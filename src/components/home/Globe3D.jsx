@@ -48,7 +48,7 @@ function TrekMarker({ trek, onHover, onLeave, onClick }) {
     const meshRef = useRef();
     const [hovered, setHovered] = useState(false);
 
-    const position = latLngToVector3(trek.lat, trek.lng, 2.02);
+    const position = latLngToVector3(trek.lat, trek.lng, 2.05);
 
     useFrame((state) => {
         if (meshRef.current && hovered) {
@@ -65,33 +65,37 @@ function TrekMarker({ trek, onHover, onLeave, onClick }) {
                     e.stopPropagation();
                     setHovered(true);
                     onHover(trek);
+                    document.body.style.cursor = 'pointer';
                 }}
                 onPointerOut={(e) => {
                     e.stopPropagation();
                     setHovered(false);
                     onLeave();
+                    document.body.style.cursor = 'default';
                 }}
                 onClick={(e) => {
                     e.stopPropagation();
                     onClick(trek);
                 }}
             >
-                <sphereGeometry args={[0.05, 16, 16]} />
+                <sphereGeometry args={[0.08, 16, 16]} />
                 <meshStandardMaterial
                     color={trek.color}
                     emissive={trek.color}
-                    emissiveIntensity={hovered ? 1 : 0.5}
+                    emissiveIntensity={hovered ? 2 : 1}
+                    metalness={0.5}
+                    roughness={0.2}
                 />
             </mesh>
 
             {/* Glow ring when hovered */}
             {hovered && (
-                <mesh>
-                    <ringGeometry args={[0.08, 0.12, 32]} />
+                <mesh rotation={[Math.PI / 2, 0, 0]}>
+                    <ringGeometry args={[0.12, 0.18, 32]} />
                     <meshBasicMaterial
                         color={trek.color}
                         transparent
-                        opacity={0.6}
+                        opacity={0.8}
                         side={THREE.DoubleSide}
                     />
                 </mesh>
@@ -105,29 +109,40 @@ function Earth({ onMarkerHover, onMarkerLeave, onMarkerClick }) {
 
     useFrame(() => {
         if (earthRef.current) {
-            earthRef.current.rotation.y += 0.001;
+            earthRef.current.rotation.y += 0.002;
         }
     });
 
     return (
         <group ref={earthRef}>
-            {/* Earth Sphere */}
+            {/* Earth Sphere - Ocean Blue with Green Continents Effect */}
             <mesh>
                 <sphereGeometry args={[2, 64, 64]} />
                 <meshStandardMaterial
-                    color="#1e3a5f"
-                    roughness={0.8}
-                    metalness={0.2}
+                    color="#2563eb"
+                    roughness={0.7}
+                    metalness={0.1}
+                />
+            </mesh>
+
+            {/* Continents Layer (slightly larger sphere with transparency) */}
+            <mesh scale={1.001}>
+                <sphereGeometry args={[2, 64, 64]} />
+                <meshStandardMaterial
+                    color="#10b981"
+                    transparent
+                    opacity={0.3}
+                    roughness={0.9}
                 />
             </mesh>
 
             {/* Atmosphere Glow */}
-            <mesh scale={1.05}>
+            <mesh scale={1.1}>
                 <sphereGeometry args={[2, 64, 64]} />
                 <meshBasicMaterial
-                    color="#4a90e2"
+                    color="#60a5fa"
                     transparent
-                    opacity={0.1}
+                    opacity={0.15}
                     side={THREE.BackSide}
                 />
             </mesh>
@@ -155,37 +170,49 @@ export default function Globe3D() {
     };
 
     return (
-        <div className="relative w-full h-screen bg-gradient-to-b from-mountain-900 to-black">
+        <div className="relative w-full h-screen bg-gradient-to-b from-gray-900 via-blue-950 to-black overflow-hidden">
             {/* Title Overlay */}
-            <div className="absolute top-20 left-0 right-0 z-10 text-center pointer-events-none">
-                <h1 className="font-display text-6xl md:text-8xl font-bold text-white mb-4 animate-fade-in">
+            <div className="absolute top-24 left-0 right-0 z-10 text-center pointer-events-none">
+                <h1 className="font-display text-5xl md:text-7xl font-bold text-white mb-4 drop-shadow-2xl animate-fade-in">
                     Akashic Records
                 </h1>
-                <p className="text-xl md:text-2xl text-gray-300 animate-fade-in-delay">
-                    Click a location to explore
+                <p className="text-lg md:text-xl text-blue-200 animate-fade-in-delay drop-shadow-lg">
+                    Explore epic mountain journeys around the world
                 </p>
             </div>
 
             {/* Hover Tooltip */}
             {hoveredTrek && (
                 <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-10 pointer-events-none">
-                    <div className="bg-white/90 backdrop-blur-sm rounded-xl px-6 py-4 shadow-2xl">
-                        <h3 className="font-display text-2xl font-bold text-mountain-900">
+                    <div className="bg-white rounded-2xl px-8 py-5 shadow-2xl border-2 border-accent-400">
+                        <h3 className="font-display text-3xl font-bold text-mountain-900 mb-1">
                             {hoveredTrek.name}
                         </h3>
-                        <p className="text-mountain-600">{hoveredTrek.country}</p>
+                        <p className="text-mountain-600 text-lg">{hoveredTrek.country}</p>
+                        <p className="text-accent-600 text-sm mt-2 font-semibold">Click to explore →</p>
                     </div>
                 </div>
             )}
 
             {/* 3D Canvas */}
             <Canvas
-                camera={{ position: [0, 0, 5], fov: 45 }}
-                style={{ background: 'transparent' }}
+                camera={{ position: [0, 0, 5], fov: 50 }}
+                gl={{ antialias: true, alpha: true }}
             >
-                <ambientLight intensity={0.5} />
-                <pointLight position={[10, 10, 10]} intensity={1} />
-                <Stars radius={300} depth={60} count={5000} factor={7} fade speed={1} />
+                {/* Lighting */}
+                <ambientLight intensity={0.8} />
+                <directionalLight position={[5, 3, 5]} intensity={1.5} />
+                <pointLight position={[-5, -3, -5]} intensity={0.5} color="#4a90e2" />
+
+                {/* Stars Background */}
+                <Stars
+                    radius={300}
+                    depth={60}
+                    count={3000}
+                    factor={4}
+                    fade
+                    speed={0.5}
+                />
 
                 <Earth
                     onMarkerHover={setHoveredTrek}
@@ -196,18 +223,22 @@ export default function Globe3D() {
                 <OrbitControls
                     enableZoom={true}
                     enablePan={false}
-                    minDistance={3}
-                    maxDistance={8}
+                    minDistance={3.5}
+                    maxDistance={10}
                     autoRotate
-                    autoRotateSpeed={0.5}
+                    autoRotateSpeed={0.3}
+                    enableDamping
+                    dampingFactor={0.05}
                 />
             </Canvas>
 
             {/* Instructions */}
-            <div className="absolute bottom-10 left-0 right-0 z-10 text-center pointer-events-none">
-                <p className="text-white/60 text-sm">
-                    Drag to rotate • Scroll to zoom • Click markers to explore
-                </p>
+            <div className="absolute bottom-12 left-0 right-0 z-10 text-center pointer-events-none">
+                <div className="bg-white/10 backdrop-blur-md rounded-full px-8 py-3 inline-block">
+                    <p className="text-white text-sm font-medium">
+                        🖱️ Drag to rotate • 🔍 Scroll to zoom • 📍 Click markers to explore
+                    </p>
+                </div>
             </div>
         </div>
     );
