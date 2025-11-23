@@ -1,0 +1,140 @@
+{
+    "id": "inca-trail",
+    "name": "Inca Trail to Machu Picchu",
+    "country": "Peru",
+    "slug": "inca-trail",
+    "description": "The legendary trek to the lost city of the Incas. A journey through history and breathtaking Andean scenery.",
+    "heroImage": "/hero-images/inca-trail-hero.png",
+    "dates": {
+        "start": "2024-05-01",
+        "end": "2024-05-04"
+    },
+    "stats": {
+        "totalDistance": 43,
+        "totalElevationGain": 2500,
+        "totalElevationLoss": 2500,
+        "duration": 4,
+        "highestPoint": {
+            "name": "Dead Woman's Pass",
+            "elevation": 4215,
+            "coordinates": [
+                -72.5300,
+                -13.2200
+            ]
+        }
+    },
+    "route": {
+        "type": "LineString",
+        "coordinates": [
+            [
+                -72.5500,
+                -13.2500,
+                2700
+            ],
+            [
+                -72.5400,
+                -13.2300,
+                3000
+            ],
+            [
+                -72.5300,
+                -13.2200,
+                4215
+            ],
+            [
+                -72.5200,
+                -13.2100,
+                3600
+            ],
+            [
+                -72.5000,
+                -13.2050,
+                4000
+            ],
+            [
+                -72.5400,
+                -13.1900,
+                2650
+            ],
+            [
+                -72.5450,
+                -13.1700,
+                2720
+            ],
+            [
+                -72.5450,
+                -13.1631,
+                2430
+            ]
+        ]
+    },
+    "camps": [
+        {
+            "id": "wayllabamba",
+            "name": "Wayllabamba",
+            "dayNumber": 1,
+            "date": "2024-05-01",
+            "elevation": 3000,
+            "coordinates": [
+                -72.5400,
+                -13.2300
+            ],
+            "distanceFromStart": 12,
+            "distanceFromPrevious": 12,
+            "elevationGainFromPrevious": 300,
+            "timeFromPrevious": "5 hours",
+            "terrain": "Valley",
+            "notes": "First camp in a quiet valley.",
+            "highlights": [
+                "Inca ruins",
+                "Valley views"
+            ],
+            "images": []
+        },
+        {
+            "id": "dead-womans-pass",
+            "name": "Dead Woman's Pass",
+            "dayNumber": 2,
+            "date": "2024-05-02",
+            "elevation": 4215,
+            "coordinates": [
+                -72.5300,
+                -13.2200
+            ],
+            "distanceFromStart": 20,
+            "distanceFromPrevious": 8,
+            "elevationGainFromPrevious": 1215,
+            "timeFromPrevious": "4 hours",
+            "terrain": "High pass",
+            "notes": "Highest point of the trek.",
+            "highlights": [
+                "Highest point",
+                "Panoramic views"
+            ],
+            "images": []
+        },
+        {
+            "id": "machu-picchu",
+            "name": "Machu Picchu",
+            "dayNumber": 4,
+            "date": "2024-05-04",
+            "elevation": 2430,
+            "coordinates": [
+                -72.5450,
+                -13.1631
+            ],
+            "distanceFromStart": 43,
+            "distanceFromPrevious": 5,
+            "elevationGainFromPrevious": 0,
+            "timeFromPrevious": "2 hours",
+            "terrain": "Ancient city",
+            "notes": "Arrival at the Sun Gate.",
+            "highlights": [
+                "Sun Gate",
+                "Machu Picchu"
+            ],
+            "images": []
+        }
+    ],
+    "dailyStages": []
+}

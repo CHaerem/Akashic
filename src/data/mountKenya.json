@@ -1,0 +1,145 @@
+{
+    "id": "mount-kenya",
+    "name": "Mount Kenya - Chogoria/Sirimon",
+    "country": "Kenya",
+    "slug": "mount-kenya",
+    "description": "The second highest mountain in Africa. A stunning trek with diverse scenery, lakes, and jagged peaks.",
+    "heroImage": "/hero-images/mount-kenya-hero.png",
+    "dates": {
+        "start": "2023-10-10",
+        "end": "2023-10-15"
+    },
+    "stats": {
+        "totalDistance": 75,
+        "totalElevationGain": 3000,
+        "totalElevationLoss": 3000,
+        "duration": 5,
+        "highestPoint": {
+            "name": "Point Lenana",
+            "elevation": 4985,
+            "coordinates": [
+                37.3088,
+                -0.1521
+            ]
+        }
+    },
+    "route": {
+        "type": "LineString",
+        "coordinates": [
+            [
+                37.5000,
+                -0.2500,
+                2000
+            ],
+            [
+                37.4600,
+                -0.2700,
+                2950
+            ],
+            [
+                37.4700,
+                -0.2600,
+                3300
+            ],
+            [
+                37.4800,
+                -0.2400,
+                4200
+            ],
+            [
+                37.4900,
+                -0.2300,
+                4000
+            ],
+            [
+                37.3088,
+                -0.1521,
+                4985
+            ],
+            [
+                37.3200,
+                -0.1600,
+                4200
+            ],
+            [
+                37.2900,
+                -0.1200,
+                3340
+            ],
+            [
+                37.2500,
+                -0.1000,
+                2600
+            ]
+        ]
+    },
+    "camps": [
+        {
+            "id": "chogoria-gate",
+            "name": "Chogoria Gate",
+            "dayNumber": 1,
+            "date": "2023-10-11",
+            "elevation": 2950,
+            "coordinates": [
+                37.4600,
+                -0.2700
+            ],
+            "distanceFromStart": 16,
+            "distanceFromPrevious": 16,
+            "elevationGainFromPrevious": 950,
+            "timeFromPrevious": "4 hours",
+            "terrain": "Forest and bamboo",
+            "notes": "Starting the trek through the forest.",
+            "highlights": [
+                "Bamboo forest",
+                "Wildlife"
+            ],
+            "images": []
+        },
+        {
+            "id": "lake-michaelson",
+            "name": "Lake Michaelson",
+            "dayNumber": 3,
+            "date": "2023-10-13",
+            "elevation": 4000,
+            "coordinates": [
+                37.4900,
+                -0.2300
+            ],
+            "distanceFromStart": 37,
+            "distanceFromPrevious": 12,
+            "elevationGainFromPrevious": 700,
+            "timeFromPrevious": "5 hours",
+            "terrain": "Gorges and lakes",
+            "notes": "One of the most beautiful campsites in the world.",
+            "highlights": [
+                "Lake view",
+                "Temple cliffs"
+            ],
+            "images": []
+        },
+        {
+            "id": "point-lenana",
+            "name": "Point Lenana (Summit)",
+            "dayNumber": 4,
+            "date": "2023-10-14",
+            "elevation": 4985,
+            "coordinates": [
+                37.3088,
+                -0.1521
+            ],
+            "distanceFromStart": 50,
+            "distanceFromPrevious": 13,
+            "elevationGainFromPrevious": 985,
+            "timeFromPrevious": "4 hours",
+            "terrain": "Rocky peak",
+            "notes": "Sunrise summit.",
+            "highlights": [
+                "Summit sunrise",
+                "Views of Batian"
+            ],
+            "images": []
+        }
+    ],
+    "dailyStages": []
+}

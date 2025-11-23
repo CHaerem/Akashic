@@ -1,0 +1,265 @@
+{
+    "id": "kilimanjaro",
+    "name": "Kilimanjaro - Lemosho Route",
+    "country": "Tanzania",
+    "slug": "kilimanjaro",
+    "description": "The highest free-standing mountain in the world. The Lemosho route is one of the most beautiful and gradual routes up to Uhuru Peak.",
+    "heroImage": "/hero-images/kilimanjaro-hero.png",
+    "dates": {
+        "start": "2023-09-29",
+        "end": "2023-10-09"
+    },
+    "stats": {
+        "totalDistance": 71,
+        "totalElevationGain": 4500,
+        "totalElevationLoss": 4500,
+        "duration": 7,
+        "highestPoint": {
+            "name": "Uhuru Peak",
+            "elevation": 5895,
+            "coordinates": [
+                37.3556,
+                -3.0758
+            ]
+        }
+    },
+    "route": {
+        "type": "LineString",
+        "coordinates": [
+            [
+                37.2089,
+                -3.0833,
+                2100
+            ],
+            [
+                37.2150,
+                -3.0900,
+                2750
+            ],
+            [
+                37.2400,
+                -3.0500,
+                3850
+            ],
+            [
+                37.3200,
+                -3.0200,
+                3950
+            ],
+            [
+                37.3400,
+                -3.0400,
+                4000
+            ],
+            [
+                37.3500,
+                -3.0600,
+                4600
+            ],
+            [
+                37.3556,
+                -3.0758,
+                5895
+            ],
+            [
+                37.3300,
+                -3.1200,
+                3100
+            ],
+            [
+                37.3200,
+                -3.1500,
+                1500
+            ]
+        ]
+    },
+    "camps": [
+        {
+            "id": "mti-mkubwa",
+            "name": "Mti Mkubwa (Big Tree Camp)",
+            "dayNumber": 1,
+            "date": "2023-10-01",
+            "elevation": 2750,
+            "coordinates": [
+                37.2150,
+                -3.0900
+            ],
+            "distanceFromStart": 7,
+            "distanceFromPrevious": 7,
+            "elevationGainFromPrevious": 550,
+            "timeFromPrevious": "3 hours",
+            "terrain": "Rainforest",
+            "notes": "First camp on the Lemosho route. Porters have already set up tents when we arrive.",
+            "highlights": [
+                "Through dense rainforest",
+                "First night on the mountain",
+                "Great tent sites"
+            ],
+            "images": []
+        },
+        {
+            "id": "shira-2",
+            "name": "Shira II",
+            "dayNumber": 2,
+            "date": "2023-10-02",
+            "elevation": 3850,
+            "coordinates": [
+                37.2400,
+                -3.0500
+            ],
+            "distanceFromStart": 24,
+            "distanceFromPrevious": 17,
+            "elevationGainFromPrevious": 1100,
+            "timeFromPrevious": "7 hours",
+            "terrain": "High alpine plateau, heath and moorland",
+            "notes": "Magnificent view towards Kibo, Shira Ridge and Mt. Meru.",
+            "highlights": [
+                "Arriving at Shira Plateau",
+                "Amazing views",
+                "Acclimatization begins"
+            ],
+            "images": []
+        },
+        {
+            "id": "barranco",
+            "name": "Barranco Camp",
+            "dayNumber": 3,
+            "date": "2023-10-03",
+            "elevation": 3950,
+            "coordinates": [
+                37.3200,
+                -3.0200
+            ],
+            "distanceFromStart": 34,
+            "distanceFromPrevious": 10,
+            "elevationGainFromPrevious": 100,
+            "elevationLossFromPrevious": 650,
+            "maxElevationReached": 4600,
+            "timeFromPrevious": "6 hours",
+            "terrain": "Lava tower, volcanic landscape",
+            "notes": "Important acclimatization day: 'Climb high, sleep low'.",
+            "highlights": [
+                "Lava Tower (4600m)",
+                "Acclimatization day",
+                "Western Breach in background"
+            ],
+            "images": []
+        },
+        {
+            "id": "karanga",
+            "name": "Karanga Valley",
+            "dayNumber": 4,
+            "date": "2023-10-04",
+            "elevation": 4000,
+            "coordinates": [
+                37.3400,
+                -3.0400
+            ],
+            "distanceFromStart": 39,
+            "distanceFromPrevious": 5,
+            "elevationGainFromPrevious": 50,
+            "timeFromPrevious": "4 hours",
+            "terrain": "Steep Barranco Wall",
+            "notes": "Most beautiful campsite with views of glaciers.",
+            "highlights": [
+                "Barranco Wall",
+                "Best camp view",
+                "Glacier views"
+            ],
+            "images": []
+        },
+        {
+            "id": "barafu",
+            "name": "Barafu Camp (Base Camp)",
+            "dayNumber": 5,
+            "date": "2023-10-05",
+            "elevation": 4600,
+            "coordinates": [
+                37.3500,
+                -3.0600
+            ],
+            "distanceFromStart": 43,
+            "distanceFromPrevious": 4,
+            "elevationGainFromPrevious": 600,
+            "timeFromPrevious": "3 hours",
+            "terrain": "Desolate, rocky",
+            "notes": "Barafu means 'ice'. Resting for summit push.",
+            "highlights": [
+                "Base camp",
+                "Last rest before summit",
+                "Midnight start"
+            ],
+            "images": []
+        },
+        {
+            "id": "uhuru-peak",
+            "name": "Uhuru Peak (SUMMIT!)",
+            "dayNumber": 6,
+            "date": "2023-10-06",
+            "elevation": 5895,
+            "coordinates": [
+                37.3556,
+                -3.0758
+            ],
+            "distanceFromStart": 52,
+            "distanceFromPrevious": 9,
+            "elevationGainFromPrevious": 1295,
+            "timeFromPrevious": "6-7 hours",
+            "terrain": "Steep scree, ice and snow",
+            "notes": "Summit day! Started at 01:00. Sunrise at Stella Point.",
+            "highlights": [
+                "Highest point in Africa!",
+                "Sunrise on crater rim",
+                "Views of Mt. Meru and Mawenzi"
+            ],
+            "summitPhoto": true,
+            "images": []
+        },
+        {
+            "id": "mweka",
+            "name": "Mweka Hut",
+            "dayNumber": 6,
+            "date": "2023-10-06",
+            "elevation": 3100,
+            "coordinates": [
+                37.3300,
+                -3.1200
+            ],
+            "distanceFromStart": 70,
+            "distanceFromPrevious": 18,
+            "elevationLossFromPrevious": 2795,
+            "timeFromPrevious": "6 hours from summit",
+            "terrain": "Descent through heath and forest",
+            "notes": "Long day! Descent to Mweka.",
+            "highlights": [
+                "Back in the forest",
+                "Well deserved rest"
+            ],
+            "images": []
+        }
+    ],
+    "dailyStages": [
+        {
+            "day": 1,
+            "date": "2023-10-01",
+            "fromCamp": "Lemosho Glades (2100m)",
+            "toCamp": "Mti Mkubwa (2750m)",
+            "distance": 7,
+            "elevationGain": 550,
+            "time": "3 hours",
+            "terrain": "Rainforest",
+            "description": "First day through dense rainforest."
+        },
+        {
+            "day": 2,
+            "date": "2023-10-02",
+            "fromCamp": "Mti Mkubwa (2750m)",
+            "toCamp": "Shira II (3850m)",
+            "distance": 17,
+            "elevationGain": 1100,
+            "time": "7 hours",
+            "terrain": "Forest -> Heath -> Alpine",
+            "description": "Reaching the spectacular Shira Plateau."
+        }
+    ]
+}
