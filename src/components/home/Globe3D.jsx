@@ -115,34 +115,25 @@ function Earth({ onMarkerHover, onMarkerLeave, onMarkerClick }) {
 
     return (
         <group ref={earthRef}>
-            {/* Earth Sphere - Ocean Blue with Green Continents Effect */}
+            {/* Earth Sphere with visible pattern */}
             <mesh>
                 <sphereGeometry args={[2, 64, 64]} />
-                <meshStandardMaterial
-                    color="#2563eb"
-                    roughness={0.7}
-                    metalness={0.1}
-                />
-            </mesh>
-
-            {/* Continents Layer (slightly larger sphere with transparency) */}
-            <mesh scale={1.001}>
-                <sphereGeometry args={[2, 64, 64]} />
-                <meshStandardMaterial
-                    color="#10b981"
-                    transparent
-                    opacity={0.3}
-                    roughness={0.9}
+                <meshPhongMaterial
+                    color="#3b82f6"
+                    emissive="#1e40af"
+                    emissiveIntensity={0.2}
+                    shininess={15}
+                    specular="#60a5fa"
                 />
             </mesh>
 
             {/* Atmosphere Glow */}
-            <mesh scale={1.1}>
+            <mesh scale={1.08}>
                 <sphereGeometry args={[2, 64, 64]} />
                 <meshBasicMaterial
                     color="#60a5fa"
                     transparent
-                    opacity={0.15}
+                    opacity={0.2}
                     side={THREE.BackSide}
                 />
             </mesh>
