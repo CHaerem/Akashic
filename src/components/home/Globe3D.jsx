@@ -115,15 +115,15 @@ function Earth({ onMarkerHover, onMarkerLeave, onMarkerClick }) {
 
     return (
         <group ref={earthRef}>
-            {/* Earth Sphere with visible pattern */}
+            {/* Earth Sphere - Much brighter and more visible */}
             <mesh>
                 <sphereGeometry args={[2, 64, 64]} />
-                <meshPhongMaterial
-                    color="#3b82f6"
-                    emissive="#1e40af"
-                    emissiveIntensity={0.2}
-                    shininess={15}
-                    specular="#60a5fa"
+                <meshStandardMaterial
+                    color="#60a5fa"
+                    emissive="#3b82f6"
+                    emissiveIntensity={0.6}
+                    roughness={0.5}
+                    metalness={0.3}
                 />
             </mesh>
 
@@ -131,9 +131,9 @@ function Earth({ onMarkerHover, onMarkerLeave, onMarkerClick }) {
             <mesh scale={1.08}>
                 <sphereGeometry args={[2, 64, 64]} />
                 <meshBasicMaterial
-                    color="#60a5fa"
+                    color="#93c5fd"
                     transparent
-                    opacity={0.2}
+                    opacity={0.3}
                     side={THREE.BackSide}
                 />
             </mesh>
