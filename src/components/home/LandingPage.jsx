@@ -8,7 +8,7 @@ const treks = [
         title: 'Kilimanjaro',
         country: 'Tanzania',
         slug: 'kilimanjaro',
-        imageUrl: '/hero-images/kilimanjaro-hero.png',
+        imageUrl: 'hero-images/kilimanjaro-hero.png',
         stats: {
             elevation: '5,895m',
             distance: '71km',
@@ -20,7 +20,7 @@ const treks = [
         title: 'Mount Kenya',
         country: 'Kenya',
         slug: 'mount-kenya',
-        imageUrl: '/hero-images/mount-kenya-hero.png',
+        imageUrl: 'hero-images/mount-kenya-hero.png',
         stats: {
             elevation: '4,985m',
             distance: '75km',
@@ -32,7 +32,7 @@ const treks = [
         title: 'Inca Trail',
         country: 'Peru',
         slug: 'inca-trail',
-        imageUrl: '/hero-images/inca-trail-hero.png',
+        imageUrl: 'hero-images/inca-trail-hero.png',
         stats: {
             elevation: '4,215m',
             distance: '43km',
@@ -50,7 +50,7 @@ export default function LandingPage() {
             <div className="relative h-[60vh] min-h-[500px] flex items-center justify-center">
                 <div className="absolute inset-0">
                     <img
-                        src="/hero-images/landing-hero.png"
+                        src="hero-images/landing-hero.png"
                         alt="Mountain Landscape"
                         className="w-full h-full object-cover"
                     />
