@@ -5,7 +5,7 @@ import ScrollToTop from './components/common/ScrollToTop';
 
 function App() {
   return (
-    <BrowserRouter>
+    <BrowserRouter basename="/Akashic/">
       <ScrollToTop />
       <Routes>
         <Route path="/" element={<LandingPage />} />
