@@ -2,9 +2,12 @@ import { memo, useCallback, useMemo, useState } from 'react';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import { useTrekData } from '../hooks/useTrekData';
 import { useIsMobile } from '../hooks/useMediaQuery';
+import { useSwipeGesture } from '../hooks/useSwipeGesture';
 import { MapboxGlobe } from './MapboxGlobe';
 import { OfflineIndicator } from './OfflineIndicator';
 import type { TrekConfig, TrekData, Camp, ExtendedStats, ElevationProfile, TabType } from '../types/trek';
+
+type PanelState = 'minimized' | 'normal' | 'expanded';
 
 // --- UI Components ---
 
@@ -285,13 +288,14 @@ const JourneyTab = memo(function JourneyTab({ trekData, selectedCamp, onCampSele
 
 interface ElevationProfileProps {
     elevationProfile: ElevationProfile | null;
+    isMobile?: boolean;
 }
 
-const ElevationProfileChart = memo(function ElevationProfileChart({ elevationProfile }: ElevationProfileProps) {
+const ElevationProfileChart = memo(function ElevationProfileChart({ elevationProfile, isMobile = false }: ElevationProfileProps) {
     if (!elevationProfile) return null;
 
     return (
-        <div style={{ position: 'relative', height: 120, width: '100%' }}>
+        <div style={{ position: 'relative', height: 120, width: '100%', paddingRight: isMobile ? 0 : 30 }}>
             <svg width="100%" height="100%" viewBox="0 0 300 120" preserveAspectRatio="none" style={{ overflow: 'visible' }}>
                 <defs>
                     <linearGradient id="elevationGradient" x1="0" x2="0" y1="0" y2="1">
@@ -305,16 +309,38 @@ const ElevationProfileChart = memo(function ElevationProfileChart({ elevationPro
                 <path d={elevationProfile.areaPath} fill="url(#elevationGradient)" />
                 <path d={elevationProfile.linePath} fill="none" stroke="white" strokeWidth="1.5" />
             </svg>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8, color: 'rgba(255,255,255,0.3)', fontSize: 10 }}>
+            <div style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                marginTop: 8,
+                color: 'rgba(255,255,255,0.3)',
+                fontSize: 10
+            }}>
                 <span>0 km</span>
                 <span>{Math.round(elevationProfile.totalDist)} km</span>
             </div>
-            <div style={{ position: 'absolute', top: 0, right: -24, color: 'rgba(255,255,255,0.3)', fontSize: 10 }}>
-                {Math.round(elevationProfile.maxEle)}m
-            </div>
-            <div style={{ position: 'absolute', bottom: 0, right: -24, color: 'rgba(255,255,255,0.3)', fontSize: 10 }}>
-                {Math.round(elevationProfile.minEle)}m
-            </div>
+            {/* Elevation labels - inline on mobile, absolute positioned on desktop */}
+            {isMobile ? (
+                <div style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    marginTop: 4,
+                    color: 'rgba(255,255,255,0.3)',
+                    fontSize: 10
+                }}>
+                    <span>{Math.round(elevationProfile.minEle)}m min</span>
+                    <span>{Math.round(elevationProfile.maxEle)}m max</span>
+                </div>
+            ) : (
+                <>
+                    <div style={{ position: 'absolute', top: 0, right: 0, color: 'rgba(255,255,255,0.3)', fontSize: 10 }}>
+                        {Math.round(elevationProfile.maxEle)}m
+                    </div>
+                    <div style={{ position: 'absolute', bottom: 24, right: 0, color: 'rgba(255,255,255,0.3)', fontSize: 10 }}>
+                        {Math.round(elevationProfile.minEle)}m
+                    </div>
+                </>
+            )}
         </div>
     );
 });
@@ -323,9 +349,10 @@ interface StatsTabProps {
     trekData: TrekData;
     extendedStats: ExtendedStats | null;
     elevationProfile: ElevationProfile | null;
+    isMobile?: boolean;
 }
 
-const StatsTab = memo(function StatsTab({ trekData, extendedStats, elevationProfile }: StatsTabProps) {
+const StatsTab = memo(function StatsTab({ trekData, extendedStats, elevationProfile, isMobile = false }: StatsTabProps) {
     return (
         <div>
             <div style={{
@@ -344,7 +371,7 @@ const StatsTab = memo(function StatsTab({ trekData, extendedStats, elevationProf
                 <p style={{ color: 'rgba(255,255,255,0.3)', fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 16 }}>
                     Elevation Profile
                 </p>
-                <ElevationProfileChart elevationProfile={elevationProfile} />
+                <ElevationProfileChart elevationProfile={elevationProfile} isMobile={isMobile} />
             </div>
 
             {extendedStats && (
@@ -369,15 +396,41 @@ interface InfoPanelProps {
     extendedStats: ExtendedStats | null;
     elevationProfile: ElevationProfile | null;
     isMobile: boolean;
-    isExpanded: boolean;
-    onToggleExpand: () => void;
+    panelState: PanelState;
+    onPanelStateChange: (state: PanelState) => void;
 }
 
 const InfoPanel = memo(function InfoPanel({
     trekData, activeTab, setActiveTab, selectedCamp, onCampSelect, onBack,
-    extendedStats, elevationProfile, isMobile, isExpanded, onToggleExpand
+    extendedStats, elevationProfile, isMobile, panelState, onPanelStateChange
 }: InfoPanelProps) {
     const padding = isMobile ? 16 : 24;
+
+    // Swipe gestures for mobile bottom sheet
+    const handleSwipeUp = useCallback(() => {
+        if (panelState === 'minimized') onPanelStateChange('normal');
+        else if (panelState === 'normal') onPanelStateChange('expanded');
+    }, [panelState, onPanelStateChange]);
+
+    const handleSwipeDown = useCallback(() => {
+        if (panelState === 'expanded') onPanelStateChange('normal');
+        else if (panelState === 'normal') onPanelStateChange('minimized');
+    }, [panelState, onPanelStateChange]);
+
+    const swipeHandlers = useSwipeGesture({
+        onSwipeUp: handleSwipeUp,
+        onSwipeDown: handleSwipeDown,
+        threshold: 30
+    });
+
+    // Panel height based on state - using dvh for better mobile support
+    const getPanelHeight = () => {
+        switch (panelState) {
+            case 'minimized': return '120px';
+            case 'normal': return '45dvh';
+            case 'expanded': return '85dvh';
+        }
+    };
 
     // Mobile bottom sheet style
     const mobileStyle: React.CSSProperties = {
@@ -385,16 +438,19 @@ const InfoPanel = memo(function InfoPanel({
         left: 0,
         right: 0,
         bottom: 0,
-        height: isExpanded ? '85%' : '45%',
-        background: 'rgba(10, 10, 15, 0.95)',
+        height: getPanelHeight(),
+        maxHeight: 'calc(100dvh - 60px)',
+        background: 'rgba(10, 10, 15, 0.98)',
         backdropFilter: 'blur(20px)',
+        WebkitBackdropFilter: 'blur(20px)',
         borderTop: '1px solid rgba(255,255,255,0.1)',
         borderRadius: '20px 20px 0 0',
         display: 'flex',
         flexDirection: 'column',
         zIndex: 20,
-        transition: 'height 0.3s ease',
-        paddingBottom: 'env(safe-area-inset-bottom)'
+        transition: 'height 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+        paddingBottom: 'env(safe-area-inset-bottom)',
+        boxShadow: '0 -4px 30px rgba(0,0,0,0.5)'
     };
 
     // Desktop side panel style
@@ -407,30 +463,41 @@ const InfoPanel = memo(function InfoPanel({
         minWidth: 380,
         background: 'rgba(10, 10, 15, 0.8)',
         backdropFilter: 'blur(20px)',
+        WebkitBackdropFilter: 'blur(20px)',
         borderLeft: '1px solid rgba(255,255,255,0.05)',
         display: 'flex',
         flexDirection: 'column',
         zIndex: 20
     };
 
+    const handleDragHandleClick = useCallback(() => {
+        // Cycle through states on tap
+        if (panelState === 'minimized') onPanelStateChange('normal');
+        else if (panelState === 'normal') onPanelStateChange('expanded');
+        else onPanelStateChange('normal');
+    }, [panelState, onPanelStateChange]);
+
     return (
         <div style={isMobile ? mobileStyle : desktopStyle}>
-            {/* Mobile drag handle */}
+            {/* Mobile drag handle with swipe support */}
             {isMobile && (
                 <div
-                    onClick={onToggleExpand}
+                    onClick={handleDragHandleClick}
+                    {...swipeHandlers}
                     style={{
                         padding: '12px 0 8px',
                         display: 'flex',
                         justifyContent: 'center',
-                        cursor: 'pointer'
+                        cursor: 'grab',
+                        touchAction: 'none'
                     }}
                 >
                     <div style={{
                         width: 40,
                         height: 4,
-                        background: 'rgba(255,255,255,0.3)',
-                        borderRadius: 2
+                        background: 'rgba(255,255,255,0.4)',
+                        borderRadius: 2,
+                        transition: 'width 0.2s ease'
                     }} />
                 </div>
             )}
@@ -438,11 +505,12 @@ const InfoPanel = memo(function InfoPanel({
             {/* Header */}
             <div style={{
                 padding: isMobile ? `8px ${padding}px 16px` : `${padding}px`,
-                borderBottom: '1px solid rgba(255,255,255,0.05)',
+                borderBottom: panelState !== 'minimized' ? '1px solid rgba(255,255,255,0.05)' : 'none',
                 display: 'flex',
                 flexDirection: isMobile ? 'row' : 'column',
                 alignItems: isMobile ? 'center' : 'stretch',
-                justifyContent: isMobile ? 'space-between' : 'flex-start'
+                justifyContent: isMobile ? 'space-between' : 'flex-start',
+                flexShrink: 0
             }}>
                 {!isMobile && (
                     <button
@@ -464,7 +532,7 @@ const InfoPanel = memo(function InfoPanel({
                         ← Globe
                     </button>
                 )}
-                <div style={{ flex: 1 }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
                     <p style={{
                         color: 'rgba(255,255,255,0.4)',
                         fontSize: 10,
@@ -476,9 +544,12 @@ const InfoPanel = memo(function InfoPanel({
                     </p>
                     <h1 style={{
                         color: 'white',
-                        fontSize: isMobile ? 20 : 24,
+                        fontSize: isMobile ? 18 : 24,
                         fontWeight: 300,
-                        margin: 0
+                        margin: 0,
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis'
                     }}>
                         {trekData.name}
                     </h1>
@@ -496,7 +567,9 @@ const InfoPanel = memo(function InfoPanel({
                             cursor: 'pointer',
                             padding: '10px 16px',
                             borderRadius: 6,
-                            minHeight: 44
+                            minHeight: 44,
+                            marginLeft: 12,
+                            flexShrink: 0
                         }}
                     >
                         ✕
@@ -504,43 +577,49 @@ const InfoPanel = memo(function InfoPanel({
                 )}
             </div>
 
-            {/* Tabs */}
-            <div style={{
-                display: 'flex',
-                borderBottom: '1px solid rgba(255,255,255,0.05)',
-                padding: `0 ${padding}px`
-            }}>
-                {(['overview', 'journey', 'stats'] as const).map(tab => (
-                    <TabButton
-                        key={tab}
-                        tab={tab}
-                        activeTab={activeTab}
-                        onClick={setActiveTab}
-                        isMobile={isMobile}
-                    />
-                ))}
-            </div>
+            {/* Tabs - hidden when minimized */}
+            {panelState !== 'minimized' && (
+                <div style={{
+                    display: 'flex',
+                    borderBottom: '1px solid rgba(255,255,255,0.05)',
+                    padding: `0 ${padding}px`,
+                    flexShrink: 0
+                }}>
+                    {(['overview', 'journey', 'stats'] as const).map(tab => (
+                        <TabButton
+                            key={tab}
+                            tab={tab}
+                            activeTab={activeTab}
+                            onClick={setActiveTab}
+                            isMobile={isMobile}
+                        />
+                    ))}
+                </div>
+            )}
 
-            {/* Tab Content */}
-            <div style={{
-                flex: 1,
-                overflow: 'auto',
-                padding: padding,
-                WebkitOverflowScrolling: 'touch'
-            }}>
-                {activeTab === 'overview' && <OverviewTab trekData={trekData} />}
-                {activeTab === 'journey' && (
-                    <JourneyTab
-                        trekData={trekData}
-                        selectedCamp={selectedCamp}
-                        onCampSelect={onCampSelect}
-                        isMobile={isMobile}
-                    />
-                )}
-                {activeTab === 'stats' && (
-                    <StatsTab trekData={trekData} extendedStats={extendedStats} elevationProfile={elevationProfile} />
-                )}
-            </div>
+            {/* Tab Content - hidden when minimized */}
+            {panelState !== 'minimized' && (
+                <div style={{
+                    flex: 1,
+                    overflow: 'auto',
+                    padding: padding,
+                    WebkitOverflowScrolling: 'touch',
+                    overscrollBehavior: 'contain'
+                }}>
+                    {activeTab === 'overview' && <OverviewTab trekData={trekData} />}
+                    {activeTab === 'journey' && (
+                        <JourneyTab
+                            trekData={trekData}
+                            selectedCamp={selectedCamp}
+                            onCampSelect={onCampSelect}
+                            isMobile={isMobile}
+                        />
+                    )}
+                    {activeTab === 'stats' && (
+                        <StatsTab trekData={trekData} extendedStats={extendedStats} elevationProfile={elevationProfile} isMobile={isMobile} />
+                    )}
+                </div>
+            )}
         </div>
     );
 });
@@ -549,7 +628,7 @@ const InfoPanel = memo(function InfoPanel({
 
 export default function AkashicApp() {
     const isMobile = useIsMobile();
-    const [isPanelExpanded, setIsPanelExpanded] = useState(false);
+    const [panelState, setPanelState] = useState<PanelState>('normal');
 
     const {
         view,
@@ -567,8 +646,8 @@ export default function AkashicApp() {
         handleCampSelect
     } = useTrekData();
 
-    const togglePanelExpand = useCallback(() => {
-        setIsPanelExpanded(prev => !prev);
+    const handlePanelStateChange = useCallback((state: PanelState) => {
+        setPanelState(state);
     }, []);
 
     return (
@@ -629,8 +708,8 @@ export default function AkashicApp() {
                     extendedStats={extendedStats}
                     elevationProfile={elevationProfile}
                     isMobile={isMobile}
-                    isExpanded={isPanelExpanded}
-                    onToggleExpand={togglePanelExpand}
+                    panelState={panelState}
+                    onPanelStateChange={handlePanelStateChange}
                 />
             )}
         </div>

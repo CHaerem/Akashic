@@ -49,15 +49,34 @@ export function useMapbox({ containerRef, onTrekSelect }: UseMapboxOptions): Use
 
         mapboxgl.accessToken = token;
 
+        // Detect mobile for touch optimizations
+        const isMobile = window.matchMedia('(max-width: 768px)').matches;
+
         try {
             const map = new mapboxgl.Map({
                 container: containerRef.current,
                 style: 'mapbox://styles/mapbox/satellite-v9',
                 projection: 'globe',
-                zoom: 1.5,
+                zoom: isMobile ? 1.2 : 1.5,
                 center: [30, 15],
                 pitch: 0,
+                // Smoother interactions
+                dragRotate: true,
+                touchZoomRotate: true,
+                touchPitch: true,
+                // Smoother zoom
+                scrollZoom: {
+                    around: 'center'
+                },
+                // Better animation defaults
+                fadeDuration: 300
             });
+
+            // Configure touch gestures for mobile
+            if (isMobile) {
+                map.touchZoomRotate.enableRotation();
+                map.touchPitch.enable();
+            }
 
             mapRef.current = map;
 
@@ -249,23 +268,29 @@ export function useMapbox({ containerRef, onTrekSelect }: UseMapboxOptions): Use
             map.setLayoutProperty('active-segment-glow', 'visibility', 'none');
         }
 
+        const isMobile = window.matchMedia('(max-width: 768px)').matches;
+
         if (selectedTrek) {
             map.flyTo({
                 center: [selectedTrek.lng, selectedTrek.lat],
-                zoom: 3.5,
+                zoom: isMobile ? 3 : 3.5,
                 pitch: 0,
                 bearing: 0,
-                duration: 2000,
-                essential: true
+                duration: 2500,
+                essential: true,
+                curve: 1.2,
+                easing: (t) => 1 - Math.pow(1 - t, 3) // ease-out cubic
             });
         } else {
             map.flyTo({
                 center: [30, 15],
-                zoom: 1.5,
+                zoom: isMobile ? 1.2 : 1.5,
                 pitch: 0,
                 bearing: 0,
                 duration: 3000,
-                essential: true
+                essential: true,
+                curve: 1.5,
+                easing: (t) => 1 - Math.pow(1 - t, 3)
             });
         }
     }, [mapReady]);
@@ -357,13 +382,16 @@ export function useMapbox({ containerRef, onTrekSelect }: UseMapboxOptions): Use
                 }
             }
 
+            const isMobileCamp = window.matchMedia('(max-width: 768px)').matches;
             map.flyTo({
                 center: selectedCamp.coordinates as [number, number],
-                zoom: 15,
+                zoom: isMobileCamp ? 14.5 : 15,
                 pitch: pitch,
                 bearing: bearing,
-                duration: 2000,
-                essential: true
+                duration: 2200,
+                essential: true,
+                curve: 1.3,
+                easing: (t) => 1 - Math.pow(1 - t, 3)
             });
 
             // Highlight segment
@@ -375,12 +403,16 @@ export function useMapbox({ containerRef, onTrekSelect }: UseMapboxOptions): Use
                 return b.extend(coord as [number, number]);
             }, new mapboxgl.LngLatBounds(coordinates[0] as [number, number], coordinates[0] as [number, number]));
 
+            const isMobileFit = window.matchMedia('(max-width: 768px)').matches;
             map.fitBounds(bounds, {
-                padding: { top: 100, bottom: 100, left: 100, right: 600 },
+                padding: isMobileFit
+                    ? { top: 80, bottom: 280, left: 40, right: 40 }
+                    : { top: 100, bottom: 100, left: 100, right: 450 },
                 pitch: trekConfig.preferredPitch,
                 bearing: trekConfig.preferredBearing,
-                duration: 2000,
-                essential: true
+                duration: 2500,
+                essential: true,
+                easing: (t) => 1 - Math.pow(1 - t, 3)
             });
 
             // Hide highlight
