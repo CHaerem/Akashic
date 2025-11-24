@@ -2,22 +2,33 @@
  * Custom hook for Mapbox map initialization and management
  */
 
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback, type RefObject, type MutableRefObject } from 'react';
 import mapboxgl from 'mapbox-gl';
 import { treks, trekDataMap, getTrekConfig } from '../data/trekConfig';
 import { calculateBearing, findCoordIndex } from '../utils/geography';
+import type { TrekConfig, TrekData, Camp } from '../types/trek';
+
+interface UseMapboxOptions {
+    containerRef: RefObject<HTMLDivElement | null>;
+    onTrekSelect: (trek: TrekConfig) => void;
+}
+
+interface UseMapboxReturn {
+    map: MutableRefObject<mapboxgl.Map | null>;
+    mapReady: boolean;
+    error: string | null;
+    flyToGlobe: (selectedTrek?: TrekConfig | null) => void;
+    flyToTrek: (selectedTrek: TrekConfig, selectedCamp?: Camp | null) => void;
+    highlightSegment: (trekData: TrekData, selectedCamp: Camp) => void;
+}
 
 /**
  * Initialize Mapbox map with globe projection and terrain
- * @param {Object} options - Configuration options
- * @param {React.RefObject} options.containerRef - Container element ref
- * @param {Function} options.onTrekSelect - Callback when trek marker is clicked
- * @returns {Object} Map state and controls
  */
-export function useMapbox({ containerRef, onTrekSelect }) {
-    const mapRef = useRef(null);
+export function useMapbox({ containerRef, onTrekSelect }: UseMapboxOptions): UseMapboxReturn {
+    const mapRef = useRef<mapboxgl.Map | null>(null);
     const [mapReady, setMapReady] = useState(false);
-    const [error, setError] = useState(null);
+    const [error, setError] = useState<string | null>(null);
 
     // Store callbacks in refs to avoid dependency issues
     const onTrekSelectRef = useRef(onTrekSelect);
@@ -29,7 +40,7 @@ export function useMapbox({ containerRef, onTrekSelect }) {
     useEffect(() => {
         if (!containerRef.current || mapRef.current) return;
 
-        const token = import.meta.env.VITE_MAPBOX_TOKEN;
+        const token = import.meta.env.VITE_MAPBOX_TOKEN as string;
         if (!token) {
             setError('Mapbox token not found');
             console.error('Mapbox token not found');
@@ -87,10 +98,10 @@ export function useMapbox({ containerRef, onTrekSelect }) {
                     data: {
                         type: 'FeatureCollection',
                         features: treks.map(trek => ({
-                            type: 'Feature',
+                            type: 'Feature' as const,
                             properties: trek,
                             geometry: {
-                                type: 'Point',
+                                type: 'Point' as const,
                                 coordinates: [trek.lng, trek.lat]
                             }
                         }))
@@ -126,7 +137,7 @@ export function useMapbox({ containerRef, onTrekSelect }) {
                 });
 
                 // Preload all trek routes
-                Object.values(trekDataMap).forEach(trekData => {
+                Object.values(trekDataMap).forEach((trekData: TrekData) => {
                     if (!trekData.route) return;
 
                     map.addSource(`route-${trekData.id}`, {
@@ -186,8 +197,8 @@ export function useMapbox({ containerRef, onTrekSelect }) {
             });
 
             map.on('click', 'trek-markers-circle', (e) => {
-                if (e.features.length > 0) {
-                    const trekProps = e.features[0].properties;
+                if (e.features && e.features.length > 0) {
+                    const trekProps = e.features[0].properties as TrekConfig;
                     const trek = treks.find(t => t.id === trekProps.id);
                     if (trek && onTrekSelectRef.current) {
                         onTrekSelectRef.current(trek);
@@ -197,7 +208,7 @@ export function useMapbox({ containerRef, onTrekSelect }) {
             });
 
         } catch (err) {
-            setError(err.message);
+            setError((err as Error).message);
             console.error('Error initializing map:', err);
         }
 
@@ -210,7 +221,7 @@ export function useMapbox({ containerRef, onTrekSelect }) {
     }, [containerRef]);
 
     // Fly to globe view
-    const flyToGlobe = useCallback((selectedTrek = null) => {
+    const flyToGlobe = useCallback((selectedTrek: TrekConfig | null = null) => {
         const map = mapRef.current;
         if (!map || !mapReady) return;
 
@@ -260,7 +271,7 @@ export function useMapbox({ containerRef, onTrekSelect }) {
     }, [mapReady]);
 
     // Highlight trek segment (defined before flyToTrek which uses it)
-    const highlightSegment = useCallback((trekData, selectedCamp) => {
+    const highlightSegment = useCallback((trekData: TrekData, selectedCamp: Camp) => {
         const map = mapRef.current;
         if (!map || !mapReady) return;
 
@@ -271,19 +282,20 @@ export function useMapbox({ containerRef, onTrekSelect }) {
         const startCoord = campIndex === 0 ? routeCoords[0] : trekData.camps[campIndex - 1].coordinates;
         const endCoord = selectedCamp.coordinates;
 
-        const startIndex = findCoordIndex(routeCoords, startCoord);
-        const endIndex = findCoordIndex(routeCoords, endCoord);
+        const startIndex = findCoordIndex(routeCoords, startCoord as [number, number]);
+        const endIndex = findCoordIndex(routeCoords, endCoord as [number, number]);
 
         if (startIndex !== -1 && endIndex !== -1 && endIndex >= startIndex) {
             const segmentCoords = routeCoords.slice(startIndex, endIndex + 1);
-            const segmentGeoJSON = {
+            const segmentGeoJSON: GeoJSON.Feature = {
                 type: 'Feature',
                 properties: {},
                 geometry: { type: 'LineString', coordinates: segmentCoords }
             };
 
-            if (map.getSource('active-segment')) {
-                map.getSource('active-segment').setData(segmentGeoJSON);
+            const source = map.getSource('active-segment') as mapboxgl.GeoJSONSource;
+            if (source) {
+                source.setData(segmentGeoJSON);
                 map.setLayoutProperty('active-segment-line', 'visibility', 'visible');
                 map.setLayoutProperty('active-segment-glow', 'visibility', 'visible');
             }
@@ -291,11 +303,11 @@ export function useMapbox({ containerRef, onTrekSelect }) {
     }, [mapReady]);
 
     // Fly to trek view
-    const flyToTrek = useCallback((selectedTrek, selectedCamp = null) => {
+    const flyToTrek = useCallback((selectedTrek: TrekConfig, selectedCamp: Camp | null = null) => {
         const map = mapRef.current;
         if (!map || !mapReady || !selectedTrek) return;
 
-        const trekData = trekDataMap[selectedTrek.id];
+        const trekData = trekDataMap[selectedTrek.id as keyof typeof trekDataMap];
         const trekConfig = getTrekConfig(selectedTrek.id);
         if (!trekData || !trekConfig) return;
 
@@ -332,7 +344,7 @@ export function useMapbox({ containerRef, onTrekSelect }) {
                 if (campIndex !== -1) {
                     const routeCoords = trekData.route.coordinates;
                     const currentCoord = selectedCamp.coordinates;
-                    const endIndex = findCoordIndex(routeCoords, currentCoord);
+                    const endIndex = findCoordIndex(routeCoords, currentCoord as [number, number]);
 
                     if (endIndex > 5) {
                         const lookBackIndex = endIndex - 5;
@@ -346,7 +358,7 @@ export function useMapbox({ containerRef, onTrekSelect }) {
             }
 
             map.flyTo({
-                center: selectedCamp.coordinates,
+                center: selectedCamp.coordinates as [number, number],
                 zoom: 15,
                 pitch: pitch,
                 bearing: bearing,
@@ -360,8 +372,8 @@ export function useMapbox({ containerRef, onTrekSelect }) {
             // Fit bounds to whole route
             const coordinates = trekData.route.coordinates;
             const bounds = coordinates.reduce((b, coord) => {
-                return b.extend(coord);
-            }, new mapboxgl.LngLatBounds(coordinates[0], coordinates[0]));
+                return b.extend(coord as [number, number]);
+            }, new mapboxgl.LngLatBounds(coordinates[0] as [number, number], coordinates[0] as [number, number]));
 
             map.fitBounds(bounds, {
                 padding: { top: 100, bottom: 100, left: 100, right: 600 },

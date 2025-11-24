@@ -1,10 +1,17 @@
 import 'mapbox-gl/dist/mapbox-gl.css';
 import { useTrekData } from '../hooks/useTrekData';
 import { MapboxGlobe } from './MapboxGlobe';
+import type { TrekConfig, TrekData, Camp, ExtendedStats, ElevationProfile, TabType } from '../types/trek';
 
 // --- UI Components ---
 
-function GlobeSelectionPanel({ selectedTrek, onBack, onExplore }) {
+interface GlobeSelectionPanelProps {
+    selectedTrek: TrekConfig;
+    onBack: () => void;
+    onExplore: () => void;
+}
+
+function GlobeSelectionPanel({ selectedTrek, onBack, onExplore }: GlobeSelectionPanelProps) {
     return (
         <div style={{
             position: 'absolute',
@@ -71,10 +78,16 @@ function GlobeHint() {
     );
 }
 
-function TabButton({ tab, activeTab, onClick }) {
+interface TabButtonProps {
+    tab: string;
+    activeTab: TabType;
+    onClick: (tab: TabType) => void;
+}
+
+function TabButton({ tab, activeTab, onClick }: TabButtonProps) {
     return (
         <button
-            onClick={() => onClick(tab)}
+            onClick={() => onClick(tab as TabType)}
             style={{
                 background: 'none',
                 border: 'none',
@@ -93,7 +106,13 @@ function TabButton({ tab, activeTab, onClick }) {
     );
 }
 
-function StatCard({ label, value, color = 'rgba(255,255,255,0.8)' }) {
+interface StatCardProps {
+    label: string;
+    value: string;
+    color?: string;
+}
+
+function StatCard({ label, value, color = 'rgba(255,255,255,0.8)' }: StatCardProps) {
     return (
         <div style={{ background: 'rgba(255,255,255,0.03)', padding: 16, borderRadius: 8 }}>
             <p style={{ color: 'rgba(255,255,255,0.3)', fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 4 }}>
@@ -104,7 +123,11 @@ function StatCard({ label, value, color = 'rgba(255,255,255,0.8)' }) {
     );
 }
 
-function OverviewTab({ trekData }) {
+interface OverviewTabProps {
+    trekData: TrekData;
+}
+
+function OverviewTab({ trekData }: OverviewTabProps) {
     return (
         <div>
             <p style={{ color: 'rgba(255,255,255,0.5)', lineHeight: 1.7, marginBottom: 24 }}>
@@ -120,7 +143,14 @@ function OverviewTab({ trekData }) {
     );
 }
 
-function CampItem({ camp, isSelected, onClick, isLast }) {
+interface CampItemProps {
+    camp: Camp;
+    isSelected: boolean;
+    onClick: (camp: Camp) => void;
+    isLast: boolean;
+}
+
+function CampItem({ camp, isSelected, onClick, isLast }: CampItemProps) {
     return (
         <div
             onClick={() => onClick(camp)}
@@ -183,7 +213,13 @@ function CampItem({ camp, isSelected, onClick, isLast }) {
     );
 }
 
-function JourneyTab({ trekData, selectedCamp, onCampSelect }) {
+interface JourneyTabProps {
+    trekData: TrekData;
+    selectedCamp: Camp | null;
+    onCampSelect: (camp: Camp) => void;
+}
+
+function JourneyTab({ trekData, selectedCamp, onCampSelect }: JourneyTabProps) {
     return (
         <div>
             {trekData.camps.map((camp, i) => (
@@ -199,7 +235,11 @@ function JourneyTab({ trekData, selectedCamp, onCampSelect }) {
     );
 }
 
-function ElevationProfile({ elevationProfile }) {
+interface ElevationProfileProps {
+    elevationProfile: ElevationProfile | null;
+}
+
+function ElevationProfileChart({ elevationProfile }: ElevationProfileProps) {
     if (!elevationProfile) return null;
 
     return (
@@ -231,7 +271,13 @@ function ElevationProfile({ elevationProfile }) {
     );
 }
 
-function StatsTab({ trekData, extendedStats, elevationProfile }) {
+interface StatsTabProps {
+    trekData: TrekData;
+    extendedStats: ExtendedStats | null;
+    elevationProfile: ElevationProfile | null;
+}
+
+function StatsTab({ trekData, extendedStats, elevationProfile }: StatsTabProps) {
     return (
         <div>
             <div style={{
@@ -250,7 +296,7 @@ function StatsTab({ trekData, extendedStats, elevationProfile }) {
                 <p style={{ color: 'rgba(255,255,255,0.3)', fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 16 }}>
                     Elevation Profile
                 </p>
-                <ElevationProfile elevationProfile={elevationProfile} />
+                <ElevationProfileChart elevationProfile={elevationProfile} />
             </div>
 
             {extendedStats && (
@@ -265,7 +311,18 @@ function StatsTab({ trekData, extendedStats, elevationProfile }) {
     );
 }
 
-function InfoPanel({ trekData, activeTab, setActiveTab, selectedCamp, onCampSelect, onBack, extendedStats, elevationProfile }) {
+interface InfoPanelProps {
+    trekData: TrekData;
+    activeTab: TabType;
+    setActiveTab: (tab: TabType) => void;
+    selectedCamp: Camp | null;
+    onCampSelect: (camp: Camp) => void;
+    onBack: () => void;
+    extendedStats: ExtendedStats | null;
+    elevationProfile: ElevationProfile | null;
+}
+
+function InfoPanel({ trekData, activeTab, setActiveTab, selectedCamp, onCampSelect, onBack, extendedStats, elevationProfile }: InfoPanelProps) {
     return (
         <div style={{
             position: 'absolute',
@@ -308,7 +365,7 @@ function InfoPanel({ trekData, activeTab, setActiveTab, selectedCamp, onCampSele
 
             {/* Tabs */}
             <div style={{ display: 'flex', borderBottom: '1px solid rgba(255,255,255,0.05)', padding: '0 24px' }}>
-                {['overview', 'journey', 'stats'].map(tab => (
+                {(['overview', 'journey', 'stats'] as const).map(tab => (
                     <TabButton key={tab} tab={tab} activeTab={activeTab} onClick={setActiveTab} />
                 ))}
             </div>

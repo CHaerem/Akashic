@@ -2,23 +2,26 @@
  * Centralized trek configuration - single source of truth
  */
 
+import type { TrekData, TrekConfig } from '../types/trek';
 import kilimanjaroData from './kilimanjaro.json';
 import mountKenyaData from './mountKenya.json';
 import incaTrailData from './incaTrail.json';
 
+type TrekId = 'kilimanjaro' | 'mount-kenya' | 'inca-trail';
+
 /**
  * Trek data mapping by ID
  */
-export const trekDataMap = {
-    'kilimanjaro': kilimanjaroData,
-    'mount-kenya': mountKenyaData,
-    'inca-trail': incaTrailData
+export const trekDataMap: Record<TrekId, TrekData> = {
+    'kilimanjaro': kilimanjaroData as TrekData,
+    'mount-kenya': mountKenyaData as TrekData,
+    'inca-trail': incaTrailData as TrekData
 };
 
 /**
  * Trek marker configuration for globe view
  */
-export const treks = [
+export const treks: TrekConfig[] = [
     {
         id: 'kilimanjaro',
         name: 'Kilimanjaro',
@@ -53,26 +56,21 @@ export const treks = [
 
 /**
  * Get trek data by ID
- * @param {string} id - Trek ID
- * @returns {Object|null} Trek data or null if not found
  */
-export function getTrekData(id) {
-    return trekDataMap[id] || null;
+export function getTrekData(id: string): TrekData | null {
+    return trekDataMap[id as TrekId] || null;
 }
 
 /**
  * Get trek config by ID
- * @param {string} id - Trek ID
- * @returns {Object|null} Trek config or null if not found
  */
-export function getTrekConfig(id) {
+export function getTrekConfig(id: string): TrekConfig | null {
     return treks.find(t => t.id === id) || null;
 }
 
 /**
  * Get all trek IDs
- * @returns {string[]} Array of trek IDs
  */
-export function getAllTrekIds() {
+export function getAllTrekIds(): string[] {
     return Object.keys(trekDataMap);
 }

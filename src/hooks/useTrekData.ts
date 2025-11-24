@@ -5,19 +5,41 @@
 import { useState, useCallback, useMemo } from 'react';
 import { trekDataMap } from '../data/trekConfig';
 import { calculateStats, generateElevationProfile } from '../utils/stats';
+import type { TrekConfig, TrekData, Camp, ExtendedStats, ElevationProfile, ViewMode, TabType } from '../types/trek';
+
+interface UseTrekDataReturn {
+    // State
+    view: ViewMode;
+    selectedTrek: TrekConfig | null;
+    selectedCamp: Camp | null;
+    activeTab: TabType;
+    trekData: TrekData | null;
+    extendedStats: ExtendedStats | null;
+    elevationProfile: ElevationProfile | null;
+
+    // Setters
+    setView: (view: ViewMode) => void;
+    setActiveTab: (tab: TabType) => void;
+
+    // Handlers
+    selectTrek: (trek: TrekConfig) => void;
+    handleExplore: () => void;
+    handleBackToGlobe: () => void;
+    handleBackToSelection: () => void;
+    handleCampSelect: (camp: Camp) => void;
+}
 
 /**
  * Manage trek selection state and computed data
- * @returns {Object} Trek state and handlers
  */
-export function useTrekData() {
-    const [view, setView] = useState('globe');
-    const [selectedTrek, setSelectedTrek] = useState(null);
-    const [selectedCamp, setSelectedCamp] = useState(null);
-    const [activeTab, setActiveTab] = useState('overview');
+export function useTrekData(): UseTrekDataReturn {
+    const [view, setView] = useState<ViewMode>('globe');
+    const [selectedTrek, setSelectedTrek] = useState<TrekConfig | null>(null);
+    const [selectedCamp, setSelectedCamp] = useState<Camp | null>(null);
+    const [activeTab, setActiveTab] = useState<TabType>('overview');
 
     // Get trek data for selected trek
-    const trekData = selectedTrek ? trekDataMap[selectedTrek.id] : null;
+    const trekData = selectedTrek ? trekDataMap[selectedTrek.id as keyof typeof trekDataMap] : null;
 
     // Memoized stats and elevation profile
     const { extendedStats, elevationProfile } = useMemo(() => {
@@ -48,12 +70,12 @@ export function useTrekData() {
     }, []);
 
     // Handle camp selection (toggle)
-    const handleCampSelect = useCallback((camp) => {
+    const handleCampSelect = useCallback((camp: Camp) => {
         setSelectedCamp(prev => prev?.id === camp.id ? null : camp);
     }, []);
 
     // Select a trek
-    const selectTrek = useCallback((trek) => {
+    const selectTrek = useCallback((trek: TrekConfig) => {
         setSelectedTrek(trek);
         setSelectedCamp(null);
     }, []);

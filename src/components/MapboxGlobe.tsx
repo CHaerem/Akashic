@@ -5,9 +5,17 @@
 import { useRef, useEffect } from 'react';
 import { useMapbox } from '../hooks/useMapbox';
 import { MapErrorFallback } from './common/ErrorBoundary';
+import type { TrekConfig, Camp, ViewMode } from '../types/trek';
 
-export function MapboxGlobe({ selectedTrek, selectedCamp, onSelectTrek, view }) {
-    const containerRef = useRef(null);
+interface MapboxGlobeProps {
+    selectedTrek: TrekConfig | null;
+    selectedCamp: Camp | null;
+    onSelectTrek: (trek: TrekConfig) => void;
+    view: ViewMode;
+}
+
+export function MapboxGlobe({ selectedTrek, selectedCamp, onSelectTrek, view }: MapboxGlobeProps) {
+    const containerRef = useRef<HTMLDivElement>(null);
 
     const { mapReady, error, flyToGlobe, flyToTrek } = useMapbox({
         containerRef,
