@@ -167,7 +167,7 @@ function MapboxGlobe({ selectedTrek, selectedCamp, onSelectTrek, view, setView }
 
         const newMap = new mapboxgl.Map({
             container: mapContainer.current,
-            style: 'mapbox://styles/mapbox/satellite-streets-v12',
+            style: 'mapbox://styles/mapbox/satellite-v9',
             projection: 'globe', // Display as a globe
             zoom: 1.5,
             center: [30, 15],
@@ -191,9 +191,9 @@ function MapboxGlobe({ selectedTrek, selectedCamp, onSelectTrek, view, setView }
                 type: 'raster-dem',
                 url: 'mapbox://mapbox.terrain-rgb',
                 tileSize: 512,
-                maxzoom: 14
+                maxzoom: 16
             });
-            newMap.setTerrain({ source: 'mapbox-dem', exaggeration: 1.5 });
+            newMap.setTerrain({ source: 'mapbox-dem', exaggeration: 1.2 });
 
             // Add Sky Layer
             newMap.addLayer({
@@ -353,7 +353,7 @@ function MapboxGlobe({ selectedTrek, selectedCamp, onSelectTrek, view, setView }
                 'space-color': 'rgb(11, 11, 25)',
                 'star-intensity': 0.0 // No stars in day
             });
-            map.current.setTerrain({ source: 'mapbox-dem', exaggeration: 1.8 }); // More dramatic terrain
+            map.current.setTerrain({ source: 'mapbox-dem', exaggeration: 1.2 });
 
             const trekData = trekDataMap[selectedTrek.id];
             const trekConfig = treks.find(t => t.id === selectedTrek.id);
@@ -416,7 +416,7 @@ function MapboxGlobe({ selectedTrek, selectedCamp, onSelectTrek, view, setView }
                 // Fly to specific camp with dynamic settings
                 map.current.flyTo({
                     center: selectedCamp.coordinates,
-                    zoom: 13.5, // Slightly closer
+                    zoom: 15, // Higher detail
                     pitch: pitch,
                     bearing: bearing,
                     duration: 2000,
@@ -495,7 +495,7 @@ function MapboxGlobe({ selectedTrek, selectedCamp, onSelectTrek, view, setView }
                 'space-color': 'rgb(11, 11, 25)', // Dark blue space
                 'star-intensity': 0.15 // Subtle stars
             });
-            map.current.setTerrain({ source: 'mapbox-dem', exaggeration: 1.5 }); // Standard globe terrain
+            map.current.setTerrain({ source: 'mapbox-dem', exaggeration: 1.2 });
 
             // Hide all routes and highlights
             Object.keys(trekDataMap).forEach(id => {

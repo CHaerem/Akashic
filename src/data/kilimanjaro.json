@@ -19,68 +19,24 @@
             "elevation": 5895,
             "coordinates": [
                 37.3556,
-                -3.0758
+                -3.0674
             ]
         }
     },
     "route": {
         "type": "LineString",
         "coordinates": [
-            [
-                37.2089,
-                -3.0833,
-                2100
-            ],
-            [
-                37.2150,
-                -3.0900,
-                2750
-            ],
-            [
-                37.2250,
-                -3.0700,
-                3500
-            ],
-            [
-                37.2400,
-                -3.0500,
-                3850
-            ],
-            [
-                37.3000,
-                -3.0400,
-                4600
-            ],
-            [
-                37.3200,
-                -3.0200,
-                3950
-            ],
-            [
-                37.3400,
-                -3.0400,
-                4000
-            ],
-            [
-                37.3500,
-                -3.0600,
-                4600
-            ],
-            [
-                37.3556,
-                -3.0758,
-                5895
-            ],
-            [
-                37.3300,
-                -3.1200,
-                3100
-            ],
-            [
-                37.3200,
-                -3.1500,
-                1500
-            ]
+            [37.2089, -3.0833, 2100],
+            [37.22, -3.07, 2750],
+            [37.24, -3.05, 3500],
+            [37.275, -3.054, 3850],
+            [37.32, -3.06, 4600],
+            [37.32, -3.09, 3950],
+            [37.34, -3.085, 4000],
+            [37.378, -3.10, 4600],
+            [37.3556, -3.0674, 5895],
+            [37.33, -3.12, 3100],
+            [37.32, -3.18, 1640]
         ]
     },
     "camps": [
@@ -90,20 +46,14 @@
             "dayNumber": 1,
             "date": "Oct 1",
             "elevation": 2750,
-            "coordinates": [
-                37.2150,
-                -3.0900
-            ],
+            "coordinates": [37.22, -3.07],
             "distanceFromStart": 7,
             "distanceFromPrevious": 7,
             "elevationGainFromPrevious": 550,
             "timeFromPrevious": "3 hours",
             "terrain": "Rainforest",
             "notes": "Trek through dense rainforest from Lemosho Glades. Colobus monkeys often visible.",
-            "highlights": [
-                "Rainforest",
-                "Colobus Monkeys"
-            ],
+            "highlights": ["Rainforest", "Colobus Monkeys"],
             "images": []
         },
         {
@@ -112,20 +62,14 @@
             "dayNumber": 2,
             "date": "Oct 2",
             "elevation": 3850,
-            "coordinates": [
-                37.2400,
-                -3.0500
-            ],
+            "coordinates": [37.275, -3.054],
             "distanceFromStart": 24,
             "distanceFromPrevious": 17,
             "elevationGainFromPrevious": 1100,
             "timeFromPrevious": "7 hours",
             "terrain": "Heath & Moorland",
             "notes": "Ascend to Shira Plateau with magnificent views of Kibo and Mt. Meru.",
-            "highlights": [
-                "Shira Plateau",
-                "Mt. Meru View"
-            ],
+            "highlights": ["Shira Plateau", "Mt. Meru View"],
             "images": []
         },
         {
@@ -134,20 +78,14 @@
             "dayNumber": 3,
             "date": "Oct 3",
             "elevation": 3950,
-            "coordinates": [
-                37.3200,
-                -3.0200
-            ],
+            "coordinates": [37.32, -3.09],
             "distanceFromStart": 34,
             "distanceFromPrevious": 10,
             "elevationGainFromPrevious": 100,
             "timeFromPrevious": "6 hours",
             "terrain": "Alpine Desert",
             "notes": "Acclimatization day. Climb to Lava Tower (4600m) for lunch, then descend to Barranco.",
-            "highlights": [
-                "Lava Tower",
-                "Western Breach"
-            ],
+            "highlights": ["Lava Tower", "Western Breach"],
             "images": []
         },
         {
@@ -156,20 +94,14 @@
             "dayNumber": 4,
             "date": "Oct 4",
             "elevation": 4000,
-            "coordinates": [
-                37.3400,
-                -3.0400
-            ],
+            "coordinates": [37.34, -3.085],
             "distanceFromStart": 39,
             "distanceFromPrevious": 5,
             "elevationGainFromPrevious": 50,
             "timeFromPrevious": "4 hours",
             "terrain": "Alpine Desert",
             "notes": "Climb the Barranco Wall. Short day to Karanga Valley with glacier views.",
-            "highlights": [
-                "Barranco Wall",
-                "Heim Glacier"
-            ],
+            "highlights": ["Barranco Wall", "Heim Glacier"],
             "images": []
         },
         {
@@ -178,20 +110,14 @@
             "dayNumber": 5,
             "date": "Oct 5",
             "elevation": 4600,
-            "coordinates": [
-                37.3500,
-                -3.0600
-            ],
+            "coordinates": [37.378, -3.10],
             "distanceFromStart": 43,
             "distanceFromPrevious": 4,
             "elevationGainFromPrevious": 600,
             "timeFromPrevious": "3 hours",
             "terrain": "Alpine Desert",
             "notes": "Steep hike to base camp. Rest and prepare for midnight summit push.",
-            "highlights": [
-                "Summit Prep",
-                "Mawenzi View"
-            ],
+            "highlights": ["Summit Prep", "Mawenzi View"],
             "images": []
         },
         {
@@ -200,20 +126,14 @@
             "dayNumber": 6,
             "date": "Oct 6",
             "elevation": 5895,
-            "coordinates": [
-                37.3556,
-                -3.0758
-            ],
+            "coordinates": [37.3556, -3.0674],
             "distanceFromStart": 48,
             "distanceFromPrevious": 5,
             "elevationGainFromPrevious": 1295,
             "timeFromPrevious": "7 hours",
             "terrain": "Glacial",
             "notes": "Summit at sunrise! Roof of Africa. Descent to Mweka Camp.",
-            "highlights": [
-                "Sunrise",
-                "Roof of Africa"
-            ],
+            "highlights": ["Sunrise", "Roof of Africa"],
             "images": [],
             "bearing": 90,
             "pitch": 60
@@ -224,20 +144,14 @@
             "dayNumber": 6,
             "date": "Oct 6",
             "elevation": 3100,
-            "coordinates": [
-                37.3300,
-                -3.1200
-            ],
+            "coordinates": [37.33, -3.12],
             "distanceFromStart": 60,
             "distanceFromPrevious": 12,
             "elevationGainFromPrevious": 0,
             "timeFromPrevious": "6 hours (descent)",
             "terrain": "Heath",
             "notes": "Long descent from summit to the tree line.",
-            "highlights": [
-                "Thick Oxygen",
-                "Celebration"
-            ],
+            "highlights": ["Thick Oxygen", "Celebration"],
             "images": []
         },
         {
@@ -246,20 +160,14 @@
             "dayNumber": 7,
             "date": "Oct 7",
             "elevation": 1640,
-            "coordinates": [
-                37.3200,
-                -3.1500
-            ],
+            "coordinates": [37.32, -3.18],
             "distanceFromStart": 70,
             "distanceFromPrevious": 10,
             "elevationGainFromPrevious": 0,
             "timeFromPrevious": "3-4 hours",
             "terrain": "Rainforest",
             "notes": "Final descent through the rainforest to the gate. Certificate ceremony!",
-            "highlights": [
-                "Rainforest",
-                "Certificates"
-            ],
+            "highlights": ["Rainforest", "Certificates"],
             "images": []
         }
     ],

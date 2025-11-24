@@ -17,70 +17,23 @@
         "highestPoint": {
             "name": "Dead Woman's Pass",
             "elevation": 4215,
-            "coordinates": [
-                -72.5300,
-                -13.2200
-            ]
+            "coordinates": [-72.4986, -13.2340]
         }
     },
     "route": {
         "type": "LineString",
         "coordinates": [
-            [
-                -72.5500,
-                -13.2500,
-                2600
-            ],
-            [
-                -72.5400,
-                -13.2300,
-                3000
-            ],
-            [
-                -72.5350,
-                -13.2250,
-                3680
-            ],
-            [
-                -72.5300,
-                -13.2200,
-                4215
-            ],
-            [
-                -72.5250,
-                -13.2150,
-                3600
-            ],
-            [
-                -72.5200,
-                -13.2100,
-                3970
-            ],
-            [
-                -72.5100,
-                -13.2080,
-                3600
-            ],
-            [
-                -72.5000,
-                -13.2050,
-                3700
-            ],
-            [
-                -72.5200,
-                -13.2000,
-                3650
-            ],
-            [
-                -72.5400,
-                -13.1900,
-                2650
-            ],
-            [
-                -72.5450,
-                -13.1631,
-                2400
-            ]
+            [-72.3823, -13.2149, 2600],
+            [-72.4234, -13.2354, 3000],
+            [-72.4600, -13.2380, 3680],
+            [-72.4986, -13.2340, 4215],
+            [-72.5168, -13.2280, 3600],
+            [-72.5250, -13.2150, 3970],
+            [-72.5318, -13.2064, 3600],
+            [-72.5375, -13.1901, 3600],
+            [-72.5352, -13.1890, 2650],
+            [-72.5339, -13.1697, 2650],
+            [-72.5449, -13.1631, 2400]
         ]
     },
     "camps": [
@@ -90,10 +43,7 @@
             "dayNumber": 1,
             "date": "Day 1",
             "elevation": 3000,
-            "coordinates": [
-                -72.5400,
-                -13.2300
-            ],
+            "coordinates": [-72.4234, -13.2354],
             "distanceFromStart": 12,
             "distanceFromPrevious": 12,
             "elevationGainFromPrevious": 400,
@@ -112,10 +62,7 @@
             "dayNumber": 2,
             "date": "Day 2",
             "elevation": 3600,
-            "coordinates": [
-                -72.5250,
-                -13.2150
-            ],
+            "coordinates": [-72.5168, -13.2280],
             "distanceFromStart": 23,
             "distanceFromPrevious": 11,
             "elevationGainFromPrevious": 1200,
@@ -134,10 +81,7 @@
             "dayNumber": 3,
             "date": "Day 3",
             "elevation": 2650,
-            "coordinates": [
-                -72.5400,
-                -13.1900
-            ],
+            "coordinates": [-72.5352, -13.1890],
             "distanceFromStart": 39,
             "distanceFromPrevious": 16,
             "elevationGainFromPrevious": 370,
@@ -156,10 +100,7 @@
             "dayNumber": 4,
             "date": "Day 4",
             "elevation": 2400,
-            "coordinates": [
-                -72.5450,
-                -13.1631
-            ],
+            "coordinates": [-72.5449, -13.1631],
             "distanceFromStart": 43,
             "distanceFromPrevious": 4,
             "elevationGainFromPrevious": 0,

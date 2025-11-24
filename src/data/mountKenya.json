@@ -3,84 +3,35 @@
     "name": "Mount Kenya - Chogoria/Sirimon",
     "country": "Kenya",
     "slug": "mount-kenya",
-    "description": "A spectacular traverse of Mount Kenya, ascending via the scenic Chogoria route and descending the Sirimon route. Includes a safari extension in the Masai Mara.",
+    "description": "A spectacular traverse of Mount Kenya, ascending via the scenic Chogoria route past Lake Ellis and descending the Sirimon route. Includes a safari extension in the Masai Mara.",
     "heroImage": "/hero-images/mount-kenya-hero.png",
     "dates": {
         "start": "2023-10-10",
         "end": "2023-10-17"
     },
     "stats": {
-        "totalDistance": 65,
-        "totalElevationGain": 2800,
-        "totalElevationLoss": 2400,
-        "duration": 6,
+        "totalDistance": 50,
+        "totalElevationGain": 2600,
+        "totalElevationLoss": 2900,
+        "duration": 4,
         "highestPoint": {
             "name": "Point Lenana",
             "elevation": 4985,
-            "coordinates": [
-                37.3088,
-                -0.1521
-            ]
+            "coordinates": [37.3178, -0.1552]
         }
     },
     "route": {
         "type": "LineString",
         "coordinates": [
-            [
-                37.4870,
-                -0.1680,
-                2900
-            ],
-            [
-                37.4700,
-                -0.1600,
-                3100
-            ],
-            [
-                37.4380,
-                -0.1550,
-                3300
-            ],
-            [
-                37.4100,
-                -0.1500,
-                3800
-            ],
-            [
-                37.3870,
-                -0.1470,
-                4200
-            ],
-            [
-                37.3500,
-                -0.1500,
-                4600
-            ],
-            [
-                37.3088,
-                -0.1521,
-                4985
-            ],
-            [
-                37.3000,
-                -0.1400,
-                4600
-            ],
-            [
-                37.2950,
-                -0.1200,
-                4200
-            ],
-            [
-                37.2900,
-                -0.0700,
-                3300
-            ],
-            [
-                37.2370,
-                -0.0260,
-                2600
-            ]
+            [37.448, -0.160, 2900],
+            [37.420, -0.140, 3200],
+            [37.400, -0.117, 3600],
+            [37.370, -0.130, 4000],
+            [37.345, -0.143, 4500],
+            [37.3178, -0.1552, 4985],
+            [37.3147, -0.1414, 4270],
+            [37.2872, -0.0490, 3386],
+            [37.2465, 0.0050, 2600]
         ]
     },
     "camps": [
@@ -90,130 +41,76 @@
             "dayNumber": 1,
             "date": "Day 2",
             "elevation": 2900,
-            "coordinates": [
-                37.4870,
-                -0.1680
-            ],
-            "distanceFromStart": 16,
-            "distanceFromPrevious": 16,
+            "coordinates": [37.448, -0.160],
+            "distanceFromStart": 10,
+            "distanceFromPrevious": 10,
             "elevationGainFromPrevious": 500,
             "timeFromPrevious": "3-4 hours",
             "terrain": "Forest and bamboo",
-            "notes": "Drive from Nairobi, lunch in Chogoria, then 4x4 to forest edge. Hike to Bandas.",
+            "notes": "Drive from Nairobi, lunch in Chogoria, then 4x4 to forest edge. Hike through bamboo forest to the Bandas.",
             "highlights": [
-                "Rainforest",
-                "Wildlife"
+                "Bamboo forest",
+                "Wildlife spotting"
             ],
             "images": []
         },
         {
-            "id": "road-head",
-            "name": "Road Head Camp",
+            "id": "lake-ellis",
+            "name": "Lake Ellis Camp",
             "dayNumber": 2,
             "date": "Day 3",
-            "elevation": 3300,
-            "coordinates": [
-                37.4380,
-                -0.1550
-            ],
-            "distanceFromStart": 25,
-            "distanceFromPrevious": 9,
-            "elevationGainFromPrevious": 350,
+            "elevation": 3600,
+            "coordinates": [37.400, -0.117],
+            "distanceFromStart": 17,
+            "distanceFromPrevious": 7,
+            "elevationGainFromPrevious": 700,
             "timeFromPrevious": "3-4 hours",
             "terrain": "Moorland",
-            "notes": "Hike through lush forest with views of Mugi and Ithanguni.",
+            "notes": "Trek through lush forest with views of Mugi, Ithanguni and Giants Billiards Table. A less-traveled route offering excellent acclimatization.",
             "highlights": [
-                "Nithi River",
-                "Moorland views"
-            ],
-            "images": []
-        },
-        {
-            "id": "mintos-camp",
-            "name": "Minto's Camp",
-            "dayNumber": 3,
-            "date": "Day 4",
-            "elevation": 4200,
-            "coordinates": [
-                37.3870,
-                -0.1470
-            ],
-            "distanceFromStart": 37,
-            "distanceFromPrevious": 12,
-            "elevationGainFromPrevious": 900,
-            "timeFromPrevious": "4-5 hours",
-            "terrain": "High alpine",
-            "notes": "Spectacular views of Gorges Valley and Lake Michaelson.",
-            "highlights": [
-                "Lake Michaelson view",
-                "The Temple"
+                "Lake Ellis",
+                "Moorland views",
+                "Giant lobelia"
             ],
             "images": []
         },
         {
             "id": "point-lenana",
             "name": "Point Lenana (Summit)",
-            "dayNumber": 4,
-            "date": "Day 5",
+            "dayNumber": 3,
+            "date": "Day 4",
             "elevation": 4985,
-            "coordinates": [
-                37.3088,
-                -0.1521
-            ],
-            "distanceFromStart": 50,
+            "coordinates": [37.3178, -0.1552],
+            "distanceFromStart": 30,
             "distanceFromPrevious": 13,
-            "elevationGainFromPrevious": 785,
-            "timeFromPrevious": "4 hours",
-            "terrain": "Glacial & Rocky",
-            "notes": "Sunrise summit! Views of Batian and Nelion.",
+            "elevationGainFromPrevious": 1385,
+            "timeFromPrevious": "5-6 hours",
+            "terrain": "Alpine & Glacial",
+            "notes": "Early start for sunrise summit! Spectacular views of Batian (5199m) and Nelion (5188m). Then long descent via Sirimon route all the way to the gate.",
             "highlights": [
-                "Sunrise",
-                "Roof of Kenya"
+                "Sunrise summit",
+                "Views of Batian & Nelion",
+                "Lewis Glacier"
             ],
             "images": [],
             "bearing": 270,
             "pitch": 60
         },
         {
-            "id": "old-moses",
-            "name": "Old Moses Camp",
-            "dayNumber": 4,
-            "date": "Day 5 (PM)",
-            "elevation": 3300,
-            "coordinates": [
-                37.2900,
-                -0.0700
-            ],
-            "distanceFromStart": 64,
-            "distanceFromPrevious": 14,
-            "elevationGainFromPrevious": 0,
-            "timeFromPrevious": "6 hours (descent)",
-            "terrain": "Moorland",
-            "notes": "Long descent from summit past Shiptons to Old Moses.",
-            "highlights": [
-                "Mackinder's Valley",
-                "Moorland"
-            ],
-            "images": []
-        },
-        {
             "id": "sirimon-gate",
             "name": "Sirimon Gate (Finish)",
-            "dayNumber": 5,
-            "date": "Day 6",
+            "dayNumber": 3,
+            "date": "Day 4 (PM)",
             "elevation": 2600,
-            "coordinates": [
-                37.2370,
-                -0.0260
-            ],
-            "distanceFromStart": 73,
-            "distanceFromPrevious": 9,
+            "coordinates": [37.2465, 0.0050],
+            "distanceFromStart": 50,
+            "distanceFromPrevious": 20,
             "elevationGainFromPrevious": 0,
-            "timeFromPrevious": "2-3 hours",
-            "terrain": "Forest",
-            "notes": "Final walk down to the gate. Transfer to Nairobi.",
+            "timeFromPrevious": "6-7 hours (descent)",
+            "terrain": "Moorland to Forest",
+            "notes": "Epic descent from the summit through Mackinder's Valley past Old Moses and out to Sirimon Gate. Transfer to Nairobi.",
             "highlights": [
-                "Forest",
+                "Mackinder's Valley",
                 "Completion"
             ],
             "images": []
@@ -221,8 +118,8 @@
         {
             "id": "safari",
             "name": "Safari: Saruni Basecamp",
-            "dayNumber": 6,
-            "date": "Day 7-8",
+            "dayNumber": 4,
+            "date": "Day 5-6",
             "elevation": 1600,
             "coordinates": [
                 35.2600,
