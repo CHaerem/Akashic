@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 
@@ -13,16 +13,152 @@ const trekDataMap = {
     'inca-trail': incaTrailData
 };
 
-// Trek markers on globe
+// Trek markers on globe with preferred camera settings
 const treks = [
-    { id: 'kilimanjaro', name: 'Kilimanjaro', country: 'Tanzania', elevation: '5,895m', lat: -3.0674, lng: 37.3556 },
-    { id: 'mount-kenya', name: 'Mount Kenya', country: 'Kenya', elevation: '5,199m', lat: -0.1521, lng: 37.3084 },
-    { id: 'inca-trail', name: 'Inca Trail', country: 'Peru', elevation: '4,215m', lat: -13.1631, lng: -72.5450 }
+    {
+        id: 'kilimanjaro',
+        name: 'Kilimanjaro',
+        country: 'Tanzania',
+        elevation: '5,895m',
+        lat: -3.0674,
+        lng: 37.3556,
+        preferredBearing: -20,
+        preferredPitch: 60
+    },
+    {
+        id: 'mount-kenya',
+        name: 'Mount Kenya',
+        country: 'Kenya',
+        elevation: '5,199m',
+        lat: -0.1521,
+        lng: 37.3084,
+        preferredBearing: -20,
+        preferredPitch: 60
+    },
+    {
+        id: 'inca-trail',
+        name: 'Inca Trail',
+        country: 'Peru',
+        elevation: '4,215m',
+        lat: -13.1631,
+        lng: -72.5450,
+        preferredBearing: 45, // Looking North-East along the valley
+        preferredPitch: 60
+    }
 ];
+
+// --- Helper Functions for Stats & Geometry ---
+
+function deg2rad(deg) {
+    return deg * (Math.PI / 180)
+}
+
+function rad2deg(rad) {
+    return rad * (180 / Math.PI);
+}
+
+function getDistanceFromLatLonInKm(lat1, lon1, lat2, lon2) {
+    var R = 6371; // Radius of the earth in km
+    var dLat = deg2rad(lat2 - lat1);
+    var dLon = deg2rad(lon2 - lon1);
+    var a =
+        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) *
+        Math.sin(dLon / 2) * Math.sin(dLon / 2)
+        ;
+    var c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    var d = R * c; // Distance in km
+    return d;
+}
+
+function calculateBearing(startLat, startLng, destLat, destLng) {
+    const startLatRad = deg2rad(startLat);
+    const startLngRad = deg2rad(startLng);
+    const destLatRad = deg2rad(destLat);
+    const destLngRad = deg2rad(destLng);
+
+    const y = Math.sin(destLngRad - startLngRad) * Math.cos(destLatRad);
+    const x = Math.cos(startLatRad) * Math.sin(destLatRad) -
+        Math.sin(startLatRad) * Math.cos(destLatRad) * Math.cos(destLngRad - startLngRad);
+    const brng = Math.atan2(y, x);
+    return (rad2deg(brng) + 360) % 360;
+}
+
+function calculateStats(trekData) {
+    const duration = trekData.stats.duration;
+    const distance = trekData.stats.totalDistance;
+    const avgDailyDistance = (distance / duration).toFixed(1);
+
+    let maxDailyGain = 0;
+    trekData.camps.forEach(camp => {
+        if (camp.elevationGainFromPrevious > maxDailyGain) {
+            maxDailyGain = camp.elevationGainFromPrevious;
+        }
+    });
+
+    return {
+        avgDailyDistance,
+        maxDailyGain,
+        difficulty: 'Hard', // Could be dynamic based on data
+        startElevation: trekData.route.coordinates[0][2]
+    };
+}
+
+function generateElevationProfile(coordinates) {
+    if (!coordinates || coordinates.length === 0) return null;
+
+    // 1. Calculate cumulative distance and extract elevation
+    let points = [];
+    let totalDist = 0;
+    let minEle = Infinity;
+    let maxEle = -Infinity;
+
+    for (let i = 0; i < coordinates.length; i++) {
+        const coord = coordinates[i];
+        const ele = coord[2];
+
+        if (i > 0) {
+            const prev = coordinates[i - 1];
+            totalDist += getDistanceFromLatLonInKm(prev[1], prev[0], coord[1], coord[0]);
+        }
+
+        if (ele < minEle) minEle = ele;
+        if (ele > maxEle) maxEle = ele;
+
+        points.push({ dist: totalDist, ele });
+    }
+
+    // 2. Normalize to SVG viewbox (e.g., 300x100)
+    const width = 300;
+    const height = 120; // Increased height for labels
+
+    // Add some padding to elevation range for better visuals
+    const eleRange = maxEle - minEle;
+    // Ensure we don't divide by zero if flat
+    const plotMinEle = Math.max(0, minEle - (eleRange > 0 ? eleRange * 0.1 : 100));
+    const plotMaxEle = maxEle + (eleRange > 0 ? eleRange * 0.1 : 100);
+    const plotEleRange = plotMaxEle - plotMinEle;
+
+    const pathPoints = points.map(p => {
+        const x = (p.dist / totalDist) * width;
+        const y = height - ((p.ele - plotMinEle) / plotEleRange) * height;
+        return `${x},${y}`;
+    });
+
+    // 3. Generate Path
+    const linePath = `M ${pathPoints.join(' L ')}`;
+    const areaPath = `${linePath} L ${width},${height} L 0,${height} Z`;
+
+    return { linePath, areaPath, minEle, maxEle, totalDist, plotMinEle, plotMaxEle };
+}
+
+// --- Components ---
 
 function MapboxGlobe({ selectedTrek, selectedCamp, onSelectTrek, view, setView }) {
     const mapContainer = useRef(null);
     const map = useRef(null);
+
+    const [mapReady, setMapReady] = useState(false);
 
     useEffect(() => {
         if (!mapContainer.current || map.current) return;
@@ -57,6 +193,17 @@ function MapboxGlobe({ selectedTrek, selectedCamp, onSelectTrek, view, setView }
                 maxzoom: 14
             });
             newMap.setTerrain({ source: 'mapbox-dem', exaggeration: 1.5 });
+
+            // Add Sky Layer
+            newMap.addLayer({
+                'id': 'sky',
+                'type': 'sky',
+                'paint': {
+                    'sky-type': 'atmosphere',
+                    'sky-atmosphere-sun': [0.0, 0.0],
+                    'sky-atmosphere-sun-intensity': 15
+                }
+            });
 
             // Add Trek Markers Source
             newMap.addSource('trek-markers', {
@@ -161,6 +308,8 @@ function MapboxGlobe({ selectedTrek, selectedCamp, onSelectTrek, view, setView }
                 layout: { 'visibility': 'none', 'line-join': 'round', 'line-cap': 'round' },
                 paint: { 'line-color': '#00ffff', 'line-width': 4 }
             });
+
+            setMapReady(true);
         });
 
         // Interaction Handlers
@@ -191,10 +340,22 @@ function MapboxGlobe({ selectedTrek, selectedCamp, onSelectTrek, view, setView }
 
     // Handle View Transitions & Selection
     useEffect(() => {
-        if (!map.current) return;
+        if (!map.current || !mapReady) return;
 
         if (view === 'trek' && selectedTrek) {
+            // Transition to Day Mode
+            map.current.setFog({
+                'range': [0.5, 10],
+                'color': 'rgb(186, 210, 235)', // Blue sky
+                'high-color': 'rgb(36, 92, 223)', // Deep blue sky
+                'horizon-blend': 0.02,
+                'space-color': 'rgb(11, 11, 25)',
+                'star-intensity': 0.0 // No stars in day
+            });
+            map.current.setTerrain({ source: 'mapbox-dem', exaggeration: 1.8 }); // More dramatic terrain
+
             const trekData = trekDataMap[selectedTrek.id];
+            const trekConfig = treks.find(t => t.id === selectedTrek.id);
 
             // Show selected route
             if (map.current.getLayer(`route-${trekData.id}`)) {
@@ -213,12 +374,50 @@ function MapboxGlobe({ selectedTrek, selectedCamp, onSelectTrek, view, setView }
             });
 
             if (selectedCamp) {
-                // Fly to specific camp
+                // 1. Determine Camera Settings
+                let bearing = trekConfig.preferredBearing;
+                let pitch = selectedCamp.pitch || 55; // Default pitch slightly lower to avoid occlusion
+
+                // Manual override for bearing
+                if (selectedCamp.bearing !== undefined) {
+                    bearing = selectedCamp.bearing;
+                } else {
+                    // Automatic "Smart" Bearing: Look along the path of arrival
+                    const campIndex = trekData.camps.findIndex(c => c.id === selectedCamp.id);
+                    if (campIndex !== -1) {
+                        const routeCoords = trekData.route.coordinates;
+                        const currentCoord = selectedCamp.coordinates;
+
+                        // Find index of current camp in route (approximate)
+                        const findCoordIndex = (target) => {
+                            return routeCoords.findIndex(c =>
+                                Math.abs(c[0] - target[0]) < 0.0001 &&
+                                Math.abs(c[1] - target[1]) < 0.0001
+                            );
+                        };
+
+                        const endIndex = findCoordIndex(currentCoord);
+
+                        // Use the last few points before the camp to determine "arrival direction"
+                        if (endIndex > 5) {
+                            const lookBackIndex = endIndex - 5;
+                            const prevCoord = routeCoords[lookBackIndex];
+                            // Calculate bearing from a point back on the trail TO the camp
+                            bearing = calculateBearing(prevCoord[1], prevCoord[0], currentCoord[1], currentCoord[0]);
+                        } else if (campIndex > 0) {
+                            // Fallback to previous camp if route match fails or is too short
+                            const prevCampCoord = trekData.camps[campIndex - 1].coordinates;
+                            bearing = calculateBearing(prevCampCoord[1], prevCampCoord[0], currentCoord[1], currentCoord[0]);
+                        }
+                    }
+                }
+
+                // Fly to specific camp with dynamic settings
                 map.current.flyTo({
                     center: selectedCamp.coordinates,
-                    zoom: 13,
-                    pitch: 70,
-                    bearing: -20,
+                    zoom: 13.5, // Slightly closer
+                    pitch: pitch,
+                    bearing: bearing,
                     duration: 2000,
                     essential: true
                 });
@@ -272,8 +471,8 @@ function MapboxGlobe({ selectedTrek, selectedCamp, onSelectTrek, view, setView }
 
                 map.current.fitBounds(bounds, {
                     padding: { top: 100, bottom: 100, left: 100, right: 600 }, // Right padding for info panel
-                    pitch: 60,
-                    bearing: -20,
+                    pitch: trekConfig.preferredPitch,
+                    bearing: trekConfig.preferredBearing,
                     duration: 2000,
                     essential: true
                 });
@@ -286,6 +485,16 @@ function MapboxGlobe({ selectedTrek, selectedCamp, onSelectTrek, view, setView }
             }
 
         } else if (view === 'globe') {
+            // Transition to Night/Space Mode
+            map.current.setFog({
+                color: 'rgb(10, 10, 15)', // Lower atmosphere
+                'high-color': 'rgb(30, 30, 50)', // Upper atmosphere
+                'horizon-blend': 0.05, // Atmosphere thickness (default 0.2 at low zooms)
+                'space-color': 'rgb(10, 10, 15)', // Background color
+                'star-intensity': 0.6 // Background star brightness (default 0.35 at low zooms )
+            });
+            map.current.setTerrain({ source: 'mapbox-dem', exaggeration: 1.5 }); // Standard globe terrain
+
             // Hide all routes and highlights
             Object.keys(trekDataMap).forEach(id => {
                 if (map.current.getLayer(`route-${id}`)) {
@@ -299,15 +508,27 @@ function MapboxGlobe({ selectedTrek, selectedCamp, onSelectTrek, view, setView }
                 map.current.setLayoutProperty('active-segment-glow', 'visibility', 'none');
             }
 
-            // Fly back to globe view
-            map.current.flyTo({
-                center: [30, 15],
-                zoom: 1.5,
-                pitch: 0,
-                bearing: 0,
-                duration: 3000,
-                essential: true
-            });
+            if (selectedTrek) {
+                // Fly to selected trek on globe
+                map.current.flyTo({
+                    center: [selectedTrek.lng, selectedTrek.lat],
+                    zoom: 3.5,
+                    pitch: 0,
+                    bearing: 0,
+                    duration: 2000,
+                    essential: true
+                });
+            } else {
+                // Fly back to default globe view
+                map.current.flyTo({
+                    center: [30, 15],
+                    zoom: 1.5,
+                    pitch: 0,
+                    bearing: 0,
+                    duration: 3000,
+                    essential: true
+                });
+            }
         }
     }, [view, selectedTrek, selectedCamp]);
 
@@ -341,6 +562,15 @@ export default function AkashicApp() {
     const handleCampSelect = useCallback((camp) => {
         setSelectedCamp(prev => prev?.id === camp.id ? null : camp);
     }, []);
+
+    // Memoize stats and profile
+    const { extendedStats, elevationProfile } = useMemo(() => {
+        if (!trekData) return { extendedStats: null, elevationProfile: null };
+        return {
+            extendedStats: calculateStats(trekData),
+            elevationProfile: generateElevationProfile(trekData.route?.coordinates)
+        };
+    }, [trekData]);
 
     return (
         <div style={{ position: 'fixed', inset: 0, background: '#0a0a0f' }}>
@@ -602,33 +832,82 @@ export default function AkashicApp() {
 
                         {activeTab === 'stats' && (
                             <div>
+                                {/* Summit Card */}
                                 <div style={{
                                     border: '1px solid rgba(255,255,255,0.1)',
                                     borderRadius: 8,
                                     padding: 20,
-                                    marginBottom: 24
+                                    marginBottom: 24,
+                                    background: 'linear-gradient(135deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0) 100%)'
                                 }}>
                                     <p style={{ color: 'rgba(255,255,255,0.3)', fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 8 }}>Summit</p>
                                     <p style={{ color: 'white', fontSize: 28, fontWeight: 300 }}>{trekData.stats.highestPoint.elevation}m</p>
                                     <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: 14 }}>{trekData.stats.highestPoint.name}</p>
                                 </div>
 
-                                <p style={{ color: 'rgba(255,255,255,0.3)', fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 12 }}>
-                                    Elevation Profile
-                                </p>
-                                <div style={{ display: 'flex', alignItems: 'flex-end', gap: 4, height: 100 }}>
-                                    {trekData.camps.map((camp, i) => (
-                                        <div
-                                            key={i}
-                                            style={{
-                                                flex: 1,
-                                                background: 'rgba(255,255,255,0.2)',
-                                                borderRadius: 2,
-                                                height: `${(camp.elevation / trekData.stats.highestPoint.elevation) * 100}%`
-                                            }}
-                                        />
-                                    ))}
+                                {/* Detailed Elevation Profile */}
+                                <div style={{ marginBottom: 32 }}>
+                                    <p style={{ color: 'rgba(255,255,255,0.3)', fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 16 }}>
+                                        Elevation Profile
+                                    </p>
+                                    {elevationProfile && (
+                                        <div style={{ position: 'relative', height: 120, width: '100%' }}>
+                                            <svg width="100%" height="100%" viewBox="0 0 300 120" preserveAspectRatio="none" style={{ overflow: 'visible' }}>
+                                                <defs>
+                                                    <linearGradient id="elevationGradient" x1="0" x2="0" y1="0" y2="1">
+                                                        <stop offset="0%" stopColor="rgba(255, 255, 255, 0.2)" />
+                                                        <stop offset="100%" stopColor="rgba(255, 255, 255, 0)" />
+                                                    </linearGradient>
+                                                </defs>
+
+                                                {/* Grid Lines (Optional) */}
+                                                <line x1="0" y1="0" x2="300" y2="0" stroke="rgba(255,255,255,0.05)" strokeWidth="1" />
+                                                <line x1="0" y1="60" x2="300" y2="60" stroke="rgba(255,255,255,0.05)" strokeWidth="1" />
+                                                <line x1="0" y1="120" x2="300" y2="120" stroke="rgba(255,255,255,0.05)" strokeWidth="1" />
+
+                                                {/* Area Fill */}
+                                                <path d={elevationProfile.areaPath} fill="url(#elevationGradient)" />
+
+                                                {/* Line Stroke */}
+                                                <path d={elevationProfile.linePath} fill="none" stroke="white" strokeWidth="1.5" />
+                                            </svg>
+
+                                            {/* Labels */}
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8, color: 'rgba(255,255,255,0.3)', fontSize: 10 }}>
+                                                <span>0 km</span>
+                                                <span>{Math.round(elevationProfile.totalDist)} km</span>
+                                            </div>
+                                            <div style={{ position: 'absolute', top: 0, right: -24, color: 'rgba(255,255,255,0.3)', fontSize: 10 }}>
+                                                {Math.round(elevationProfile.maxEle)}m
+                                            </div>
+                                            <div style={{ position: 'absolute', bottom: 0, right: -24, color: 'rgba(255,255,255,0.3)', fontSize: 10 }}>
+                                                {Math.round(elevationProfile.minEle)}m
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
+
+                                {/* Extended Stats Grid */}
+                                {extendedStats && (
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                                        <div style={{ background: 'rgba(255,255,255,0.03)', padding: 16, borderRadius: 8 }}>
+                                            <p style={{ color: 'rgba(255,255,255,0.3)', fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 4 }}>Avg Daily Dist</p>
+                                            <p style={{ color: 'rgba(255,255,255,0.8)' }}>{extendedStats.avgDailyDistance} km</p>
+                                        </div>
+                                        <div style={{ background: 'rgba(255,255,255,0.03)', padding: 16, borderRadius: 8 }}>
+                                            <p style={{ color: 'rgba(255,255,255,0.3)', fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 4 }}>Max Daily Gain</p>
+                                            <p style={{ color: '#4ade80' }}>+{extendedStats.maxDailyGain}m</p>
+                                        </div>
+                                        <div style={{ background: 'rgba(255,255,255,0.03)', padding: 16, borderRadius: 8 }}>
+                                            <p style={{ color: 'rgba(255,255,255,0.3)', fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 4 }}>Start Elevation</p>
+                                            <p style={{ color: 'rgba(255,255,255,0.8)' }}>{extendedStats.startElevation}m</p>
+                                        </div>
+                                        <div style={{ background: 'rgba(255,255,255,0.03)', padding: 16, borderRadius: 8 }}>
+                                            <p style={{ color: 'rgba(255,255,255,0.3)', fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 4 }}>Difficulty</p>
+                                            <p style={{ color: '#facc15' }}>{extendedStats.difficulty}</p>
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         )}
                     </div>

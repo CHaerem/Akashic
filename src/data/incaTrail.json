@@ -32,9 +32,19 @@
                 2700
             ],
             [
+                -72.5450,
+                -13.2400,
+                2850
+            ],
+            [
                 -72.5400,
                 -13.2300,
                 3000
+            ],
+            [
+                -72.5350,
+                -13.2250,
+                3500
             ],
             [
                 -72.5300,
@@ -42,9 +52,19 @@
                 4215
             ],
             [
+                -72.5250,
+                -13.2150,
+                3900
+            ],
+            [
                 -72.5200,
                 -13.2100,
                 3600
+            ],
+            [
+                -72.5100,
+                -13.2080,
+                3800
             ],
             [
                 -72.5000,
@@ -52,9 +72,19 @@
                 4000
             ],
             [
+                -72.5200,
+                -13.2000,
+                3300
+            ],
+            [
                 -72.5400,
                 -13.1900,
                 2650
+            ],
+            [
+                -72.5425,
+                -13.1800,
+                2700
             ],
             [
                 -72.5450,
@@ -114,6 +144,28 @@
             "images": []
         },
         {
+            "id": "winay-wayna",
+            "name": "Wiñay Wayna",
+            "dayNumber": 3,
+            "date": "2024-05-03",
+            "elevation": 2650,
+            "coordinates": [
+                -72.5400,
+                -13.1900
+            ],
+            "distanceFromStart": 36,
+            "distanceFromPrevious": 16,
+            "elevationGainFromPrevious": 0,
+            "timeFromPrevious": "7 hours",
+            "terrain": "Cloud forest",
+            "notes": "Beautiful ruins overlooking the Urubamba river.",
+            "highlights": [
+                "Inca terraces",
+                "Cloud forest"
+            ],
+            "images": []
+        },
+        {
             "id": "machu-picchu",
             "name": "Machu Picchu",
             "dayNumber": 4,
@@ -124,7 +176,7 @@
                 -13.1631
             ],
             "distanceFromStart": 43,
-            "distanceFromPrevious": 5,
+            "distanceFromPrevious": 7,
             "elevationGainFromPrevious": 0,
             "timeFromPrevious": "2 hours",
             "terrain": "Ancient city",

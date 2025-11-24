@@ -32,14 +32,29 @@
                 2000
             ],
             [
+                37.4800,
+                -0.2600,
+                2500
+            ],
+            [
                 37.4600,
                 -0.2700,
                 2950
             ],
             [
+                37.4650,
+                -0.2650,
+                3100
+            ],
+            [
                 37.4700,
                 -0.2600,
                 3300
+            ],
+            [
+                37.4750,
+                -0.2500,
+                3800
             ],
             [
                 37.4800,
@@ -52,9 +67,19 @@
                 4000
             ],
             [
+                37.4000,
+                -0.1900,
+                4500
+            ],
+            [
                 37.3088,
                 -0.1521,
                 4985
+            ],
+            [
+                37.3150,
+                -0.1550,
+                4600
             ],
             [
                 37.3200,
@@ -62,9 +87,19 @@
                 4200
             ],
             [
+                37.3050,
+                -0.1400,
+                3800
+            ],
+            [
                 37.2900,
                 -0.1200,
                 3340
+            ],
+            [
+                37.2700,
+                -0.1100,
+                3000
             ],
             [
                 37.2500,
@@ -93,6 +128,28 @@
             "highlights": [
                 "Bamboo forest",
                 "Wildlife"
+            ],
+            "images": []
+        },
+        {
+            "id": "road-head",
+            "name": "Road Head Camp",
+            "dayNumber": 2,
+            "date": "2023-10-12",
+            "elevation": 3300,
+            "coordinates": [
+                37.4700,
+                -0.2600
+            ],
+            "distanceFromStart": 25,
+            "distanceFromPrevious": 9,
+            "elevationGainFromPrevious": 350,
+            "timeFromPrevious": "4 hours",
+            "terrain": "Moorland",
+            "notes": "Camping by the Nithi River.",
+            "highlights": [
+                "Nithi Falls",
+                "Moorland views"
             ],
             "images": []
         },
@@ -137,6 +194,28 @@
             "highlights": [
                 "Summit sunrise",
                 "Views of Batian"
+            ],
+            "images": []
+        },
+        {
+            "id": "old-moses",
+            "name": "Old Moses Camp",
+            "dayNumber": 5,
+            "date": "2023-10-15",
+            "elevation": 3340,
+            "coordinates": [
+                37.2900,
+                -0.1200
+            ],
+            "distanceFromStart": 65,
+            "distanceFromPrevious": 15,
+            "elevationGainFromPrevious": 0,
+            "timeFromPrevious": "6 hours",
+            "terrain": "Moorland descent",
+            "notes": "Descent via Sirimon route.",
+            "highlights": [
+                "Mackinder's Valley",
+                "Moorland vegetation"
             ],
             "images": []
         }
