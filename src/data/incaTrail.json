@@ -3,15 +3,15 @@
     "name": "Inca Trail to Machu Picchu",
     "country": "Peru",
     "slug": "inca-trail",
-    "description": "The legendary trek to the lost city of the Incas. A journey through history and breathtaking Andean scenery.",
+    "description": "The classic trek to the Lost City of the Incas. A journey through history, cloud forests, and breathtaking Andean scenery.",
     "heroImage": "/hero-images/inca-trail-hero.png",
     "dates": {
         "start": "2024-05-01",
         "end": "2024-05-04"
     },
     "stats": {
-        "totalDistance": 43,
-        "totalElevationGain": 2500,
+        "totalDistance": 45,
+        "totalElevationGain": 3000,
         "totalElevationLoss": 2500,
         "duration": 4,
         "highestPoint": {
@@ -29,12 +29,7 @@
             [
                 -72.5500,
                 -13.2500,
-                2700
-            ],
-            [
-                -72.5450,
-                -13.2400,
-                2850
+                2600
             ],
             [
                 -72.5400,
@@ -44,7 +39,7 @@
             [
                 -72.5350,
                 -13.2250,
-                3500
+                3680
             ],
             [
                 -72.5300,
@@ -54,27 +49,27 @@
             [
                 -72.5250,
                 -13.2150,
-                3900
+                3600
             ],
             [
                 -72.5200,
                 -13.2100,
-                3600
+                3970
             ],
             [
                 -72.5100,
                 -13.2080,
-                3800
+                3600
             ],
             [
                 -72.5000,
                 -13.2050,
-                4000
+                3700
             ],
             [
                 -72.5200,
                 -13.2000,
-                3300
+                3650
             ],
             [
                 -72.5400,
@@ -82,28 +77,18 @@
                 2650
             ],
             [
-                -72.5425,
-                -13.1800,
-                2700
-            ],
-            [
-                -72.5450,
-                -13.1700,
-                2720
-            ],
-            [
                 -72.5450,
                 -13.1631,
-                2430
+                2400
             ]
         ]
     },
     "camps": [
         {
             "id": "wayllabamba",
-            "name": "Wayllabamba",
+            "name": "Wayllabamba Camp",
             "dayNumber": 1,
-            "date": "2024-05-01",
+            "date": "Day 1",
             "elevation": 3000,
             "coordinates": [
                 -72.5400,
@@ -111,81 +96,83 @@
             ],
             "distanceFromStart": 12,
             "distanceFromPrevious": 12,
-            "elevationGainFromPrevious": 300,
-            "timeFromPrevious": "5 hours",
+            "elevationGainFromPrevious": 400,
+            "timeFromPrevious": "6 hours",
             "terrain": "Valley",
-            "notes": "First camp in a quiet valley.",
+            "notes": "Hike along the Urubamba river, passing Patallacta ruins. Camp at Wayllabamba.",
             "highlights": [
-                "Inca ruins",
-                "Valley views"
+                "Patallacta Ruins",
+                "Veronica Peak View"
             ],
             "images": []
         },
         {
-            "id": "dead-womans-pass",
-            "name": "Dead Woman's Pass",
+            "id": "pacaymayo",
+            "name": "Pacaymayo Camp",
             "dayNumber": 2,
-            "date": "2024-05-02",
-            "elevation": 4215,
+            "date": "Day 2",
+            "elevation": 3600,
             "coordinates": [
-                -72.5300,
-                -13.2200
+                -72.5250,
+                -13.2150
             ],
-            "distanceFromStart": 20,
-            "distanceFromPrevious": 8,
-            "elevationGainFromPrevious": 1215,
-            "timeFromPrevious": "4 hours",
-            "terrain": "High pass",
-            "notes": "Highest point of the trek.",
+            "distanceFromStart": 23,
+            "distanceFromPrevious": 11,
+            "elevationGainFromPrevious": 1200,
+            "timeFromPrevious": "7 hours",
+            "terrain": "High Pass",
+            "notes": "Hardest day. Cross 'Dead Woman's Pass' (4200m). Descent to Pacaymayo.",
             "highlights": [
-                "Highest point",
-                "Panoramic views"
+                "Dead Woman's Pass",
+                "Cloud Forest"
             ],
             "images": []
         },
         {
             "id": "winay-wayna",
-            "name": "Wiñay Wayna",
+            "name": "Wiñay Wayna Camp",
             "dayNumber": 3,
-            "date": "2024-05-03",
+            "date": "Day 3",
             "elevation": 2650,
             "coordinates": [
                 -72.5400,
                 -13.1900
             ],
-            "distanceFromStart": 36,
+            "distanceFromStart": 39,
             "distanceFromPrevious": 16,
-            "elevationGainFromPrevious": 0,
-            "timeFromPrevious": "7 hours",
-            "terrain": "Cloud forest",
-            "notes": "Beautiful ruins overlooking the Urubamba river.",
+            "elevationGainFromPrevious": 370,
+            "timeFromPrevious": "8 hours",
+            "terrain": "Cloud Forest",
+            "notes": "Long but beautiful day. Visit Runkurakay, Sayacmarca, and Phuyupatamarca ruins.",
             "highlights": [
-                "Inca terraces",
-                "Cloud forest"
+                "Inca Ruins",
+                "Cloud Forest"
             ],
             "images": []
         },
         {
             "id": "machu-picchu",
-            "name": "Machu Picchu",
+            "name": "Machu Picchu (Sun Gate)",
             "dayNumber": 4,
-            "date": "2024-05-04",
-            "elevation": 2430,
+            "date": "Day 4",
+            "elevation": 2400,
             "coordinates": [
                 -72.5450,
                 -13.1631
             ],
             "distanceFromStart": 43,
-            "distanceFromPrevious": 7,
+            "distanceFromPrevious": 4,
             "elevationGainFromPrevious": 0,
             "timeFromPrevious": "2 hours",
-            "terrain": "Ancient city",
-            "notes": "Arrival at the Sun Gate.",
+            "terrain": "Ancient City",
+            "notes": "Sunrise at the Sun Gate! Tour of the Lost City. Train back to Cusco.",
             "highlights": [
                 "Sun Gate",
                 "Machu Picchu"
             ],
-            "images": []
+            "images": [],
+            "bearing": 180,
+            "pitch": 60
         }
     ],
     "dailyStages": []
