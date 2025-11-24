@@ -1,6 +1,7 @@
-import { memo, useCallback, useMemo } from 'react';
+import { memo, useCallback, useMemo, useState } from 'react';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import { useTrekData } from '../hooks/useTrekData';
+import { useIsMobile } from '../hooks/useMediaQuery';
 import { MapboxGlobe } from './MapboxGlobe';
 import type { TrekConfig, TrekData, Camp, ExtendedStats, ElevationProfile, TabType } from '../types/trek';
 
@@ -10,16 +11,21 @@ interface GlobeSelectionPanelProps {
     selectedTrek: TrekConfig;
     onBack: () => void;
     onExplore: () => void;
+    isMobile: boolean;
 }
 
-function GlobeSelectionPanel({ selectedTrek, onBack, onExplore }: GlobeSelectionPanelProps) {
+function GlobeSelectionPanel({ selectedTrek, onBack, onExplore, isMobile }: GlobeSelectionPanelProps) {
     return (
         <div style={{
             position: 'absolute',
-            left: 24,
-            bottom: 48,
+            left: isMobile ? 0 : 24,
+            right: isMobile ? 0 : 'auto',
+            bottom: 0,
             zIndex: 20,
-            maxWidth: 400
+            maxWidth: isMobile ? '100%' : 400,
+            padding: isMobile ? '24px 20px 32px' : 0,
+            paddingBottom: isMobile ? 'max(32px, env(safe-area-inset-bottom))' : 48,
+            background: isMobile ? 'linear-gradient(to top, rgba(10,10,15,0.95) 0%, rgba(10,10,15,0.8) 70%, transparent 100%)' : 'transparent'
         }}>
             <button
                 onClick={onBack}
@@ -27,34 +33,55 @@ function GlobeSelectionPanel({ selectedTrek, onBack, onExplore }: GlobeSelection
                     background: 'none',
                     border: 'none',
                     color: 'rgba(255,255,255,0.4)',
-                    fontSize: 11,
+                    fontSize: isMobile ? 12 : 11,
                     letterSpacing: '0.15em',
                     textTransform: 'uppercase',
                     cursor: 'pointer',
-                    marginBottom: 24
+                    marginBottom: isMobile ? 16 : 24,
+                    padding: isMobile ? '12px 0' : 0,
+                    minHeight: isMobile ? 44 : 'auto'
                 }}
             >
                 ← Back
             </button>
-            <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: 10, letterSpacing: '0.25em', textTransform: 'uppercase', marginBottom: 12 }}>
+            <p style={{
+                color: 'rgba(255,255,255,0.4)',
+                fontSize: isMobile ? 11 : 10,
+                letterSpacing: '0.25em',
+                textTransform: 'uppercase',
+                marginBottom: isMobile ? 8 : 12
+            }}>
                 {selectedTrek.country}
             </p>
-            <h2 style={{ color: 'white', fontSize: 36, fontWeight: 300, marginBottom: 8 }}>
+            <h2 style={{
+                color: 'white',
+                fontSize: isMobile ? 28 : 36,
+                fontWeight: 300,
+                marginBottom: 8
+            }}>
                 {selectedTrek.name}
             </h2>
-            <p style={{ color: 'rgba(255,255,255,0.3)', fontSize: 14, marginBottom: 32 }}>
+            <p style={{
+                color: 'rgba(255,255,255,0.3)',
+                fontSize: isMobile ? 13 : 14,
+                marginBottom: isMobile ? 20 : 32
+            }}>
                 Summit: {selectedTrek.elevation}
             </p>
             <button
                 onClick={onExplore}
                 style={{
-                    background: 'none',
+                    background: isMobile ? 'rgba(255,255,255,0.1)' : 'none',
                     border: 'none',
-                    color: 'rgba(255,255,255,0.5)',
-                    fontSize: 11,
+                    color: 'rgba(255,255,255,0.7)',
+                    fontSize: isMobile ? 12 : 11,
                     letterSpacing: '0.2em',
                     textTransform: 'uppercase',
-                    cursor: 'pointer'
+                    cursor: 'pointer',
+                    padding: isMobile ? '16px 24px' : 0,
+                    borderRadius: isMobile ? 8 : 0,
+                    width: isMobile ? '100%' : 'auto',
+                    minHeight: isMobile ? 48 : 'auto'
                 }}
             >
                 Explore Journey →
@@ -63,18 +90,25 @@ function GlobeSelectionPanel({ selectedTrek, onBack, onExplore }: GlobeSelection
     );
 }
 
-function GlobeHint() {
+interface GlobeHintProps {
+    isMobile: boolean;
+}
+
+function GlobeHint({ isMobile }: GlobeHintProps) {
     return (
         <div style={{
             position: 'absolute',
-            bottom: 24,
-            right: 24,
-            color: 'rgba(255,255,255,0.2)',
-            fontSize: 10,
+            bottom: isMobile ? 'max(24px, env(safe-area-inset-bottom))' : 24,
+            left: isMobile ? '50%' : 'auto',
+            right: isMobile ? 'auto' : 24,
+            transform: isMobile ? 'translateX(-50%)' : 'none',
+            color: 'rgba(255,255,255,0.3)',
+            fontSize: isMobile ? 11 : 10,
             letterSpacing: '0.15em',
-            textTransform: 'uppercase'
+            textTransform: 'uppercase',
+            textAlign: 'center'
         }}>
-            Click a marker to explore
+            {isMobile ? 'Tap a marker to explore' : 'Click a marker to explore'}
         </div>
     );
 }
@@ -83,9 +117,10 @@ interface TabButtonProps {
     tab: string;
     activeTab: TabType;
     onClick: (tab: TabType) => void;
+    isMobile?: boolean;
 }
 
-const TabButton = memo(function TabButton({ tab, activeTab, onClick }: TabButtonProps) {
+const TabButton = memo(function TabButton({ tab, activeTab, onClick, isMobile = false }: TabButtonProps) {
     const handleClick = useCallback(() => onClick(tab as TabType), [onClick, tab]);
     const isActive = activeTab === tab;
 
@@ -97,12 +132,14 @@ const TabButton = memo(function TabButton({ tab, activeTab, onClick }: TabButton
                 border: 'none',
                 borderBottom: isActive ? '2px solid rgba(255,255,255,0.6)' : '2px solid transparent',
                 color: isActive ? 'white' : 'rgba(255,255,255,0.4)',
-                fontSize: 11,
+                fontSize: isMobile ? 12 : 11,
                 letterSpacing: '0.15em',
                 textTransform: 'uppercase',
-                padding: '16px 16px',
+                padding: isMobile ? '16px 12px' : '16px 16px',
                 cursor: 'pointer',
-                marginBottom: -1
+                marginBottom: -1,
+                flex: isMobile ? 1 : 'none',
+                minHeight: 48
             }}
         >
             {tab}
@@ -152,10 +189,12 @@ interface CampItemProps {
     isSelected: boolean;
     onClick: (camp: Camp) => void;
     isLast: boolean;
+    isMobile?: boolean;
 }
 
-const CampItem = memo(function CampItem({ camp, isSelected, onClick, isLast }: CampItemProps) {
+const CampItem = memo(function CampItem({ camp, isSelected, onClick, isLast, isMobile = false }: CampItemProps) {
     const handleClick = useCallback(() => onClick(camp), [onClick, camp]);
+    const padding = isMobile ? 16 : 24;
 
     const containerStyle = useMemo(() => ({
         padding: '20px 0',
@@ -163,10 +202,11 @@ const CampItem = memo(function CampItem({ camp, isSelected, onClick, isLast }: C
         cursor: 'pointer',
         transition: 'background 0.2s',
         background: isSelected ? 'rgba(255,255,255,0.03)' : 'transparent',
-        margin: '0 -24px',
-        paddingLeft: 24,
-        paddingRight: 24
-    }), [isLast, isSelected]);
+        margin: `0 -${padding}px`,
+        paddingLeft: padding,
+        paddingRight: padding,
+        minHeight: 44
+    }), [isLast, isSelected, padding]);
 
     return (
         <div onClick={handleClick} style={containerStyle}>
@@ -199,7 +239,7 @@ const CampItem = memo(function CampItem({ camp, isSelected, onClick, isLast }: C
                     )}
                     <div style={{
                         width: '100%',
-                        height: 160,
+                        height: isMobile ? 120 : 160,
                         background: 'rgba(255,255,255,0.05)',
                         border: '1px dashed rgba(255,255,255,0.1)',
                         borderRadius: 8,
@@ -222,9 +262,10 @@ interface JourneyTabProps {
     trekData: TrekData;
     selectedCamp: Camp | null;
     onCampSelect: (camp: Camp) => void;
+    isMobile?: boolean;
 }
 
-const JourneyTab = memo(function JourneyTab({ trekData, selectedCamp, onCampSelect }: JourneyTabProps) {
+const JourneyTab = memo(function JourneyTab({ trekData, selectedCamp, onCampSelect, isMobile = false }: JourneyTabProps) {
     return (
         <div>
             {trekData.camps.map((camp, i) => (
@@ -234,6 +275,7 @@ const JourneyTab = memo(function JourneyTab({ trekData, selectedCamp, onCampSele
                     isSelected={selectedCamp?.id === camp.id}
                     onClick={onCampSelect}
                     isLast={i === trekData.camps.length - 1}
+                    isMobile={isMobile}
                 />
             ))}
         </div>
@@ -325,61 +367,174 @@ interface InfoPanelProps {
     onBack: () => void;
     extendedStats: ExtendedStats | null;
     elevationProfile: ElevationProfile | null;
+    isMobile: boolean;
+    isExpanded: boolean;
+    onToggleExpand: () => void;
 }
 
-const InfoPanel = memo(function InfoPanel({ trekData, activeTab, setActiveTab, selectedCamp, onCampSelect, onBack, extendedStats, elevationProfile }: InfoPanelProps) {
+const InfoPanel = memo(function InfoPanel({
+    trekData, activeTab, setActiveTab, selectedCamp, onCampSelect, onBack,
+    extendedStats, elevationProfile, isMobile, isExpanded, onToggleExpand
+}: InfoPanelProps) {
+    const padding = isMobile ? 16 : 24;
+
+    // Mobile bottom sheet style
+    const mobileStyle: React.CSSProperties = {
+        position: 'absolute',
+        left: 0,
+        right: 0,
+        bottom: 0,
+        height: isExpanded ? '85%' : '45%',
+        background: 'rgba(10, 10, 15, 0.95)',
+        backdropFilter: 'blur(20px)',
+        borderTop: '1px solid rgba(255,255,255,0.1)',
+        borderRadius: '20px 20px 0 0',
+        display: 'flex',
+        flexDirection: 'column',
+        zIndex: 20,
+        transition: 'height 0.3s ease',
+        paddingBottom: 'env(safe-area-inset-bottom)'
+    };
+
+    // Desktop side panel style
+    const desktopStyle: React.CSSProperties = {
+        position: 'absolute',
+        top: 0,
+        right: 0,
+        bottom: 0,
+        width: '40%',
+        minWidth: 380,
+        background: 'rgba(10, 10, 15, 0.8)',
+        backdropFilter: 'blur(20px)',
+        borderLeft: '1px solid rgba(255,255,255,0.05)',
+        display: 'flex',
+        flexDirection: 'column',
+        zIndex: 20
+    };
+
     return (
-        <div style={{
-            position: 'absolute',
-            top: 0,
-            right: 0,
-            bottom: 0,
-            width: '40%',
-            background: 'rgba(10, 10, 15, 0.8)',
-            backdropFilter: 'blur(20px)',
-            borderLeft: '1px solid rgba(255,255,255,0.05)',
-            display: 'flex',
-            flexDirection: 'column',
-            zIndex: 20
-        }}>
-            {/* Header */}
-            <div style={{ padding: 24, borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-                <button
-                    onClick={onBack}
+        <div style={isMobile ? mobileStyle : desktopStyle}>
+            {/* Mobile drag handle */}
+            {isMobile && (
+                <div
+                    onClick={onToggleExpand}
                     style={{
-                        background: 'none',
-                        border: 'none',
-                        color: 'rgba(255,255,255,0.5)',
-                        fontSize: 11,
-                        letterSpacing: '0.15em',
-                        textTransform: 'uppercase',
-                        cursor: 'pointer',
-                        marginBottom: 24,
-                        display: 'block'
+                        padding: '12px 0 8px',
+                        display: 'flex',
+                        justifyContent: 'center',
+                        cursor: 'pointer'
                     }}
                 >
-                    ← Globe
-                </button>
-                <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: 10, letterSpacing: '0.25em', textTransform: 'uppercase', marginBottom: 8 }}>
-                    {trekData.country}
-                </p>
-                <h1 style={{ color: 'white', fontSize: 24, fontWeight: 300 }}>
-                    {trekData.name}
-                </h1>
+                    <div style={{
+                        width: 40,
+                        height: 4,
+                        background: 'rgba(255,255,255,0.3)',
+                        borderRadius: 2
+                    }} />
+                </div>
+            )}
+
+            {/* Header */}
+            <div style={{
+                padding: isMobile ? `8px ${padding}px 16px` : `${padding}px`,
+                borderBottom: '1px solid rgba(255,255,255,0.05)',
+                display: 'flex',
+                flexDirection: isMobile ? 'row' : 'column',
+                alignItems: isMobile ? 'center' : 'stretch',
+                justifyContent: isMobile ? 'space-between' : 'flex-start'
+            }}>
+                {!isMobile && (
+                    <button
+                        onClick={onBack}
+                        style={{
+                            background: 'none',
+                            border: 'none',
+                            color: 'rgba(255,255,255,0.5)',
+                            fontSize: 11,
+                            letterSpacing: '0.15em',
+                            textTransform: 'uppercase',
+                            cursor: 'pointer',
+                            marginBottom: 24,
+                            display: 'block',
+                            padding: '8px 0',
+                            minHeight: 44
+                        }}
+                    >
+                        ← Globe
+                    </button>
+                )}
+                <div style={{ flex: 1 }}>
+                    <p style={{
+                        color: 'rgba(255,255,255,0.4)',
+                        fontSize: 10,
+                        letterSpacing: '0.25em',
+                        textTransform: 'uppercase',
+                        marginBottom: isMobile ? 4 : 8
+                    }}>
+                        {trekData.country}
+                    </p>
+                    <h1 style={{
+                        color: 'white',
+                        fontSize: isMobile ? 20 : 24,
+                        fontWeight: 300,
+                        margin: 0
+                    }}>
+                        {trekData.name}
+                    </h1>
+                </div>
+                {isMobile && (
+                    <button
+                        onClick={onBack}
+                        style={{
+                            background: 'rgba(255,255,255,0.1)',
+                            border: 'none',
+                            color: 'rgba(255,255,255,0.7)',
+                            fontSize: 11,
+                            letterSpacing: '0.1em',
+                            textTransform: 'uppercase',
+                            cursor: 'pointer',
+                            padding: '10px 16px',
+                            borderRadius: 6,
+                            minHeight: 44
+                        }}
+                    >
+                        ✕
+                    </button>
+                )}
             </div>
 
             {/* Tabs */}
-            <div style={{ display: 'flex', borderBottom: '1px solid rgba(255,255,255,0.05)', padding: '0 24px' }}>
+            <div style={{
+                display: 'flex',
+                borderBottom: '1px solid rgba(255,255,255,0.05)',
+                padding: `0 ${padding}px`
+            }}>
                 {(['overview', 'journey', 'stats'] as const).map(tab => (
-                    <TabButton key={tab} tab={tab} activeTab={activeTab} onClick={setActiveTab} />
+                    <TabButton
+                        key={tab}
+                        tab={tab}
+                        activeTab={activeTab}
+                        onClick={setActiveTab}
+                        isMobile={isMobile}
+                    />
                 ))}
             </div>
 
             {/* Tab Content */}
-            <div style={{ flex: 1, overflow: 'auto', padding: 24 }}>
+            <div style={{
+                flex: 1,
+                overflow: 'auto',
+                padding: padding,
+                WebkitOverflowScrolling: 'touch'
+            }}>
                 {activeTab === 'overview' && <OverviewTab trekData={trekData} />}
                 {activeTab === 'journey' && (
-                    <JourneyTab trekData={trekData} selectedCamp={selectedCamp} onCampSelect={onCampSelect} />
+                    <JourneyTab
+                        trekData={trekData}
+                        selectedCamp={selectedCamp}
+                        onCampSelect={onCampSelect}
+                        isMobile={isMobile}
+                    />
                 )}
                 {activeTab === 'stats' && (
                     <StatsTab trekData={trekData} extendedStats={extendedStats} elevationProfile={elevationProfile} />
@@ -392,6 +547,9 @@ const InfoPanel = memo(function InfoPanel({ trekData, activeTab, setActiveTab, s
 // --- Main Component ---
 
 export default function AkashicApp() {
+    const isMobile = useIsMobile();
+    const [isPanelExpanded, setIsPanelExpanded] = useState(false);
+
     const {
         view,
         selectedTrek,
@@ -408,6 +566,10 @@ export default function AkashicApp() {
         handleCampSelect
     } = useTrekData();
 
+    const togglePanelExpand = useCallback(() => {
+        setIsPanelExpanded(prev => !prev);
+    }, []);
+
     return (
         <div style={{ position: 'fixed', inset: 0, background: '#0a0a0f' }}>
             {/* Mapbox Globe */}
@@ -423,14 +585,18 @@ export default function AkashicApp() {
             {/* Title */}
             <div style={{
                 position: 'absolute',
-                top: 24,
-                left: 24,
+                top: isMobile ? 'max(16px, env(safe-area-inset-top))' : 24,
+                left: isMobile ? 16 : 24,
                 zIndex: 100,
                 color: 'rgba(255,255,255,0.7)',
-                fontSize: 14,
+                fontSize: isMobile ? 12 : 14,
                 letterSpacing: '0.3em',
                 textTransform: 'uppercase',
-                cursor: 'pointer'
+                cursor: 'pointer',
+                padding: isMobile ? '8px 0' : 0,
+                minHeight: isMobile ? 44 : 'auto',
+                display: 'flex',
+                alignItems: 'center'
             }} onClick={handleBackToGlobe}>
                 Akashic
             </div>
@@ -441,10 +607,11 @@ export default function AkashicApp() {
                     selectedTrek={selectedTrek}
                     onBack={handleBackToSelection}
                     onExplore={handleExplore}
+                    isMobile={isMobile}
                 />
             )}
 
-            {!selectedTrek && view === 'globe' && <GlobeHint />}
+            {!selectedTrek && view === 'globe' && <GlobeHint isMobile={isMobile} />}
 
             {/* Trek View Info Panel */}
             {view === 'trek' && trekData && (
@@ -457,6 +624,9 @@ export default function AkashicApp() {
                     onBack={handleBackToGlobe}
                     extendedStats={extendedStats}
                     elevationProfile={elevationProfile}
+                    isMobile={isMobile}
+                    isExpanded={isPanelExpanded}
+                    onToggleExpand={togglePanelExpand}
                 />
             )}
         </div>
