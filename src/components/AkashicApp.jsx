@@ -178,11 +178,12 @@ function MapboxGlobe({ selectedTrek, selectedCamp, onSelectTrek, view, setView }
 
         newMap.on('style.load', () => {
             newMap.setFog({
-                color: 'rgb(10, 10, 15)', // Lower atmosphere
-                'high-color': 'rgb(30, 30, 50)', // Upper atmosphere
-                'horizon-blend': 0.05, // Atmosphere thickness (default 0.2 at low zooms)
-                'space-color': 'rgb(10, 10, 15)', // Background color
-                'star-intensity': 0.6 // Background star brightness (default 0.35 at low zooms )
+                'range': [1, 12], // Increase visibility range to reduce darkening
+                'color': 'rgb(186, 210, 235)', // Lighter blue atmosphere
+                'high-color': 'rgb(36, 92, 223)', // Blue sky gradient
+                'horizon-blend': 0.02, // Thin atmosphere layer
+                'space-color': 'rgb(11, 11, 25)', // Dark blue space
+                'star-intensity': 0.15 // Subtle stars
             });
 
             // Add terrain source
@@ -201,7 +202,7 @@ function MapboxGlobe({ selectedTrek, selectedCamp, onSelectTrek, view, setView }
                 'paint': {
                     'sky-type': 'atmosphere',
                     'sky-atmosphere-sun': [0.0, 0.0],
-                    'sky-atmosphere-sun-intensity': 15
+                    'sky-atmosphere-sun-intensity': 3 // Low intensity for subtle glow
                 }
             });
 
@@ -485,13 +486,14 @@ function MapboxGlobe({ selectedTrek, selectedCamp, onSelectTrek, view, setView }
             }
 
         } else if (view === 'globe') {
-            // Transition to Night/Space Mode
+            // Globe view with brighter, visible atmosphere
             map.current.setFog({
-                color: 'rgb(10, 10, 15)', // Lower atmosphere
-                'high-color': 'rgb(30, 30, 50)', // Upper atmosphere
-                'horizon-blend': 0.05, // Atmosphere thickness (default 0.2 at low zooms)
-                'space-color': 'rgb(10, 10, 15)', // Background color
-                'star-intensity': 0.6 // Background star brightness (default 0.35 at low zooms )
+                'range': [1, 12], // Increase visibility range
+                'color': 'rgb(186, 210, 235)', // Lighter blue atmosphere
+                'high-color': 'rgb(36, 92, 223)', // Blue sky gradient
+                'horizon-blend': 0.02, // Thin atmosphere layer
+                'space-color': 'rgb(11, 11, 25)', // Dark blue space
+                'star-intensity': 0.15 // Subtle stars
             });
             map.current.setTerrain({ source: 'mapbox-dem', exaggeration: 1.5 }); // Standard globe terrain
 
