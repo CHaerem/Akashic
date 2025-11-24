@@ -3,6 +3,7 @@ import 'mapbox-gl/dist/mapbox-gl.css';
 import { useTrekData } from '../hooks/useTrekData';
 import { useIsMobile } from '../hooks/useMediaQuery';
 import { MapboxGlobe } from './MapboxGlobe';
+import { OfflineIndicator } from './OfflineIndicator';
 import type { TrekConfig, TrekData, Camp, ExtendedStats, ElevationProfile, TabType } from '../types/trek';
 
 // --- UI Components ---
@@ -581,6 +582,9 @@ export default function AkashicApp() {
                     view={view}
                 />
             </div>
+
+            {/* Offline Status */}
+            <OfflineIndicator isMobile={isMobile} />
 
             {/* Title */}
             <div style={{
