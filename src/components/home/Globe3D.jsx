@@ -1,144 +1,177 @@
-import { useRef, useState } from 'react';
-import { Canvas, useFrame } from '@react-three/fiber';
+import { useRef, useState, useEffect, useMemo, Suspense } from 'react';
+import { Canvas, useFrame, useThree, useLoader } from '@react-three/fiber';
 import { OrbitControls, Stars } from '@react-three/drei';
 import { useNavigate } from 'react-router-dom';
 import * as THREE from 'three';
 
-// Trek locations in lat/long
 const treks = [
     {
         id: 'kilimanjaro',
         name: 'Kilimanjaro',
         country: 'Tanzania',
+        elevation: '5,895m',
         lat: -3.0674,
         lng: 37.3556,
-        color: '#f97316'
     },
     {
         id: 'mount-kenya',
         name: 'Mount Kenya',
         country: 'Kenya',
+        elevation: '5,199m',
         lat: -0.1521,
         lng: 37.3084,
-        color: '#f97316'
     },
     {
         id: 'inca-trail',
         name: 'Inca Trail',
         country: 'Peru',
+        elevation: '4,215m',
         lat: -13.1631,
         lng: -72.5450,
-        color: '#f97316'
     }
 ];
 
-// Convert lat/lng to 3D coordinates on sphere
 function latLngToVector3(lat, lng, radius) {
     const phi = (90 - lat) * (Math.PI / 180);
     const theta = (lng + 180) * (Math.PI / 180);
-
-    const x = -(radius * Math.sin(phi) * Math.cos(theta));
-    const y = radius * Math.cos(phi);
-    const z = radius * Math.sin(phi) * Math.sin(theta);
-
-    return new THREE.Vector3(x, y, z);
-}
-
-function TrekMarker({ trek, onHover, onLeave, onClick }) {
-    const meshRef = useRef();
-    const [hovered, setHovered] = useState(false);
-
-    const position = latLngToVector3(trek.lat, trek.lng, 2.05);
-
-    useFrame((state) => {
-        if (meshRef.current && hovered) {
-            meshRef.current.scale.setScalar(1 + Math.sin(state.clock.elapsedTime * 3) * 0.2);
-        }
-    });
-
-    return (
-        <group position={position}>
-            {/* Marker Pin */}
-            <mesh
-                ref={meshRef}
-                onPointerOver={(e) => {
-                    e.stopPropagation();
-                    setHovered(true);
-                    onHover(trek);
-                    document.body.style.cursor = 'pointer';
-                }}
-                onPointerOut={(e) => {
-                    e.stopPropagation();
-                    setHovered(false);
-                    onLeave();
-                    document.body.style.cursor = 'default';
-                }}
-                onClick={(e) => {
-                    e.stopPropagation();
-                    onClick(trek);
-                }}
-            >
-                <sphereGeometry args={[0.08, 16, 16]} />
-                <meshStandardMaterial
-                    color={trek.color}
-                    emissive={trek.color}
-                    emissiveIntensity={hovered ? 2 : 1}
-                    metalness={0.5}
-                    roughness={0.2}
-                />
-            </mesh>
-
-            {/* Glow ring when hovered */}
-            {hovered && (
-                <mesh rotation={[Math.PI / 2, 0, 0]}>
-                    <ringGeometry args={[0.12, 0.18, 32]} />
-                    <meshBasicMaterial
-                        color={trek.color}
-                        transparent
-                        opacity={0.8}
-                        side={THREE.DoubleSide}
-                    />
-                </mesh>
-            )}
-        </group>
+    return new THREE.Vector3(
+        -(radius * Math.sin(phi) * Math.cos(theta)),
+        radius * Math.cos(phi),
+        radius * Math.sin(phi) * Math.sin(theta)
     );
 }
 
-function Earth({ onMarkerHover, onMarkerLeave, onMarkerClick }) {
+function getCameraPositionForTrek(lat, lng, distance = 3.8) {
+    const phi = (90 - lat) * (Math.PI / 180);
+    const theta = (lng + 180) * (Math.PI / 180);
+    return new THREE.Vector3(
+        -(distance * Math.sin(phi) * Math.cos(theta)),
+        distance * Math.cos(phi),
+        distance * Math.sin(phi) * Math.sin(theta)
+    );
+}
+
+function CameraController({ targetPosition, onAnimationComplete }) {
+    const { camera } = useThree();
+    const progress = useRef(0);
+    const start = useRef(new THREE.Vector3());
+    const animating = useRef(false);
+
+    useEffect(() => {
+        if (targetPosition) {
+            start.current.copy(camera.position);
+            progress.current = 0;
+            animating.current = true;
+        }
+    }, [targetPosition, camera]);
+
+    useFrame((_, delta) => {
+        if (animating.current && targetPosition) {
+            progress.current += delta * 1.2;
+            const t = Math.min(progress.current, 1);
+            const eased = 1 - Math.pow(1 - t, 4);
+            camera.position.lerpVectors(start.current, targetPosition, eased);
+            camera.lookAt(0, 0, 0);
+            if (t >= 1) {
+                animating.current = false;
+                onAnimationComplete?.();
+            }
+        }
+    });
+
+    return null;
+}
+
+function TrekMarker({ trek, onHover, onLeave, onClick, isSelected, isAnySelected }) {
+    const ref = useRef();
+    const [hovered, setHovered] = useState(false);
+    const position = latLngToVector3(trek.lat, trek.lng, 2.01);
+
+    useFrame((state) => {
+        if (ref.current) {
+            const active = hovered || isSelected;
+            const scale = active ? 1.4 + Math.sin(state.clock.elapsedTime * 3) * 0.1 : 1;
+            ref.current.scale.setScalar(scale);
+        }
+    });
+
+    // Fade out non-selected markers
+    const opacity = isAnySelected ? (isSelected ? 1 : 0) : (hovered ? 1 : 0.85);
+
+    return (
+        <mesh
+            ref={ref}
+            position={position}
+            visible={!isAnySelected || isSelected}
+            onPointerOver={(e) => {
+                e.stopPropagation();
+                setHovered(true);
+                onHover(trek);
+                document.body.style.cursor = 'pointer';
+            }}
+            onPointerOut={(e) => {
+                e.stopPropagation();
+                setHovered(false);
+                onLeave();
+                document.body.style.cursor = 'default';
+            }}
+            onClick={(e) => {
+                e.stopPropagation();
+                onClick(trek);
+            }}
+        >
+            <sphereGeometry args={[0.035, 16, 16]} />
+            <meshBasicMaterial color="#ffffff" transparent opacity={opacity} />
+        </mesh>
+    );
+}
+
+function Earth({ onMarkerHover, onMarkerLeave, onMarkerClick, selectedTrek, isZoomed }) {
     const earthRef = useRef();
 
-    useFrame(() => {
-        if (earthRef.current) {
-            earthRef.current.rotation.y += 0.002;
+    const [dayMap, bumpMap, specularMap] = useLoader(THREE.TextureLoader, [
+        '/Akashic/textures/earth-day.jpg',
+        '/Akashic/textures/earth-topology.png',
+        '/Akashic/textures/earth-water.png'
+    ]);
+
+    useMemo(() => {
+        [dayMap, bumpMap, specularMap].forEach(t => {
+            t.colorSpace = THREE.SRGBColorSpace;
+        });
+    }, [dayMap, bumpMap, specularMap]);
+
+    useFrame((_, delta) => {
+        if (earthRef.current && !isZoomed) {
+            earthRef.current.rotation.y += delta * 0.06;
         }
     });
 
     return (
         <group ref={earthRef}>
-            {/* Earth Sphere - Much brighter and more visible */}
             <mesh>
                 <sphereGeometry args={[2, 64, 64]} />
-                <meshStandardMaterial
-                    color="#60a5fa"
-                    emissive="#3b82f6"
-                    emissiveIntensity={0.6}
-                    roughness={0.5}
-                    metalness={0.3}
+                <meshPhongMaterial
+                    map={dayMap}
+                    bumpMap={bumpMap}
+                    bumpScale={0.04}
+                    specularMap={specularMap}
+                    specular={new THREE.Color('#111111')}
+                    shininess={3}
                 />
             </mesh>
 
-            {/* Atmosphere Glow */}
-            <mesh scale={1.08}>
+            {/* Subtle atmosphere */}
+            <mesh scale={1.015}>
                 <sphereGeometry args={[2, 64, 64]} />
                 <meshBasicMaterial
-                    color="#93c5fd"
+                    color="#4a9eff"
                     transparent
-                    opacity={0.3}
+                    opacity={0.06}
                     side={THREE.BackSide}
                 />
             </mesh>
 
-            {/* Trek Markers */}
             {treks.map((trek) => (
                 <TrekMarker
                     key={trek.id}
@@ -146,90 +179,158 @@ function Earth({ onMarkerHover, onMarkerLeave, onMarkerClick }) {
                     onHover={onMarkerHover}
                     onLeave={onMarkerLeave}
                     onClick={onMarkerClick}
+                    isSelected={selectedTrek?.id === trek.id}
+                    isAnySelected={!!selectedTrek}
                 />
             ))}
         </group>
     );
 }
 
+function LoadingGlobe() {
+    const ref = useRef();
+    useFrame((_, delta) => {
+        if (ref.current) ref.current.rotation.y += delta * 0.5;
+    });
+
+    return (
+        <mesh ref={ref}>
+            <sphereGeometry args={[2, 24, 24]} />
+            <meshBasicMaterial color="#0f172a" wireframe />
+        </mesh>
+    );
+}
+
+function Scene({ onMarkerHover, onMarkerLeave, onMarkerClick, selectedTrek, cameraTarget, onZoomComplete }) {
+    const controlsRef = useRef();
+    const isZoomed = !!selectedTrek;
+
+    useEffect(() => {
+        if (controlsRef.current) {
+            controlsRef.current.autoRotate = !isZoomed;
+        }
+    }, [isZoomed]);
+
+    return (
+        <>
+            <ambientLight intensity={0.35} />
+            <directionalLight position={[5, 3, 5]} intensity={1.6} />
+            <pointLight position={[-10, -5, -10]} intensity={0.2} color="#6366f1" />
+
+            <Stars radius={300} depth={50} count={1500} factor={2.5} fade speed={0.15} />
+
+            <Suspense fallback={<LoadingGlobe />}>
+                <Earth
+                    onMarkerHover={onMarkerHover}
+                    onMarkerLeave={onMarkerLeave}
+                    onMarkerClick={onMarkerClick}
+                    selectedTrek={selectedTrek}
+                    isZoomed={isZoomed}
+                />
+            </Suspense>
+
+            <CameraController targetPosition={cameraTarget} onAnimationComplete={onZoomComplete} />
+
+            <OrbitControls
+                ref={controlsRef}
+                enableZoom={true}
+                enablePan={false}
+                minDistance={3.2}
+                maxDistance={10}
+                autoRotate={!isZoomed}
+                autoRotateSpeed={0.35}
+                enableDamping
+                dampingFactor={0.05}
+                enabled={!cameraTarget}
+            />
+        </>
+    );
+}
+
 export default function Globe3D() {
     const navigate = useNavigate();
     const [hoveredTrek, setHoveredTrek] = useState(null);
+    const [selectedTrek, setSelectedTrek] = useState(null);
+    const [cameraTarget, setCameraTarget] = useState(null);
+    const [showDetails, setShowDetails] = useState(false);
 
     const handleMarkerClick = (trek) => {
-        navigate(`/trek/${trek.id}`);
+        if (selectedTrek?.id === trek.id) {
+            navigate(`/trek/${trek.id}`);
+        } else {
+            setSelectedTrek(trek);
+            setShowDetails(false);
+            setCameraTarget(getCameraPositionForTrek(trek.lat, trek.lng));
+        }
+    };
+
+    const handleBack = () => {
+        setSelectedTrek(null);
+        setCameraTarget(new THREE.Vector3(0, 0, 5));
+        setShowDetails(false);
     };
 
     return (
-        <div className="relative w-full h-screen bg-gradient-to-b from-gray-900 via-blue-950 to-black overflow-hidden">
-            {/* Title Overlay */}
-            <div className="absolute top-24 left-0 right-0 z-10 text-center pointer-events-none">
-                <h1 className="font-display text-5xl md:text-7xl font-bold text-white mb-4 drop-shadow-2xl animate-fade-in">
-                    Akashic Records
-                </h1>
-                <p className="text-lg md:text-xl text-blue-200 animate-fade-in-delay drop-shadow-lg">
-                    Explore epic mountain journeys around the world
-                </p>
-            </div>
+        <div className="relative w-full h-screen bg-[#0a0a0f] overflow-hidden">
+            {/* Hover label */}
+            {hoveredTrek && !selectedTrek && (
+                <div className="absolute bottom-20 left-1/2 -translate-x-1/2 z-10 pointer-events-none">
+                    <p className="text-white/70 text-xs tracking-[0.2em] uppercase">
+                        {hoveredTrek.name}
+                    </p>
+                </div>
+            )}
 
-            {/* Hover Tooltip */}
-            {hoveredTrek && (
-                <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-10 pointer-events-none">
-                    <div className="bg-white rounded-2xl px-8 py-5 shadow-2xl border-2 border-accent-400">
-                        <h3 className="font-display text-3xl font-bold text-mountain-900 mb-1">
-                            {hoveredTrek.name}
-                        </h3>
-                        <p className="text-mountain-600 text-lg">{hoveredTrek.country}</p>
-                        <p className="text-accent-600 text-sm mt-2 font-semibold">Click to explore →</p>
+            {/* Selected trek panel */}
+            {selectedTrek && showDetails && (
+                <div className="absolute left-6 lg:left-12 bottom-12 z-20">
+                    <button
+                        onClick={handleBack}
+                        className="text-white/40 hover:text-white text-xs tracking-[0.15em] uppercase mb-8 transition-colors flex items-center gap-2"
+                    >
+                        <span>&larr;</span>
+                        <span>Back</span>
+                    </button>
+
+                    <div className="text-white">
+                        <p className="text-white/40 text-[10px] tracking-[0.2em] uppercase mb-3">
+                            {selectedTrek.country}
+                        </p>
+                        <h2 className="text-3xl lg:text-4xl font-light tracking-wide mb-2">
+                            {selectedTrek.name}
+                        </h2>
+                        <p className="text-white/30 text-sm tracking-wider mb-10">
+                            {selectedTrek.elevation}
+                        </p>
+
+                        <button
+                            onClick={() => navigate(`/trek/${selectedTrek.id}`)}
+                            className="group flex items-center gap-4 text-xs tracking-[0.2em] uppercase text-white/60 hover:text-white transition-colors"
+                        >
+                            <span>Explore Journey</span>
+                            <span className="group-hover:translate-x-1 transition-transform">&rarr;</span>
+                        </button>
                     </div>
                 </div>
             )}
 
-            {/* 3D Canvas */}
-            <Canvas
-                camera={{ position: [0, 0, 5], fov: 50 }}
-                gl={{ antialias: true, alpha: true }}
-            >
-                {/* Lighting */}
-                <ambientLight intensity={0.8} />
-                <directionalLight position={[5, 3, 5]} intensity={1.5} />
-                <pointLight position={[-5, -3, -5]} intensity={0.5} color="#4a90e2" />
-
-                {/* Stars Background */}
-                <Stars
-                    radius={300}
-                    depth={60}
-                    count={3000}
-                    factor={4}
-                    fade
-                    speed={0.5}
-                />
-
-                <Earth
+            {/* Canvas */}
+            <Canvas camera={{ position: [0, 0, 5], fov: 45 }} gl={{ antialias: true }}>
+                <Scene
                     onMarkerHover={setHoveredTrek}
                     onMarkerLeave={() => setHoveredTrek(null)}
                     onMarkerClick={handleMarkerClick}
-                />
-
-                <OrbitControls
-                    enableZoom={true}
-                    enablePan={false}
-                    minDistance={3.5}
-                    maxDistance={10}
-                    autoRotate
-                    autoRotateSpeed={0.3}
-                    enableDamping
-                    dampingFactor={0.05}
+                    selectedTrek={selectedTrek}
+                    cameraTarget={cameraTarget}
+                    onZoomComplete={() => { setCameraTarget(null); setShowDetails(true); }}
                 />
             </Canvas>
 
-            {/* Instructions */}
-            <div className="absolute bottom-12 left-0 right-0 z-10 text-center pointer-events-none">
-                <div className="bg-white/10 backdrop-blur-md rounded-full px-8 py-3 inline-block">
-                    <p className="text-white text-sm font-medium">
-                        🖱️ Drag to rotate • 🔍 Scroll to zoom • 📍 Click markers to explore
-                    </p>
-                </div>
+            {/* Minimal hint */}
+            <div className={`absolute bottom-6 right-6 z-10 transition-all duration-500 ${selectedTrek ? 'opacity-0' : 'opacity-100'}`}>
+                <p className="text-white/20 text-[10px] tracking-[0.15em] uppercase">
+                    Drag to explore
+                </p>
             </div>
         </div>
     );

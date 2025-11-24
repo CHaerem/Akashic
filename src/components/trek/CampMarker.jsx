@@ -10,21 +10,65 @@ export default function CampMarker({ camp, map }) {
         // Create marker element
         const el = document.createElement('div');
         el.className = 'camp-marker';
+        el.style.cssText = `
+            width: 12px;
+            height: 12px;
+            cursor: pointer;
+            position: relative;
+        `;
         el.innerHTML = `
-      <div class="w-6 h-6 bg-orange-500 rounded-full border-2 border-white shadow-lg flex items-center justify-center cursor-pointer hover:scale-110 transition-transform">
-        <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
-        </svg>
-      </div>
-    `;
+            <div style="
+                width: 8px;
+                height: 8px;
+                background: white;
+                border-radius: 50%;
+                position: absolute;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                transition: transform 0.2s ease;
+            "></div>
+        `;
 
-        // Create popup
-        const popup = new mapboxgl.Popup({ offset: 25 }).setHTML(`
-      <div class="p-2">
-        <h3 class="font-bold text-mountain-900">${camp.name}</h3>
-        <p class="text-sm text-gray-600">Day ${camp.dayNumber} • ${camp.elevation}m</p>
-      </div>
-    `);
+        // Hover effect
+        el.addEventListener('mouseenter', () => {
+            el.querySelector('div').style.transform = 'translate(-50%, -50%) scale(1.5)';
+        });
+        el.addEventListener('mouseleave', () => {
+            el.querySelector('div').style.transform = 'translate(-50%, -50%) scale(1)';
+        });
+
+        // Create popup with dark styling
+        const popup = new mapboxgl.Popup({
+            offset: 15,
+            closeButton: false,
+            className: 'dark-popup'
+        }).setHTML(`
+            <div style="
+                background: rgba(10, 10, 15, 0.95);
+                color: white;
+                padding: 12px 16px;
+                border-radius: 8px;
+                border: 1px solid rgba(255, 255, 255, 0.1);
+            ">
+                <p style="
+                    font-size: 10px;
+                    letter-spacing: 0.15em;
+                    text-transform: uppercase;
+                    color: rgba(255, 255, 255, 0.4);
+                    margin-bottom: 4px;
+                ">Day ${camp.dayNumber}</p>
+                <p style="
+                    font-size: 14px;
+                    color: rgba(255, 255, 255, 0.9);
+                    margin-bottom: 2px;
+                ">${camp.name}</p>
+                <p style="
+                    font-size: 12px;
+                    color: rgba(255, 255, 255, 0.4);
+                ">${camp.elevation}m</p>
+            </div>
+        `);
 
         // Add marker to map
         markerRef.current = new mapboxgl.Marker(el)

@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from 'react';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import CampMarker from './CampMarker';
-import LoadingSpinner from '../common/LoadingSpinner';
 
 export default function Map3D({ routeData }) {
     const mapContainer = useRef(null);
@@ -16,15 +15,22 @@ export default function Map3D({ routeData }) {
 
         const newMap = new mapboxgl.Map({
             container: mapContainer.current,
-            style: 'mapbox://styles/mapbox/outdoors-v12',
+            style: 'mapbox://styles/mapbox/dark-v11',
             center: routeData.stats.highestPoint.coordinates,
             zoom: 11,
             pitch: 60,
-            bearing: 0,
+            bearing: -20,
             interactive: true
         });
 
-        newMap.on('load', () => {
+        newMap.on('style.load', () => {
+            // Add atmosphere
+            newMap.setFog({
+                color: 'rgb(10, 10, 15)',
+                'high-color': 'rgb(30, 30, 50)',
+                'horizon-blend': 0.05,
+            });
+
             // Add 3D terrain
             newMap.addSource('mapbox-dem', {
                 type: 'raster-dem',
@@ -42,6 +48,23 @@ export default function Map3D({ routeData }) {
                 }
             });
 
+            // Route glow
+            newMap.addLayer({
+                id: 'route-glow',
+                type: 'line',
+                source: 'route',
+                layout: {
+                    'line-join': 'round',
+                    'line-cap': 'round'
+                },
+                paint: {
+                    'line-color': 'rgba(255, 255, 255, 0.2)',
+                    'line-width': 12,
+                    'line-blur': 8
+                }
+            });
+
+            // Route line
             newMap.addLayer({
                 id: 'route',
                 type: 'line',
@@ -51,9 +74,8 @@ export default function Map3D({ routeData }) {
                     'line-cap': 'round'
                 },
                 paint: {
-                    'line-color': '#FF6B35',
-                    'line-width': 4,
-                    'line-opacity': 0.8
+                    'line-color': 'rgba(255, 255, 255, 0.8)',
+                    'line-width': 2
                 }
             });
 
@@ -61,20 +83,43 @@ export default function Map3D({ routeData }) {
             setMap(newMap);
         });
 
-        // Add navigation controls
-        newMap.addControl(new mapboxgl.NavigationControl());
+        // Minimal navigation controls
+        newMap.addControl(new mapboxgl.NavigationControl({ showCompass: false }), 'bottom-right');
 
         return () => newMap.remove();
     }, [routeData]);
 
     return (
-        <div className="relative w-full h-full">
+        <div className="relative w-full h-full bg-[#0a0a0f]">
             <div ref={mapContainer} className="w-full h-full" />
+
+            {/* Custom control styles */}
+            <style>{`
+                .mapboxgl-ctrl-group {
+                    background: rgba(10, 10, 15, 0.8) !important;
+                    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+                    border-radius: 4px !important;
+                }
+                .mapboxgl-ctrl-group button {
+                    background-color: transparent !important;
+                    width: 30px !important;
+                    height: 30px !important;
+                }
+                .mapboxgl-ctrl-group button + button {
+                    border-top: 1px solid rgba(255, 255, 255, 0.1) !important;
+                }
+                .mapboxgl-ctrl-icon {
+                    filter: invert(1) opacity(0.6);
+                }
+                .mapboxgl-ctrl-group button:hover .mapboxgl-ctrl-icon {
+                    filter: invert(1) opacity(1);
+                }
+            `}</style>
 
             {/* Loading State */}
             {!isLoaded && (
-                <div className="absolute inset-0 bg-mountain-50/80 backdrop-blur-sm z-10 flex items-center justify-center">
-                    <LoadingSpinner />
+                <div className="absolute inset-0 flex items-center justify-center">
+                    <div className="w-6 h-6 border border-white/20 border-t-white/60 rounded-full animate-spin" />
                 </div>
             )}
 

@@ -1,9 +1,8 @@
-import { useParams, Link } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import Navbar from '../common/Navbar';
 import Map3D from './Map3D';
 import InfoPanel from './InfoPanel';
-import LoadingSpinner from '../common/LoadingSpinner';
 import kilimanjaroData from '../../data/kilimanjaro.json';
 import mountKenyaData from '../../data/mountKenya.json';
 import incaTrailData from '../../data/incaTrail.json';
@@ -16,59 +15,83 @@ const trekDataMap = {
 
 export default function TrekDetailPage() {
     const { trekId } = useParams();
+    const navigate = useNavigate();
     const [trekData, setTrekData] = useState(null);
     const [loading, setLoading] = useState(true);
+    const [showContent, setShowContent] = useState(false);
 
     useEffect(() => {
         setLoading(true);
-        // Simulate async data loading
-        setTimeout(() => {
-            if (trekId && trekDataMap[trekId]) {
-                setTrekData(trekDataMap[trekId]);
-            }
-            setLoading(false);
-        }, 300);
+        setShowContent(false);
+
+        // Quick data load
+        const data = trekId && trekDataMap[trekId];
+        if (data) {
+            setTrekData(data);
+        }
+        setLoading(false);
+
+        // Trigger animations after mount
+        requestAnimationFrame(() => {
+            setShowContent(true);
+        });
     }, [trekId]);
 
     if (loading) {
         return (
-            <div className="h-screen flex flex-col">
-                <Navbar />
-                <div className="flex-grow pt-16">
-                    <LoadingSpinner fullScreen />
-                </div>
+            <div className="h-screen bg-[#0a0a0f] flex items-center justify-center">
+                <div className="w-8 h-8 border border-white/20 border-t-white/60 rounded-full animate-spin" />
             </div>
         );
     }
 
     if (!trekData) {
         return (
-            <div className="min-h-screen bg-mountain-50 flex items-center justify-center">
+            <div className="h-screen bg-[#0a0a0f] flex items-center justify-center">
                 <div className="text-center">
-                    <h2 className="text-2xl font-bold text-mountain-900 mb-4">Trek not found</h2>
-                    <Link to="/" className="text-mountain-500 hover:underline">Return Home</Link>
+                    <p className="text-white/40 text-sm tracking-widest uppercase mb-6">Trek not found</p>
+                    <button
+                        onClick={() => navigate('/')}
+                        className="text-white/60 hover:text-white text-xs tracking-widest uppercase transition-colors"
+                    >
+                        Return Home
+                    </button>
                 </div>
             </div>
         );
     }
 
     return (
-        <div className="h-screen flex flex-col overflow-hidden">
+        <div className="h-screen bg-[#0a0a0f] flex flex-col overflow-hidden">
             <Navbar />
 
-            <div className="flex-grow flex flex-col md:flex-row relative pt-16">
-                {/* Left/Top: 3D Map */}
-                <div className="w-full md:w-3/5 h-[40vh] md:h-full relative">
+            <div className="flex-grow flex flex-col lg:flex-row pt-16">
+                {/* Map Section */}
+                <div className={`w-full lg:w-3/5 h-[45vh] lg:h-full relative transition-opacity duration-700 ${showContent ? 'opacity-100' : 'opacity-0'}`}>
                     <Map3D routeData={trekData} />
 
-                    {/* Overlay Title for Mobile */}
-                    <div className="absolute top-4 left-4 md:hidden z-10">
-                        <h1 className="text-2xl font-bold text-white drop-shadow-lg">{trekData.name}</h1>
+                    {/* Back button overlay */}
+                    <button
+                        onClick={() => navigate('/')}
+                        className="absolute top-4 left-4 z-10 text-white/50 hover:text-white text-xs tracking-widest uppercase transition-colors flex items-center gap-2"
+                    >
+                        <span>&larr;</span>
+                        <span>Globe</span>
+                    </button>
+
+                    {/* Trek title overlay (mobile) */}
+                    <div className="absolute bottom-6 left-6 lg:hidden z-10">
+                        <p className="text-white/40 text-[10px] tracking-[0.2em] uppercase mb-1">
+                            {trekData.country}
+                        </p>
+                        <h1 className="text-2xl font-light text-white tracking-wide">
+                            {trekData.name}
+                        </h1>
                     </div>
                 </div>
 
-                {/* Right/Bottom: Info Panel */}
-                <div className="w-full md:w-2/5 h-[60vh] md:h-full bg-white border-l border-gray-200 shadow-xl z-20 overflow-hidden">
+                {/* Info Panel Section */}
+                <div className={`w-full lg:w-2/5 h-[55vh] lg:h-full border-l border-white/5 transition-all duration-500 delay-200 ${showContent ? 'opacity-100 translate-x-0' : 'opacity-0 translate-x-8'}`}>
                     <InfoPanel trekData={trekData} />
                 </div>
             </div>

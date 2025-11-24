@@ -1,18 +1,25 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
-import LandingPage from './components/home/LandingPage';
-import TrekDetailPage from './components/trek/TrekDetailPage';
-import ScrollToTop from './components/common/ScrollToTop';
+import { Suspense, lazy } from 'react';
+
+const AkashicApp = lazy(() => import('./components/AkashicApp'));
 
 function App() {
-  return (
-    <BrowserRouter basename="/Akashic/">
-      <ScrollToTop />
-      <Routes>
-        <Route path="/" element={<LandingPage />} />
-        <Route path="/trek/:trekId" element={<TrekDetailPage />} />
-      </Routes>
-    </BrowserRouter>
-  );
+    return (
+        <Suspense fallback={
+            <div style={{
+                position: 'fixed',
+                inset: 0,
+                background: '#0a0a0f',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: 'white'
+            }}>
+                Loading...
+            </div>
+        }>
+            <AkashicApp />
+        </Suspense>
+    );
 }
 
 export default App;

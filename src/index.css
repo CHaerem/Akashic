@@ -4,34 +4,100 @@
 
 @layer utilities {
   .animate-fade-in {
-    animation: fadeIn 1s ease-in;
+    animation: fadeIn 0.6s ease-out both;
   }
-  
+
   .animate-fade-in-delay {
-    animation: fadeIn 1s ease-in 0.3s both;
+    animation: fadeIn 0.6s ease-out 0.15s both;
   }
-  
+
   .animate-fade-in-up {
-    animation: fadeInUp 0.6s ease-out both;
+    animation: fadeInUp 0.5s ease-out both;
+  }
+
+  .animate-slide-in-right {
+    animation: slideInRight 0.5s ease-out both;
+  }
+
+  .animate-slide-in-left {
+    animation: slideInLeft 0.5s ease-out both;
   }
 }
 
 @keyframes fadeIn {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 @keyframes fadeInUp {
   from {
     opacity: 0;
-    transform: translateY(30px);
+    transform: translateY(20px);
   }
   to {
     opacity: 1;
     transform: translateY(0);
   }
+}
+
+@keyframes slideInRight {
+  from {
+    opacity: 0;
+    transform: translateX(40px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes slideInLeft {
+  from {
+    opacity: 0;
+    transform: translateX(-40px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* Custom scrollbar for dark theme */
+.dark-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+
+.dark-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.dark-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 3px;
+}
+
+.dark-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+/* Page transitions */
+.page-enter {
+  opacity: 0;
+}
+
+.page-enter-active {
+  opacity: 1;
+  transition: opacity 0.4s ease-out;
+}
+
+/* Mapbox dark popup */
+.dark-popup .mapboxgl-popup-content {
+  background: transparent;
+  padding: 0;
+  box-shadow: none;
+}
+
+.dark-popup .mapboxgl-popup-tip {
+  border-top-color: rgba(10, 10, 15, 0.95);
+  border-bottom-color: rgba(10, 10, 15, 0.95);
 }
