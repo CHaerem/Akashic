@@ -1,3 +1,4 @@
+import { memo, useCallback, useMemo } from 'react';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import { useTrekData } from '../hooks/useTrekData';
 import { MapboxGlobe } from './MapboxGlobe';
@@ -84,15 +85,18 @@ interface TabButtonProps {
     onClick: (tab: TabType) => void;
 }
 
-function TabButton({ tab, activeTab, onClick }: TabButtonProps) {
+const TabButton = memo(function TabButton({ tab, activeTab, onClick }: TabButtonProps) {
+    const handleClick = useCallback(() => onClick(tab as TabType), [onClick, tab]);
+    const isActive = activeTab === tab;
+
     return (
         <button
-            onClick={() => onClick(tab as TabType)}
+            onClick={handleClick}
             style={{
                 background: 'none',
                 border: 'none',
-                borderBottom: activeTab === tab ? '2px solid rgba(255,255,255,0.6)' : '2px solid transparent',
-                color: activeTab === tab ? 'white' : 'rgba(255,255,255,0.4)',
+                borderBottom: isActive ? '2px solid rgba(255,255,255,0.6)' : '2px solid transparent',
+                color: isActive ? 'white' : 'rgba(255,255,255,0.4)',
                 fontSize: 11,
                 letterSpacing: '0.15em',
                 textTransform: 'uppercase',
@@ -104,7 +108,7 @@ function TabButton({ tab, activeTab, onClick }: TabButtonProps) {
             {tab}
         </button>
     );
-}
+});
 
 interface StatCardProps {
     label: string;
@@ -112,7 +116,7 @@ interface StatCardProps {
     color?: string;
 }
 
-function StatCard({ label, value, color = 'rgba(255,255,255,0.8)' }: StatCardProps) {
+const StatCard = memo(function StatCard({ label, value, color = 'rgba(255,255,255,0.8)' }: StatCardProps) {
     return (
         <div style={{ background: 'rgba(255,255,255,0.03)', padding: 16, borderRadius: 8 }}>
             <p style={{ color: 'rgba(255,255,255,0.3)', fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 4 }}>
@@ -121,13 +125,13 @@ function StatCard({ label, value, color = 'rgba(255,255,255,0.8)' }: StatCardPro
             <p style={{ color }}>{value}</p>
         </div>
     );
-}
+});
 
 interface OverviewTabProps {
     trekData: TrekData;
 }
 
-function OverviewTab({ trekData }: OverviewTabProps) {
+const OverviewTab = memo(function OverviewTab({ trekData }: OverviewTabProps) {
     return (
         <div>
             <p style={{ color: 'rgba(255,255,255,0.5)', lineHeight: 1.7, marginBottom: 24 }}>
@@ -141,7 +145,7 @@ function OverviewTab({ trekData }: OverviewTabProps) {
             </div>
         </div>
     );
-}
+});
 
 interface CampItemProps {
     camp: Camp;
@@ -150,21 +154,22 @@ interface CampItemProps {
     isLast: boolean;
 }
 
-function CampItem({ camp, isSelected, onClick, isLast }: CampItemProps) {
+const CampItem = memo(function CampItem({ camp, isSelected, onClick, isLast }: CampItemProps) {
+    const handleClick = useCallback(() => onClick(camp), [onClick, camp]);
+
+    const containerStyle = useMemo(() => ({
+        padding: '20px 0',
+        borderBottom: !isLast ? '1px solid rgba(255,255,255,0.05)' : 'none',
+        cursor: 'pointer',
+        transition: 'background 0.2s',
+        background: isSelected ? 'rgba(255,255,255,0.03)' : 'transparent',
+        margin: '0 -24px',
+        paddingLeft: 24,
+        paddingRight: 24
+    }), [isLast, isSelected]);
+
     return (
-        <div
-            onClick={() => onClick(camp)}
-            style={{
-                padding: '20px 0',
-                borderBottom: !isLast ? '1px solid rgba(255,255,255,0.05)' : 'none',
-                cursor: 'pointer',
-                transition: 'background 0.2s',
-                background: isSelected ? 'rgba(255,255,255,0.03)' : 'transparent',
-                margin: '0 -24px',
-                paddingLeft: 24,
-                paddingRight: 24
-            }}
-        >
+        <div onClick={handleClick} style={containerStyle}>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
                 <span style={{ color: isSelected ? '#3b82f6' : 'rgba(255,255,255,0.3)', fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase' }}>
                     Day {camp.dayNumber}
@@ -211,7 +216,7 @@ function CampItem({ camp, isSelected, onClick, isLast }: CampItemProps) {
             )}
         </div>
     );
-}
+});
 
 interface JourneyTabProps {
     trekData: TrekData;
@@ -219,7 +224,7 @@ interface JourneyTabProps {
     onCampSelect: (camp: Camp) => void;
 }
 
-function JourneyTab({ trekData, selectedCamp, onCampSelect }: JourneyTabProps) {
+const JourneyTab = memo(function JourneyTab({ trekData, selectedCamp, onCampSelect }: JourneyTabProps) {
     return (
         <div>
             {trekData.camps.map((camp, i) => (
@@ -233,13 +238,13 @@ function JourneyTab({ trekData, selectedCamp, onCampSelect }: JourneyTabProps) {
             ))}
         </div>
     );
-}
+});
 
 interface ElevationProfileProps {
     elevationProfile: ElevationProfile | null;
 }
 
-function ElevationProfileChart({ elevationProfile }: ElevationProfileProps) {
+const ElevationProfileChart = memo(function ElevationProfileChart({ elevationProfile }: ElevationProfileProps) {
     if (!elevationProfile) return null;
 
     return (
@@ -269,7 +274,7 @@ function ElevationProfileChart({ elevationProfile }: ElevationProfileProps) {
             </div>
         </div>
     );
-}
+});
 
 interface StatsTabProps {
     trekData: TrekData;
@@ -277,7 +282,7 @@ interface StatsTabProps {
     elevationProfile: ElevationProfile | null;
 }
 
-function StatsTab({ trekData, extendedStats, elevationProfile }: StatsTabProps) {
+const StatsTab = memo(function StatsTab({ trekData, extendedStats, elevationProfile }: StatsTabProps) {
     return (
         <div>
             <div style={{
@@ -309,7 +314,7 @@ function StatsTab({ trekData, extendedStats, elevationProfile }: StatsTabProps) 
             )}
         </div>
     );
-}
+});
 
 interface InfoPanelProps {
     trekData: TrekData;
@@ -322,7 +327,7 @@ interface InfoPanelProps {
     elevationProfile: ElevationProfile | null;
 }
 
-function InfoPanel({ trekData, activeTab, setActiveTab, selectedCamp, onCampSelect, onBack, extendedStats, elevationProfile }: InfoPanelProps) {
+const InfoPanel = memo(function InfoPanel({ trekData, activeTab, setActiveTab, selectedCamp, onCampSelect, onBack, extendedStats, elevationProfile }: InfoPanelProps) {
     return (
         <div style={{
             position: 'absolute',
@@ -382,7 +387,7 @@ function InfoPanel({ trekData, activeTab, setActiveTab, selectedCamp, onCampSele
             </div>
         </div>
     );
-}
+});
 
 // --- Main Component ---
 

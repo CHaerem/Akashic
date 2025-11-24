@@ -6,7 +6,7 @@ import {
     calculateBearing,
     findCoordIndex,
     calculateRouteDistance
-} from './geography.ts';
+} from './geography';
 
 describe('geography utilities', () => {
     describe('deg2rad', () => {
@@ -114,7 +114,7 @@ describe('geography utilities', () => {
     });
 
     describe('findCoordIndex', () => {
-        const routeCoords = [
+        const routeCoords: [number, number, number][] = [
             [37.3556, -3.0674, 1800],
             [37.3600, -3.0700, 2000],
             [37.3650, -3.0750, 2500],
@@ -159,7 +159,7 @@ describe('geography utilities', () => {
         });
 
         it('calculates distance for two points', () => {
-            const coords = [
+            const coords: [number, number, number][] = [
                 [0, 0, 0],
                 [0, 1, 0]
             ];
@@ -169,7 +169,7 @@ describe('geography utilities', () => {
         });
 
         it('sums distances along route', () => {
-            const coords = [
+            const coords: [number, number, number][] = [
                 [0, 0, 0],
                 [0, 1, 0],
                 [0, 2, 0]
@@ -181,8 +181,8 @@ describe('geography utilities', () => {
         });
 
         it('handles null/undefined', () => {
-            expect(calculateRouteDistance(null)).toBe(0);
-            expect(calculateRouteDistance(undefined)).toBe(0);
+            expect(calculateRouteDistance(null as unknown as [number, number, number][])).toBe(0);
+            expect(calculateRouteDistance(undefined as unknown as [number, number, number][])).toBe(0);
         });
     });
 });

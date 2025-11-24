@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import { useTrekData } from './useTrekData';
+import type { TrekConfig, Camp } from '../types/trek';
 
 describe('useTrekData hook', () => {
     describe('initial state', () => {
@@ -33,7 +34,16 @@ describe('useTrekData hook', () => {
     describe('selectTrek', () => {
         it('selects a trek', () => {
             const { result } = renderHook(() => useTrekData());
-            const mockTrek = { id: 'kilimanjaro', name: 'Kilimanjaro' };
+            const mockTrek: TrekConfig = {
+                id: 'kilimanjaro',
+                name: 'Kilimanjaro',
+                country: 'Tanzania',
+                elevation: '5,895m',
+                lat: -3.0674,
+                lng: 37.3556,
+                preferredBearing: 180,
+                preferredPitch: 60
+            };
 
             act(() => {
                 result.current.selectTrek(mockTrek);
@@ -44,20 +54,46 @@ describe('useTrekData hook', () => {
 
         it('loads trek data when trek is selected', () => {
             const { result } = renderHook(() => useTrekData());
-            const mockTrek = { id: 'kilimanjaro', name: 'Kilimanjaro' };
+            const mockTrek: TrekConfig = {
+                id: 'kilimanjaro',
+                name: 'Kilimanjaro',
+                country: 'Tanzania',
+                elevation: '5,895m',
+                lat: -3.0674,
+                lng: 37.3556,
+                preferredBearing: 180,
+                preferredPitch: 60
+            };
 
             act(() => {
                 result.current.selectTrek(mockTrek);
             });
 
             expect(result.current.trekData).not.toBeNull();
-            expect(result.current.trekData.id).toBe('kilimanjaro');
+            expect(result.current.trekData!.id).toBe('kilimanjaro');
         });
 
         it('clears selected camp when selecting new trek', () => {
             const { result } = renderHook(() => useTrekData());
-            const mockTrek = { id: 'kilimanjaro', name: 'Kilimanjaro' };
-            const mockCamp = { id: 'camp1', name: 'Camp 1' };
+            const mockTrek: TrekConfig = {
+                id: 'kilimanjaro',
+                name: 'Kilimanjaro',
+                country: 'Tanzania',
+                elevation: '5,895m',
+                lat: -3.0674,
+                lng: 37.3556,
+                preferredBearing: 180,
+                preferredPitch: 60
+            };
+            const mockCamp: Camp = {
+                id: 'camp1',
+                name: 'Camp 1',
+                dayNumber: 1,
+                elevation: 2700,
+                coordinates: [37.35, -3.06],
+                elevationGainFromPrevious: 500,
+                notes: 'Test camp'
+            };
 
             act(() => {
                 result.current.selectTrek(mockTrek);
@@ -70,7 +106,16 @@ describe('useTrekData hook', () => {
             expect(result.current.selectedCamp).toEqual(mockCamp);
 
             act(() => {
-                result.current.selectTrek({ id: 'mount-kenya', name: 'Mount Kenya' });
+                result.current.selectTrek({
+                    id: 'mount-kenya',
+                    name: 'Mount Kenya',
+                    country: 'Kenya',
+                    elevation: '4,985m',
+                    lat: -0.1521,
+                    lng: 37.3084,
+                    preferredBearing: 0,
+                    preferredPitch: 60
+                });
             });
 
             expect(result.current.selectedCamp).toBeNull();
@@ -80,7 +125,16 @@ describe('useTrekData hook', () => {
     describe('handleExplore', () => {
         it('switches to trek view when trek is selected', () => {
             const { result } = renderHook(() => useTrekData());
-            const mockTrek = { id: 'kilimanjaro', name: 'Kilimanjaro' };
+            const mockTrek: TrekConfig = {
+                id: 'kilimanjaro',
+                name: 'Kilimanjaro',
+                country: 'Tanzania',
+                elevation: '5,895m',
+                lat: -3.0674,
+                lng: 37.3556,
+                preferredBearing: 180,
+                preferredPitch: 60
+            };
 
             act(() => {
                 result.current.selectTrek(mockTrek);
@@ -107,7 +161,16 @@ describe('useTrekData hook', () => {
     describe('handleBackToGlobe', () => {
         it('switches to globe view', () => {
             const { result } = renderHook(() => useTrekData());
-            const mockTrek = { id: 'kilimanjaro', name: 'Kilimanjaro' };
+            const mockTrek: TrekConfig = {
+                id: 'kilimanjaro',
+                name: 'Kilimanjaro',
+                country: 'Tanzania',
+                elevation: '5,895m',
+                lat: -3.0674,
+                lng: 37.3556,
+                preferredBearing: 180,
+                preferredPitch: 60
+            };
 
             act(() => {
                 result.current.selectTrek(mockTrek);
@@ -128,7 +191,16 @@ describe('useTrekData hook', () => {
 
         it('clears selected trek and camp', () => {
             const { result } = renderHook(() => useTrekData());
-            const mockTrek = { id: 'kilimanjaro', name: 'Kilimanjaro' };
+            const mockTrek: TrekConfig = {
+                id: 'kilimanjaro',
+                name: 'Kilimanjaro',
+                country: 'Tanzania',
+                elevation: '5,895m',
+                lat: -3.0674,
+                lng: 37.3556,
+                preferredBearing: 180,
+                preferredPitch: 60
+            };
 
             act(() => {
                 result.current.selectTrek(mockTrek);
@@ -146,7 +218,16 @@ describe('useTrekData hook', () => {
     describe('handleBackToSelection', () => {
         it('clears trek selection but stays on globe view', () => {
             const { result } = renderHook(() => useTrekData());
-            const mockTrek = { id: 'kilimanjaro', name: 'Kilimanjaro' };
+            const mockTrek: TrekConfig = {
+                id: 'kilimanjaro',
+                name: 'Kilimanjaro',
+                country: 'Tanzania',
+                elevation: '5,895m',
+                lat: -3.0674,
+                lng: 37.3556,
+                preferredBearing: 180,
+                preferredPitch: 60
+            };
 
             act(() => {
                 result.current.selectTrek(mockTrek);
@@ -166,7 +247,15 @@ describe('useTrekData hook', () => {
     describe('handleCampSelect', () => {
         it('selects a camp', () => {
             const { result } = renderHook(() => useTrekData());
-            const mockCamp = { id: 'camp1', name: 'Base Camp' };
+            const mockCamp: Camp = {
+                id: 'camp1',
+                name: 'Base Camp',
+                dayNumber: 1,
+                elevation: 2700,
+                coordinates: [37.35, -3.06],
+                elevationGainFromPrevious: 500,
+                notes: 'Test camp'
+            };
 
             act(() => {
                 result.current.handleCampSelect(mockCamp);
@@ -177,7 +266,15 @@ describe('useTrekData hook', () => {
 
         it('deselects camp when clicking same camp', () => {
             const { result } = renderHook(() => useTrekData());
-            const mockCamp = { id: 'camp1', name: 'Base Camp' };
+            const mockCamp: Camp = {
+                id: 'camp1',
+                name: 'Base Camp',
+                dayNumber: 1,
+                elevation: 2700,
+                coordinates: [37.35, -3.06],
+                elevationGainFromPrevious: 500,
+                notes: 'Test camp'
+            };
 
             act(() => {
                 result.current.handleCampSelect(mockCamp);
@@ -194,8 +291,24 @@ describe('useTrekData hook', () => {
 
         it('switches to different camp', () => {
             const { result } = renderHook(() => useTrekData());
-            const camp1 = { id: 'camp1', name: 'Base Camp' };
-            const camp2 = { id: 'camp2', name: 'High Camp' };
+            const camp1: Camp = {
+                id: 'camp1',
+                name: 'Base Camp',
+                dayNumber: 1,
+                elevation: 2700,
+                coordinates: [37.35, -3.06],
+                elevationGainFromPrevious: 500,
+                notes: 'Test camp 1'
+            };
+            const camp2: Camp = {
+                id: 'camp2',
+                name: 'High Camp',
+                dayNumber: 2,
+                elevation: 3500,
+                coordinates: [37.36, -3.07],
+                elevationGainFromPrevious: 800,
+                notes: 'Test camp 2'
+            };
 
             act(() => {
                 result.current.handleCampSelect(camp1);
@@ -230,28 +343,46 @@ describe('useTrekData hook', () => {
     describe('computed values', () => {
         it('computes extendedStats when trek is selected', () => {
             const { result } = renderHook(() => useTrekData());
-            const mockTrek = { id: 'kilimanjaro', name: 'Kilimanjaro' };
+            const mockTrek: TrekConfig = {
+                id: 'kilimanjaro',
+                name: 'Kilimanjaro',
+                country: 'Tanzania',
+                elevation: '5,895m',
+                lat: -3.0674,
+                lng: 37.3556,
+                preferredBearing: 180,
+                preferredPitch: 60
+            };
 
             act(() => {
                 result.current.selectTrek(mockTrek);
             });
 
             expect(result.current.extendedStats).not.toBeNull();
-            expect(result.current.extendedStats.avgDailyDistance).toBeDefined();
-            expect(result.current.extendedStats.maxDailyGain).toBeDefined();
+            expect(result.current.extendedStats!.avgDailyDistance).toBeDefined();
+            expect(result.current.extendedStats!.maxDailyGain).toBeDefined();
         });
 
         it('computes elevationProfile when trek is selected', () => {
             const { result } = renderHook(() => useTrekData());
-            const mockTrek = { id: 'kilimanjaro', name: 'Kilimanjaro' };
+            const mockTrek: TrekConfig = {
+                id: 'kilimanjaro',
+                name: 'Kilimanjaro',
+                country: 'Tanzania',
+                elevation: '5,895m',
+                lat: -3.0674,
+                lng: 37.3556,
+                preferredBearing: 180,
+                preferredPitch: 60
+            };
 
             act(() => {
                 result.current.selectTrek(mockTrek);
             });
 
             expect(result.current.elevationProfile).not.toBeNull();
-            expect(result.current.elevationProfile.linePath).toBeDefined();
-            expect(result.current.elevationProfile.areaPath).toBeDefined();
+            expect(result.current.elevationProfile!.linePath).toBeDefined();
+            expect(result.current.elevationProfile!.areaPath).toBeDefined();
         });
 
         it('returns null computed values when no trek selected', () => {
