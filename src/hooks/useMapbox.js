@@ -1,0 +1,390 @@
+/**
+ * Custom hook for Mapbox map initialization and management
+ */
+
+import { useState, useRef, useEffect, useCallback } from 'react';
+import mapboxgl from 'mapbox-gl';
+import { treks, trekDataMap, getTrekConfig } from '../data/trekConfig';
+import { calculateBearing, findCoordIndex } from '../utils/geography';
+
+/**
+ * Initialize Mapbox map with globe projection and terrain
+ * @param {Object} options - Configuration options
+ * @param {React.RefObject} options.containerRef - Container element ref
+ * @param {Function} options.onTrekSelect - Callback when trek marker is clicked
+ * @returns {Object} Map state and controls
+ */
+export function useMapbox({ containerRef, onTrekSelect }) {
+    const mapRef = useRef(null);
+    const [mapReady, setMapReady] = useState(false);
+    const [error, setError] = useState(null);
+
+    // Store callbacks in refs to avoid dependency issues
+    const onTrekSelectRef = useRef(onTrekSelect);
+    useEffect(() => {
+        onTrekSelectRef.current = onTrekSelect;
+    }, [onTrekSelect]);
+
+    // Initialize map
+    useEffect(() => {
+        if (!containerRef.current || mapRef.current) return;
+
+        const token = import.meta.env.VITE_MAPBOX_TOKEN;
+        if (!token) {
+            setError('Mapbox token not found');
+            console.error('Mapbox token not found');
+            return;
+        }
+
+        mapboxgl.accessToken = token;
+
+        try {
+            const map = new mapboxgl.Map({
+                container: containerRef.current,
+                style: 'mapbox://styles/mapbox/satellite-v9',
+                projection: 'globe',
+                zoom: 1.5,
+                center: [30, 15],
+                pitch: 0,
+            });
+
+            mapRef.current = map;
+
+            map.on('style.load', () => {
+                // Set atmosphere fog
+                map.setFog({
+                    'range': [1, 12],
+                    'color': 'rgb(186, 210, 235)',
+                    'high-color': 'rgb(36, 92, 223)',
+                    'horizon-blend': 0.02,
+                    'space-color': 'rgb(11, 11, 25)',
+                    'star-intensity': 0.15
+                });
+
+                // Add terrain source
+                map.addSource('mapbox-dem', {
+                    type: 'raster-dem',
+                    url: 'mapbox://mapbox.terrain-rgb',
+                    tileSize: 512,
+                    maxzoom: 16
+                });
+                map.setTerrain({ source: 'mapbox-dem', exaggeration: 1.2 });
+
+                // Add sky layer
+                map.addLayer({
+                    'id': 'sky',
+                    'type': 'sky',
+                    'paint': {
+                        'sky-type': 'atmosphere',
+                        'sky-atmosphere-sun': [0.0, 0.0],
+                        'sky-atmosphere-sun-intensity': 3
+                    }
+                });
+
+                // Add trek markers
+                map.addSource('trek-markers', {
+                    type: 'geojson',
+                    data: {
+                        type: 'FeatureCollection',
+                        features: treks.map(trek => ({
+                            type: 'Feature',
+                            properties: trek,
+                            geometry: {
+                                type: 'Point',
+                                coordinates: [trek.lng, trek.lat]
+                            }
+                        }))
+                    }
+                });
+
+                // Trek marker layers
+                map.addLayer({
+                    id: 'trek-markers-circle',
+                    type: 'circle',
+                    source: 'trek-markers',
+                    paint: {
+                        'circle-color': '#ffffff',
+                        'circle-radius': 6,
+                        'circle-stroke-width': 2,
+                        'circle-stroke-color': 'rgba(0,0,0,0.2)',
+                        'circle-emissive-strength': 1
+                    }
+                });
+
+                map.addLayer({
+                    id: 'trek-markers-glow',
+                    type: 'circle',
+                    source: 'trek-markers',
+                    paint: {
+                        'circle-color': '#ffffff',
+                        'circle-radius': 12,
+                        'circle-opacity': 0.3,
+                        'circle-blur': 0.5,
+                        'circle-emissive-strength': 1
+                    },
+                    beforeId: 'trek-markers-circle'
+                });
+
+                // Preload all trek routes
+                Object.values(trekDataMap).forEach(trekData => {
+                    if (!trekData.route) return;
+
+                    map.addSource(`route-${trekData.id}`, {
+                        type: 'geojson',
+                        data: { type: 'Feature', properties: {}, geometry: trekData.route }
+                    });
+
+                    map.addLayer({
+                        id: `route-glow-${trekData.id}`,
+                        type: 'line',
+                        source: `route-${trekData.id}`,
+                        layout: { 'line-join': 'round', 'line-cap': 'round', 'visibility': 'none' },
+                        paint: { 'line-color': 'rgba(255,255,255,0.15)', 'line-width': 12, 'line-blur': 8 }
+                    });
+
+                    map.addLayer({
+                        id: `route-${trekData.id}`,
+                        type: 'line',
+                        source: `route-${trekData.id}`,
+                        layout: { 'line-join': 'round', 'line-cap': 'round', 'visibility': 'none' },
+                        paint: { 'line-color': 'rgba(255,255,255,0.8)', 'line-width': 2 }
+                    });
+                });
+
+                // Active segment source & layers
+                map.addSource('active-segment', {
+                    type: 'geojson',
+                    data: { type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: [] } }
+                });
+
+                map.addLayer({
+                    id: 'active-segment-glow',
+                    type: 'line',
+                    source: 'active-segment',
+                    layout: { 'visibility': 'none', 'line-join': 'round', 'line-cap': 'round' },
+                    paint: { 'line-color': '#00ffff', 'line-width': 15, 'line-blur': 10, 'line-opacity': 0.5 }
+                });
+
+                map.addLayer({
+                    id: 'active-segment-line',
+                    type: 'line',
+                    source: 'active-segment',
+                    layout: { 'visibility': 'none', 'line-join': 'round', 'line-cap': 'round' },
+                    paint: { 'line-color': '#00ffff', 'line-width': 4 }
+                });
+
+                setMapReady(true);
+            });
+
+            // Interaction handlers
+            map.on('mouseenter', 'trek-markers-circle', () => {
+                map.getCanvas().style.cursor = 'pointer';
+            });
+
+            map.on('mouseleave', 'trek-markers-circle', () => {
+                map.getCanvas().style.cursor = '';
+            });
+
+            map.on('click', 'trek-markers-circle', (e) => {
+                if (e.features.length > 0) {
+                    const trekProps = e.features[0].properties;
+                    const trek = treks.find(t => t.id === trekProps.id);
+                    if (trek && onTrekSelectRef.current) {
+                        onTrekSelectRef.current(trek);
+                    }
+                    e.originalEvent.stopPropagation();
+                }
+            });
+
+        } catch (err) {
+            setError(err.message);
+            console.error('Error initializing map:', err);
+        }
+
+        return () => {
+            if (mapRef.current) {
+                mapRef.current.remove();
+                mapRef.current = null;
+            }
+        };
+    }, [containerRef]);
+
+    // Fly to globe view
+    const flyToGlobe = useCallback((selectedTrek = null) => {
+        const map = mapRef.current;
+        if (!map || !mapReady) return;
+
+        // Set globe atmosphere
+        map.setFog({
+            'range': [1, 12],
+            'color': 'rgb(186, 210, 235)',
+            'high-color': 'rgb(36, 92, 223)',
+            'horizon-blend': 0.02,
+            'space-color': 'rgb(11, 11, 25)',
+            'star-intensity': 0.15
+        });
+
+        // Hide all routes
+        Object.keys(trekDataMap).forEach(id => {
+            if (map.getLayer(`route-${id}`)) {
+                map.setLayoutProperty(`route-${id}`, 'visibility', 'none');
+                map.setLayoutProperty(`route-glow-${id}`, 'visibility', 'none');
+            }
+        });
+
+        // Hide active segment
+        if (map.getLayer('active-segment-line')) {
+            map.setLayoutProperty('active-segment-line', 'visibility', 'none');
+            map.setLayoutProperty('active-segment-glow', 'visibility', 'none');
+        }
+
+        if (selectedTrek) {
+            map.flyTo({
+                center: [selectedTrek.lng, selectedTrek.lat],
+                zoom: 3.5,
+                pitch: 0,
+                bearing: 0,
+                duration: 2000,
+                essential: true
+            });
+        } else {
+            map.flyTo({
+                center: [30, 15],
+                zoom: 1.5,
+                pitch: 0,
+                bearing: 0,
+                duration: 3000,
+                essential: true
+            });
+        }
+    }, [mapReady]);
+
+    // Highlight trek segment (defined before flyToTrek which uses it)
+    const highlightSegment = useCallback((trekData, selectedCamp) => {
+        const map = mapRef.current;
+        if (!map || !mapReady) return;
+
+        const campIndex = trekData.camps.findIndex(c => c.id === selectedCamp.id);
+        if (campIndex === -1) return;
+
+        const routeCoords = trekData.route.coordinates;
+        const startCoord = campIndex === 0 ? routeCoords[0] : trekData.camps[campIndex - 1].coordinates;
+        const endCoord = selectedCamp.coordinates;
+
+        const startIndex = findCoordIndex(routeCoords, startCoord);
+        const endIndex = findCoordIndex(routeCoords, endCoord);
+
+        if (startIndex !== -1 && endIndex !== -1 && endIndex >= startIndex) {
+            const segmentCoords = routeCoords.slice(startIndex, endIndex + 1);
+            const segmentGeoJSON = {
+                type: 'Feature',
+                properties: {},
+                geometry: { type: 'LineString', coordinates: segmentCoords }
+            };
+
+            if (map.getSource('active-segment')) {
+                map.getSource('active-segment').setData(segmentGeoJSON);
+                map.setLayoutProperty('active-segment-line', 'visibility', 'visible');
+                map.setLayoutProperty('active-segment-glow', 'visibility', 'visible');
+            }
+        }
+    }, [mapReady]);
+
+    // Fly to trek view
+    const flyToTrek = useCallback((selectedTrek, selectedCamp = null) => {
+        const map = mapRef.current;
+        if (!map || !mapReady || !selectedTrek) return;
+
+        const trekData = trekDataMap[selectedTrek.id];
+        const trekConfig = getTrekConfig(selectedTrek.id);
+        if (!trekData || !trekConfig) return;
+
+        // Set day mode atmosphere
+        map.setFog({
+            'range': [0.5, 10],
+            'color': 'rgb(186, 210, 235)',
+            'high-color': 'rgb(36, 92, 223)',
+            'horizon-blend': 0.02,
+            'space-color': 'rgb(11, 11, 25)',
+            'star-intensity': 0.0
+        });
+        map.setTerrain({ source: 'mapbox-dem', exaggeration: 1.2 });
+
+        // Show selected route, hide others
+        Object.keys(trekDataMap).forEach(id => {
+            if (map.getLayer(`route-${id}`)) {
+                const visibility = id === selectedTrek.id ? 'visible' : 'none';
+                map.setLayoutProperty(`route-${id}`, 'visibility', visibility);
+                map.setLayoutProperty(`route-glow-${id}`, 'visibility', visibility);
+            }
+        });
+
+        if (selectedCamp) {
+            // Calculate camera settings
+            let bearing = trekConfig.preferredBearing;
+            const pitch = selectedCamp.pitch || 55;
+
+            if (selectedCamp.bearing !== undefined) {
+                bearing = selectedCamp.bearing;
+            } else {
+                // Smart bearing: look along path of arrival
+                const campIndex = trekData.camps.findIndex(c => c.id === selectedCamp.id);
+                if (campIndex !== -1) {
+                    const routeCoords = trekData.route.coordinates;
+                    const currentCoord = selectedCamp.coordinates;
+                    const endIndex = findCoordIndex(routeCoords, currentCoord);
+
+                    if (endIndex > 5) {
+                        const lookBackIndex = endIndex - 5;
+                        const prevCoord = routeCoords[lookBackIndex];
+                        bearing = calculateBearing(prevCoord[1], prevCoord[0], currentCoord[1], currentCoord[0]);
+                    } else if (campIndex > 0) {
+                        const prevCampCoord = trekData.camps[campIndex - 1].coordinates;
+                        bearing = calculateBearing(prevCampCoord[1], prevCampCoord[0], currentCoord[1], currentCoord[0]);
+                    }
+                }
+            }
+
+            map.flyTo({
+                center: selectedCamp.coordinates,
+                zoom: 15,
+                pitch: pitch,
+                bearing: bearing,
+                duration: 2000,
+                essential: true
+            });
+
+            // Highlight segment
+            highlightSegment(trekData, selectedCamp);
+        } else {
+            // Fit bounds to whole route
+            const coordinates = trekData.route.coordinates;
+            const bounds = coordinates.reduce((b, coord) => {
+                return b.extend(coord);
+            }, new mapboxgl.LngLatBounds(coordinates[0], coordinates[0]));
+
+            map.fitBounds(bounds, {
+                padding: { top: 100, bottom: 100, left: 100, right: 600 },
+                pitch: trekConfig.preferredPitch,
+                bearing: trekConfig.preferredBearing,
+                duration: 2000,
+                essential: true
+            });
+
+            // Hide highlight
+            if (map.getLayer('active-segment-line')) {
+                map.setLayoutProperty('active-segment-line', 'visibility', 'none');
+                map.setLayoutProperty('active-segment-glow', 'visibility', 'none');
+            }
+        }
+    }, [mapReady, highlightSegment]);
+
+    return {
+        map: mapRef,
+        mapReady,
+        error,
+        flyToGlobe,
+        flyToTrek,
+        highlightSegment
+    };
+}

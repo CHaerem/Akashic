@@ -58,4 +58,15 @@ export default defineConfig({
     setupFiles: './vitest.setup.js',
   },
   base: '/Akashic/',
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'mapbox': ['mapbox-gl'],
+          'three': ['three', '@react-three/fiber', '@react-three/drei'],
+          'vendor': ['react', 'react-dom', 'react-router-dom']
+        }
+      }
+    }
+  }
 })
