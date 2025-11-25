@@ -220,18 +220,39 @@
             "images": []
         },
         {
-            "id": "point-lenana",
-            "name": "Point Lenana (Summit)",
+            "id": "lake-michaelson",
+            "name": "Lake Michaelson Camp",
             "dayNumber": 3,
             "date": "Day 4",
+            "elevation": 3950,
+            "coordinates": [37.375, -0.125],
+            "distanceFromStart": 24,
+            "distanceFromPrevious": 7,
+            "elevationGainFromPrevious": 600,
+            "timeFromPrevious": "4-5 hours",
+            "terrain": "Alpine moorland",
+            "notes": "Final camp before summit in Gorges Valley near Lake Michaelson. Spectacular views of The Temple cliff, Gorges Valley, and the main peaks. Last night before the big push to Point Lenana.",
+            "highlights": [
+                "Lake Michaelson",
+                "The Temple cliff",
+                "Gorges Valley views",
+                "Views of Batian & Nelion"
+            ],
+            "images": []
+        },
+        {
+            "id": "point-lenana",
+            "name": "Point Lenana (Summit)",
+            "dayNumber": 4,
+            "date": "Day 5",
             "elevation": 4989,
             "coordinates": [37.3179, -0.1552],
             "distanceFromStart": 30,
-            "distanceFromPrevious": 13,
-            "elevationGainFromPrevious": 1385,
-            "timeFromPrevious": "5-6 hours",
+            "distanceFromPrevious": 6,
+            "elevationGainFromPrevious": 1039,
+            "timeFromPrevious": "3-4 hours",
             "terrain": "Alpine & Glacial",
-            "notes": "Early start for sunrise summit! Spectacular views of Batian (5199m) and Nelion (5188m). Then long descent via Sirimon route all the way to the gate.",
+            "notes": "Early 3am start for sunrise summit! Spectacular views of Batian (5199m) and Nelion (5188m). Combined the descent into one big day all the way to Sirimon Gate.",
             "highlights": [
                 "Sunrise summit",
                 "Views of Batian & Nelion",
@@ -244,8 +265,8 @@
         {
             "id": "sirimon-gate",
             "name": "Sirimon Gate (Finish)",
-            "dayNumber": 3,
-            "date": "Day 4 (PM)",
+            "dayNumber": 4,
+            "date": "Day 5 (PM)",
             "elevation": 2669,
             "coordinates": [37.2467, 0.0052],
             "distanceFromStart": 50,
@@ -253,9 +274,10 @@
             "elevationGainFromPrevious": 0,
             "timeFromPrevious": "6-7 hours (descent)",
             "terrain": "Moorland to Forest",
-            "notes": "Epic descent from the summit through Mackinder's Valley past Old Moses and out to Sirimon Gate. Transfer to Nairobi.",
+            "notes": "Epic combined descent from the summit through Mackinder's Valley past Old Moses and out to Sirimon Gate. A long day but rewarding! Transfer to Nairobi.",
             "highlights": [
                 "Mackinder's Valley",
+                "Old Moses Camp",
                 "Completion"
             ],
             "images": []
@@ -263,8 +285,8 @@
         {
             "id": "safari",
             "name": "Safari: Saruni Basecamp",
-            "dayNumber": 4,
-            "date": "Day 5-6",
+            "dayNumber": 5,
+            "date": "Day 6-7",
             "elevation": 1600,
             "coordinates": [
                 35.2600,
