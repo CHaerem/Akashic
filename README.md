@@ -20,10 +20,10 @@
 
 ## 🛠️ Tech Stack
 
-- **Frontend**: React 18, Vite
-- **Styling**: Tailwind CSS
+- **Frontend**: React 19, Vite 7
+- **Styling**: Tailwind CSS 4
 - **Maps**: Mapbox GL JS
-- **Routing**: React Router v6
+- **Routing**: React Router v7
 - **Data Processing**: Node.js, Exif-parser
 
 ## 🚀 Getting Started
@@ -64,6 +64,16 @@
     ```bash
     npm run dev
     ```
+
+6.  **Run Tests**
+    - Unit tests (Vitest):
+      ```bash
+      npm test
+      ```
+    - E2E tests (Playwright):
+      ```bash
+      npm run test:e2e
+      ```
 
 ## 🔒 Security & Deployment
 
