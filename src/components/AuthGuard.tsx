@@ -85,9 +85,28 @@ export function AuthGuard({ children }: AuthGuardProps) {
                     <p style={{ color: '#cbd5e1', marginBottom: '1.5rem' }}>
                         This is a private application. Your account is not authorized to access it.
                     </p>
-                    <p style={{ color: '#94a3b8', fontSize: '0.875rem' }}>
+                    <p style={{ color: '#94a3b8', fontSize: '0.875rem', marginBottom: '1.5rem' }}>
                         Contact the owner if you believe this is a mistake.
                     </p>
+                    <button
+                        onClick={() => {
+                            setAuthError(null);
+                            setHasAttemptedLogin(false);
+                            loginWithRedirect();
+                        }}
+                        style={{
+                            backgroundColor: '#3b82f6',
+                            color: '#ffffff',
+                            padding: '0.75rem 1.5rem',
+                            borderRadius: '0.5rem',
+                            border: 'none',
+                            fontSize: '0.875rem',
+                            fontWeight: '500',
+                            cursor: 'pointer',
+                        }}
+                    >
+                        Try different account
+                    </button>
                 </div>
             </div>
         );
