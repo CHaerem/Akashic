@@ -2,7 +2,7 @@
 
 **Akashic** is an interactive 3D storytelling platform for visualizing mountain adventures. It combines immersive 3D terrain maps with personal photography and detailed route statistics to create a digital archive of expeditions.
 
-![Akashic Landing Page](public/hero-images/landing-hero.png)
+![Akashic Landing Page](public/hero-images/akashic-hero.png)
 
 ## 🏔️ Features
 
