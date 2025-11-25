@@ -8,29 +8,73 @@ interface AuthGuardProps {
 export function AuthGuard({ children }: AuthGuardProps) {
     const { isAuthenticated, isLoading, loginWithRedirect, error } = useAuth0();
     const [hasAttemptedLogin, setHasAttemptedLogin] = useState(false);
+    const [authError, setAuthError] = useState<Error | null>(null);
+
+    // Capture error and clear URL parameters to prevent loop
+    useEffect(() => {
+        if (error) {
+            setAuthError(error);
+            // Clear error params from URL
+            const url = new URL(window.location.href);
+            url.searchParams.delete('error');
+            url.searchParams.delete('error_description');
+            window.history.replaceState({}, '', url.pathname);
+        }
+    }, [error]);
 
     useEffect(() => {
-        if (!isLoading && !isAuthenticated && !error && !hasAttemptedLogin) {
+        if (!isLoading && !isAuthenticated && !error && !authError && !hasAttemptedLogin) {
             setHasAttemptedLogin(true);
             loginWithRedirect();
         }
-    }, [isLoading, isAuthenticated, loginWithRedirect, error, hasAttemptedLogin]);
+    }, [isLoading, isAuthenticated, loginWithRedirect, error, authError, hasAttemptedLogin]);
 
     // Show access denied message if there's an error (e.g., user not whitelisted)
-    if (error) {
+    if (error || authError) {
         return (
-            <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4">
-                <div className="text-center max-w-md bg-slate-800 rounded-xl p-8 shadow-xl">
-                    <div className="w-16 h-16 bg-red-500/20 rounded-full flex items-center justify-center mx-auto mb-6">
-                        <svg className="w-8 h-8 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div
+                style={{
+                    minHeight: '100vh',
+                    backgroundColor: '#0f172a',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    padding: '1rem'
+                }}
+            >
+                <div
+                    style={{
+                        textAlign: 'center',
+                        maxWidth: '28rem',
+                        backgroundColor: '#1e293b',
+                        borderRadius: '0.75rem',
+                        padding: '2rem',
+                        boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)'
+                    }}
+                >
+                    <div
+                        style={{
+                            width: '4rem',
+                            height: '4rem',
+                            backgroundColor: 'rgba(239, 68, 68, 0.2)',
+                            borderRadius: '50%',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            margin: '0 auto 1.5rem'
+                        }}
+                    >
+                        <svg style={{ width: '2rem', height: '2rem', color: '#f87171' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                         </svg>
                     </div>
-                    <h1 className="text-2xl font-bold text-white mb-3">Access Denied</h1>
-                    <p className="text-slate-300 mb-6">
+                    <h1 style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#ffffff', marginBottom: '0.75rem' }}>
+                        Access Denied
+                    </h1>
+                    <p style={{ color: '#cbd5e1', marginBottom: '1.5rem' }}>
                         This is a private application. Your account is not authorized to access it.
                     </p>
-                    <p className="text-slate-400 text-sm">
+                    <p style={{ color: '#94a3b8', fontSize: '0.875rem' }}>
                         Contact the owner if you believe this is a mistake.
                     </p>
                 </div>

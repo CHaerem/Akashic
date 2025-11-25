@@ -10,6 +10,13 @@ vi.mock('@auth0/auth0-react', () => ({
 
 import { useAuth0 } from '@auth0/auth0-react';
 
+// Mock window.history.replaceState
+const mockReplaceState = vi.fn();
+Object.defineProperty(window, 'history', {
+    value: { replaceState: mockReplaceState },
+    writable: true,
+});
+
 describe('AuthGuard', () => {
     beforeEach(() => {
         vi.clearAllMocks();
