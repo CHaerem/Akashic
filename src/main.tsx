@@ -22,7 +22,7 @@ if (rootElement) {
                 domain={domain}
                 clientId={clientId}
                 authorizationParams={{
-                    redirect_uri: window.location.origin,
+                    redirect_uri: window.location.origin + import.meta.env.BASE_URL,
                 }}
             >
                 <AuthGuard>
