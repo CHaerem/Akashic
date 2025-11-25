@@ -18,6 +18,7 @@
     "view-routes": "node scripts/viewRoutes.js"
   },
   "dependencies": {
+    "@auth0/auth0-react": "^2.9.0",
     "@react-three/drei": "^10.7.7",
     "@react-three/fiber": "^9.4.0",
     "exif-parser": "^0.1.12",
