@@ -30,3 +30,6 @@ dist-ssr
 
 # Generated files
 routes-preview.geojson
+
+# GPX source data
+gpx-data/
