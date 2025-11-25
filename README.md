@@ -77,19 +77,19 @@
 
 ## 🔒 Security & Deployment
 
+### Hosting
+Deployed on **Netlify** with automatic deploys from the `main` branch.
+
+### Authentication
+Protected with **Auth0** - only authenticated users can access the app.
+
 ### Restricting Mapbox Access
 Since this is a client-side application, your Mapbox API token is visible in the browser. To prevent unauthorized usage:
 
 1.  Go to your [Mapbox Account Dashboard](https://account.mapbox.com/).
 2.  Find your token and click **"Configure"** or create a new token specifically for production.
-3.  Under **"URL Restrictions"**, add your GitHub Pages URL:
-    - `https://chaerem.github.io/Akashic/`
-    - `https://chaerem.github.io/`
+3.  Under **"URL Restrictions"**, add your domain (e.g., `https://akashic.no/`).
 4.  This ensures your token can **only** be used on your specific website.
-
-### GitHub Pages Access
-- **Public Repositories**: Sites are publicly accessible to anyone on the internet.
-- **Private Repositories**: To restrict access to the site itself (e.g., only you or collaborators), you must upgrade to **GitHub Pro** or **Team** plan. This allows you to publish GitHub Pages from a private repository with access control.
 
 ## 📝 License
 
