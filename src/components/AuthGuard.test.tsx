@@ -20,6 +20,7 @@ describe('AuthGuard', () => {
             isLoading: true,
             isAuthenticated: false,
             loginWithRedirect: mockLoginWithRedirect,
+            error: undefined,
         } as ReturnType<typeof useAuth0>);
 
         render(
@@ -37,6 +38,7 @@ describe('AuthGuard', () => {
             isLoading: false,
             isAuthenticated: false,
             loginWithRedirect: mockLoginWithRedirect,
+            error: undefined,
         } as ReturnType<typeof useAuth0>);
 
         render(
@@ -58,6 +60,7 @@ describe('AuthGuard', () => {
             isLoading: false,
             isAuthenticated: true,
             loginWithRedirect: mockLoginWithRedirect,
+            error: undefined,
         } as ReturnType<typeof useAuth0>);
 
         render(
@@ -76,6 +79,44 @@ describe('AuthGuard', () => {
             isLoading: true,
             isAuthenticated: false,
             loginWithRedirect: mockLoginWithRedirect,
+            error: undefined,
+        } as ReturnType<typeof useAuth0>);
+
+        render(
+            <AuthGuard>
+                <div>Protected Content</div>
+            </AuthGuard>
+        );
+
+        expect(mockLoginWithRedirect).not.toHaveBeenCalled();
+    });
+
+    it('shows access denied when there is an auth error', () => {
+        vi.mocked(useAuth0).mockReturnValue({
+            isLoading: false,
+            isAuthenticated: false,
+            loginWithRedirect: mockLoginWithRedirect,
+            error: new Error('unauthorized_email'),
+        } as ReturnType<typeof useAuth0>);
+
+        render(
+            <AuthGuard>
+                <div>Protected Content</div>
+            </AuthGuard>
+        );
+
+        expect(screen.getByText('Access Denied')).toBeInTheDocument();
+        expect(screen.getByText(/This is a private application/)).toBeInTheDocument();
+        expect(screen.queryByText('Protected Content')).not.toBeInTheDocument();
+        expect(mockLoginWithRedirect).not.toHaveBeenCalled();
+    });
+
+    it('does not redirect when there is an error', () => {
+        vi.mocked(useAuth0).mockReturnValue({
+            isLoading: false,
+            isAuthenticated: false,
+            loginWithRedirect: mockLoginWithRedirect,
+            error: new Error('access_denied'),
         } as ReturnType<typeof useAuth0>);
 
         render(
