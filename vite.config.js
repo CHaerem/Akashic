@@ -138,7 +138,7 @@ export default defineConfig({
     setupFiles: './vitest.setup.js',
     exclude: ['**/node_modules/**', '**/e2e/**'],
   },
-  base: '/Akashic/',
+  base: '/',
   build: {
     rollupOptions: {
       output: {
