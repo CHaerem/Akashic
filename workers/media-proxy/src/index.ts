@@ -162,15 +162,15 @@ async function verifyJWT(token: string, supabaseUrl: string): Promise<JWTPayload
 
 // Check if user has access to a journey via Supabase
 async function checkJourneyAccess(
-    journeyId: string,
+    journeySlug: string,
     userId: string | null,
     supabaseUrl: string,
     supabaseKey: string
 ): Promise<boolean> {
     try {
-        // Query journey to check ownership and public status
+        // Query journey by slug to check ownership and public status
         const response = await fetch(
-            `${supabaseUrl}/rest/v1/journeys?id=eq.${journeyId}&select=id,user_id,is_public`,
+            `${supabaseUrl}/rest/v1/journeys?slug=eq.${journeySlug}&select=id,user_id,is_public`,
             {
                 headers: {
                     'apikey': supabaseKey,
