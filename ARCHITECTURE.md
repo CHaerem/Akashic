@@ -22,8 +22,8 @@ The data model is designed to be flexible - routes, camps, and structured waypoi
 |-----------|---------|--------|
 | Hosting | Cloudflare Pages | Active |
 | Auth | Supabase Auth (Google OAuth) | Active |
-| Storage | Git repo (public folder) | Active |
-| Database | JSON files | Active |
+| Storage | Git repo (public folder) | Temporary |
+| Database | Supabase PostgreSQL | Active (schema ready) |
 | Domain | akashic.no | Active (Cloudflare DNS) |
 
 ---
