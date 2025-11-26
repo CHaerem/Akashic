@@ -15,7 +15,8 @@
     "generate-photos": "node scripts/generatePhotoData.js",
     "generate-icons": "node scripts/generateIcons.js",
     "import-gpx": "node scripts/importGpx.js",
-    "view-routes": "node scripts/viewRoutes.js"
+    "view-routes": "node scripts/viewRoutes.js",
+    "migrate-to-supabase": "node scripts/migrateToSupabase.js"
   },
   "dependencies": {
     "@react-three/drei": "^10.7.7",
