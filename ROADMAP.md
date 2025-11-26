@@ -36,14 +36,14 @@ Move photos from git repo to Cloudflare R2 and build upload tooling.
 #### 1.2 Photo Upload API
 - [x] Add upload endpoint to media Worker (`POST /upload/journeys/{slug}/photos`)
 - [x] File validation (type, size limits)
-- [ ] Extract EXIF metadata (coordinates, date taken)
+- [x] Extract EXIF metadata (coordinates, date taken) - client-side via `exifr`
 - [ ] Handle thumbnail generation (resize on upload or on-demand)
 
 #### 1.3 Database Integration
 - [x] Photo CRUD operations in `src/lib/journeys.ts`
 - [x] Link photos to journeys
 - [ ] Link photos to waypoints (UI pending)
-- [ ] Store extracted EXIF data (coordinates, timestamps)
+- [x] Store extracted EXIF data (coordinates, timestamps)
 
 #### 1.4 Photo Display
 - [x] PhotosTab component with upload UI
@@ -221,5 +221,5 @@ A platform where anyone can create and share their travel journeys.
 ## Questions to Resolve
 
 1. **Photo display**: Map markers? Lightbox? Timeline? (needs experimentation)
-2. **EXIF extraction**: Client-side (before upload) or server-side (after upload)?
+2. ~~**EXIF extraction**: Client-side (before upload) or server-side (after upload)?~~ → **Resolved**: Client-side using `exifr` library
 3. **Thumbnail generation**: On-demand vs at upload time?

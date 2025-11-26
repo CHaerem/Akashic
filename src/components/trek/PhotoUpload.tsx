@@ -5,6 +5,7 @@
 
 import { useState, useCallback, useRef } from 'react';
 import { uploadPhoto, type UploadResult } from '../../lib/media';
+import { extractPhotoMetadata } from '../../lib/exif';
 
 interface PhotoUploadProps {
     journeySlug: string;
@@ -42,13 +43,24 @@ export function PhotoUpload({ journeySlug, onUploadComplete, onUploadError }: Ph
         // Upload each file
         for (const file of fileArray) {
             try {
+                // Extract EXIF metadata before upload
+                const metadata = await extractPhotoMetadata(file);
+
+                // Upload to R2
                 const result = await uploadPhoto(journeySlug, file);
+
+                // Combine upload result with extracted metadata
+                const resultWithMetadata: UploadResult = {
+                    ...result,
+                    coordinates: metadata.coordinates,
+                    takenAt: metadata.takenAt,
+                };
 
                 // Remove from uploading state
                 setUploading(prev => prev.filter(u => u.file !== file));
 
-                // Notify parent
-                onUploadComplete(result);
+                // Notify parent with metadata
+                onUploadComplete(resultWithMetadata);
             } catch (error) {
                 const errorMessage = error instanceof Error ? error.message : 'Upload failed';
 

@@ -7,7 +7,7 @@ import { useState, useEffect, useCallback } from 'react';
 import type { TrekData, Photo } from '../../types/trek';
 import type { UploadResult } from '../../lib/media';
 import { useMedia } from '../../hooks/useMedia';
-import { fetchPhotos, createPhoto, getJourneyIdBySlug } from '../../lib/journeys';
+import { fetchPhotos, createPhoto, deletePhoto, getJourneyIdBySlug } from '../../lib/journeys';
 import { PhotoUpload } from './PhotoUpload';
 
 interface PhotosTabProps {
@@ -56,10 +56,12 @@ export function PhotosTab({ trekData, isMobile }: PhotosTabProps) {
         if (!journeyDbId) return;
 
         try {
-            // Create photo record in database
+            // Create photo record in database with extracted metadata
             const photo = await createPhoto({
                 journey_id: journeyDbId,
                 url: result.path,
+                coordinates: result.coordinates,
+                taken_at: result.takenAt?.toISOString(),
             });
 
             if (photo) {
@@ -83,6 +85,21 @@ export function PhotosTab({ trekData, isMobile }: PhotosTabProps) {
 
     const closeLightbox = useCallback(() => {
         setSelectedPhoto(null);
+    }, []);
+
+    const handleDeletePhoto = useCallback(async (photo: Photo) => {
+        if (!confirm('Delete this photo? This cannot be undone.')) {
+            return;
+        }
+
+        try {
+            await deletePhoto(photo.id);
+            setPhotos(prev => prev.filter(p => p.id !== photo.id));
+            setSelectedPhoto(null);
+        } catch (err) {
+            console.error('Error deleting photo:', err);
+            setError('Failed to delete photo');
+        }
     }, []);
 
     if (loading || tokenLoading) {
@@ -225,25 +242,60 @@ export function PhotosTab({ trekData, isMobile }: PhotosTabProps) {
                         cursor: 'pointer'
                     }}
                 >
-                    <button
-                        onClick={closeLightbox}
-                        style={{
-                            position: 'absolute',
-                            top: 16,
-                            right: 16,
-                            background: 'rgba(255,255,255,0.1)',
-                            border: 'none',
-                            color: 'white',
-                            width: 44,
-                            height: 44,
-                            borderRadius: '50%',
-                            cursor: 'pointer',
-                            fontSize: 20,
-                            zIndex: 1001
-                        }}
-                    >
-                        ✕
-                    </button>
+                    {/* Top-right buttons */}
+                    <div style={{
+                        position: 'absolute',
+                        top: 16,
+                        right: 16,
+                        display: 'flex',
+                        gap: 8,
+                        zIndex: 1001
+                    }}>
+                        <button
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                handleDeletePhoto(selectedPhoto);
+                            }}
+                            style={{
+                                background: 'rgba(255,100,100,0.2)',
+                                border: 'none',
+                                color: 'rgba(255,150,150,0.9)',
+                                width: 48,
+                                height: 48,
+                                borderRadius: '50%',
+                                cursor: 'pointer',
+                                fontSize: 20,
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                WebkitTapHighlightColor: 'transparent'
+                            }}
+                            title="Delete photo"
+                            aria-label="Delete photo"
+                        >
+                            🗑
+                        </button>
+                        <button
+                            onClick={closeLightbox}
+                            style={{
+                                background: 'rgba(255,255,255,0.1)',
+                                border: 'none',
+                                color: 'white',
+                                width: 48,
+                                height: 48,
+                                borderRadius: '50%',
+                                cursor: 'pointer',
+                                fontSize: 22,
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                WebkitTapHighlightColor: 'transparent'
+                            }}
+                            aria-label="Close"
+                        >
+                            ✕
+                        </button>
+                    </div>
                     <img
                         src={getMediaUrl(selectedPhoto.url)}
                         alt={selectedPhoto.caption || 'Journey photo'}

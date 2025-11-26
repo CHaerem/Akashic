@@ -53,13 +53,16 @@ export function getJourneyPhotoPath(journeySlug: string, photoId: string, extens
 }
 
 /**
- * Upload result from the media Worker
+ * Upload result from the media Worker with extracted metadata
  */
 export interface UploadResult {
     photoId: string;
     path: string;
     size: number;
     contentType: string;
+    // Extracted EXIF metadata (optional)
+    coordinates?: [number, number];
+    takenAt?: Date;
 }
 
 /**
