@@ -1,0 +1,16 @@
+name = "akashic-media"
+main = "src/index.ts"
+compatibility_date = "2024-01-01"
+
+# R2 bucket binding
+[[r2_buckets]]
+binding = "MEDIA_BUCKET"
+bucket_name = "akashic-media"
+
+[vars]
+SUPABASE_URL = "https://pbqvnxeldpgvcrdbxcvr.supabase.co"
+
+# Secrets (set via `wrangler secret put <NAME>` in this directory):
+# - SUPABASE_ANON_KEY: Anon key for querying journey access
+#
+# Note: JWT verification uses JWKS (public key) from Supabase - no secret needed!

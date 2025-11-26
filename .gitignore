@@ -33,3 +33,6 @@ routes-preview.geojson
 
 # GPX source data
 gpx-data/
+
+# Wrangler local development
+.wrangler/

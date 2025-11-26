@@ -8,10 +8,11 @@ const mockTrek: TrekConfig = {
     name: 'Test Trek',
     country: 'Test Country',
     elevation: '5000m',
-    coordinates: [0, 0],
-    zoom: 10,
-    pitch: 45,
-    bearing: 0
+    lat: 0,
+    lng: 0,
+    preferredBearing: 0,
+    preferredPitch: 60,
+    slug: 'test-trek'
 };
 
 describe('GlobeSelectionPanel', () => {

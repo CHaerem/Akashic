@@ -58,6 +58,8 @@ export interface TrekConfig {
     lng: number;
     preferredBearing: number;
     preferredPitch: number;
+    /** Slug for building media URLs (e.g., hero images) */
+    slug: string;
 }
 
 export interface ExtendedStats {

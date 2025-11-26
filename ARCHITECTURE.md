@@ -22,7 +22,8 @@ The data model is designed to be flexible - routes, camps, and structured waypoi
 |-----------|---------|--------|
 | Hosting | Cloudflare Pages | ✅ Active |
 | Auth | Supabase Auth (Google OAuth) | ✅ Active |
-| Storage | Git repo (public folder) | ⏳ Temporary (R2 pending) |
+| Media Storage | Cloudflare R2 (`akashic-media`) | ✅ Active |
+| Media API | Cloudflare Worker (authenticated) | ✅ Active |
 | Database | Supabase PostgreSQL | ✅ Active (data migrated) |
 | Domain | akashic.no | ✅ Active (Cloudflare DNS) |
 
@@ -214,19 +215,28 @@ CREATE POLICY "Users can manage own photos" ON photos
 
 ### Storage Structure (R2)
 
+**Bucket**: `akashic-media`
+
 ```
-akashic-bucket/
-├── journeys/
-│   └── {journey_id}/
-│       ├── hero.jpg
-│       ├── route.gpx
-│       └── photos/
-│           ├── {photo_id}.jpg
-│           └── {photo_id}_thumb.jpg
-└── users/
-    └── {user_id}/
-        └── avatar.jpg
+akashic-media/
+└── journeys/
+    └── {journey_slug}/
+        └── photos/
+            ├── {photo_id}.jpg
+            └── {photo_id}_thumb.jpg
 ```
+
+**Access**: All R2 content is served through an authenticated Cloudflare Worker (`workers/media-proxy/`). The Worker:
+- Verifies Supabase JWT tokens using JWKS (public key)
+- Checks journey access permissions
+- MVP: Any authenticated user can access all journeys
+- Future: Support for private/shared/public access levels
+
+**Worker URL**: `https://akashic-media.chris-haerem.workers.dev`
+
+**Frontend utilities**:
+- `src/lib/media.ts` - URL building helpers
+- `src/hooks/useMedia.ts` - React hook for authenticated media URLs
 
 ---
 
@@ -248,10 +258,11 @@ akashic-bucket/
    - ✅ Set up Row Level Security
    - ✅ Add route/stats JSONB columns for trek data
 
-3. **Cloudflare R2** ⏳
-   - Create R2 bucket
-   - Configure public access
-   - Set up CORS for uploads
+3. **Cloudflare R2** ✅
+   - ✅ Create R2 bucket (`akashic-media`)
+   - ✅ Create authenticated media Worker
+   - ✅ JWT verification via Supabase JWKS
+   - ✅ Frontend utilities for authenticated URLs
 
 ### Phase 2: Code Migration ✅
 
@@ -271,10 +282,11 @@ akashic-bucket/
    - ✅ Remove old JSON data files
    - ✅ Add e2e tests for Supabase data loading
 
-6. **Migrate Images to R2** ⏳
-   - Upload existing images to R2
-   - Update image URLs in database
-   - Remove images from git repo
+6. **Photo Upload System** ⏳
+   - Add upload endpoint to media Worker
+   - Extract EXIF metadata (coordinates, date)
+   - Store photo records in Supabase
+   - Build photo display UI (TBD)
 
 ### Phase 3: Multi-user Features (Future)
 
@@ -297,20 +309,22 @@ akashic-bucket/
 
 ## Environment Variables
 
-### Current (.env)
-
-```env
-VITE_MAPBOX_TOKEN=xxx
-```
-
-### Target (.env)
+### Frontend (.env)
 
 ```env
 VITE_MAPBOX_TOKEN=xxx
 VITE_SUPABASE_URL=xxx
 VITE_SUPABASE_ANON_KEY=xxx
-VITE_R2_PUBLIC_URL=xxx
+VITE_MEDIA_URL=https://akashic-media.chris-haerem.workers.dev  # Optional, has default
 ```
+
+### Media Worker (workers/media-proxy/)
+
+Secrets set via `wrangler secret put`:
+- `SUPABASE_ANON_KEY` - For querying journey access
+
+Environment variables in `wrangler.toml`:
+- `SUPABASE_URL` - Supabase project URL
 
 ---
 

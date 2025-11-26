@@ -51,7 +51,8 @@ function toTrekConfig(journey: DbJourney): TrekConfig {
         lat,
         lng,
         preferredBearing: journey.preferred_bearing || 0,
-        preferredPitch: journey.preferred_pitch || 60
+        preferredPitch: journey.preferred_pitch || 60,
+        slug: journey.slug
     };
 }
 
@@ -119,10 +120,11 @@ export async function fetchJourneys(): Promise<{
     }
 
     // Fetch journeys
+    // MVP: Any authenticated user can see all journeys
+    // Future: Add sharing permissions (private, shared, public)
     const { data: journeys, error: journeysError } = await supabase
         .from('journeys')
         .select('*')
-        .eq('is_public', true)
         .order('name');
 
     if (journeysError) {

@@ -27,41 +27,40 @@ Move photos from git repo to Cloudflare R2 and build upload tooling.
 ### Tasks
 
 #### 1.1 Cloudflare R2 Setup
-- [ ] Create R2 bucket (`akashic-media`)
-- [ ] Configure public access via custom domain or R2.dev
-- [ ] Set up CORS for browser uploads
-- [ ] Add `VITE_R2_PUBLIC_URL` to environment
+- [x] Create R2 bucket (`akashic-media`)
+- [x] Create authenticated media Worker (`workers/media-proxy/`)
+- [x] JWT verification via Supabase JWKS (public key)
+- [x] Worker deployed at `akashic-media.chris-haerem.workers.dev`
+- [x] Frontend utilities (`src/lib/media.ts`, `src/hooks/useMedia.ts`)
 
 #### 1.2 Photo Upload API
-- [ ] Create upload endpoint (Cloudflare Worker or Supabase Edge Function)
+- [ ] Add upload endpoint to media Worker
 - [ ] Generate presigned URLs for direct browser-to-R2 uploads
-- [ ] Handle thumbnail generation (resize on upload)
 - [ ] Extract EXIF metadata (coordinates, date taken)
+- [ ] Handle thumbnail generation (resize on upload or on-demand)
 
 #### 1.3 Database Integration
 - [ ] Populate `photos` table with uploaded images
 - [ ] Link photos to journeys and optionally to waypoints
 - [ ] Store extracted EXIF data (coordinates, timestamps)
 
-#### 1.4 Migrate Existing Photos
-- [ ] Upload current `/public/images` to R2
-- [ ] Update database URLs to point to R2
-- [ ] Remove images from git repo
-- [ ] Verify app still works with R2 URLs
+#### 1.4 Photo Display (TBD - needs experimentation)
+- [ ] Display photos on map at GPS coordinates
+- [ ] Photo viewing UI (lightbox, panel, gallery - to be determined)
+- [ ] Timeline/day-based organization
 
-### Photo Data Model (existing)
+### Photo Data Model (existing in Supabase)
 
 ```sql
 photos (
   id UUID,
   journey_id UUID,      -- Required: which journey
   waypoint_id UUID,     -- Optional: specific camp/location
-  url TEXT,             -- R2 URL
-  thumbnail_url TEXT,   -- R2 URL (smaller version)
+  url TEXT,             -- R2 path (e.g., "journeys/kilimanjaro/photos/abc123.jpg")
+  thumbnail_url TEXT,   -- R2 path for thumbnail
   caption TEXT,
   coordinates JSONB,    -- [lng, lat] from EXIF or manual
   taken_at TIMESTAMPTZ, -- From EXIF or manual
-  is_hero BOOLEAN,      -- Featured photo
   sort_order INTEGER
 )
 ```
@@ -70,17 +69,14 @@ photos (
 
 ```
 akashic-media/
-├── journeys/
-│   └── {journey_id}/
-│       ├── hero.jpg
-│       ├── route.gpx
-│       └── photos/
-│           ├── {photo_id}.jpg
-│           └── {photo_id}_thumb.jpg
-└── users/
-    └── {user_id}/
-        └── avatar.jpg
+└── journeys/
+    └── {journey_slug}/
+        └── photos/
+            ├── {photo_id}.jpg
+            └── {photo_id}_thumb.jpg
 ```
+
+**Note**: Photos are served through authenticated Worker, not directly from R2.
 
 ---
 
@@ -194,7 +190,9 @@ A platform where anyone can create and share their travel journeys.
 | Infrastructure | ✅ Complete | Cloudflare Pages, Supabase Auth/DB |
 | Data Migration | ✅ Complete | 3 journeys, 18 waypoints in DB |
 | E2E Tests | ✅ Complete | Auth bypass for testing |
-| Phase 1 (Photos) | ⏳ Next | R2 setup pending |
+| Phase 1.1 (R2 Setup) | ✅ Complete | Bucket + authenticated Worker deployed |
+| Phase 1.2 (Photo Upload) | ⏳ In Progress | Upload API next |
+| Phase 1.3-1.4 (Photos) | 📋 Planned | After upload works |
 | Phase 2 (Admin UI) | 📋 Planned | After Phase 1 |
 | Phase 3 (Polish) | 📋 Planned | After MVP launch |
 | Multi-user | 🔮 Future | Post-MVP |
@@ -209,12 +207,14 @@ A platform where anyone can create and share their travel journeys.
 | 2024-11 | Supabase over Auth0 | Open source, self-hostable, unified with DB |
 | 2024-11 | Keep auth simple (Google only) | MVP scope, family use case |
 | 2024-11 | E2E test auth bypass | Allows automated testing without real auth |
+| 2024-11 | Authenticated R2 via Worker | Future-proof for multi-user, uses JWKS for JWT verification |
+| 2024-11 | MVP access: all authenticated users see all journeys | Simplest model for family sharing |
+| 2024-11 | Photo display UX TBD | Will experiment with map markers, lightbox, timeline |
 
 ---
 
 ## Questions to Resolve
 
-1. **Photo upload UX**: Bulk upload from folder vs one-by-one?
+1. **Photo display**: Map markers? Lightbox? Timeline? (needs experimentation)
 2. **EXIF extraction**: Client-side (before upload) or server-side (after upload)?
 3. **Thumbnail generation**: On-demand vs at upload time?
-4. **Journey creation flow**: Wizard vs single form?
