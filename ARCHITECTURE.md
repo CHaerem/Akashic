@@ -20,7 +20,7 @@ The data model is designed to be flexible - routes, camps, and structured waypoi
 
 | Component | Service | Status |
 |-----------|---------|--------|
-| Hosting | Cloudflare Pages | Pending setup |
+| Hosting | Cloudflare Pages | Active |
 | Auth | None (public access) | Temporary |
 | Storage | Git repo (public folder) | Active |
 | Database | JSON files | Active |
