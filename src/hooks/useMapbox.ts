@@ -20,6 +20,8 @@ interface UseMapboxReturn {
     flyToGlobe: (selectedTrek?: TrekConfig | null) => void;
     flyToTrek: (selectedTrek: TrekConfig, selectedCamp?: Camp | null) => void;
     highlightSegment: (trekData: TrekData, selectedCamp: Camp) => void;
+    startRotation: () => void;
+    stopRotation: () => void;
 }
 
 /**
@@ -28,6 +30,8 @@ interface UseMapboxReturn {
 export function useMapbox({ containerRef, onTrekSelect }: UseMapboxOptions): UseMapboxReturn {
     const { treks, trekDataMap } = useJourneys();
     const mapRef = useRef<mapboxgl.Map | null>(null);
+    const rotationAnimationRef = useRef<number | null>(null);
+    const interactionListenerRef = useRef<(() => void) | null>(null);
     const [mapReady, setMapReady] = useState(false);
     const [dataLayersReady, setDataLayersReady] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -91,14 +95,14 @@ export function useMapbox({ containerRef, onTrekSelect }: UseMapboxOptions): Use
             mapRef.current = map;
 
             map.on('style.load', () => {
-                // Set atmosphere fog
+                // Set atmosphere fog - transparent space so CSS starfield shows through
                 map.setFog({
                     'range': [1, 12],
                     'color': 'rgb(186, 210, 235)',
                     'high-color': 'rgb(36, 92, 223)',
                     'horizon-blend': 0.02,
-                    'space-color': 'rgb(11, 11, 25)',
-                    'star-intensity': 0.15
+                    'space-color': 'rgba(0, 0, 0, 0)', // Transparent - CSS stars show through
+                    'star-intensity': 0 // Disable Mapbox stars
                 });
 
                 // Add terrain source
@@ -155,7 +159,8 @@ export function useMapbox({ containerRef, onTrekSelect }: UseMapboxOptions): Use
                 map.getCanvas().style.cursor = '';
             });
 
-            map.on('click', 'trek-markers-circle', (e) => {
+            // Handler for selecting a trek marker
+            const handleTrekSelect = (e: mapboxgl.MapMouseEvent & { features?: mapboxgl.MapGeoJSONFeature[] }) => {
                 if (e.features && e.features.length > 0) {
                     const trekProps = e.features[0].properties as TrekConfig;
                     const trek = treksRef.current.find(t => t.id === trekProps.id);
@@ -164,7 +169,11 @@ export function useMapbox({ containerRef, onTrekSelect }: UseMapboxOptions): Use
                     }
                     e.originalEvent.stopPropagation();
                 }
-            });
+            };
+
+            // Both click and double-click select the journey
+            map.on('click', 'trek-markers-circle', handleTrekSelect);
+            map.on('dblclick', 'trek-markers-circle', handleTrekSelect);
 
         } catch (err) {
             setError((err as Error).message);
@@ -265,14 +274,14 @@ export function useMapbox({ containerRef, onTrekSelect }: UseMapboxOptions): Use
         const map = mapRef.current;
         if (!map || !mapReady) return;
 
-        // Set globe atmosphere
+        // Set globe atmosphere - transparent space so CSS starfield shows through
         map.setFog({
             'range': [1, 12],
             'color': 'rgb(186, 210, 235)',
             'high-color': 'rgb(36, 92, 223)',
             'horizon-blend': 0.02,
-            'space-color': 'rgb(11, 11, 25)',
-            'star-intensity': 0.15
+            'space-color': 'rgba(0, 0, 0, 0)',
+            'star-intensity': 0
         });
 
         // Hide all routes
@@ -444,12 +453,91 @@ export function useMapbox({ containerRef, onTrekSelect }: UseMapboxOptions): Use
         }
     }, [mapReady, highlightSegment]);
 
+    // Stop rotation - defined first so startRotation can reference it
+    const stopRotation = useCallback(() => {
+        // Cancel animation
+        if (rotationAnimationRef.current) {
+            cancelAnimationFrame(rotationAnimationRef.current);
+            rotationAnimationRef.current = null;
+        }
+        // Remove interaction listeners
+        const map = mapRef.current;
+        const listener = interactionListenerRef.current;
+        if (map && listener) {
+            // Remove canvas listeners
+            const canvas = map.getCanvas();
+            canvas.removeEventListener('mousedown', listener);
+            canvas.removeEventListener('touchstart', listener);
+            canvas.removeEventListener('wheel', listener);
+            // Remove Mapbox listeners
+            map.off('dragstart', listener);
+            map.off('zoomstart', listener);
+            map.off('rotatestart', listener);
+            map.off('pitchstart', listener);
+            interactionListenerRef.current = null;
+        }
+    }, []);
+
+    // Globe spin animation - rotates globe on its axis (Earth spins, space stays fixed)
+    const startRotation = useCallback(() => {
+        const map = mapRef.current;
+        if (!map || rotationAnimationRef.current) return;
+
+        // Clean up any existing listeners first
+        stopRotation();
+
+        let lastTime = performance.now();
+        const rotationSpeed = 2; // degrees per second
+
+        // Create and store the interaction listener
+        const onInteraction = () => stopRotation();
+        interactionListenerRef.current = onInteraction;
+
+        // Listen for early interaction signals (before Mapbox's drag/zoom events)
+        // Use passive: true for better mobile scroll performance
+        const canvas = map.getCanvas();
+        canvas.addEventListener('mousedown', onInteraction, { passive: true });
+        canvas.addEventListener('touchstart', onInteraction, { passive: true });
+        canvas.addEventListener('wheel', onInteraction, { passive: true });
+
+        // Also listen for Mapbox events as backup
+        map.on('dragstart', onInteraction);
+        map.on('zoomstart', onInteraction);
+        map.on('rotatestart', onInteraction);
+        map.on('pitchstart', onInteraction);
+
+        const animate = (currentTime: number) => {
+            if (!mapRef.current || !rotationAnimationRef.current) return;
+
+            const deltaTime = (currentTime - lastTime) / 1000;
+            lastTime = currentTime;
+
+            // Spin globe by moving center longitude
+            // Decrease longitude = Earth appears to rotate eastward (natural direction)
+            const center = mapRef.current.getCenter();
+            mapRef.current.setCenter([center.lng - rotationSpeed * deltaTime, center.lat]);
+
+            rotationAnimationRef.current = requestAnimationFrame(animate);
+        };
+
+        rotationAnimationRef.current = requestAnimationFrame(animate);
+    }, [stopRotation]);
+
+    // Cleanup rotation on unmount
+    useEffect(() => {
+        return () => {
+            stopRotation();
+        };
+    }, [stopRotation]);
+
     return {
         map: mapRef,
         mapReady,
         error,
         flyToGlobe,
         flyToTrek,
-        highlightSegment
+        highlightSegment,
+        startRotation,
+        stopRotation
     };
 }

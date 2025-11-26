@@ -77,11 +77,16 @@ export function useTrekData(): UseTrekDataReturn {
         setSelectedCamp(prev => prev?.id === camp.id ? null : camp);
     }, []);
 
-    // Select a trek
+    // Select a trek - if already selected, explore it
     const selectTrek = useCallback((trek: TrekConfig) => {
-        setSelectedTrek(trek);
-        setSelectedCamp(null);
-    }, []);
+        if (selectedTrek?.id === trek.id) {
+            // Clicking on already-selected trek opens it
+            setView('trek');
+        } else {
+            setSelectedTrek(trek);
+            setSelectedCamp(null);
+        }
+    }, [selectedTrek]);
 
     return {
         // State
