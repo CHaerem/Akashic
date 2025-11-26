@@ -282,11 +282,13 @@ akashic-media/
    - ✅ Remove old JSON data files
    - ✅ Add e2e tests for Supabase data loading
 
-6. **Photo Upload System** ⏳
-   - Add upload endpoint to media Worker
-   - Extract EXIF metadata (coordinates, date)
-   - Store photo records in Supabase
-   - Build photo display UI (TBD)
+6. **Photo Upload System** ✅
+   - ✅ Upload endpoint in media Worker (`POST /upload/journeys/{slug}/photos`)
+   - ✅ Photo CRUD operations in `src/lib/journeys.ts`
+   - ✅ PhotosTab component with drag-and-drop upload
+   - ✅ Photo grid + lightbox display
+   - ⏳ EXIF metadata extraction (pending)
+   - ⏳ Photo map markers (pending)
 
 ### Phase 3: Multi-user Features (Future)
 

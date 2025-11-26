@@ -34,19 +34,22 @@ Move photos from git repo to Cloudflare R2 and build upload tooling.
 - [x] Frontend utilities (`src/lib/media.ts`, `src/hooks/useMedia.ts`)
 
 #### 1.2 Photo Upload API
-- [ ] Add upload endpoint to media Worker
-- [ ] Generate presigned URLs for direct browser-to-R2 uploads
+- [x] Add upload endpoint to media Worker (`POST /upload/journeys/{slug}/photos`)
+- [x] File validation (type, size limits)
 - [ ] Extract EXIF metadata (coordinates, date taken)
 - [ ] Handle thumbnail generation (resize on upload or on-demand)
 
 #### 1.3 Database Integration
-- [ ] Populate `photos` table with uploaded images
-- [ ] Link photos to journeys and optionally to waypoints
+- [x] Photo CRUD operations in `src/lib/journeys.ts`
+- [x] Link photos to journeys
+- [ ] Link photos to waypoints (UI pending)
 - [ ] Store extracted EXIF data (coordinates, timestamps)
 
-#### 1.4 Photo Display (TBD - needs experimentation)
+#### 1.4 Photo Display
+- [x] PhotosTab component with upload UI
+- [x] Photo grid with thumbnails
+- [x] Lightbox for full-size viewing
 - [ ] Display photos on map at GPS coordinates
-- [ ] Photo viewing UI (lightbox, panel, gallery - to be determined)
 - [ ] Timeline/day-based organization
 
 ### Photo Data Model (existing in Supabase)
@@ -83,7 +86,7 @@ akashic-media/
 ## Phase 2: Journey Management UI
 
 ### Goal
-Admin interface for creating and editing journeys (initially for owner only).
+Collaborative interface for family members to create and edit journeys together.
 
 ### Tasks
 
@@ -191,9 +194,10 @@ A platform where anyone can create and share their travel journeys.
 | Data Migration | ✅ Complete | 3 journeys, 18 waypoints in DB |
 | E2E Tests | ✅ Complete | Auth bypass for testing |
 | Phase 1.1 (R2 Setup) | ✅ Complete | Bucket + authenticated Worker deployed |
-| Phase 1.2 (Photo Upload) | ⏳ In Progress | Upload API next |
-| Phase 1.3-1.4 (Photos) | 📋 Planned | After upload works |
-| Phase 2 (Admin UI) | 📋 Planned | After Phase 1 |
+| Phase 1.2 (Photo Upload) | ✅ Complete | Upload endpoint + frontend UI |
+| Phase 1.3 (DB Integration) | ⏳ Partial | Photo CRUD done, EXIF/waypoints pending |
+| Phase 1.4 (Photo Display) | ⏳ Partial | Grid + lightbox done, map markers pending |
+| Phase 2 (Journey UI) | 📋 Planned | Collaborative editing |
 | Phase 3 (Polish) | 📋 Planned | After MVP launch |
 | Multi-user | 🔮 Future | Post-MVP |
 
@@ -210,6 +214,7 @@ A platform where anyone can create and share their travel journeys.
 | 2024-11 | Authenticated R2 via Worker | Future-proof for multi-user, uses JWKS for JWT verification |
 | 2024-11 | MVP access: all authenticated users see all journeys | Simplest model for family sharing |
 | 2024-11 | Photo display UX TBD | Will experiment with map markers, lightbox, timeline |
+| 2024-11 | Collaborative over admin-only | Family members can all contribute photos |
 
 ---
 
