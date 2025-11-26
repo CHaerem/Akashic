@@ -2,6 +2,7 @@ import { memo, useCallback, useMemo, useState } from 'react';
 import type { TrekData, Camp, Photo } from '../../types/trek';
 import { WaypointEditModal } from './WaypointEditModal';
 import { PhotoAssignModal } from './PhotoAssignModal';
+import { PhotoLightbox } from '../common/PhotoLightbox';
 
 /**
  * Get the actual date for a specific day number based on journey start date
@@ -37,12 +38,15 @@ interface DayPhotosProps {
     photos: Photo[];
     getMediaUrl: (path: string) => string;
     isMobile: boolean;
+    onPhotoClick: (index: number) => void;
 }
 
-const DayPhotos = memo(function DayPhotos({ photos, getMediaUrl, isMobile }: DayPhotosProps) {
+const DayPhotos = memo(function DayPhotos({ photos, getMediaUrl, isMobile, onPhotoClick }: DayPhotosProps) {
     if (photos.length === 0) {
         return null;
     }
+
+    const maxVisible = isMobile ? 6 : 8;
 
     return (
         <div style={{
@@ -50,14 +54,19 @@ const DayPhotos = memo(function DayPhotos({ photos, getMediaUrl, isMobile }: Day
             gridTemplateColumns: `repeat(${isMobile ? 3 : 4}, 1fr)`,
             gap: 6
         }}>
-            {photos.slice(0, isMobile ? 6 : 8).map(photo => (
+            {photos.slice(0, maxVisible).map((photo, index) => (
                 <div
                     key={photo.id}
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        onPhotoClick(index);
+                    }}
                     style={{
                         aspectRatio: '1',
                         borderRadius: 6,
                         overflow: 'hidden',
-                        background: 'rgba(255,255,255,0.05)'
+                        background: 'rgba(255,255,255,0.05)',
+                        cursor: 'pointer'
                     }}
                 >
                     <img
@@ -72,18 +81,25 @@ const DayPhotos = memo(function DayPhotos({ photos, getMediaUrl, isMobile }: Day
                     />
                 </div>
             ))}
-            {photos.length > (isMobile ? 6 : 8) && (
-                <div style={{
-                    aspectRatio: '1',
-                    borderRadius: 6,
-                    background: 'rgba(255,255,255,0.05)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    color: 'rgba(255,255,255,0.4)',
-                    fontSize: 12
-                }}>
-                    +{photos.length - (isMobile ? 6 : 8)}
+            {photos.length > maxVisible && (
+                <div
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        onPhotoClick(maxVisible);
+                    }}
+                    style={{
+                        aspectRatio: '1',
+                        borderRadius: 6,
+                        background: 'rgba(255,255,255,0.05)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        color: 'rgba(255,255,255,0.4)',
+                        fontSize: 12,
+                        cursor: 'pointer'
+                    }}
+                >
+                    +{photos.length - maxVisible}
                 </div>
             )}
         </div>
@@ -96,12 +112,14 @@ interface CampItemProps {
     onClick: (camp: Camp) => void;
     onEdit: (camp: Camp) => void;
     onAssignPhotos: (camp: Camp) => void;
+    onPhotoClick: (photos: Photo[], index: number) => void;
     isLast: boolean;
     isMobile?: boolean;
     dayDate: Date | null;
     photos: Photo[];
     assignedPhotos: Photo[];
     getMediaUrl: (path: string) => string;
+    editMode?: boolean;
 }
 
 const CampItem = memo(function CampItem({
@@ -110,12 +128,14 @@ const CampItem = memo(function CampItem({
     onClick,
     onEdit,
     onAssignPhotos,
+    onPhotoClick,
     isLast,
     isMobile = false,
     dayDate,
     photos,
     assignedPhotos,
-    getMediaUrl
+    getMediaUrl,
+    editMode = false
 }: CampItemProps) {
     const handleClick = useCallback(() => onClick(camp), [onClick, camp]);
     const handleEdit = useCallback((e: React.MouseEvent) => {
@@ -222,15 +242,17 @@ const CampItem = memo(function CampItem({
                 <div style={{ animation: 'fadeIn 0.3s ease', marginTop: 12 }}>
                     <style>{`@keyframes fadeIn { from { opacity: 0; transform: translateY(-5px); } to { opacity: 1; transform: translateY(0); } }`}</style>
 
-                    {/* Action buttons */}
-                    <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
-                        <button onClick={handleEdit} style={actionButtonStyle}>
-                            Edit Day
-                        </button>
-                        <button onClick={handleAssignPhotos} style={actionButtonStyle}>
-                            Assign Photos
-                        </button>
-                    </div>
+                    {/* Action buttons - only show in edit mode */}
+                    {editMode && (
+                        <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+                            <button onClick={handleEdit} style={actionButtonStyle}>
+                                Edit Day
+                            </button>
+                            <button onClick={handleAssignPhotos} style={actionButtonStyle}>
+                                Assign Photos
+                            </button>
+                        </div>
+                    )}
 
                     {camp.notes && (
                         <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: 14, lineHeight: 1.6, marginBottom: 16, marginTop: 0 }}>
@@ -248,7 +270,12 @@ const CampItem = memo(function CampItem({
                     )}
 
                     {allPhotos.length > 0 ? (
-                        <DayPhotos photos={allPhotos} getMediaUrl={getMediaUrl} isMobile={isMobile} />
+                        <DayPhotos
+                            photos={allPhotos}
+                            getMediaUrl={getMediaUrl}
+                            isMobile={isMobile}
+                            onPhotoClick={(index) => onPhotoClick(allPhotos, index)}
+                        />
                     ) : (
                         <div style={{
                             width: '100%',
@@ -280,6 +307,7 @@ interface JourneyTabProps {
     photos?: Photo[];
     getMediaUrl?: (path: string) => string;
     onUpdate?: () => void;
+    editMode?: boolean;
 }
 
 export const JourneyTab = memo(function JourneyTab({
@@ -289,10 +317,13 @@ export const JourneyTab = memo(function JourneyTab({
     isMobile = false,
     photos = [],
     getMediaUrl = (path) => path,
-    onUpdate
+    onUpdate,
+    editMode = false
 }: JourneyTabProps) {
     const [editingCamp, setEditingCamp] = useState<Camp | null>(null);
     const [assigningCamp, setAssigningCamp] = useState<Camp | null>(null);
+    const [lightboxPhotos, setLightboxPhotos] = useState<Photo[]>([]);
+    const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
 
     // Group photos by day (auto-match by date)
     const photosByDay = useMemo(() => {
@@ -334,6 +365,15 @@ export const JourneyTab = memo(function JourneyTab({
         setAssigningCamp(camp);
     }, []);
 
+    const handlePhotoClick = useCallback((dayPhotos: Photo[], index: number) => {
+        setLightboxPhotos(dayPhotos);
+        setLightboxIndex(index);
+    }, []);
+
+    const closeLightbox = useCallback(() => {
+        setLightboxIndex(null);
+    }, []);
+
     const handleSave = useCallback(() => {
         if (onUpdate) onUpdate();
     }, [onUpdate]);
@@ -348,12 +388,14 @@ export const JourneyTab = memo(function JourneyTab({
                     onClick={onCampSelect}
                     onEdit={handleEdit}
                     onAssignPhotos={handleAssignPhotos}
+                    onPhotoClick={handlePhotoClick}
                     isLast={i === trekData.camps.length - 1}
                     isMobile={isMobile}
                     dayDate={getDateForDay(trekData.dateStarted, camp.dayNumber)}
                     photos={photosByDay[camp.dayNumber] || []}
                     assignedPhotos={photosByWaypoint[camp.id] || []}
                     getMediaUrl={getMediaUrl}
+                    editMode={editMode}
                 />
             ))}
 
@@ -382,6 +424,15 @@ export const JourneyTab = memo(function JourneyTab({
                     getMediaUrl={getMediaUrl}
                 />
             )}
+
+            {/* Photo Lightbox */}
+            <PhotoLightbox
+                photos={lightboxPhotos}
+                initialIndex={lightboxIndex ?? 0}
+                isOpen={lightboxIndex !== null}
+                onClose={closeLightbox}
+                getMediaUrl={getMediaUrl}
+            />
         </div>
     );
 });

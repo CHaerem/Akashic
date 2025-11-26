@@ -10,6 +10,14 @@ import { JourneyEditModal } from './JourneyEditModal';
 
 export type PanelState = 'minimized' | 'normal' | 'expanded';
 
+// Pencil icon SVG for edit mode toggle
+const PencilIcon = () => (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/>
+        <path d="m15 5 4 4"/>
+    </svg>
+);
+
 interface InfoPanelProps {
     trekData: TrekData;
     activeTab: TabType;
@@ -34,6 +42,7 @@ export const InfoPanel = memo(function InfoPanel({
 }: InfoPanelProps) {
     const padding = isMobile ? 16 : 24;
     const [showEditModal, setShowEditModal] = useState(false);
+    const [editMode, setEditMode] = useState(false);
 
     // Swipe gestures for mobile bottom sheet
     const handleSwipeUp = useCallback(() => {
@@ -53,15 +62,16 @@ export const InfoPanel = memo(function InfoPanel({
     });
 
     // Panel height based on state - using dvh for better mobile support
+    // Minimized is smaller to show more map, expanded is larger for immersive content
     const getPanelHeight = () => {
         switch (panelState) {
-            case 'minimized': return '120px';
-            case 'normal': return '45dvh';
-            case 'expanded': return '85dvh';
+            case 'minimized': return '100px';
+            case 'normal': return '42dvh';
+            case 'expanded': return '88dvh';
         }
     };
 
-    // Mobile bottom sheet style
+    // Mobile bottom sheet style - calm design with subtle shadow
     const mobileStyle: React.CSSProperties = {
         position: 'absolute',
         left: 0,
@@ -69,31 +79,32 @@ export const InfoPanel = memo(function InfoPanel({
         bottom: 0,
         height: getPanelHeight(),
         maxHeight: 'calc(100dvh - 60px)',
-        background: 'rgba(10, 10, 15, 0.98)',
-        backdropFilter: 'blur(20px)',
-        WebkitBackdropFilter: 'blur(20px)',
-        borderTop: '1px solid rgba(255,255,255,0.1)',
-        borderRadius: '20px 20px 0 0',
+        background: 'rgba(8, 8, 12, 0.95)',
+        backdropFilter: 'blur(24px)',
+        WebkitBackdropFilter: 'blur(24px)',
+        borderTop: '1px solid rgba(255,255,255,0.06)',
+        borderRadius: '24px 24px 0 0',
         display: 'flex',
         flexDirection: 'column',
         zIndex: 20,
-        transition: 'height 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+        transition: 'height 0.4s cubic-bezier(0.32, 0.72, 0, 1)',
         paddingBottom: 'env(safe-area-inset-bottom)',
-        boxShadow: '0 -4px 30px rgba(0,0,0,0.5)'
+        boxShadow: '0 -8px 40px rgba(0,0,0,0.4)'
     };
 
-    // Desktop side panel style
+    // Desktop side panel style - slightly more transparent for better map visibility
     const desktopStyle: React.CSSProperties = {
         position: 'absolute',
         top: 0,
         right: 0,
         bottom: 0,
-        width: '40%',
-        minWidth: 380,
-        background: 'rgba(10, 10, 15, 0.8)',
-        backdropFilter: 'blur(20px)',
-        WebkitBackdropFilter: 'blur(20px)',
-        borderLeft: '1px solid rgba(255,255,255,0.05)',
+        width: '38%',
+        minWidth: 360,
+        maxWidth: 480,
+        background: 'rgba(8, 8, 12, 0.75)',
+        backdropFilter: 'blur(24px)',
+        WebkitBackdropFilter: 'blur(24px)',
+        borderLeft: '1px solid rgba(255,255,255,0.04)',
         display: 'flex',
         flexDirection: 'column',
         zIndex: 20
@@ -108,13 +119,13 @@ export const InfoPanel = memo(function InfoPanel({
 
     return (
         <div style={isMobile ? mobileStyle : desktopStyle}>
-            {/* Mobile drag handle with swipe support */}
+            {/* Mobile drag handle with swipe support - subtle indicator */}
             {isMobile && (
                 <div
                     onClick={handleDragHandleClick}
                     {...swipeHandlers}
                     style={{
-                        padding: '12px 0 8px',
+                        padding: '14px 0 10px',
                         display: 'flex',
                         justifyContent: 'center',
                         cursor: 'grab',
@@ -122,11 +133,13 @@ export const InfoPanel = memo(function InfoPanel({
                     }}
                 >
                     <div style={{
-                        width: 40,
+                        width: panelState === 'expanded' ? 48 : 36,
                         height: 4,
-                        background: 'rgba(255,255,255,0.4)',
+                        background: panelState === 'expanded'
+                            ? 'rgba(255,255,255,0.25)'
+                            : 'rgba(255,255,255,0.35)',
                         borderRadius: 2,
-                        transition: 'width 0.2s ease'
+                        transition: 'all 0.3s ease'
                     }} />
                 </div>
             )}
@@ -174,20 +187,25 @@ export const InfoPanel = memo(function InfoPanel({
                         </p>
                         {!isMobile && (
                             <button
-                                onClick={() => setShowEditModal(true)}
+                                onClick={() => setEditMode(!editMode)}
+                                title={editMode ? 'Exit edit mode' : 'Enter edit mode'}
                                 style={{
-                                    background: 'rgba(255,255,255,0.1)',
-                                    border: 'none',
-                                    color: 'rgba(255,255,255,0.5)',
-                                    fontSize: 10,
-                                    letterSpacing: '0.05em',
+                                    background: editMode ? 'rgba(59, 130, 246, 0.2)' : 'rgba(255,255,255,0.1)',
+                                    border: editMode ? '1px solid rgba(59, 130, 246, 0.5)' : '1px solid transparent',
+                                    color: editMode ? '#3b82f6' : 'rgba(255,255,255,0.5)',
                                     cursor: 'pointer',
-                                    padding: '4px 10px',
-                                    borderRadius: 4,
-                                    marginLeft: 'auto'
+                                    padding: '6px 8px',
+                                    borderRadius: 6,
+                                    marginLeft: 'auto',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: 6,
+                                    fontSize: 11,
+                                    transition: 'all 0.2s'
                                 }}
                             >
-                                Edit
+                                <PencilIcon />
+                                {editMode && <span>Editing</span>}
                             </button>
                         )}
                     </div>
@@ -202,24 +220,47 @@ export const InfoPanel = memo(function InfoPanel({
                     }}>
                         {trekData.name}
                     </h1>
+                    {/* Edit Journey button - only in edit mode, desktop */}
+                    {editMode && !isMobile && (
+                        <button
+                            onClick={() => setShowEditModal(true)}
+                            style={{
+                                background: 'rgba(59, 130, 246, 0.1)',
+                                border: '1px solid rgba(59, 130, 246, 0.3)',
+                                color: '#3b82f6',
+                                fontSize: 12,
+                                cursor: 'pointer',
+                                padding: '6px 12px',
+                                borderRadius: 6,
+                                marginTop: 8,
+                                transition: 'all 0.2s'
+                            }}
+                        >
+                            Edit Journey Details
+                        </button>
+                    )}
                 </div>
                 {isMobile && (
                     <div style={{ display: 'flex', gap: 8, marginLeft: 12, flexShrink: 0 }}>
                         <button
-                            onClick={() => setShowEditModal(true)}
+                            onClick={() => setEditMode(!editMode)}
+                            title={editMode ? 'Exit edit mode' : 'Enter edit mode'}
                             style={{
-                                background: 'rgba(255,255,255,0.1)',
-                                border: 'none',
-                                color: 'rgba(255,255,255,0.7)',
-                                fontSize: 14,
+                                background: editMode ? 'rgba(59, 130, 246, 0.2)' : 'rgba(255,255,255,0.1)',
+                                border: editMode ? '1px solid rgba(59, 130, 246, 0.5)' : '1px solid transparent',
+                                color: editMode ? '#3b82f6' : 'rgba(255,255,255,0.7)',
                                 cursor: 'pointer',
                                 padding: '10px 14px',
                                 borderRadius: 6,
                                 minHeight: 44,
-                                minWidth: 44
+                                minWidth: 44,
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                transition: 'all 0.2s'
                             }}
                         >
-                            Edit
+                            <PencilIcon />
                         </button>
                         <button
                             onClick={onBack}
@@ -241,6 +282,28 @@ export const InfoPanel = memo(function InfoPanel({
                     </div>
                 )}
             </div>
+
+            {/* Edit Journey button for mobile - only in edit mode */}
+            {editMode && isMobile && panelState !== 'minimized' && (
+                <div style={{ padding: `0 ${padding}px 12px` }}>
+                    <button
+                        onClick={() => setShowEditModal(true)}
+                        style={{
+                            width: '100%',
+                            background: 'rgba(59, 130, 246, 0.1)',
+                            border: '1px solid rgba(59, 130, 246, 0.3)',
+                            color: '#3b82f6',
+                            fontSize: 13,
+                            cursor: 'pointer',
+                            padding: '10px 16px',
+                            borderRadius: 8,
+                            transition: 'all 0.2s'
+                        }}
+                    >
+                        Edit Journey Details
+                    </button>
+                </div>
+            )}
 
             {/* Tabs - hidden when minimized */}
             {panelState !== 'minimized' && (
@@ -281,13 +344,14 @@ export const InfoPanel = memo(function InfoPanel({
                             photos={photos}
                             getMediaUrl={getMediaUrl}
                             onUpdate={onJourneyUpdate}
+                            editMode={editMode}
                         />
                     )}
                     {activeTab === 'stats' && (
                         <StatsTab trekData={trekData} extendedStats={extendedStats} elevationProfile={elevationProfile} isMobile={isMobile} />
                     )}
                     {activeTab === 'photos' && (
-                        <PhotosTab trekData={trekData} isMobile={isMobile} />
+                        <PhotosTab trekData={trekData} isMobile={isMobile} editMode={editMode} />
                     )}
                 </div>
             )}

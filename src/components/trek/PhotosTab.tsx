@@ -9,18 +9,20 @@ import type { UploadResult } from '../../lib/media';
 import { useMedia } from '../../hooks/useMedia';
 import { fetchPhotos, createPhoto, deletePhoto, getJourneyIdBySlug } from '../../lib/journeys';
 import { PhotoUpload } from './PhotoUpload';
+import { PhotoLightbox } from '../common/PhotoLightbox';
 
 interface PhotosTabProps {
     trekData: TrekData;
     isMobile: boolean;
+    editMode?: boolean;
 }
 
-export function PhotosTab({ trekData, isMobile }: PhotosTabProps) {
+export function PhotosTab({ trekData, isMobile, editMode = false }: PhotosTabProps) {
     const [photos, setPhotos] = useState<Photo[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [journeyDbId, setJourneyDbId] = useState<string | null>(null);
-    const [selectedPhoto, setSelectedPhoto] = useState<Photo | null>(null);
+    const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
     const { getMediaUrl, loading: tokenLoading } = useMedia();
 
     // Get the database ID for this journey (needed for creating photos)
@@ -79,23 +81,19 @@ export function PhotosTab({ trekData, isMobile }: PhotosTabProps) {
         setTimeout(() => setError(null), 5000);
     }, []);
 
-    const handlePhotoClick = useCallback((photo: Photo) => {
-        setSelectedPhoto(photo);
+    const handlePhotoClick = useCallback((index: number) => {
+        setLightboxIndex(index);
     }, []);
 
     const closeLightbox = useCallback(() => {
-        setSelectedPhoto(null);
+        setLightboxIndex(null);
     }, []);
 
     const handleDeletePhoto = useCallback(async (photo: Photo) => {
-        if (!confirm('Delete this photo? This cannot be undone.')) {
-            return;
-        }
-
         try {
             await deletePhoto(photo.id);
             setPhotos(prev => prev.filter(p => p.id !== photo.id));
-            setSelectedPhoto(null);
+            // Lightbox will handle index adjustment
         } catch (err) {
             console.error('Error deleting photo:', err);
             setError('Failed to delete photo');
@@ -133,24 +131,26 @@ export function PhotosTab({ trekData, isMobile }: PhotosTabProps) {
                 </div>
             )}
 
-            {/* Upload section */}
-            <div style={{ marginBottom: 24 }}>
-                <h3 style={{
-                    color: 'rgba(255,255,255,0.9)',
-                    fontSize: 14,
-                    fontWeight: 500,
-                    marginBottom: 12,
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.1em'
-                }}>
-                    Add Photos
-                </h3>
-                <PhotoUpload
-                    journeySlug={trekData.id}
-                    onUploadComplete={handleUploadComplete}
-                    onUploadError={handleUploadError}
-                />
-            </div>
+            {/* Upload section - only show in edit mode */}
+            {editMode && (
+                <div style={{ marginBottom: 24 }}>
+                    <h3 style={{
+                        color: 'rgba(255,255,255,0.9)',
+                        fontSize: 14,
+                        fontWeight: 500,
+                        marginBottom: 12,
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.1em'
+                    }}>
+                        Add Photos
+                    </h3>
+                    <PhotoUpload
+                        journeySlug={trekData.id}
+                        onUploadComplete={handleUploadComplete}
+                        onUploadError={handleUploadError}
+                    />
+                </div>
+            )}
 
             {/* Photo grid */}
             {photos.length > 0 && (
@@ -170,10 +170,10 @@ export function PhotosTab({ trekData, isMobile }: PhotosTabProps) {
                         gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(3, 1fr)',
                         gap: 8
                     }}>
-                        {photos.map(photo => (
+                        {photos.map((photo, index) => (
                             <div
                                 key={photo.id}
-                                onClick={() => handlePhotoClick(photo)}
+                                onClick={() => handlePhotoClick(index)}
                                 style={{
                                     aspectRatio: '1',
                                     borderRadius: 8,
@@ -228,104 +228,15 @@ export function PhotosTab({ trekData, isMobile }: PhotosTabProps) {
             )}
 
             {/* Lightbox */}
-            {selectedPhoto && (
-                <div
-                    onClick={closeLightbox}
-                    style={{
-                        position: 'fixed',
-                        inset: 0,
-                        background: 'rgba(0,0,0,0.95)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        zIndex: 1000,
-                        cursor: 'pointer'
-                    }}
-                >
-                    {/* Top-right buttons */}
-                    <div style={{
-                        position: 'absolute',
-                        top: 16,
-                        right: 16,
-                        display: 'flex',
-                        gap: 8,
-                        zIndex: 1001
-                    }}>
-                        <button
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                handleDeletePhoto(selectedPhoto);
-                            }}
-                            style={{
-                                background: 'rgba(255,100,100,0.2)',
-                                border: 'none',
-                                color: 'rgba(255,150,150,0.9)',
-                                width: 48,
-                                height: 48,
-                                borderRadius: '50%',
-                                cursor: 'pointer',
-                                fontSize: 20,
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                WebkitTapHighlightColor: 'transparent'
-                            }}
-                            title="Delete photo"
-                            aria-label="Delete photo"
-                        >
-                            🗑
-                        </button>
-                        <button
-                            onClick={closeLightbox}
-                            style={{
-                                background: 'rgba(255,255,255,0.1)',
-                                border: 'none',
-                                color: 'white',
-                                width: 48,
-                                height: 48,
-                                borderRadius: '50%',
-                                cursor: 'pointer',
-                                fontSize: 22,
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                WebkitTapHighlightColor: 'transparent'
-                            }}
-                            aria-label="Close"
-                        >
-                            ✕
-                        </button>
-                    </div>
-                    <img
-                        src={getMediaUrl(selectedPhoto.url)}
-                        alt={selectedPhoto.caption || 'Journey photo'}
-                        onClick={(e) => e.stopPropagation()}
-                        style={{
-                            maxWidth: '90vw',
-                            maxHeight: '90vh',
-                            objectFit: 'contain',
-                            cursor: 'default'
-                        }}
-                    />
-                    {selectedPhoto.caption && (
-                        <div style={{
-                            position: 'absolute',
-                            bottom: 24,
-                            left: '50%',
-                            transform: 'translateX(-50%)',
-                            background: 'rgba(0,0,0,0.7)',
-                            padding: '12px 24px',
-                            borderRadius: 8,
-                            color: 'white',
-                            fontSize: 14,
-                            maxWidth: '80vw',
-                            textAlign: 'center'
-                        }}>
-                            {selectedPhoto.caption}
-                        </div>
-                    )}
-                </div>
-            )}
+            <PhotoLightbox
+                photos={photos}
+                initialIndex={lightboxIndex ?? 0}
+                isOpen={lightboxIndex !== null}
+                onClose={closeLightbox}
+                getMediaUrl={getMediaUrl}
+                onDelete={editMode ? handleDeletePhoto : undefined}
+                editMode={editMode}
+            />
         </div>
     );
 }

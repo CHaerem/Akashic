@@ -17,6 +17,26 @@ A polished experience where authorized family members can:
 
 **Current journeys**: Kilimanjaro, Inca Trail, Mount Kenya
 
+### MVP Checklist (what's done vs remaining)
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| Google auth | ✅ | Family members whitelisted |
+| 3D globe view | ✅ | Click journey → zooms in |
+| Journey details (overview, stats) | ✅ | InfoPanel with tabs |
+| Photo upload to R2 | ✅ | With EXIF extraction |
+| Photo viewing (grid + lightbox) | ✅ | In Photos tab |
+| Photos by day | ✅ | Auto-match by date + manual assign |
+| Edit journey details | ✅ | Modal with all fields |
+| Edit waypoints/days | ✅ | Name, elevation, description, highlights |
+| Free tier limits | ✅ | Server-side enforcement |
+| Delete photos | ✅ | Via Photos tab |
+| **Create new journey** | ❌ | Not needed for MVP (3 journeys exist) |
+| **Delete journey** | ❌ | Nice-to-have, not critical |
+| **Photo map markers** | ❌ | Deferred to Phase 3 |
+
+**MVP is feature-complete** - remaining work is polish and testing.
+
 ---
 
 ## Phase 1: Photo Storage & Upload Infrastructure
@@ -94,7 +114,7 @@ Collaborative interface for family members to create and edit journeys together.
 - [ ] Create new journey form (name, type, dates, description)
 - [x] Edit journey details (name, country, description, dates, stats via modal)
 - [ ] Delete journey (with confirmation)
-- [ ] Set journey visibility (public/private)
+- [x] Journey visibility: private by default, shared with all authenticated family members (MVP model)
 
 #### 2.2 Waypoint Management
 - [ ] Add waypoints to journey
@@ -166,14 +186,16 @@ A platform where anyone can create and share their travel journeys.
 - [ ] User profiles
 - [ ] User dashboard (my journeys)
 
-#### Sharing
-- [ ] Public journey links
+#### Sharing Model (private/shared)
+- [x] MVP: All journeys private, shared with all authenticated family members
+- [ ] Future: Share journey with specific users (email invite)
+- [ ] Future: Public journey links (opt-in per journey)
 - [ ] Embed widget for blogs
 - [ ] Social sharing
 
 #### Collaboration
-- [ ] Share journey with specific users
-- [ ] Collaborative editing
+- [x] MVP: Any authenticated user can edit any journey
+- [ ] Future: Per-journey role permissions (owner, editor, viewer)
 - [ ] Comments on journeys
 
 ### Scale Considerations
@@ -195,7 +217,7 @@ A platform where anyone can create and share their travel journeys.
 | E2E Tests | ✅ Complete | Auth bypass for testing |
 | Phase 1.1 (R2 Setup) | ✅ Complete | Bucket + authenticated Worker deployed |
 | Phase 1.2 (Photo Upload) | ✅ Complete | Upload endpoint + frontend UI |
-| Phase 1.3 (DB Integration) | ⏳ Partial | Photo CRUD done, waypoint linking pending |
+| Phase 1.3 (DB Integration) | ✅ Complete | Photo CRUD, waypoint linking, assign photos modal |
 | Phase 1.4 (Photo Display) | ✅ Complete | Grid, lightbox, day-based organization |
 | Phase 2 (Journey UI) | ⏳ Partial | Journey editing done, waypoint/create pending |
 | Phase 3 (Polish) | 📋 Planned | After MVP launch |
@@ -215,11 +237,12 @@ A platform where anyone can create and share their travel journeys.
 | 2024-11 | MVP access: all authenticated users see all journeys | Simplest model for family sharing |
 | 2024-11 | Photo display UX TBD | Will experiment with map markers, lightbox, timeline |
 | 2024-11 | Collaborative over admin-only | Family members can all contribute photos |
+| 2024-11 | Free tier limits enforced server-side | Worker: 5MB max, Supabase triggers: 20 journeys, 100 photos/journey, 30 waypoints/journey |
 
 ---
 
 ## Questions to Resolve
 
-1. **Photo display**: Map markers? Lightbox? Timeline? (needs experimentation)
+1. ~~**Photo display**: Map markers? Lightbox? Timeline?~~ → **Resolved**: Lightbox done, map markers deferred to Phase 3
 2. ~~**EXIF extraction**: Client-side (before upload) or server-side (after upload)?~~ → **Resolved**: Client-side using `exifr` library
-3. **Thumbnail generation**: On-demand vs at upload time?
+3. **Thumbnail generation**: On-demand vs at upload time? (deferred - full images work fine for now)

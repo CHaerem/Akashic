@@ -80,13 +80,13 @@ export default function AkashicApp() {
             {/* Offline Status */}
             <OfflineIndicator isMobile={isMobile} />
 
-            {/* Title */}
+            {/* Title - fades to subtle when viewing trek */}
             <div style={{
                 position: 'absolute',
                 top: isMobile ? 'max(16px, env(safe-area-inset-top))' : 24,
                 left: isMobile ? 16 : 24,
                 zIndex: 100,
-                color: 'rgba(255,255,255,0.7)',
+                color: view === 'trek' ? 'rgba(255,255,255,0.3)' : 'rgba(255,255,255,0.7)',
                 fontSize: isMobile ? 12 : 14,
                 letterSpacing: '0.3em',
                 textTransform: 'uppercase',
@@ -94,7 +94,9 @@ export default function AkashicApp() {
                 padding: isMobile ? '8px 0' : 0,
                 minHeight: isMobile ? 44 : 'auto',
                 display: 'flex',
-                alignItems: 'center'
+                alignItems: 'center',
+                transition: 'color 0.5s ease, opacity 0.5s ease',
+                opacity: view === 'trek' ? 0.6 : 1
             }} onClick={handleBackToGlobe}>
                 Akashic
             </div>
