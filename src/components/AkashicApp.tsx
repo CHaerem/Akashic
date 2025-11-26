@@ -3,6 +3,7 @@ import 'mapbox-gl/dist/mapbox-gl.css';
 import { useTrekData } from '../hooks/useTrekData';
 import { useIsMobile } from '../hooks/useMediaQuery';
 import { useMedia } from '../hooks/useMedia';
+import { useJourneys } from '../contexts/JourneysContext';
 import { fetchPhotos, getJourneyIdBySlug } from '../lib/journeys';
 import type { Photo } from '../types/trek';
 import { MapboxGlobe } from './MapboxGlobe';
@@ -18,6 +19,7 @@ export default function AkashicApp() {
     const [panelState, setPanelState] = useState<PanelState>('normal');
     const [photos, setPhotos] = useState<Photo[]>([]);
     const { getMediaUrl } = useMedia();
+    const { refetch: refetchJourneys } = useJourneys();
 
     const {
         view,
@@ -125,6 +127,7 @@ export default function AkashicApp() {
                     onPanelStateChange={handlePanelStateChange}
                     photos={photos}
                     getMediaUrl={getMediaUrl}
+                    onJourneyUpdate={refetchJourneys}
                 />
             )}
         </div>

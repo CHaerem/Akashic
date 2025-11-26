@@ -327,3 +327,71 @@ export async function getJourneyIdBySlug(slug: string): Promise<string | null> {
 
     return data?.id || null;
 }
+
+/**
+ * Editable journey fields
+ */
+export interface JourneyUpdate {
+    name?: string;
+    description?: string;
+    country?: string;
+    date_started?: string | null;
+    date_ended?: string | null;
+    total_days?: number | null;
+    total_distance?: number | null;
+    summit_elevation?: number | null;
+}
+
+/**
+ * Update a journey
+ */
+export async function updateJourney(slug: string, updates: JourneyUpdate): Promise<boolean> {
+    if (!supabase) {
+        console.warn('Supabase not configured');
+        return false;
+    }
+
+    const { error } = await supabase
+        .from('journeys')
+        .update(updates)
+        .eq('slug', slug);
+
+    if (error) {
+        console.error('Error updating journey:', error);
+        throw new Error(error.message);
+    }
+
+    // Update local cache if loaded
+    if (journeyCache.loaded && journeyCache.trekDataMap[slug]) {
+        const cached = journeyCache.trekDataMap[slug];
+        if (updates.name !== undefined) cached.name = updates.name;
+        if (updates.description !== undefined) cached.description = updates.description;
+        if (updates.country !== undefined) cached.country = updates.country;
+        if (updates.date_started !== undefined) cached.dateStarted = updates.date_started || undefined;
+    }
+
+    return true;
+}
+
+/**
+ * Get full journey details for editing
+ */
+export async function getJourneyForEdit(slug: string): Promise<DbJourney | null> {
+    if (!supabase) return null;
+
+    const { data, error } = await supabase
+        .from('journeys')
+        .select('*')
+        .eq('slug', slug)
+        .single();
+
+    if (error) {
+        console.error('Error fetching journey:', error);
+        return null;
+    }
+
+    return data;
+}
+
+// Export DbJourney type for components
+export type { DbJourney };

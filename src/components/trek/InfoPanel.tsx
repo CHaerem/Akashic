@@ -1,4 +1,4 @@
-import { memo, useCallback } from 'react';
+import { memo, useCallback, useState } from 'react';
 import type { TrekData, Camp, ExtendedStats, ElevationProfile, TabType, Photo } from '../../types/trek';
 import { useSwipeGesture } from '../../hooks/useSwipeGesture';
 import { TabButton } from '../common/TabButton';
@@ -6,6 +6,7 @@ import { OverviewTab } from './OverviewTab';
 import { JourneyTab } from './JourneyTab';
 import { StatsTab } from './StatsTab';
 import { PhotosTab } from './PhotosTab';
+import { JourneyEditModal } from './JourneyEditModal';
 
 export type PanelState = 'minimized' | 'normal' | 'expanded';
 
@@ -23,14 +24,16 @@ interface InfoPanelProps {
     onPanelStateChange: (state: PanelState) => void;
     photos?: Photo[];
     getMediaUrl?: (path: string) => string;
+    onJourneyUpdate?: () => void;
 }
 
 export const InfoPanel = memo(function InfoPanel({
     trekData, activeTab, setActiveTab, selectedCamp, onCampSelect, onBack,
     extendedStats, elevationProfile, isMobile, panelState, onPanelStateChange,
-    photos = [], getMediaUrl = (path) => path
+    photos = [], getMediaUrl = (path) => path, onJourneyUpdate
 }: InfoPanelProps) {
     const padding = isMobile ? 16 : 24;
+    const [showEditModal, setShowEditModal] = useState(false);
 
     // Swipe gestures for mobile bottom sheet
     const handleSwipeUp = useCallback(() => {
@@ -159,15 +162,35 @@ export const InfoPanel = memo(function InfoPanel({
                     </button>
                 )}
                 <div style={{ flex: 1, minWidth: 0 }}>
-                    <p style={{
-                        color: 'rgba(255,255,255,0.4)',
-                        fontSize: 10,
-                        letterSpacing: '0.25em',
-                        textTransform: 'uppercase',
-                        marginBottom: isMobile ? 4 : 8
-                    }}>
-                        {trekData.country}
-                    </p>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: isMobile ? 4 : 8 }}>
+                        <p style={{
+                            color: 'rgba(255,255,255,0.4)',
+                            fontSize: 10,
+                            letterSpacing: '0.25em',
+                            textTransform: 'uppercase',
+                            margin: 0
+                        }}>
+                            {trekData.country}
+                        </p>
+                        {!isMobile && (
+                            <button
+                                onClick={() => setShowEditModal(true)}
+                                style={{
+                                    background: 'rgba(255,255,255,0.1)',
+                                    border: 'none',
+                                    color: 'rgba(255,255,255,0.5)',
+                                    fontSize: 10,
+                                    letterSpacing: '0.05em',
+                                    cursor: 'pointer',
+                                    padding: '4px 10px',
+                                    borderRadius: 4,
+                                    marginLeft: 'auto'
+                                }}
+                            >
+                                Edit
+                            </button>
+                        )}
+                    </div>
                     <h1 style={{
                         color: 'white',
                         fontSize: isMobile ? 18 : 24,
@@ -181,25 +204,41 @@ export const InfoPanel = memo(function InfoPanel({
                     </h1>
                 </div>
                 {isMobile && (
-                    <button
-                        onClick={onBack}
-                        style={{
-                            background: 'rgba(255,255,255,0.1)',
-                            border: 'none',
-                            color: 'rgba(255,255,255,0.7)',
-                            fontSize: 11,
-                            letterSpacing: '0.1em',
-                            textTransform: 'uppercase',
-                            cursor: 'pointer',
-                            padding: '10px 16px',
-                            borderRadius: 6,
-                            minHeight: 44,
-                            marginLeft: 12,
-                            flexShrink: 0
-                        }}
-                    >
-                        ✕
-                    </button>
+                    <div style={{ display: 'flex', gap: 8, marginLeft: 12, flexShrink: 0 }}>
+                        <button
+                            onClick={() => setShowEditModal(true)}
+                            style={{
+                                background: 'rgba(255,255,255,0.1)',
+                                border: 'none',
+                                color: 'rgba(255,255,255,0.7)',
+                                fontSize: 14,
+                                cursor: 'pointer',
+                                padding: '10px 14px',
+                                borderRadius: 6,
+                                minHeight: 44,
+                                minWidth: 44
+                            }}
+                        >
+                            Edit
+                        </button>
+                        <button
+                            onClick={onBack}
+                            style={{
+                                background: 'rgba(255,255,255,0.1)',
+                                border: 'none',
+                                color: 'rgba(255,255,255,0.7)',
+                                fontSize: 11,
+                                letterSpacing: '0.1em',
+                                textTransform: 'uppercase',
+                                cursor: 'pointer',
+                                padding: '10px 16px',
+                                borderRadius: 6,
+                                minHeight: 44
+                            }}
+                        >
+                            ✕
+                        </button>
+                    </div>
                 )}
             </div>
 
@@ -251,6 +290,17 @@ export const InfoPanel = memo(function InfoPanel({
                     )}
                 </div>
             )}
+
+            {/* Edit Modal */}
+            <JourneyEditModal
+                slug={trekData.id}
+                isOpen={showEditModal}
+                onClose={() => setShowEditModal(false)}
+                onSave={() => {
+                    if (onJourneyUpdate) onJourneyUpdate();
+                }}
+                isMobile={isMobile}
+            />
         </div>
     );
 });

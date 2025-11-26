@@ -49,8 +49,8 @@ Move photos from git repo to Cloudflare R2 and build upload tooling.
 - [x] PhotosTab component with upload UI
 - [x] Photo grid with thumbnails
 - [x] Lightbox for full-size viewing
+- [x] Photos organized by day in Journey tab (matched by taken_at date)
 - [ ] Display photos on map at GPS coordinates
-- [ ] Timeline/day-based organization
 
 ### Photo Data Model (existing in Supabase)
 
@@ -92,7 +92,7 @@ Collaborative interface for family members to create and edit journeys together.
 
 #### 2.1 Journey CRUD
 - [ ] Create new journey form (name, type, dates, description)
-- [ ] Edit journey details
+- [x] Edit journey details (name, country, description, dates, stats via modal)
 - [ ] Delete journey (with confirmation)
 - [ ] Set journey visibility (public/private)
 
@@ -134,10 +134,10 @@ Polish and quality-of-life improvements.
 ### Nice-to-Haves
 
 #### Photo Features
-- [ ] Auto-extract coordinates from EXIF GPS data
+- [x] Auto-extract coordinates from EXIF GPS data (client-side via exifr)
 - [ ] Auto-match photos to nearest waypoint by coordinates
-- [ ] Auto-match photos to waypoints by date
-- [ ] Photo lightbox/gallery view
+- [x] Auto-match photos to days by date (Journey tab shows photos per day)
+- [x] Photo lightbox/gallery view
 - [ ] Photo map markers (show photos at their GPS locations)
 
 #### Journey Features
@@ -195,9 +195,9 @@ A platform where anyone can create and share their travel journeys.
 | E2E Tests | ✅ Complete | Auth bypass for testing |
 | Phase 1.1 (R2 Setup) | ✅ Complete | Bucket + authenticated Worker deployed |
 | Phase 1.2 (Photo Upload) | ✅ Complete | Upload endpoint + frontend UI |
-| Phase 1.3 (DB Integration) | ⏳ Partial | Photo CRUD done, EXIF/waypoints pending |
-| Phase 1.4 (Photo Display) | ⏳ Partial | Grid + lightbox done, map markers pending |
-| Phase 2 (Journey UI) | 📋 Planned | Collaborative editing |
+| Phase 1.3 (DB Integration) | ⏳ Partial | Photo CRUD done, waypoint linking pending |
+| Phase 1.4 (Photo Display) | ✅ Complete | Grid, lightbox, day-based organization |
+| Phase 2 (Journey UI) | ⏳ Partial | Journey editing done, waypoint/create pending |
 | Phase 3 (Polish) | 📋 Planned | After MVP launch |
 | Multi-user | 🔮 Future | Post-MVP |
 
