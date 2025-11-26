@@ -23,9 +23,9 @@ export interface PhotoMetadata {
 export async function extractPhotoMetadata(file: File): Promise<PhotoMetadata> {
     try {
         const exif = await exifr.parse(file, {
-            // Only extract what we need
-            pick: ['GPSLatitude', 'GPSLongitude', 'DateTimeOriginal', 'Make', 'Model'],
-            // Parse GPS coordinates to decimal degrees
+            // Only extract what we need (include GPS ref fields for sign handling)
+            pick: ['GPSLatitude', 'GPSLongitude', 'GPSLatitudeRef', 'GPSLongitudeRef', 'DateTimeOriginal', 'Make', 'Model'],
+            // Parse GPS coordinates to decimal degrees (applies N/S E/W signs)
             gps: true,
         });
 
