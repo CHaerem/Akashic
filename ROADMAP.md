@@ -42,7 +42,7 @@ Move photos from git repo to Cloudflare R2 and build upload tooling.
 #### 1.3 Database Integration
 - [x] Photo CRUD operations in `src/lib/journeys.ts`
 - [x] Link photos to journeys
-- [ ] Link photos to waypoints (UI pending)
+- [x] Link photos to waypoints (via "Assign Photos" button per day)
 - [x] Store extracted EXIF data (coordinates, timestamps)
 
 #### 1.4 Photo Display
@@ -98,18 +98,18 @@ Collaborative interface for family members to create and edit journeys together.
 
 #### 2.2 Waypoint Management
 - [ ] Add waypoints to journey
-- [ ] Edit waypoint details (name, coordinates, elevation, description)
+- [x] Edit waypoint details (name, day number, elevation, description, highlights)
 - [ ] Reorder waypoints (drag-and-drop)
 - [ ] Delete waypoints
 - [ ] Click-on-map to set coordinates
 
 #### 2.3 Photo Management
 - [ ] Bulk photo upload with progress
-- [ ] Assign photos to waypoints
+- [x] Assign photos to waypoints (via modal)
 - [ ] Set hero images for journey/waypoints
 - [ ] Add/edit captions
 - [ ] Reorder photos
-- [ ] Delete photos
+- [x] Delete photos
 
 #### 2.4 Route Management
 - [ ] Upload GPX file

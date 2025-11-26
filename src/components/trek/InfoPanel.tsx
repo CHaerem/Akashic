@@ -280,6 +280,7 @@ export const InfoPanel = memo(function InfoPanel({
                             isMobile={isMobile}
                             photos={photos}
                             getMediaUrl={getMediaUrl}
+                            onUpdate={onJourneyUpdate}
                         />
                     )}
                     {activeTab === 'stats' && (

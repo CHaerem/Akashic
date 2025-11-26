@@ -394,4 +394,101 @@ export async function getJourneyForEdit(slug: string): Promise<DbJourney | null>
 }
 
 // Export DbJourney type for components
-export type { DbJourney };
+export type { DbJourney, DbWaypoint };
+
+/**
+ * Editable waypoint fields
+ */
+export interface WaypointUpdate {
+    name?: string;
+    description?: string;
+    elevation?: number | null;
+    day_number?: number | null;
+    highlights?: string[] | null;
+    coordinates?: [number, number];
+}
+
+/**
+ * Update a waypoint
+ */
+export async function updateWaypoint(waypointId: string, updates: WaypointUpdate): Promise<boolean> {
+    if (!supabase) {
+        console.warn('Supabase not configured');
+        return false;
+    }
+
+    const { error } = await supabase
+        .from('waypoints')
+        .update(updates)
+        .eq('id', waypointId);
+
+    if (error) {
+        console.error('Error updating waypoint:', error);
+        throw new Error(error.message);
+    }
+
+    return true;
+}
+
+/**
+ * Get waypoint by ID
+ */
+export async function getWaypoint(waypointId: string): Promise<DbWaypoint | null> {
+    if (!supabase) return null;
+
+    const { data, error } = await supabase
+        .from('waypoints')
+        .select('*')
+        .eq('id', waypointId)
+        .single();
+
+    if (error) {
+        console.error('Error fetching waypoint:', error);
+        return null;
+    }
+
+    return data;
+}
+
+/**
+ * Assign a photo to a waypoint (day)
+ */
+export async function assignPhotoToWaypoint(photoId: string, waypointId: string | null): Promise<boolean> {
+    if (!supabase) {
+        console.warn('Supabase not configured');
+        return false;
+    }
+
+    const { error } = await supabase
+        .from('photos')
+        .update({ waypoint_id: waypointId })
+        .eq('id', photoId);
+
+    if (error) {
+        console.error('Error assigning photo to waypoint:', error);
+        throw new Error(error.message);
+    }
+
+    return true;
+}
+
+/**
+ * Get photos assigned to a specific waypoint
+ */
+export async function getPhotosForWaypoint(waypointId: string): Promise<Photo[]> {
+    if (!supabase) return [];
+
+    const { data, error } = await supabase
+        .from('photos')
+        .select('*')
+        .eq('waypoint_id', waypointId)
+        .order('sort_order', { ascending: true })
+        .order('taken_at', { ascending: true, nullsFirst: false });
+
+    if (error) {
+        console.error('Error fetching photos for waypoint:', error);
+        return [];
+    }
+
+    return data || [];
+}
