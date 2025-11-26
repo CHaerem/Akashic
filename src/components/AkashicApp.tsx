@@ -1,7 +1,10 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useState, useEffect } from 'react';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import { useTrekData } from '../hooks/useTrekData';
 import { useIsMobile } from '../hooks/useMediaQuery';
+import { useMedia } from '../hooks/useMedia';
+import { fetchPhotos, getJourneyIdBySlug } from '../lib/journeys';
+import type { Photo } from '../types/trek';
 import { MapboxGlobe } from './MapboxGlobe';
 import { OfflineIndicator } from './OfflineIndicator';
 import { GlobeSelectionPanel } from './home/GlobeSelectionPanel';
@@ -13,6 +16,8 @@ import { InfoPanel, type PanelState } from './trek/InfoPanel';
 export default function AkashicApp() {
     const isMobile = useIsMobile();
     const [panelState, setPanelState] = useState<PanelState>('normal');
+    const [photos, setPhotos] = useState<Photo[]>([]);
+    const { getMediaUrl } = useMedia();
 
     const {
         view,
@@ -29,6 +34,30 @@ export default function AkashicApp() {
         handleBackToSelection,
         handleCampSelect
     } = useTrekData();
+
+    // Fetch photos when trek changes
+    useEffect(() => {
+        if (!selectedTrek) {
+            setPhotos([]);
+            return;
+        }
+
+        let cancelled = false;
+
+        async function loadPhotos() {
+            const journeyId = await getJourneyIdBySlug(selectedTrek!.id);
+            if (journeyId && !cancelled) {
+                const journeyPhotos = await fetchPhotos(journeyId);
+                if (!cancelled) {
+                    setPhotos(journeyPhotos);
+                }
+            }
+        }
+
+        loadPhotos();
+
+        return () => { cancelled = true; };
+    }, [selectedTrek]);
 
     const handlePanelStateChange = useCallback((state: PanelState) => {
         setPanelState(state);
@@ -94,6 +123,8 @@ export default function AkashicApp() {
                     isMobile={isMobile}
                     panelState={panelState}
                     onPanelStateChange={handlePanelStateChange}
+                    photos={photos}
+                    getMediaUrl={getMediaUrl}
                 />
             )}
         </div>

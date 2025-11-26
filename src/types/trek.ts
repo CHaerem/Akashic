@@ -47,6 +47,8 @@ export interface TrekData {
     stats: TrekStats;
     camps: Camp[];
     route: Route;
+    /** Start date of the journey (YYYY-MM-DD) */
+    dateStarted?: string;
 }
 
 export interface TrekConfig {

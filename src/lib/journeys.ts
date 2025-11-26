@@ -92,7 +92,8 @@ function toTrekData(journey: DbJourney, waypoints: DbWaypoint[]): TrekData {
             }
         },
         camps,
-        route: journey.route || { type: 'LineString', coordinates: [] }
+        route: journey.route || { type: 'LineString', coordinates: [] },
+        dateStarted: journey.date_started || undefined
     };
 }
 

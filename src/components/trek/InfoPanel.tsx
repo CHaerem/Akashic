@@ -1,5 +1,5 @@
 import { memo, useCallback } from 'react';
-import type { TrekData, Camp, ExtendedStats, ElevationProfile, TabType } from '../../types/trek';
+import type { TrekData, Camp, ExtendedStats, ElevationProfile, TabType, Photo } from '../../types/trek';
 import { useSwipeGesture } from '../../hooks/useSwipeGesture';
 import { TabButton } from '../common/TabButton';
 import { OverviewTab } from './OverviewTab';
@@ -21,11 +21,14 @@ interface InfoPanelProps {
     isMobile: boolean;
     panelState: PanelState;
     onPanelStateChange: (state: PanelState) => void;
+    photos?: Photo[];
+    getMediaUrl?: (path: string) => string;
 }
 
 export const InfoPanel = memo(function InfoPanel({
     trekData, activeTab, setActiveTab, selectedCamp, onCampSelect, onBack,
-    extendedStats, elevationProfile, isMobile, panelState, onPanelStateChange
+    extendedStats, elevationProfile, isMobile, panelState, onPanelStateChange,
+    photos = [], getMediaUrl = (path) => path
 }: InfoPanelProps) {
     const padding = isMobile ? 16 : 24;
 
@@ -236,6 +239,8 @@ export const InfoPanel = memo(function InfoPanel({
                             selectedCamp={selectedCamp}
                             onCampSelect={onCampSelect}
                             isMobile={isMobile}
+                            photos={photos}
+                            getMediaUrl={getMediaUrl}
                         />
                     )}
                     {activeTab === 'stats' && (
