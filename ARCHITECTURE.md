@@ -20,11 +20,11 @@ The data model is designed to be flexible - routes, camps, and structured waypoi
 
 | Component | Service | Status |
 |-----------|---------|--------|
-| Hosting | Netlify | Active (limited builds) |
-| Auth | Auth0 | Active |
+| Hosting | Cloudflare Pages | Pending setup |
+| Auth | None (public access) | Temporary |
 | Storage | Git repo (public folder) | Active |
 | Database | JSON files | Active |
-| Domain | akashic.no | Active |
+| Domain | akashic.no | Active (Cloudflare DNS) |
 
 ---
 
@@ -291,8 +291,6 @@ akashic-bucket/
 
 ```env
 VITE_MAPBOX_TOKEN=xxx
-VITE_AUTH0_DOMAIN=xxx
-VITE_AUTH0_CLIENT_ID=xxx
 ```
 
 ### Target (.env)
@@ -303,6 +301,42 @@ VITE_SUPABASE_URL=xxx
 VITE_SUPABASE_ANON_KEY=xxx
 VITE_R2_PUBLIC_URL=xxx
 ```
+
+---
+
+## GitHub Secrets Setup
+
+The following secrets must be configured in your GitHub repository for CI/CD:
+
+### Required Secrets
+
+| Secret | Description | How to Get |
+|--------|-------------|------------|
+| `VITE_MAPBOX_TOKEN` | Mapbox API token for globe/map | [Mapbox Dashboard](https://account.mapbox.com/access-tokens/) |
+| `CLOUDFLARE_API_TOKEN` | Cloudflare API token for deployment | See below |
+| `CLOUDFLARE_ACCOUNT_ID` | Your Cloudflare account ID | See below |
+
+### Getting Cloudflare Credentials
+
+1. **Account ID**:
+   - Go to [Cloudflare Dashboard](https://dash.cloudflare.com/)
+   - Select your account
+   - Account ID is shown in the right sidebar (or URL)
+
+2. **API Token**:
+   - Go to [API Tokens](https://dash.cloudflare.com/profile/api-tokens)
+   - Click "Create Token"
+   - Use the "Edit Cloudflare Workers" template OR create custom token with:
+     - Account > Cloudflare Pages > Edit
+     - Account > Account Settings > Read
+   - Copy the generated token
+
+### Adding Secrets to GitHub
+
+1. Go to your repository on GitHub
+2. Navigate to Settings → Secrets and variables → Actions
+3. Click "New repository secret"
+4. Add each secret with its name and value
 
 ---
 
