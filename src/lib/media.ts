@@ -51,3 +51,45 @@ export function buildMediaUrl(path: string, token?: string | null): string {
 export function getJourneyPhotoPath(journeySlug: string, photoId: string, extension = 'jpg'): string {
     return `journeys/${journeySlug}/photos/${photoId}.${extension}`;
 }
+
+/**
+ * Upload result from the media Worker
+ */
+export interface UploadResult {
+    photoId: string;
+    path: string;
+    size: number;
+    contentType: string;
+}
+
+/**
+ * Upload a photo to R2 storage
+ * @param journeySlug - The journey to upload to
+ * @param file - The file to upload
+ * @returns Upload result with photo ID and path
+ */
+export async function uploadPhoto(journeySlug: string, file: File): Promise<UploadResult> {
+    const token = await getAccessToken();
+
+    if (!token) {
+        throw new Error('Authentication required');
+    }
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const response = await fetch(`${MEDIA_BASE_URL}/upload/journeys/${journeySlug}/photos`, {
+        method: 'POST',
+        headers: {
+            'Authorization': `Bearer ${token}`,
+        },
+        body: formData,
+    });
+
+    if (!response.ok) {
+        const error = await response.json().catch(() => ({ error: 'Upload failed' }));
+        throw new Error(error.error || 'Upload failed');
+    }
+
+    return response.json();
+}

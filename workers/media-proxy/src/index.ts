@@ -1,13 +1,16 @@
 /**
  * Akashic Media Proxy Worker
  *
- * Serves images from R2 with authentication via Supabase JWT.
+ * Serves and uploads images to R2 with authentication via Supabase JWT.
  * Uses JWKS (public key) verification - no secret needed.
  *
  * URL patterns:
- * - /journeys/{journey_id}/hero.png - Journey hero image
- * - /journeys/{journey_id}/photos/{photo_id}.jpg - Journey photo
+ * GET:
+ * - /journeys/{journey_slug}/photos/{photo_id}.jpg - Journey photo
  * - /public/{path} - Public assets (no auth required)
+ *
+ * POST:
+ * - /upload/journeys/{journey_slug}/photos - Upload a photo (multipart/form-data)
  */
 
 export interface Env {
@@ -207,6 +210,133 @@ function getContentType(path: string): string {
     return types[ext || ''] || 'application/octet-stream';
 }
 
+// Get file extension from content type
+function getExtensionFromContentType(contentType: string): string | null {
+    const types: Record<string, string> = {
+        'image/jpeg': 'jpg',
+        'image/png': 'png',
+        'image/gif': 'gif',
+        'image/webp': 'webp',
+    };
+    return types[contentType] || null;
+}
+
+// Generate a unique photo ID
+function generatePhotoId(): string {
+    return crypto.randomUUID();
+}
+
+// Allowed image types for upload
+const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20MB
+
+interface UploadResult {
+    photoId: string;
+    path: string;
+    size: number;
+    contentType: string;
+}
+
+// Handle photo upload
+async function handleUpload(
+    request: Request,
+    env: Env,
+    journeySlug: string,
+    userId: string
+): Promise<Response> {
+    const corsHeaders = {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+        'Access-Control-Allow-Headers': 'Authorization, Content-Type',
+    };
+
+    try {
+        const contentType = request.headers.get('Content-Type') || '';
+
+        let file: File | null = null;
+
+        if (contentType.includes('multipart/form-data')) {
+            // Handle multipart form data
+            const formData = await request.formData();
+            const fileField = formData.get('file');
+
+            if (!(fileField instanceof File)) {
+                return new Response(JSON.stringify({ error: 'No file provided' }), {
+                    status: 400,
+                    headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+                });
+            }
+            file = fileField;
+        } else if (ALLOWED_IMAGE_TYPES.includes(contentType)) {
+            // Handle direct binary upload
+            const blob = await request.blob();
+            const ext = getExtensionFromContentType(contentType);
+            file = new File([blob], `upload.${ext}`, { type: contentType });
+        } else {
+            return new Response(JSON.stringify({ error: 'Invalid content type. Use multipart/form-data or send image directly.' }), {
+                status: 400,
+                headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+            });
+        }
+
+        // Validate file type
+        if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
+            return new Response(JSON.stringify({
+                error: `Invalid file type: ${file.type}. Allowed: ${ALLOWED_IMAGE_TYPES.join(', ')}`
+            }), {
+                status: 400,
+                headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+            });
+        }
+
+        // Validate file size
+        if (file.size > MAX_FILE_SIZE) {
+            return new Response(JSON.stringify({
+                error: `File too large: ${(file.size / 1024 / 1024).toFixed(2)}MB. Max: ${MAX_FILE_SIZE / 1024 / 1024}MB`
+            }), {
+                status: 400,
+                headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+            });
+        }
+
+        // Generate photo ID and path
+        const photoId = generatePhotoId();
+        const ext = getExtensionFromContentType(file.type);
+        const path = `journeys/${journeySlug}/photos/${photoId}.${ext}`;
+
+        // Upload to R2
+        const arrayBuffer = await file.arrayBuffer();
+        await env.MEDIA_BUCKET.put(path, arrayBuffer, {
+            httpMetadata: {
+                contentType: file.type,
+            },
+            customMetadata: {
+                uploadedBy: userId,
+                uploadedAt: new Date().toISOString(),
+                originalName: file.name,
+            }
+        });
+
+        const result: UploadResult = {
+            photoId,
+            path,
+            size: file.size,
+            contentType: file.type,
+        };
+
+        return new Response(JSON.stringify(result), {
+            status: 201,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+    } catch (error) {
+        console.error('Upload error:', error);
+        return new Response(JSON.stringify({ error: 'Upload failed' }), {
+            status: 500,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+    }
+}
+
 export default {
     async fetch(request: Request, env: Env): Promise<Response> {
         const url = new URL(request.url);
@@ -215,7 +345,7 @@ export default {
         // CORS headers for frontend access
         const corsHeaders = {
             'Access-Control-Allow-Origin': '*',
-            'Access-Control-Allow-Methods': 'GET, OPTIONS',
+            'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
             'Access-Control-Allow-Headers': 'Authorization, Content-Type',
         };
 
@@ -224,7 +354,47 @@ export default {
             return new Response(null, { headers: corsHeaders });
         }
 
-        // Only allow GET requests
+        // Handle POST requests (uploads)
+        if (request.method === 'POST') {
+            // Pattern: upload/journeys/{journey_slug}/photos
+            const uploadMatch = path.match(/^upload\/journeys\/([^/]+)\/photos$/);
+
+            if (!uploadMatch) {
+                return new Response(JSON.stringify({ error: 'Invalid upload path' }), {
+                    status: 400,
+                    headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+                });
+            }
+
+            const journeySlug = uploadMatch[1];
+
+            // Get and verify token
+            let token = request.headers.get('Authorization')?.replace('Bearer ', '');
+            if (!token) {
+                token = url.searchParams.get('token');
+            }
+
+            if (!token) {
+                return new Response(JSON.stringify({ error: 'Authentication required' }), {
+                    status: 401,
+                    headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+                });
+            }
+
+            const payload = await verifyJWT(token, env.SUPABASE_URL);
+            if (!payload) {
+                return new Response(JSON.stringify({ error: 'Invalid token' }), {
+                    status: 401,
+                    headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+                });
+            }
+
+            // For MVP: any authenticated user can upload to any journey
+            // Future: Check if user owns or has write access to the journey
+            return handleUpload(request, env, journeySlug, payload.sub);
+        }
+
+        // Only allow GET requests for non-upload paths
         if (request.method !== 'GET') {
             return new Response('Method not allowed', { status: 405, headers: corsHeaders });
         }
