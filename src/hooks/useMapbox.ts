@@ -4,7 +4,7 @@
 
 import { useState, useRef, useEffect, useCallback, type RefObject, type MutableRefObject } from 'react';
 import mapboxgl from 'mapbox-gl';
-import { treks, trekDataMap, getTrekConfig } from '../data/trekConfig';
+import { useJourneys } from '../contexts/JourneysContext';
 import { calculateBearing, findCoordIndex } from '../utils/geography';
 import type { TrekConfig, TrekData, Camp } from '../types/trek';
 
@@ -26,15 +26,25 @@ interface UseMapboxReturn {
  * Initialize Mapbox map with globe projection and terrain
  */
 export function useMapbox({ containerRef, onTrekSelect }: UseMapboxOptions): UseMapboxReturn {
+    const { treks, trekDataMap } = useJourneys();
     const mapRef = useRef<mapboxgl.Map | null>(null);
     const [mapReady, setMapReady] = useState(false);
+    const [dataLayersReady, setDataLayersReady] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
-    // Store callbacks in refs to avoid dependency issues
+    // Store callbacks and data in refs to avoid dependency issues
     const onTrekSelectRef = useRef(onTrekSelect);
+    const treksRef = useRef(treks);
+    const trekDataMapRef = useRef(trekDataMap);
+
     useEffect(() => {
         onTrekSelectRef.current = onTrekSelect;
     }, [onTrekSelect]);
+
+    useEffect(() => {
+        treksRef.current = treks;
+        trekDataMapRef.current = trekDataMap;
+    }, [treks, trekDataMap]);
 
     // Initialize map
     useEffect(() => {
@@ -111,77 +121,7 @@ export function useMapbox({ containerRef, onTrekSelect }: UseMapboxOptions): Use
                     }
                 });
 
-                // Add trek markers
-                map.addSource('trek-markers', {
-                    type: 'geojson',
-                    data: {
-                        type: 'FeatureCollection',
-                        features: treks.map(trek => ({
-                            type: 'Feature' as const,
-                            properties: trek,
-                            geometry: {
-                                type: 'Point' as const,
-                                coordinates: [trek.lng, trek.lat]
-                            }
-                        }))
-                    }
-                });
-
-                // Trek marker layers
-                map.addLayer({
-                    id: 'trek-markers-circle',
-                    type: 'circle',
-                    source: 'trek-markers',
-                    paint: {
-                        'circle-color': '#ffffff',
-                        'circle-radius': 6,
-                        'circle-stroke-width': 2,
-                        'circle-stroke-color': 'rgba(0,0,0,0.2)',
-                        'circle-emissive-strength': 1
-                    }
-                });
-
-                map.addLayer({
-                    id: 'trek-markers-glow',
-                    type: 'circle',
-                    source: 'trek-markers',
-                    paint: {
-                        'circle-color': '#ffffff',
-                        'circle-radius': 12,
-                        'circle-opacity': 0.3,
-                        'circle-blur': 0.5,
-                        'circle-emissive-strength': 1
-                    },
-                    beforeId: 'trek-markers-circle'
-                });
-
-                // Preload all trek routes
-                Object.values(trekDataMap).forEach((trekData: TrekData) => {
-                    if (!trekData.route) return;
-
-                    map.addSource(`route-${trekData.id}`, {
-                        type: 'geojson',
-                        data: { type: 'Feature', properties: {}, geometry: trekData.route }
-                    });
-
-                    map.addLayer({
-                        id: `route-glow-${trekData.id}`,
-                        type: 'line',
-                        source: `route-${trekData.id}`,
-                        layout: { 'line-join': 'round', 'line-cap': 'round', 'visibility': 'none' },
-                        paint: { 'line-color': 'rgba(255,255,255,0.15)', 'line-width': 12, 'line-blur': 8 }
-                    });
-
-                    map.addLayer({
-                        id: `route-${trekData.id}`,
-                        type: 'line',
-                        source: `route-${trekData.id}`,
-                        layout: { 'line-join': 'round', 'line-cap': 'round', 'visibility': 'none' },
-                        paint: { 'line-color': 'rgba(255,255,255,0.8)', 'line-width': 2 }
-                    });
-                });
-
-                // Active segment source & layers
+                // Active segment source & layers (always needed)
                 map.addSource('active-segment', {
                     type: 'geojson',
                     data: { type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: [] } }
@@ -218,7 +158,7 @@ export function useMapbox({ containerRef, onTrekSelect }: UseMapboxOptions): Use
             map.on('click', 'trek-markers-circle', (e) => {
                 if (e.features && e.features.length > 0) {
                     const trekProps = e.features[0].properties as TrekConfig;
-                    const trek = treks.find(t => t.id === trekProps.id);
+                    const trek = treksRef.current.find(t => t.id === trekProps.id);
                     if (trek && onTrekSelectRef.current) {
                         onTrekSelectRef.current(trek);
                     }
@@ -239,6 +179,87 @@ export function useMapbox({ containerRef, onTrekSelect }: UseMapboxOptions): Use
         };
     }, [containerRef]);
 
+    // Add trek markers and routes when data is available
+    useEffect(() => {
+        const map = mapRef.current;
+        if (!map || !mapReady || treks.length === 0 || dataLayersReady) return;
+
+        // Add trek markers
+        if (!map.getSource('trek-markers')) {
+            map.addSource('trek-markers', {
+                type: 'geojson',
+                data: {
+                    type: 'FeatureCollection',
+                    features: treks.map(trek => ({
+                        type: 'Feature' as const,
+                        properties: trek,
+                        geometry: {
+                            type: 'Point' as const,
+                            coordinates: [trek.lng, trek.lat]
+                        }
+                    }))
+                }
+            });
+
+            // Trek marker layers
+            map.addLayer({
+                id: 'trek-markers-circle',
+                type: 'circle',
+                source: 'trek-markers',
+                paint: {
+                    'circle-color': '#ffffff',
+                    'circle-radius': 6,
+                    'circle-stroke-width': 2,
+                    'circle-stroke-color': 'rgba(0,0,0,0.2)',
+                    'circle-emissive-strength': 1
+                }
+            });
+
+            map.addLayer({
+                id: 'trek-markers-glow',
+                type: 'circle',
+                source: 'trek-markers',
+                paint: {
+                    'circle-color': '#ffffff',
+                    'circle-radius': 12,
+                    'circle-opacity': 0.3,
+                    'circle-blur': 0.5,
+                    'circle-emissive-strength': 1
+                },
+                beforeId: 'trek-markers-circle'
+            });
+        }
+
+        // Preload all trek routes
+        Object.values(trekDataMap).forEach((trekData: TrekData) => {
+            if (!trekData.route) return;
+            if (map.getSource(`route-${trekData.id}`)) return;
+
+            map.addSource(`route-${trekData.id}`, {
+                type: 'geojson',
+                data: { type: 'Feature', properties: {}, geometry: trekData.route }
+            });
+
+            map.addLayer({
+                id: `route-glow-${trekData.id}`,
+                type: 'line',
+                source: `route-${trekData.id}`,
+                layout: { 'line-join': 'round', 'line-cap': 'round', 'visibility': 'none' },
+                paint: { 'line-color': 'rgba(255,255,255,0.15)', 'line-width': 12, 'line-blur': 8 }
+            });
+
+            map.addLayer({
+                id: `route-${trekData.id}`,
+                type: 'line',
+                source: `route-${trekData.id}`,
+                layout: { 'line-join': 'round', 'line-cap': 'round', 'visibility': 'none' },
+                paint: { 'line-color': 'rgba(255,255,255,0.8)', 'line-width': 2 }
+            });
+        });
+
+        setDataLayersReady(true);
+    }, [mapReady, treks, trekDataMap, dataLayersReady]);
+
     // Fly to globe view
     const flyToGlobe = useCallback((selectedTrek: TrekConfig | null = null) => {
         const map = mapRef.current;
@@ -255,7 +276,7 @@ export function useMapbox({ containerRef, onTrekSelect }: UseMapboxOptions): Use
         });
 
         // Hide all routes
-        Object.keys(trekDataMap).forEach(id => {
+        Object.keys(trekDataMapRef.current).forEach(id => {
             if (map.getLayer(`route-${id}`)) {
                 map.setLayoutProperty(`route-${id}`, 'visibility', 'none');
                 map.setLayoutProperty(`route-glow-${id}`, 'visibility', 'none');
@@ -332,8 +353,8 @@ export function useMapbox({ containerRef, onTrekSelect }: UseMapboxOptions): Use
         const map = mapRef.current;
         if (!map || !mapReady || !selectedTrek) return;
 
-        const trekData = trekDataMap[selectedTrek.id as keyof typeof trekDataMap];
-        const trekConfig = getTrekConfig(selectedTrek.id);
+        const trekData = trekDataMapRef.current[selectedTrek.id];
+        const trekConfig = treksRef.current.find(t => t.id === selectedTrek.id);
         if (!trekData || !trekConfig) return;
 
         // Set day mode atmosphere
@@ -348,7 +369,7 @@ export function useMapbox({ containerRef, onTrekSelect }: UseMapboxOptions): Use
         map.setTerrain({ source: 'mapbox-dem', exaggeration: 1.2 });
 
         // Show selected route, hide others
-        Object.keys(trekDataMap).forEach(id => {
+        Object.keys(trekDataMapRef.current).forEach(id => {
             if (map.getLayer(`route-${id}`)) {
                 const visibility = id === selectedTrek.id ? 'visible' : 'none';
                 map.setLayoutProperty(`route-${id}`, 'visibility', visibility);

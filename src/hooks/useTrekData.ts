@@ -3,7 +3,7 @@
  */
 
 import { useState, useCallback, useMemo } from 'react';
-import { trekDataMap } from '../data/trekConfig';
+import { useJourneys } from '../contexts/JourneysContext';
 import { calculateStats, generateElevationProfile } from '../utils/stats';
 import type { TrekConfig, TrekData, Camp, ExtendedStats, ElevationProfile, ViewMode, TabType } from '../types/trek';
 
@@ -16,6 +16,7 @@ interface UseTrekDataReturn {
     trekData: TrekData | null;
     extendedStats: ExtendedStats | null;
     elevationProfile: ElevationProfile | null;
+    loading: boolean;
 
     // Setters
     setView: (view: ViewMode) => void;
@@ -33,13 +34,15 @@ interface UseTrekDataReturn {
  * Manage trek selection state and computed data
  */
 export function useTrekData(): UseTrekDataReturn {
+    const { trekDataMap, loading } = useJourneys();
+
     const [view, setView] = useState<ViewMode>('globe');
     const [selectedTrek, setSelectedTrek] = useState<TrekConfig | null>(null);
     const [selectedCamp, setSelectedCamp] = useState<Camp | null>(null);
     const [activeTab, setActiveTab] = useState<TabType>('overview');
 
     // Get trek data for selected trek
-    const trekData = selectedTrek ? trekDataMap[selectedTrek.id as keyof typeof trekDataMap] : null;
+    const trekData = selectedTrek ? trekDataMap[selectedTrek.id] || null : null;
 
     // Memoized stats and elevation profile
     const { extendedStats, elevationProfile } = useMemo(() => {
@@ -89,6 +92,7 @@ export function useTrekData(): UseTrekDataReturn {
         trekData,
         extendedStats,
         elevationProfile,
+        loading,
 
         // Setters
         setView,

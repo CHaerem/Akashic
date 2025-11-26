@@ -20,11 +20,11 @@ The data model is designed to be flexible - routes, camps, and structured waypoi
 
 | Component | Service | Status |
 |-----------|---------|--------|
-| Hosting | Cloudflare Pages | Active |
-| Auth | Supabase Auth (Google OAuth) | Active |
-| Storage | Git repo (public folder) | Temporary |
-| Database | Supabase PostgreSQL | Active (schema ready) |
-| Domain | akashic.no | Active (Cloudflare DNS) |
+| Hosting | Cloudflare Pages | ✅ Active |
+| Auth | Supabase Auth (Google OAuth) | ✅ Active |
+| Storage | Git repo (public folder) | ⏳ Temporary (R2 pending) |
+| Database | Supabase PostgreSQL | ✅ Active (data migrated) |
+| Domain | akashic.no | ✅ Active (Cloudflare DNS) |
 
 ---
 
@@ -95,6 +95,12 @@ CREATE TABLE journeys (
   -- Map settings
   center_coordinates JSONB,        -- [lng, lat]
   default_zoom NUMERIC,
+  preferred_bearing NUMERIC,       -- Camera bearing for map view
+  preferred_pitch NUMERIC DEFAULT 60, -- Camera pitch for map view
+
+  -- Route data (trek-specific)
+  route JSONB,                     -- GeoJSON LineString geometry
+  stats JSONB,                     -- Computed stats (distance, elevation, etc.)
 
   -- Metadata
   is_public BOOLEAN DEFAULT false,
@@ -226,42 +232,46 @@ akashic-bucket/
 
 ## Migration Plan
 
-### Phase 1: Infrastructure Setup
+### Phase 1: Infrastructure Setup ✅
 
-1. **Cloudflare Pages**
-   - Create Cloudflare account
-   - Connect GitHub repo
-   - Configure build settings
-   - Point akashic.no DNS to Cloudflare
-   - Remove Netlify
+1. **Cloudflare Pages** ✅
+   - ✅ Create Cloudflare account
+   - ✅ Connect GitHub repo
+   - ✅ Configure build settings
+   - ✅ Point akashic.no DNS to Cloudflare
+   - ✅ Remove Netlify
 
-2. **Supabase**
-   - Create Supabase project
-   - Create database schema
-   - Configure auth providers (Google, etc.)
-   - Set up Row Level Security
+2. **Supabase** ✅
+   - ✅ Create Supabase project
+   - ✅ Create database schema (journeys, waypoints, photos tables)
+   - ✅ Configure auth providers (Google OAuth)
+   - ✅ Set up Row Level Security
+   - ✅ Add route/stats JSONB columns for trek data
 
-3. **Cloudflare R2**
+3. **Cloudflare R2** ⏳
    - Create R2 bucket
    - Configure public access
    - Set up CORS for uploads
 
-### Phase 2: Code Migration
+### Phase 2: Code Migration ✅
 
-4. **Replace Auth0 with Supabase Auth**
-   - Install `@supabase/supabase-js`
-   - Remove `@auth0/auth0-react`
-   - Update AuthGuard component
-   - Update login flow
-   - Configure allowed users (whitelist)
+4. **Replace Auth0 with Supabase Auth** ✅
+   - ✅ Install `@supabase/supabase-js`
+   - ✅ Remove `@auth0/auth0-react`
+   - ✅ Update AuthGuard component
+   - ✅ Update login flow
+   - ✅ Configure allowed users (sign-ups disabled)
 
-5. **Migrate Data to Database**
-   - Create Supabase client
-   - Migrate existing trek JSON to database
-   - Update data fetching hooks
-   - Keep JSON files as backup
+5. **Migrate Data to Database** ✅
+   - ✅ Create Supabase client (`src/lib/supabase.ts`)
+   - ✅ Create data fetching layer (`src/lib/journeys.ts`)
+   - ✅ Create JourneysContext for async data loading
+   - ✅ Run migration script (3 journeys, 18 waypoints, routes + stats)
+   - ✅ Update hooks to use context (`useTrekData`, `useMapbox`)
+   - ✅ Remove old JSON data files
+   - ✅ Add e2e tests for Supabase data loading
 
-6. **Migrate Images to R2**
+6. **Migrate Images to R2** ⏳
    - Upload existing images to R2
    - Update image URLs in database
    - Remove images from git repo
