@@ -4,7 +4,7 @@
  */
 
 import { supabase } from './supabase';
-import type { TrekConfig, TrekData, Camp, Route, TrekStats } from '../types/trek';
+import type { TrekConfig, TrekData, Camp, Route, TrekStats, Photo } from '../types/trek';
 
 // Database types (from Supabase)
 interface DbJourney {
@@ -201,4 +201,128 @@ export function getTrekConfig(id: string): TrekConfig | null {
  */
 export function isDataLoaded(): boolean {
     return journeyCache.loaded;
+}
+
+/**
+ * Fetch photos for a journey
+ */
+export async function fetchPhotos(journeyId: string): Promise<Photo[]> {
+    if (!supabase) {
+        console.warn('Supabase not configured');
+        return [];
+    }
+
+    const { data, error } = await supabase
+        .from('photos')
+        .select('*')
+        .eq('journey_id', journeyId)
+        .order('sort_order', { ascending: true })
+        .order('taken_at', { ascending: true, nullsFirst: false });
+
+    if (error) {
+        console.error('Error fetching photos:', error);
+        return [];
+    }
+
+    return data || [];
+}
+
+/**
+ * Create a new photo record after upload
+ */
+export async function createPhoto(photo: {
+    journey_id: string;
+    url: string;
+    thumbnail_url?: string;
+    caption?: string;
+    coordinates?: [number, number];
+    taken_at?: string;
+    waypoint_id?: string;
+}): Promise<Photo | null> {
+    if (!supabase) {
+        console.warn('Supabase not configured');
+        return null;
+    }
+
+    const { data, error } = await supabase
+        .from('photos')
+        .insert(photo)
+        .select()
+        .single();
+
+    if (error) {
+        console.error('Error creating photo:', error);
+        throw new Error(error.message);
+    }
+
+    return data;
+}
+
+/**
+ * Update a photo record
+ */
+export async function updatePhoto(
+    photoId: string,
+    updates: Partial<Pick<Photo, 'caption' | 'waypoint_id' | 'coordinates' | 'is_hero' | 'sort_order'>>
+): Promise<Photo | null> {
+    if (!supabase) {
+        console.warn('Supabase not configured');
+        return null;
+    }
+
+    const { data, error } = await supabase
+        .from('photos')
+        .update(updates)
+        .eq('id', photoId)
+        .select()
+        .single();
+
+    if (error) {
+        console.error('Error updating photo:', error);
+        throw new Error(error.message);
+    }
+
+    return data;
+}
+
+/**
+ * Delete a photo record
+ */
+export async function deletePhoto(photoId: string): Promise<boolean> {
+    if (!supabase) {
+        console.warn('Supabase not configured');
+        return false;
+    }
+
+    const { error } = await supabase
+        .from('photos')
+        .delete()
+        .eq('id', photoId);
+
+    if (error) {
+        console.error('Error deleting photo:', error);
+        throw new Error(error.message);
+    }
+
+    return true;
+}
+
+/**
+ * Get the database journey ID from a slug
+ */
+export async function getJourneyIdBySlug(slug: string): Promise<string | null> {
+    if (!supabase) return null;
+
+    const { data, error } = await supabase
+        .from('journeys')
+        .select('id')
+        .eq('slug', slug)
+        .single();
+
+    if (error) {
+        console.error('Error fetching journey ID:', error);
+        return null;
+    }
+
+    return data?.id || null;
 }

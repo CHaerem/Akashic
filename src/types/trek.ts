@@ -79,5 +79,19 @@ export interface ElevationProfile {
     plotMaxEle: number;
 }
 
+export interface Photo {
+    id: string;
+    journey_id: string;
+    waypoint_id?: string | null;
+    url: string;
+    thumbnail_url?: string | null;
+    caption?: string | null;
+    coordinates?: [number, number] | null;
+    taken_at?: string | null;
+    is_hero?: boolean;
+    sort_order?: number;
+    created_at?: string;
+}
+
 export type ViewMode = 'globe' | 'trek';
-export type TabType = 'overview' | 'journey' | 'stats';
+export type TabType = 'overview' | 'journey' | 'stats' | 'photos';

@@ -5,6 +5,7 @@ import { TabButton } from '../common/TabButton';
 import { OverviewTab } from './OverviewTab';
 import { JourneyTab } from './JourneyTab';
 import { StatsTab } from './StatsTab';
+import { PhotosTab } from './PhotosTab';
 
 export type PanelState = 'minimized' | 'normal' | 'expanded';
 
@@ -207,7 +208,7 @@ export const InfoPanel = memo(function InfoPanel({
                     padding: `0 ${padding}px`,
                     flexShrink: 0
                 }}>
-                    {(['overview', 'journey', 'stats'] as const).map(tab => (
+                    {(['overview', 'journey', 'stats', 'photos'] as const).map(tab => (
                         <TabButton
                             key={tab}
                             tab={tab}
@@ -239,6 +240,9 @@ export const InfoPanel = memo(function InfoPanel({
                     )}
                     {activeTab === 'stats' && (
                         <StatsTab trekData={trekData} extendedStats={extendedStats} elevationProfile={elevationProfile} isMobile={isMobile} />
+                    )}
+                    {activeTab === 'photos' && (
+                        <PhotosTab trekData={trekData} isMobile={isMobile} />
                     )}
                 </div>
             )}
