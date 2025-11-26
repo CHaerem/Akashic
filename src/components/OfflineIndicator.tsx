@@ -1,5 +1,6 @@
 import { memo, useState, useEffect } from 'react';
 import { useOnlineStatus } from '../hooks/useOnlineStatus';
+import { colors, radius, typography } from '../styles/liquidGlass';
 
 interface OfflineIndicatorProps {
     isMobile: boolean;
@@ -33,30 +34,40 @@ export const OfflineIndicator = memo(function OfflineIndicator({ isMobile }: Off
                 zIndex: 200,
                 display: 'flex',
                 alignItems: 'center',
-                gap: 6,
-                animation: 'fadeIn 0.3s ease'
+                gap: 8,
+                // Liquid Glass pill styling
+                background: `linear-gradient(
+                    135deg,
+                    rgba(255, 255, 255, 0.1) 0%,
+                    rgba(255, 255, 255, 0.05) 100%
+                )`,
+                backdropFilter: 'blur(16px) saturate(180%)',
+                WebkitBackdropFilter: 'blur(16px) saturate(180%)',
+                border: `1px solid ${colors.glass.border}`,
+                borderRadius: radius.pill,
+                padding: '8px 14px',
+                boxShadow: `
+                    0 4px 16px rgba(0, 0, 0, 0.2),
+                    inset 0 1px 0 rgba(255, 255, 255, 0.15)
+                `,
+                animation: 'scaleIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1)'
             }}
         >
-            <style>{`
-                @keyframes fadeIn {
-                    from { opacity: 0; }
-                    to { opacity: 1; }
-                }
-            `}</style>
-
-            {/* Minimal dot indicator */}
+            {/* Status dot with glow effect */}
             <div style={{
-                width: 6,
-                height: 6,
+                width: 8,
+                height: 8,
                 borderRadius: '50%',
-                background: isOnline ? '#22c55e' : '#f87171'
+                background: isOnline ? colors.accent.secondary : colors.accent.error,
+                boxShadow: isOnline
+                    ? `0 0 12px ${colors.accent.secondary}`
+                    : `0 0 12px ${colors.accent.error}`,
             }} />
 
             <span style={{
-                color: 'rgba(255,255,255,0.5)',
+                ...typography.label,
                 fontSize: 10,
-                letterSpacing: '0.1em',
-                textTransform: 'uppercase'
+                color: colors.text.secondary,
             }}>
                 {isOnline ? 'Online' : 'Offline'}
             </span>

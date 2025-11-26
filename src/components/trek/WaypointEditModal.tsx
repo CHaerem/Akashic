@@ -1,6 +1,9 @@
 import { memo, useState, useEffect, useCallback } from 'react';
 import { getWaypoint, updateWaypoint, type DbWaypoint, type WaypointUpdate } from '../../lib/journeys';
 import type { Camp, Photo } from '../../types/trek';
+import { GlassModal, glassInputStyle, glassLabelStyle, glassErrorBoxStyle } from '../common/GlassModal';
+import { GlassButton } from '../common/GlassButton';
+import { colors, radius } from '../../styles/liquidGlass';
 
 interface WaypointEditModalProps {
     camp: Camp;
@@ -12,26 +15,76 @@ interface WaypointEditModalProps {
     getMediaUrl?: (path: string) => string;
 }
 
-const inputStyle: React.CSSProperties = {
-    width: '100%',
-    padding: '12px',
-    background: 'rgba(255,255,255,0.05)',
-    border: '1px solid rgba(255,255,255,0.1)',
-    borderRadius: 8,
-    color: 'white',
-    fontSize: 14,
-    outline: 'none',
-    boxSizing: 'border-box'
-};
+// Enhanced input with focus state handling
+function GlassInput({
+    type = 'text',
+    value,
+    onChange,
+    placeholder,
+    style,
+    ...props
+}: React.InputHTMLAttributes<HTMLInputElement> & { style?: React.CSSProperties }) {
+    const [focused, setFocused] = useState(false);
 
-const labelStyle: React.CSSProperties = {
-    display: 'block',
-    color: 'rgba(255,255,255,0.5)',
-    fontSize: 11,
-    letterSpacing: '0.1em',
-    textTransform: 'uppercase',
-    marginBottom: 8
-};
+    return (
+        <input
+            type={type}
+            value={value}
+            onChange={onChange}
+            placeholder={placeholder}
+            onFocus={() => setFocused(true)}
+            onBlur={() => setFocused(false)}
+            style={{
+                ...glassInputStyle,
+                ...(focused && {
+                    borderColor: colors.accent.primary,
+                    boxShadow: `
+                        inset 0 2px 4px rgba(0, 0, 0, 0.2),
+                        0 0 0 3px rgba(96, 165, 250, 0.2)
+                    `,
+                }),
+                ...style,
+            }}
+            {...props}
+        />
+    );
+}
+
+// Enhanced textarea with focus state handling
+function GlassTextarea({
+    value,
+    onChange,
+    placeholder,
+    style,
+    minHeight = 80,
+    ...props
+}: React.TextareaHTMLAttributes<HTMLTextAreaElement> & { style?: React.CSSProperties; minHeight?: number }) {
+    const [focused, setFocused] = useState(false);
+
+    return (
+        <textarea
+            value={value}
+            onChange={onChange}
+            placeholder={placeholder}
+            onFocus={() => setFocused(true)}
+            onBlur={() => setFocused(false)}
+            style={{
+                ...glassInputStyle,
+                minHeight,
+                resize: 'vertical' as const,
+                ...(focused && {
+                    borderColor: colors.accent.primary,
+                    boxShadow: `
+                        inset 0 2px 4px rgba(0, 0, 0, 0.2),
+                        0 0 0 3px rgba(96, 165, 250, 0.2)
+                    `,
+                }),
+                ...style,
+            }}
+            {...props}
+        />
+    );
+}
 
 export const WaypointEditModal = memo(function WaypointEditModal({
     camp,
@@ -107,242 +160,147 @@ export const WaypointEditModal = memo(function WaypointEditModal({
         }
     }, [waypoint, camp.id, name, description, elevation, dayNumber, highlightsText, onSave, onClose]);
 
-    if (!isOpen) return null;
-
     // Photos assigned to this waypoint
     const assignedPhotos = photos.filter(p => p.waypoint_id === camp.id);
 
-    const modalStyle: React.CSSProperties = {
-        position: 'fixed',
-        inset: 0,
-        zIndex: 1000,
-        display: 'flex',
-        alignItems: isMobile ? 'flex-end' : 'center',
-        justifyContent: 'center',
-        padding: isMobile ? 0 : 24
-    };
-
-    const overlayStyle: React.CSSProperties = {
-        position: 'absolute',
-        inset: 0,
-        background: 'rgba(0,0,0,0.7)',
-        backdropFilter: 'blur(4px)'
-    };
-
-    const contentStyle: React.CSSProperties = {
-        position: 'relative',
-        background: 'rgba(15, 15, 20, 0.98)',
-        borderRadius: isMobile ? '20px 20px 0 0' : 16,
-        width: isMobile ? '100%' : '100%',
-        maxWidth: 500,
-        maxHeight: isMobile ? '90dvh' : '80vh',
-        overflow: 'hidden',
-        display: 'flex',
-        flexDirection: 'column',
-        border: '1px solid rgba(255,255,255,0.1)'
-    };
-
-    const headerStyle: React.CSSProperties = {
-        padding: isMobile ? '20px 20px 16px' : 24,
-        borderBottom: '1px solid rgba(255,255,255,0.05)',
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center'
-    };
-
-    const bodyStyle: React.CSSProperties = {
-        flex: 1,
-        overflow: 'auto',
-        padding: isMobile ? 20 : 24,
-        WebkitOverflowScrolling: 'touch'
-    };
-
-    const footerStyle: React.CSSProperties = {
-        padding: isMobile ? '16px 20px' : '16px 24px',
-        paddingBottom: isMobile ? 'calc(16px + env(safe-area-inset-bottom))' : 16,
-        borderTop: '1px solid rgba(255,255,255,0.05)',
-        display: 'flex',
-        gap: 12,
-        justifyContent: 'flex-end'
-    };
-
-    const buttonBase: React.CSSProperties = {
-        padding: '12px 24px',
-        borderRadius: 8,
-        fontSize: 14,
-        fontWeight: 500,
-        cursor: 'pointer',
-        border: 'none',
-        minHeight: 44,
-        transition: 'opacity 0.2s'
-    };
+    const footer = (
+        <>
+            <GlassButton variant="subtle" size="md" onClick={onClose}>
+                Cancel
+            </GlassButton>
+            <GlassButton
+                variant="primary"
+                size="md"
+                onClick={handleSave}
+                disabled={saving || loading}
+                style={{ opacity: saving || loading ? 0.5 : 1 }}
+            >
+                {saving ? 'Saving...' : 'Save Changes'}
+            </GlassButton>
+        </>
+    );
 
     return (
-        <div style={modalStyle}>
-            <div style={overlayStyle} onClick={onClose} />
-            <div style={contentStyle}>
-                {/* Header */}
-                <div style={headerStyle}>
-                    <h2 style={{ color: 'white', fontSize: 18, fontWeight: 500, margin: 0 }}>
-                        Edit Day {camp.dayNumber}
-                    </h2>
-                    <button
-                        onClick={onClose}
-                        style={{
-                            background: 'rgba(255,255,255,0.1)',
-                            border: 'none',
-                            color: 'rgba(255,255,255,0.7)',
-                            width: 36,
-                            height: 36,
-                            borderRadius: 8,
-                            cursor: 'pointer',
-                            fontSize: 18
-                        }}
-                    >
-                        ×
-                    </button>
+        <GlassModal
+            isOpen={isOpen}
+            onClose={onClose}
+            title={`Edit Day ${camp.dayNumber}`}
+            footer={footer}
+            isMobile={isMobile}
+        >
+            {loading ? (
+                <div style={{ color: colors.text.tertiary, textAlign: 'center', padding: 40 }}>
+                    Loading...
                 </div>
+            ) : error ? (
+                <div style={glassErrorBoxStyle}>
+                    {error}
+                </div>
+            ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+                    {/* Name */}
+                    <div>
+                        <label style={glassLabelStyle}>Camp/Location Name</label>
+                        <GlassInput
+                            type="text"
+                            value={name}
+                            onChange={e => setName(e.target.value)}
+                            placeholder="e.g., Base Camp"
+                        />
+                    </div>
 
-                {/* Body */}
-                <div style={bodyStyle}>
-                    {loading ? (
-                        <div style={{ color: 'rgba(255,255,255,0.5)', textAlign: 'center', padding: 40 }}>
-                            Loading...
+                    {/* Day Number & Elevation */}
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                        <div>
+                            <label style={glassLabelStyle}>Day Number</label>
+                            <GlassInput
+                                type="number"
+                                value={dayNumber}
+                                onChange={e => setDayNumber(e.target.value)}
+                                placeholder="1"
+                                min={1}
+                            />
                         </div>
-                    ) : error ? (
-                        <div style={{ color: '#ef4444', textAlign: 'center', padding: 40 }}>
-                            {error}
+                        <div>
+                            <label style={glassLabelStyle}>Elevation (m)</label>
+                            <GlassInput
+                                type="number"
+                                value={elevation}
+                                onChange={e => setElevation(e.target.value)}
+                                placeholder="e.g., 3200"
+                            />
                         </div>
-                    ) : (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-                            {/* Name */}
-                            <div>
-                                <label style={labelStyle}>Camp/Location Name</label>
-                                <input
-                                    type="text"
-                                    value={name}
-                                    onChange={e => setName(e.target.value)}
-                                    style={inputStyle}
-                                    placeholder="e.g., Base Camp"
-                                />
-                            </div>
+                    </div>
 
-                            {/* Day Number & Elevation */}
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                                <div>
-                                    <label style={labelStyle}>Day Number</label>
-                                    <input
-                                        type="number"
-                                        value={dayNumber}
-                                        onChange={e => setDayNumber(e.target.value)}
-                                        style={inputStyle}
-                                        placeholder="1"
-                                        min="1"
-                                    />
-                                </div>
-                                <div>
-                                    <label style={labelStyle}>Elevation (m)</label>
-                                    <input
-                                        type="number"
-                                        value={elevation}
-                                        onChange={e => setElevation(e.target.value)}
-                                        style={inputStyle}
-                                        placeholder="e.g., 3200"
-                                    />
-                                </div>
-                            </div>
+                    {/* Description */}
+                    <div>
+                        <label style={glassLabelStyle}>Description</label>
+                        <GlassTextarea
+                            value={description}
+                            onChange={e => setDescription(e.target.value)}
+                            placeholder="Notes about this day..."
+                            minHeight={80}
+                        />
+                    </div>
 
-                            {/* Description */}
-                            <div>
-                                <label style={labelStyle}>Description</label>
-                                <textarea
-                                    value={description}
-                                    onChange={e => setDescription(e.target.value)}
-                                    style={{ ...inputStyle, minHeight: 80, resize: 'vertical' }}
-                                    placeholder="Notes about this day..."
-                                />
-                            </div>
+                    {/* Highlights */}
+                    <div>
+                        <label style={glassLabelStyle}>Highlights (one per line)</label>
+                        <GlassTextarea
+                            value={highlightsText}
+                            onChange={e => setHighlightsText(e.target.value)}
+                            placeholder={`Scenic viewpoint\nWildlife sighting\nChallenging terrain`}
+                            minHeight={80}
+                        />
+                    </div>
 
-                            {/* Highlights */}
-                            <div>
-                                <label style={labelStyle}>Highlights (one per line)</label>
-                                <textarea
-                                    value={highlightsText}
-                                    onChange={e => setHighlightsText(e.target.value)}
-                                    style={{ ...inputStyle, minHeight: 80, resize: 'vertical' }}
-                                    placeholder="Scenic viewpoint&#10;Wildlife sighting&#10;Challenging terrain"
-                                />
-                            </div>
-
-                            {/* Assigned Photos */}
-                            {assignedPhotos.length > 0 && (
-                                <div>
-                                    <label style={labelStyle}>Assigned Photos ({assignedPhotos.length})</label>
-                                    <div style={{
-                                        display: 'grid',
-                                        gridTemplateColumns: 'repeat(4, 1fr)',
-                                        gap: 6
-                                    }}>
-                                        {assignedPhotos.slice(0, 8).map(photo => (
-                                            <div
-                                                key={photo.id}
-                                                style={{
-                                                    aspectRatio: '1',
-                                                    borderRadius: 6,
-                                                    overflow: 'hidden',
-                                                    background: 'rgba(255,255,255,0.05)'
-                                                }}
-                                            >
-                                                <img
-                                                    src={getMediaUrl(photo.thumbnail_url || photo.url)}
-                                                    alt={photo.caption || 'Photo'}
-                                                    style={{
-                                                        width: '100%',
-                                                        height: '100%',
-                                                        objectFit: 'cover'
-                                                    }}
-                                                    loading="lazy"
-                                                />
-                                            </div>
-                                        ))}
+                    {/* Assigned Photos */}
+                    {assignedPhotos.length > 0 && (
+                        <div>
+                            <label style={glassLabelStyle}>Assigned Photos ({assignedPhotos.length})</label>
+                            <div style={{
+                                display: 'grid',
+                                gridTemplateColumns: 'repeat(4, 1fr)',
+                                gap: 8,
+                                marginTop: 4,
+                            }}>
+                                {assignedPhotos.slice(0, 8).map(photo => (
+                                    <div
+                                        key={photo.id}
+                                        style={{
+                                            aspectRatio: '1',
+                                            borderRadius: radius.sm,
+                                            overflow: 'hidden',
+                                            background: `linear-gradient(
+                                                135deg,
+                                                rgba(255, 255, 255, 0.06) 0%,
+                                                rgba(255, 255, 255, 0.02) 100%
+                                            )`,
+                                            border: `1px solid ${colors.glass.borderSubtle}`,
+                                        }}
+                                    >
+                                        <img
+                                            src={getMediaUrl(photo.thumbnail_url || photo.url)}
+                                            alt={photo.caption || 'Photo'}
+                                            style={{
+                                                width: '100%',
+                                                height: '100%',
+                                                objectFit: 'cover'
+                                            }}
+                                            loading="lazy"
+                                        />
                                     </div>
-                                    {assignedPhotos.length > 8 && (
-                                        <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: 12, marginTop: 8 }}>
-                                            +{assignedPhotos.length - 8} more photos
-                                        </p>
-                                    )}
-                                </div>
+                                ))}
+                            </div>
+                            {assignedPhotos.length > 8 && (
+                                <p style={{ color: colors.text.subtle, fontSize: 12, marginTop: 8 }}>
+                                    +{assignedPhotos.length - 8} more photos
+                                </p>
                             )}
                         </div>
                     )}
                 </div>
-
-                {/* Footer */}
-                <div style={footerStyle}>
-                    <button
-                        onClick={onClose}
-                        style={{
-                            ...buttonBase,
-                            background: 'rgba(255,255,255,0.1)',
-                            color: 'rgba(255,255,255,0.7)'
-                        }}
-                    >
-                        Cancel
-                    </button>
-                    <button
-                        onClick={handleSave}
-                        disabled={saving || loading}
-                        style={{
-                            ...buttonBase,
-                            background: '#3b82f6',
-                            color: 'white',
-                            opacity: saving || loading ? 0.5 : 1
-                        }}
-                    >
-                        {saving ? 'Saving...' : 'Save Changes'}
-                    </button>
-                </div>
-            </div>
-        </div>
+            )}
+        </GlassModal>
     );
 });

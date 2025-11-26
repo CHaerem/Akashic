@@ -1,5 +1,8 @@
 import { memo, useState, useEffect, useCallback } from 'react';
 import { getJourneyForEdit, updateJourney, type DbJourney, type JourneyUpdate } from '../../lib/journeys';
+import { GlassModal, glassInputStyle, glassLabelStyle, glassInfoBoxStyle, glassErrorBoxStyle } from '../common/GlassModal';
+import { GlassButton } from '../common/GlassButton';
+import { colors, transitions } from '../../styles/liquidGlass';
 
 interface JourneyEditModalProps {
     slug: string;
@@ -9,26 +12,75 @@ interface JourneyEditModalProps {
     isMobile: boolean;
 }
 
-const inputStyle: React.CSSProperties = {
-    width: '100%',
-    padding: '12px',
-    background: 'rgba(255,255,255,0.05)',
-    border: '1px solid rgba(255,255,255,0.1)',
-    borderRadius: 8,
-    color: 'white',
-    fontSize: 14,
-    outline: 'none',
-    boxSizing: 'border-box'
-};
+// Enhanced input with focus state handling
+function GlassInput({
+    type = 'text',
+    value,
+    onChange,
+    placeholder,
+    style,
+    ...props
+}: React.InputHTMLAttributes<HTMLInputElement> & { style?: React.CSSProperties }) {
+    const [focused, setFocused] = useState(false);
 
-const labelStyle: React.CSSProperties = {
-    display: 'block',
-    color: 'rgba(255,255,255,0.5)',
-    fontSize: 11,
-    letterSpacing: '0.1em',
-    textTransform: 'uppercase',
-    marginBottom: 8
-};
+    return (
+        <input
+            type={type}
+            value={value}
+            onChange={onChange}
+            placeholder={placeholder}
+            onFocus={() => setFocused(true)}
+            onBlur={() => setFocused(false)}
+            style={{
+                ...glassInputStyle,
+                ...(focused && {
+                    borderColor: colors.accent.primary,
+                    boxShadow: `
+                        inset 0 2px 4px rgba(0, 0, 0, 0.2),
+                        0 0 0 3px rgba(96, 165, 250, 0.2)
+                    `,
+                }),
+                ...style,
+            }}
+            {...props}
+        />
+    );
+}
+
+// Enhanced textarea with focus state handling
+function GlassTextarea({
+    value,
+    onChange,
+    placeholder,
+    style,
+    ...props
+}: React.TextareaHTMLAttributes<HTMLTextAreaElement> & { style?: React.CSSProperties }) {
+    const [focused, setFocused] = useState(false);
+
+    return (
+        <textarea
+            value={value}
+            onChange={onChange}
+            placeholder={placeholder}
+            onFocus={() => setFocused(true)}
+            onBlur={() => setFocused(false)}
+            style={{
+                ...glassInputStyle,
+                minHeight: 100,
+                resize: 'vertical' as const,
+                ...(focused && {
+                    borderColor: colors.accent.primary,
+                    boxShadow: `
+                        inset 0 2px 4px rgba(0, 0, 0, 0.2),
+                        0 0 0 3px rgba(96, 165, 250, 0.2)
+                    `,
+                }),
+                ...style,
+            }}
+            {...props}
+        />
+    );
+}
 
 export const JourneyEditModal = memo(function JourneyEditModal({
     slug,
@@ -106,249 +158,137 @@ export const JourneyEditModal = memo(function JourneyEditModal({
         }
     }, [journey, slug, name, description, country, dateStarted, dateEnded, totalDays, totalDistance, summitElevation, onSave, onClose]);
 
-    if (!isOpen) return null;
-
-    const modalStyle: React.CSSProperties = {
-        position: 'fixed',
-        inset: 0,
-        zIndex: 1000,
-        display: 'flex',
-        alignItems: isMobile ? 'flex-end' : 'center',
-        justifyContent: 'center',
-        padding: isMobile ? 0 : 24
-    };
-
-    const overlayStyle: React.CSSProperties = {
-        position: 'absolute',
-        inset: 0,
-        background: 'rgba(0,0,0,0.7)',
-        backdropFilter: 'blur(4px)'
-    };
-
-    const contentStyle: React.CSSProperties = {
-        position: 'relative',
-        background: 'rgba(15, 15, 20, 0.98)',
-        borderRadius: isMobile ? '20px 20px 0 0' : 16,
-        width: isMobile ? '100%' : '100%',
-        maxWidth: 500,
-        maxHeight: isMobile ? '90dvh' : '80vh',
-        overflow: 'hidden',
-        display: 'flex',
-        flexDirection: 'column',
-        border: '1px solid rgba(255,255,255,0.1)'
-    };
-
-    const headerStyle: React.CSSProperties = {
-        padding: isMobile ? '20px 20px 16px' : 24,
-        borderBottom: '1px solid rgba(255,255,255,0.05)',
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center'
-    };
-
-    const bodyStyle: React.CSSProperties = {
-        flex: 1,
-        overflow: 'auto',
-        padding: isMobile ? 20 : 24,
-        WebkitOverflowScrolling: 'touch'
-    };
-
-    const footerStyle: React.CSSProperties = {
-        padding: isMobile ? '16px 20px' : '16px 24px',
-        paddingBottom: isMobile ? 'calc(16px + env(safe-area-inset-bottom))' : 16,
-        borderTop: '1px solid rgba(255,255,255,0.05)',
-        display: 'flex',
-        gap: 12,
-        justifyContent: 'flex-end'
-    };
-
-    const buttonBase: React.CSSProperties = {
-        padding: '12px 24px',
-        borderRadius: 8,
-        fontSize: 14,
-        fontWeight: 500,
-        cursor: 'pointer',
-        border: 'none',
-        minHeight: 44,
-        transition: 'opacity 0.2s'
-    };
+    const footer = (
+        <>
+            <GlassButton variant="subtle" size="md" onClick={onClose}>
+                Cancel
+            </GlassButton>
+            <GlassButton
+                variant="primary"
+                size="md"
+                onClick={handleSave}
+                disabled={saving || loading}
+                style={{ opacity: saving || loading ? 0.5 : 1 }}
+            >
+                {saving ? 'Saving...' : 'Save Changes'}
+            </GlassButton>
+        </>
+    );
 
     return (
-        <div style={modalStyle}>
-            <div style={overlayStyle} onClick={onClose} />
-            <div style={contentStyle}>
-                {/* Header */}
-                <div style={headerStyle}>
-                    <h2 style={{ color: 'white', fontSize: 18, fontWeight: 500, margin: 0 }}>
-                        Edit Journey
-                    </h2>
-                    <button
-                        onClick={onClose}
-                        style={{
-                            background: 'rgba(255,255,255,0.1)',
-                            border: 'none',
-                            color: 'rgba(255,255,255,0.7)',
-                            width: 36,
-                            height: 36,
-                            borderRadius: 8,
-                            cursor: 'pointer',
-                            fontSize: 18
-                        }}
-                    >
-                        ×
-                    </button>
+        <GlassModal
+            isOpen={isOpen}
+            onClose={onClose}
+            title="Edit Journey"
+            footer={footer}
+            isMobile={isMobile}
+        >
+            {loading ? (
+                <div style={{ color: colors.text.tertiary, textAlign: 'center', padding: 40 }}>
+                    Loading...
                 </div>
+            ) : error ? (
+                <div style={glassErrorBoxStyle}>
+                    {error}
+                </div>
+            ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+                    {/* Name */}
+                    <div>
+                        <label style={glassLabelStyle}>Name</label>
+                        <GlassInput
+                            type="text"
+                            value={name}
+                            onChange={e => setName(e.target.value)}
+                            placeholder="Journey name"
+                        />
+                    </div>
 
-                {/* Body */}
-                <div style={bodyStyle}>
-                    {loading ? (
-                        <div style={{ color: 'rgba(255,255,255,0.5)', textAlign: 'center', padding: 40 }}>
-                            Loading...
+                    {/* Country */}
+                    <div>
+                        <label style={glassLabelStyle}>Country</label>
+                        <GlassInput
+                            type="text"
+                            value={country}
+                            onChange={e => setCountry(e.target.value)}
+                            placeholder="e.g., Peru"
+                        />
+                    </div>
+
+                    {/* Description */}
+                    <div>
+                        <label style={glassLabelStyle}>Description</label>
+                        <GlassTextarea
+                            value={description}
+                            onChange={e => setDescription(e.target.value)}
+                            placeholder="Journey description..."
+                        />
+                    </div>
+
+                    {/* Dates */}
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                        <div>
+                            <label style={glassLabelStyle}>Start Date</label>
+                            <GlassInput
+                                type="date"
+                                value={dateStarted}
+                                onChange={e => setDateStarted(e.target.value)}
+                                style={{ colorScheme: 'dark' }}
+                            />
                         </div>
-                    ) : error ? (
-                        <div style={{ color: '#ef4444', textAlign: 'center', padding: 40 }}>
-                            {error}
+                        <div>
+                            <label style={glassLabelStyle}>End Date</label>
+                            <GlassInput
+                                type="date"
+                                value={dateEnded}
+                                onChange={e => setDateEnded(e.target.value)}
+                                style={{ colorScheme: 'dark' }}
+                            />
                         </div>
-                    ) : (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-                            {/* Name */}
-                            <div>
-                                <label style={labelStyle}>Name</label>
-                                <input
-                                    type="text"
-                                    value={name}
-                                    onChange={e => setName(e.target.value)}
-                                    style={inputStyle}
-                                    placeholder="Journey name"
-                                />
-                            </div>
+                    </div>
 
-                            {/* Country */}
-                            <div>
-                                <label style={labelStyle}>Country</label>
-                                <input
-                                    type="text"
-                                    value={country}
-                                    onChange={e => setCountry(e.target.value)}
-                                    style={inputStyle}
-                                    placeholder="e.g., Peru"
-                                />
-                            </div>
+                    {/* Stats */}
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+                        <div>
+                            <label style={glassLabelStyle}>Days</label>
+                            <GlassInput
+                                type="number"
+                                value={totalDays}
+                                onChange={e => setTotalDays(e.target.value)}
+                                placeholder="e.g., 5"
+                                min={1}
+                            />
+                        </div>
+                        <div>
+                            <label style={glassLabelStyle}>Distance (km)</label>
+                            <GlassInput
+                                type="number"
+                                value={totalDistance}
+                                onChange={e => setTotalDistance(e.target.value)}
+                                placeholder="e.g., 45"
+                                step={0.1}
+                            />
+                        </div>
+                        <div>
+                            <label style={glassLabelStyle}>Summit (m)</label>
+                            <GlassInput
+                                type="number"
+                                value={summitElevation}
+                                onChange={e => setSummitElevation(e.target.value)}
+                                placeholder="e.g., 4215"
+                            />
+                        </div>
+                    </div>
 
-                            {/* Description */}
-                            <div>
-                                <label style={labelStyle}>Description</label>
-                                <textarea
-                                    value={description}
-                                    onChange={e => setDescription(e.target.value)}
-                                    style={{ ...inputStyle, minHeight: 100, resize: 'vertical' }}
-                                    placeholder="Journey description..."
-                                />
-                            </div>
-
-                            {/* Dates */}
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                                <div>
-                                    <label style={labelStyle}>Start Date</label>
-                                    <input
-                                        type="date"
-                                        value={dateStarted}
-                                        onChange={e => setDateStarted(e.target.value)}
-                                        style={{ ...inputStyle, colorScheme: 'dark' }}
-                                    />
-                                </div>
-                                <div>
-                                    <label style={labelStyle}>End Date</label>
-                                    <input
-                                        type="date"
-                                        value={dateEnded}
-                                        onChange={e => setDateEnded(e.target.value)}
-                                        style={{ ...inputStyle, colorScheme: 'dark' }}
-                                    />
-                                </div>
-                            </div>
-
-                            {/* Stats */}
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
-                                <div>
-                                    <label style={labelStyle}>Days</label>
-                                    <input
-                                        type="number"
-                                        value={totalDays}
-                                        onChange={e => setTotalDays(e.target.value)}
-                                        style={inputStyle}
-                                        placeholder="e.g., 5"
-                                        min="1"
-                                    />
-                                </div>
-                                <div>
-                                    <label style={labelStyle}>Distance (km)</label>
-                                    <input
-                                        type="number"
-                                        value={totalDistance}
-                                        onChange={e => setTotalDistance(e.target.value)}
-                                        style={inputStyle}
-                                        placeholder="e.g., 45"
-                                        step="0.1"
-                                    />
-                                </div>
-                                <div>
-                                    <label style={labelStyle}>Summit (m)</label>
-                                    <input
-                                        type="number"
-                                        value={summitElevation}
-                                        onChange={e => setSummitElevation(e.target.value)}
-                                        style={inputStyle}
-                                        placeholder="e.g., 4215"
-                                    />
-                                </div>
-                            </div>
-
-                            {/* Info about date matching */}
-                            {dateStarted && (
-                                <div style={{
-                                    background: 'rgba(59, 130, 246, 0.1)',
-                                    border: '1px solid rgba(59, 130, 246, 0.2)',
-                                    borderRadius: 8,
-                                    padding: 12,
-                                    fontSize: 12,
-                                    color: 'rgba(255,255,255,0.6)',
-                                    lineHeight: 1.5
-                                }}>
-                                    Photos will be matched to days based on this start date.
-                                    Day 1 = {new Date(dateStarted).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                                </div>
-                            )}
+                    {/* Info about date matching */}
+                    {dateStarted && (
+                        <div style={glassInfoBoxStyle}>
+                            Photos will be matched to days based on this start date.
+                            Day 1 = {new Date(dateStarted).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                         </div>
                     )}
                 </div>
-
-                {/* Footer */}
-                <div style={footerStyle}>
-                    <button
-                        onClick={onClose}
-                        style={{
-                            ...buttonBase,
-                            background: 'rgba(255,255,255,0.1)',
-                            color: 'rgba(255,255,255,0.7)'
-                        }}
-                    >
-                        Cancel
-                    </button>
-                    <button
-                        onClick={handleSave}
-                        disabled={saving || loading}
-                        style={{
-                            ...buttonBase,
-                            background: '#3b82f6',
-                            color: 'white',
-                            opacity: saving || loading ? 0.5 : 1
-                        }}
-                    >
-                        {saving ? 'Saving...' : 'Save Changes'}
-                    </button>
-                </div>
-            </div>
-        </div>
+            )}
+        </GlassModal>
     );
 });

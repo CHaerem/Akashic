@@ -1,4 +1,6 @@
 import type { TrekConfig } from '../../types/trek';
+import { GlassButton } from '../common/GlassButton';
+import { colors, radius, typography } from '../../styles/liquidGlass';
 
 interface GlobeSelectionPanelProps {
     selectedTrek: TrekConfig;
@@ -15,70 +17,94 @@ export function GlobeSelectionPanel({ selectedTrek, onBack, onExplore, isMobile 
             right: isMobile ? 0 : 'auto',
             bottom: 0,
             zIndex: 20,
-            maxWidth: isMobile ? '100%' : 400,
+            maxWidth: isMobile ? '100%' : 420,
             padding: isMobile ? '24px 20px 32px' : 0,
             paddingBottom: isMobile ? 'max(32px, env(safe-area-inset-bottom))' : 48,
-            background: isMobile ? 'linear-gradient(to top, rgba(10,10,15,0.95) 0%, rgba(10,10,15,0.8) 70%, transparent 100%)' : 'transparent'
+            // Liquid Glass gradient for mobile
+            background: isMobile
+                ? `linear-gradient(
+                    to top,
+                    rgba(12, 12, 18, 0.98) 0%,
+                    rgba(12, 12, 18, 0.9) 50%,
+                    rgba(12, 12, 18, 0.6) 80%,
+                    transparent 100%
+                  )`
+                : 'transparent',
         }}>
-            <button
+            {/* Back button with glass styling */}
+            <GlassButton
+                variant="ghost"
+                size={isMobile ? 'md' : 'sm'}
                 onClick={onBack}
                 style={{
-                    background: 'none',
-                    border: 'none',
-                    color: 'rgba(255,255,255,0.4)',
-                    fontSize: isMobile ? 12 : 11,
-                    letterSpacing: '0.15em',
-                    textTransform: 'uppercase',
-                    cursor: 'pointer',
-                    marginBottom: isMobile ? 16 : 24,
-                    padding: isMobile ? '12px 0' : 0,
-                    minHeight: isMobile ? 44 : 'auto'
+                    marginBottom: isMobile ? 20 : 28,
+                    ...typography.label,
                 }}
             >
                 ← Back
-            </button>
+            </GlassButton>
+
+            {/* Country label */}
             <p style={{
-                color: 'rgba(255,255,255,0.4)',
+                ...typography.label,
                 fontSize: isMobile ? 11 : 10,
-                letterSpacing: '0.25em',
-                textTransform: 'uppercase',
-                marginBottom: isMobile ? 8 : 12
+                letterSpacing: '0.2em',
+                color: colors.text.subtle,
+                marginBottom: isMobile ? 10 : 14
             }}>
                 {selectedTrek.country}
             </p>
-            <h2 style={{
-                color: 'white',
-                fontSize: isMobile ? 28 : 36,
-                fontWeight: 300,
-                marginBottom: 8
-            }}>
-                {selectedTrek.name}
-            </h2>
-            <p style={{
-                color: 'rgba(255,255,255,0.3)',
-                fontSize: isMobile ? 13 : 14,
-                marginBottom: isMobile ? 20 : 32
-            }}>
-                Summit: {selectedTrek.elevation}
-            </p>
-            <button
+
+            {/* Trek name with glass card effect on mobile */}
+            <div style={isMobile ? {
+                background: `linear-gradient(
+                    135deg,
+                    rgba(255, 255, 255, 0.08) 0%,
+                    rgba(255, 255, 255, 0.03) 100%
+                )`,
+                backdropFilter: 'blur(16px) saturate(180%)',
+                WebkitBackdropFilter: 'blur(16px) saturate(180%)',
+                border: `1px solid ${colors.glass.borderSubtle}`,
+                borderRadius: radius.lg,
+                padding: '20px',
+                marginBottom: 20,
+                boxShadow: `
+                    0 8px 32px rgba(0, 0, 0, 0.25),
+                    inset 0 1px 0 rgba(255, 255, 255, 0.1)
+                `,
+            } : { marginBottom: 12 }}>
+                <h2 style={{
+                    ...typography.display,
+                    fontSize: isMobile ? 28 : 38,
+                    fontWeight: 500,
+                    marginBottom: 8,
+                    color: colors.text.primary,
+                }}>
+                    {selectedTrek.name}
+                </h2>
+                <p style={{
+                    ...typography.body,
+                    fontSize: isMobile ? 14 : 15,
+                    color: colors.text.tertiary,
+                    margin: 0,
+                }}>
+                    Summit: {selectedTrek.elevation}
+                </p>
+            </div>
+
+            {/* Explore button */}
+            <GlassButton
+                variant={isMobile ? 'default' : 'ghost'}
+                size={isMobile ? 'lg' : 'md'}
+                fullWidth={isMobile}
                 onClick={onExplore}
                 style={{
-                    background: isMobile ? 'rgba(255,255,255,0.1)' : 'none',
-                    border: 'none',
-                    color: 'rgba(255,255,255,0.7)',
-                    fontSize: isMobile ? 12 : 11,
-                    letterSpacing: '0.2em',
-                    textTransform: 'uppercase',
-                    cursor: 'pointer',
-                    padding: isMobile ? '16px 24px' : 0,
-                    borderRadius: isMobile ? 8 : 0,
-                    width: isMobile ? '100%' : 'auto',
-                    minHeight: isMobile ? 48 : 'auto'
+                    ...typography.label,
+                    letterSpacing: '0.15em',
                 }}
             >
                 Explore Journey →
-            </button>
+            </GlassButton>
         </div>
     );
 }
