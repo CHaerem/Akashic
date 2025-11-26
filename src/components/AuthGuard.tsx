@@ -45,80 +45,88 @@ export function AuthGuard({ children }: AuthGuardProps) {
         return (
             <div
                 style={{
-                    minHeight: '100vh',
-                    backgroundColor: '#0f172a',
+                    position: 'fixed',
+                    inset: 0,
+                    background: '#0a0a0f',
                     display: 'flex',
+                    flexDirection: 'column',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    padding: '1rem'
+                    padding: '24px'
                 }}
             >
-                <div
+                <p style={{
+                    color: 'rgba(255,255,255,0.4)',
+                    fontSize: 10,
+                    letterSpacing: '0.25em',
+                    textTransform: 'uppercase',
+                    marginBottom: 16
+                }}>
+                    Access Denied
+                </p>
+                <h1 style={{
+                    color: 'white',
+                    fontSize: 32,
+                    fontWeight: 300,
+                    marginBottom: 12,
+                    textAlign: 'center'
+                }}>
+                    Private Application
+                </h1>
+                <p style={{
+                    color: 'rgba(255,255,255,0.3)',
+                    fontSize: 14,
+                    marginBottom: 48,
+                    textAlign: 'center',
+                    maxWidth: 300
+                }}>
+                    Your account is not authorized to access this application.
+                </p>
+                <button
+                    onClick={() => {
+                        setAuthError(null);
+                        // Keep hasAttemptedLogin true to prevent useEffect from interfering
+                        loginWithRedirect({ authorizationParams: { prompt: 'login' } });
+                    }}
                     style={{
-                        textAlign: 'center',
-                        maxWidth: '28rem',
-                        backgroundColor: '#1e293b',
-                        borderRadius: '0.75rem',
-                        padding: '2rem',
-                        boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)'
+                        background: 'rgba(255,255,255,0.1)',
+                        border: 'none',
+                        color: 'rgba(255,255,255,0.7)',
+                        fontSize: 11,
+                        letterSpacing: '0.2em',
+                        textTransform: 'uppercase',
+                        cursor: 'pointer',
+                        padding: '16px 32px',
+                        borderRadius: 8
                     }}
                 >
-                    <div
-                        style={{
-                            width: '4rem',
-                            height: '4rem',
-                            backgroundColor: 'rgba(239, 68, 68, 0.2)',
-                            borderRadius: '50%',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            margin: '0 auto 1.5rem'
-                        }}
-                    >
-                        <svg style={{ width: '2rem', height: '2rem', color: '#f87171' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                        </svg>
-                    </div>
-                    <h1 style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#ffffff', marginBottom: '0.75rem' }}>
-                        Access Denied
-                    </h1>
-                    <p style={{ color: '#cbd5e1', marginBottom: '1.5rem' }}>
-                        This is a private application. Your account is not authorized to access it.
-                    </p>
-                    <p style={{ color: '#94a3b8', fontSize: '0.875rem', marginBottom: '1.5rem' }}>
-                        Contact the owner if you believe this is a mistake.
-                    </p>
-                    <button
-                        onClick={() => {
-                            setAuthError(null);
-                            setHasAttemptedLogin(false);
-                            loginWithRedirect();
-                        }}
-                        style={{
-                            backgroundColor: '#3b82f6',
-                            color: '#ffffff',
-                            padding: '0.75rem 1.5rem',
-                            borderRadius: '0.5rem',
-                            border: 'none',
-                            fontSize: '0.875rem',
-                            fontWeight: '500',
-                            cursor: 'pointer',
-                        }}
-                    >
-                        Try different account
-                    </button>
-                </div>
+                    Try Different Account →
+                </button>
             </div>
         );
     }
 
     if (isLoading || !isAuthenticated) {
         return (
-            <div className="min-h-screen bg-slate-900 flex items-center justify-center">
-                <div className="text-center">
-                    <div className="w-12 h-12 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-                    <p className="text-slate-400">Redirecting to login...</p>
-                </div>
+            <div
+                style={{
+                    position: 'fixed',
+                    inset: 0,
+                    background: '#0a0a0f',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center'
+                }}
+            >
+                <p style={{
+                    color: 'rgba(255,255,255,0.3)',
+                    fontSize: 10,
+                    letterSpacing: '0.15em',
+                    textTransform: 'uppercase'
+                }}>
+                    Redirecting to login...
+                </p>
             </div>
         );
     }
