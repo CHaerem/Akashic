@@ -16,7 +16,7 @@ import type { TrekData, Camp } from '../../types/trek';
 import { GlassButton } from '../common/GlassButton';
 import { colors, radius, transitions } from '../../styles/liquidGlass';
 import { findNearestPointOnRoute, calculateRouteDistances, type RouteCoordinate } from '../../utils/routeUtils';
-import { updateWaypointPosition, createWaypoint, deleteWaypoint, getJourneyIdBySlug } from '../../lib/journeys';
+import { updateWaypoint, createWaypoint, deleteWaypoint, getJourneyIdBySlug } from '../../lib/journeys';
 
 interface RouteEditorProps {
     trekData: TrekData;
@@ -375,30 +375,36 @@ export const RouteEditor = memo(function RouteEditor({
                 throw new Error('Journey not found');
             }
 
-            // Process each camp
-            for (const camp of camps) {
+            // Sort camps by route order to assign correct day numbers
+            const sortedCamps = sortCamps(camps);
+
+            // Process each camp with correct day number based on route order
+            for (let i = 0; i < sortedCamps.length; i++) {
+                const camp = sortedCamps[i];
+                const newDayNumber = i + 1;
+
                 if (camp.id.startsWith('new-')) {
                     // Create new waypoint
                     await createWaypoint({
                         journey_id: journeyId,
                         name: camp.name,
-                        day_number: camp.dayNumber,
+                        day_number: newDayNumber,
                         coordinates: camp.coordinates,
                         elevation: camp.elevation,
                         description: camp.notes,
                         route_distance_km: camp.routeDistanceKm || undefined,
                         route_point_index: camp.routePointIndex || undefined,
-                        sort_order: camp.dayNumber
+                        sort_order: newDayNumber
                     });
-                } else if (camp.isDirty) {
-                    // Update existing waypoint
-                    await updateWaypointPosition(
-                        camp.id,
-                        camp.coordinates,
-                        camp.elevation,
-                        camp.routeDistanceKm || null,
-                        camp.routePointIndex || null
-                    );
+                } else {
+                    // Update existing waypoint - always update day_number to match route order
+                    await updateWaypoint(camp.id, {
+                        coordinates: camp.coordinates,
+                        elevation: camp.elevation,
+                        route_distance_km: camp.routeDistanceKm,
+                        route_point_index: camp.routePointIndex,
+                        day_number: newDayNumber
+                    });
                 }
             }
 
@@ -417,7 +423,7 @@ export const RouteEditor = memo(function RouteEditor({
         } finally {
             setSaving(false);
         }
-    }, [camps, trekData, onSave, onClose]);
+    }, [camps, trekData, onSave, onClose, sortCamps]);
 
     const selectedCamp = camps.find(c => c.id === selectedCampId);
 

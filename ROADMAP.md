@@ -117,11 +117,11 @@ Collaborative interface for family members to create and edit journeys together.
 - [x] Journey visibility: private by default, shared with all authenticated family members (MVP model)
 
 #### 2.2 Waypoint Management
-- [ ] Add waypoints to journey
+- [x] Add waypoints to journey (via RouteEditor - click on route)
 - [x] Edit waypoint details (name, day number, elevation, description, highlights)
-- [ ] Reorder waypoints (drag-and-drop)
-- [ ] Delete waypoints
-- [ ] Click-on-map to set coordinates
+- [x] Reorder waypoints (via RouteEditor - drag along route, auto-sorts by distance)
+- [x] Delete waypoints (via RouteEditor)
+- [x] Click-on-map to set coordinates (via RouteEditor)
 
 #### 2.3 Photo Management
 - [ ] Bulk photo upload with progress
@@ -201,7 +201,7 @@ Visual improvements when selecting a day/camp.
 
 #### 2.5.5 Route as Timeline
 Make the route line itself interactive.
-- [ ] Click anywhere on route to see segment info
+- [x] Click anywhere on route to see segment info (distance, elevation, nearest camp)
 - [ ] Show "Day X - between Camp A and Camp B"
 - [ ] Display distance walked, elevation change for segment
 - [ ] Jump to that day's photos from route click
