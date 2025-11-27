@@ -857,19 +857,31 @@ export const RouteEditor = memo(function RouteEditor({
                 position: 'fixed',
                 inset: 0,
                 zIndex: 1000,
-                background: colors.background.base,
+                background: colors.background.deep,
                 display: 'flex',
                 flexDirection: 'column'
             }}
         >
-            {/* Header */}
+            {/* Header - Liquid Glass style */}
             <div style={{
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
                 padding: isMobile ? '12px 16px' : '16px 24px',
-                background: `linear-gradient(180deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.02) 100%)`,
-                borderBottom: `1px solid ${colors.glass.borderSubtle}`,
+                background: `linear-gradient(
+                    180deg,
+                    rgba(255, 255, 255, 0.12) 0%,
+                    rgba(255, 255, 255, 0.06) 50%,
+                    rgba(255, 255, 255, 0.02) 100%
+                )`,
+                backdropFilter: 'blur(24px) saturate(180%)',
+                WebkitBackdropFilter: 'blur(24px) saturate(180%)',
+                borderBottom: `1px solid ${colors.glass.border}`,
+                boxShadow: `
+                    0 4px 24px rgba(0, 0, 0, 0.2),
+                    inset 0 1px 0 rgba(255, 255, 255, 0.15),
+                    inset 0 -1px 0 rgba(0, 0, 0, 0.1)
+                `,
                 flexShrink: 0,
                 flexWrap: 'wrap',
                 gap: 12
@@ -1035,17 +1047,27 @@ export const RouteEditor = memo(function RouteEditor({
                     )}
                 </div>
 
-                {/* Sidebar */}
+                {/* Sidebar - Liquid Glass style */}
                 <div style={{
                     width: isMobile ? '100%' : 320,
                     height: isMobile ? 'auto' : '100%',
                     maxHeight: isMobile ? '40vh' : 'none',
-                    background: `linear-gradient(180deg, rgba(255,255,255,0.06) 0%, rgba(10,10,15,0.95) 100%)`,
-                    borderLeft: isMobile ? 'none' : `1px solid ${colors.glass.borderSubtle}`,
-                    borderTop: isMobile ? `1px solid ${colors.glass.borderSubtle}` : 'none',
+                    background: `linear-gradient(
+                        ${isMobile ? '180deg' : '135deg'},
+                        rgba(255, 255, 255, 0.1) 0%,
+                        rgba(255, 255, 255, 0.05) 30%,
+                        rgba(10, 10, 15, 0.95) 100%
+                    )`,
+                    backdropFilter: 'blur(32px) saturate(180%)',
+                    WebkitBackdropFilter: 'blur(32px) saturate(180%)',
+                    borderLeft: isMobile ? 'none' : `1px solid ${colors.glass.border}`,
+                    borderTop: isMobile ? `1px solid ${colors.glass.border}` : 'none',
                     display: 'flex',
                     flexDirection: 'column',
-                    overflow: 'hidden'
+                    overflow: 'hidden',
+                    boxShadow: isMobile
+                        ? `0 -8px 32px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.1)`
+                        : `-8px 0 40px rgba(0, 0, 0, 0.3), inset 1px 0 0 rgba(255, 255, 255, 0.1)`
                 }}>
                     {mode === 'camps' ? (
                         <>
