@@ -21,11 +21,63 @@ import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import type { TrekData, Camp, Route } from '../../types/trek';
 import { GlassButton } from '../common/GlassButton';
-import { colors, radius, transitions, effects, shadows, glassFloating, typography } from '../../styles/liquidGlass';
+import { colors, radius, transitions, effects, shadows, glassFloating, glassPanel, glassButton, typography } from '../../styles/liquidGlass';
 import { findNearestPointOnRoute, calculateRouteDistances, type RouteCoordinate } from '../../utils/routeUtils';
 import { updateWaypoint, createWaypoint, deleteWaypoint, getJourneyIdBySlug, updateJourneyRoute } from '../../lib/journeys';
 
 type EditorMode = 'camps' | 'route';
+
+// Reusable mode toggle button with hover state
+const ModeToggleButton = memo(function ModeToggleButton({
+    label,
+    isActive,
+    onClick
+}: {
+    label: string;
+    isActive: boolean;
+    onClick: () => void;
+}) {
+    const [isHovered, setIsHovered] = useState(false);
+
+    const baseStyle: React.CSSProperties = {
+        padding: '10px 18px',
+        borderRadius: radius.lg,
+        fontSize: 11,
+        fontWeight: isActive ? 500 : 400,
+        letterSpacing: '0.08em',
+        textTransform: 'uppercase',
+        cursor: 'pointer',
+        transition: `all ${transitions.smooth}`,
+    };
+
+    const stateStyle: React.CSSProperties = isActive
+        ? {
+            ...glassButton,
+            color: colors.text.primary,
+        }
+        : isHovered
+        ? {
+            background: 'rgba(255, 255, 255, 0.06)',
+            border: `1px solid ${colors.glass.borderSubtle}`,
+            color: colors.text.secondary,
+        }
+        : {
+            background: 'transparent',
+            border: '1px solid transparent',
+            color: colors.text.tertiary,
+        };
+
+    return (
+        <button
+            onClick={onClick}
+            onMouseEnter={() => setIsHovered(true)}
+            onMouseLeave={() => setIsHovered(false)}
+            style={{ ...baseStyle, ...stateStyle }}
+        >
+            {label}
+        </button>
+    );
+});
 
 interface RouteEditorProps {
     trekData: TrekData;
@@ -868,7 +920,7 @@ export const RouteEditor = memo(function RouteEditor({
                 }}
             />
 
-            {/* Header - Liquid Glass floating over map */}
+            {/* Header - using glassPanel preset */}
             <div style={{
                 position: 'absolute',
                 top: 0,
@@ -878,14 +930,11 @@ export const RouteEditor = memo(function RouteEditor({
                 alignItems: 'center',
                 justifyContent: 'space-between',
                 padding: isMobile ? '12px 16px' : '16px 24px',
-                background: 'rgba(12, 12, 18, 0.7)',
-                backdropFilter: 'blur(32px) saturate(180%)',
-                WebkitBackdropFilter: 'blur(32px) saturate(180%)',
-                borderBottom: `1px solid ${colors.glass.border}`,
-                boxShadow: `
-                    0 4px 20px rgba(0, 0, 0, 0.25),
-                    inset 0 1px 0 rgba(255, 255, 255, 0.1)
-                `,
+                ...glassPanel,
+                borderTop: 'none',
+                borderLeft: 'none',
+                borderRight: 'none',
+                borderRadius: 0,
                 flexWrap: 'wrap',
                 gap: 12,
                 zIndex: 10
@@ -904,80 +953,31 @@ export const RouteEditor = memo(function RouteEditor({
                         ...typography.display,
                         margin: 0,
                         fontSize: isMobile ? 18 : 22,
-                        fontWeight: 500,
-                        color: colors.text.primary
+                        fontWeight: 500
                     }}>
                         {trekData.name}
                     </h1>
                 </div>
 
-                {/* Mode toggle - Liquid Glass pill tabs */}
+                {/* Mode toggle - using ModeToggleButton component */}
                 <div style={{
                     display: 'flex',
-                    gap: 6,
+                    gap: 4,
                     padding: 4,
-                    background: `linear-gradient(
-                        180deg,
-                        rgba(255, 255, 255, 0.04) 0%,
-                        transparent 100%
-                    )`,
+                    background: colors.glass.subtle,
                     borderRadius: radius.xl,
                     border: `1px solid ${colors.glass.borderSubtle}`
                 }}>
-                    <button
+                    <ModeToggleButton
+                        label="Camps"
+                        isActive={mode === 'camps'}
                         onClick={() => setMode('camps')}
-                        style={{
-                            padding: '10px 18px',
-                            borderRadius: radius.lg,
-                            background: mode === 'camps'
-                                ? `linear-gradient(135deg, rgba(255, 255, 255, 0.15) 0%, rgba(255, 255, 255, 0.08) 100%)`
-                                : 'transparent',
-                            backdropFilter: mode === 'camps' ? 'blur(8px) saturate(180%)' : 'none',
-                            WebkitBackdropFilter: mode === 'camps' ? 'blur(8px) saturate(180%)' : 'none',
-                            border: mode === 'camps'
-                                ? `1px solid ${colors.glass.border}`
-                                : '1px solid transparent',
-                            boxShadow: mode === 'camps'
-                                ? `0 2px 8px rgba(0, 0, 0, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.15)`
-                                : 'none',
-                            color: mode === 'camps' ? colors.text.primary : colors.text.tertiary,
-                            fontSize: 11,
-                            fontWeight: mode === 'camps' ? 500 : 400,
-                            letterSpacing: '0.08em',
-                            textTransform: 'uppercase' as const,
-                            cursor: 'pointer',
-                            transition: `all ${transitions.smooth}`
-                        }}
-                    >
-                        Camps
-                    </button>
-                    <button
+                    />
+                    <ModeToggleButton
+                        label="Route"
+                        isActive={mode === 'route'}
                         onClick={() => setMode('route')}
-                        style={{
-                            padding: '10px 18px',
-                            borderRadius: radius.lg,
-                            background: mode === 'route'
-                                ? `linear-gradient(135deg, rgba(255, 255, 255, 0.15) 0%, rgba(255, 255, 255, 0.08) 100%)`
-                                : 'transparent',
-                            backdropFilter: mode === 'route' ? 'blur(8px) saturate(180%)' : 'none',
-                            WebkitBackdropFilter: mode === 'route' ? 'blur(8px) saturate(180%)' : 'none',
-                            border: mode === 'route'
-                                ? `1px solid ${colors.glass.border}`
-                                : '1px solid transparent',
-                            boxShadow: mode === 'route'
-                                ? `0 2px 8px rgba(0, 0, 0, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.15)`
-                                : 'none',
-                            color: mode === 'route' ? colors.text.primary : colors.text.tertiary,
-                            fontSize: 11,
-                            fontWeight: mode === 'route' ? 500 : 400,
-                            letterSpacing: '0.08em',
-                            textTransform: 'uppercase' as const,
-                            cursor: 'pointer',
-                            transition: `all ${transitions.smooth}`
-                        }}
-                    >
-                        Route
-                    </button>
+                    />
                 </div>
 
                 {/* Undo/Redo buttons */}
@@ -1067,7 +1067,7 @@ export const RouteEditor = memo(function RouteEditor({
                 </div>
             )}
 
-            {/* Sidebar - Liquid Glass floating panel (like InfoPanel) */}
+            {/* Sidebar - using glassPanel preset */}
             <div style={{
                 position: 'absolute',
                 top: isMobile ? 'auto' : 0,
@@ -1076,23 +1076,15 @@ export const RouteEditor = memo(function RouteEditor({
                 left: isMobile ? 0 : 'auto',
                 width: isMobile ? '100%' : 320,
                 height: isMobile ? '40vh' : '100%',
-                background: `linear-gradient(
-                    ${isMobile ? '180deg' : '135deg'},
-                    rgba(255, 255, 255, 0.1) 0%,
-                    rgba(255, 255, 255, 0.05) 30%,
-                    rgba(10, 10, 15, 0.85) 100%
-                )`,
-                backdropFilter: 'blur(32px) saturate(180%)',
-                WebkitBackdropFilter: 'blur(32px) saturate(180%)',
+                ...glassPanel,
                 borderLeft: isMobile ? 'none' : `1px solid ${colors.glass.border}`,
                 borderTop: isMobile ? `1px solid ${colors.glass.border}` : 'none',
+                borderBottom: 'none',
+                borderRight: 'none',
                 borderRadius: isMobile ? `${radius.xxl}px ${radius.xxl}px 0 0` : 0,
                 display: 'flex',
                 flexDirection: 'column',
                 overflow: 'hidden',
-                boxShadow: isMobile
-                    ? `0 -16px 48px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.15), inset 0 2px 20px rgba(255, 255, 255, 0.05)`
-                    : `-8px 0 40px rgba(0, 0, 0, 0.3), inset 1px 0 0 rgba(255, 255, 255, 0.1)`,
                 zIndex: 10
             }}>
                     {mode === 'camps' ? (
