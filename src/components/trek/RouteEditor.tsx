@@ -22,10 +22,12 @@ import 'mapbox-gl/dist/mapbox-gl.css';
 import type { TrekData, Camp, Route } from '../../types/trek';
 import { GlassButton } from '../common/GlassButton';
 import { colors, radius, transitions, effects, shadows, glassFloating, glassPanel, glassButton, typography } from '../../styles/liquidGlass';
-import { findNearestPointOnRoute, calculateRouteDistances, type RouteCoordinate } from '../../utils/routeUtils';
+import { findNearestPointOnRoute, type RouteCoordinate, type Coordinate } from '../../utils/routeUtils';
+import { processDrawnSegment as processWithMapMatching } from '../../lib/mapMatching';
 import { updateWaypoint, createWaypoint, deleteWaypoint, getJourneyIdBySlug, updateJourneyRoute } from '../../lib/journeys';
 
 type EditorMode = 'camps' | 'route';
+type RouteSubMode = 'edit' | 'draw';
 
 // Reusable mode toggle button with hover state
 const ModeToggleButton = memo(function ModeToggleButton({
@@ -116,6 +118,14 @@ export const RouteEditor = memo(function RouteEditor({
     const [routeCoordinates, setRouteCoordinates] = useState<RouteCoordinate[]>([]);
     const [selectedRoutePointIndex, setSelectedRoutePointIndex] = useState<number | null>(null);
     const [routeHasChanges, setRouteHasChanges] = useState(false);
+
+    // Route sub-mode state (edit existing points vs draw new segments)
+    const [routeSubMode, setRouteSubMode] = useState<RouteSubMode>('edit');
+
+    // Drawing state
+    const [isDrawing, setIsDrawing] = useState(false);
+    const [drawingPoints, setDrawingPoints] = useState<[number, number][]>([]);
+    const [isProcessingDraw, setIsProcessingDraw] = useState(false);
 
     // Shared state
     const [saving, setSaving] = useState(false);
@@ -369,6 +379,43 @@ export const RouteEditor = memo(function RouteEditor({
                     map.getCanvas().style.cursor = '';
                 });
             }
+
+            // Add drawing preview layer (initially empty)
+            map.addSource('drawing-preview', {
+                type: 'geojson',
+                data: {
+                    type: 'Feature',
+                    properties: {},
+                    geometry: {
+                        type: 'LineString',
+                        coordinates: []
+                    }
+                }
+            });
+
+            // Drawing preview glow
+            map.addLayer({
+                id: 'drawing-preview-glow',
+                type: 'line',
+                source: 'drawing-preview',
+                paint: {
+                    'line-color': 'rgba(52, 211, 153, 0.5)',
+                    'line-width': 10,
+                    'line-blur': 5
+                }
+            });
+
+            // Drawing preview line (dashed)
+            map.addLayer({
+                id: 'drawing-preview-line',
+                type: 'line',
+                source: 'drawing-preview',
+                paint: {
+                    'line-color': '#34d399',
+                    'line-width': 4,
+                    'line-dasharray': [2, 2]
+                }
+            });
         });
 
         return () => {
@@ -693,6 +740,224 @@ export const RouteEditor = memo(function RouteEditor({
 
         setRouteHasChanges(true);
     }, [mode, routeCoordinates, pushToHistory]);
+
+    // === DRAWING MODE HANDLERS ===
+
+    // Calculate distance between two points in meters (approximate)
+    const getDistanceMeters = useCallback((p1: [number, number], p2: [number, number]) => {
+        const R = 6371000; // Earth radius in meters
+        const dLat = (p2[1] - p1[1]) * Math.PI / 180;
+        const dLon = (p2[0] - p1[0]) * Math.PI / 180;
+        const lat1 = p1[1] * Math.PI / 180;
+        const lat2 = p2[1] * Math.PI / 180;
+        const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon / 2) ** 2;
+        return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    }, []);
+
+    // Handle drawing start (mousedown/touchstart)
+    const handleDrawStart = useCallback((coords: [number, number]) => {
+        if (mode !== 'route' || routeSubMode !== 'draw') return;
+        setIsDrawing(true);
+        setDrawingPoints([coords]);
+    }, [mode, routeSubMode]);
+
+    // Handle drawing move (mousemove/touchmove)
+    const handleDrawMove = useCallback((coords: [number, number]) => {
+        if (!isDrawing || mode !== 'route' || routeSubMode !== 'draw') return;
+
+        setDrawingPoints(prev => {
+            // Only add point if distance from last point is > 5 meters (reduce noise)
+            const lastPoint = prev[prev.length - 1];
+            if (lastPoint && getDistanceMeters(lastPoint, coords) < 5) {
+                return prev;
+            }
+            return [...prev, coords];
+        });
+    }, [isDrawing, mode, routeSubMode, getDistanceMeters]);
+
+    // Feedback state for drawing
+    const [drawFeedback, setDrawFeedback] = useState<string | null>(null);
+
+    // Process drawn segment - append to existing route with intelligent snapping
+    const processDrawnSegment = useCallback(async (points: [number, number][]) => {
+        if (points.length < 2) return;
+
+        setIsProcessingDraw(true);
+        setDrawFeedback(null);
+
+        try {
+            // Save state before making changes
+            pushToHistory();
+
+            // Get Mapbox token
+            const mapboxToken = import.meta.env.VITE_MAPBOX_TOKEN as string;
+
+            // Process with intelligent snapping (Map Matching + fallback to simplified)
+            const result = await processWithMapMatching(
+                points as Coordinate[],
+                mapboxToken
+            );
+
+            if (result.coordinates.length === 0) {
+                setError('Could not process drawn segment');
+                return;
+            }
+
+            // Get elevation from last route point (or 0 if no route)
+            const lastRoutePoint = routeCoordinates[routeCoordinates.length - 1];
+            const baseElevation = lastRoutePoint?.[2] || 0;
+
+            // Add elevation to new points (use base elevation for now)
+            const newPoints: RouteCoordinate[] = result.coordinates.map(p => [
+                p[0],
+                p[1],
+                p[2] || baseElevation
+            ]);
+
+            setRouteCoordinates(prev => [...prev, ...newPoints]);
+            setRouteHasChanges(true);
+
+            // Show feedback
+            if (result.wasSnapped) {
+                setDrawFeedback(`Snapped to trail (${Math.round(result.confidence * 100)}% match)`);
+            } else {
+                setDrawFeedback(`Added ${newPoints.length} points`);
+            }
+
+            // Clear feedback after 2 seconds
+            setTimeout(() => setDrawFeedback(null), 2000);
+
+        } catch (err) {
+            console.error('Error processing drawn segment:', err);
+            setError('Failed to process drawn segment');
+        } finally {
+            setIsProcessingDraw(false);
+            setDrawingPoints([]);
+        }
+    }, [routeCoordinates, pushToHistory]);
+
+    // Handle drawing end (mouseup/touchend)
+    const handleDrawEnd = useCallback(() => {
+        if (!isDrawing) return;
+        setIsDrawing(false);
+
+        if (drawingPoints.length >= 2) {
+            processDrawnSegment(drawingPoints);
+        } else {
+            setDrawingPoints([]);
+        }
+    }, [isDrawing, drawingPoints, processDrawnSegment]);
+
+    // Set up drawing event listeners on the map
+    useEffect(() => {
+        const map = mapRef.current;
+        if (!map || !mapLoaded || mode !== 'route' || routeSubMode !== 'draw') return;
+
+        const canvas = map.getCanvas();
+
+        // Convert event to coordinates
+        const eventToCoords = (e: MouseEvent | Touch): [number, number] => {
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            const lngLat = map.unproject([x, y]);
+            return [lngLat.lng, lngLat.lat];
+        };
+
+        // Mouse handlers
+        const onMouseDown = (e: MouseEvent) => {
+            if (e.button !== 0) return; // Only left click
+            handleDrawStart(eventToCoords(e));
+        };
+
+        const onMouseMove = (e: MouseEvent) => {
+            handleDrawMove(eventToCoords(e));
+        };
+
+        const onMouseUp = () => {
+            handleDrawEnd();
+        };
+
+        // Touch handlers
+        let activeTouchId: number | null = null;
+
+        const onTouchStart = (e: TouchEvent) => {
+            // Only track single finger for drawing (two fingers = pan/zoom)
+            if (e.touches.length !== 1) return;
+            const touch = e.touches[0];
+            activeTouchId = touch.identifier;
+            handleDrawStart(eventToCoords(touch));
+            // Prevent default to avoid pan during draw
+            e.preventDefault();
+        };
+
+        const onTouchMove = (e: TouchEvent) => {
+            if (activeTouchId === null) return;
+            const touch = Array.from(e.touches).find(t => t.identifier === activeTouchId);
+            if (!touch) return;
+            handleDrawMove(eventToCoords(touch));
+            e.preventDefault();
+        };
+
+        const onTouchEnd = (e: TouchEvent) => {
+            if (activeTouchId === null) return;
+            const wasOurTouch = !Array.from(e.touches).some(t => t.identifier === activeTouchId);
+            if (wasOurTouch) {
+                activeTouchId = null;
+                handleDrawEnd();
+            }
+        };
+
+        // Disable map interactions during draw mode
+        map.dragPan.disable();
+        map.dragRotate.disable();
+        canvas.style.cursor = 'crosshair';
+
+        // Add listeners
+        canvas.addEventListener('mousedown', onMouseDown);
+        canvas.addEventListener('mousemove', onMouseMove);
+        canvas.addEventListener('mouseup', onMouseUp);
+        canvas.addEventListener('mouseleave', onMouseUp);
+        canvas.addEventListener('touchstart', onTouchStart, { passive: false });
+        canvas.addEventListener('touchmove', onTouchMove, { passive: false });
+        canvas.addEventListener('touchend', onTouchEnd);
+        canvas.addEventListener('touchcancel', onTouchEnd);
+
+        return () => {
+            // Re-enable map interactions
+            map.dragPan.enable();
+            map.dragRotate.enable();
+            canvas.style.cursor = '';
+
+            // Remove listeners
+            canvas.removeEventListener('mousedown', onMouseDown);
+            canvas.removeEventListener('mousemove', onMouseMove);
+            canvas.removeEventListener('mouseup', onMouseUp);
+            canvas.removeEventListener('mouseleave', onMouseUp);
+            canvas.removeEventListener('touchstart', onTouchStart);
+            canvas.removeEventListener('touchmove', onTouchMove);
+            canvas.removeEventListener('touchend', onTouchEnd);
+            canvas.removeEventListener('touchcancel', onTouchEnd);
+        };
+    }, [mapLoaded, mode, routeSubMode, handleDrawStart, handleDrawMove, handleDrawEnd]);
+
+    // Update drawing preview layer
+    useEffect(() => {
+        const map = mapRef.current;
+        if (!map || !mapLoaded) return;
+
+        const source = map.getSource('drawing-preview') as mapboxgl.GeoJSONSource;
+        if (source) {
+            source.setData({
+                type: 'Feature',
+                properties: {},
+                geometry: {
+                    type: 'LineString',
+                    coordinates: drawingPoints
+                }
+            });
+        }
+    }, [drawingPoints, mapLoaded]);
 
     // Update map route line when coordinates change
     useEffect(() => {
@@ -1027,6 +1292,29 @@ export const RouteEditor = memo(function RouteEditor({
                     />
                 </div>
 
+                {/* Route sub-mode toggle (only visible in Route mode) */}
+                {mode === 'route' && (
+                    <div style={{
+                        display: 'flex',
+                        gap: 4,
+                        padding: 4,
+                        background: colors.glass.subtle,
+                        borderRadius: radius.xl,
+                        border: `1px solid ${colors.glass.borderSubtle}`
+                    }}>
+                        <ModeToggleButton
+                            label="Edit"
+                            isActive={routeSubMode === 'edit'}
+                            onClick={() => setRouteSubMode('edit')}
+                        />
+                        <ModeToggleButton
+                            label="Draw"
+                            isActive={routeSubMode === 'draw'}
+                            onClick={() => setRouteSubMode('draw')}
+                        />
+                    </div>
+                )}
+
                 {/* Undo/Redo buttons */}
                 <div style={{ display: 'flex', gap: 8 }}>
                     <GlassButton
@@ -1083,10 +1371,27 @@ export const RouteEditor = memo(function RouteEditor({
                         <strong>Drag</strong> markers to reposition camps<br />
                         <strong>Click</strong> on route to add new camp
                     </>
-                ) : (
+                ) : routeSubMode === 'edit' ? (
                     <>
                         <strong>Drag</strong> route points to adjust path<br />
                         <strong>Click</strong> on route to add new point
+                    </>
+                ) : isProcessingDraw ? (
+                    <span style={{ color: colors.accent.primary }}>Processing...</span>
+                ) : isDrawing ? (
+                    <span style={{ color: '#34d399' }}>
+                        <strong>Drawing...</strong> Lift to finish
+                    </span>
+                ) : drawFeedback ? (
+                    <span style={{ color: '#34d399' }}>
+                        {drawFeedback}
+                    </span>
+                ) : (
+                    <>
+                        <strong style={{ color: '#34d399' }}>Draw</strong> on map to extend route<br />
+                        <span style={{ fontSize: 11, color: colors.text.tertiary }}>
+                            Drag to draw • Two fingers to pan
+                        </span>
                     </>
                 )}
             </div>

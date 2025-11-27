@@ -304,3 +304,149 @@ export function interpolatePointAtDistance(
 
     return route[route.length - 1];
 }
+
+// ============================================
+// Route Drawing and Simplification Utilities
+// ============================================
+
+/**
+ * Calculate perpendicular distance from a point to a line segment
+ * Uses coordinate space (not geodesic) for simplicity - works well for small areas
+ */
+function perpendicularDistance(
+    point: Coordinate,
+    lineStart: Coordinate,
+    lineEnd: Coordinate
+): number {
+    const [px, py] = point;
+    const [x1, y1] = lineStart;
+    const [x2, y2] = lineEnd;
+
+    const dx = x2 - x1;
+    const dy = y2 - y1;
+
+    // If line is a point, return distance to that point
+    const lineLenSq = dx * dx + dy * dy;
+    if (lineLenSq === 0) {
+        return Math.sqrt((px - x1) ** 2 + (py - y1) ** 2);
+    }
+
+    // Calculate perpendicular distance using cross product method
+    // |AB × AP| / |AB|
+    const crossProduct = Math.abs((x2 - x1) * (y1 - py) - (x1 - px) * (y2 - y1));
+    return crossProduct / Math.sqrt(lineLenSq);
+}
+
+/**
+ * Douglas-Peucker line simplification algorithm
+ * Reduces the number of points while preserving the overall shape
+ *
+ * @param points Array of [lng, lat] coordinates
+ * @param epsilon Tolerance in degrees (roughly 0.0001 = 11 meters at equator)
+ * @returns Simplified array of points
+ */
+export function douglasPeucker(
+    points: Coordinate[],
+    epsilon: number
+): Coordinate[] {
+    if (points.length <= 2) return points;
+
+    // Find the point with maximum distance from the line between first and last
+    let maxDist = 0;
+    let maxIndex = 0;
+    const start = points[0];
+    const end = points[points.length - 1];
+
+    for (let i = 1; i < points.length - 1; i++) {
+        const dist = perpendicularDistance(points[i], start, end);
+        if (dist > maxDist) {
+            maxDist = dist;
+            maxIndex = i;
+        }
+    }
+
+    // If max distance is greater than epsilon, recursively simplify
+    if (maxDist > epsilon) {
+        const left = douglasPeucker(points.slice(0, maxIndex + 1), epsilon);
+        const right = douglasPeucker(points.slice(maxIndex), epsilon);
+        // Combine results (removing duplicate point at junction)
+        return [...left.slice(0, -1), ...right];
+    }
+
+    // All points are within epsilon, keep only endpoints
+    return [start, end];
+}
+
+/**
+ * Simplify a route with elevation data
+ * Preserves elevation by interpolating from original points
+ *
+ * @param route Array of [lng, lat, elevation] coordinates
+ * @param epsilon Tolerance in degrees
+ * @returns Simplified route with elevation
+ */
+export function simplifyRoute(
+    route: RouteCoordinate[],
+    epsilon: number
+): RouteCoordinate[] {
+    if (route.length <= 2) return route;
+
+    // Simplify using 2D coordinates
+    const coords2D: Coordinate[] = route.map(p => [p[0], p[1]]);
+    const simplified2D = douglasPeucker(coords2D, epsilon);
+
+    // Map back to RouteCoordinates, finding nearest original point for elevation
+    return simplified2D.map(coord => {
+        // Find closest original point for elevation
+        let minDist = Infinity;
+        let elevation = 0;
+        for (const original of route) {
+            const dist = Math.sqrt(
+                (coord[0] - original[0]) ** 2 + (coord[1] - original[1]) ** 2
+            );
+            if (dist < minDist) {
+                minDist = dist;
+                elevation = original[2];
+            }
+        }
+        return [coord[0], coord[1], elevation];
+    });
+}
+
+/**
+ * Sample points from an array to reduce count
+ * Useful for reducing points before API calls
+ *
+ * @param points Array of coordinates
+ * @param maxPoints Maximum number of points to return
+ * @returns Sampled array with at most maxPoints elements
+ */
+export function samplePoints<T>(points: T[], maxPoints: number): T[] {
+    if (points.length <= maxPoints) return points;
+
+    const result: T[] = [points[0]]; // Always include first point
+    const step = (points.length - 1) / (maxPoints - 1);
+
+    for (let i = 1; i < maxPoints - 1; i++) {
+        const index = Math.round(i * step);
+        result.push(points[index]);
+    }
+
+    result.push(points[points.length - 1]); // Always include last point
+    return result;
+}
+
+/**
+ * Tolerance presets for Douglas-Peucker simplification
+ * Values are in degrees (at equator: 0.00001° ≈ 1.1m, 0.0001° ≈ 11m, 0.001° ≈ 111m)
+ */
+export const SIMPLIFY_TOLERANCE = {
+    /** ~5 meters - high detail, keeps most shape */
+    high: 0.00005,
+    /** ~15 meters - good balance of detail and point reduction */
+    medium: 0.00015,
+    /** ~30 meters - significant reduction, may lose small features */
+    low: 0.0003,
+    /** ~50 meters - aggressive simplification */
+    veryLow: 0.0005
+} as const;
