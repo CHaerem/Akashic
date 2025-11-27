@@ -11,6 +11,7 @@ import { OfflineIndicator } from './OfflineIndicator';
 import { GlobeSelectionPanel } from './home/GlobeSelectionPanel';
 import { GlobeHint } from './home/GlobeHint';
 import { InfoPanel, type PanelState } from './trek/InfoPanel';
+import { colors, radius, transitions, typography } from '../styles/liquidGlass';
 
 // --- Main Component ---
 
@@ -66,7 +67,7 @@ export default function AkashicApp() {
     }, []);
 
     return (
-        <div style={{ position: 'fixed', inset: 0, background: '#0a0a0f' }}>
+        <div style={{ position: 'fixed', inset: 0, background: colors.background.base }}>
             {/* Mapbox Globe */}
             <div style={{ position: 'absolute', inset: 0 }}>
                 <MapboxGlobe
@@ -80,25 +81,51 @@ export default function AkashicApp() {
             {/* Offline Status */}
             <OfflineIndicator isMobile={isMobile} />
 
-            {/* Title - fades to subtle when viewing trek */}
-            <div style={{
-                position: 'absolute',
-                top: isMobile ? 'max(16px, env(safe-area-inset-top))' : 24,
-                left: isMobile ? 16 : 24,
-                zIndex: 100,
-                color: view === 'trek' ? 'rgba(255,255,255,0.3)' : 'rgba(255,255,255,0.7)',
-                fontSize: isMobile ? 12 : 14,
-                letterSpacing: '0.3em',
-                textTransform: 'uppercase',
-                cursor: 'pointer',
-                padding: isMobile ? '8px 0' : 0,
-                minHeight: isMobile ? 44 : 'auto',
-                display: 'flex',
-                alignItems: 'center',
-                transition: 'color 0.5s ease, opacity 0.5s ease',
-                opacity: view === 'trek' ? 0.6 : 1
-            }} onClick={handleBackToGlobe}>
-                Akashic
+            {/* Title - Liquid Glass pill style when viewing trek */}
+            <div
+                onClick={handleBackToGlobe}
+                style={{
+                    position: 'absolute',
+                    top: isMobile ? 'max(16px, env(safe-area-inset-top))' : 24,
+                    left: isMobile ? 16 : 24,
+                    zIndex: 100,
+                    cursor: 'pointer',
+                    padding: isMobile ? '10px 16px' : '8px 14px',
+                    minHeight: isMobile ? 44 : 'auto',
+                    display: 'flex',
+                    alignItems: 'center',
+                    transition: `all ${transitions.smooth}`,
+                    // Liquid Glass styling when in trek view
+                    ...(view === 'trek' ? {
+                        background: `linear-gradient(
+                            135deg,
+                            rgba(255, 255, 255, 0.08) 0%,
+                            rgba(255, 255, 255, 0.04) 100%
+                        )`,
+                        backdropFilter: 'blur(12px) saturate(150%)',
+                        WebkitBackdropFilter: 'blur(12px) saturate(150%)',
+                        border: `1px solid ${colors.glass.borderSubtle}`,
+                        borderRadius: radius.lg,
+                        boxShadow: `
+                            0 4px 16px rgba(0, 0, 0, 0.15),
+                            inset 0 1px 0 rgba(255, 255, 255, 0.1)
+                        `,
+                    } : {
+                        background: 'transparent',
+                        border: '1px solid transparent',
+                        borderRadius: radius.lg,
+                    }),
+                }}
+            >
+                <span style={{
+                    ...typography.label,
+                    fontSize: isMobile ? 12 : 13,
+                    letterSpacing: '0.25em',
+                    color: view === 'trek' ? colors.text.secondary : colors.text.primary,
+                    transition: `color ${transitions.smooth}`,
+                }}>
+                    Akashic
+                </span>
             </div>
 
             {/* Globe View UI */}

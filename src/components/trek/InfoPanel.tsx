@@ -2,11 +2,13 @@ import { memo, useCallback, useState } from 'react';
 import type { TrekData, Camp, ExtendedStats, ElevationProfile, TabType, Photo } from '../../types/trek';
 import { useSwipeGesture } from '../../hooks/useSwipeGesture';
 import { TabButton } from '../common/TabButton';
+import { GlassButton } from '../common/GlassButton';
 import { OverviewTab } from './OverviewTab';
 import { JourneyTab } from './JourneyTab';
 import { StatsTab } from './StatsTab';
 import { PhotosTab } from './PhotosTab';
 import { JourneyEditModal } from './JourneyEditModal';
+import { colors, radius, transitions, typography } from '../../styles/liquidGlass';
 
 export type PanelState = 'minimized' | 'normal' | 'expanded';
 
@@ -62,7 +64,6 @@ export const InfoPanel = memo(function InfoPanel({
     });
 
     // Panel height based on state - using dvh for better mobile support
-    // Minimized is smaller to show more map, expanded is larger for immersive content
     const getPanelHeight = () => {
         switch (panelState) {
             case 'minimized': return '100px';
@@ -71,7 +72,7 @@ export const InfoPanel = memo(function InfoPanel({
         }
     };
 
-    // Mobile bottom sheet style - calm design with subtle shadow
+    // Mobile bottom sheet style - Liquid Glass design
     const mobileStyle: React.CSSProperties = {
         position: 'absolute',
         left: 0,
@@ -79,20 +80,30 @@ export const InfoPanel = memo(function InfoPanel({
         bottom: 0,
         height: getPanelHeight(),
         maxHeight: 'calc(100dvh - 60px)',
-        background: 'rgba(8, 8, 12, 0.95)',
-        backdropFilter: 'blur(24px)',
-        WebkitBackdropFilter: 'blur(24px)',
-        borderTop: '1px solid rgba(255,255,255,0.06)',
-        borderRadius: '24px 24px 0 0',
+        // Liquid Glass gradient background
+        background: `linear-gradient(
+            180deg,
+            rgba(255, 255, 255, 0.12) 0%,
+            rgba(255, 255, 255, 0.06) 10%,
+            rgba(12, 12, 18, 0.95) 40%
+        )`,
+        backdropFilter: 'blur(32px) saturate(180%)',
+        WebkitBackdropFilter: 'blur(32px) saturate(180%)',
+        borderTop: `1px solid ${colors.glass.border}`,
+        borderRadius: `${radius.xxl}px ${radius.xxl}px 0 0`,
         display: 'flex',
         flexDirection: 'column',
         zIndex: 20,
-        transition: 'height 0.4s cubic-bezier(0.32, 0.72, 0, 1)',
+        transition: `height ${transitions.glass}`,
         paddingBottom: 'env(safe-area-inset-bottom)',
-        boxShadow: '0 -8px 40px rgba(0,0,0,0.4)'
+        boxShadow: `
+            0 -16px 48px rgba(0, 0, 0, 0.4),
+            inset 0 1px 0 rgba(255, 255, 255, 0.15),
+            inset 0 2px 20px rgba(255, 255, 255, 0.05)
+        `,
     };
 
-    // Desktop side panel style - slightly more transparent for better map visibility
+    // Desktop side panel style - Liquid Glass design
     const desktopStyle: React.CSSProperties = {
         position: 'absolute',
         top: 0,
@@ -101,13 +112,23 @@ export const InfoPanel = memo(function InfoPanel({
         width: '38%',
         minWidth: 360,
         maxWidth: 480,
-        background: 'rgba(8, 8, 12, 0.75)',
-        backdropFilter: 'blur(24px)',
-        WebkitBackdropFilter: 'blur(24px)',
-        borderLeft: '1px solid rgba(255,255,255,0.04)',
+        // Liquid Glass gradient background
+        background: `linear-gradient(
+            135deg,
+            rgba(255, 255, 255, 0.1) 0%,
+            rgba(255, 255, 255, 0.05) 30%,
+            rgba(10, 10, 15, 0.85) 100%
+        )`,
+        backdropFilter: 'blur(32px) saturate(180%)',
+        WebkitBackdropFilter: 'blur(32px) saturate(180%)',
+        borderLeft: `1px solid ${colors.glass.border}`,
         display: 'flex',
         flexDirection: 'column',
-        zIndex: 20
+        zIndex: 20,
+        boxShadow: `
+            -8px 0 40px rgba(0, 0, 0, 0.3),
+            inset 1px 0 0 rgba(255, 255, 255, 0.1)
+        `,
     };
 
     const handleDragHandleClick = useCallback(() => {
@@ -118,8 +139,8 @@ export const InfoPanel = memo(function InfoPanel({
     }, [panelState, onPanelStateChange]);
 
     return (
-        <div style={isMobile ? mobileStyle : desktopStyle}>
-            {/* Mobile drag handle with swipe support - subtle indicator */}
+        <div style={isMobile ? mobileStyle : desktopStyle} className="glass-scrollbar">
+            {/* Mobile drag handle with swipe support - Liquid Glass pill */}
             {isMobile && (
                 <div
                     onClick={handleDragHandleClick}
@@ -133,13 +154,17 @@ export const InfoPanel = memo(function InfoPanel({
                     }}
                 >
                     <div style={{
-                        width: panelState === 'expanded' ? 48 : 36,
-                        height: 4,
-                        background: panelState === 'expanded'
-                            ? 'rgba(255,255,255,0.25)'
-                            : 'rgba(255,255,255,0.35)',
-                        borderRadius: 2,
-                        transition: 'all 0.3s ease'
+                        width: panelState === 'expanded' ? 48 : 40,
+                        height: 5,
+                        background: `linear-gradient(
+                            90deg,
+                            rgba(255, 255, 255, 0.2) 0%,
+                            rgba(255, 255, 255, 0.4) 50%,
+                            rgba(255, 255, 255, 0.2) 100%
+                        )`,
+                        borderRadius: radius.pill,
+                        transition: `all ${transitions.smooth}`,
+                        boxShadow: 'inset 0 1px 0 rgba(255, 255, 255, 0.3)',
                     }} />
                 </div>
             )}
@@ -147,7 +172,7 @@ export const InfoPanel = memo(function InfoPanel({
             {/* Header */}
             <div style={{
                 padding: isMobile ? `8px ${padding}px 16px` : `${padding}px`,
-                borderBottom: panelState !== 'minimized' ? '1px solid rgba(255,255,255,0.05)' : 'none',
+                borderBottom: panelState !== 'minimized' ? `1px solid ${colors.glass.borderSubtle}` : 'none',
                 display: 'flex',
                 flexDirection: isMobile ? 'row' : 'column',
                 alignItems: isMobile ? 'center' : 'stretch',
@@ -155,130 +180,83 @@ export const InfoPanel = memo(function InfoPanel({
                 flexShrink: 0
             }}>
                 {!isMobile && (
-                    <button
+                    <GlassButton
+                        variant="ghost"
+                        size="sm"
                         onClick={onBack}
                         style={{
-                            background: 'none',
-                            border: 'none',
-                            color: 'rgba(255,255,255,0.5)',
-                            fontSize: 11,
-                            letterSpacing: '0.15em',
-                            textTransform: 'uppercase',
-                            cursor: 'pointer',
-                            marginBottom: 24,
-                            display: 'block',
-                            padding: '8px 0',
-                            minHeight: 44
+                            alignSelf: 'flex-start',
+                            marginBottom: 20,
+                            ...typography.label,
                         }}
                     >
                         ← Globe
-                    </button>
+                    </GlassButton>
                 )}
                 <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: isMobile ? 4 : 8 }}>
                         <p style={{
-                            color: 'rgba(255,255,255,0.4)',
+                            ...typography.label,
                             fontSize: 10,
-                            letterSpacing: '0.25em',
-                            textTransform: 'uppercase',
+                            letterSpacing: '0.2em',
+                            color: colors.text.subtle,
                             margin: 0
                         }}>
                             {trekData.country}
                         </p>
                         {!isMobile && (
-                            <button
+                            <GlassButton
+                                variant={editMode ? 'primary' : 'subtle'}
+                                size="sm"
                                 onClick={() => setEditMode(!editMode)}
-                                title={editMode ? 'Exit edit mode' : 'Enter edit mode'}
-                                style={{
-                                    background: editMode ? 'rgba(59, 130, 246, 0.2)' : 'rgba(255,255,255,0.1)',
-                                    border: editMode ? '1px solid rgba(59, 130, 246, 0.5)' : '1px solid transparent',
-                                    color: editMode ? '#3b82f6' : 'rgba(255,255,255,0.5)',
-                                    cursor: 'pointer',
-                                    padding: '6px 8px',
-                                    borderRadius: 6,
-                                    marginLeft: 'auto',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: 6,
-                                    fontSize: 11,
-                                    transition: 'all 0.2s'
-                                }}
+                                icon={<PencilIcon />}
+                                style={{ marginLeft: 'auto' }}
                             >
-                                <PencilIcon />
-                                {editMode && <span>Editing</span>}
-                            </button>
+                                {editMode ? 'Editing' : ''}
+                            </GlassButton>
                         )}
                     </div>
                     <h1 style={{
-                        color: 'white',
-                        fontSize: isMobile ? 18 : 24,
-                        fontWeight: 300,
+                        ...typography.display,
+                        fontSize: isMobile ? 20 : 26,
+                        fontWeight: 500,
                         margin: 0,
                         whiteSpace: 'nowrap',
                         overflow: 'hidden',
-                        textOverflow: 'ellipsis'
+                        textOverflow: 'ellipsis',
+                        color: colors.text.primary,
                     }}>
                         {trekData.name}
                     </h1>
                     {/* Edit Journey button - only in edit mode, desktop */}
                     {editMode && !isMobile && (
-                        <button
+                        <GlassButton
+                            variant="primary"
+                            size="sm"
                             onClick={() => setShowEditModal(true)}
-                            style={{
-                                background: 'rgba(59, 130, 246, 0.1)',
-                                border: '1px solid rgba(59, 130, 246, 0.3)',
-                                color: '#3b82f6',
-                                fontSize: 12,
-                                cursor: 'pointer',
-                                padding: '6px 12px',
-                                borderRadius: 6,
-                                marginTop: 8,
-                                transition: 'all 0.2s'
-                            }}
+                            style={{ marginTop: 12 }}
                         >
                             Edit Journey Details
-                        </button>
+                        </GlassButton>
                     )}
                 </div>
                 {isMobile && (
                     <div style={{ display: 'flex', gap: 8, marginLeft: 12, flexShrink: 0 }}>
-                        <button
+                        <GlassButton
+                            variant={editMode ? 'primary' : 'subtle'}
+                            size="sm"
                             onClick={() => setEditMode(!editMode)}
-                            title={editMode ? 'Exit edit mode' : 'Enter edit mode'}
-                            style={{
-                                background: editMode ? 'rgba(59, 130, 246, 0.2)' : 'rgba(255,255,255,0.1)',
-                                border: editMode ? '1px solid rgba(59, 130, 246, 0.5)' : '1px solid transparent',
-                                color: editMode ? '#3b82f6' : 'rgba(255,255,255,0.7)',
-                                cursor: 'pointer',
-                                padding: '10px 14px',
-                                borderRadius: 6,
-                                minHeight: 44,
-                                minWidth: 44,
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                transition: 'all 0.2s'
-                            }}
-                        >
-                            <PencilIcon />
-                        </button>
-                        <button
+                            icon={<PencilIcon />}
+                            style={{ minWidth: 44, padding: '10px' }}
+                        />
+                        <GlassButton
+                            variant="subtle"
+                            size="sm"
                             onClick={onBack}
-                            style={{
-                                background: 'rgba(255,255,255,0.1)',
-                                border: 'none',
-                                color: 'rgba(255,255,255,0.7)',
-                                fontSize: 11,
-                                letterSpacing: '0.1em',
-                                textTransform: 'uppercase',
-                                cursor: 'pointer',
-                                padding: '10px 16px',
-                                borderRadius: 6,
-                                minHeight: 44
-                            }}
+                            style={{ minWidth: 44, padding: '10px' }}
                         >
                             ✕
-                        </button>
+                        </GlassButton>
                     </div>
                 )}
             </div>
@@ -286,31 +264,29 @@ export const InfoPanel = memo(function InfoPanel({
             {/* Edit Journey button for mobile - only in edit mode */}
             {editMode && isMobile && panelState !== 'minimized' && (
                 <div style={{ padding: `0 ${padding}px 12px` }}>
-                    <button
+                    <GlassButton
+                        variant="primary"
+                        size="md"
+                        fullWidth
                         onClick={() => setShowEditModal(true)}
-                        style={{
-                            width: '100%',
-                            background: 'rgba(59, 130, 246, 0.1)',
-                            border: '1px solid rgba(59, 130, 246, 0.3)',
-                            color: '#3b82f6',
-                            fontSize: 13,
-                            cursor: 'pointer',
-                            padding: '10px 16px',
-                            borderRadius: 8,
-                            transition: 'all 0.2s'
-                        }}
                     >
                         Edit Journey Details
-                    </button>
+                    </GlassButton>
                 </div>
             )}
 
-            {/* Tabs - hidden when minimized */}
+            {/* Tabs - hidden when minimized - Liquid Glass pill container */}
             {panelState !== 'minimized' && (
                 <div style={{
                     display: 'flex',
-                    borderBottom: '1px solid rgba(255,255,255,0.05)',
-                    padding: `0 ${padding}px`,
+                    gap: 6,
+                    padding: `8px ${padding}px 12px`,
+                    background: `linear-gradient(
+                        180deg,
+                        rgba(255, 255, 255, 0.04) 0%,
+                        transparent 100%
+                    )`,
+                    borderBottom: `1px solid ${colors.glass.borderSubtle}`,
                     flexShrink: 0
                 }}>
                     {(['overview', 'journey', 'stats', 'photos'] as const).map(tab => (
@@ -333,7 +309,7 @@ export const InfoPanel = memo(function InfoPanel({
                     padding: padding,
                     WebkitOverflowScrolling: 'touch',
                     overscrollBehavior: 'contain'
-                }}>
+                }} className="glass-scrollbar">
                     {activeTab === 'overview' && <OverviewTab trekData={trekData} />}
                     {activeTab === 'journey' && (
                         <JourneyTab

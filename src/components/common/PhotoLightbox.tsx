@@ -9,6 +9,7 @@
 import { useState, useCallback, useRef, useEffect, memo } from 'react';
 import { createPortal } from 'react-dom';
 import type { Photo } from '../../types/trek';
+import { colors, gradients, transitions } from '../../styles/liquidGlass';
 
 interface PhotoLightboxProps {
     photos: Photo[];
@@ -210,17 +211,17 @@ export const PhotoLightbox = memo(function PhotoLightbox({
                 left: 0,
                 right: 0,
                 padding: 'max(16px, env(safe-area-inset-top)) 16px 24px',
-                background: 'linear-gradient(to bottom, rgba(0,0,0,0.5) 0%, transparent 100%)',
+                background: gradients.overlay.top,
                 display: 'flex',
                 justifyContent: 'space-between',
                 alignItems: 'center',
                 opacity: showControls ? 1 : 0,
-                transition: 'opacity 0.3s ease',
+                transition: `opacity ${transitions.normal}`,
                 pointerEvents: showControls ? 'auto' : 'none'
             }}>
                 {/* Photo counter */}
                 <span style={{
-                    color: 'rgba(255,255,255,0.8)',
+                    color: colors.text.primary,
                     fontSize: 14,
                     fontWeight: 400,
                     letterSpacing: '0.02em',
@@ -240,9 +241,9 @@ export const PhotoLightbox = memo(function PhotoLightbox({
                                 }
                             }}
                             style={{
-                                background: 'rgba(255,80,80,0.2)',
+                                background: `rgba(248, 113, 113, 0.2)`,
                                 border: 'none',
-                                color: 'rgba(255,180,180,1)',
+                                color: colors.accent.error,
                                 width: 44,
                                 height: 44,
                                 borderRadius: '50%',
@@ -250,7 +251,7 @@ export const PhotoLightbox = memo(function PhotoLightbox({
                                 display: 'flex',
                                 alignItems: 'center',
                                 justifyContent: 'center',
-                                transition: 'background 0.2s ease'
+                                transition: `background ${transitions.normal}`
                             }}
                             aria-label="Delete photo"
                         >
@@ -265,9 +266,9 @@ export const PhotoLightbox = memo(function PhotoLightbox({
                             onClose();
                         }}
                         style={{
-                            background: 'rgba(255,255,255,0.15)',
+                            background: colors.glass.light,
                             border: 'none',
-                            color: 'white',
+                            color: colors.text.primary,
                             width: 44,
                             height: 44,
                             borderRadius: '50%',
@@ -275,7 +276,7 @@ export const PhotoLightbox = memo(function PhotoLightbox({
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
-                            transition: 'background 0.2s ease'
+                            transition: `background ${transitions.normal}`
                         }}
                         aria-label="Close"
                     >
@@ -298,9 +299,9 @@ export const PhotoLightbox = memo(function PhotoLightbox({
                         left: 20,
                         top: '50%',
                         transform: 'translateY(-50%)',
-                        background: 'rgba(255,255,255,0.1)',
+                        background: colors.glass.medium,
                         border: 'none',
-                        color: 'rgba(255,255,255,0.9)',
+                        color: colors.text.primary,
                         width: 52,
                         height: 52,
                         borderRadius: '50%',
@@ -309,7 +310,7 @@ export const PhotoLightbox = memo(function PhotoLightbox({
                         alignItems: 'center',
                         justifyContent: 'center',
                         opacity: showControls ? 1 : 0,
-                        transition: 'opacity 0.3s ease, background 0.2s ease',
+                        transition: `opacity ${transitions.normal}, background ${transitions.normal}`,
                         pointerEvents: showControls ? 'auto' : 'none'
                     }}
                     aria-label="Previous photo"
@@ -331,9 +332,9 @@ export const PhotoLightbox = memo(function PhotoLightbox({
                         right: 20,
                         top: '50%',
                         transform: 'translateY(-50%)',
-                        background: 'rgba(255,255,255,0.1)',
+                        background: colors.glass.medium,
                         border: 'none',
-                        color: 'rgba(255,255,255,0.9)',
+                        color: colors.text.primary,
                         width: 52,
                         height: 52,
                         borderRadius: '50%',
@@ -342,7 +343,7 @@ export const PhotoLightbox = memo(function PhotoLightbox({
                         alignItems: 'center',
                         justifyContent: 'center',
                         opacity: showControls ? 1 : 0,
-                        transition: 'opacity 0.3s ease, background 0.2s ease',
+                        transition: `opacity ${transitions.normal}, background ${transitions.normal}`,
                         pointerEvents: showControls ? 'auto' : 'none'
                     }}
                     aria-label="Next photo"
@@ -376,8 +377,8 @@ export const PhotoLightbox = memo(function PhotoLightbox({
                         <div style={{
                             width: 32,
                             height: 32,
-                            border: '2px solid rgba(255,255,255,0.1)',
-                            borderTopColor: 'rgba(255,255,255,0.5)',
+                            border: `2px solid ${colors.glass.borderSubtle}`,
+                            borderTopColor: colors.text.tertiary,
                             borderRadius: '50%',
                             animation: 'spin 0.8s linear infinite'
                         }} />
@@ -419,13 +420,13 @@ export const PhotoLightbox = memo(function PhotoLightbox({
                     left: 0,
                     right: 0,
                     padding: '32px 24px max(24px, env(safe-area-inset-bottom))',
-                    background: 'linear-gradient(to top, rgba(0,0,0,0.6) 0%, transparent 100%)',
+                    background: gradients.overlay.bottom,
                     opacity: showControls ? 1 : 0,
-                    transition: 'opacity 0.3s ease',
+                    transition: `opacity ${transitions.normal}`,
                     pointerEvents: showControls ? 'auto' : 'none'
                 }}>
                     <p style={{
-                        color: 'rgba(255,255,255,0.95)',
+                        color: colors.text.primary,
                         fontSize: 15,
                         textAlign: 'center',
                         margin: 0,
@@ -448,7 +449,7 @@ export const PhotoLightbox = memo(function PhotoLightbox({
                     left: '50%',
                     transform: 'translateX(-50%)',
                     opacity: showControls ? 0.7 : 0,
-                    transition: 'opacity 0.3s ease'
+                    transition: `opacity ${transitions.normal}`
                 }}>
                     {photos.length <= 10 ? (
                         // Dots for few photos
@@ -460,8 +461,8 @@ export const PhotoLightbox = memo(function PhotoLightbox({
                                         width: idx === currentIndex ? 20 : 6,
                                         height: 6,
                                         borderRadius: 3,
-                                        background: idx === currentIndex ? 'white' : 'rgba(255,255,255,0.35)',
-                                        transition: 'all 0.25s ease'
+                                        background: idx === currentIndex ? colors.text.primary : colors.text.subtle,
+                                        transition: `all ${transitions.normal}`
                                     }}
                                 />
                             ))}
@@ -471,16 +472,16 @@ export const PhotoLightbox = memo(function PhotoLightbox({
                         <div style={{
                             width: 120,
                             height: 3,
-                            background: 'rgba(255,255,255,0.2)',
+                            background: colors.glass.light,
                             borderRadius: 2,
                             overflow: 'hidden'
                         }}>
                             <div style={{
                                 width: `${((currentIndex + 1) / photos.length) * 100}%`,
                                 height: '100%',
-                                background: 'white',
+                                background: colors.text.primary,
                                 borderRadius: 2,
-                                transition: 'width 0.25s ease'
+                                transition: `width ${transitions.normal}`
                             }} />
                         </div>
                     )}

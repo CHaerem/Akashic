@@ -1,6 +1,8 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { supabase, isAuthEnabled } from '../lib/supabase';
 import type { User } from '@supabase/supabase-js';
+import { colors, gradients, radius, transitions, typography } from '../styles/liquidGlass';
+import { GlassButton } from './common/GlassButton';
 
 interface AuthGuardProps {
     children: ReactNode;
@@ -59,16 +61,14 @@ export function AuthGuard({ children }: AuthGuardProps) {
             <div style={{
                 position: 'fixed',
                 inset: 0,
-                background: '#0a0a0f',
+                background: colors.background.base,
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center'
             }}>
                 <p style={{
-                    color: 'rgba(255,255,255,0.4)',
-                    fontSize: 12,
-                    letterSpacing: '0.2em',
-                    textTransform: 'uppercase'
+                    ...typography.label,
+                    color: colors.text.subtle
                 }}>
                     Loading...
                 </p>
@@ -86,64 +86,72 @@ export function AuthGuard({ children }: AuthGuardProps) {
         <div style={{
             position: 'fixed',
             inset: 0,
-            background: '#0a0a0f',
+            background: colors.background.base,
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center',
             justifyContent: 'center',
             padding: 24
         }}>
-            <h1 style={{
-                color: 'rgba(255,255,255,0.7)',
-                fontSize: 14,
-                letterSpacing: '0.3em',
-                textTransform: 'uppercase',
-                marginBottom: 48,
-                fontWeight: 300
+            {/* Subtle glass card for login */}
+            <div style={{
+                background: gradients.glass.subtle,
+                backdropFilter: 'blur(16px) saturate(180%)',
+                WebkitBackdropFilter: 'blur(16px) saturate(180%)',
+                border: `1px solid ${colors.glass.borderSubtle}`,
+                borderRadius: radius.xl,
+                padding: '48px 40px',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                boxShadow: `
+                    0 16px 48px rgba(0, 0, 0, 0.3),
+                    inset 0 1px 0 rgba(255, 255, 255, 0.1)
+                `,
             }}>
-                Akashic
-            </h1>
+                <h1 style={{
+                    ...typography.label,
+                    fontSize: 14,
+                    letterSpacing: '0.3em',
+                    color: colors.text.secondary,
+                    marginBottom: 40,
+                }}>
+                    Akashic
+                </h1>
 
-            <button
-                onClick={handleGoogleSignIn}
-                style={{
-                    background: 'rgba(255,255,255,0.1)',
-                    border: '1px solid rgba(255,255,255,0.2)',
-                    borderRadius: 4,
-                    padding: '14px 28px',
-                    color: 'rgba(255,255,255,0.8)',
-                    fontSize: 12,
-                    letterSpacing: '0.15em',
-                    textTransform: 'uppercase',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: 10
-                }}
-            >
-                Sign in with Google
-            </button>
+                <GlassButton
+                    variant="default"
+                    size="lg"
+                    onClick={handleGoogleSignIn}
+                    style={{
+                        ...typography.label,
+                        letterSpacing: '0.15em',
+                    }}
+                >
+                    Sign in with Google
+                </GlassButton>
 
-            {error && (
+                {error && (
+                    <p style={{
+                        color: colors.accent.error,
+                        fontSize: 12,
+                        marginTop: 24,
+                        textAlign: 'center',
+                        transition: `opacity ${transitions.normal}`,
+                    }}>
+                        {error}
+                    </p>
+                )}
+
                 <p style={{
-                    color: '#ff6b6b',
-                    fontSize: 12,
-                    marginTop: 24,
+                    color: colors.text.subtle,
+                    fontSize: 11,
+                    marginTop: 32,
                     textAlign: 'center'
                 }}>
-                    {error}
+                    Access restricted to authorized users
                 </p>
-            )}
-
-            <p style={{
-                color: 'rgba(255,255,255,0.3)',
-                fontSize: 11,
-                marginTop: 32,
-                textAlign: 'center'
-            }}>
-                Access restricted to authorized users
-            </p>
+            </div>
         </div>
     );
 }

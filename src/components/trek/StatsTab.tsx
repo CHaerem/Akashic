@@ -1,6 +1,7 @@
 import { memo } from 'react';
 import type { TrekData, ExtendedStats, ElevationProfile } from '../../types/trek';
 import { StatCard } from '../common/StatCard';
+import { colors, radius } from '../../styles/liquidGlass';
 
 interface ElevationProfileProps {
     elevationProfile: ElevationProfile | null;
@@ -15,21 +16,21 @@ const ElevationProfileChart = memo(function ElevationProfileChart({ elevationPro
             <svg width="100%" height="100%" viewBox="0 0 300 120" preserveAspectRatio="none" style={{ overflow: 'visible' }}>
                 <defs>
                     <linearGradient id="elevationGradient" x1="0" x2="0" y1="0" y2="1">
-                        <stop offset="0%" stopColor="rgba(255, 255, 255, 0.2)" />
+                        <stop offset="0%" stopColor={colors.glass.light} />
                         <stop offset="100%" stopColor="rgba(255, 255, 255, 0)" />
                     </linearGradient>
                 </defs>
-                <line x1="0" y1="0" x2="300" y2="0" stroke="rgba(255,255,255,0.05)" strokeWidth="1" />
-                <line x1="0" y1="60" x2="300" y2="60" stroke="rgba(255,255,255,0.05)" strokeWidth="1" />
-                <line x1="0" y1="120" x2="300" y2="120" stroke="rgba(255,255,255,0.05)" strokeWidth="1" />
+                <line x1="0" y1="0" x2="300" y2="0" stroke={colors.glass.borderSubtle} strokeWidth="1" />
+                <line x1="0" y1="60" x2="300" y2="60" stroke={colors.glass.borderSubtle} strokeWidth="1" />
+                <line x1="0" y1="120" x2="300" y2="120" stroke={colors.glass.borderSubtle} strokeWidth="1" />
                 <path d={elevationProfile.areaPath} fill="url(#elevationGradient)" />
-                <path d={elevationProfile.linePath} fill="none" stroke="white" strokeWidth="1.5" />
+                <path d={elevationProfile.linePath} fill="none" stroke={colors.text.primary} strokeWidth="1.5" />
             </svg>
             <div style={{
                 display: 'flex',
                 justifyContent: 'space-between',
                 marginTop: 8,
-                color: 'rgba(255,255,255,0.3)',
+                color: colors.text.subtle,
                 fontSize: 10
             }}>
                 <span>0 km</span>
@@ -41,7 +42,7 @@ const ElevationProfileChart = memo(function ElevationProfileChart({ elevationPro
                     display: 'flex',
                     justifyContent: 'space-between',
                     marginTop: 4,
-                    color: 'rgba(255,255,255,0.3)',
+                    color: colors.text.subtle,
                     fontSize: 10
                 }}>
                     <span>{Math.round(elevationProfile.minEle)}m min</span>
@@ -49,10 +50,10 @@ const ElevationProfileChart = memo(function ElevationProfileChart({ elevationPro
                 </div>
             ) : (
                 <>
-                    <div style={{ position: 'absolute', top: 0, right: 0, color: 'rgba(255,255,255,0.3)', fontSize: 10 }}>
+                    <div style={{ position: 'absolute', top: 0, right: 0, color: colors.text.subtle, fontSize: 10 }}>
                         {Math.round(elevationProfile.maxEle)}m
                     </div>
-                    <div style={{ position: 'absolute', bottom: 24, right: 0, color: 'rgba(255,255,255,0.3)', fontSize: 10 }}>
+                    <div style={{ position: 'absolute', bottom: 24, right: 0, color: colors.text.subtle, fontSize: 10 }}>
                         {Math.round(elevationProfile.minEle)}m
                     </div>
                 </>
@@ -71,20 +72,25 @@ interface StatsTabProps {
 export const StatsTab = memo(function StatsTab({ trekData, extendedStats, elevationProfile, isMobile = false }: StatsTabProps) {
     return (
         <div>
+            {/* Summit card with glass styling */}
             <div style={{
-                border: '1px solid rgba(255,255,255,0.1)',
-                borderRadius: 8,
+                border: `1px solid ${colors.glass.borderSubtle}`,
+                borderRadius: radius.md,
                 padding: 20,
                 marginBottom: 24,
-                background: 'linear-gradient(135deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0) 100%)'
+                background: `linear-gradient(135deg, ${colors.glass.medium} 0%, ${colors.glass.subtle} 100%)`,
+                boxShadow: `
+                    0 4px 16px rgba(0, 0, 0, 0.2),
+                    inset 0 1px 0 rgba(255, 255, 255, 0.08)
+                `,
             }}>
-                <p style={{ color: 'rgba(255,255,255,0.3)', fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 8 }}>Summit</p>
-                <p style={{ color: 'white', fontSize: 28, fontWeight: 300 }}>{trekData.stats.highestPoint.elevation}m</p>
-                <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: 14 }}>{trekData.stats.highestPoint.name}</p>
+                <p style={{ color: colors.text.subtle, fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 8 }}>Summit</p>
+                <p style={{ color: colors.text.primary, fontSize: 28, fontWeight: 300 }}>{trekData.stats.highestPoint.elevation}m</p>
+                <p style={{ color: colors.text.subtle, fontSize: 14 }}>{trekData.stats.highestPoint.name}</p>
             </div>
 
             <div style={{ marginBottom: 32 }}>
-                <p style={{ color: 'rgba(255,255,255,0.3)', fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 16 }}>
+                <p style={{ color: colors.text.subtle, fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 16 }}>
                     Elevation Profile
                 </p>
                 <ElevationProfileChart elevationProfile={elevationProfile} isMobile={isMobile} />
@@ -93,9 +99,9 @@ export const StatsTab = memo(function StatsTab({ trekData, extendedStats, elevat
             {extendedStats && (
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                     <StatCard label="Avg Daily Dist" value={`${extendedStats.avgDailyDistance} km`} />
-                    <StatCard label="Max Daily Gain" value={`+${extendedStats.maxDailyGain}m`} color="#4ade80" />
+                    <StatCard label="Max Daily Gain" value={`+${extendedStats.maxDailyGain}m`} color={colors.accent.secondary} />
                     <StatCard label="Start Elevation" value={`${extendedStats.startElevation}m`} />
-                    <StatCard label="Difficulty" value={extendedStats.difficulty} color="#facc15" />
+                    <StatCard label="Difficulty" value={extendedStats.difficulty} color={colors.accent.warning} />
                 </div>
             )}
         </div>

@@ -3,6 +3,7 @@ import type { TrekData, Camp, Photo } from '../../types/trek';
 import { WaypointEditModal } from './WaypointEditModal';
 import { PhotoAssignModal } from './PhotoAssignModal';
 import { PhotoLightbox } from '../common/PhotoLightbox';
+import { colors, radius, transitions } from '../../styles/liquidGlass';
 
 /**
  * Get the actual date for a specific day number based on journey start date
@@ -63,9 +64,9 @@ const DayPhotos = memo(function DayPhotos({ photos, getMediaUrl, isMobile, onPho
                     }}
                     style={{
                         aspectRatio: '1',
-                        borderRadius: 6,
+                        borderRadius: radius.sm,
                         overflow: 'hidden',
-                        background: 'rgba(255,255,255,0.05)',
+                        background: colors.glass.subtle,
                         cursor: 'pointer'
                     }}
                 >
@@ -89,12 +90,12 @@ const DayPhotos = memo(function DayPhotos({ photos, getMediaUrl, isMobile, onPho
                     }}
                     style={{
                         aspectRatio: '1',
-                        borderRadius: 6,
-                        background: 'rgba(255,255,255,0.05)',
+                        borderRadius: radius.sm,
+                        background: colors.glass.subtle,
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
-                        color: 'rgba(255,255,255,0.4)',
+                        color: colors.text.subtle,
                         fontSize: 12,
                         cursor: 'pointer'
                     }}
@@ -175,10 +176,10 @@ const CampItem = memo(function CampItem({
 
     const containerStyle = useMemo(() => ({
         padding: '20px 0',
-        borderBottom: !isLast ? '1px solid rgba(255,255,255,0.05)' : 'none',
+        borderBottom: !isLast ? `1px solid ${colors.glass.borderSubtle}` : 'none',
         cursor: 'pointer',
-        transition: 'background 0.2s',
-        background: isSelected ? 'rgba(255,255,255,0.03)' : 'transparent',
+        transition: `background ${transitions.normal}`,
+        background: isSelected ? colors.glass.subtle : 'transparent',
         margin: `0 -${padding}px`,
         paddingLeft: padding,
         paddingRight: padding,
@@ -190,35 +191,35 @@ const CampItem = memo(function CampItem({
         : `Day ${camp.dayNumber}`;
 
     const actionButtonStyle: React.CSSProperties = {
-        background: 'rgba(255,255,255,0.1)',
-        border: 'none',
-        color: 'rgba(255,255,255,0.7)',
+        background: colors.glass.medium,
+        border: `1px solid ${colors.glass.borderSubtle}`,
+        color: colors.text.secondary,
         fontSize: 12,
         padding: '8px 12px',
-        borderRadius: 6,
+        borderRadius: radius.sm,
         cursor: 'pointer',
         minHeight: 36,
-        transition: 'background 0.2s'
+        transition: `all ${transitions.normal}`
     };
 
     return (
         <div onClick={handleClick} style={containerStyle}>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
                 <span style={{
-                    color: isSelected ? '#3b82f6' : 'rgba(255,255,255,0.3)',
+                    color: isSelected ? colors.accent.primary : colors.text.subtle,
                     fontSize: 10,
                     letterSpacing: '0.1em',
                     textTransform: 'uppercase'
                 }}>
                     {dayLabel}
                 </span>
-                <span style={{ color: 'rgba(255,255,255,0.3)', fontSize: 12 }}>
+                <span style={{ color: colors.text.subtle, fontSize: 12 }}>
                     {camp.elevation}m
                 </span>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <p style={{
-                    color: isSelected ? 'white' : 'rgba(255,255,255,0.7)',
+                    color: isSelected ? colors.text.primary : colors.text.secondary,
                     fontSize: 16,
                     marginBottom: isSelected ? 12 : 0,
                     margin: 0
@@ -227,11 +228,11 @@ const CampItem = memo(function CampItem({
                 </p>
                 {!isSelected && allPhotos.length > 0 && (
                     <span style={{
-                        background: 'rgba(255,255,255,0.1)',
+                        background: colors.glass.medium,
                         padding: '2px 8px',
                         borderRadius: 10,
                         fontSize: 10,
-                        color: 'rgba(255,255,255,0.5)'
+                        color: colors.text.tertiary
                     }}>
                         {allPhotos.length} photo{allPhotos.length !== 1 ? 's' : ''}
                     </span>
@@ -255,14 +256,14 @@ const CampItem = memo(function CampItem({
                     )}
 
                     {camp.notes && (
-                        <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: 14, lineHeight: 1.6, marginBottom: 16, marginTop: 0 }}>
+                        <p style={{ color: colors.text.tertiary, fontSize: 14, lineHeight: 1.6, marginBottom: 16, marginTop: 0 }}>
                             {camp.notes}
                         </p>
                     )}
                     {camp.highlights && camp.highlights.length > 0 && (
                         <ul style={{ marginBottom: 20, paddingLeft: 16, marginTop: 0 }}>
                             {camp.highlights.map((highlight, idx) => (
-                                <li key={idx} style={{ color: 'rgba(255,255,255,0.6)', fontSize: 13, marginBottom: 4 }}>
+                                <li key={idx} style={{ color: colors.text.secondary, fontSize: 13, marginBottom: 4 }}>
                                     {highlight}
                                 </li>
                             ))}
@@ -280,13 +281,13 @@ const CampItem = memo(function CampItem({
                         <div style={{
                             width: '100%',
                             height: isMobile ? 80 : 100,
-                            background: 'rgba(255,255,255,0.03)',
-                            border: '1px dashed rgba(255,255,255,0.1)',
-                            borderRadius: 8,
+                            background: colors.glass.subtle,
+                            border: `1px dashed ${colors.glass.borderSubtle}`,
+                            borderRadius: radius.sm,
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
-                            color: 'rgba(255,255,255,0.2)',
+                            color: colors.text.disabled,
                             fontSize: 11,
                             letterSpacing: '0.05em'
                         }}>
