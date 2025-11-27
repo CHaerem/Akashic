@@ -131,11 +131,29 @@ Collaborative interface for family members to create and edit journeys together.
 - [ ] Reorder photos
 - [x] Delete photos
 
-#### 2.4 Route Management
+#### 2.4 Route & Camp Position Management
+
+**Phase A: Camp Placement Editor** ✅
+- [x] RouteEditor fullscreen component with draggable markers
+- [x] Snap camps to route line when dragged
+- [x] Click on route to add new camps
+- [x] Store route_distance_km and route_point_index in waypoints
+- [x] Elevation profile uses stored route distances
+- [x] Route utility functions (snap to route, distance calc)
+
+**Phase B: Route Adjustment** (Future)
+- [ ] Click to add intermediate points to route
+- [ ] Drag existing route points to adjust path
+- [ ] Delete wayward points
+- [ ] Smooth/simplify tools
+
+**Phase C: Full Route Drawing** (Future)
+- [ ] Draw new route sections
+- [ ] Connect/extend existing routes
+- [ ] GPX re-import with merge options
 - [ ] Upload GPX file
 - [ ] Parse and store route geometry
 - [ ] Compute stats (distance, elevation gain/loss)
-- [ ] Visualize route on map during editing
 
 ### UI Considerations
 
@@ -268,7 +286,7 @@ A platform where anyone can create and share their travel journeys.
 | Phase 1.2 (Photo Upload) | ✅ Complete | Upload endpoint + frontend UI |
 | Phase 1.3 (DB Integration) | ✅ Complete | Photo CRUD, waypoint linking, assign photos modal |
 | Phase 1.4 (Photo Display) | ✅ Complete | Grid, lightbox, day-based, map markers |
-| Phase 2 (Journey UI) | ⏳ Partial | Journey editing done, waypoint/create pending |
+| Phase 2 (Journey UI) | ⏳ Partial | Journey editing done, Route Editor Phase A done |
 | **Phase 2.5 (Immersive Exploration)** | ✅ Core Complete | Elevation profile, photo markers, view-on-map done |
 | Phase 3 (Polish) | 📋 Planned | After immersive exploration |
 | Multi-user | 🔮 Future | Post-MVP |

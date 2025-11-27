@@ -200,7 +200,8 @@ export const RouteEditor = memo(function RouteEditor({
                 const el = createMarkerElement(camp, index);
                 marker = new mapboxgl.Marker({
                     element: el,
-                    draggable: true
+                    draggable: true,
+                    anchor: 'center' // Center the marker on the coordinates
                 })
                     .setLngLat(camp.coordinates)
                     .addTo(map);
@@ -260,7 +261,8 @@ export const RouteEditor = memo(function RouteEditor({
         el.style.fontSize = isMobile ? '16px' : '14px';
         el.style.fontWeight = '700';
         el.style.color = isSelected ? 'white' : '#333';
-        el.style.transition = 'all 0.2s ease';
+        // Only transition visual properties, NOT transform (which Mapbox uses for positioning)
+        el.style.transition = 'background 0.2s ease, border 0.2s ease, box-shadow 0.2s ease';
         el.style.userSelect = 'none';
         el.innerHTML = `${index + 1}`;
     }
