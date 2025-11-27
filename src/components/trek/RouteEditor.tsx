@@ -21,7 +21,7 @@ import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import type { TrekData, Camp, Route } from '../../types/trek';
 import { GlassButton } from '../common/GlassButton';
-import { colors, radius, transitions, effects, shadows, tabBar, glassFloating } from '../../styles/liquidGlass';
+import { colors, radius, transitions, effects, shadows, glassFloating, typography } from '../../styles/liquidGlass';
 import { findNearestPointOnRoute, calculateRouteDistances, type RouteCoordinate } from '../../utils/routeUtils';
 import { updateWaypoint, createWaypoint, deleteWaypoint, getJourneyIdBySlug, updateJourneyRoute } from '../../lib/journeys';
 
@@ -887,41 +887,62 @@ export const RouteEditor = memo(function RouteEditor({
                 gap: 12
             }}>
                 <div style={{ flex: '1 1 auto', minWidth: 150 }}>
+                    <p style={{
+                        ...typography.label,
+                        fontSize: 10,
+                        letterSpacing: '0.2em',
+                        color: colors.text.subtle,
+                        margin: '0 0 4px 0'
+                    }}>
+                        ROUTE EDITOR
+                    </p>
                     <h1 style={{
+                        ...typography.display,
                         margin: 0,
                         fontSize: isMobile ? 18 : 22,
-                        fontWeight: 600,
+                        fontWeight: 500,
                         color: colors.text.primary
                     }}>
-                        Edit Route & Camps
-                    </h1>
-                    <p style={{
-                        margin: '4px 0 0',
-                        fontSize: 13,
-                        color: colors.text.tertiary
-                    }}>
                         {trekData.name}
-                    </p>
+                    </h1>
                 </div>
 
-                {/* Mode toggle */}
+                {/* Mode toggle - Liquid Glass pill tabs */}
                 <div style={{
                     display: 'flex',
-                    ...tabBar.container,
-                    borderRadius: radius.lg,
+                    gap: 6,
                     padding: 4,
-                    gap: 4,
+                    background: `linear-gradient(
+                        180deg,
+                        rgba(255, 255, 255, 0.04) 0%,
+                        transparent 100%
+                    )`,
+                    borderRadius: radius.xl,
                     border: `1px solid ${colors.glass.borderSubtle}`
                 }}>
                     <button
                         onClick={() => setMode('camps')}
                         style={{
-                            padding: '8px 16px',
-                            borderRadius: radius.md,
-                            ...(mode === 'camps' ? tabBar.tab.active : tabBar.tab.inactive),
-                            fontSize: 13,
-                            fontWeight: 500,
-                            cursor: 'pointer'
+                            padding: '10px 18px',
+                            borderRadius: radius.lg,
+                            background: mode === 'camps'
+                                ? `linear-gradient(135deg, rgba(255, 255, 255, 0.15) 0%, rgba(255, 255, 255, 0.08) 100%)`
+                                : 'transparent',
+                            backdropFilter: mode === 'camps' ? 'blur(8px) saturate(180%)' : 'none',
+                            WebkitBackdropFilter: mode === 'camps' ? 'blur(8px) saturate(180%)' : 'none',
+                            border: mode === 'camps'
+                                ? `1px solid ${colors.glass.border}`
+                                : '1px solid transparent',
+                            boxShadow: mode === 'camps'
+                                ? `0 2px 8px rgba(0, 0, 0, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.15)`
+                                : 'none',
+                            color: mode === 'camps' ? colors.text.primary : colors.text.tertiary,
+                            fontSize: 11,
+                            fontWeight: mode === 'camps' ? 500 : 400,
+                            letterSpacing: '0.08em',
+                            textTransform: 'uppercase' as const,
+                            cursor: 'pointer',
+                            transition: `all ${transitions.smooth}`
                         }}
                     >
                         Camps
@@ -929,12 +950,26 @@ export const RouteEditor = memo(function RouteEditor({
                     <button
                         onClick={() => setMode('route')}
                         style={{
-                            padding: '8px 16px',
-                            borderRadius: radius.md,
-                            ...(mode === 'route' ? tabBar.tab.active : tabBar.tab.inactive),
-                            fontSize: 13,
-                            fontWeight: 500,
-                            cursor: 'pointer'
+                            padding: '10px 18px',
+                            borderRadius: radius.lg,
+                            background: mode === 'route'
+                                ? `linear-gradient(135deg, rgba(255, 255, 255, 0.15) 0%, rgba(255, 255, 255, 0.08) 100%)`
+                                : 'transparent',
+                            backdropFilter: mode === 'route' ? 'blur(8px) saturate(180%)' : 'none',
+                            WebkitBackdropFilter: mode === 'route' ? 'blur(8px) saturate(180%)' : 'none',
+                            border: mode === 'route'
+                                ? `1px solid ${colors.glass.border}`
+                                : '1px solid transparent',
+                            boxShadow: mode === 'route'
+                                ? `0 2px 8px rgba(0, 0, 0, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.15)`
+                                : 'none',
+                            color: mode === 'route' ? colors.text.primary : colors.text.tertiary,
+                            fontSize: 11,
+                            fontWeight: mode === 'route' ? 500 : 400,
+                            letterSpacing: '0.08em',
+                            textTransform: 'uppercase' as const,
+                            cursor: 'pointer',
+                            transition: `all ${transitions.smooth}`
                         }}
                     >
                         Route
@@ -1149,12 +1184,11 @@ export const RouteEditor = memo(function RouteEditor({
                     {/* Camp list header */}
                     <div style={{
                         padding: '12px 16px',
-                        fontSize: 12,
-                        fontWeight: 600,
+                        ...typography.label,
+                        fontSize: 11,
                         color: colors.text.tertiary,
-                        textTransform: 'uppercase',
-                        letterSpacing: '0.05em',
-                        borderBottom: `1px solid ${colors.glass.borderSubtle}`
+                        borderBottom: `1px solid ${colors.glass.borderSubtle}`,
+                        background: `linear-gradient(180deg, rgba(255, 255, 255, 0.03) 0%, transparent 100%)`
                     }}>
                         Camps ({camps.length})
                     </div>
@@ -1335,12 +1369,11 @@ export const RouteEditor = memo(function RouteEditor({
                             {/* Route info header */}
                             <div style={{
                                 padding: '12px 16px',
-                                fontSize: 12,
-                                fontWeight: 600,
+                                ...typography.label,
+                                fontSize: 11,
                                 color: colors.text.tertiary,
-                                textTransform: 'uppercase',
-                                letterSpacing: '0.05em',
-                                borderBottom: `1px solid ${colors.glass.borderSubtle}`
+                                borderBottom: `1px solid ${colors.glass.borderSubtle}`,
+                                background: `linear-gradient(180deg, rgba(255, 255, 255, 0.03) 0%, transparent 100%)`
                             }}>
                                 Route Points ({routeCoordinates.length})
                             </div>
