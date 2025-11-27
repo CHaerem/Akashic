@@ -21,7 +21,7 @@ import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import type { TrekData, Camp, Route } from '../../types/trek';
 import { GlassButton } from '../common/GlassButton';
-import { colors, radius, transitions } from '../../styles/liquidGlass';
+import { colors, radius, transitions, effects, shadows, tabBar, glassFloating } from '../../styles/liquidGlass';
 import { findNearestPointOnRoute, calculateRouteDistances, type RouteCoordinate } from '../../utils/routeUtils';
 import { updateWaypoint, createWaypoint, deleteWaypoint, getJourneyIdBySlug, updateJourneyRoute } from '../../lib/journeys';
 
@@ -895,23 +895,21 @@ export const RouteEditor = memo(function RouteEditor({
                 {/* Mode toggle */}
                 <div style={{
                     display: 'flex',
-                    background: colors.glass.subtle,
-                    borderRadius: radius.md,
+                    ...tabBar.container,
+                    borderRadius: radius.lg,
                     padding: 4,
-                    gap: 4
+                    gap: 4,
+                    border: `1px solid ${colors.glass.borderSubtle}`
                 }}>
                     <button
                         onClick={() => setMode('camps')}
                         style={{
                             padding: '8px 16px',
-                            borderRadius: radius.sm,
-                            border: 'none',
-                            background: mode === 'camps' ? colors.glass.medium : 'transparent',
-                            color: mode === 'camps' ? colors.text.primary : colors.text.tertiary,
+                            borderRadius: radius.md,
+                            ...(mode === 'camps' ? tabBar.tab.active : tabBar.tab.inactive),
                             fontSize: 13,
                             fontWeight: 500,
-                            cursor: 'pointer',
-                            transition: `all ${transitions.normal}`
+                            cursor: 'pointer'
                         }}
                     >
                         Camps
@@ -920,14 +918,11 @@ export const RouteEditor = memo(function RouteEditor({
                         onClick={() => setMode('route')}
                         style={{
                             padding: '8px 16px',
-                            borderRadius: radius.sm,
-                            border: 'none',
-                            background: mode === 'route' ? colors.glass.medium : 'transparent',
-                            color: mode === 'route' ? colors.text.primary : colors.text.tertiary,
+                            borderRadius: radius.md,
+                            ...(mode === 'route' ? tabBar.tab.active : tabBar.tab.inactive),
                             fontSize: 13,
                             fontWeight: 500,
-                            cursor: 'pointer',
-                            transition: `all ${transitions.normal}`
+                            cursor: 'pointer'
                         }}
                     >
                         Route
@@ -997,13 +992,12 @@ export const RouteEditor = memo(function RouteEditor({
                         position: 'absolute',
                         top: isMobile ? 8 : 16,
                         left: isMobile ? 8 : 16,
-                        background: 'rgba(0,0,0,0.75)',
-                        backdropFilter: 'blur(8px)',
-                        borderRadius: radius.md,
+                        ...glassFloating,
+                        borderRadius: radius.lg,
                         padding: isMobile ? '10px 14px' : '12px 16px',
                         maxWidth: isMobile ? 'calc(100% - 80px)' : 280,
                         fontSize: isMobile ? 12 : 13,
-                        color: 'rgba(255,255,255,0.9)',
+                        color: colors.text.primary,
                         lineHeight: 1.5
                     }}>
                         {mode === 'camps' ? (
@@ -1026,11 +1020,15 @@ export const RouteEditor = memo(function RouteEditor({
                             bottom: 16,
                             left: 16,
                             right: 16,
-                            background: 'rgba(239, 68, 68, 0.95)',
-                            borderRadius: radius.md,
+                            background: `linear-gradient(135deg, rgba(239, 68, 68, 0.9) 0%, rgba(185, 28, 28, 0.85) 100%)`,
+                            backdropFilter: effects.blur.medium,
+                            WebkitBackdropFilter: effects.blur.medium,
+                            borderRadius: radius.lg,
                             padding: '12px 16px',
                             color: 'white',
-                            fontSize: 13
+                            fontSize: 13,
+                            boxShadow: shadows.drop.md,
+                            border: `1px solid rgba(255, 255, 255, 0.15)`
                         }}>
                             {error}
                         </div>
@@ -1056,7 +1054,8 @@ export const RouteEditor = memo(function RouteEditor({
                         <div style={{
                             padding: 16,
                             borderBottom: `1px solid ${colors.glass.borderSubtle}`,
-                            background: colors.glass.subtle
+                            background: `linear-gradient(180deg, ${colors.glass.light} 0%, ${colors.glass.subtle} 100%)`,
+                            boxShadow: shadows.inset.subtle
                         }}>
                             <div style={{
                                 display: 'flex',
@@ -1092,11 +1091,13 @@ export const RouteEditor = memo(function RouteEditor({
                                 {selectedCamp.isDirty && (
                                     <span style={{
                                         fontSize: 11,
-                                        color: '#f59e0b',
-                                        background: 'rgba(251, 191, 36, 0.2)',
-                                        padding: '4px 8px',
-                                        borderRadius: 4,
-                                        fontWeight: 500
+                                        color: colors.accent.warning,
+                                        background: `linear-gradient(135deg, rgba(251, 191, 36, 0.25) 0%, rgba(245, 158, 11, 0.15) 100%)`,
+                                        padding: '4px 10px',
+                                        borderRadius: radius.sm,
+                                        fontWeight: 500,
+                                        border: '1px solid rgba(251, 191, 36, 0.3)',
+                                        backdropFilter: effects.blur.subtle
                                     }}>
                                         Modified
                                     </span>
@@ -1227,11 +1228,12 @@ export const RouteEditor = memo(function RouteEditor({
                     {hasChanges && (
                         <div style={{
                             padding: '12px 16px',
-                            background: 'rgba(251, 191, 36, 0.1)',
+                            background: `linear-gradient(180deg, rgba(251, 191, 36, 0.15) 0%, rgba(251, 191, 36, 0.08) 100%)`,
                             borderTop: `1px solid rgba(251, 191, 36, 0.3)`,
                             fontSize: 13,
-                            color: '#fbbf24',
-                            textAlign: 'center'
+                            color: colors.accent.warning,
+                            textAlign: 'center',
+                            fontWeight: 500
                         }}>
                             You have unsaved changes
                         </div>
@@ -1245,7 +1247,8 @@ export const RouteEditor = memo(function RouteEditor({
                                 <div style={{
                                     padding: 16,
                                     borderBottom: `1px solid ${colors.glass.borderSubtle}`,
-                                    background: colors.glass.subtle
+                                    background: `linear-gradient(180deg, ${colors.glass.light} 0%, ${colors.glass.subtle} 100%)`,
+                                    boxShadow: shadows.inset.subtle
                                 }}>
                                     <div style={{
                                         display: 'flex',
@@ -1344,11 +1347,12 @@ export const RouteEditor = memo(function RouteEditor({
                             {routeHasChanges && (
                                 <div style={{
                                     padding: '12px 16px',
-                                    background: 'rgba(251, 191, 36, 0.1)',
+                                    background: `linear-gradient(180deg, rgba(251, 191, 36, 0.15) 0%, rgba(251, 191, 36, 0.08) 100%)`,
                                     borderTop: `1px solid rgba(251, 191, 36, 0.3)`,
                                     fontSize: 13,
-                                    color: '#fbbf24',
+                                    color: colors.accent.warning,
                                     textAlign: 'center',
+                                    fontWeight: 500,
                                     marginTop: 'auto'
                                 }}>
                                     Route has unsaved changes
