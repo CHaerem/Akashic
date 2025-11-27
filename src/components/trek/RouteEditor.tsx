@@ -487,7 +487,8 @@ export const RouteEditor = memo(function RouteEditor({
             ? '0 2px 8px rgba(245, 158, 11, 0.6)'
             : '0 1px 4px rgba(0,0,0,0.3)';
         el.style.cursor = 'grab';
-        el.style.transition = 'all 0.15s ease';
+        // Only transition visual properties, NOT transform (which Mapbox uses for positioning)
+        el.style.transition = 'background 0.15s ease, border 0.15s ease, box-shadow 0.15s ease, width 0.15s ease, height 0.15s ease';
     }
 
     // Handle route point dragged to new position
