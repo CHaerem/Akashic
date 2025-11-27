@@ -454,6 +454,145 @@ export const typography = {
   } as CSSProperties,
 };
 
+// ============================================================================
+// TOUCH INTERACTION STYLES
+// ============================================================================
+
+/**
+ * Touch-specific styles following Liquid Glass principles:
+ * - Material illuminates from within on touch
+ * - Glow spreads from fingertip
+ * - Gel-like flexibility
+ */
+export const touch = {
+  /** Minimum touch target size (Apple HIG) */
+  minTarget: 44,
+
+  /** Touch feedback transitions */
+  transitions: {
+    /** Ultra-fast press feedback */
+    press: '0.1s cubic-bezier(0.2, 0, 0.2, 1)',
+    /** Quick release */
+    release: '0.25s cubic-bezier(0.32, 0.72, 0, 1)',
+    /** Spring bounce back */
+    spring: '0.4s cubic-bezier(0.34, 1.56, 0.64, 1)',
+  },
+
+  /** Press state transforms */
+  transforms: {
+    /** Subtle press - for small buttons */
+    subtle: 'scale(0.98)',
+    /** Standard press - for most buttons */
+    standard: 'scale(0.97)',
+    /** Strong press - for primary actions */
+    strong: 'scale(0.95)',
+  },
+
+  /** Glow colors for press illumination */
+  glowColors: {
+    default: 'rgba(255, 255, 255, 0.4)',
+    primary: 'rgba(96, 165, 250, 0.5)',
+    success: 'rgba(52, 211, 153, 0.5)',
+    danger: 'rgba(248, 113, 113, 0.5)',
+  },
+
+  /** CSS properties to disable unwanted touch behaviors */
+  disableDefaults: {
+    WebkitTapHighlightColor: 'transparent',
+    WebkitTouchCallout: 'none',
+    WebkitUserSelect: 'none',
+    userSelect: 'none',
+    touchAction: 'manipulation',
+  } as CSSProperties,
+};
+
+/**
+ * Glass button pressed state - illumination effect
+ */
+export const glassButtonPressed: CSSProperties = {
+  transform: touch.transforms.standard,
+  boxShadow: `
+    0 2px 8px rgba(0, 0, 0, 0.2),
+    inset 0 0 20px rgba(255, 255, 255, 0.15),
+    inset 0 1px 0 rgba(255, 255, 255, 0.25)
+  `,
+  transition: `all ${touch.transitions.press}`,
+};
+
+/**
+ * Interactive element base styles for touch
+ */
+export const touchInteractive: CSSProperties = {
+  ...touch.disableDefaults,
+  cursor: 'pointer',
+  minHeight: touch.minTarget,
+  minWidth: touch.minTarget,
+};
+
+// ============================================================================
+// ANIMATION KEYFRAMES (as CSS strings for injection)
+// ============================================================================
+
+export const keyframes = {
+  /** Press illumination - glow spreads from center */
+  pressGlow: `
+    @keyframes pressGlow {
+      0% { opacity: 0; transform: scale(0.8); }
+      50% { opacity: 1; transform: scale(1.1); }
+      100% { opacity: 0.8; transform: scale(1); }
+    }
+  `,
+
+  /** Release bounce - spring back */
+  releaseBounce: `
+    @keyframes releaseBounce {
+      0% { transform: scale(0.97); }
+      50% { transform: scale(1.02); }
+      100% { transform: scale(1); }
+    }
+  `,
+
+  /** Shimmer effect for loading states */
+  shimmer: `
+    @keyframes shimmer {
+      0% { background-position: -200% 0; }
+      100% { background-position: 200% 0; }
+    }
+  `,
+
+  /** Pulse glow for attention */
+  pulseGlow: `
+    @keyframes pulseGlow {
+      0%, 100% { box-shadow: 0 0 20px rgba(96, 165, 250, 0.2); }
+      50% { box-shadow: 0 0 40px rgba(96, 165, 250, 0.4); }
+    }
+  `,
+
+  /** Float animation */
+  float: `
+    @keyframes float {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-8px); }
+    }
+  `,
+
+  /** Fade in up */
+  fadeInUp: `
+    @keyframes fadeInUp {
+      from { opacity: 0; transform: translateY(16px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+  `,
+
+  /** Scale in */
+  scaleIn: `
+    @keyframes scaleIn {
+      from { opacity: 0; transform: scale(0.95); }
+      to { opacity: 1; transform: scale(1); }
+    }
+  `,
+};
+
 export default {
   colors,
   gradients,
@@ -466,11 +605,15 @@ export default {
   glassCard,
   glassButton,
   glassButtonHover,
+  glassButtonPressed,
   glassInput,
   glassInputFocus,
   glassFloating,
   tabBar,
   typography,
+  touch,
+  touchInteractive,
+  keyframes,
   createGlassGradient,
   createBackdropFilter,
   mergeGlassStyles,
