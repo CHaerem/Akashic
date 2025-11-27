@@ -878,19 +878,13 @@ export const RouteEditor = memo(function RouteEditor({
                 alignItems: 'center',
                 justifyContent: 'space-between',
                 padding: isMobile ? '12px 16px' : '16px 24px',
-                background: `linear-gradient(
-                    180deg,
-                    rgba(255, 255, 255, 0.12) 0%,
-                    rgba(255, 255, 255, 0.06) 10%,
-                    rgba(12, 12, 18, 0.95) 40%
-                )`,
+                background: 'rgba(12, 12, 18, 0.7)',
                 backdropFilter: 'blur(32px) saturate(180%)',
                 WebkitBackdropFilter: 'blur(32px) saturate(180%)',
                 borderBottom: `1px solid ${colors.glass.border}`,
                 boxShadow: `
-                    0 8px 32px rgba(0, 0, 0, 0.3),
-                    inset 0 1px 0 rgba(255, 255, 255, 0.15),
-                    inset 0 2px 20px rgba(255, 255, 255, 0.05)
+                    0 4px 20px rgba(0, 0, 0, 0.25),
+                    inset 0 1px 0 rgba(255, 255, 255, 0.1)
                 `,
                 flexWrap: 'wrap',
                 gap: 12,
