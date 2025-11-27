@@ -57,6 +57,44 @@ export const colors = {
 } as const;
 
 // ============================================================================
+// GRADIENTS
+// ============================================================================
+
+export const gradients = {
+  // Glass card backgrounds - most commonly used
+  glass: {
+    /** Standard glass card - 8% to 3% opacity */
+    card: 'linear-gradient(135deg, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0.03) 100%)',
+    /** Subtle glass panel - 6% to 2% opacity */
+    subtle: 'linear-gradient(135deg, rgba(255, 255, 255, 0.06) 0%, rgba(255, 255, 255, 0.02) 100%)',
+    /** Button/interactive - 12% to 6% opacity */
+    button: 'linear-gradient(135deg, rgba(255, 255, 255, 0.12) 0%, rgba(255, 255, 255, 0.06) 100%)',
+    /** Button hover state - 15% to 8% opacity */
+    buttonHover: 'linear-gradient(135deg, rgba(255, 255, 255, 0.15) 0%, rgba(255, 255, 255, 0.08) 100%)',
+    /** Primary button - 20% to 12% opacity */
+    buttonPrimary: 'linear-gradient(135deg, rgba(255, 255, 255, 0.2) 0%, rgba(255, 255, 255, 0.12) 100%)',
+    /** Elevated panel - vertical, 12% to 4% opacity */
+    panel: 'linear-gradient(180deg, rgba(255, 255, 255, 0.12) 0%, rgba(255, 255, 255, 0.06) 30%, rgba(255, 255, 255, 0.04) 100%)',
+  },
+
+  // Overlay gradients for content over images/backgrounds
+  overlay: {
+    /** Top fade - for top bars over content */
+    top: 'linear-gradient(to bottom, rgba(0, 0, 0, 0.5) 0%, transparent 100%)',
+    /** Bottom fade - for captions/info over images */
+    bottom: 'linear-gradient(to top, rgba(0, 0, 0, 0.6) 0%, transparent 100%)',
+    /** Subtle bottom fade - for metadata on thumbnails */
+    bottomSubtle: 'linear-gradient(transparent, rgba(0, 0, 0, 0.7))',
+  },
+
+  // Elevation fill gradients (using color tokens)
+  fill: {
+    /** Area chart fill - light glass to transparent */
+    area: `linear-gradient(to bottom, ${colors.glass.light} 0%, rgba(255, 255, 255, 0) 100%)`,
+  },
+} as const;
+
+// ============================================================================
 // BLUR & EFFECTS
 // ============================================================================
 
@@ -418,6 +456,7 @@ export const typography = {
 
 export default {
   colors,
+  gradients,
   effects,
   shadows,
   radius,

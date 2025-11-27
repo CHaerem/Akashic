@@ -1,4 +1,5 @@
 import { Component, type ReactNode, type ErrorInfo } from 'react';
+import { colors, gradients, radius, typography, transitions } from '../../styles/liquidGlass';
 
 interface ErrorBoundaryProps {
     children: ReactNode;
@@ -8,6 +9,26 @@ interface ErrorBoundaryState {
     hasError: boolean;
     error: Error | null;
 }
+
+// Glass button style for class components (can't use hooks)
+const glassButtonStyle: React.CSSProperties = {
+    background: gradients.glass.button,
+    backdropFilter: 'blur(8px) saturate(180%)',
+    WebkitBackdropFilter: 'blur(8px) saturate(180%)',
+    border: `1px solid ${colors.glass.border}`,
+    boxShadow: `
+        0 4px 16px rgba(0, 0, 0, 0.2),
+        inset 0 1px 0 rgba(255, 255, 255, 0.15)
+    `,
+    color: colors.text.primary,
+    padding: '12px 24px',
+    borderRadius: radius.md,
+    cursor: 'pointer',
+    fontSize: 14,
+    fontWeight: 500,
+    letterSpacing: '0.02em',
+    transition: `all ${transitions.smooth}`,
+};
 
 /**
  * Error boundary component for graceful error handling
@@ -32,29 +53,41 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
                 <div style={{
                     position: 'fixed',
                     inset: 0,
-                    background: '#0a0a0f',
+                    background: colors.background.base,
                     display: 'flex',
                     flexDirection: 'column',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    color: 'white',
+                    color: colors.text.primary,
                     padding: 24
                 }}>
+                    {/* Glass card container */}
                     <div style={{
-                        maxWidth: 400,
-                        textAlign: 'center'
+                        maxWidth: 420,
+                        textAlign: 'center',
+                        background: gradients.glass.card,
+                        backdropFilter: 'blur(24px) saturate(180%)',
+                        WebkitBackdropFilter: 'blur(24px) saturate(180%)',
+                        border: `1px solid ${colors.glass.borderSubtle}`,
+                        borderRadius: radius.xl,
+                        padding: 32,
+                        boxShadow: `
+                            0 16px 48px rgba(0, 0, 0, 0.3),
+                            inset 0 1px 0 rgba(255, 255, 255, 0.1)
+                        `,
                     }}>
                         <h1 style={{
+                            ...typography.heading,
                             fontSize: 24,
-                            fontWeight: 300,
                             marginBottom: 16,
-                            color: 'rgba(255,255,255,0.9)'
+                            color: colors.text.primary,
                         }}>
                             Something went wrong
                         </h1>
                         <p style={{
+                            ...typography.body,
                             fontSize: 14,
-                            color: 'rgba(255,255,255,0.5)',
+                            color: colors.text.tertiary,
                             lineHeight: 1.6,
                             marginBottom: 24
                         }}>
@@ -63,24 +96,23 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
                         {this.state.error && (
                             <details style={{
                                 textAlign: 'left',
-                                background: 'rgba(255,255,255,0.05)',
+                                background: colors.glass.subtle,
                                 padding: 16,
-                                borderRadius: 8,
-                                marginBottom: 24
+                                borderRadius: radius.md,
+                                marginBottom: 24,
+                                border: `1px solid ${colors.glass.borderSubtle}`,
                             }}>
                                 <summary style={{
+                                    ...typography.label,
                                     cursor: 'pointer',
-                                    color: 'rgba(255,255,255,0.4)',
-                                    fontSize: 12,
-                                    letterSpacing: '0.1em',
-                                    textTransform: 'uppercase',
+                                    color: colors.text.subtle,
                                     marginBottom: 8
                                 }}>
                                     Error Details
                                 </summary>
                                 <pre style={{
                                     fontSize: 12,
-                                    color: 'rgba(255,255,255,0.6)',
+                                    color: colors.text.secondary,
                                     whiteSpace: 'pre-wrap',
                                     wordBreak: 'break-word',
                                     margin: 0
@@ -91,16 +123,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
                         )}
                         <button
                             onClick={() => window.location.reload()}
-                            style={{
-                                background: 'rgba(255,255,255,0.1)',
-                                border: '1px solid rgba(255,255,255,0.2)',
-                                color: 'white',
-                                padding: '12px 24px',
-                                borderRadius: 8,
-                                cursor: 'pointer',
-                                fontSize: 14,
-                                letterSpacing: '0.05em'
-                            }}
+                            style={glassButtonStyle}
                         >
                             Reload Application
                         </button>
@@ -126,20 +149,31 @@ export function MapErrorFallback({ error, onRetry }: MapErrorFallbackProps) {
         <div style={{
             position: 'absolute',
             inset: 0,
-            background: '#0a0a0f',
+            background: colors.background.base,
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center',
             justifyContent: 'center',
-            color: 'white'
+            color: colors.text.primary,
         }}>
             <div style={{
                 textAlign: 'center',
-                maxWidth: 300
+                maxWidth: 300,
+                background: gradients.glass.subtle,
+                backdropFilter: 'blur(16px) saturate(180%)',
+                WebkitBackdropFilter: 'blur(16px) saturate(180%)',
+                border: `1px solid ${colors.glass.borderSubtle}`,
+                borderRadius: radius.lg,
+                padding: 24,
+                boxShadow: `
+                    0 8px 32px rgba(0, 0, 0, 0.25),
+                    inset 0 1px 0 rgba(255, 255, 255, 0.08)
+                `,
             }}>
                 <p style={{
+                    ...typography.body,
                     fontSize: 14,
-                    color: 'rgba(255,255,255,0.5)',
+                    color: colors.text.tertiary,
                     marginBottom: 16
                 }}>
                     Unable to load map
@@ -147,7 +181,7 @@ export function MapErrorFallback({ error, onRetry }: MapErrorFallbackProps) {
                 {error && (
                     <p style={{
                         fontSize: 12,
-                        color: 'rgba(255,255,255,0.3)',
+                        color: colors.text.subtle,
                         marginBottom: 16
                     }}>
                         {error}
@@ -157,13 +191,9 @@ export function MapErrorFallback({ error, onRetry }: MapErrorFallbackProps) {
                     <button
                         onClick={onRetry}
                         style={{
-                            background: 'rgba(255,255,255,0.1)',
-                            border: '1px solid rgba(255,255,255,0.2)',
-                            color: 'white',
+                            ...glassButtonStyle,
                             padding: '8px 16px',
-                            borderRadius: 4,
-                            cursor: 'pointer',
-                            fontSize: 12
+                            fontSize: 12,
                         }}
                     >
                         Retry
