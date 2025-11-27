@@ -9,6 +9,25 @@ import { MapErrorFallback } from './common/ErrorBoundary';
 import { colors, radius, glassFloating, glassButton } from '../styles/liquidGlass';
 import type { TrekConfig, Camp, ViewMode, Photo } from '../types/trek';
 
+// Check if running in E2E test mode
+const isE2ETestMode = import.meta.env.VITE_E2E_TEST_MODE === 'true';
+
+// Test helpers interface for E2E testing
+interface TestHelpers {
+    selectTrek: (id: string) => boolean;
+    getTreks: () => Array<{ id: string; name: string }>;
+    getSelectedTrek: () => string | null;
+    isMapReady: () => boolean;
+    isDataLoaded: () => boolean;
+}
+
+// Declare global window extension for test helpers
+declare global {
+    interface Window {
+        testHelpers?: TestHelpers;
+    }
+}
+
 interface MapboxGlobeProps {
     selectedTrek: TrekConfig | null;
     selectedCamp: Camp | null;
@@ -109,7 +128,7 @@ const starfieldStyle: React.CSSProperties = {
 
 export function MapboxGlobe({ selectedTrek, selectedCamp, onSelectTrek, view, photos = [], onPhotoClick, flyToPhotoRef, onCampSelect }: MapboxGlobeProps) {
     const containerRef = useRef<HTMLDivElement>(null);
-    const { trekDataMap } = useJourneys();
+    const { treks, trekDataMap, loading: journeysLoading } = useJourneys();
     const [routeInfo, setRouteInfo] = useState<RouteClickInfo | null>(null);
 
     // Get camps for the selected trek
@@ -139,6 +158,34 @@ export function MapboxGlobe({ selectedTrek, selectedCamp, onSelectTrek, view, ph
         onPhotoClick: handlePhotoClick,
         onRouteClick: handleRouteClick
     });
+
+    // Expose test helpers for E2E testing
+    useEffect(() => {
+        if (!isE2ETestMode) return;
+
+        // Create test helpers object
+        const testHelpers: TestHelpers = {
+            selectTrek: (id: string) => {
+                const trek = treks.find(t => t.id === id);
+                if (trek) {
+                    onSelectTrek(trek);
+                    return true;
+                }
+                return false;
+            },
+            getTreks: () => treks.map(t => ({ id: t.id, name: t.name })),
+            getSelectedTrek: () => selectedTrek?.id || null,
+            isMapReady: () => mapReady,
+            isDataLoaded: () => !journeysLoading && treks.length > 0
+        };
+
+        // Register on window
+        window.testHelpers = testHelpers;
+
+        return () => {
+            delete window.testHelpers;
+        };
+    }, [mapReady, treks, selectedTrek, onSelectTrek, journeysLoading]);
 
     // Expose flyToPhoto to parent via ref
     useEffect(() => {
