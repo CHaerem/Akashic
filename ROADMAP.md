@@ -142,11 +142,11 @@ Collaborative interface for family members to create and edit journeys together.
 - [x] Elevation profile uses stored route distances
 - [x] Route utility functions (snap to route, distance calc)
 
-**Phase B: Route Adjustment** (Future)
-- [ ] Click to add intermediate points to route
-- [ ] Drag existing route points to adjust path
-- [ ] Delete wayward points
-- [ ] Smooth/simplify tools
+**Phase B: Route Adjustment** ✅
+- [x] Click to add intermediate points to route
+- [x] Drag existing route points to adjust path
+- [x] Delete route points
+- [ ] Smooth/simplify tools (future enhancement)
 
 **Phase C: Full Route Drawing** (Future)
 - [ ] Draw new route sections
@@ -287,7 +287,7 @@ A platform where anyone can create and share their travel journeys.
 | Phase 1.2 (Photo Upload) | ✅ Complete | Upload endpoint + frontend UI |
 | Phase 1.3 (DB Integration) | ✅ Complete | Photo CRUD, waypoint linking, assign photos modal |
 | Phase 1.4 (Photo Display) | ✅ Complete | Grid, lightbox, day-based, map markers |
-| Phase 2 (Journey UI) | ⏳ Partial | Journey editing done, Route Editor Phase A done |
+| Phase 2 (Journey UI) | ⏳ Partial | Journey editing done, Route Editor Phase A+B done |
 | **Phase 2.5 (Immersive Exploration)** | ✅ Core Complete | Elevation profile, photo markers, view-on-map done |
 | Phase 3 (Polish) | 📋 Planned | After immersive exploration |
 | Multi-user | 🔮 Future | Post-MVP |

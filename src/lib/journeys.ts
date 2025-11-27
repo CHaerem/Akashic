@@ -346,6 +346,7 @@ export interface JourneyUpdate {
     total_days?: number | null;
     total_distance?: number | null;
     summit_elevation?: number | null;
+    route?: Route | null;
 }
 
 /**
@@ -374,6 +375,56 @@ export async function updateJourney(slug: string, updates: JourneyUpdate): Promi
         if (updates.description !== undefined) cached.description = updates.description;
         if (updates.country !== undefined) cached.country = updates.country;
         if (updates.date_started !== undefined) cached.dateStarted = updates.date_started || undefined;
+        if (updates.route !== undefined) cached.route = updates.route || { type: 'LineString', coordinates: [] };
+    }
+
+    return true;
+}
+
+/**
+ * Update journey route coordinates
+ * Recalculates total_distance based on new route
+ */
+export async function updateJourneyRoute(slug: string, route: Route): Promise<boolean> {
+    if (!supabase) {
+        console.warn('Supabase not configured');
+        return false;
+    }
+
+    // Calculate total distance from route coordinates
+    let totalDistance = 0;
+    const coords = route.coordinates;
+    for (let i = 1; i < coords.length; i++) {
+        const [lng1, lat1] = coords[i - 1];
+        const [lng2, lat2] = coords[i];
+        // Haversine formula for distance
+        const R = 6371;
+        const dLat = (lat2 - lat1) * Math.PI / 180;
+        const dLng = (lng2 - lng1) * Math.PI / 180;
+        const a = Math.sin(dLat / 2) ** 2 +
+            Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+            Math.sin(dLng / 2) ** 2;
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        totalDistance += R * c;
+    }
+
+    const { error } = await supabase
+        .from('journeys')
+        .update({
+            route,
+            total_distance: Math.round(totalDistance * 10) / 10
+        })
+        .eq('slug', slug);
+
+    if (error) {
+        console.error('Error updating journey route:', error);
+        throw new Error(error.message);
+    }
+
+    // Update local cache
+    if (journeyCache.loaded && journeyCache.trekDataMap[slug]) {
+        journeyCache.trekDataMap[slug].route = route;
+        journeyCache.trekDataMap[slug].stats.totalDistance = Math.round(totalDistance * 10) / 10;
     }
 
     return true;

@@ -1,22 +1,31 @@
 /**
- * Route Editor - Fullscreen editor for camp positions along the route
+ * Route Editor - Fullscreen editor for camp positions and route geometry
  *
- * NUMBERING BEHAVIOR:
- * Numbers (1, 2, 3...) show ORDER along the route, not fixed day IDs.
- * When you drag a camp past another, numbers re-sort by route distance.
- * Example: Drag camp #2 past camp #3 → it becomes #3, old #3 becomes #2.
- * Camp NAMES stay the same, only position numbers change.
+ * Two modes:
+ * 1. CAMPS MODE - Drag camp markers along the route
+ *    - Numbers (1, 2, 3...) show ORDER along the route
+ *    - When you drag a camp past another, numbers re-sort by route distance
+ *    - Click on route to add new camp
+ *
+ * 2. ROUTE MODE - Edit the actual route line
+ *    - Shows editable route points as smaller markers
+ *    - Drag points to adjust route path
+ *    - Click on route to insert new points
+ *    - Select and delete points
+ *    - Simplify tool to reduce point count
  */
 
-import { useState, useRef, useEffect, useCallback, memo } from 'react';
+import { useState, useRef, useEffect, useCallback, memo, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
-import type { TrekData, Camp } from '../../types/trek';
+import type { TrekData, Camp, Route } from '../../types/trek';
 import { GlassButton } from '../common/GlassButton';
 import { colors, radius, transitions } from '../../styles/liquidGlass';
 import { findNearestPointOnRoute, calculateRouteDistances, type RouteCoordinate } from '../../utils/routeUtils';
-import { updateWaypoint, createWaypoint, deleteWaypoint, getJourneyIdBySlug } from '../../lib/journeys';
+import { updateWaypoint, createWaypoint, deleteWaypoint, getJourneyIdBySlug, updateJourneyRoute } from '../../lib/journeys';
+
+type EditorMode = 'camps' | 'route';
 
 interface RouteEditorProps {
     trekData: TrekData;
@@ -42,23 +51,68 @@ export const RouteEditor = memo(function RouteEditor({
     const mapContainerRef = useRef<HTMLDivElement>(null);
     const mapRef = useRef<mapboxgl.Map | null>(null);
     const markersRef = useRef<Map<string, mapboxgl.Marker>>(new Map());
+    const routeMarkersRef = useRef<Map<number, mapboxgl.Marker>>(new Map());
 
+    // Editor mode state
+    const [mode, setMode] = useState<EditorMode>('camps');
+
+    // Camp editing state
     const [camps, setCamps] = useState<EditableCamp[]>([]);
     const [selectedCampId, setSelectedCampId] = useState<string | null>(null);
+
+    // Route editing state
+    const [routeCoordinates, setRouteCoordinates] = useState<RouteCoordinate[]>([]);
+    const [selectedRoutePointIndex, setSelectedRoutePointIndex] = useState<number | null>(null);
+    const [routeHasChanges, setRouteHasChanges] = useState(false);
+
+    // Shared state
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [hasChanges, setHasChanges] = useState(false);
     const [mapLoaded, setMapLoaded] = useState(false);
 
-    // Initialize camps from trekData
+    // Sample rate for route points (show every Nth point to avoid performance issues)
+    const getRoutePointSampleRate = useCallback((totalPoints: number) => {
+        if (totalPoints < 100) return 1;
+        if (totalPoints < 500) return 5;
+        if (totalPoints < 2000) return 10;
+        return Math.ceil(totalPoints / 200);
+    }, []);
+
+    // Get visible route point indices based on sample rate
+    const visibleRoutePointIndices = useMemo(() => {
+        if (routeCoordinates.length === 0) return [];
+        const sampleRate = getRoutePointSampleRate(routeCoordinates.length);
+        const indices: number[] = [];
+        for (let i = 0; i < routeCoordinates.length; i += sampleRate) {
+            indices.push(i);
+        }
+        // Always include the last point
+        if (indices[indices.length - 1] !== routeCoordinates.length - 1) {
+            indices.push(routeCoordinates.length - 1);
+        }
+        return indices;
+    }, [routeCoordinates.length, getRoutePointSampleRate]);
+
+    // Initialize camps and route from trekData
     useEffect(() => {
-        if (isOpen && trekData.camps) {
-            setCamps(trekData.camps.map(c => ({ ...c })));
+        if (isOpen) {
+            // Initialize camps
+            if (trekData.camps) {
+                setCamps(trekData.camps.map(c => ({ ...c })));
+            }
+            // Initialize route coordinates
+            if (trekData.route?.coordinates) {
+                setRouteCoordinates([...trekData.route.coordinates] as RouteCoordinate[]);
+            }
             setHasChanges(false);
+            setRouteHasChanges(false);
             setError(null);
             setMapLoaded(false);
+            setSelectedCampId(null);
+            setSelectedRoutePointIndex(null);
         }
-    }, [isOpen, trekData.camps]);
+    }, [isOpen, trekData.camps, trekData.route]);
 
     // Initialize map
     useEffect(() => {
@@ -134,10 +188,16 @@ export const RouteEditor = memo(function RouteEditor({
                     }
                 });
 
-                // Add click handler for route to add new camps
+                // Add click handler for route - behavior depends on mode
                 map.on('click', 'route-line', (e) => {
                     if (e.lngLat) {
-                        handleRouteClick([e.lngLat.lng, e.lngLat.lat]);
+                        // Store click handler reference that can check current mode
+                        const coords: [number, number] = [e.lngLat.lng, e.lngLat.lat];
+                        // We'll dispatch to the right handler based on mode state
+                        // Using a custom event to allow mode-aware handling
+                        window.dispatchEvent(new CustomEvent('route-editor-route-click', {
+                            detail: { coords }
+                        }));
                     }
                 });
 
@@ -156,11 +216,31 @@ export const RouteEditor = memo(function RouteEditor({
             // Cleanup markers
             markersRef.current.forEach(marker => marker.remove());
             markersRef.current.clear();
+            routeMarkersRef.current.forEach(marker => marker.remove());
+            routeMarkersRef.current.clear();
             map.remove();
             mapRef.current = null;
             setMapLoaded(false);
         };
     }, [isOpen, trekData.route, isMobile]);
+
+    // Handle route click events based on current mode
+    useEffect(() => {
+        const handleRouteClickEvent = (e: Event) => {
+            const customEvent = e as CustomEvent<{ coords: [number, number] }>;
+            const { coords } = customEvent.detail;
+            if (mode === 'camps') {
+                handleRouteClick(coords);
+            } else {
+                handleRouteLineClick(coords);
+            }
+        };
+
+        window.addEventListener('route-editor-route-click', handleRouteClickEvent);
+        return () => {
+            window.removeEventListener('route-editor-route-click', handleRouteClickEvent);
+        };
+    }, [mode, handleRouteClick, handleRouteLineClick]);
 
     // Sort camps by route distance (consistent with sidebar)
     const sortCamps = useCallback((campsToSort: EditableCamp[]) => {
@@ -230,9 +310,211 @@ export const RouteEditor = memo(function RouteEditor({
                 updateMarkerStyle(el, camp, index, camp.id === selectedCampId);
             }
         });
-    }, [camps, selectedCampId, isOpen, mapLoaded, sortCamps]);
+    }, [camps, selectedCampId, isOpen, mapLoaded, sortCamps, mode]);
 
-    // Create marker element - larger for easier interaction
+    // Update route point markers when in route editing mode
+    useEffect(() => {
+        const map = mapRef.current;
+        if (!map || !isOpen || !mapLoaded || mode !== 'route') {
+            // Clear route markers when not in route mode
+            routeMarkersRef.current.forEach(marker => marker.remove());
+            routeMarkersRef.current.clear();
+            return;
+        }
+
+        const existingMarkers = routeMarkersRef.current;
+        const visibleIndices = new Set(visibleRoutePointIndices);
+
+        // Remove markers that are no longer visible
+        existingMarkers.forEach((marker, index) => {
+            if (!visibleIndices.has(index)) {
+                marker.remove();
+                existingMarkers.delete(index);
+            }
+        });
+
+        // Add/update markers for visible route points
+        visibleRoutePointIndices.forEach((pointIndex) => {
+            const coord = routeCoordinates[pointIndex];
+            if (!coord) return;
+
+            let marker = existingMarkers.get(pointIndex);
+
+            if (!marker) {
+                // Create new route point marker
+                const el = createRoutePointMarkerElement(pointIndex);
+                marker = new mapboxgl.Marker({
+                    element: el,
+                    draggable: true,
+                    anchor: 'center'
+                })
+                    .setLngLat([coord[0], coord[1]])
+                    .addTo(map);
+
+                // Handle drag end
+                marker.on('dragend', () => {
+                    const lngLat = marker!.getLngLat();
+                    handleRoutePointDragged(pointIndex, [lngLat.lng, lngLat.lat]);
+                });
+
+                // Handle click
+                el.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    setSelectedRoutePointIndex(pointIndex === selectedRoutePointIndex ? null : pointIndex);
+                });
+
+                existingMarkers.set(pointIndex, marker);
+            } else {
+                // Update position if needed
+                const currentPos = marker.getLngLat();
+                if (currentPos.lng !== coord[0] || currentPos.lat !== coord[1]) {
+                    marker.setLngLat([coord[0], coord[1]]);
+                }
+                // Update element styling
+                const el = marker.getElement();
+                updateRoutePointMarkerStyle(el, pointIndex, pointIndex === selectedRoutePointIndex);
+            }
+        });
+    }, [routeCoordinates, visibleRoutePointIndices, selectedRoutePointIndex, isOpen, mapLoaded, mode]);
+
+    // Create route point marker element
+    function createRoutePointMarkerElement(index: number): HTMLDivElement {
+        const el = document.createElement('div');
+        updateRoutePointMarkerStyle(el, index, false);
+        return el;
+    }
+
+    // Update route point marker styling - smaller than camp markers
+    function updateRoutePointMarkerStyle(el: HTMLElement, index: number, isSelected: boolean) {
+        const size = isSelected ? 16 : 10;
+        el.style.width = `${size}px`;
+        el.style.height = `${size}px`;
+        el.style.borderRadius = '50%';
+        el.style.background = isSelected
+            ? '#f59e0b'
+            : 'rgba(255, 255, 255, 0.8)';
+        el.style.border = isSelected ? '2px solid white' : '2px solid rgba(0,0,0,0.5)';
+        el.style.boxShadow = isSelected
+            ? '0 2px 8px rgba(245, 158, 11, 0.6)'
+            : '0 1px 4px rgba(0,0,0,0.3)';
+        el.style.cursor = 'grab';
+        el.style.transition = 'all 0.15s ease';
+    }
+
+    // Handle route point dragged to new position
+    const handleRoutePointDragged = useCallback((pointIndex: number, newCoords: [number, number]) => {
+        // Get elevation from nearby points (interpolate)
+        const prevCoord = routeCoordinates[pointIndex - 1];
+        const nextCoord = routeCoordinates[pointIndex + 1];
+        let elevation = routeCoordinates[pointIndex]?.[2] || 0;
+
+        // Simple interpolation if we have neighbors
+        if (prevCoord && nextCoord) {
+            elevation = (prevCoord[2] + nextCoord[2]) / 2;
+        } else if (prevCoord) {
+            elevation = prevCoord[2];
+        } else if (nextCoord) {
+            elevation = nextCoord[2];
+        }
+
+        setRouteCoordinates(prev => {
+            const newCoords3D: RouteCoordinate = [newCoords[0], newCoords[1], elevation];
+            const updated = [...prev];
+            updated[pointIndex] = newCoords3D;
+            return updated;
+        });
+
+        setRouteHasChanges(true);
+    }, [routeCoordinates]);
+
+    // Delete selected route point
+    const handleDeleteRoutePoint = useCallback(() => {
+        if (selectedRoutePointIndex === null) return;
+        if (routeCoordinates.length <= 2) {
+            setError('Route must have at least 2 points');
+            return;
+        }
+
+        // Remove the marker
+        const marker = routeMarkersRef.current.get(selectedRoutePointIndex);
+        if (marker) {
+            marker.remove();
+            routeMarkersRef.current.delete(selectedRoutePointIndex);
+        }
+
+        setRouteCoordinates(prev => {
+            const updated = [...prev];
+            updated.splice(selectedRoutePointIndex, 1);
+            return updated;
+        });
+
+        setSelectedRoutePointIndex(null);
+        setRouteHasChanges(true);
+    }, [selectedRoutePointIndex, routeCoordinates.length]);
+
+    // Insert a point into the route (click on route line in route mode)
+    const handleRouteLineClick = useCallback((coords: [number, number]) => {
+        if (mode !== 'route') return;
+
+        // Find nearest segment to insert point
+        let nearestIndex = 0;
+        let nearestDistance = Infinity;
+
+        for (let i = 0; i < routeCoordinates.length - 1; i++) {
+            const start = routeCoordinates[i];
+            const end = routeCoordinates[i + 1];
+
+            // Calculate distance from click to segment midpoint (simplified)
+            const midLng = (start[0] + end[0]) / 2;
+            const midLat = (start[1] + end[1]) / 2;
+            const dist = Math.sqrt(
+                Math.pow(coords[0] - midLng, 2) +
+                Math.pow(coords[1] - midLat, 2)
+            );
+
+            if (dist < nearestDistance) {
+                nearestDistance = dist;
+                nearestIndex = i + 1; // Insert after this segment's start
+            }
+        }
+
+        // Interpolate elevation from neighbors
+        const prevCoord = routeCoordinates[nearestIndex - 1];
+        const nextCoord = routeCoordinates[nearestIndex];
+        const elevation = prevCoord && nextCoord
+            ? (prevCoord[2] + nextCoord[2]) / 2
+            : prevCoord?.[2] || nextCoord?.[2] || 0;
+
+        const newPoint: RouteCoordinate = [coords[0], coords[1], elevation];
+
+        setRouteCoordinates(prev => {
+            const updated = [...prev];
+            updated.splice(nearestIndex, 0, newPoint);
+            return updated;
+        });
+
+        setRouteHasChanges(true);
+    }, [mode, routeCoordinates]);
+
+    // Update map route line when coordinates change
+    useEffect(() => {
+        const map = mapRef.current;
+        if (!map || !mapLoaded) return;
+
+        const source = map.getSource('route') as mapboxgl.GeoJSONSource;
+        if (source && routeCoordinates.length > 0) {
+            source.setData({
+                type: 'Feature',
+                properties: {},
+                geometry: {
+                    type: 'LineString',
+                    coordinates: routeCoordinates.map(c => [c[0], c[1]])
+                }
+            });
+        }
+    }, [routeCoordinates, mapLoaded]);
+
+    // Create camp marker element - larger for easier interaction
     function createMarkerElement(camp: EditableCamp, index: number): HTMLDivElement {
         const el = document.createElement('div');
         updateMarkerStyle(el, camp, index, false);
@@ -375,44 +657,56 @@ export const RouteEditor = memo(function RouteEditor({
                 throw new Error('Journey not found');
             }
 
-            // Sort camps by route order to assign correct day numbers
-            const sortedCamps = sortCamps(camps);
-
-            // Process each camp with correct day number based on route order
-            for (let i = 0; i < sortedCamps.length; i++) {
-                const camp = sortedCamps[i];
-                const newDayNumber = i + 1;
-
-                if (camp.id.startsWith('new-')) {
-                    // Create new waypoint
-                    await createWaypoint({
-                        journey_id: journeyId,
-                        name: camp.name,
-                        day_number: newDayNumber,
-                        coordinates: camp.coordinates,
-                        elevation: camp.elevation,
-                        description: camp.notes,
-                        route_distance_km: camp.routeDistanceKm || undefined,
-                        route_point_index: camp.routePointIndex || undefined,
-                        sort_order: newDayNumber
-                    });
-                } else {
-                    // Update existing waypoint - always update day_number to match route order
-                    await updateWaypoint(camp.id, {
-                        coordinates: camp.coordinates,
-                        elevation: camp.elevation,
-                        route_distance_km: camp.routeDistanceKm,
-                        route_point_index: camp.routePointIndex,
-                        day_number: newDayNumber
-                    });
-                }
+            // Save route changes if any
+            if (routeHasChanges && routeCoordinates.length > 0) {
+                const updatedRoute: Route = {
+                    type: 'LineString',
+                    coordinates: routeCoordinates
+                };
+                await updateJourneyRoute(trekData.id, updatedRoute);
             }
 
-            // Delete removed camps
-            const currentIds = new Set(camps.map(c => c.id));
-            for (const originalCamp of trekData.camps) {
-                if (!currentIds.has(originalCamp.id)) {
-                    await deleteWaypoint(originalCamp.id);
+            // Save camp changes if any
+            if (hasChanges) {
+                // Sort camps by route order to assign correct day numbers
+                const sortedCamps = sortCamps(camps);
+
+                // Process each camp with correct day number based on route order
+                for (let i = 0; i < sortedCamps.length; i++) {
+                    const camp = sortedCamps[i];
+                    const newDayNumber = i + 1;
+
+                    if (camp.id.startsWith('new-')) {
+                        // Create new waypoint
+                        await createWaypoint({
+                            journey_id: journeyId,
+                            name: camp.name,
+                            day_number: newDayNumber,
+                            coordinates: camp.coordinates,
+                            elevation: camp.elevation,
+                            description: camp.notes,
+                            route_distance_km: camp.routeDistanceKm || undefined,
+                            route_point_index: camp.routePointIndex || undefined,
+                            sort_order: newDayNumber
+                        });
+                    } else {
+                        // Update existing waypoint - always update day_number to match route order
+                        await updateWaypoint(camp.id, {
+                            coordinates: camp.coordinates,
+                            elevation: camp.elevation,
+                            route_distance_km: camp.routeDistanceKm,
+                            route_point_index: camp.routePointIndex,
+                            day_number: newDayNumber
+                        });
+                    }
+                }
+
+                // Delete removed camps
+                const currentIds = new Set(camps.map(c => c.id));
+                for (const originalCamp of trekData.camps) {
+                    if (!currentIds.has(originalCamp.id)) {
+                        await deleteWaypoint(originalCamp.id);
+                    }
                 }
             }
 
@@ -423,7 +717,7 @@ export const RouteEditor = memo(function RouteEditor({
         } finally {
             setSaving(false);
         }
-    }, [camps, trekData, onSave, onClose, sortCamps]);
+    }, [camps, trekData, onSave, onClose, sortCamps, routeHasChanges, routeCoordinates, hasChanges]);
 
     const selectedCamp = camps.find(c => c.id === selectedCampId);
 
@@ -449,9 +743,11 @@ export const RouteEditor = memo(function RouteEditor({
                 padding: isMobile ? '12px 16px' : '16px 24px',
                 background: `linear-gradient(180deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.02) 100%)`,
                 borderBottom: `1px solid ${colors.glass.borderSubtle}`,
-                flexShrink: 0
+                flexShrink: 0,
+                flexWrap: 'wrap',
+                gap: 12
             }}>
-                <div>
+                <div style={{ flex: '1 1 auto', minWidth: 150 }}>
                     <h1 style={{
                         margin: 0,
                         fontSize: isMobile ? 18 : 22,
@@ -468,6 +764,49 @@ export const RouteEditor = memo(function RouteEditor({
                         {trekData.name}
                     </p>
                 </div>
+
+                {/* Mode toggle */}
+                <div style={{
+                    display: 'flex',
+                    background: colors.glass.subtle,
+                    borderRadius: radius.md,
+                    padding: 4,
+                    gap: 4
+                }}>
+                    <button
+                        onClick={() => setMode('camps')}
+                        style={{
+                            padding: '8px 16px',
+                            borderRadius: radius.sm,
+                            border: 'none',
+                            background: mode === 'camps' ? colors.glass.medium : 'transparent',
+                            color: mode === 'camps' ? colors.text.primary : colors.text.tertiary,
+                            fontSize: 13,
+                            fontWeight: 500,
+                            cursor: 'pointer',
+                            transition: `all ${transitions.normal}`
+                        }}
+                    >
+                        Camps
+                    </button>
+                    <button
+                        onClick={() => setMode('route')}
+                        style={{
+                            padding: '8px 16px',
+                            borderRadius: radius.sm,
+                            border: 'none',
+                            background: mode === 'route' ? colors.glass.medium : 'transparent',
+                            color: mode === 'route' ? colors.text.primary : colors.text.tertiary,
+                            fontSize: 13,
+                            fontWeight: 500,
+                            cursor: 'pointer',
+                            transition: `all ${transitions.normal}`
+                        }}
+                    >
+                        Route
+                    </button>
+                </div>
+
                 <div style={{ display: 'flex', gap: 12 }}>
                     <GlassButton variant="subtle" size="md" onClick={onClose} disabled={saving}>
                         Cancel
@@ -476,7 +815,7 @@ export const RouteEditor = memo(function RouteEditor({
                         variant="primary"
                         size="md"
                         onClick={handleSave}
-                        disabled={saving || !hasChanges}
+                        disabled={saving || (!hasChanges && !routeHasChanges)}
                     >
                         {saving ? 'Saving...' : 'Save Changes'}
                     </GlassButton>
@@ -518,8 +857,17 @@ export const RouteEditor = memo(function RouteEditor({
                         color: 'rgba(255,255,255,0.9)',
                         lineHeight: 1.5
                     }}>
-                        <strong>Drag</strong> markers to reposition camps<br />
-                        <strong>Click</strong> on route to add new camp
+                        {mode === 'camps' ? (
+                            <>
+                                <strong>Drag</strong> markers to reposition camps<br />
+                                <strong>Click</strong> on route to add new camp
+                            </>
+                        ) : (
+                            <>
+                                <strong>Drag</strong> route points to adjust path<br />
+                                <strong>Click</strong> on route to add new point
+                            </>
+                        )}
                     </div>
 
                     {/* Error message */}
@@ -540,7 +888,7 @@ export const RouteEditor = memo(function RouteEditor({
                     )}
                 </div>
 
-                {/* Sidebar - camp list */}
+                {/* Sidebar */}
                 <div style={{
                     width: isMobile ? '100%' : 320,
                     height: isMobile ? 'auto' : '100%',
@@ -552,6 +900,8 @@ export const RouteEditor = memo(function RouteEditor({
                     flexDirection: 'column',
                     overflow: 'hidden'
                 }}>
+                    {mode === 'camps' ? (
+                        <>
                     {/* Selected camp actions */}
                     {selectedCamp && (
                         <div style={{
@@ -736,6 +1086,126 @@ export const RouteEditor = memo(function RouteEditor({
                         }}>
                             You have unsaved changes
                         </div>
+                    )}
+                        </>
+                    ) : (
+                        <>
+                            {/* Route editing mode sidebar */}
+                            {/* Selected route point actions */}
+                            {selectedRoutePointIndex !== null && (
+                                <div style={{
+                                    padding: 16,
+                                    borderBottom: `1px solid ${colors.glass.borderSubtle}`,
+                                    background: colors.glass.subtle
+                                }}>
+                                    <div style={{
+                                        display: 'flex',
+                                        justifyContent: 'space-between',
+                                        alignItems: 'flex-start',
+                                        marginBottom: 12
+                                    }}>
+                                        <div>
+                                            <div style={{
+                                                fontSize: 16,
+                                                fontWeight: 600,
+                                                color: colors.text.primary
+                                            }}>
+                                                Route Point #{selectedRoutePointIndex + 1}
+                                            </div>
+                                            <div style={{
+                                                fontSize: 13,
+                                                color: colors.text.secondary,
+                                                marginTop: 4
+                                            }}>
+                                                {routeCoordinates[selectedRoutePointIndex]?.[2]?.toFixed(0) || 0}m elevation
+                                            </div>
+                                            <div style={{
+                                                fontSize: 12,
+                                                color: colors.text.tertiary,
+                                                marginTop: 2
+                                            }}>
+                                                {routeCoordinates[selectedRoutePointIndex]?.[1]?.toFixed(5)}, {routeCoordinates[selectedRoutePointIndex]?.[0]?.toFixed(5)}
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div style={{ display: 'flex', gap: 8 }}>
+                                        <GlassButton
+                                            variant="subtle"
+                                            size="sm"
+                                            onClick={() => {
+                                                const coord = routeCoordinates[selectedRoutePointIndex];
+                                                if (coord && mapRef.current) {
+                                                    mapRef.current.flyTo({
+                                                        center: [coord[0], coord[1]],
+                                                        zoom: 15,
+                                                        duration: 1000
+                                                    });
+                                                }
+                                            }}
+                                            style={{ flex: 1 }}
+                                        >
+                                            Zoom To
+                                        </GlassButton>
+                                        <GlassButton
+                                            variant="subtle"
+                                            size="sm"
+                                            onClick={handleDeleteRoutePoint}
+                                            style={{ color: '#ef4444' }}
+                                        >
+                                            Delete
+                                        </GlassButton>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Route info header */}
+                            <div style={{
+                                padding: '12px 16px',
+                                fontSize: 12,
+                                fontWeight: 600,
+                                color: colors.text.tertiary,
+                                textTransform: 'uppercase',
+                                letterSpacing: '0.05em',
+                                borderBottom: `1px solid ${colors.glass.borderSubtle}`
+                            }}>
+                                Route Points ({routeCoordinates.length})
+                            </div>
+
+                            {/* Route stats */}
+                            <div style={{
+                                padding: 16,
+                                borderBottom: `1px solid ${colors.glass.borderSubtle}`
+                            }}>
+                                <div style={{
+                                    fontSize: 13,
+                                    color: colors.text.secondary,
+                                    marginBottom: 8
+                                }}>
+                                    Visible markers: {visibleRoutePointIndices.length}
+                                </div>
+                                <div style={{
+                                    fontSize: 12,
+                                    color: colors.text.tertiary
+                                }}>
+                                    Drag markers to adjust the route path. Click on the route line to add new points.
+                                </div>
+                            </div>
+
+                            {/* Route changes indicator */}
+                            {routeHasChanges && (
+                                <div style={{
+                                    padding: '12px 16px',
+                                    background: 'rgba(251, 191, 36, 0.1)',
+                                    borderTop: `1px solid rgba(251, 191, 36, 0.3)`,
+                                    fontSize: 13,
+                                    color: '#fbbf24',
+                                    textAlign: 'center',
+                                    marginTop: 'auto'
+                                }}>
+                                    Route has unsaved changes
+                                </div>
+                            )}
+                        </>
                     )}
                 </div>
             </div>
