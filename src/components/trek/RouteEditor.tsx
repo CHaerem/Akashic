@@ -71,6 +71,113 @@ export const RouteEditor = memo(function RouteEditor({
     const [hasChanges, setHasChanges] = useState(false);
     const [mapLoaded, setMapLoaded] = useState(false);
 
+    // Undo/redo history state
+    interface HistoryState {
+        camps: EditableCamp[];
+        routeCoordinates: RouteCoordinate[];
+    }
+    const [undoStack, setUndoStack] = useState<HistoryState[]>([]);
+    const [redoStack, setRedoStack] = useState<HistoryState[]>([]);
+    const maxHistorySize = 50;
+
+    // Push current state to undo stack (call before making changes)
+    const pushToHistory = useCallback(() => {
+        setUndoStack(prev => {
+            const newState: HistoryState = {
+                camps: camps.map(c => ({ ...c })),
+                routeCoordinates: [...routeCoordinates]
+            };
+            const updated = [...prev, newState];
+            // Limit history size
+            if (updated.length > maxHistorySize) {
+                return updated.slice(-maxHistorySize);
+            }
+            return updated;
+        });
+        // Clear redo stack when new action is performed
+        setRedoStack([]);
+    }, [camps, routeCoordinates]);
+
+    // Undo action
+    const handleUndo = useCallback(() => {
+        if (undoStack.length === 0) return;
+
+        const prevState = undoStack[undoStack.length - 1];
+
+        // Push current state to redo stack
+        setRedoStack(prev => [...prev, {
+            camps: camps.map(c => ({ ...c })),
+            routeCoordinates: [...routeCoordinates]
+        }]);
+
+        // Restore previous state
+        setCamps(prevState.camps);
+        setRouteCoordinates(prevState.routeCoordinates);
+
+        // Remove from undo stack
+        setUndoStack(prev => prev.slice(0, -1));
+
+        // Update change flags based on restored state
+        const originalCamps = trekData.camps || [];
+        const originalRoute = trekData.route?.coordinates || [];
+        const campsChanged = JSON.stringify(prevState.camps) !== JSON.stringify(originalCamps.map(c => ({ ...c })));
+        const routeChanged = JSON.stringify(prevState.routeCoordinates) !== JSON.stringify(originalRoute);
+        setHasChanges(campsChanged);
+        setRouteHasChanges(routeChanged);
+    }, [undoStack, camps, routeCoordinates, trekData.camps, trekData.route]);
+
+    // Redo action
+    const handleRedo = useCallback(() => {
+        if (redoStack.length === 0) return;
+
+        const nextState = redoStack[redoStack.length - 1];
+
+        // Push current state to undo stack
+        setUndoStack(prev => [...prev, {
+            camps: camps.map(c => ({ ...c })),
+            routeCoordinates: [...routeCoordinates]
+        }]);
+
+        // Restore next state
+        setCamps(nextState.camps);
+        setRouteCoordinates(nextState.routeCoordinates);
+
+        // Remove from redo stack
+        setRedoStack(prev => prev.slice(0, -1));
+
+        // Update change flags
+        const originalCamps = trekData.camps || [];
+        const originalRoute = trekData.route?.coordinates || [];
+        const campsChanged = JSON.stringify(nextState.camps) !== JSON.stringify(originalCamps.map(c => ({ ...c })));
+        const routeChanged = JSON.stringify(nextState.routeCoordinates) !== JSON.stringify(originalRoute);
+        setHasChanges(campsChanged);
+        setRouteHasChanges(routeChanged);
+    }, [redoStack, camps, routeCoordinates, trekData.camps, trekData.route]);
+
+    // Keyboard shortcuts for undo/redo
+    useEffect(() => {
+        if (!isOpen) return;
+
+        const handleKeyDown = (e: KeyboardEvent) => {
+            // Use metaKey for Mac (Cmd), ctrlKey for others
+            const modKey = e.metaKey || e.ctrlKey;
+
+            if (modKey && e.key === 'z' && !e.shiftKey) {
+                e.preventDefault();
+                handleUndo();
+            } else if (modKey && e.key === 'z' && e.shiftKey) {
+                e.preventDefault();
+                handleRedo();
+            } else if (modKey && e.key === 'y') {
+                e.preventDefault();
+                handleRedo();
+            }
+        };
+
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [isOpen, handleUndo, handleRedo]);
+
     // Sample rate for route points (show every Nth point to avoid performance issues)
     const getRoutePointSampleRate = useCallback((totalPoints: number) => {
         if (totalPoints < 100) return 1;
@@ -403,6 +510,9 @@ export const RouteEditor = memo(function RouteEditor({
 
     // Handle route point dragged to new position
     const handleRoutePointDragged = useCallback((pointIndex: number, newCoords: [number, number]) => {
+        // Save state before making changes
+        pushToHistory();
+
         // Get elevation from nearby points (interpolate)
         const prevCoord = routeCoordinates[pointIndex - 1];
         const nextCoord = routeCoordinates[pointIndex + 1];
@@ -425,7 +535,7 @@ export const RouteEditor = memo(function RouteEditor({
         });
 
         setRouteHasChanges(true);
-    }, [routeCoordinates]);
+    }, [routeCoordinates, pushToHistory]);
 
     // Delete selected route point
     const handleDeleteRoutePoint = useCallback(() => {
@@ -434,6 +544,9 @@ export const RouteEditor = memo(function RouteEditor({
             setError('Route must have at least 2 points');
             return;
         }
+
+        // Save state before making changes
+        pushToHistory();
 
         // Remove the marker
         const marker = routeMarkersRef.current.get(selectedRoutePointIndex);
@@ -450,11 +563,14 @@ export const RouteEditor = memo(function RouteEditor({
 
         setSelectedRoutePointIndex(null);
         setRouteHasChanges(true);
-    }, [selectedRoutePointIndex, routeCoordinates.length]);
+    }, [selectedRoutePointIndex, routeCoordinates.length, pushToHistory]);
 
     // Insert a point into the route (click on route line in route mode)
     const handleRouteLineClick = useCallback((coords: [number, number]) => {
         if (mode !== 'route') return;
+
+        // Save state before making changes
+        pushToHistory();
 
         // Find nearest segment to insert point
         let nearestIndex = 0;
@@ -494,7 +610,7 @@ export const RouteEditor = memo(function RouteEditor({
         });
 
         setRouteHasChanges(true);
-    }, [mode, routeCoordinates]);
+    }, [mode, routeCoordinates, pushToHistory]);
 
     // Update map route line when coordinates change
     useEffect(() => {
@@ -554,6 +670,9 @@ export const RouteEditor = memo(function RouteEditor({
         const route = trekData.route?.coordinates as RouteCoordinate[] | undefined;
         if (!route) return;
 
+        // Save state before making changes
+        pushToHistory();
+
         // Snap to nearest point on route
         const nearest = findNearestPointOnRoute(newCoords, route);
         if (!nearest) return;
@@ -582,12 +701,15 @@ export const RouteEditor = memo(function RouteEditor({
         }
 
         setHasChanges(true);
-    }, [trekData.route]);
+    }, [trekData.route, pushToHistory]);
 
     // Handle click on route to add new camp
     const handleRouteClick = useCallback((coords: [number, number]) => {
         const route = trekData.route?.coordinates as RouteCoordinate[] | undefined;
         if (!route) return;
+
+        // Save state before making changes
+        pushToHistory();
 
         const nearest = findNearestPointOnRoute(coords, route);
         if (!nearest) return;
@@ -623,16 +745,19 @@ export const RouteEditor = memo(function RouteEditor({
         setCamps(prev => [...prev, newCamp]);
         setSelectedCampId(newCamp.id);
         setHasChanges(true);
-    }, [camps, trekData.route]);
+    }, [camps, trekData.route, pushToHistory]);
 
     // Delete selected camp
     const handleDeleteCamp = useCallback(() => {
         if (!selectedCampId) return;
 
+        // Save state before making changes
+        pushToHistory();
+
         setCamps(prev => prev.filter(c => c.id !== selectedCampId));
         setSelectedCampId(null);
         setHasChanges(true);
-    }, [selectedCampId]);
+    }, [selectedCampId, pushToHistory]);
 
     // Fly to selected camp
     const flyToCamp = useCallback((camp: EditableCamp) => {
@@ -805,6 +930,28 @@ export const RouteEditor = memo(function RouteEditor({
                     >
                         Route
                     </button>
+                </div>
+
+                {/* Undo/Redo buttons */}
+                <div style={{ display: 'flex', gap: 8 }}>
+                    <GlassButton
+                        variant="subtle"
+                        size="sm"
+                        onClick={handleUndo}
+                        disabled={undoStack.length === 0 || saving}
+                        title="Undo (⌘Z)"
+                    >
+                        ↶ Undo
+                    </GlassButton>
+                    <GlassButton
+                        variant="subtle"
+                        size="sm"
+                        onClick={handleRedo}
+                        disabled={redoStack.length === 0 || saving}
+                        title="Redo (⌘⇧Z)"
+                    >
+                        ↷ Redo
+                    </GlassButton>
                 </div>
 
                 <div style={{ display: 'flex', gap: 12 }}>
