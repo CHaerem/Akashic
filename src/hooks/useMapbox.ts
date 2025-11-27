@@ -191,17 +191,81 @@ export function useMapbox({ containerRef, onTrekSelect, onPhotoClick, onRouteCli
                     paint: { 'line-color': '#00ffff', 'line-width': 4 }
                 });
 
-                // Photo markers source & layers
+                // Photo markers source & layers (with clustering)
                 map.addSource('photo-markers', {
                     type: 'geojson',
-                    data: { type: 'FeatureCollection', features: [] }
+                    data: { type: 'FeatureCollection', features: [] },
+                    cluster: true,
+                    clusterMaxZoom: 14, // Max zoom to cluster points
+                    clusterRadius: 50 // Radius of each cluster in pixels
                 });
 
-                // Photo marker glow (background)
+                // Cluster circles - outer glow
+                map.addLayer({
+                    id: 'photo-clusters-glow',
+                    type: 'circle',
+                    source: 'photo-markers',
+                    filter: ['has', 'point_count'],
+                    layout: { 'visibility': 'none' },
+                    paint: {
+                        'circle-color': '#60a5fa',
+                        'circle-radius': [
+                            'step',
+                            ['get', 'point_count'],
+                            18, // radius for < 5 photos
+                            5, 22, // radius for 5-9 photos
+                            10, 26 // radius for 10+ photos
+                        ],
+                        'circle-opacity': 0.3,
+                        'circle-blur': 0.5
+                    }
+                });
+
+                // Cluster circles - main
+                map.addLayer({
+                    id: 'photo-clusters-circle',
+                    type: 'circle',
+                    source: 'photo-markers',
+                    filter: ['has', 'point_count'],
+                    layout: { 'visibility': 'none' },
+                    paint: {
+                        'circle-color': '#3b82f6',
+                        'circle-radius': [
+                            'step',
+                            ['get', 'point_count'],
+                            12, // radius for < 5 photos
+                            5, 15, // radius for 5-9 photos
+                            10, 18 // radius for 10+ photos
+                        ],
+                        'circle-stroke-width': 2,
+                        'circle-stroke-color': '#60a5fa'
+                    }
+                });
+
+                // Cluster count labels
+                map.addLayer({
+                    id: 'photo-clusters-count',
+                    type: 'symbol',
+                    source: 'photo-markers',
+                    filter: ['has', 'point_count'],
+                    layout: {
+                        'visibility': 'none',
+                        'text-field': ['get', 'point_count_abbreviated'],
+                        'text-font': ['DIN Pro Medium', 'Arial Unicode MS Regular'],
+                        'text-size': 11,
+                        'text-allow-overlap': true
+                    },
+                    paint: {
+                        'text-color': '#ffffff'
+                    }
+                });
+
+                // Photo marker glow (background) - unclustered points only
                 map.addLayer({
                     id: 'photo-markers-glow',
                     type: 'circle',
                     source: 'photo-markers',
+                    filter: ['!', ['has', 'point_count']],
                     layout: { 'visibility': 'none' },
                     paint: {
                         'circle-color': ['case', ['get', 'highlighted'], '#60a5fa', '#ffffff'],
@@ -211,11 +275,12 @@ export function useMapbox({ containerRef, onTrekSelect, onPhotoClick, onRouteCli
                     }
                 });
 
-                // Photo marker circles
+                // Photo marker circles - unclustered points only
                 map.addLayer({
                     id: 'photo-markers-circle',
                     type: 'circle',
                     source: 'photo-markers',
+                    filter: ['!', ['has', 'point_count']],
                     layout: { 'visibility': 'none' },
                     paint: {
                         'circle-color': ['case', ['get', 'highlighted'], '#3b82f6', '#ffffff'],
@@ -296,6 +361,37 @@ export function useMapbox({ containerRef, onTrekSelect, onPhotoClick, onRouteCli
                         if (photo) {
                             onPhotoClickRef.current(photo);
                         }
+                    }
+                    e.originalEvent.stopPropagation();
+                }
+            });
+
+            // Cluster interaction handlers - zoom in on click
+            map.on('mouseenter', 'photo-clusters-circle', () => {
+                map.getCanvas().style.cursor = 'pointer';
+            });
+
+            map.on('mouseleave', 'photo-clusters-circle', () => {
+                map.getCanvas().style.cursor = '';
+            });
+
+            map.on('click', 'photo-clusters-circle', (e) => {
+                if (e.features && e.features.length > 0) {
+                    const clusterId = e.features[0].properties?.cluster_id;
+                    const source = map.getSource('photo-markers') as mapboxgl.GeoJSONSource;
+
+                    if (source && clusterId !== undefined) {
+                        // Get cluster expansion zoom level
+                        source.getClusterExpansionZoom(clusterId, (err, zoom) => {
+                            if (err) return;
+
+                            const geometry = e.features![0].geometry as GeoJSON.Point;
+                            map.easeTo({
+                                center: geometry.coordinates as [number, number],
+                                zoom: zoom || 15,
+                                duration: 500
+                            });
+                        });
                     }
                     e.originalEvent.stopPropagation();
                 }
@@ -783,10 +879,15 @@ export function useMapbox({ containerRef, onTrekSelect, onPhotoClick, onRouteCli
                 features
             });
 
-            // Show/hide photo markers based on whether we have photos
+            // Show/hide photo markers and clusters based on whether we have photos
             const visibility = features.length > 0 ? 'visible' : 'none';
+            // Individual markers (unclustered)
             map.setLayoutProperty('photo-markers-circle', 'visibility', visibility);
             map.setLayoutProperty('photo-markers-glow', 'visibility', visibility);
+            // Cluster layers
+            map.setLayoutProperty('photo-clusters-circle', 'visibility', visibility);
+            map.setLayoutProperty('photo-clusters-glow', 'visibility', visibility);
+            map.setLayoutProperty('photo-clusters-count', 'visibility', visibility);
         }
     }, [mapReady]);
 

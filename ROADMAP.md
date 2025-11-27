@@ -211,7 +211,7 @@ Show photos spatially on the map using their GPS coordinates.
 
 - [x] Render small markers/dots at photo locations along route
 - [x] Click marker to open lightbox
-- [ ] Cluster markers when zoomed out, spread when zoomed in (future)
+- [x] Cluster markers when zoomed out, spread when zoomed in
 - [x] When a day is selected, highlight only that day's photo markers
 - [x] Subtle styling that doesn't clutter the map
 
