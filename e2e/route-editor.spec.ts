@@ -275,4 +275,104 @@ test.describe('Route Editor', () => {
             await expect(campsButton).toBeVisible();
         });
     });
+
+    test.describe('Draw Mode', () => {
+        test('shows Edit and Draw sub-mode toggle in Route mode', async ({ page }) => {
+            const found = await openRouteEditor(page);
+            if (!found) {
+                test.skip();
+                return;
+            }
+
+            // Switch to route mode
+            const routeButton = page.locator('button:has-text("Route")');
+            await routeButton.click();
+            await page.waitForTimeout(300);
+
+            // Should show Edit and Draw toggle buttons
+            const editButton = page.locator('button:has-text("Edit")');
+            const drawButton = page.locator('button:has-text("Draw")');
+
+            await expect(editButton).toBeVisible({ timeout: 3000 });
+            await expect(drawButton).toBeVisible({ timeout: 3000 });
+        });
+
+        test('Edit sub-mode is default in Route mode', async ({ page }) => {
+            const found = await openRouteEditor(page);
+            if (!found) {
+                test.skip();
+                return;
+            }
+
+            // Switch to route mode
+            const routeButton = page.locator('button:has-text("Route")');
+            await routeButton.click();
+            await page.waitForTimeout(300);
+
+            // Instructions should mention "Drag route points"
+            const instructions = page.locator('div:has-text("Drag route points")');
+            await expect(instructions).toBeVisible({ timeout: 3000 });
+        });
+
+        test('switching to Draw sub-mode changes instructions', async ({ page }) => {
+            const found = await openRouteEditor(page);
+            if (!found) {
+                test.skip();
+                return;
+            }
+
+            // Switch to route mode
+            const routeButton = page.locator('button:has-text("Route")');
+            await routeButton.click();
+            await page.waitForTimeout(300);
+
+            // Click Draw sub-mode button
+            const drawButton = page.locator('button:has-text("Draw")');
+            await drawButton.click();
+            await page.waitForTimeout(300);
+
+            // Instructions should mention "Draw on map"
+            const instructions = page.locator('div:has-text("Draw on map")');
+            await expect(instructions).toBeVisible({ timeout: 3000 });
+        });
+
+        test('Draw mode shows touch instructions', async ({ page }) => {
+            const found = await openRouteEditor(page);
+            if (!found) {
+                test.skip();
+                return;
+            }
+
+            // Switch to route mode and draw sub-mode
+            const routeButton = page.locator('button:has-text("Route")');
+            await routeButton.click();
+            await page.waitForTimeout(300);
+
+            const drawButton = page.locator('button:has-text("Draw")');
+            await drawButton.click();
+            await page.waitForTimeout(300);
+
+            // Instructions should mention two fingers for panning
+            const instructions = page.locator('div:has-text("Two fingers to pan")');
+            await expect(instructions).toBeVisible({ timeout: 3000 });
+        });
+
+        test('sub-mode toggle is not visible in Camps mode', async ({ page }) => {
+            const found = await openRouteEditor(page);
+            if (!found) {
+                test.skip();
+                return;
+            }
+
+            // Start in camps mode (default)
+            // The Edit/Draw toggle should not be visible
+            const drawButton = page.locator('button:has-text("Draw")');
+
+            // Wait a bit for UI to settle
+            await page.waitForTimeout(500);
+
+            // Draw button should not be visible in Camps mode
+            await expect(drawButton).not.toBeVisible();
+        });
+    });
 });

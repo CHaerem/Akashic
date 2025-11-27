@@ -146,11 +146,18 @@ Collaborative interface for family members to create and edit journeys together.
 - [x] Click to add intermediate points to route
 - [x] Drag existing route points to adjust path
 - [x] Delete route points
-- [ ] Smooth/simplify tools (future enhancement)
+- [x] Douglas-Peucker auto-simplification
 
-**Phase C: Full Route Drawing** (Future)
-- [ ] Draw new route sections
-- [ ] Connect/extend existing routes
+**Phase C: Intelligent Route Drawing** ✅
+- [x] Draw mode toggle (Edit vs Draw sub-modes)
+- [x] Freehand drawing with mouse/touch gestures
+- [x] Real-time drawing preview layer
+- [x] Mapbox Map Matching API integration (snap to trails)
+- [x] Auto-fallback to simplified freehand when no trails nearby
+- [x] Visual feedback (snapped vs freehand)
+- [x] Mobile touch support (single finger = draw, two fingers = pan)
+
+**Phase D: Route Import** (Future)
 - [ ] GPX re-import with merge options
 - [ ] Upload GPX file
 - [ ] Parse and store route geometry
@@ -287,7 +294,7 @@ A platform where anyone can create and share their travel journeys.
 | Phase 1.2 (Photo Upload) | ✅ Complete | Upload endpoint + frontend UI |
 | Phase 1.3 (DB Integration) | ✅ Complete | Photo CRUD, waypoint linking, assign photos modal |
 | Phase 1.4 (Photo Display) | ✅ Complete | Grid, lightbox, day-based, map markers |
-| Phase 2 (Journey UI) | ⏳ Partial | Journey editing done, Route Editor Phase A+B done |
+| Phase 2 (Journey UI) | ✅ Complete | Journey editing, Route Editor A+B+C (intelligent drawing) done |
 | **Phase 2.5 (Immersive Exploration)** | ✅ Core Complete | Elevation profile, photo markers, view-on-map done |
 | Phase 3 (Polish) | 📋 Planned | After immersive exploration |
 | Multi-user | 🔮 Future | Post-MVP |
