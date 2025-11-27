@@ -22,7 +22,7 @@ import 'mapbox-gl/dist/mapbox-gl.css';
 import type { TrekData, Camp, Route } from '../../types/trek';
 import { GlassButton } from '../common/GlassButton';
 import { colors, radius, transitions, effects, shadows, glassFloating, glassPanel, glassButton, typography } from '../../styles/liquidGlass';
-import { findNearestPointOnRoute, type RouteCoordinate, type Coordinate } from '../../utils/routeUtils';
+import { findNearestPointOnRoute, haversineDistance, type RouteCoordinate, type Coordinate } from '../../utils/routeUtils';
 import { processDrawnSegment as processWithMapMatching } from '../../lib/mapMatching';
 import { updateWaypoint, createWaypoint, deleteWaypoint, getJourneyIdBySlug, updateJourneyRoute } from '../../lib/journeys';
 
@@ -778,7 +778,25 @@ export const RouteEditor = memo(function RouteEditor({
     // Feedback state for drawing
     const [drawFeedback, setDrawFeedback] = useState<string | null>(null);
 
-    // Process drawn segment - append to existing route with intelligent snapping
+    // Find nearest route point index within threshold
+    const findNearestRoutePointIndex = useCallback((coord: Coordinate, thresholdKm: number = 0.05): number | null => {
+        if (routeCoordinates.length === 0) return null;
+
+        let nearestIndex: number | null = null;
+        let nearestDist = Infinity;
+
+        for (let i = 0; i < routeCoordinates.length; i++) {
+            const dist = haversineDistance(coord, routeCoordinates[i]);
+            if (dist < nearestDist && dist < thresholdKm) {
+                nearestDist = dist;
+                nearestIndex = i;
+            }
+        }
+
+        return nearestIndex;
+    }, [routeCoordinates]);
+
+    // Process drawn segment - replace/insert/append with intelligent snapping
     const processDrawnSegment = useCallback(async (points: [number, number][]) => {
         if (points.length < 2) return;
 
@@ -803,29 +821,85 @@ export const RouteEditor = memo(function RouteEditor({
                 return;
             }
 
-            // Get elevation from last route point (or 0 if no route)
-            const lastRoutePoint = routeCoordinates[routeCoordinates.length - 1];
-            const baseElevation = lastRoutePoint?.[2] || 0;
+            // Find if draw start/end are near existing route points (50m threshold)
+            const drawStart = points[0];
+            const drawEnd = points[points.length - 1];
+            const startIndex = findNearestRoutePointIndex(drawStart, 0.05);
+            const endIndex = findNearestRoutePointIndex(drawEnd, 0.05);
 
-            // Add elevation to new points (use base elevation for now)
+            // Get elevation from nearest route point (or 0 if no route)
+            const getBaseElevation = (index: number | null): number => {
+                if (index !== null && routeCoordinates[index]) {
+                    return routeCoordinates[index][2];
+                }
+                if (routeCoordinates.length > 0) {
+                    return routeCoordinates[routeCoordinates.length - 1][2];
+                }
+                return 0;
+            };
+
+            const baseElevation = getBaseElevation(startIndex ?? endIndex);
+
+            // Add elevation to new points
             const newPoints: RouteCoordinate[] = result.coordinates.map(p => [
                 p[0],
                 p[1],
                 p[2] || baseElevation
             ]);
 
-            setRouteCoordinates(prev => [...prev, ...newPoints]);
-            setRouteHasChanges(true);
+            let feedbackMessage = '';
 
-            // Show feedback
-            if (result.wasSnapped) {
-                setDrawFeedback(`Snapped to trail (${Math.round(result.confidence * 100)}% match)`);
+            // Determine merge strategy based on start/end positions
+            if (startIndex !== null && endIndex !== null && startIndex < endIndex) {
+                // Replace segment: drawing connects two points on the route
+                // Keep route before startIndex, add new points, keep route after endIndex
+                setRouteCoordinates(prev => [
+                    ...prev.slice(0, startIndex),
+                    ...newPoints,
+                    ...prev.slice(endIndex + 1)
+                ]);
+                feedbackMessage = `Replaced segment (points ${startIndex}-${endIndex})`;
+            } else if (startIndex !== null && endIndex !== null && endIndex < startIndex) {
+                // Drawing goes backward - replace in reverse direction
+                // Keep route before endIndex, add new points (reversed), keep route after startIndex
+                const reversedPoints = [...newPoints].reverse();
+                setRouteCoordinates(prev => [
+                    ...prev.slice(0, endIndex),
+                    ...reversedPoints,
+                    ...prev.slice(startIndex + 1)
+                ]);
+                feedbackMessage = `Replaced segment (points ${endIndex}-${startIndex})`;
+            } else if (startIndex !== null && endIndex === null) {
+                // Started on route, ended off - replace from startIndex to end
+                setRouteCoordinates(prev => [
+                    ...prev.slice(0, startIndex),
+                    ...newPoints
+                ]);
+                feedbackMessage = `Extended from point ${startIndex}`;
+            } else if (startIndex === null && endIndex !== null) {
+                // Started off route, ended on route - prepend to endIndex
+                setRouteCoordinates(prev => [
+                    ...newPoints,
+                    ...prev.slice(endIndex + 1)
+                ]);
+                feedbackMessage = `Prepended to point ${endIndex}`;
             } else {
-                setDrawFeedback(`Added ${newPoints.length} points`);
+                // Neither on route - append to end (original behavior)
+                setRouteCoordinates(prev => [...prev, ...newPoints]);
+                feedbackMessage = `Added ${newPoints.length} points`;
             }
 
-            // Clear feedback after 2 seconds
-            setTimeout(() => setDrawFeedback(null), 2000);
+            setRouteHasChanges(true);
+
+            // Show feedback with snapping info
+            if (result.wasSnapped) {
+                setDrawFeedback(`${feedbackMessage} • Snapped to trail (${Math.round(result.confidence * 100)}%)`);
+            } else {
+                setDrawFeedback(feedbackMessage);
+            }
+
+            // Clear feedback after 3 seconds
+            setTimeout(() => setDrawFeedback(null), 3000);
 
         } catch (err) {
             console.error('Error processing drawn segment:', err);
@@ -834,7 +908,7 @@ export const RouteEditor = memo(function RouteEditor({
             setIsProcessingDraw(false);
             setDrawingPoints([]);
         }
-    }, [routeCoordinates, pushToHistory]);
+    }, [routeCoordinates, pushToHistory, findNearestRoutePointIndex]);
 
     // Handle drawing end (mouseup/touchend)
     const handleDrawEnd = useCallback(() => {
@@ -1388,9 +1462,9 @@ export const RouteEditor = memo(function RouteEditor({
                     </span>
                 ) : (
                     <>
-                        <strong style={{ color: '#34d399' }}>Draw</strong> on map to extend route<br />
+                        <strong style={{ color: '#34d399' }}>Draw</strong> on map to add or replace route<br />
                         <span style={{ fontSize: 11, color: colors.text.tertiary }}>
-                            Drag to draw • Two fingers to pan
+                            Start/end near route to replace • Two fingers to pan
                         </span>
                     </>
                 )}
