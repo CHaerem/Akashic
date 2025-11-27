@@ -331,24 +331,6 @@ export const RouteEditor = memo(function RouteEditor({
         };
     }, [isOpen, trekData.route, isMobile]);
 
-    // Handle route click events based on current mode
-    useEffect(() => {
-        const handleRouteClickEvent = (e: Event) => {
-            const customEvent = e as CustomEvent<{ coords: [number, number] }>;
-            const { coords } = customEvent.detail;
-            if (mode === 'camps') {
-                handleRouteClick(coords);
-            } else {
-                handleRouteLineClick(coords);
-            }
-        };
-
-        window.addEventListener('route-editor-route-click', handleRouteClickEvent);
-        return () => {
-            window.removeEventListener('route-editor-route-click', handleRouteClickEvent);
-        };
-    }, [mode, handleRouteClick, handleRouteLineClick]);
-
     // Sort camps by route distance (consistent with sidebar)
     const sortCamps = useCallback((campsToSort: EditableCamp[]) => {
         return [...campsToSort].sort((a, b) => {
@@ -746,6 +728,25 @@ export const RouteEditor = memo(function RouteEditor({
         setSelectedCampId(newCamp.id);
         setHasChanges(true);
     }, [camps, trekData.route, pushToHistory]);
+
+    // Handle route click events based on current mode
+    // Note: This useEffect must be after handleRouteClick and handleRouteLineClick are defined
+    useEffect(() => {
+        const handleRouteClickEvent = (e: Event) => {
+            const customEvent = e as CustomEvent<{ coords: [number, number] }>;
+            const { coords } = customEvent.detail;
+            if (mode === 'camps') {
+                handleRouteClick(coords);
+            } else {
+                handleRouteLineClick(coords);
+            }
+        };
+
+        window.addEventListener('route-editor-route-click', handleRouteClickEvent);
+        return () => {
+            window.removeEventListener('route-editor-route-click', handleRouteClickEvent);
+        };
+    }, [mode, handleRouteClick, handleRouteLineClick]);
 
     // Delete selected camp
     const handleDeleteCamp = useCallback(() => {
