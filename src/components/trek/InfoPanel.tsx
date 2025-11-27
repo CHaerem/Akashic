@@ -35,12 +35,13 @@ interface InfoPanelProps {
     photos?: Photo[];
     getMediaUrl?: (path: string) => string;
     onJourneyUpdate?: () => void;
+    onViewPhotoOnMap?: (photo: Photo) => void;
 }
 
 export const InfoPanel = memo(function InfoPanel({
     trekData, activeTab, setActiveTab, selectedCamp, onCampSelect, onBack,
     extendedStats, elevationProfile, isMobile, panelState, onPanelStateChange,
-    photos = [], getMediaUrl = (path) => path, onJourneyUpdate
+    photos = [], getMediaUrl = (path) => path, onJourneyUpdate, onViewPhotoOnMap
 }: InfoPanelProps) {
     const padding = isMobile ? 16 : 24;
     const [showEditModal, setShowEditModal] = useState(false);
@@ -321,13 +322,26 @@ export const InfoPanel = memo(function InfoPanel({
                             getMediaUrl={getMediaUrl}
                             onUpdate={onJourneyUpdate}
                             editMode={editMode}
+                            onViewPhotoOnMap={onViewPhotoOnMap}
                         />
                     )}
                     {activeTab === 'stats' && (
-                        <StatsTab trekData={trekData} extendedStats={extendedStats} elevationProfile={elevationProfile} isMobile={isMobile} />
+                        <StatsTab
+                            trekData={trekData}
+                            extendedStats={extendedStats}
+                            elevationProfile={elevationProfile}
+                            isMobile={isMobile}
+                            selectedCamp={selectedCamp}
+                            onCampSelect={onCampSelect}
+                        />
                     )}
                     {activeTab === 'photos' && (
-                        <PhotosTab trekData={trekData} isMobile={isMobile} editMode={editMode} />
+                        <PhotosTab
+                            trekData={trekData}
+                            isMobile={isMobile}
+                            editMode={editMode}
+                            onViewPhotoOnMap={onViewPhotoOnMap}
+                        />
                     )}
                 </div>
             )}

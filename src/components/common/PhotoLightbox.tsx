@@ -19,6 +19,7 @@ interface PhotoLightboxProps {
     getMediaUrl: (path: string) => string;
     onDelete?: (photo: Photo) => void;
     editMode?: boolean;
+    onViewOnMap?: (photo: Photo) => void;
 }
 
 export const PhotoLightbox = memo(function PhotoLightbox({
@@ -28,7 +29,8 @@ export const PhotoLightbox = memo(function PhotoLightbox({
     onClose,
     getMediaUrl,
     onDelete,
-    editMode = false
+    editMode = false,
+    onViewOnMap
 }: PhotoLightboxProps) {
     const [currentIndex, setCurrentIndex] = useState(initialIndex);
     const [showControls, setShowControls] = useState(true);
@@ -412,8 +414,8 @@ export const PhotoLightbox = memo(function PhotoLightbox({
                 />
             </div>
 
-            {/* Caption - bottom */}
-            {currentPhoto.caption && (
+            {/* Bottom info bar - caption and location */}
+            {(currentPhoto.caption || currentPhoto.coordinates) && (
                 <div style={{
                     position: 'absolute',
                     bottom: 0,
@@ -425,19 +427,60 @@ export const PhotoLightbox = memo(function PhotoLightbox({
                     transition: `opacity ${transitions.normal}`,
                     pointerEvents: showControls ? 'auto' : 'none'
                 }}>
-                    <p style={{
-                        color: colors.text.primary,
-                        fontSize: 15,
-                        textAlign: 'center',
-                        margin: 0,
-                        fontWeight: 400,
-                        lineHeight: 1.5,
-                        maxWidth: 560,
-                        marginLeft: 'auto',
-                        marginRight: 'auto'
-                    }}>
-                        {currentPhoto.caption}
-                    </p>
+                    {/* Caption */}
+                    {currentPhoto.caption && (
+                        <p style={{
+                            color: colors.text.primary,
+                            fontSize: 15,
+                            textAlign: 'center',
+                            margin: 0,
+                            fontWeight: 400,
+                            lineHeight: 1.5,
+                            maxWidth: 560,
+                            marginLeft: 'auto',
+                            marginRight: 'auto',
+                            marginBottom: currentPhoto.coordinates ? 12 : 0
+                        }}>
+                            {currentPhoto.caption}
+                        </p>
+                    )}
+
+                    {/* Location info and View on Map button */}
+                    {currentPhoto.coordinates && onViewOnMap && (
+                        <div style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: 12
+                        }}>
+                            <button
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    onClose(); // Close lightbox first
+                                    onViewOnMap(currentPhoto);
+                                }}
+                                style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: 6,
+                                    background: colors.glass.medium,
+                                    border: `1px solid ${colors.glass.border}`,
+                                    borderRadius: 20,
+                                    padding: '8px 16px',
+                                    color: colors.text.secondary,
+                                    fontSize: 12,
+                                    cursor: 'pointer',
+                                    transition: `all ${transitions.normal}`
+                                }}
+                            >
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                    <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/>
+                                    <circle cx="12" cy="10" r="3"/>
+                                </svg>
+                                View on Map
+                            </button>
+                        </div>
+                    )}
                 </div>
             )}
 
@@ -445,7 +488,7 @@ export const PhotoLightbox = memo(function PhotoLightbox({
             {photos.length > 1 && (
                 <div style={{
                     position: 'absolute',
-                    bottom: currentPhoto.caption ? 100 : 32,
+                    bottom: (currentPhoto.caption || currentPhoto.coordinates) ? 110 : 32,
                     left: '50%',
                     transform: 'translateX(-50%)',
                     opacity: showControls ? 0.7 : 0,

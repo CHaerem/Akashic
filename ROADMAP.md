@@ -31,9 +31,9 @@ A polished experience where authorized family members can:
 | Edit waypoints/days | ✅ | Name, elevation, description, highlights |
 | Free tier limits | ✅ | Server-side enforcement |
 | Delete photos | ✅ | Via Photos tab |
+| Photo map markers | ✅ | Click to open lightbox, fly to photo |
 | **Create new journey** | ❌ | Not needed for MVP (3 journeys exist) |
 | **Delete journey** | ❌ | Nice-to-have, not critical |
-| **Photo map markers** | ❌ | Deferred to Phase 3 |
 
 **MVP is feature-complete** - remaining work is polish and testing.
 
@@ -70,7 +70,7 @@ Move photos from git repo to Cloudflare R2 and build upload tooling.
 - [x] Photo grid with thumbnails
 - [x] Lightbox for full-size viewing
 - [x] Photos organized by day in Journey tab (matched by taken_at date)
-- [ ] Display photos on map at GPS coordinates
+- [x] Display photos on map at GPS coordinates (markers with click-to-view)
 
 ### Photo Data Model (existing in Supabase)
 
@@ -146,24 +146,73 @@ For MVP, the admin UI can be simple:
 
 ---
 
-## Phase 3: Enhanced Features
+## Phase 2.5: Immersive Exploration
 
 ### Goal
-Polish and quality-of-life improvements.
+Deepen the journey exploration experience by connecting map, photos, elevation, and route into a cohesive, interactive narrative. Keep it calm and simple while making exploration more engaging.
 
-### Nice-to-Haves
+### Priority Order
+
+#### 2.5.1 Interactive Elevation Profile ✅
+Transform the static elevation chart into an interactive exploration tool.
+- [x] Hover shows day name, elevation, distance marker
+- [x] Click flies camera to that camp, selects it in Journey tab
+- [x] Current selected day highlighted on the profile
+- [x] Smooth transitions between selections
+- [x] Touch support for mobile devices
+
+#### 2.5.2 Photo Markers on Map ✅
+Show photos spatially on the map using their GPS coordinates.
+- [x] Render small markers/dots at photo locations along route
+- [x] Click marker to open lightbox
+- [ ] Cluster markers when zoomed out, spread when zoomed in (future)
+- [x] When a day is selected, highlight only that day's photo markers
+- [x] Subtle styling that doesn't clutter the map
+
+#### 2.5.3 Photo ↔ Map Connection ✅
+Connect the lightbox experience to the spatial journey.
+- [x] "View on map" button flies camera to photo location (from all lightboxes)
+- [ ] Small map inset in lightbox (future - adds complexity)
+- [ ] Option to navigate photos by geographic order (future)
+
+#### 2.5.4 Enhanced Camp Selection
+Visual improvements when selecting a day/camp.
+- [ ] Photo thumbnails appear as subtle strip when camp selected
+- [ ] Featured photo fades in as background layer (optional)
+- [ ] Walked segment pulses briefly on selection
+
+#### 2.5.5 Route as Timeline
+Make the route line itself interactive.
+- [ ] Click anywhere on route to see segment info
+- [ ] Show "Day X - between Camp A and Camp B"
+- [ ] Display distance walked, elevation change for segment
+- [ ] Jump to that day's photos from route click
+
+#### 2.5.6 Journey Playback Mode
+Meditative "walk through" experience.
+- [ ] Play button starts automatic camp-to-camp progression
+- [ ] Camera moves smoothly between waypoints
+- [ ] Photos fade in as you "arrive" at each day
+- [ ] Pause/resume, manual control with arrow keys
+- [ ] Optional ambient mode (minimal UI)
+
+---
+
+## Phase 3: Polish & Extended Features
+
+### Goal
+Quality-of-life improvements and additional features.
+
+### Features
 
 #### Photo Features
 - [x] Auto-extract coordinates from EXIF GPS data (client-side via exifr)
 - [ ] Auto-match photos to nearest waypoint by coordinates
 - [x] Auto-match photos to days by date (Journey tab shows photos per day)
 - [x] Photo lightbox/gallery view
-- [ ] Photo map markers (show photos at their GPS locations)
 
 #### Journey Features
 - [ ] GPX import with automatic waypoint detection
-- [ ] Elevation profile visualization (already partially done)
-- [ ] Timeline view of journey
 - [ ] Journey statistics dashboard
 
 #### UX Improvements
@@ -218,9 +267,10 @@ A platform where anyone can create and share their travel journeys.
 | Phase 1.1 (R2 Setup) | ✅ Complete | Bucket + authenticated Worker deployed |
 | Phase 1.2 (Photo Upload) | ✅ Complete | Upload endpoint + frontend UI |
 | Phase 1.3 (DB Integration) | ✅ Complete | Photo CRUD, waypoint linking, assign photos modal |
-| Phase 1.4 (Photo Display) | ✅ Complete | Grid, lightbox, day-based organization |
+| Phase 1.4 (Photo Display) | ✅ Complete | Grid, lightbox, day-based, map markers |
 | Phase 2 (Journey UI) | ⏳ Partial | Journey editing done, waypoint/create pending |
-| Phase 3 (Polish) | 📋 Planned | After MVP launch |
+| **Phase 2.5 (Immersive Exploration)** | ✅ Core Complete | Elevation profile, photo markers, view-on-map done |
+| Phase 3 (Polish) | 📋 Planned | After immersive exploration |
 | Multi-user | 🔮 Future | Post-MVP |
 
 ---

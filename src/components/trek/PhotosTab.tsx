@@ -15,9 +15,10 @@ interface PhotosTabProps {
     trekData: TrekData;
     isMobile: boolean;
     editMode?: boolean;
+    onViewPhotoOnMap?: (photo: Photo) => void;
 }
 
-export function PhotosTab({ trekData, isMobile, editMode = false }: PhotosTabProps) {
+export function PhotosTab({ trekData, isMobile, editMode = false, onViewPhotoOnMap }: PhotosTabProps) {
     const [photos, setPhotos] = useState<Photo[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -236,6 +237,7 @@ export function PhotosTab({ trekData, isMobile, editMode = false }: PhotosTabPro
                 getMediaUrl={getMediaUrl}
                 onDelete={editMode ? handleDeletePhoto : undefined}
                 editMode={editMode}
+                onViewOnMap={onViewPhotoOnMap}
             />
         </div>
     );

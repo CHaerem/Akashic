@@ -71,6 +71,23 @@ export interface ExtendedStats {
     startElevation: number;
 }
 
+export interface ElevationPoint {
+    dist: number;
+    ele: number;
+    x: number;
+    y: number;
+}
+
+export interface CampMarker {
+    campId: string;
+    dayNumber: number;
+    name: string;
+    dist: number;
+    ele: number;
+    x: number;
+    y: number;
+}
+
 export interface ElevationProfile {
     linePath: string;
     areaPath: string;
@@ -79,6 +96,10 @@ export interface ElevationProfile {
     totalDist: number;
     plotMinEle: number;
     plotMaxEle: number;
+    /** Raw points for hover detection */
+    points: ElevationPoint[];
+    /** Camp positions on the profile */
+    campMarkers: CampMarker[];
 }
 
 export interface Photo {

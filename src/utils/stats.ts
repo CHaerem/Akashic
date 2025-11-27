@@ -3,7 +3,7 @@
  */
 
 import { getDistanceFromLatLonInKm } from './geography';
-import type { TrekData, ExtendedStats, ElevationProfile } from '../types/trek';
+import type { TrekData, Camp, ExtendedStats, ElevationProfile, ElevationPoint, CampMarker } from '../types/trek';
 
 /**
  * Calculate extended statistics for a trek
@@ -29,15 +29,49 @@ export function calculateStats(trekData: TrekData): ExtendedStats {
 }
 
 /**
+ * Find the closest route point to a camp's coordinates
+ */
+function findCampDistanceOnRoute(
+    campCoords: [number, number],
+    routeCoords: [number, number, number][],
+    cumulativeDistances: number[]
+): { dist: number; ele: number } | null {
+    let minDistance = Infinity;
+    let closestIndex = 0;
+
+    for (let i = 0; i < routeCoords.length; i++) {
+        const routePoint = routeCoords[i];
+        const dist = getDistanceFromLatLonInKm(
+            campCoords[1], campCoords[0],  // camp lat, lng
+            routePoint[1], routePoint[0]   // route lat, lng
+        );
+        if (dist < minDistance) {
+            minDistance = dist;
+            closestIndex = i;
+        }
+    }
+
+    // Only match if within 500m of the route
+    if (minDistance > 0.5) return null;
+
+    return {
+        dist: cumulativeDistances[closestIndex],
+        ele: routeCoords[closestIndex][2]
+    };
+}
+
+/**
  * Generate elevation profile data for SVG rendering
  */
 export function generateElevationProfile(
-    coordinates: [number, number, number][] | null | undefined
+    coordinates: [number, number, number][] | null | undefined,
+    camps?: Camp[]
 ): ElevationProfile | null {
     if (!coordinates || coordinates.length === 0) return null;
 
     // Calculate cumulative distance and extract elevation
-    const points: { dist: number; ele: number }[] = [];
+    const rawPoints: { dist: number; ele: number }[] = [];
+    const cumulativeDistances: number[] = [];
     let totalDist = 0;
     let minEle = Infinity;
     let maxEle = -Infinity;
@@ -54,7 +88,8 @@ export function generateElevationProfile(
         if (ele < minEle) minEle = ele;
         if (ele > maxEle) maxEle = ele;
 
-        points.push({ dist: totalDist, ele });
+        rawPoints.push({ dist: totalDist, ele });
+        cumulativeDistances.push(totalDist);
     }
 
     // Normalize to SVG viewbox
@@ -67,15 +102,53 @@ export function generateElevationProfile(
     const plotMaxEle = maxEle + (eleRange > 0 ? eleRange * 0.1 : 100);
     const plotEleRange = plotMaxEle - plotMinEle;
 
-    const pathPoints = points.map(p => {
-        const x = totalDist > 0 ? (p.dist / totalDist) * width : 0;
-        const y = plotEleRange > 0 ? height - ((p.ele - plotMinEle) / plotEleRange) * height : height / 2;
-        return `${x},${y}`;
+    // Convert to SVG coordinates
+    const toSvgCoords = (dist: number, ele: number): { x: number; y: number } => ({
+        x: totalDist > 0 ? (dist / totalDist) * width : 0,
+        y: plotEleRange > 0 ? height - ((ele - plotMinEle) / plotEleRange) * height : height / 2
     });
 
+    // Generate points with SVG coordinates
+    const points: ElevationPoint[] = rawPoints.map(p => ({
+        ...p,
+        ...toSvgCoords(p.dist, p.ele)
+    }));
+
     // Generate SVG paths
+    const pathPoints = points.map(p => `${p.x},${p.y}`);
     const linePath = `M ${pathPoints.join(' L ')}`;
     const areaPath = `${linePath} L ${width},${height} L 0,${height} Z`;
 
-    return { linePath, areaPath, minEle, maxEle, totalDist, plotMinEle, plotMaxEle };
+    // Calculate camp markers
+    const campMarkers: CampMarker[] = [];
+    if (camps && camps.length > 0) {
+        for (const camp of camps) {
+            const campPos = findCampDistanceOnRoute(camp.coordinates, coordinates, cumulativeDistances);
+            if (campPos) {
+                const svgCoords = toSvgCoords(campPos.dist, campPos.ele);
+                campMarkers.push({
+                    campId: camp.id,
+                    dayNumber: camp.dayNumber,
+                    name: camp.name,
+                    dist: campPos.dist,
+                    ele: campPos.ele,
+                    ...svgCoords
+                });
+            }
+        }
+        // Sort by distance
+        campMarkers.sort((a, b) => a.dist - b.dist);
+    }
+
+    return {
+        linePath,
+        areaPath,
+        minEle,
+        maxEle,
+        totalDist,
+        plotMinEle,
+        plotMaxEle,
+        points,
+        campMarkers
+    };
 }

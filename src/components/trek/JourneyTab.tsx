@@ -178,12 +178,16 @@ const CampItem = memo(function CampItem({
         padding: '20px 0',
         borderBottom: !isLast ? `1px solid ${colors.glass.borderSubtle}` : 'none',
         cursor: 'pointer',
-        transition: `background ${transitions.normal}`,
+        transition: `all ${transitions.smooth}`,
         background: isSelected ? colors.glass.subtle : 'transparent',
         margin: `0 -${padding}px`,
-        paddingLeft: padding,
+        paddingLeft: isSelected ? padding - 3 : padding, // Compensate for border
         paddingRight: padding,
-        minHeight: 44
+        minHeight: 44,
+        // Selection indicator - colored left border
+        borderLeft: isSelected ? `3px solid ${colors.accent.primary}` : '3px solid transparent',
+        // Subtle glow when selected
+        boxShadow: isSelected ? `inset 6px 0 16px -8px ${colors.glow.blue}` : 'none',
     }), [isLast, isSelected, padding]);
 
     const dayLabel = dayDate
@@ -221,8 +225,10 @@ const CampItem = memo(function CampItem({
                 <p style={{
                     color: isSelected ? colors.text.primary : colors.text.secondary,
                     fontSize: 16,
+                    marginTop: 0,
                     marginBottom: isSelected ? 12 : 0,
-                    margin: 0
+                    marginLeft: 0,
+                    marginRight: 0
                 }}>
                     {camp.name}
                 </p>
@@ -240,8 +246,8 @@ const CampItem = memo(function CampItem({
             </div>
 
             {isSelected && (
-                <div style={{ animation: 'fadeIn 0.3s ease', marginTop: 12 }}>
-                    <style>{`@keyframes fadeIn { from { opacity: 0; transform: translateY(-5px); } to { opacity: 1; transform: translateY(0); } }`}</style>
+                <div style={{ animation: 'expandIn 0.4s cubic-bezier(0.32, 0.72, 0, 1)', marginTop: 12 }}>
+                    <style>{`@keyframes expandIn { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: translateY(0); } }`}</style>
 
                     {/* Action buttons - only show in edit mode */}
                     {editMode && (
@@ -309,6 +315,7 @@ interface JourneyTabProps {
     getMediaUrl?: (path: string) => string;
     onUpdate?: () => void;
     editMode?: boolean;
+    onViewPhotoOnMap?: (photo: Photo) => void;
 }
 
 export const JourneyTab = memo(function JourneyTab({
@@ -319,7 +326,8 @@ export const JourneyTab = memo(function JourneyTab({
     photos = [],
     getMediaUrl = (path) => path,
     onUpdate,
-    editMode = false
+    editMode = false,
+    onViewPhotoOnMap
 }: JourneyTabProps) {
     const [editingCamp, setEditingCamp] = useState<Camp | null>(null);
     const [assigningCamp, setAssigningCamp] = useState<Camp | null>(null);
@@ -433,6 +441,7 @@ export const JourneyTab = memo(function JourneyTab({
                 isOpen={lightboxIndex !== null}
                 onClose={closeLightbox}
                 getMediaUrl={getMediaUrl}
+                onViewOnMap={onViewPhotoOnMap}
             />
         </div>
     );
