@@ -856,14 +856,24 @@ export const RouteEditor = memo(function RouteEditor({
             style={{
                 position: 'fixed',
                 inset: 0,
-                zIndex: 1000,
-                background: colors.background.deep,
-                display: 'flex',
-                flexDirection: 'column'
+                zIndex: 1000
             }}
         >
-            {/* Header - Liquid Glass style */}
+            {/* Map fills entire viewport */}
+            <div
+                ref={mapContainerRef}
+                style={{
+                    position: 'absolute',
+                    inset: 0
+                }}
+            />
+
+            {/* Header - Liquid Glass floating over map */}
             <div style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: isMobile ? 0 : 320,
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
@@ -871,20 +881,20 @@ export const RouteEditor = memo(function RouteEditor({
                 background: `linear-gradient(
                     180deg,
                     rgba(255, 255, 255, 0.12) 0%,
-                    rgba(255, 255, 255, 0.06) 50%,
-                    rgba(255, 255, 255, 0.02) 100%
+                    rgba(255, 255, 255, 0.06) 10%,
+                    rgba(12, 12, 18, 0.95) 40%
                 )`,
-                backdropFilter: 'blur(24px) saturate(180%)',
-                WebkitBackdropFilter: 'blur(24px) saturate(180%)',
+                backdropFilter: 'blur(32px) saturate(180%)',
+                WebkitBackdropFilter: 'blur(32px) saturate(180%)',
                 borderBottom: `1px solid ${colors.glass.border}`,
                 boxShadow: `
-                    0 4px 24px rgba(0, 0, 0, 0.2),
+                    0 8px 32px rgba(0, 0, 0, 0.3),
                     inset 0 1px 0 rgba(255, 255, 255, 0.15),
-                    inset 0 -1px 0 rgba(0, 0, 0, 0.1)
+                    inset 0 2px 20px rgba(255, 255, 255, 0.05)
                 `,
-                flexShrink: 0,
                 flexWrap: 'wrap',
-                gap: 12
+                gap: 12,
+                zIndex: 10
             }}>
                 <div style={{ flex: '1 1 auto', minWidth: 150 }}>
                     <p style={{
@@ -1013,97 +1023,84 @@ export const RouteEditor = memo(function RouteEditor({
                 </div>
             </div>
 
-            {/* Main content */}
+            {/* Instructions overlay - floating over map */}
             <div style={{
-                flex: 1,
-                display: 'flex',
-                flexDirection: isMobile ? 'column' : 'row',
-                overflow: 'hidden'
+                position: 'absolute',
+                top: isMobile ? 80 : 100,
+                left: isMobile ? 8 : 16,
+                ...glassFloating,
+                borderRadius: radius.lg,
+                padding: isMobile ? '10px 14px' : '12px 16px',
+                maxWidth: isMobile ? 'calc(100% - 80px)' : 280,
+                fontSize: isMobile ? 12 : 13,
+                color: colors.text.primary,
+                lineHeight: 1.5,
+                zIndex: 5
             }}>
-                {/* Map */}
+                {mode === 'camps' ? (
+                    <>
+                        <strong>Drag</strong> markers to reposition camps<br />
+                        <strong>Click</strong> on route to add new camp
+                    </>
+                ) : (
+                    <>
+                        <strong>Drag</strong> route points to adjust path<br />
+                        <strong>Click</strong> on route to add new point
+                    </>
+                )}
+            </div>
+
+            {/* Error message - floating over map */}
+            {error && (
                 <div style={{
-                    flex: 1,
-                    position: 'relative',
-                    minHeight: isMobile ? '50vh' : 'auto'
+                    position: 'absolute',
+                    bottom: isMobile ? 'auto' : 16,
+                    top: isMobile ? 'auto' : 'auto',
+                    left: 16,
+                    right: isMobile ? 16 : 336,
+                    background: `linear-gradient(135deg, rgba(239, 68, 68, 0.9) 0%, rgba(185, 28, 28, 0.85) 100%)`,
+                    backdropFilter: effects.blur.medium,
+                    WebkitBackdropFilter: effects.blur.medium,
+                    borderRadius: radius.lg,
+                    padding: '12px 16px',
+                    color: 'white',
+                    fontSize: 13,
+                    boxShadow: shadows.drop.md,
+                    border: `1px solid rgba(255, 255, 255, 0.15)`,
+                    zIndex: 5
                 }}>
-                    <div
-                        ref={mapContainerRef}
-                        style={{
-                            position: 'absolute',
-                            inset: 0
-                        }}
-                    />
-
-                    {/* Instructions overlay */}
-                    <div style={{
-                        position: 'absolute',
-                        top: isMobile ? 8 : 16,
-                        left: isMobile ? 8 : 16,
-                        ...glassFloating,
-                        borderRadius: radius.lg,
-                        padding: isMobile ? '10px 14px' : '12px 16px',
-                        maxWidth: isMobile ? 'calc(100% - 80px)' : 280,
-                        fontSize: isMobile ? 12 : 13,
-                        color: colors.text.primary,
-                        lineHeight: 1.5
-                    }}>
-                        {mode === 'camps' ? (
-                            <>
-                                <strong>Drag</strong> markers to reposition camps<br />
-                                <strong>Click</strong> on route to add new camp
-                            </>
-                        ) : (
-                            <>
-                                <strong>Drag</strong> route points to adjust path<br />
-                                <strong>Click</strong> on route to add new point
-                            </>
-                        )}
-                    </div>
-
-                    {/* Error message */}
-                    {error && (
-                        <div style={{
-                            position: 'absolute',
-                            bottom: 16,
-                            left: 16,
-                            right: 16,
-                            background: `linear-gradient(135deg, rgba(239, 68, 68, 0.9) 0%, rgba(185, 28, 28, 0.85) 100%)`,
-                            backdropFilter: effects.blur.medium,
-                            WebkitBackdropFilter: effects.blur.medium,
-                            borderRadius: radius.lg,
-                            padding: '12px 16px',
-                            color: 'white',
-                            fontSize: 13,
-                            boxShadow: shadows.drop.md,
-                            border: `1px solid rgba(255, 255, 255, 0.15)`
-                        }}>
-                            {error}
-                        </div>
-                    )}
+                    {error}
                 </div>
+            )}
 
-                {/* Sidebar - Liquid Glass style */}
-                <div style={{
-                    width: isMobile ? '100%' : 320,
-                    height: isMobile ? 'auto' : '100%',
-                    maxHeight: isMobile ? '40vh' : 'none',
-                    background: `linear-gradient(
-                        ${isMobile ? '180deg' : '135deg'},
-                        rgba(255, 255, 255, 0.1) 0%,
-                        rgba(255, 255, 255, 0.05) 30%,
-                        rgba(10, 10, 15, 0.95) 100%
-                    )`,
-                    backdropFilter: 'blur(32px) saturate(180%)',
-                    WebkitBackdropFilter: 'blur(32px) saturate(180%)',
-                    borderLeft: isMobile ? 'none' : `1px solid ${colors.glass.border}`,
-                    borderTop: isMobile ? `1px solid ${colors.glass.border}` : 'none',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    overflow: 'hidden',
-                    boxShadow: isMobile
-                        ? `0 -8px 32px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.1)`
-                        : `-8px 0 40px rgba(0, 0, 0, 0.3), inset 1px 0 0 rgba(255, 255, 255, 0.1)`
-                }}>
+            {/* Sidebar - Liquid Glass floating panel (like InfoPanel) */}
+            <div style={{
+                position: 'absolute',
+                top: isMobile ? 'auto' : 0,
+                right: 0,
+                bottom: 0,
+                left: isMobile ? 0 : 'auto',
+                width: isMobile ? '100%' : 320,
+                height: isMobile ? '40vh' : '100%',
+                background: `linear-gradient(
+                    ${isMobile ? '180deg' : '135deg'},
+                    rgba(255, 255, 255, 0.1) 0%,
+                    rgba(255, 255, 255, 0.05) 30%,
+                    rgba(10, 10, 15, 0.85) 100%
+                )`,
+                backdropFilter: 'blur(32px) saturate(180%)',
+                WebkitBackdropFilter: 'blur(32px) saturate(180%)',
+                borderLeft: isMobile ? 'none' : `1px solid ${colors.glass.border}`,
+                borderTop: isMobile ? `1px solid ${colors.glass.border}` : 'none',
+                borderRadius: isMobile ? `${radius.xxl}px ${radius.xxl}px 0 0` : 0,
+                display: 'flex',
+                flexDirection: 'column',
+                overflow: 'hidden',
+                boxShadow: isMobile
+                    ? `0 -16px 48px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.15), inset 0 2px 20px rgba(255, 255, 255, 0.05)`
+                    : `-8px 0 40px rgba(0, 0, 0, 0.3), inset 1px 0 0 rgba(255, 255, 255, 0.1)`,
+                zIndex: 10
+            }}>
                     {mode === 'camps' ? (
                         <>
                     {/* Selected camp actions */}
@@ -1416,7 +1413,6 @@ export const RouteEditor = memo(function RouteEditor({
                         </>
                     )}
                 </div>
-            </div>
         </div>,
         document.body
     );
