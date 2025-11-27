@@ -6,6 +6,7 @@ import { useState, useRef, useEffect, useCallback, type RefObject, type MutableR
 import mapboxgl from 'mapbox-gl';
 import { useJourneys } from '../contexts/JourneysContext';
 import { calculateBearing, findCoordIndex, getDistanceFromLatLonInKm } from '../utils/geography';
+import { buildMediaUrl, getAccessToken } from '../lib/media';
 import type { TrekConfig, TrekData, Camp, Photo } from '../types/trek';
 
 // Route click information
@@ -58,6 +59,8 @@ export function useMapbox({ containerRef, onTrekSelect, onPhotoClick, onRouteCli
     const rotationAnimationRef = useRef<number | null>(null);
     const interactionListenerRef = useRef<(() => void) | null>(null);
     const photosRef = useRef<Photo[]>([]);
+    const photoMarkersRef = useRef<Map<string, mapboxgl.Marker>>(new Map());
+    const authTokenRef = useRef<string | null>(null);
     const selectedTrekRef = useRef<string | null>(null);
     const playbackAnimationRef = useRef<number | null>(null);
     const playbackCallbackRef = useRef<((camp: Camp) => void) | null>(null);
@@ -88,6 +91,13 @@ export function useMapbox({ containerRef, onTrekSelect, onPhotoClick, onRouteCli
     useEffect(() => {
         onRouteClickRef.current = onRouteClick;
     }, [onRouteClick]);
+
+    // Fetch auth token for media URLs
+    useEffect(() => {
+        getAccessToken().then(token => {
+            authTokenRef.current = token;
+        });
+    }, []);
 
     useEffect(() => {
         treksRef.current = treks;
@@ -200,7 +210,7 @@ export function useMapbox({ containerRef, onTrekSelect, onPhotoClick, onRouteCli
                     clusterRadius: 50 // Radius of each cluster in pixels
                 });
 
-                // Cluster circles - outer glow
+                // Cluster circles - outer glow (cool blue tint - distinct from warm camps)
                 map.addLayer({
                     id: 'photo-clusters-glow',
                     type: 'circle',
@@ -208,20 +218,20 @@ export function useMapbox({ containerRef, onTrekSelect, onPhotoClick, onRouteCli
                     filter: ['has', 'point_count'],
                     layout: { 'visibility': 'none' },
                     paint: {
-                        'circle-color': '#60a5fa',
+                        'circle-color': 'rgba(147, 197, 253, 0.7)',
                         'circle-radius': [
                             'step',
                             ['get', 'point_count'],
-                            18, // radius for < 5 photos
-                            5, 22, // radius for 5-9 photos
-                            10, 26 // radius for 10+ photos
+                            14, // radius for < 5 photos
+                            5, 17, // radius for 5-9 photos
+                            10, 20 // radius for 10+ photos
                         ],
-                        'circle-opacity': 0.3,
-                        'circle-blur': 0.5
+                        'circle-opacity': 0.4,
+                        'circle-blur': 0.6
                     }
                 });
 
-                // Cluster circles - main
+                // Cluster circles - main (cool blue-tinted glass)
                 map.addLayer({
                     id: 'photo-clusters-circle',
                     type: 'circle',
@@ -229,20 +239,20 @@ export function useMapbox({ containerRef, onTrekSelect, onPhotoClick, onRouteCli
                     filter: ['has', 'point_count'],
                     layout: { 'visibility': 'none' },
                     paint: {
-                        'circle-color': '#3b82f6',
+                        'circle-color': 'rgba(219, 234, 254, 0.92)',
                         'circle-radius': [
                             'step',
                             ['get', 'point_count'],
-                            12, // radius for < 5 photos
-                            5, 15, // radius for 5-9 photos
-                            10, 18 // radius for 10+ photos
+                            10, // radius for < 5 photos
+                            5, 12, // radius for 5-9 photos
+                            10, 14 // radius for 10+ photos
                         ],
-                        'circle-stroke-width': 2,
-                        'circle-stroke-color': '#60a5fa'
+                        'circle-stroke-width': 1.5,
+                        'circle-stroke-color': 'rgba(96, 165, 250, 0.5)'
                     }
                 });
 
-                // Cluster count labels
+                // Cluster count labels (blue-tinted text)
                 map.addLayer({
                     id: 'photo-clusters-count',
                     type: 'symbol',
@@ -251,16 +261,18 @@ export function useMapbox({ containerRef, onTrekSelect, onPhotoClick, onRouteCli
                     layout: {
                         'visibility': 'none',
                         'text-field': ['get', 'point_count_abbreviated'],
-                        'text-font': ['DIN Pro Medium', 'Arial Unicode MS Regular'],
-                        'text-size': 11,
+                        'text-font': ['DIN Pro Bold', 'Arial Unicode MS Bold'],
+                        'text-size': 10,
                         'text-allow-overlap': true
                     },
                     paint: {
-                        'text-color': '#ffffff'
+                        'text-color': 'rgba(30, 64, 175, 0.9)',
+                        'text-halo-color': 'rgba(219, 234, 254, 0.5)',
+                        'text-halo-width': 1
                     }
                 });
 
-                // Photo marker glow (background) - unclustered points only
+                // Photo marker glow (cool blue starlight)
                 map.addLayer({
                     id: 'photo-markers-glow',
                     type: 'circle',
@@ -268,14 +280,14 @@ export function useMapbox({ containerRef, onTrekSelect, onPhotoClick, onRouteCli
                     filter: ['!', ['has', 'point_count']],
                     layout: { 'visibility': 'none' },
                     paint: {
-                        'circle-color': ['case', ['get', 'highlighted'], '#60a5fa', '#ffffff'],
-                        'circle-radius': ['case', ['get', 'highlighted'], 12, 8],
-                        'circle-opacity': ['case', ['get', 'highlighted'], 0.4, 0.2],
-                        'circle-blur': 0.5
+                        'circle-color': ['case', ['get', 'highlighted'], 'rgba(96, 165, 250, 0.8)', 'rgba(147, 197, 253, 0.6)'],
+                        'circle-radius': ['case', ['get', 'highlighted'], 10, 6],
+                        'circle-opacity': ['case', ['get', 'highlighted'], 0.5, 0.3],
+                        'circle-blur': 0.7
                     }
                 });
 
-                // Photo marker circles - unclustered points only
+                // Photo marker circles - blue-tinted crystalline dots
                 map.addLayer({
                     id: 'photo-markers-circle',
                     type: 'circle',
@@ -283,10 +295,10 @@ export function useMapbox({ containerRef, onTrekSelect, onPhotoClick, onRouteCli
                     filter: ['!', ['has', 'point_count']],
                     layout: { 'visibility': 'none' },
                     paint: {
-                        'circle-color': ['case', ['get', 'highlighted'], '#3b82f6', '#ffffff'],
-                        'circle-radius': ['case', ['get', 'highlighted'], 6, 4],
-                        'circle-stroke-width': ['case', ['get', 'highlighted'], 2, 1],
-                        'circle-stroke-color': ['case', ['get', 'highlighted'], '#60a5fa', 'rgba(0,0,0,0.3)']
+                        'circle-color': ['case', ['get', 'highlighted'], 'rgba(219, 234, 254, 0.98)', 'rgba(241, 245, 249, 0.9)'],
+                        'circle-radius': ['case', ['get', 'highlighted'], 5, 3],
+                        'circle-stroke-width': ['case', ['get', 'highlighted'], 1.5, 0.5],
+                        'circle-stroke-color': ['case', ['get', 'highlighted'], 'rgba(59, 130, 246, 0.7)', 'rgba(147, 197, 253, 0.5)']
                     }
                 });
 
@@ -296,35 +308,35 @@ export function useMapbox({ containerRef, onTrekSelect, onPhotoClick, onRouteCli
                     data: { type: 'FeatureCollection', features: [] }
                 });
 
-                // Camp marker outer glow (pulsing for selected)
+                // Camp marker outer glow (warm amber tint - clearly distinct from photos)
                 map.addLayer({
                     id: 'camp-markers-glow',
                     type: 'circle',
                     source: 'camp-markers',
                     layout: { 'visibility': 'none' },
                     paint: {
-                        'circle-color': ['case', ['get', 'selected'], '#60a5fa', '#ffffff'],
-                        'circle-radius': ['case', ['get', 'selected'], 16, 10],
-                        'circle-opacity': ['case', ['get', 'selected'], 0.4, 0.15],
+                        'circle-color': ['case', ['get', 'selected'], 'rgba(251, 191, 36, 0.8)', 'rgba(253, 224, 168, 0.7)'],
+                        'circle-radius': ['case', ['get', 'selected'], 18, 14],
+                        'circle-opacity': ['case', ['get', 'selected'], 0.5, 0.35],
                         'circle-blur': 0.6
                     }
                 });
 
-                // Camp marker circles with day number label
+                // Camp marker circles (warm cream/amber glass - distinct from cool photo markers)
                 map.addLayer({
                     id: 'camp-markers-circle',
                     type: 'circle',
                     source: 'camp-markers',
                     layout: { 'visibility': 'none' },
                     paint: {
-                        'circle-color': ['case', ['get', 'selected'], '#3b82f6', 'rgba(255,255,255,0.9)'],
-                        'circle-radius': ['case', ['get', 'selected'], 10, 7],
+                        'circle-color': ['case', ['get', 'selected'], 'rgba(254, 243, 199, 0.95)', 'rgba(254, 249, 235, 0.9)'],
+                        'circle-radius': ['case', ['get', 'selected'], 12, 9],
                         'circle-stroke-width': ['case', ['get', 'selected'], 2, 1.5],
-                        'circle-stroke-color': ['case', ['get', 'selected'], '#60a5fa', 'rgba(0,0,0,0.25)']
+                        'circle-stroke-color': ['case', ['get', 'selected'], 'rgba(251, 191, 36, 0.7)', 'rgba(253, 211, 106, 0.5)']
                     }
                 });
 
-                // Camp marker labels (day numbers)
+                // Camp marker labels (day number with warm styling)
                 map.addLayer({
                     id: 'camp-markers-label',
                     type: 'symbol',
@@ -333,11 +345,13 @@ export function useMapbox({ containerRef, onTrekSelect, onPhotoClick, onRouteCli
                         'visibility': 'none',
                         'text-field': ['get', 'dayNumber'],
                         'text-size': ['case', ['get', 'selected'], 11, 9],
-                        'text-font': ['DIN Pro Medium', 'Arial Unicode MS Regular'],
+                        'text-font': ['DIN Pro Bold', 'Arial Unicode MS Bold'],
                         'text-allow-overlap': true
                     },
                     paint: {
-                        'text-color': ['case', ['get', 'selected'], '#ffffff', '#1a1a1a']
+                        'text-color': ['case', ['get', 'selected'], 'rgba(120, 53, 15, 0.95)', 'rgba(146, 64, 14, 0.85)'],
+                        'text-halo-color': 'rgba(254, 243, 199, 0.6)',
+                        'text-halo-width': 1
                     }
                 });
 
@@ -428,6 +442,12 @@ export function useMapbox({ containerRef, onTrekSelect, onPhotoClick, onRouteCli
         }
 
         return () => {
+            // Clean up HTML photo markers
+            for (const marker of photoMarkersRef.current.values()) {
+                marker.remove();
+            }
+            photoMarkersRef.current.clear();
+
             if (mapRef.current) {
                 mapRef.current.remove();
                 mapRef.current = null;
@@ -457,16 +477,16 @@ export function useMapbox({ containerRef, onTrekSelect, onPhotoClick, onRouteCli
                 }
             });
 
-            // Trek marker layers
+            // Trek marker layers (Apple Liquid Glass - luminous glass beads)
             map.addLayer({
                 id: 'trek-markers-circle',
                 type: 'circle',
                 source: 'trek-markers',
                 paint: {
-                    'circle-color': '#ffffff',
+                    'circle-color': 'rgba(255, 255, 255, 0.92)',
                     'circle-radius': 6,
-                    'circle-stroke-width': 2,
-                    'circle-stroke-color': 'rgba(0,0,0,0.2)',
+                    'circle-stroke-width': 1,
+                    'circle-stroke-color': 'rgba(255, 255, 255, 0.35)',
                     'circle-emissive-strength': 1
                 }
             });
@@ -476,10 +496,10 @@ export function useMapbox({ containerRef, onTrekSelect, onPhotoClick, onRouteCli
                 type: 'circle',
                 source: 'trek-markers',
                 paint: {
-                    'circle-color': '#ffffff',
+                    'circle-color': 'rgba(255, 255, 255, 0.75)',
                     'circle-radius': 12,
-                    'circle-opacity': 0.3,
-                    'circle-blur': 0.5,
+                    'circle-opacity': 0.25,
+                    'circle-blur': 0.75,
                     'circle-emissive-strength': 1
                 },
                 beforeId: 'trek-markers-circle'
@@ -842,7 +862,7 @@ export function useMapbox({ containerRef, onTrekSelect, onPhotoClick, onRouteCli
         };
     }, [stopRotation]);
 
-    // Update photo markers on the map
+    // Update photo markers on the map - uses HTML thumbnail markers
     const updatePhotoMarkers = useCallback((photos: Photo[], selectedCampId: string | null = null) => {
         const map = mapRef.current;
         if (!map || !mapReady) return;
@@ -853,17 +873,16 @@ export function useMapbox({ containerRef, onTrekSelect, onPhotoClick, onRouteCli
         // Filter photos with coordinates
         const photosWithCoords = photos.filter(p => p.coordinates && p.coordinates.length === 2);
 
-        // Create GeoJSON features
+        // Create GeoJSON features for clustering
         const features: GeoJSON.Feature[] = photosWithCoords.map(photo => {
-            // Check if this photo belongs to the selected camp (by waypoint_id)
             const isHighlighted = selectedCampId ? photo.waypoint_id === selectedCampId : false;
-
             return {
                 type: 'Feature',
                 properties: {
                     id: photo.id,
                     highlighted: isHighlighted,
-                    waypoint_id: photo.waypoint_id || null
+                    waypoint_id: photo.waypoint_id || null,
+                    url: photo.thumbnail_url || photo.url
                 },
                 geometry: {
                     type: 'Point',
@@ -879,16 +898,75 @@ export function useMapbox({ containerRef, onTrekSelect, onPhotoClick, onRouteCli
                 features
             });
 
-            // Show/hide photo markers and clusters based on whether we have photos
+            // Show/hide cluster layers based on whether we have photos
             const visibility = features.length > 0 ? 'visible' : 'none';
-            // Individual markers (unclustered)
-            map.setLayoutProperty('photo-markers-circle', 'visibility', visibility);
-            map.setLayoutProperty('photo-markers-glow', 'visibility', visibility);
-            // Cluster layers
+            // Hide the old circle layers - we use HTML markers now
+            map.setLayoutProperty('photo-markers-circle', 'visibility', 'none');
+            map.setLayoutProperty('photo-markers-glow', 'visibility', 'none');
+            // Cluster layers (still use native circles)
             map.setLayoutProperty('photo-clusters-circle', 'visibility', visibility);
             map.setLayoutProperty('photo-clusters-glow', 'visibility', visibility);
             map.setLayoutProperty('photo-clusters-count', 'visibility', visibility);
         }
+
+        // Remove old HTML markers that are no longer needed
+        const currentPhotoIds = new Set(photosWithCoords.map(p => p.id));
+        for (const [photoId, marker] of photoMarkersRef.current.entries()) {
+            if (!currentPhotoIds.has(photoId)) {
+                marker.remove();
+                photoMarkersRef.current.delete(photoId);
+            }
+        }
+
+        // Create or update HTML markers for each photo
+        const token = authTokenRef.current;
+        photosWithCoords.forEach(photo => {
+            const isHighlighted = selectedCampId ? photo.waypoint_id === selectedCampId : false;
+            const existingMarker = photoMarkersRef.current.get(photo.id);
+
+            if (existingMarker) {
+                // Update existing marker's highlight state
+                const el = existingMarker.getElement();
+                if (isHighlighted) {
+                    el.classList.add('photo-marker-highlighted');
+                } else {
+                    el.classList.remove('photo-marker-highlighted');
+                }
+            } else {
+                // Create new HTML marker with thumbnail
+                const el = document.createElement('div');
+                el.className = 'photo-thumbnail-marker' + (isHighlighted ? ' photo-marker-highlighted' : '');
+
+                // Build authenticated URL
+                const photoUrl = photo.thumbnail_url || photo.url;
+                const imgUrl = buildMediaUrl(photoUrl, token);
+
+                // Create image element
+                const img = document.createElement('img');
+                img.src = imgUrl;
+                img.alt = photo.caption || 'Photo';
+                img.draggable = false;
+                el.appendChild(img);
+
+                // Create marker
+                const marker = new mapboxgl.Marker({
+                    element: el,
+                    anchor: 'center'
+                })
+                    .setLngLat(photo.coordinates as [number, number])
+                    .addTo(map);
+
+                // Click handler
+                el.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    if (onPhotoClickRef.current) {
+                        onPhotoClickRef.current(photo);
+                    }
+                });
+
+                photoMarkersRef.current.set(photo.id, marker);
+            }
+        });
     }, [mapReady]);
 
     // Update camp markers on the map
