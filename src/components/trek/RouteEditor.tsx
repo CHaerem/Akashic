@@ -544,33 +544,80 @@ export const RouteEditor = memo(function RouteEditor({
     }
 
     // Handle route point dragged to new position
+    // When dragging a visible marker, interpolate all intermediate points
+    // between adjacent visible markers so the route follows the drag smoothly
     const handleRoutePointDragged = useCallback((pointIndex: number, newCoords: [number, number]) => {
         // Save state before making changes
         pushToHistory();
 
-        // Get elevation from nearby points (interpolate)
-        const prevCoord = routeCoordinates[pointIndex - 1];
-        const nextCoord = routeCoordinates[pointIndex + 1];
+        // Find previous and next visible marker indices
+        const visibleIndices = visibleRoutePointIndices;
+        const currentVisibleIdx = visibleIndices.indexOf(pointIndex);
+
+        // Get the previous and next visible point indices
+        const prevVisiblePointIndex = currentVisibleIdx > 0
+            ? visibleIndices[currentVisibleIdx - 1]
+            : 0;
+        const nextVisiblePointIndex = currentVisibleIdx < visibleIndices.length - 1
+            ? visibleIndices[currentVisibleIdx + 1]
+            : routeCoordinates.length - 1;
+
+        // Get elevation from nearby visible points (interpolate)
+        const prevVisibleCoord = routeCoordinates[prevVisiblePointIndex];
+        const nextVisibleCoord = routeCoordinates[nextVisiblePointIndex];
         let elevation = routeCoordinates[pointIndex]?.[2] || 0;
 
-        // Simple interpolation if we have neighbors
-        if (prevCoord && nextCoord) {
-            elevation = (prevCoord[2] + nextCoord[2]) / 2;
-        } else if (prevCoord) {
-            elevation = prevCoord[2];
-        } else if (nextCoord) {
-            elevation = nextCoord[2];
+        // Simple interpolation for the dragged point's elevation
+        if (prevVisibleCoord && nextVisibleCoord && pointIndex !== prevVisiblePointIndex && pointIndex !== nextVisiblePointIndex) {
+            elevation = (prevVisibleCoord[2] + nextVisibleCoord[2]) / 2;
+        } else if (prevVisibleCoord && pointIndex !== prevVisiblePointIndex) {
+            elevation = prevVisibleCoord[2];
+        } else if (nextVisibleCoord && pointIndex !== nextVisiblePointIndex) {
+            elevation = nextVisibleCoord[2];
         }
 
         setRouteCoordinates(prev => {
-            const newCoords3D: RouteCoordinate = [newCoords[0], newCoords[1], elevation];
             const updated = [...prev];
+
+            // Update the dragged point
+            const newCoords3D: RouteCoordinate = [newCoords[0], newCoords[1], elevation];
             updated[pointIndex] = newCoords3D;
+
+            // Interpolate points between previous visible marker and current point
+            if (pointIndex > prevVisiblePointIndex + 1) {
+                const startCoord = prev[prevVisiblePointIndex];
+                const endCoord = newCoords3D;
+                const segmentLength = pointIndex - prevVisiblePointIndex;
+
+                for (let i = prevVisiblePointIndex + 1; i < pointIndex; i++) {
+                    const t = (i - prevVisiblePointIndex) / segmentLength;
+                    const interpLng = startCoord[0] + t * (endCoord[0] - startCoord[0]);
+                    const interpLat = startCoord[1] + t * (endCoord[1] - startCoord[1]);
+                    const interpElev = startCoord[2] + t * (endCoord[2] - startCoord[2]);
+                    updated[i] = [interpLng, interpLat, interpElev];
+                }
+            }
+
+            // Interpolate points between current point and next visible marker
+            if (nextVisiblePointIndex > pointIndex + 1) {
+                const startCoord = newCoords3D;
+                const endCoord = prev[nextVisiblePointIndex];
+                const segmentLength = nextVisiblePointIndex - pointIndex;
+
+                for (let i = pointIndex + 1; i < nextVisiblePointIndex; i++) {
+                    const t = (i - pointIndex) / segmentLength;
+                    const interpLng = startCoord[0] + t * (endCoord[0] - startCoord[0]);
+                    const interpLat = startCoord[1] + t * (endCoord[1] - startCoord[1]);
+                    const interpElev = startCoord[2] + t * (endCoord[2] - startCoord[2]);
+                    updated[i] = [interpLng, interpLat, interpElev];
+                }
+            }
+
             return updated;
         });
 
         setRouteHasChanges(true);
-    }, [routeCoordinates, pushToHistory]);
+    }, [routeCoordinates, pushToHistory, visibleRoutePointIndices]);
 
     // Delete selected route point
     const handleDeleteRoutePoint = useCallback(() => {
