@@ -124,11 +124,12 @@ Collaborative interface for family members to create and edit journeys together.
 - [x] Click-on-map to set coordinates (via RouteEditor)
 
 #### 2.3 Photo Management
-- [ ] Bulk photo upload with progress
+- [x] Bulk photo upload with progress (multi-file select, shows upload status)
 - [x] Assign photos to waypoints (via modal)
-- [ ] Set hero images for journey/waypoints
-- [ ] Add/edit captions
-- [ ] Reorder photos
+- [x] Set hero images for journey (via PhotoEditModal)
+- [x] Add/edit captions (via PhotoEditModal)
+- [x] Edit photo location (via PhotoEditModal with map picker)
+- [x] Reorder photos (drag-and-drop in edit mode)
 - [x] Delete photos
 
 #### 2.4 Route & Camp Position Management

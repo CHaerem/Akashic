@@ -20,6 +20,7 @@ interface PhotoLightboxProps {
     onDelete?: (photo: Photo) => void;
     editMode?: boolean;
     onViewOnMap?: (photo: Photo) => void;
+    onEdit?: (photo: Photo) => void;
 }
 
 export const PhotoLightbox = memo(function PhotoLightbox({
@@ -30,7 +31,8 @@ export const PhotoLightbox = memo(function PhotoLightbox({
     getMediaUrl,
     onDelete,
     editMode = false,
-    onViewOnMap
+    onViewOnMap,
+    onEdit
 }: PhotoLightboxProps) {
     const [currentIndex, setCurrentIndex] = useState(initialIndex);
     const [showControls, setShowControls] = useState(true);
@@ -234,6 +236,34 @@ export const PhotoLightbox = memo(function PhotoLightbox({
 
                 {/* Action buttons */}
                 <div style={{ display: 'flex', gap: 12 }}>
+                    {editMode && onEdit && (
+                        <button
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                onClose();
+                                onEdit(currentPhoto);
+                            }}
+                            style={{
+                                background: colors.glass.light,
+                                border: 'none',
+                                color: colors.text.primary,
+                                width: 44,
+                                height: 44,
+                                borderRadius: '50%',
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                transition: `background ${transitions.normal}`
+                            }}
+                            aria-label="Edit photo"
+                        >
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/>
+                                <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                            </svg>
+                        </button>
+                    )}
                     {editMode && onDelete && (
                         <button
                             onClick={(e) => {
