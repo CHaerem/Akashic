@@ -20,6 +20,10 @@ export interface Camp {
     highlights?: string[];
     bearing?: number;
     pitch?: number;
+    /** Distance from journey start along route (km) - if set via RouteEditor */
+    routeDistanceKm?: number | null;
+    /** Index in route coordinates array - if set via RouteEditor */
+    routePointIndex?: number | null;
 }
 
 export interface Route {

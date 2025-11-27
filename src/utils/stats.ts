@@ -123,7 +123,21 @@ export function generateElevationProfile(
     const campMarkers: CampMarker[] = [];
     if (camps && camps.length > 0) {
         for (const camp of camps) {
-            const campPos = findCampDistanceOnRoute(camp.coordinates, coordinates, cumulativeDistances);
+            let campPos: { dist: number; ele: number } | null = null;
+
+            // Use stored route distance if available (more accurate)
+            if (camp.routeDistanceKm != null && camp.routePointIndex != null) {
+                // Use the stored route position
+                const routeIndex = Math.min(camp.routePointIndex, coordinates.length - 1);
+                campPos = {
+                    dist: camp.routeDistanceKm,
+                    ele: coordinates[routeIndex][2]
+                };
+            } else {
+                // Fall back to finding closest route point
+                campPos = findCampDistanceOnRoute(camp.coordinates, coordinates, cumulativeDistances);
+            }
+
             if (campPos) {
                 const svgCoords = toSvgCoords(campPos.dist, campPos.ele);
                 campMarkers.push({

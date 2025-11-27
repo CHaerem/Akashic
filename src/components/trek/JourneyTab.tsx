@@ -2,7 +2,9 @@ import { memo, useCallback, useMemo, useState } from 'react';
 import type { TrekData, Camp, Photo } from '../../types/trek';
 import { WaypointEditModal } from './WaypointEditModal';
 import { PhotoAssignModal } from './PhotoAssignModal';
+import { RouteEditor } from './RouteEditor';
 import { PhotoLightbox } from '../common/PhotoLightbox';
+import { GlassButton } from '../common/GlassButton';
 import { colors, radius, transitions } from '../../styles/liquidGlass';
 
 /**
@@ -333,6 +335,7 @@ export const JourneyTab = memo(function JourneyTab({
     const [assigningCamp, setAssigningCamp] = useState<Camp | null>(null);
     const [lightboxPhotos, setLightboxPhotos] = useState<Photo[]>([]);
     const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+    const [showRouteEditor, setShowRouteEditor] = useState(false);
 
     // Group photos by day (auto-match by date)
     const photosByDay = useMemo(() => {
@@ -389,6 +392,20 @@ export const JourneyTab = memo(function JourneyTab({
 
     return (
         <div>
+            {/* Edit Route button - only in edit mode */}
+            {editMode && (
+                <div style={{ marginBottom: 16 }}>
+                    <GlassButton
+                        variant="primary"
+                        size="md"
+                        fullWidth
+                        onClick={() => setShowRouteEditor(true)}
+                    >
+                        Edit Route & Camp Positions
+                    </GlassButton>
+                </div>
+            )}
+
             {trekData.camps.map((camp, i) => (
                 <CampItem
                     key={camp.id}
@@ -442,6 +459,15 @@ export const JourneyTab = memo(function JourneyTab({
                 onClose={closeLightbox}
                 getMediaUrl={getMediaUrl}
                 onViewOnMap={onViewPhotoOnMap}
+            />
+
+            {/* Route Editor Modal */}
+            <RouteEditor
+                trekData={trekData}
+                isOpen={showRouteEditor}
+                onClose={() => setShowRouteEditor(false)}
+                onSave={handleSave}
+                isMobile={isMobile}
             />
         </div>
     );
