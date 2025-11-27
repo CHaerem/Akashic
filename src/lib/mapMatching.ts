@@ -68,6 +68,13 @@ function cleanCache(): void {
 }
 
 /**
+ * Clear all cache entries (useful for testing)
+ */
+export function clearMatchCache(): void {
+    matchCache.clear();
+}
+
+/**
  * Try to match a drawn path to trails/roads using Mapbox Map Matching API
  *
  * @param drawnPoints Array of [lng, lat] coordinates from user drawing
@@ -134,21 +141,25 @@ export async function tryMapMatching(
     const radiusString = sampled.map(() => snapRadius.toString()).join(';');
 
     try {
-        const response = await fetch(
-            `https://api.mapbox.com/matching/v5/mapbox/${profile}/${coordString}?` +
+        const url = `https://api.mapbox.com/matching/v5/mapbox/${profile}/${coordString}?` +
             `access_token=${accessToken}&` +
             `geometries=geojson&` +
             `radiuses=${radiusString}&` +
             `tidy=true&` +
-            `overview=full`
-        );
+            `overview=full`;
+
+        console.log('[MapMatching] Requesting match for', sampled.length, 'points');
+
+        const response = await fetch(url);
 
         if (!response.ok) {
-            console.warn('Map Matching API error:', response.status, response.statusText);
+            const errorText = await response.text();
+            console.warn('[MapMatching] API error:', response.status, response.statusText, errorText);
             return { coordinates: [], confidence: 0, matched: false };
         }
 
         const data: MapboxMatchingResponse = await response.json();
+        console.log('[MapMatching] Response code:', data.code, 'matchings:', data.matchings?.length || 0);
 
         if (data.code === 'Ok' && data.matchings && data.matchings.length > 0) {
             const matching = data.matchings[0];
@@ -230,4 +241,166 @@ export async function processDrawnSegment(
         wasSnapped: false,
         confidence: matchResult.confidence
     };
+}
+
+export interface SnapRouteResult {
+    /** Snapped route coordinates */
+    coordinates: RouteCoordinate[];
+    /** Number of segments that were successfully snapped */
+    snappedSegments: number;
+    /** Total number of segments processed */
+    totalSegments: number;
+    /** Average confidence across all segments */
+    averageConfidence: number;
+}
+
+/**
+ * Snap an entire route to trails using Map Matching API
+ * Processes the route in chunks to handle API limits (100 points max)
+ * Preserves elevation data from original route
+ *
+ * @param route Array of [lng, lat, elevation] coordinates
+ * @param accessToken Mapbox access token
+ * @param onProgress Optional callback for progress updates (0-1)
+ * @returns Snapped route with statistics
+ */
+export async function snapRouteToTrails(
+    route: RouteCoordinate[],
+    accessToken: string,
+    onProgress?: (progress: number) => void
+): Promise<SnapRouteResult> {
+    if (route.length < 2) {
+        return {
+            coordinates: route,
+            snappedSegments: 0,
+            totalSegments: 0,
+            averageConfidence: 0
+        };
+    }
+
+    // Process in chunks of ~80 points (with overlap for smooth joins)
+    const CHUNK_SIZE = 80;
+    const OVERLAP = 5;
+
+    const chunks: RouteCoordinate[][] = [];
+    let startIndex = 0;
+
+    while (startIndex < route.length) {
+        const endIndex = Math.min(startIndex + CHUNK_SIZE, route.length);
+        chunks.push(route.slice(startIndex, endIndex));
+
+        if (endIndex >= route.length) break;
+        // Next chunk starts with overlap
+        startIndex = endIndex - OVERLAP;
+    }
+
+    const results: RouteCoordinate[][] = [];
+    let snappedCount = 0;
+    let totalConfidence = 0;
+
+    console.log('[SnapRoute] Processing', chunks.length, 'chunks from', route.length, 'total points');
+
+    for (let i = 0; i < chunks.length; i++) {
+        const chunk = chunks[i];
+
+        // Convert to 2D coordinates for API
+        const coords2D: Coordinate[] = chunk.map(c => [c[0], c[1]]);
+
+        console.log(`[SnapRoute] Processing chunk ${i + 1}/${chunks.length} with ${chunk.length} points`);
+
+        // Try to snap this chunk
+        const matchResult = await tryMapMatching(coords2D, {
+            accessToken,
+            snapRadius: 50, // Slightly larger radius for existing routes
+            profile: 'walking',
+            minConfidence: 0.3 // Lower threshold for existing routes
+        });
+
+        console.log(`[SnapRoute] Chunk ${i + 1} result: matched=${matchResult.matched}, confidence=${matchResult.confidence.toFixed(2)}, coords=${matchResult.coordinates.length}`);
+
+        if (matchResult.matched && matchResult.coordinates.length > 0) {
+            // Snap was successful - interpolate elevations from original
+            const snappedWithElevation = interpolateElevations(
+                matchResult.coordinates,
+                chunk
+            );
+            results.push(snappedWithElevation);
+            snappedCount++;
+            totalConfidence += matchResult.confidence;
+        } else {
+            // Keep original chunk if snapping failed
+            results.push(chunk);
+            totalConfidence += 0;
+        }
+
+        // Report progress
+        if (onProgress) {
+            onProgress((i + 1) / chunks.length);
+        }
+
+        // Small delay between API calls to avoid rate limiting
+        if (i < chunks.length - 1) {
+            await new Promise(resolve => setTimeout(resolve, 100));
+        }
+    }
+
+    // Merge chunks, removing overlap duplicates
+    const mergedCoordinates = mergeChunks(results, OVERLAP);
+
+    console.log(`[SnapRoute] Complete: ${snappedCount}/${chunks.length} chunks snapped, ${mergedCoordinates.length} total points`);
+
+    return {
+        coordinates: mergedCoordinates,
+        snappedSegments: snappedCount,
+        totalSegments: chunks.length,
+        averageConfidence: chunks.length > 0 ? totalConfidence / chunks.length : 0
+    };
+}
+
+/**
+ * Interpolate elevations from original route to snapped coordinates
+ */
+function interpolateElevations(
+    snapped: RouteCoordinate[],
+    original: RouteCoordinate[]
+): RouteCoordinate[] {
+    return snapped.map(point => {
+        // Find nearest point in original for elevation
+        let minDist = Infinity;
+        let nearestElevation = 0;
+
+        for (const orig of original) {
+            const dist = Math.sqrt(
+                (point[0] - orig[0]) ** 2 + (point[1] - orig[1]) ** 2
+            );
+            if (dist < minDist) {
+                minDist = dist;
+                nearestElevation = orig[2];
+            }
+        }
+
+        return [point[0], point[1], nearestElevation];
+    });
+}
+
+/**
+ * Merge overlapping chunks into a single route
+ */
+function mergeChunks(
+    chunks: RouteCoordinate[][],
+    overlap: number
+): RouteCoordinate[] {
+    if (chunks.length === 0) return [];
+    if (chunks.length === 1) return chunks[0];
+
+    const result: RouteCoordinate[] = [...chunks[0]];
+
+    for (let i = 1; i < chunks.length; i++) {
+        // Skip the first `overlap` points of subsequent chunks (they overlap with previous)
+        const chunk = chunks[i];
+        const startIndex = Math.min(overlap, chunk.length);
+        result.push(...chunk.slice(startIndex));
+    }
+
+    return result;
 }

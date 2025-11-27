@@ -23,11 +23,11 @@ import type { TrekData, Camp, Route } from '../../types/trek';
 import { GlassButton } from '../common/GlassButton';
 import { colors, radius, transitions, effects, shadows, glassFloating, glassPanel, glassButton, typography } from '../../styles/liquidGlass';
 import { findNearestPointOnRoute, haversineDistance, type RouteCoordinate, type Coordinate } from '../../utils/routeUtils';
-import { processDrawnSegment as processWithMapMatching } from '../../lib/mapMatching';
+import { processDrawnSegment as processWithMapMatching, snapRouteToTrails } from '../../lib/mapMatching';
 import { updateWaypoint, createWaypoint, deleteWaypoint, getJourneyIdBySlug, updateJourneyRoute } from '../../lib/journeys';
 
 type EditorMode = 'camps' | 'route';
-type RouteSubMode = 'edit' | 'draw';
+type RouteSubMode = 'edit' | 'draw' | 'select';
 
 // Reusable mode toggle button with hover state
 const ModeToggleButton = memo(function ModeToggleButton({
@@ -116,7 +116,8 @@ export const RouteEditor = memo(function RouteEditor({
 
     // Route editing state
     const [routeCoordinates, setRouteCoordinates] = useState<RouteCoordinate[]>([]);
-    const [selectedRoutePointIndex, setSelectedRoutePointIndex] = useState<number | null>(null);
+    const [selectedRoutePoints, setSelectedRoutePoints] = useState<Set<number>>(new Set());
+    const [lastSelectedIndex, setLastSelectedIndex] = useState<number | null>(null); // For shift+click range selection
     const [routeHasChanges, setRouteHasChanges] = useState(false);
 
     // Route sub-mode state (edit existing points vs draw new segments)
@@ -126,6 +127,15 @@ export const RouteEditor = memo(function RouteEditor({
     const [isDrawing, setIsDrawing] = useState(false);
     const [drawingPoints, setDrawingPoints] = useState<[number, number][]>([]);
     const [isProcessingDraw, setIsProcessingDraw] = useState(false);
+
+    // Snap to trail state
+    const [isSnapping, setIsSnapping] = useState(false);
+    const [snapProgress, setSnapProgress] = useState(0);
+
+    // Rectangle selection state
+    const [isSelecting, setIsSelecting] = useState(false);
+    const [selectionStart, setSelectionStart] = useState<{ x: number; y: number } | null>(null);
+    const [selectionEnd, setSelectionEnd] = useState<{ x: number; y: number } | null>(null);
 
     // Shared state
     const [saving, setSaving] = useState(false);
@@ -233,12 +243,42 @@ export const RouteEditor = memo(function RouteEditor({
             } else if (modKey && e.key === 'y') {
                 e.preventDefault();
                 handleRedo();
+            } else if (e.key === 'Escape') {
+                // ESC to deselect all
+                e.preventDefault();
+                setSelectedRoutePoints(new Set());
+                setLastSelectedIndex(null);
+                setSelectedCampId(null);
+            } else if ((e.key === 'Backspace' || e.key === 'Delete') && selectedRoutePoints.size > 0) {
+                // Backspace/Delete to delete selected route points
+                e.preventDefault();
+                // Check we're in route mode
+                if (mode === 'route') {
+                    const remainingCount = routeCoordinates.length - selectedRoutePoints.size;
+                    if (remainingCount < 2) {
+                        setError('Route must have at least 2 points');
+                        return;
+                    }
+                    // Remove markers for deleted points
+                    selectedRoutePoints.forEach(index => {
+                        const marker = routeMarkersRef.current.get(index);
+                        if (marker) {
+                            marker.remove();
+                            routeMarkersRef.current.delete(index);
+                        }
+                    });
+                    // Remove points from coordinates
+                    setRouteCoordinates(prev => prev.filter((_, index) => !selectedRoutePoints.has(index)));
+                    setSelectedRoutePoints(new Set());
+                    setLastSelectedIndex(null);
+                    setRouteHasChanges(true);
+                }
             }
         };
 
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [isOpen, handleUndo, handleRedo]);
+    }, [isOpen, handleUndo, handleRedo, selectedRoutePoints, mode, routeCoordinates.length]);
 
     // Sample rate for route points (show every Nth point to avoid performance issues)
     const getRoutePointSampleRate = useCallback((totalPoints: number) => {
@@ -279,7 +319,8 @@ export const RouteEditor = memo(function RouteEditor({
             setError(null);
             setMapLoaded(false);
             setSelectedCampId(null);
-            setSelectedRoutePointIndex(null);
+            setSelectedRoutePoints(new Set());
+            setLastSelectedIndex(null);
         }
     }, [isOpen, trekData.camps, trekData.route]);
 
@@ -545,10 +586,10 @@ export const RouteEditor = memo(function RouteEditor({
                     handleRoutePointDragged(pointIndex, [lngLat.lng, lngLat.lat]);
                 });
 
-                // Handle click
+                // Handle click with shift for range selection
                 el.addEventListener('click', (e) => {
                     e.stopPropagation();
-                    setSelectedRoutePointIndex(pointIndex === selectedRoutePointIndex ? null : pointIndex);
+                    handleRoutePointClick(pointIndex, e.shiftKey);
                 });
 
                 existingMarkers.set(pointIndex, marker);
@@ -560,10 +601,10 @@ export const RouteEditor = memo(function RouteEditor({
                 }
                 // Update element styling
                 const el = marker.getElement();
-                updateRoutePointMarkerStyle(el, pointIndex, pointIndex === selectedRoutePointIndex);
+                updateRoutePointMarkerStyle(el, pointIndex, selectedRoutePoints.has(pointIndex));
             }
         });
-    }, [routeCoordinates, visibleRoutePointIndices, selectedRoutePointIndex, isOpen, mapLoaded, mode]);
+    }, [routeCoordinates, visibleRoutePointIndices, selectedRoutePoints, isOpen, mapLoaded, mode]);
 
     // Create route point marker element
     function createRoutePointMarkerElement(index: number): HTMLDivElement {
@@ -666,10 +707,38 @@ export const RouteEditor = memo(function RouteEditor({
         setRouteHasChanges(true);
     }, [routeCoordinates, pushToHistory, visibleRoutePointIndices]);
 
-    // Delete selected route point
-    const handleDeleteRoutePoint = useCallback(() => {
-        if (selectedRoutePointIndex === null) return;
-        if (routeCoordinates.length <= 2) {
+    // Handle route point click with shift for range selection
+    const handleRoutePointClick = useCallback((pointIndex: number, shiftKey: boolean) => {
+        if (shiftKey && lastSelectedIndex !== null) {
+            // Range selection: select all points between lastSelectedIndex and pointIndex
+            const start = Math.min(lastSelectedIndex, pointIndex);
+            const end = Math.max(lastSelectedIndex, pointIndex);
+            const newSelection = new Set<number>();
+            for (let i = start; i <= end; i++) {
+                newSelection.add(i);
+            }
+            setSelectedRoutePoints(newSelection);
+        } else {
+            // Toggle single selection
+            setSelectedRoutePoints(prev => {
+                const newSet = new Set(prev);
+                if (newSet.has(pointIndex)) {
+                    newSet.delete(pointIndex);
+                } else {
+                    newSet.add(pointIndex);
+                }
+                return newSet;
+            });
+            setLastSelectedIndex(pointIndex);
+        }
+    }, [lastSelectedIndex]);
+
+    // Delete selected route points (supports multiple)
+    const handleDeleteRoutePoints = useCallback(() => {
+        if (selectedRoutePoints.size === 0) return;
+
+        const remainingCount = routeCoordinates.length - selectedRoutePoints.size;
+        if (remainingCount < 2) {
             setError('Route must have at least 2 points');
             return;
         }
@@ -677,22 +746,243 @@ export const RouteEditor = memo(function RouteEditor({
         // Save state before making changes
         pushToHistory();
 
-        // Remove the marker
-        const marker = routeMarkersRef.current.get(selectedRoutePointIndex);
-        if (marker) {
-            marker.remove();
-            routeMarkersRef.current.delete(selectedRoutePointIndex);
-        }
-
-        setRouteCoordinates(prev => {
-            const updated = [...prev];
-            updated.splice(selectedRoutePointIndex, 1);
-            return updated;
+        // Remove markers for deleted points
+        selectedRoutePoints.forEach(index => {
+            const marker = routeMarkersRef.current.get(index);
+            if (marker) {
+                marker.remove();
+                routeMarkersRef.current.delete(index);
+            }
         });
 
-        setSelectedRoutePointIndex(null);
+        // Remove points from coordinates (in reverse order to maintain indices)
+        setRouteCoordinates(prev => {
+            return prev.filter((_, index) => !selectedRoutePoints.has(index));
+        });
+
+        setSelectedRoutePoints(new Set());
+        setLastSelectedIndex(null);
         setRouteHasChanges(true);
-    }, [selectedRoutePointIndex, routeCoordinates.length, pushToHistory]);
+    }, [selectedRoutePoints, routeCoordinates.length, pushToHistory]);
+
+    // Select a range of route points (for UI input)
+    const handleSelectRange = useCallback((startIndex: number, endIndex: number) => {
+        const start = Math.max(0, Math.min(startIndex, endIndex));
+        const end = Math.min(routeCoordinates.length - 1, Math.max(startIndex, endIndex));
+        const newSelection = new Set<number>();
+        for (let i = start; i <= end; i++) {
+            newSelection.add(i);
+        }
+        setSelectedRoutePoints(newSelection);
+        setLastSelectedIndex(end);
+    }, [routeCoordinates.length]);
+
+    // Clear selection
+    const handleClearSelection = useCallback(() => {
+        setSelectedRoutePoints(new Set());
+        setLastSelectedIndex(null);
+    }, []);
+
+    // Select all visible route points
+    const handleSelectAllVisible = useCallback(() => {
+        setSelectedRoutePoints(new Set(visibleRoutePointIndices));
+        if (visibleRoutePointIndices.length > 0) {
+            setLastSelectedIndex(visibleRoutePointIndices[visibleRoutePointIndices.length - 1]);
+        }
+    }, [visibleRoutePointIndices]);
+
+    // Rectangle selection handlers
+    const handleSelectionStart = useCallback((e: MouseEvent | TouchEvent) => {
+        if (mode !== 'route' || routeSubMode !== 'select') return;
+
+        const map = mapRef.current;
+        if (!map) return;
+
+        e.preventDefault();
+        e.stopPropagation();
+
+        // Get screen coordinates
+        const point = 'touches' in e
+            ? { x: e.touches[0].clientX, y: e.touches[0].clientY }
+            : { x: e.clientX, y: e.clientY };
+
+        // Get map container offset
+        const rect = map.getContainer().getBoundingClientRect();
+        const screenPoint = {
+            x: point.x - rect.left,
+            y: point.y - rect.top
+        };
+
+        setIsSelecting(true);
+        setSelectionStart(screenPoint);
+        setSelectionEnd(screenPoint);
+    }, [mode, routeSubMode]);
+
+    const handleSelectionMove = useCallback((e: MouseEvent | TouchEvent) => {
+        if (!isSelecting || mode !== 'route' || routeSubMode !== 'select') return;
+
+        const map = mapRef.current;
+        if (!map) return;
+
+        e.preventDefault();
+
+        const point = 'touches' in e
+            ? { x: e.touches[0].clientX, y: e.touches[0].clientY }
+            : { x: e.clientX, y: e.clientY };
+
+        const rect = map.getContainer().getBoundingClientRect();
+        const screenPoint = {
+            x: point.x - rect.left,
+            y: point.y - rect.top
+        };
+
+        setSelectionEnd(screenPoint);
+    }, [isSelecting, mode, routeSubMode]);
+
+    const handleSelectionEnd = useCallback(() => {
+        if (!isSelecting || !selectionStart || !selectionEnd) {
+            setIsSelecting(false);
+            return;
+        }
+
+        const map = mapRef.current;
+        if (!map) {
+            setIsSelecting(false);
+            return;
+        }
+
+        // Calculate bounding box in screen coordinates
+        const minX = Math.min(selectionStart.x, selectionEnd.x);
+        const maxX = Math.max(selectionStart.x, selectionEnd.x);
+        const minY = Math.min(selectionStart.y, selectionEnd.y);
+        const maxY = Math.max(selectionStart.y, selectionEnd.y);
+
+        // Only process if box is big enough (at least 10px)
+        if (maxX - minX < 10 || maxY - minY < 10) {
+            setIsSelecting(false);
+            setSelectionStart(null);
+            setSelectionEnd(null);
+            return;
+        }
+
+        // Find all route points within the selection box
+        const newSelection = new Set<number>();
+        routeCoordinates.forEach((coord, index) => {
+            const point = map.project([coord[0], coord[1]]);
+            if (point.x >= minX && point.x <= maxX && point.y >= minY && point.y <= maxY) {
+                newSelection.add(index);
+            }
+        });
+
+        // Add to existing selection (or replace if no shift key - but we'll always add for simplicity)
+        setSelectedRoutePoints(prev => {
+            const combined = new Set(prev);
+            newSelection.forEach(i => combined.add(i));
+            return combined;
+        });
+
+        if (newSelection.size > 0) {
+            const indices = Array.from(newSelection);
+            setLastSelectedIndex(indices[indices.length - 1]);
+        }
+
+        setIsSelecting(false);
+        setSelectionStart(null);
+        setSelectionEnd(null);
+    }, [isSelecting, selectionStart, selectionEnd, routeCoordinates]);
+
+    // Snap only selected portion to trail
+    const handleSnapSelectedToTrail = useCallback(async () => {
+        if (selectedRoutePoints.size < 2 || isSnapping) return;
+
+        // Get indices in order
+        const indices = Array.from(selectedRoutePoints).sort((a, b) => a - b);
+        const minIndex = indices[0];
+        const maxIndex = indices[indices.length - 1];
+
+        // Check if selection is contiguous (for best results)
+        const isContiguous = maxIndex - minIndex + 1 === indices.length;
+        if (!isContiguous) {
+            setError('Please select a contiguous range for best results');
+            return;
+        }
+
+        setIsSnapping(true);
+        setSnapProgress(0);
+        setError(null);
+
+        try {
+            pushToHistory();
+
+            const mapboxToken = import.meta.env.VITE_MAPBOX_TOKEN as string;
+
+            // Extract the selected portion
+            const selectedPortion = routeCoordinates.slice(minIndex, maxIndex + 1);
+
+            const result = await snapRouteToTrails(
+                selectedPortion,
+                mapboxToken,
+                (progress) => setSnapProgress(progress)
+            );
+
+            if (result.coordinates.length > 0) {
+                // Replace the selected portion with snapped version
+                setRouteCoordinates(prev => [
+                    ...prev.slice(0, minIndex),
+                    ...result.coordinates,
+                    ...prev.slice(maxIndex + 1)
+                ]);
+                setRouteHasChanges(true);
+
+                const successRate = Math.round((result.snappedSegments / result.totalSegments) * 100);
+                const confidence = Math.round(result.averageConfidence * 100);
+                setDrawFeedback(
+                    `Snapped selection (${successRate}% success, ${confidence}% confidence)`
+                );
+                setTimeout(() => setDrawFeedback(null), 5000);
+
+                // Clear selection after snapping
+                setSelectedRoutePoints(new Set());
+                setLastSelectedIndex(null);
+            } else {
+                setError('Could not snap selected portion to trails');
+            }
+        } catch (err) {
+            console.error('Error snapping selection:', err);
+            setError('Failed to snap selected portion');
+        } finally {
+            setIsSnapping(false);
+            setSnapProgress(0);
+        }
+    }, [selectedRoutePoints, routeCoordinates, isSnapping, pushToHistory]);
+
+    // Set up selection event listeners
+    useEffect(() => {
+        const map = mapRef.current;
+        if (!map || !mapLoaded || mode !== 'route' || routeSubMode !== 'select') return;
+
+        const canvas = map.getCanvas();
+
+        // Disable map drag during selection
+        map.dragPan.disable();
+
+        canvas.addEventListener('mousedown', handleSelectionStart);
+        canvas.addEventListener('mousemove', handleSelectionMove);
+        canvas.addEventListener('mouseup', handleSelectionEnd);
+        canvas.addEventListener('touchstart', handleSelectionStart, { passive: false });
+        canvas.addEventListener('touchmove', handleSelectionMove, { passive: false });
+        canvas.addEventListener('touchend', handleSelectionEnd);
+
+        return () => {
+            map.dragPan.enable();
+            canvas.removeEventListener('mousedown', handleSelectionStart);
+            canvas.removeEventListener('mousemove', handleSelectionMove);
+            canvas.removeEventListener('mouseup', handleSelectionEnd);
+            canvas.removeEventListener('touchstart', handleSelectionStart);
+            canvas.removeEventListener('touchmove', handleSelectionMove);
+            canvas.removeEventListener('touchend', handleSelectionEnd);
+        };
+    }, [mapLoaded, mode, routeSubMode, handleSelectionStart, handleSelectionMove, handleSelectionEnd]);
 
     // Insert a point into the route (click on route line in route mode)
     const handleRouteLineClick = useCallback((coords: [number, number]) => {
@@ -921,6 +1211,49 @@ export const RouteEditor = memo(function RouteEditor({
             setDrawingPoints([]);
         }
     }, [isDrawing, drawingPoints, processDrawnSegment]);
+
+    // Handle snap entire route to trails
+    const handleSnapToTrail = useCallback(async () => {
+        if (routeCoordinates.length < 2 || isSnapping) return;
+
+        setIsSnapping(true);
+        setSnapProgress(0);
+        setError(null);
+
+        try {
+            // Save state before making changes
+            pushToHistory();
+
+            const mapboxToken = import.meta.env.VITE_MAPBOX_TOKEN as string;
+
+            const result = await snapRouteToTrails(
+                routeCoordinates,
+                mapboxToken,
+                (progress) => setSnapProgress(progress)
+            );
+
+            if (result.coordinates.length > 0) {
+                setRouteCoordinates(result.coordinates);
+                setRouteHasChanges(true);
+
+                // Show feedback
+                const successRate = Math.round((result.snappedSegments / result.totalSegments) * 100);
+                const confidence = Math.round(result.averageConfidence * 100);
+                setDrawFeedback(
+                    `Snapped ${result.snappedSegments}/${result.totalSegments} segments (${successRate}% success, ${confidence}% confidence)`
+                );
+                setTimeout(() => setDrawFeedback(null), 5000);
+            } else {
+                setError('Could not snap route to trails');
+            }
+        } catch (err) {
+            console.error('Error snapping route:', err);
+            setError('Failed to snap route to trails');
+        } finally {
+            setIsSnapping(false);
+            setSnapProgress(0);
+        }
+    }, [routeCoordinates, isSnapping, pushToHistory]);
 
     // Set up drawing event listeners on the map
     useEffect(() => {
@@ -1382,6 +1715,11 @@ export const RouteEditor = memo(function RouteEditor({
                             onClick={() => setRouteSubMode('edit')}
                         />
                         <ModeToggleButton
+                            label="Select"
+                            isActive={routeSubMode === 'select'}
+                            onClick={() => setRouteSubMode('select')}
+                        />
+                        <ModeToggleButton
                             label="Draw"
                             isActive={routeSubMode === 'draw'}
                             onClick={() => setRouteSubMode('draw')}
@@ -1450,6 +1788,23 @@ export const RouteEditor = memo(function RouteEditor({
                         <strong>Drag</strong> route points to adjust path<br />
                         <strong>Click</strong> on route to add new point
                     </>
+                ) : routeSubMode === 'select' ? (
+                    isSelecting ? (
+                        <span style={{ color: '#60a5fa' }}>
+                            <strong>Selecting...</strong> Release to select points
+                        </span>
+                    ) : drawFeedback ? (
+                        <span style={{ color: '#34d399' }}>
+                            {drawFeedback}
+                        </span>
+                    ) : (
+                        <>
+                            <strong style={{ color: '#60a5fa' }}>Drag</strong> to draw selection box<br />
+                            <span style={{ fontSize: 11, color: colors.text.tertiary }}>
+                                Select points, then snap or delete • Shift+click for range
+                            </span>
+                        </>
+                    )
                 ) : isProcessingDraw ? (
                     <span style={{ color: colors.accent.primary }}>Processing...</span>
                 ) : isDrawing ? (
@@ -1469,6 +1824,24 @@ export const RouteEditor = memo(function RouteEditor({
                     </>
                 )}
             </div>
+
+            {/* Selection rectangle overlay */}
+            {isSelecting && selectionStart && selectionEnd && (
+                <div
+                    style={{
+                        position: 'absolute',
+                        left: Math.min(selectionStart.x, selectionEnd.x),
+                        top: Math.min(selectionStart.y, selectionEnd.y),
+                        width: Math.abs(selectionEnd.x - selectionStart.x),
+                        height: Math.abs(selectionEnd.y - selectionStart.y),
+                        background: 'rgba(96, 165, 250, 0.15)',
+                        border: '2px solid rgba(96, 165, 250, 0.8)',
+                        borderRadius: 4,
+                        pointerEvents: 'none',
+                        zIndex: 10
+                    }}
+                />
+            )}
 
             {/* Error message - floating over map */}
             {error && (
@@ -1707,8 +2080,8 @@ export const RouteEditor = memo(function RouteEditor({
                     ) : (
                         <>
                             {/* Route editing mode sidebar */}
-                            {/* Selected route point actions */}
-                            {selectedRoutePointIndex !== null && (
+                            {/* Selected route points actions */}
+                            {selectedRoutePoints.size > 0 && (
                                 <div style={{
                                     padding: 16,
                                     borderBottom: `1px solid ${colors.glass.borderSubtle}`,
@@ -1727,49 +2100,85 @@ export const RouteEditor = memo(function RouteEditor({
                                                 fontWeight: 600,
                                                 color: colors.text.primary
                                             }}>
-                                                Route Point #{selectedRoutePointIndex + 1}
+                                                {selectedRoutePoints.size === 1
+                                                    ? `Route Point #${Array.from(selectedRoutePoints)[0] + 1}`
+                                                    : `${selectedRoutePoints.size} Points Selected`
+                                                }
                                             </div>
-                                            <div style={{
-                                                fontSize: 13,
-                                                color: colors.text.secondary,
-                                                marginTop: 4
-                                            }}>
-                                                {routeCoordinates[selectedRoutePointIndex]?.[2]?.toFixed(0) || 0}m elevation
-                                            </div>
-                                            <div style={{
-                                                fontSize: 12,
-                                                color: colors.text.tertiary,
-                                                marginTop: 2
-                                            }}>
-                                                {routeCoordinates[selectedRoutePointIndex]?.[1]?.toFixed(5)}, {routeCoordinates[selectedRoutePointIndex]?.[0]?.toFixed(5)}
-                                            </div>
+                                            {selectedRoutePoints.size === 1 && (
+                                                <>
+                                                    <div style={{
+                                                        fontSize: 13,
+                                                        color: colors.text.secondary,
+                                                        marginTop: 4
+                                                    }}>
+                                                        {routeCoordinates[Array.from(selectedRoutePoints)[0]]?.[2]?.toFixed(0) || 0}m elevation
+                                                    </div>
+                                                    <div style={{
+                                                        fontSize: 12,
+                                                        color: colors.text.tertiary,
+                                                        marginTop: 2
+                                                    }}>
+                                                        {routeCoordinates[Array.from(selectedRoutePoints)[0]]?.[1]?.toFixed(5)}, {routeCoordinates[Array.from(selectedRoutePoints)[0]]?.[0]?.toFixed(5)}
+                                                    </div>
+                                                </>
+                                            )}
+                                            {selectedRoutePoints.size > 1 && (
+                                                <div style={{
+                                                    fontSize: 12,
+                                                    color: colors.text.tertiary,
+                                                    marginTop: 4
+                                                }}>
+                                                    Points {Math.min(...selectedRoutePoints) + 1} - {Math.max(...selectedRoutePoints) + 1}
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
-                                    <div style={{ display: 'flex', gap: 8 }}>
+                                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                                        {selectedRoutePoints.size === 1 && (
+                                            <GlassButton
+                                                variant="subtle"
+                                                size="sm"
+                                                onClick={() => {
+                                                    const coord = routeCoordinates[Array.from(selectedRoutePoints)[0]];
+                                                    if (coord && mapRef.current) {
+                                                        mapRef.current.flyTo({
+                                                            center: [coord[0], coord[1]],
+                                                            zoom: 15,
+                                                            duration: 1000
+                                                        });
+                                                    }
+                                                }}
+                                                style={{ flex: 1 }}
+                                            >
+                                                Zoom To
+                                            </GlassButton>
+                                        )}
                                         <GlassButton
                                             variant="subtle"
                                             size="sm"
-                                            onClick={() => {
-                                                const coord = routeCoordinates[selectedRoutePointIndex];
-                                                if (coord && mapRef.current) {
-                                                    mapRef.current.flyTo({
-                                                        center: [coord[0], coord[1]],
-                                                        zoom: 15,
-                                                        duration: 1000
-                                                    });
-                                                }
-                                            }}
-                                            style={{ flex: 1 }}
+                                            onClick={handleClearSelection}
                                         >
-                                            Zoom To
+                                            Clear
                                         </GlassButton>
+                                        {selectedRoutePoints.size >= 2 && (
+                                            <GlassButton
+                                                variant="subtle"
+                                                size="sm"
+                                                onClick={handleSnapSelectedToTrail}
+                                                disabled={isSnapping}
+                                                style={{ color: '#60a5fa' }}
+                                            >
+                                                {isSnapping ? `Snapping ${Math.round(snapProgress * 100)}%` : '🛤️ Snap'}
+                                            </GlassButton>
+                                        )}
                                         <GlassButton
                                             variant="subtle"
                                             size="sm"
-                                            onClick={handleDeleteRoutePoint}
+                                            onClick={handleDeleteRoutePoints}
                                             style={{ color: '#ef4444' }}
                                         >
-                                            Delete
+                                            Delete {selectedRoutePoints.size > 1 ? `(${selectedRoutePoints.size})` : ''}
                                         </GlassButton>
                                     </div>
                                 </div>
@@ -1801,9 +2210,137 @@ export const RouteEditor = memo(function RouteEditor({
                                 </div>
                                 <div style={{
                                     fontSize: 12,
-                                    color: colors.text.tertiary
+                                    color: colors.text.tertiary,
+                                    marginBottom: 12
                                 }}>
                                     Drag markers to adjust the route path. Click on the route line to add new points.
+                                </div>
+
+                                {/* Snap to Trail button */}
+                                <GlassButton
+                                    variant="subtle"
+                                    size="sm"
+                                    onClick={handleSnapToTrail}
+                                    disabled={isSnapping || routeCoordinates.length < 2}
+                                    style={{ width: '100%' }}
+                                >
+                                    {isSnapping ? (
+                                        <>Snapping... {Math.round(snapProgress * 100)}%</>
+                                    ) : (
+                                        <>🛤️ Snap Route to Trails</>
+                                    )}
+                                </GlassButton>
+                                <div style={{
+                                    fontSize: 11,
+                                    color: colors.text.tertiary,
+                                    marginTop: 8,
+                                    lineHeight: 1.4
+                                }}>
+                                    Automatically align the entire route to nearby hiking trails using Mapbox.
+                                </div>
+                            </div>
+
+                            {/* Selection tools */}
+                            <div style={{
+                                padding: 16,
+                                borderBottom: `1px solid ${colors.glass.borderSubtle}`
+                            }}>
+                                <div style={{
+                                    fontSize: 11,
+                                    color: colors.text.tertiary,
+                                    marginBottom: 12,
+                                    textTransform: 'uppercase',
+                                    letterSpacing: '0.1em'
+                                }}>
+                                    Selection Tools
+                                </div>
+
+                                {/* Quick select buttons */}
+                                <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+                                    <GlassButton
+                                        variant="subtle"
+                                        size="sm"
+                                        onClick={handleSelectAllVisible}
+                                        style={{ flex: 1 }}
+                                    >
+                                        Select Visible
+                                    </GlassButton>
+                                    {selectedRoutePoints.size > 0 && (
+                                        <GlassButton
+                                            variant="subtle"
+                                            size="sm"
+                                            onClick={handleClearSelection}
+                                        >
+                                            Clear
+                                        </GlassButton>
+                                    )}
+                                </div>
+
+                                {/* Range select inputs */}
+                                <div style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: 8
+                                }}>
+                                    <input
+                                        type="number"
+                                        min={1}
+                                        max={routeCoordinates.length}
+                                        placeholder="Start"
+                                        style={{
+                                            flex: 1,
+                                            padding: '8px 10px',
+                                            borderRadius: radius.sm,
+                                            border: `1px solid ${colors.glass.border}`,
+                                            background: colors.glass.subtle,
+                                            color: colors.text.primary,
+                                            fontSize: 13,
+                                            width: 60
+                                        }}
+                                        id="range-start"
+                                    />
+                                    <span style={{ color: colors.text.tertiary }}>to</span>
+                                    <input
+                                        type="number"
+                                        min={1}
+                                        max={routeCoordinates.length}
+                                        placeholder="End"
+                                        style={{
+                                            flex: 1,
+                                            padding: '8px 10px',
+                                            borderRadius: radius.sm,
+                                            border: `1px solid ${colors.glass.border}`,
+                                            background: colors.glass.subtle,
+                                            color: colors.text.primary,
+                                            fontSize: 13,
+                                            width: 60
+                                        }}
+                                        id="range-end"
+                                    />
+                                    <GlassButton
+                                        variant="subtle"
+                                        size="sm"
+                                        onClick={() => {
+                                            const startInput = document.getElementById('range-start') as HTMLInputElement;
+                                            const endInput = document.getElementById('range-end') as HTMLInputElement;
+                                            const start = parseInt(startInput?.value || '0') - 1;
+                                            const end = parseInt(endInput?.value || '0') - 1;
+                                            if (!isNaN(start) && !isNaN(end) && start >= 0 && end >= 0) {
+                                                handleSelectRange(start, end);
+                                            }
+                                        }}
+                                    >
+                                        Select
+                                    </GlassButton>
+                                </div>
+
+                                <div style={{
+                                    fontSize: 11,
+                                    color: colors.text.tertiary,
+                                    marginTop: 8,
+                                    lineHeight: 1.4
+                                }}>
+                                    Shift+click markers to select a range. Delete to remove selected portion.
                                 </div>
                             </div>
 
