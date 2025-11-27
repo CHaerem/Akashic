@@ -8,6 +8,14 @@ export default defineConfig({
     workers: process.env.CI ? 1 : undefined,
     reporter: 'html',
     timeout: 60000, // Increase default timeout for map-heavy tests
+    // Use platform-agnostic snapshot paths
+    snapshotPathTemplate: '{testDir}/{testFileDir}/{testFileName}-snapshots/{arg}{ext}',
+    expect: {
+        toHaveScreenshot: {
+            // Increase threshold for cross-platform consistency
+            maxDiffPixelRatio: 0.1,
+        },
+    },
     use: {
         baseURL: 'http://localhost:5173',
         trace: 'on-first-retry',

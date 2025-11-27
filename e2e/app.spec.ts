@@ -211,18 +211,13 @@ test.describe('Akashic App', () => {
     });
 
     test.describe('Visual Regression', () => {
-        // Visual regression tests are skipped in CI as they require platform-specific
-        // baseline snapshots (darwin/linux/win32) and map rendering can vary
-        test('globe view matches snapshot', async ({ page }, testInfo) => {
-            // Skip in CI environments - platform-dependent snapshots
-            test.skip(!!process.env.CI, 'Visual regression tests skipped in CI');
-
+        test('globe view matches snapshot', async ({ page }) => {
             // Wait for map to fully load
             await page.waitForTimeout(3000);
 
             // Take screenshot of initial state
             await expect(page).toHaveScreenshot('globe-view.png', {
-                maxDiffPixelRatio: 0.15 // Increased tolerance for minor CSS variations
+                maxDiffPixelRatio: 0.1
             });
         });
     });
