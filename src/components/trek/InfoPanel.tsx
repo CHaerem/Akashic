@@ -1,6 +1,6 @@
-import { memo, useCallback, useState } from 'react';
+import { memo, useCallback, useState, useMemo } from 'react';
 import type { TrekData, Camp, ExtendedStats, ElevationProfile, TabType, Photo } from '../../types/trek';
-import { useSwipeGesture } from '../../hooks/useSwipeGesture';
+import { useDragGesture } from '../../hooks/useDragGesture';
 import { TabButton } from '../common/TabButton';
 import { GlassButton } from '../common/GlassButton';
 import { OverviewTab } from './OverviewTab';
@@ -38,6 +38,11 @@ interface InfoPanelProps {
     onViewPhotoOnMap?: (photo: Photo) => void;
 }
 
+// Snap points as vh percentages (from smallest to largest panel height)
+// minimized: ~10vh, normal: 42vh, expanded: 88vh
+const SNAP_POINTS_VH = [10, 42, 88];
+const PANEL_STATES: PanelState[] = ['minimized', 'normal', 'expanded'];
+
 export const InfoPanel = memo(function InfoPanel({
     trekData, activeTab, setActiveTab, selectedCamp, onCampSelect, onBack,
     extendedStats, elevationProfile, isMobile, panelState, onPanelStateChange,
@@ -47,21 +52,24 @@ export const InfoPanel = memo(function InfoPanel({
     const [showEditModal, setShowEditModal] = useState(false);
     const [editMode, setEditMode] = useState(false);
 
-    // Swipe gestures for mobile bottom sheet
-    const handleSwipeUp = useCallback(() => {
-        if (panelState === 'minimized') onPanelStateChange('normal');
-        else if (panelState === 'normal') onPanelStateChange('expanded');
-    }, [panelState, onPanelStateChange]);
+    // Convert panel state to snap index
+    const currentSnapIndex = useMemo(() =>
+        PANEL_STATES.indexOf(panelState),
+        [panelState]
+    );
 
-    const handleSwipeDown = useCallback(() => {
-        if (panelState === 'expanded') onPanelStateChange('normal');
-        else if (panelState === 'normal') onPanelStateChange('minimized');
-    }, [panelState, onPanelStateChange]);
+    // Handle snap changes from drag gesture
+    const handleSnapChange = useCallback((index: number) => {
+        onPanelStateChange(PANEL_STATES[index]);
+    }, [onPanelStateChange]);
 
-    const swipeHandlers = useSwipeGesture({
-        onSwipeUp: handleSwipeUp,
-        onSwipeDown: handleSwipeDown,
-        threshold: 30
+    // iOS-like drag gesture with velocity detection
+    const [dragState, dragHandlers] = useDragGesture({
+        snapPoints: SNAP_POINTS_VH,
+        currentSnapIndex,
+        onSnapChange: handleSnapChange,
+        velocityThreshold: 0.4,  // Slightly lower for more responsive feel
+        distanceThreshold: 40,   // 40px threshold for slow drags
     });
 
     // Panel height based on state - using dvh for better mobile support
@@ -97,7 +105,11 @@ export const InfoPanel = memo(function InfoPanel({
         display: 'flex',
         flexDirection: 'column',
         zIndex: 20,
-        transition: `height ${transitions.glass}`,
+        // iOS-like: panel follows finger during drag, smooth spring on release
+        transform: dragState.isDragging ? `translateY(${dragState.dragOffset}px)` : 'translateY(0)',
+        transition: dragState.isDragging
+            ? 'none'  // No transition during drag for instant follow
+            : `height 0.4s cubic-bezier(0.32, 0.72, 0, 1), transform 0.4s cubic-bezier(0.32, 0.72, 0, 1)`,
         paddingBottom: 'env(safe-area-inset-bottom)',
         boxShadow: `
             0 -16px 48px rgba(0, 0, 0, 0.4),
@@ -143,30 +155,39 @@ export const InfoPanel = memo(function InfoPanel({
 
     return (
         <div style={isMobile ? mobileStyle : desktopStyle} className="glass-scrollbar">
-            {/* Mobile drag handle with swipe support - Liquid Glass pill */}
+            {/* Mobile drag handle with iOS-like gesture support */}
             {isMobile && (
                 <div
                     onClick={handleDragHandleClick}
-                    {...swipeHandlers}
+                    onTouchStart={dragHandlers.onTouchStart}
+                    onTouchMove={dragHandlers.onTouchMove}
+                    onTouchEnd={dragHandlers.onTouchEnd}
                     style={{
                         padding: '14px 0 10px',
                         display: 'flex',
                         justifyContent: 'center',
-                        cursor: 'grab',
+                        cursor: dragState.isDragging ? 'grabbing' : 'grab',
                         touchAction: 'none'
                     }}
                 >
                     <div style={{
-                        width: panelState === 'expanded' ? 48 : 40,
+                        width: dragState.isDragging ? 52 : (panelState === 'expanded' ? 48 : 40),
                         height: 5,
-                        background: `linear-gradient(
-                            90deg,
-                            rgba(255, 255, 255, 0.2) 0%,
-                            rgba(255, 255, 255, 0.4) 50%,
-                            rgba(255, 255, 255, 0.2) 100%
-                        )`,
+                        background: dragState.isDragging
+                            ? `linear-gradient(
+                                90deg,
+                                rgba(255, 255, 255, 0.3) 0%,
+                                rgba(255, 255, 255, 0.6) 50%,
+                                rgba(255, 255, 255, 0.3) 100%
+                            )`
+                            : `linear-gradient(
+                                90deg,
+                                rgba(255, 255, 255, 0.2) 0%,
+                                rgba(255, 255, 255, 0.4) 50%,
+                                rgba(255, 255, 255, 0.2) 100%
+                            )`,
                         borderRadius: radius.pill,
-                        transition: `all ${transitions.smooth}`,
+                        transition: dragState.isDragging ? 'none' : `all ${transitions.smooth}`,
                         boxShadow: 'inset 0 1px 0 rgba(255, 255, 255, 0.3)',
                     }} />
                 </div>
