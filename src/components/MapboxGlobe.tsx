@@ -7,7 +7,21 @@ import { useMapbox, type RouteClickInfo } from '../hooks/useMapbox';
 import { useJourneys } from '../contexts/JourneysContext';
 import { MapErrorFallback } from './common/ErrorBoundary';
 import { colors, radius, glassFloating, glassButton } from '../styles/liquidGlass';
-import type { TrekConfig, Camp, ViewMode, Photo } from '../types/trek';
+import type { TrekConfig, Camp, ViewMode, Photo, PointOfInterest } from '../types/trek';
+
+// POI category display info
+const POI_CATEGORY_INFO: Record<string, { icon: string; label: string; color: string }> = {
+    viewpoint: { icon: '👁', label: 'Viewpoint', color: 'rgba(168, 85, 247, 0.8)' },
+    water: { icon: '💧', label: 'Water Source', color: 'rgba(59, 130, 246, 0.8)' },
+    landmark: { icon: '🏔', label: 'Landmark', color: 'rgba(234, 179, 8, 0.8)' },
+    shelter: { icon: '🏠', label: 'Shelter', color: 'rgba(34, 197, 94, 0.8)' },
+    warning: { icon: '⚠', label: 'Caution', color: 'rgba(239, 68, 68, 0.8)' },
+    summit: { icon: '⛰', label: 'Summit', color: 'rgba(251, 146, 60, 0.8)' },
+    wildlife: { icon: '🦌', label: 'Wildlife Area', color: 'rgba(20, 184, 166, 0.8)' },
+    photo_spot: { icon: '📷', label: 'Photo Spot', color: 'rgba(236, 72, 153, 0.8)' },
+    rest_area: { icon: '🪑', label: 'Rest Area', color: 'rgba(132, 204, 22, 0.8)' },
+    info: { icon: 'ℹ', label: 'Information', color: 'rgba(148, 163, 184, 0.8)' }
+};
 
 // Check if running in E2E test mode
 const isE2ETestMode = import.meta.env.VITE_E2E_TEST_MODE === 'true';
@@ -131,9 +145,11 @@ export function MapboxGlobe({ selectedTrek, selectedCamp, onSelectTrek, view, ph
     const containerRef = useRef<HTMLDivElement>(null);
     const { treks, trekDataMap, loading: journeysLoading } = useJourneys();
     const [routeInfo, setRouteInfo] = useState<RouteClickInfo | null>(null);
+    const [poiInfo, setPOIInfo] = useState<PointOfInterest | null>(null);
 
-    // Get camps for the selected trek
+    // Get camps and POIs for the selected trek
     const camps = selectedTrek ? trekDataMap[selectedTrek.id]?.camps || [] : [];
+    const pois = selectedTrek ? trekDataMap[selectedTrek.id]?.pointsOfInterest || [] : [];
 
     // Handle photo click from map marker
     const handlePhotoClick = useCallback((photo: Photo) => {
@@ -145,19 +161,28 @@ export function MapboxGlobe({ selectedTrek, selectedCamp, onSelectTrek, view, ph
 
     // Handle route click - show info popup
     const handleRouteClick = useCallback((info: RouteClickInfo) => {
+        setPOIInfo(null); // Clear POI popup
         setRouteInfo(info);
     }, []);
 
-    // Clear route info when clicking elsewhere or changing trek
+    // Handle POI click - show POI popup
+    const handlePOIClick = useCallback((poi: PointOfInterest) => {
+        setRouteInfo(null); // Clear route popup
+        setPOIInfo(poi);
+    }, []);
+
+    // Clear popups when clicking elsewhere or changing trek
     useEffect(() => {
         setRouteInfo(null);
+        setPOIInfo(null);
     }, [selectedTrek, selectedCamp]);
 
-    const { mapReady, error, flyToGlobe, flyToTrek, updatePhotoMarkers, updateCampMarkers, flyToPhoto, startRotation, stopRotation } = useMapbox({
+    const { mapReady, error, flyToGlobe, flyToTrek, updatePhotoMarkers, updateCampMarkers, updatePOIMarkers, flyToPhoto, flyToPOI, startRotation, stopRotation } = useMapbox({
         containerRef,
         onTrekSelect: onSelectTrek,
         onPhotoClick: handlePhotoClick,
         onRouteClick: handleRouteClick,
+        onPOIClick: handlePOIClick,
         getMediaUrl
     });
 
@@ -250,6 +275,20 @@ export function MapboxGlobe({ selectedTrek, selectedCamp, onSelectTrek, view, ph
         }
     }, [mapReady, view, updateCampMarkers]);
 
+    // Update POI markers when trek changes
+    useEffect(() => {
+        if (!mapReady || view !== 'trek') return;
+        updatePOIMarkers(pois);
+    }, [mapReady, view, pois, updatePOIMarkers]);
+
+    // Hide POI markers when leaving trek view
+    useEffect(() => {
+        if (!mapReady) return;
+        if (view !== 'trek') {
+            updatePOIMarkers([]);
+        }
+    }, [mapReady, view, updatePOIMarkers]);
+
     if (error) {
         return <MapErrorFallback error={error} />;
     }
@@ -281,7 +320,8 @@ export function MapboxGlobe({ selectedTrek, selectedCamp, onSelectTrek, view, ph
                         borderRadius: radius.lg,
                         padding: '20px 24px',
                         zIndex: 100,
-                        minWidth: 200,
+                        minWidth: 240,
+                        maxWidth: 300,
                         animation: 'popupIn 0.25s cubic-bezier(0.32, 0.72, 0, 1)',
                     }}
                 >
@@ -306,52 +346,316 @@ export function MapboxGlobe({ selectedTrek, selectedCamp, onSelectTrek, view, ph
                         ×
                     </button>
 
-                    <div style={{ fontSize: 11, color: colors.text.subtle, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 12 }}>
-                        Route Point
+                    {/* Progress indicator */}
+                    <div style={{ marginBottom: 16 }}>
+                        <div style={{
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'baseline',
+                            marginBottom: 8
+                        }}>
+                            <span style={{ fontSize: 11, color: colors.text.subtle, textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+                                Journey Progress
+                            </span>
+                            <span style={{ fontSize: 13, color: colors.text.secondary, fontWeight: 500 }}>
+                                {routeInfo.progressPercent}%
+                            </span>
+                        </div>
+                        <div style={{
+                            height: 4,
+                            background: colors.glass.subtle,
+                            borderRadius: 2,
+                            overflow: 'hidden'
+                        }}>
+                            <div style={{
+                                height: '100%',
+                                width: `${routeInfo.progressPercent}%`,
+                                background: `linear-gradient(90deg, ${colors.accent.primary}, ${colors.accent.secondary})`,
+                                borderRadius: 2,
+                                transition: 'width 0.3s ease'
+                            }} />
+                        </div>
                     </div>
 
-                    <div style={{ display: 'grid', gap: 12 }}>
-                        <div>
-                            <div style={{ fontSize: 24, fontWeight: 500, color: colors.text.primary }}>
+                    {/* Main stats */}
+                    <div style={{ display: 'flex', gap: 20, marginBottom: 16 }}>
+                        <div style={{ flex: 1 }}>
+                            <div style={{ fontSize: 22, fontWeight: 500, color: colors.text.primary }}>
                                 {routeInfo.distanceFromStart} km
                             </div>
-                            <div style={{ fontSize: 12, color: colors.text.tertiary }}>from start</div>
+                            <div style={{ fontSize: 11, color: colors.text.tertiary }}>completed</div>
                         </div>
+                        <div style={{ flex: 1, textAlign: 'right' }}>
+                            <div style={{ fontSize: 22, fontWeight: 500, color: colors.text.secondary }}>
+                                {(routeInfo.totalDistance - routeInfo.distanceFromStart).toFixed(1)} km
+                            </div>
+                            <div style={{ fontSize: 11, color: colors.text.tertiary }}>remaining</div>
+                        </div>
+                    </div>
 
-                        {routeInfo.elevation !== null && (
+                    {/* Elevation */}
+                    {routeInfo.elevation !== null && (
+                        <div style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 8,
+                            padding: '10px 12px',
+                            background: colors.glass.subtle,
+                            borderRadius: radius.sm,
+                            marginBottom: 16
+                        }}>
+                            <span style={{ fontSize: 14 }}>⛰</span>
                             <div>
-                                <div style={{ fontSize: 18, fontWeight: 500, color: colors.text.primary }}>
+                                <div style={{ fontSize: 15, fontWeight: 500, color: colors.text.primary }}>
                                     {routeInfo.elevation.toLocaleString()}m
                                 </div>
-                                <div style={{ fontSize: 12, color: colors.text.tertiary }}>elevation</div>
+                                <div style={{ fontSize: 10, color: colors.text.tertiary }}>current elevation</div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Between camps indicator */}
+                    {(routeInfo.previousCamp || routeInfo.nextCamp) && (
+                        <div style={{
+                            padding: '12px',
+                            background: colors.glass.subtle,
+                            borderRadius: radius.sm,
+                            marginBottom: 16
+                        }}>
+                            <div style={{ fontSize: 10, color: colors.text.subtle, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>
+                                Current Segment
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                                {routeInfo.previousCamp ? (
+                                    <div style={{ flex: 1, textAlign: 'left' }}>
+                                        <div style={{ fontSize: 12, color: colors.text.secondary, fontWeight: 500 }}>
+                                            Day {routeInfo.previousCamp.dayNumber}
+                                        </div>
+                                        <div style={{ fontSize: 10, color: colors.text.tertiary }}>
+                                            {routeInfo.distanceToPreviousCamp} km ago
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div style={{ flex: 1, textAlign: 'left' }}>
+                                        <div style={{ fontSize: 12, color: colors.text.tertiary }}>Start</div>
+                                    </div>
+                                )}
+                                <div style={{ color: colors.text.disabled, fontSize: 12 }}>→</div>
+                                {routeInfo.nextCamp ? (
+                                    <div style={{ flex: 1, textAlign: 'right' }}>
+                                        <div style={{ fontSize: 12, color: colors.text.secondary, fontWeight: 500 }}>
+                                            Day {routeInfo.nextCamp.dayNumber}
+                                        </div>
+                                        <div style={{ fontSize: 10, color: colors.text.tertiary }}>
+                                            in {routeInfo.distanceToNextCamp} km
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div style={{ flex: 1, textAlign: 'right' }}>
+                                        <div style={{ fontSize: 12, color: colors.text.tertiary }}>End</div>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Quick action */}
+                    {routeInfo.nearestCamp && onCampSelect && (
+                        <button
+                            onClick={handleGoToNearestCamp}
+                            style={{
+                                ...glassButton,
+                                width: '100%',
+                                padding: '12px 16px',
+                                borderRadius: radius.sm,
+                                fontSize: 13,
+                                fontWeight: 500,
+                                color: colors.text.primary,
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                gap: 8
+                            }}
+                        >
+                            <span>View Day {routeInfo.nearestCamp.dayNumber}</span>
+                            <span style={{ fontSize: 10, color: colors.text.tertiary }}>
+                                ({routeInfo.distanceToNearestCamp} km away)
+                            </span>
+                        </button>
+                    )}
+                </div>
+            )}
+
+            {/* POI Info Popup */}
+            {poiInfo && view === 'trek' && (
+                <div
+                    style={{
+                        position: 'absolute',
+                        top: '50%',
+                        left: '50%',
+                        transform: 'translate(-50%, -50%)',
+                        ...glassFloating,
+                        borderRadius: radius.lg,
+                        padding: '20px 24px',
+                        zIndex: 100,
+                        minWidth: 240,
+                        maxWidth: 320,
+                        animation: 'popupIn 0.25s cubic-bezier(0.32, 0.72, 0, 1)',
+                    }}
+                >
+                    {/* Close button */}
+                    <button
+                        onClick={() => setPOIInfo(null)}
+                        style={{
+                            position: 'absolute',
+                            top: 8,
+                            right: 8,
+                            background: 'none',
+                            border: 'none',
+                            color: colors.text.subtle,
+                            cursor: 'pointer',
+                            padding: 4,
+                            fontSize: 16,
+                            lineHeight: 1
+                        }}
+                    >
+                        ×
+                    </button>
+
+                    {/* Category badge */}
+                    <div style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 6,
+                        padding: '4px 10px',
+                        borderRadius: 12,
+                        background: (POI_CATEGORY_INFO[poiInfo.category]?.color || colors.glass.medium).replace('0.8', '0.15'),
+                        marginBottom: 12
+                    }}>
+                        <span style={{ fontSize: 12 }}>
+                            {POI_CATEGORY_INFO[poiInfo.category]?.icon || '•'}
+                        </span>
+                        <span style={{
+                            fontSize: 10,
+                            fontWeight: 600,
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.05em',
+                            color: POI_CATEGORY_INFO[poiInfo.category]?.color || colors.text.secondary
+                        }}>
+                            {POI_CATEGORY_INFO[poiInfo.category]?.label || poiInfo.category}
+                        </span>
+                    </div>
+
+                    {/* POI Name */}
+                    <h3 style={{
+                        fontSize: 18,
+                        fontWeight: 500,
+                        color: colors.text.primary,
+                        marginBottom: 8,
+                        marginTop: 0
+                    }}>
+                        {poiInfo.name}
+                    </h3>
+
+                    {/* Elevation & Distance */}
+                    <div style={{
+                        display: 'flex',
+                        gap: 16,
+                        marginBottom: 12
+                    }}>
+                        {poiInfo.elevation && (
+                            <div style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 4,
+                                color: colors.text.secondary,
+                                fontSize: 12
+                            }}>
+                                <span style={{ opacity: 0.6 }}>⛰</span>
+                                <span>{poiInfo.elevation.toLocaleString()}m</span>
                             </div>
                         )}
-
-                        {routeInfo.nearestCamp && (
-                            <div style={{ marginTop: 8, paddingTop: 12, borderTop: `1px solid ${colors.glass.borderSubtle}` }}>
-                                <div style={{ fontSize: 12, color: colors.text.tertiary, marginBottom: 8 }}>
-                                    Nearest: {routeInfo.nearestCamp.name} ({routeInfo.distanceToNearestCamp} km)
-                                </div>
-                                {onCampSelect && (
-                                    <button
-                                        onClick={handleGoToNearestCamp}
-                                        style={{
-                                            ...glassButton,
-                                            width: '100%',
-                                            padding: '10px 16px',
-                                            borderRadius: radius.sm,
-                                            fontSize: 13,
-                                            fontWeight: 500,
-                                            color: colors.text.primary,
-                                            cursor: 'pointer',
-                                        }}
-                                    >
-                                        Go to Day {routeInfo.nearestCamp.dayNumber}
-                                    </button>
-                                )}
+                        {poiInfo.routeDistanceKm !== undefined && (
+                            <div style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 4,
+                                color: colors.text.secondary,
+                                fontSize: 12
+                            }}>
+                                <span style={{ opacity: 0.6 }}>📍</span>
+                                <span>{poiInfo.routeDistanceKm.toFixed(1)} km from start</span>
                             </div>
                         )}
                     </div>
+
+                    {/* Description */}
+                    {poiInfo.description && (
+                        <p style={{
+                            fontSize: 13,
+                            color: colors.text.tertiary,
+                            lineHeight: 1.5,
+                            marginBottom: 12,
+                            marginTop: 0
+                        }}>
+                            {poiInfo.description}
+                        </p>
+                    )}
+
+                    {/* Tips */}
+                    {poiInfo.tips && poiInfo.tips.length > 0 && (
+                        <div style={{
+                            padding: '10px 12px',
+                            background: colors.glass.subtle,
+                            borderRadius: radius.sm,
+                            marginBottom: 12
+                        }}>
+                            <div style={{
+                                fontSize: 10,
+                                color: colors.text.subtle,
+                                textTransform: 'uppercase',
+                                letterSpacing: '0.05em',
+                                marginBottom: 6
+                            }}>
+                                Tips
+                            </div>
+                            <ul style={{
+                                margin: 0,
+                                paddingLeft: 16,
+                                fontSize: 12,
+                                color: colors.text.secondary
+                            }}>
+                                {poiInfo.tips.map((tip, i) => (
+                                    <li key={i} style={{ marginBottom: 4 }}>{tip}</li>
+                                ))}
+                            </ul>
+                        </div>
+                    )}
+
+                    {/* Fly to POI button */}
+                    <button
+                        onClick={() => {
+                            flyToPOI(poiInfo);
+                            setPOIInfo(null);
+                        }}
+                        style={{
+                            ...glassButton,
+                            width: '100%',
+                            padding: '12px 16px',
+                            borderRadius: radius.sm,
+                            fontSize: 13,
+                            fontWeight: 500,
+                            color: colors.text.primary,
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: 8
+                        }}
+                    >
+                        View on Map
+                    </button>
                 </div>
             )}
         </div>

@@ -6,7 +6,7 @@ import { useState, useRef, useEffect, useCallback, type RefObject, type MutableR
 import mapboxgl from 'mapbox-gl';
 import { useJourneys } from '../contexts/JourneysContext';
 import { calculateBearing, findCoordIndex, getDistanceFromLatLonInKm } from '../utils/geography';
-import type { TrekConfig, TrekData, Camp, Photo } from '../types/trek';
+import type { TrekConfig, TrekData, Camp, Photo, PointOfInterest, POICategory } from '../types/trek';
 
 // Route click information
 export interface RouteClickInfo {
@@ -15,6 +15,13 @@ export interface RouteClickInfo {
     elevation: number | null;
     nearestCamp: Camp | null;
     distanceToNearestCamp: number | null; // km
+    // Enhanced info
+    totalDistance: number; // total journey distance in km
+    progressPercent: number; // 0-100
+    previousCamp: Camp | null; // camp before this point
+    nextCamp: Camp | null; // camp after this point
+    distanceToPreviousCamp: number | null; // km
+    distanceToNextCamp: number | null; // km
 }
 
 interface UseMapboxOptions {
@@ -22,6 +29,7 @@ interface UseMapboxOptions {
     onTrekSelect: (trek: TrekConfig) => void;
     onPhotoClick?: (photo: Photo) => void;
     onRouteClick?: (info: RouteClickInfo) => void;
+    onPOIClick?: (poi: PointOfInterest) => void;
     getMediaUrl?: (path: string) => string;
 }
 
@@ -41,7 +49,9 @@ interface UseMapboxReturn {
     highlightSegment: (trekData: TrekData, selectedCamp: Camp) => void;
     updatePhotoMarkers: (photos: Photo[], selectedCampId?: string | null) => void;
     updateCampMarkers: (camps: Camp[], selectedCampId?: string | null) => void;
+    updatePOIMarkers: (pois: PointOfInterest[]) => void;
     flyToPhoto: (photo: Photo) => void;
+    flyToPOI: (poi: PointOfInterest) => void;
     startRotation: () => void;
     stopRotation: () => void;
     // Playback controls
@@ -53,12 +63,13 @@ interface UseMapboxReturn {
 /**
  * Initialize Mapbox map with globe projection and terrain
  */
-export function useMapbox({ containerRef, onTrekSelect, onPhotoClick, onRouteClick, getMediaUrl }: UseMapboxOptions): UseMapboxReturn {
+export function useMapbox({ containerRef, onTrekSelect, onPhotoClick, onRouteClick, onPOIClick, getMediaUrl }: UseMapboxOptions): UseMapboxReturn {
     const { treks, trekDataMap } = useJourneys();
     const mapRef = useRef<mapboxgl.Map | null>(null);
     const rotationAnimationRef = useRef<number | null>(null);
     const interactionListenerRef = useRef<(() => void) | null>(null);
     const photosRef = useRef<Photo[]>([]);
+    const poisRef = useRef<PointOfInterest[]>([]);
     const photoMarkersRef = useRef<Map<string, mapboxgl.Marker>>(new Map());
     const selectedTrekRef = useRef<string | null>(null);
     const playbackAnimationRef = useRef<number | null>(null);
@@ -76,6 +87,7 @@ export function useMapbox({ containerRef, onTrekSelect, onPhotoClick, onRouteCli
     const onTrekSelectRef = useRef(onTrekSelect);
     const onPhotoClickRef = useRef(onPhotoClick);
     const onRouteClickRef = useRef(onRouteClick);
+    const onPOIClickRef = useRef(onPOIClick);
     const treksRef = useRef(treks);
     const trekDataMapRef = useRef(trekDataMap);
 
@@ -90,6 +102,10 @@ export function useMapbox({ containerRef, onTrekSelect, onPhotoClick, onRouteCli
     useEffect(() => {
         onRouteClickRef.current = onRouteClick;
     }, [onRouteClick]);
+
+    useEffect(() => {
+        onPOIClickRef.current = onPOIClick;
+    }, [onPOIClick]);
 
     useEffect(() => {
         treksRef.current = treks;
@@ -347,6 +363,126 @@ export function useMapbox({ containerRef, onTrekSelect, onPhotoClick, onRouteCli
                     }
                 });
 
+                // POI (Points of Interest) markers source & layers
+                map.addSource('poi-markers', {
+                    type: 'geojson',
+                    data: { type: 'FeatureCollection', features: [] }
+                });
+
+                // POI marker outer glow - color varies by category
+                map.addLayer({
+                    id: 'poi-markers-glow',
+                    type: 'circle',
+                    source: 'poi-markers',
+                    layout: { 'visibility': 'none' },
+                    paint: {
+                        'circle-color': [
+                            'match', ['get', 'category'],
+                            'viewpoint', 'rgba(168, 85, 247, 0.7)',     // Purple for viewpoints
+                            'water', 'rgba(59, 130, 246, 0.7)',         // Blue for water
+                            'landmark', 'rgba(234, 179, 8, 0.7)',       // Yellow for landmarks
+                            'shelter', 'rgba(34, 197, 94, 0.7)',        // Green for shelters
+                            'warning', 'rgba(239, 68, 68, 0.7)',        // Red for warnings
+                            'summit', 'rgba(251, 146, 60, 0.7)',        // Orange for summits
+                            'wildlife', 'rgba(20, 184, 166, 0.7)',      // Teal for wildlife
+                            'photo_spot', 'rgba(236, 72, 153, 0.7)',    // Pink for photo spots
+                            'rest_area', 'rgba(132, 204, 22, 0.7)',     // Lime for rest areas
+                            'rgba(148, 163, 184, 0.7)'                  // Default gray
+                        ],
+                        'circle-radius': 12,
+                        'circle-opacity': 0.4,
+                        'circle-blur': 0.5
+                    }
+                });
+
+                // POI marker circles - distinct icon-like appearance
+                map.addLayer({
+                    id: 'poi-markers-circle',
+                    type: 'circle',
+                    source: 'poi-markers',
+                    layout: { 'visibility': 'none' },
+                    paint: {
+                        'circle-color': [
+                            'match', ['get', 'category'],
+                            'viewpoint', 'rgba(233, 213, 255, 0.95)',   // Light purple
+                            'water', 'rgba(219, 234, 254, 0.95)',       // Light blue
+                            'landmark', 'rgba(254, 249, 195, 0.95)',    // Light yellow
+                            'shelter', 'rgba(220, 252, 231, 0.95)',     // Light green
+                            'warning', 'rgba(254, 226, 226, 0.95)',     // Light red
+                            'summit', 'rgba(255, 237, 213, 0.95)',      // Light orange
+                            'wildlife', 'rgba(204, 251, 241, 0.95)',    // Light teal
+                            'photo_spot', 'rgba(252, 231, 243, 0.95)',  // Light pink
+                            'rest_area', 'rgba(236, 252, 203, 0.95)',   // Light lime
+                            'rgba(241, 245, 249, 0.95)'                 // Default light gray
+                        ],
+                        'circle-radius': 8,
+                        'circle-stroke-width': 1.5,
+                        'circle-stroke-color': [
+                            'match', ['get', 'category'],
+                            'viewpoint', 'rgba(168, 85, 247, 0.8)',
+                            'water', 'rgba(59, 130, 246, 0.8)',
+                            'landmark', 'rgba(234, 179, 8, 0.8)',
+                            'shelter', 'rgba(34, 197, 94, 0.8)',
+                            'warning', 'rgba(239, 68, 68, 0.8)',
+                            'summit', 'rgba(251, 146, 60, 0.8)',
+                            'wildlife', 'rgba(20, 184, 166, 0.8)',
+                            'photo_spot', 'rgba(236, 72, 153, 0.8)',
+                            'rest_area', 'rgba(132, 204, 22, 0.8)',
+                            'rgba(148, 163, 184, 0.8)'
+                        ]
+                    }
+                });
+
+                // POI marker labels with category icon
+                map.addLayer({
+                    id: 'poi-markers-label',
+                    type: 'symbol',
+                    source: 'poi-markers',
+                    layout: {
+                        'visibility': 'none',
+                        'text-field': [
+                            'match', ['get', 'category'],
+                            'viewpoint', '👁',
+                            'water', '💧',
+                            'landmark', '🏔',
+                            'shelter', '🏠',
+                            'warning', '⚠',
+                            'summit', '⛰',
+                            'wildlife', '🦌',
+                            'photo_spot', '📷',
+                            'rest_area', '🪑',
+                            'info', 'ℹ',
+                            '•'
+                        ],
+                        'text-size': 12,
+                        'text-allow-overlap': true,
+                        'text-offset': [0, -1.8]
+                    },
+                    paint: {
+                        'text-color': 'rgba(255, 255, 255, 0.95)'
+                    }
+                });
+
+                // POI name labels (shown on hover/zoom)
+                map.addLayer({
+                    id: 'poi-markers-name',
+                    type: 'symbol',
+                    source: 'poi-markers',
+                    layout: {
+                        'visibility': 'none',
+                        'text-field': ['get', 'name'],
+                        'text-size': 10,
+                        'text-font': ['DIN Pro Medium', 'Arial Unicode MS Regular'],
+                        'text-offset': [0, 1.5],
+                        'text-anchor': 'top'
+                    },
+                    paint: {
+                        'text-color': 'rgba(255, 255, 255, 0.9)',
+                        'text-halo-color': 'rgba(0, 0, 0, 0.7)',
+                        'text-halo-width': 1
+                    }
+                });
+
                 setMapReady(true);
             });
 
@@ -398,6 +534,28 @@ export function useMapbox({ containerRef, onTrekSelect, onPhotoClick, onRouteCli
                                 duration: 500
                             });
                         });
+                    }
+                    e.originalEvent.stopPropagation();
+                }
+            });
+
+            // POI marker interaction handlers
+            map.on('mouseenter', 'poi-markers-circle', () => {
+                map.getCanvas().style.cursor = 'pointer';
+            });
+
+            map.on('mouseleave', 'poi-markers-circle', () => {
+                map.getCanvas().style.cursor = '';
+            });
+
+            map.on('click', 'poi-markers-circle', (e) => {
+                if (e.features && e.features.length > 0) {
+                    const poiId = e.features[0].properties?.id;
+                    if (poiId && onPOIClickRef.current) {
+                        const poi = poisRef.current.find(p => p.id === poiId);
+                        if (poi) {
+                            onPOIClickRef.current(poi);
+                        }
                     }
                     e.originalEvent.stopPropagation();
                 }
@@ -552,6 +710,14 @@ export function useMapbox({ containerRef, onTrekSelect, onPhotoClick, onRouteCli
                     distFromStart += getDistanceFromLatLonInKm(prev[1], prev[0], curr[1], curr[0]);
                 }
 
+                // Calculate total route distance
+                let totalDistance = distFromStart;
+                for (let i = nearestIdx + 1; i < routeCoords.length; i++) {
+                    const prev = routeCoords[i - 1];
+                    const curr = routeCoords[i];
+                    totalDistance += getDistanceFromLatLonInKm(prev[1], prev[0], curr[1], curr[0]);
+                }
+
                 // Get elevation at this point
                 const nearestCoord = routeCoords[nearestIdx];
                 const elevation = nearestCoord[2] !== undefined ? nearestCoord[2] : null;
@@ -570,12 +736,42 @@ export function useMapbox({ containerRef, onTrekSelect, onPhotoClick, onRouteCli
                     }
                 });
 
+                // Find previous and next camps along route
+                // Sort camps by their route distance
+                const sortedCamps = [...camps].sort((a, b) => {
+                    const distA = a.routeDistanceKm ?? 0;
+                    const distB = b.routeDistanceKm ?? 0;
+                    return distA - distB;
+                });
+
+                let previousCamp: Camp | null = null;
+                let nextCamp: Camp | null = null;
+                let distToPreviousCamp: number | null = null;
+                let distToNextCamp: number | null = null;
+
+                for (let i = 0; i < sortedCamps.length; i++) {
+                    const campDist = sortedCamps[i].routeDistanceKm ?? 0;
+                    if (campDist <= distFromStart) {
+                        previousCamp = sortedCamps[i];
+                        distToPreviousCamp = distFromStart - campDist;
+                    } else if (!nextCamp) {
+                        nextCamp = sortedCamps[i];
+                        distToNextCamp = campDist - distFromStart;
+                    }
+                }
+
                 onRouteClickRef.current({
                     coordinates: [coords.lng, coords.lat],
-                    distanceFromStart: Math.round(distFromStart * 10) / 10, // 1 decimal
+                    distanceFromStart: Math.round(distFromStart * 10) / 10,
                     elevation: elevation !== null ? Math.round(elevation) : null,
                     nearestCamp,
-                    distanceToNearestCamp: nearestCamp ? Math.round(distToNearestCamp * 10) / 10 : null
+                    distanceToNearestCamp: nearestCamp ? Math.round(distToNearestCamp * 10) / 10 : null,
+                    totalDistance: Math.round(totalDistance * 10) / 10,
+                    progressPercent: totalDistance > 0 ? Math.round((distFromStart / totalDistance) * 100) : 0,
+                    previousCamp,
+                    nextCamp,
+                    distanceToPreviousCamp: distToPreviousCamp !== null ? Math.round(distToPreviousCamp * 10) / 10 : null,
+                    distanceToNextCamp: distToNextCamp !== null ? Math.round(distToNextCamp * 10) / 10 : null
                 });
 
                 e.originalEvent.stopPropagation();
@@ -1189,6 +1385,62 @@ export function useMapbox({ containerRef, onTrekSelect, onPhotoClick, onRouteCli
         }
     }, [mapReady]);
 
+    // Update POI markers on the map
+    const updatePOIMarkers = useCallback((pois: PointOfInterest[]) => {
+        const map = mapRef.current;
+        if (!map || !mapReady) return;
+
+        // Store in ref for click handler
+        poisRef.current = pois;
+
+        // Create GeoJSON features for POIs
+        const features: GeoJSON.Feature[] = pois.map(poi => ({
+            type: 'Feature',
+            properties: {
+                id: poi.id,
+                name: poi.name,
+                category: poi.category,
+                elevation: poi.elevation || 0,
+                description: poi.description || '',
+                routeDistanceKm: poi.routeDistanceKm || 0
+            },
+            geometry: {
+                type: 'Point',
+                coordinates: poi.coordinates as [number, number]
+            }
+        }));
+
+        const source = map.getSource('poi-markers') as mapboxgl.GeoJSONSource;
+        if (source) {
+            source.setData({
+                type: 'FeatureCollection',
+                features
+            });
+
+            // Show/hide POI markers based on whether we have POIs
+            const visibility = features.length > 0 ? 'visible' : 'none';
+            map.setLayoutProperty('poi-markers-circle', 'visibility', visibility);
+            map.setLayoutProperty('poi-markers-glow', 'visibility', visibility);
+            map.setLayoutProperty('poi-markers-label', 'visibility', visibility);
+            map.setLayoutProperty('poi-markers-name', 'visibility', visibility);
+        }
+    }, [mapReady]);
+
+    // Fly to a POI's location
+    const flyToPOI = useCallback((poi: PointOfInterest) => {
+        const map = mapRef.current;
+        if (!map || !mapReady) return;
+
+        map.flyTo({
+            center: poi.coordinates as [number, number],
+            zoom: 16,
+            pitch: 50,
+            duration: 1500,
+            essential: true,
+            easing: (t) => 1 - Math.pow(1 - t, 3)
+        });
+    }, [mapReady]);
+
     // Fly to a photo's location
     const flyToPhoto = useCallback((photo: Photo) => {
         const map = mapRef.current;
@@ -1326,7 +1578,9 @@ export function useMapbox({ containerRef, onTrekSelect, onPhotoClick, onRouteCli
         highlightSegment,
         updatePhotoMarkers,
         updateCampMarkers,
+        updatePOIMarkers,
         flyToPhoto,
+        flyToPOI,
         startRotation,
         stopRotation,
         startPlayback,
