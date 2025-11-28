@@ -698,9 +698,9 @@ export function useMapbox({ containerRef, onTrekSelect, onPhotoClick, onRouteCli
         const trekConfig = treksRef.current.find(t => t.id === selectedTrek.id);
         if (!trekData || !trekConfig) return;
 
-        // Defer non-critical updates to avoid blocking the UI during transition
-        // This allows the camera animation to start immediately
-        requestAnimationFrame(() => {
+        // Defer non-critical updates until after animation has started
+        // Use setTimeout to ensure we don't compete with animation frames
+        setTimeout(() => {
             // Set day mode atmosphere (terrain already enabled on init)
             map.setFog({
                 'range': [0.5, 10],
@@ -719,7 +719,7 @@ export function useMapbox({ containerRef, onTrekSelect, onPhotoClick, onRouteCli
                     map.setLayoutProperty(`route-glow-${id}`, 'visibility', visibility);
                 }
             });
-        });
+        }, 100);
 
         if (selectedCamp) {
             // Calculate camera settings
@@ -763,10 +763,28 @@ export function useMapbox({ containerRef, onTrekSelect, onPhotoClick, onRouteCli
             highlightSegment(trekData, selectedCamp);
         } else {
             // Fit bounds to whole route
+            // Optimized bounds calculation - only sample every Nth point for large routes
             const coordinates = trekData.route.coordinates;
-            const bounds = coordinates.reduce((b, coord) => {
-                return b.extend(coord as [number, number]);
-            }, new mapboxgl.LngLatBounds(coordinates[0] as [number, number], coordinates[0] as [number, number]));
+            const sampleRate = coordinates.length > 500 ? Math.ceil(coordinates.length / 100) : 1;
+
+            let minLng = coordinates[0][0], maxLng = coordinates[0][0];
+            let minLat = coordinates[0][1], maxLat = coordinates[0][1];
+
+            for (let i = 0; i < coordinates.length; i += sampleRate) {
+                const coord = coordinates[i];
+                if (coord[0] < minLng) minLng = coord[0];
+                if (coord[0] > maxLng) maxLng = coord[0];
+                if (coord[1] < minLat) minLat = coord[1];
+                if (coord[1] > maxLat) maxLat = coord[1];
+            }
+            // Always include last point
+            const last = coordinates[coordinates.length - 1];
+            if (last[0] < minLng) minLng = last[0];
+            if (last[0] > maxLng) maxLng = last[0];
+            if (last[1] < minLat) minLat = last[1];
+            if (last[1] > maxLat) maxLat = last[1];
+
+            const bounds = new mapboxgl.LngLatBounds([minLng, minLat], [maxLng, maxLat]);
 
             const isMobileFit = window.matchMedia('(max-width: 768px)').matches;
             map.fitBounds(bounds, {
@@ -775,9 +793,10 @@ export function useMapbox({ containerRef, onTrekSelect, onPhotoClick, onRouteCli
                     : { top: 100, bottom: 100, left: 100, right: 450 },
                 pitch: trekConfig.preferredPitch,
                 bearing: trekConfig.preferredBearing,
-                duration: 2500,
+                duration: isMobileFit ? 2000 : 2500, // Shorter animation on mobile
                 essential: true,
-                easing: (t) => 1 - Math.pow(1 - t, 3)
+                // Simpler easing for smoother animation
+                easing: (t) => t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2
             });
 
             // Hide highlight
@@ -935,54 +954,75 @@ export function useMapbox({ containerRef, onTrekSelect, onPhotoClick, onRouteCli
         }
 
         // Create or update HTML markers for each photo
+        // Batch creation to avoid blocking the main thread during animations
         const token = authTokenRef.current;
-        photosWithCoords.forEach(photo => {
-            const isHighlighted = selectedCampId ? photo.waypoint_id === selectedCampId : false;
-            const existingMarker = photoMarkersRef.current.get(photo.id);
+        const BATCH_SIZE = 5; // Create 5 markers per frame
+        let index = 0;
 
-            if (existingMarker) {
-                // Update existing marker's highlight state
-                const el = existingMarker.getElement();
-                if (isHighlighted) {
-                    el.classList.add('photo-marker-highlighted');
-                } else {
-                    el.classList.remove('photo-marker-highlighted');
-                }
-            } else {
-                // Create new HTML marker with thumbnail
-                const el = document.createElement('div');
-                el.className = 'photo-thumbnail-marker' + (isHighlighted ? ' photo-marker-highlighted' : '');
+        const createMarkerBatch = () => {
+            const endIndex = Math.min(index + BATCH_SIZE, photosWithCoords.length);
 
-                // Build authenticated URL
-                const photoUrl = photo.thumbnail_url || photo.url;
-                const imgUrl = buildMediaUrl(photoUrl, token);
+            for (let i = index; i < endIndex; i++) {
+                const photo = photosWithCoords[i];
+                const isHighlighted = selectedCampId ? photo.waypoint_id === selectedCampId : false;
+                const existingMarker = photoMarkersRef.current.get(photo.id);
 
-                // Create image element
-                const img = document.createElement('img');
-                img.src = imgUrl;
-                img.alt = photo.caption || 'Photo';
-                img.draggable = false;
-                el.appendChild(img);
-
-                // Create marker
-                const marker = new mapboxgl.Marker({
-                    element: el,
-                    anchor: 'center'
-                })
-                    .setLngLat(photo.coordinates as [number, number])
-                    .addTo(map);
-
-                // Click handler
-                el.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    if (onPhotoClickRef.current) {
-                        onPhotoClickRef.current(photo);
+                if (existingMarker) {
+                    // Update existing marker's highlight state
+                    const el = existingMarker.getElement();
+                    if (isHighlighted) {
+                        el.classList.add('photo-marker-highlighted');
+                    } else {
+                        el.classList.remove('photo-marker-highlighted');
                     }
-                });
+                } else {
+                    // Create new HTML marker with thumbnail
+                    const el = document.createElement('div');
+                    el.className = 'photo-thumbnail-marker' + (isHighlighted ? ' photo-marker-highlighted' : '');
 
-                photoMarkersRef.current.set(photo.id, marker);
+                    // Build authenticated URL
+                    const photoUrl = photo.thumbnail_url || photo.url;
+                    const imgUrl = buildMediaUrl(photoUrl, token);
+
+                    // Create image element
+                    const img = document.createElement('img');
+                    img.src = imgUrl;
+                    img.alt = photo.caption || 'Photo';
+                    img.draggable = false;
+                    el.appendChild(img);
+
+                    // Create marker
+                    const marker = new mapboxgl.Marker({
+                        element: el,
+                        anchor: 'center'
+                    })
+                        .setLngLat(photo.coordinates as [number, number])
+                        .addTo(map);
+
+                    // Click handler
+                    el.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        if (onPhotoClickRef.current) {
+                            onPhotoClickRef.current(photo);
+                        }
+                    });
+
+                    photoMarkersRef.current.set(photo.id, marker);
+                }
             }
-        });
+
+            index = endIndex;
+
+            // Continue with next batch if there are more photos
+            if (index < photosWithCoords.length) {
+                requestAnimationFrame(createMarkerBatch);
+            }
+        };
+
+        // Start batched marker creation
+        if (photosWithCoords.length > 0) {
+            requestAnimationFrame(createMarkerBatch);
+        }
     }, [mapReady]);
 
     // Update camp markers on the map

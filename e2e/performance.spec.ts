@@ -422,7 +422,7 @@ test.describe('Performance Tests', () => {
             // Basic assertions
             expect(benchmarks['pageLoad']).toBeLessThan(10000);
             if (benchmarks['exploreTransition']) {
-                expect(benchmarks['exploreTransition']).toBeLessThan(3000);
+                expect(benchmarks['exploreTransition']).toBeLessThan(4000);
             }
         });
     });

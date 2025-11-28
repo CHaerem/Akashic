@@ -220,9 +220,24 @@ export function MapboxGlobe({ selectedTrek, selectedCamp, onSelectTrek, view, ph
     }, [view, selectedTrek, selectedCamp, mapReady, flyToGlobe, flyToTrek, startRotation, stopRotation]);
 
     // Update photo markers when photos or selected camp changes
+    // Defer marker creation to not block camera animation
     useEffect(() => {
         if (!mapReady || view !== 'trek') return;
-        updatePhotoMarkers(photos, selectedCamp?.id || null);
+
+        // If no photos, update immediately (clearing markers)
+        if (photos.length === 0) {
+            updatePhotoMarkers(photos, selectedCamp?.id || null);
+            return;
+        }
+
+        // Defer photo marker creation to let Mapbox camera animation start first
+        // This prevents stutter when transitioning to trek view with many photos
+        // Use 500ms delay to ensure animation is well underway before creating markers
+        const timerId = setTimeout(() => {
+            updatePhotoMarkers(photos, selectedCamp?.id || null);
+        }, 500);
+
+        return () => clearTimeout(timerId);
     }, [mapReady, view, photos, selectedCamp, updatePhotoMarkers]);
 
     // Hide photo markers when leaving trek view

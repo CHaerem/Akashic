@@ -2,7 +2,7 @@
  * Custom hook for managing trek state and data
  */
 
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useTransition } from 'react';
 import { useJourneys } from '../contexts/JourneysContext';
 import { calculateStats, generateElevationProfile } from '../utils/stats';
 import type { TrekConfig, TrekData, Camp, ExtendedStats, ElevationProfile, ViewMode, TabType } from '../types/trek';
@@ -36,10 +36,20 @@ interface UseTrekDataReturn {
 export function useTrekData(): UseTrekDataReturn {
     const { trekDataMap, loading } = useJourneys();
 
-    const [view, setView] = useState<ViewMode>('globe');
+    const [view, setViewState] = useState<ViewMode>('globe');
     const [selectedTrek, setSelectedTrek] = useState<TrekConfig | null>(null);
     const [selectedCamp, setSelectedCamp] = useState<Camp | null>(null);
     const [activeTab, setActiveTab] = useState<TabType>('overview');
+
+    // Use transition for view changes to prevent blocking Mapbox animations
+    const [, startTransition] = useTransition();
+
+    // Wrap setView in startTransition for smooth camera animations
+    const setView = useCallback((newView: ViewMode) => {
+        startTransition(() => {
+            setViewState(newView);
+        });
+    }, []);
 
     // Get trek data for selected trek
     const trekData = selectedTrek ? trekDataMap[selectedTrek.id] || null : null;
@@ -57,14 +67,14 @@ export function useTrekData(): UseTrekDataReturn {
     const handleExplore = useCallback(() => {
         if (!selectedTrek) return;
         setView('trek');
-    }, [selectedTrek]);
+    }, [selectedTrek, setView]);
 
     // Handle back to globe view
     const handleBackToGlobe = useCallback(() => {
         setView('globe');
         setSelectedTrek(null);
         setSelectedCamp(null);
-    }, []);
+    }, [setView]);
 
     // Handle back to trek selection (deselect trek)
     const handleBackToSelection = useCallback(() => {
@@ -86,7 +96,7 @@ export function useTrekData(): UseTrekDataReturn {
             setSelectedTrek(trek);
             setSelectedCamp(null);
         }
-    }, [selectedTrek]);
+    }, [selectedTrek, setView]);
 
     return {
         // State
