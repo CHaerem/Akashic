@@ -51,12 +51,16 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
-            const deploymentUrl = '${{ steps.deploy.outputs.url }}';
+            // Get branch name and convert to Cloudflare Pages URL format
+            const branchName = context.payload.pull_request.head.ref;
+            const sanitizedBranch = branchName.toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').substring(0, 28);
+            const branchUrl = `https://${sanitizedBranch}.akashic.pages.dev`;
+
             const body = `## 🚀 Staging Deployment Ready!
 
             Your PR has been deployed to a staging environment for testing.
 
-            **Preview URL:** ${deploymentUrl}
+            **Preview URL:** ${branchUrl}
 
             This staging environment uses the same database and authentication as production, so you can test with real data.
 
