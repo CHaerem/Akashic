@@ -216,8 +216,10 @@ test.describe('Akashic App', () => {
             await page.waitForTimeout(3000);
 
             // Take screenshot of initial state
+            // Using 15% threshold to account for cross-platform rendering differences
+            // (fonts, anti-aliasing, map tile rendering vary between macOS/Linux)
             await expect(page).toHaveScreenshot('globe-view.png', {
-                maxDiffPixelRatio: 0.1
+                maxDiffPixelRatio: 0.15
             });
         });
     });
