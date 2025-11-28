@@ -3,26 +3,33 @@
  * Allows family members to collaboratively add photos to journeys
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import type { TrekData, Photo } from '../../types/trek';
 import type { UploadResult } from '../../lib/media';
 import { useMedia } from '../../hooks/useMedia';
-import { fetchPhotos, createPhoto, deletePhoto, getJourneyIdBySlug } from '../../lib/journeys';
+import { fetchPhotos, createPhoto, deletePhoto, getJourneyIdBySlug, updatePhoto } from '../../lib/journeys';
 import { PhotoUpload } from './PhotoUpload';
 import { PhotoLightbox } from '../common/PhotoLightbox';
+import { PhotoEditModal } from './PhotoEditModal';
+import { colors, radius } from '../../styles/liquidGlass';
 
 interface PhotosTabProps {
     trekData: TrekData;
     isMobile: boolean;
     editMode?: boolean;
+    onViewPhotoOnMap?: (photo: Photo) => void;
 }
 
-export function PhotosTab({ trekData, isMobile, editMode = false }: PhotosTabProps) {
+export function PhotosTab({ trekData, isMobile, editMode = false, onViewPhotoOnMap }: PhotosTabProps) {
     const [photos, setPhotos] = useState<Photo[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [journeyDbId, setJourneyDbId] = useState<string | null>(null);
     const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+    const [editingPhoto, setEditingPhoto] = useState<Photo | null>(null);
+    const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
+    const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+    const dragTimeoutRef = useRef<number | null>(null);
     const { getMediaUrl, loading: tokenLoading } = useMedia();
 
     // Get the database ID for this journey (needed for creating photos)
@@ -100,6 +107,78 @@ export function PhotosTab({ trekData, isMobile, editMode = false }: PhotosTabPro
         }
     }, []);
 
+    const handleEditPhoto = useCallback((photo: Photo) => {
+        setEditingPhoto(photo);
+    }, []);
+
+    const handlePhotoUpdated = useCallback((updatedPhoto: Photo) => {
+        setPhotos(prev => prev.map(p =>
+            p.id === updatedPhoto.id ? updatedPhoto : p
+        ));
+    }, []);
+
+    // Drag and drop handlers for reordering
+    const handleDragStart = useCallback((index: number) => {
+        setDraggedIndex(index);
+    }, []);
+
+    const handleDragOver = useCallback((e: React.DragEvent, index: number) => {
+        e.preventDefault();
+        if (draggedIndex !== null && draggedIndex !== index) {
+            setDragOverIndex(index);
+        }
+    }, [draggedIndex]);
+
+    const handleDragLeave = useCallback(() => {
+        // Small delay to prevent flickering
+        if (dragTimeoutRef.current) {
+            clearTimeout(dragTimeoutRef.current);
+        }
+        dragTimeoutRef.current = window.setTimeout(() => {
+            setDragOverIndex(null);
+        }, 50);
+    }, []);
+
+    const handleDrop = useCallback(async (targetIndex: number) => {
+        if (draggedIndex === null || draggedIndex === targetIndex) {
+            setDraggedIndex(null);
+            setDragOverIndex(null);
+            return;
+        }
+
+        // Reorder photos locally
+        const newPhotos = [...photos];
+        const [draggedPhoto] = newPhotos.splice(draggedIndex, 1);
+        newPhotos.splice(targetIndex, 0, draggedPhoto);
+
+        // Update sort_order for all affected photos
+        const updatedPhotos = newPhotos.map((photo, index) => ({
+            ...photo,
+            sort_order: index
+        }));
+
+        setPhotos(updatedPhotos);
+        setDraggedIndex(null);
+        setDragOverIndex(null);
+
+        // Save to database
+        try {
+            await Promise.all(
+                updatedPhotos.map((photo, index) =>
+                    updatePhoto(photo.id, { sort_order: index })
+                )
+            );
+        } catch (err) {
+            console.error('Error saving photo order:', err);
+            setError('Failed to save photo order');
+        }
+    }, [draggedIndex, photos]);
+
+    const handleDragEnd = useCallback(() => {
+        setDraggedIndex(null);
+        setDragOverIndex(null);
+    }, []);
+
     if (loading || tokenLoading) {
         return (
             <div style={{
@@ -155,16 +234,31 @@ export function PhotosTab({ trekData, isMobile, editMode = false }: PhotosTabPro
             {/* Photo grid */}
             {photos.length > 0 && (
                 <div>
-                    <h3 style={{
-                        color: 'rgba(255,255,255,0.9)',
-                        fontSize: 14,
-                        fontWeight: 500,
-                        marginBottom: 12,
-                        textTransform: 'uppercase',
-                        letterSpacing: '0.1em'
+                    <div style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        marginBottom: 12
                     }}>
-                        Journey Photos ({photos.length})
-                    </h3>
+                        <h3 style={{
+                            color: 'rgba(255,255,255,0.9)',
+                            fontSize: 14,
+                            fontWeight: 500,
+                            margin: 0,
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.1em'
+                        }}>
+                            Journey Photos ({photos.length})
+                        </h3>
+                        {editMode && photos.length > 1 && (
+                            <span style={{
+                                fontSize: 11,
+                                color: colors.text.tertiary
+                            }}>
+                                Drag to reorder
+                            </span>
+                        )}
+                    </div>
                     <div style={{
                         display: 'grid',
                         gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(3, 1fr)',
@@ -174,13 +268,27 @@ export function PhotosTab({ trekData, isMobile, editMode = false }: PhotosTabPro
                             <div
                                 key={photo.id}
                                 onClick={() => handlePhotoClick(index)}
+                                draggable={editMode}
+                                onDragStart={() => editMode && handleDragStart(index)}
+                                onDragOver={(e) => editMode && handleDragOver(e, index)}
+                                onDragLeave={() => editMode && handleDragLeave()}
+                                onDrop={() => editMode && handleDrop(index)}
+                                onDragEnd={() => editMode && handleDragEnd()}
                                 style={{
                                     aspectRatio: '1',
                                     borderRadius: 8,
                                     overflow: 'hidden',
-                                    cursor: 'pointer',
+                                    cursor: editMode ? 'grab' : 'pointer',
                                     background: 'rgba(255,255,255,0.05)',
-                                    position: 'relative'
+                                    position: 'relative',
+                                    border: photo.is_hero
+                                        ? '2px solid #fbbf24'
+                                        : dragOverIndex === index
+                                            ? '2px solid #3b82f6'
+                                            : 'none',
+                                    opacity: draggedIndex === index ? 0.5 : 1,
+                                    transform: dragOverIndex === index ? 'scale(1.02)' : 'scale(1)',
+                                    transition: 'transform 0.15s ease, opacity 0.15s ease, border 0.15s ease'
                                 }}
                             >
                                 <img
@@ -193,6 +301,72 @@ export function PhotosTab({ trekData, isMobile, editMode = false }: PhotosTabPro
                                     }}
                                     loading="lazy"
                                 />
+
+                                {/* Hero badge */}
+                                {photo.is_hero && (
+                                    <div style={{
+                                        position: 'absolute',
+                                        top: 6,
+                                        left: 6,
+                                        background: '#fbbf24',
+                                        color: '#000',
+                                        fontSize: 9,
+                                        fontWeight: 600,
+                                        padding: '2px 6px',
+                                        borderRadius: 4,
+                                        textTransform: 'uppercase',
+                                        letterSpacing: '0.05em'
+                                    }}>
+                                        Hero
+                                    </div>
+                                )}
+
+                                {/* Edit button in edit mode */}
+                                {editMode && (
+                                    <button
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleEditPhoto(photo);
+                                        }}
+                                        style={{
+                                            position: 'absolute',
+                                            top: 6,
+                                            right: 6,
+                                            background: colors.glass.medium,
+                                            border: 'none',
+                                            borderRadius: radius.sm,
+                                            padding: '6px 10px',
+                                            color: colors.text.primary,
+                                            fontSize: 11,
+                                            cursor: 'pointer',
+                                            opacity: 0.9
+                                        }}
+                                    >
+                                        Edit
+                                    </button>
+                                )}
+
+                                {/* Location indicator */}
+                                {photo.coordinates && (
+                                    <div style={{
+                                        position: 'absolute',
+                                        bottom: photo.caption ? 32 : 6,
+                                        right: 6,
+                                        background: 'rgba(0,0,0,0.5)',
+                                        borderRadius: '50%',
+                                        width: 24,
+                                        height: 24,
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center'
+                                    }}>
+                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
+                                            <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/>
+                                            <circle cx="12" cy="10" r="3"/>
+                                        </svg>
+                                    </div>
+                                )}
+
                                 {photo.caption && (
                                     <div style={{
                                         position: 'absolute',
@@ -236,7 +410,22 @@ export function PhotosTab({ trekData, isMobile, editMode = false }: PhotosTabPro
                 getMediaUrl={getMediaUrl}
                 onDelete={editMode ? handleDeletePhoto : undefined}
                 editMode={editMode}
+                onViewOnMap={onViewPhotoOnMap}
+                onEdit={editMode ? handleEditPhoto : undefined}
             />
+
+            {/* Photo edit modal */}
+            {editingPhoto && (
+                <PhotoEditModal
+                    photo={editingPhoto}
+                    trekData={trekData}
+                    isOpen={true}
+                    onClose={() => setEditingPhoto(null)}
+                    onSave={handlePhotoUpdated}
+                    getMediaUrl={getMediaUrl}
+                    isMobile={isMobile}
+                />
+            )}
         </div>
     );
 }

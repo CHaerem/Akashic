@@ -20,6 +20,10 @@ export interface Camp {
     highlights?: string[];
     bearing?: number;
     pitch?: number;
+    /** Distance from journey start along route (km) - if set via RouteEditor */
+    routeDistanceKm?: number | null;
+    /** Index in route coordinates array - if set via RouteEditor */
+    routePointIndex?: number | null;
 }
 
 export interface Route {
@@ -71,6 +75,23 @@ export interface ExtendedStats {
     startElevation: number;
 }
 
+export interface ElevationPoint {
+    dist: number;
+    ele: number;
+    x: number;
+    y: number;
+}
+
+export interface CampMarker {
+    campId: string;
+    dayNumber: number;
+    name: string;
+    dist: number;
+    ele: number;
+    x: number;
+    y: number;
+}
+
 export interface ElevationProfile {
     linePath: string;
     areaPath: string;
@@ -79,6 +100,10 @@ export interface ElevationProfile {
     totalDist: number;
     plotMinEle: number;
     plotMaxEle: number;
+    /** Raw points for hover detection */
+    points: ElevationPoint[];
+    /** Camp positions on the profile */
+    campMarkers: CampMarker[];
 }
 
 export interface Photo {

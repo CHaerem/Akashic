@@ -36,3 +36,7 @@ gpx-data/
 
 # Wrangler local development
 .wrangler/
+
+# Test artifacts
+test-results/
+playwright-report/

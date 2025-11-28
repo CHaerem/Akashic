@@ -5,7 +5,7 @@ export type GlassButtonVariant = 'default' | 'primary' | 'subtle' | 'ghost' | 'd
 export type GlassButtonSize = 'sm' | 'md' | 'lg';
 
 interface GlassButtonProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'style'> {
-  children: ReactNode;
+  children?: ReactNode;
   variant?: GlassButtonVariant;
   size?: GlassButtonSize;
   fullWidth?: boolean;

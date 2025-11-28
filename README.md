@@ -1,96 +1,95 @@
 # Akashic
 
-**Akashic** is an interactive 3D storytelling platform for visualizing mountain adventures. It combines immersive 3D terrain maps with personal photography and detailed route statistics to create a digital archive of expeditions.
+**Akashic** is an interactive 3D globe for visualizing family mountain adventures. Explore trek routes, view photos organized by day, and relive expeditions through immersive terrain visualization.
 
-![Akashic Landing Page](public/hero-images/akashic-hero.png)
+![Akashic Globe View](public/hero-images/akashic-hero.png)
 
-## 🏔️ Features
+## Features
 
-- **Interactive 3D Maps**: Explore trek routes on a 3D globe using Mapbox GL JS.
-- **Visual Storytelling**: Follow the journey camp-by-camp with integrated photo galleries.
-- **Detailed Statistics**: Elevation profiles, daily distances, and trek facts.
-- **Photo Mapping**: Automatically places photos on the map based on GPS EXIF data.
-- **Responsive Design**: Premium experience on desktop, tablet, and mobile.
+- **Interactive 3D Globe** - Explore trek routes on a rotating globe with satellite imagery and terrain
+- **Immersive Photo Lightbox** - Full-screen photo viewing with swipe navigation and auto-hiding controls
+- **Day-by-Day Journey** - Photos automatically organized by date, with manual assignment option
+- **Detailed Statistics** - Elevation profiles, daily distances, and trek metrics
+- **Collaborative Editing** - Family members can upload photos and edit journey details
+- **Calm Design** - Minimal, distraction-free interface with smooth animations
 
-## 🗺️ Featured Treks
+## Featured Journeys
 
-1.  **Kilimanjaro (Lemosho Route)** - Tanzania 🇹🇿
-2.  **Mount Kenya (Chogoria/Sirimon)** - Kenya 🇰🇪
-3.  **Inca Trail to Machu Picchu** - Peru 🇵🇪
+1. **Kilimanjaro (Lemosho Route)** - Tanzania
+2. **Mount Kenya (Chogoria/Sirimon)** - Kenya
+3. **Inca Trail to Machu Picchu** - Peru
 
-## 🛠️ Tech Stack
+## Tech Stack
 
-- **Frontend**: React 19, Vite 7
-- **Styling**: Tailwind CSS 4
-- **Maps**: Mapbox GL JS
-- **Routing**: React Router v7
-- **Data Processing**: Node.js, Exif-parser
+| Layer | Technology |
+|-------|------------|
+| Frontend | React 19, TypeScript, Vite |
+| Maps | Mapbox GL JS (globe projection, 3D terrain) |
+| Auth | Supabase Auth (Google OAuth) |
+| Database | Supabase PostgreSQL |
+| Photo Storage | Cloudflare R2 |
+| Media Proxy | Cloudflare Worker (JWT auth) |
+| Hosting | Cloudflare Pages |
 
-## 🚀 Getting Started
+## Getting Started
 
 ### Prerequisites
 
-- Node.js (v16+)
-- A Mapbox Access Token (Free tier available)
+- Node.js 18+
+- Mapbox access token
+- Supabase project
+- Cloudflare account (for R2 and Workers)
+
+### Environment Variables
+
+Create `.env` in the project root:
+
+```env
+VITE_MAPBOX_TOKEN=your_mapbox_token
+VITE_SUPABASE_URL=your_supabase_url
+VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
+VITE_MEDIA_WORKER_URL=your_worker_url
+```
 
 ### Installation
 
-1.  **Clone the repository**
-    ```bash
-    git clone https://github.com/CHaerem/Akashic.git
-    cd Akashic
-    ```
+```bash
+# Clone and install
+git clone https://github.com/CHaerem/Akashic.git
+cd Akashic
+npm install
 
-2.  **Install dependencies**
-    ```bash
-    npm install
-    ```
+# Start development server
+npm run dev
 
-3.  **Configure Mapbox**
-    - Create a file named `.env` in the root directory.
-    - Add your Mapbox token:
-      ```
-      VITE_MAPBOX_TOKEN=your_mapbox_token_here
-      ```
+# Run tests
+npm test           # Unit tests (Vitest)
+npm run test:e2e   # E2E tests (Playwright)
 
-4.  **Add Photos (Optional)**
-    - Place your trek photos in `public/images/kilimanjaro`, `public/images/mount-kenya`, etc.
-    - Run the photo processing script:
-      ```bash
-      npm run generate-photos
-      ```
+# Build for production
+npm run build
+```
 
-5.  **Start Development Server**
-    ```bash
-    npm run dev
-    ```
+### Deployment
 
-6.  **Run Tests**
-    - Unit tests (Vitest):
-      ```bash
-      npm test
-      ```
-    - E2E tests (Playwright):
-      ```bash
-      npm run test:e2e
-      ```
+The app auto-deploys to Cloudflare Pages on push to `main`.
 
-## 🔒 Security & Deployment
+## Architecture
 
-### Hosting
-Deployed on **Netlify** with automatic deploys from the `main` branch.
+See [ARCHITECTURE.md](ARCHITECTURE.md) for detailed system design and [ROADMAP.md](ROADMAP.md) for development progress.
 
-### Authentication
-Protected with **Auth0** - only authenticated users can access the app.
+```
+src/
+├── components/
+│   ├── common/      # Shared components (PhotoLightbox, etc.)
+│   ├── home/        # Globe view components
+│   └── trek/        # Journey view components (InfoPanel, tabs)
+├── hooks/           # Custom hooks (useMapbox, useMedia, etc.)
+├── lib/             # API clients (Supabase, media)
+├── contexts/        # React contexts
+└── types/           # TypeScript types
+```
 
-### Restricting Mapbox Access
-Since this is a client-side application, your Mapbox API token is visible in the browser. To prevent unauthorized usage:
+## License
 
-1.  Go to your [Mapbox Account Dashboard](https://account.mapbox.com/).
-2.  Find your token and click **"Configure"** or create a new token specifically for production.
-3.  Under **"URL Restrictions"**, add your domain (e.g., `https://akashic.no/`).
-4.  This ensures your token can **only** be used on your specific website.
-
-## 📝 License
-
-This project is personal and created as a gift.
+Personal project, created as a gift for family.

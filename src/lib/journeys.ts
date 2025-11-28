@@ -38,6 +38,10 @@ interface DbWaypoint {
     description: string | null;
     highlights: string[] | null;
     sort_order: number | null;
+    /** Distance from journey start along route (km) */
+    route_distance_km: number | null;
+    /** Index in route coordinates array */
+    route_point_index: number | null;
 }
 
 // Transform database journey to TrekConfig (for globe markers)
@@ -67,7 +71,9 @@ function toCamp(waypoint: DbWaypoint, index: number): Camp {
         elevationGainFromPrevious: 0, // Not stored in DB, could be calculated
         notes: waypoint.description || '',
         highlights: waypoint.highlights || [],
-        // bearing and pitch can be added to waypoints table if needed
+        // Route position data (if set via RouteEditor)
+        routeDistanceKm: waypoint.route_distance_km,
+        routePointIndex: waypoint.route_point_index,
     };
 }
 
@@ -340,6 +346,7 @@ export interface JourneyUpdate {
     total_days?: number | null;
     total_distance?: number | null;
     summit_elevation?: number | null;
+    route?: Route | null;
 }
 
 /**
@@ -368,6 +375,56 @@ export async function updateJourney(slug: string, updates: JourneyUpdate): Promi
         if (updates.description !== undefined) cached.description = updates.description;
         if (updates.country !== undefined) cached.country = updates.country;
         if (updates.date_started !== undefined) cached.dateStarted = updates.date_started || undefined;
+        if (updates.route !== undefined) cached.route = updates.route || { type: 'LineString', coordinates: [] };
+    }
+
+    return true;
+}
+
+/**
+ * Update journey route coordinates
+ * Recalculates total_distance based on new route
+ */
+export async function updateJourneyRoute(slug: string, route: Route): Promise<boolean> {
+    if (!supabase) {
+        console.warn('Supabase not configured');
+        return false;
+    }
+
+    // Calculate total distance from route coordinates
+    let totalDistance = 0;
+    const coords = route.coordinates;
+    for (let i = 1; i < coords.length; i++) {
+        const [lng1, lat1] = coords[i - 1];
+        const [lng2, lat2] = coords[i];
+        // Haversine formula for distance
+        const R = 6371;
+        const dLat = (lat2 - lat1) * Math.PI / 180;
+        const dLng = (lng2 - lng1) * Math.PI / 180;
+        const a = Math.sin(dLat / 2) ** 2 +
+            Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+            Math.sin(dLng / 2) ** 2;
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        totalDistance += R * c;
+    }
+
+    const { error } = await supabase
+        .from('journeys')
+        .update({
+            route,
+            total_distance: Math.round(totalDistance * 10) / 10
+        })
+        .eq('slug', slug);
+
+    if (error) {
+        console.error('Error updating journey route:', error);
+        throw new Error(error.message);
+    }
+
+    // Update local cache
+    if (journeyCache.loaded && journeyCache.trekDataMap[slug]) {
+        journeyCache.trekDataMap[slug].route = route;
+        journeyCache.trekDataMap[slug].stats.totalDistance = Math.round(totalDistance * 10) / 10;
     }
 
     return true;
@@ -406,6 +463,8 @@ export interface WaypointUpdate {
     day_number?: number | null;
     highlights?: string[] | null;
     coordinates?: [number, number];
+    route_distance_km?: number | null;
+    route_point_index?: number | null;
 }
 
 /**
@@ -491,4 +550,126 @@ export async function getPhotosForWaypoint(waypointId: string): Promise<Photo[]>
     }
 
     return data || [];
+}
+
+/**
+ * Update waypoint position on route
+ * Used when dragging a camp marker to a new position
+ */
+export async function updateWaypointPosition(
+    waypointId: string,
+    coordinates: [number, number],
+    elevation: number | null,
+    routeDistanceKm: number | null,
+    routePointIndex: number | null
+): Promise<boolean> {
+    if (!supabase) {
+        console.warn('Supabase not configured');
+        return false;
+    }
+
+    const { error } = await supabase
+        .from('waypoints')
+        .update({
+            coordinates,
+            elevation,
+            route_distance_km: routeDistanceKm,
+            route_point_index: routePointIndex
+        })
+        .eq('id', waypointId);
+
+    if (error) {
+        console.error('Error updating waypoint position:', error);
+        throw new Error(error.message);
+    }
+
+    return true;
+}
+
+/**
+ * Create a new waypoint for a journey
+ */
+export interface NewWaypoint {
+    journey_id: string;
+    name: string;
+    waypoint_type?: string;
+    day_number?: number;
+    coordinates: [number, number];
+    elevation?: number;
+    description?: string;
+    sort_order?: number;
+    route_distance_km?: number;
+    route_point_index?: number;
+}
+
+export async function createWaypoint(waypoint: NewWaypoint): Promise<DbWaypoint | null> {
+    if (!supabase) {
+        console.warn('Supabase not configured');
+        return null;
+    }
+
+    const { data, error } = await supabase
+        .from('waypoints')
+        .insert({
+            ...waypoint,
+            waypoint_type: waypoint.waypoint_type || 'camp'
+        })
+        .select()
+        .single();
+
+    if (error) {
+        console.error('Error creating waypoint:', error);
+        throw new Error(error.message);
+    }
+
+    return data;
+}
+
+/**
+ * Delete a waypoint
+ */
+export async function deleteWaypoint(waypointId: string): Promise<boolean> {
+    if (!supabase) {
+        console.warn('Supabase not configured');
+        return false;
+    }
+
+    const { error } = await supabase
+        .from('waypoints')
+        .delete()
+        .eq('id', waypointId);
+
+    if (error) {
+        console.error('Error deleting waypoint:', error);
+        throw new Error(error.message);
+    }
+
+    return true;
+}
+
+/**
+ * Update sort order for multiple waypoints (for reordering)
+ */
+export async function updateWaypointOrder(
+    updates: Array<{ id: string; sort_order: number; day_number: number }>
+): Promise<boolean> {
+    if (!supabase) {
+        console.warn('Supabase not configured');
+        return false;
+    }
+
+    // Use a transaction-like approach with multiple updates
+    for (const update of updates) {
+        const { error } = await supabase
+            .from('waypoints')
+            .update({ sort_order: update.sort_order, day_number: update.day_number })
+            .eq('id', update.id);
+
+        if (error) {
+            console.error('Error updating waypoint order:', error);
+            throw new Error(error.message);
+        }
+    }
+
+    return true;
 }

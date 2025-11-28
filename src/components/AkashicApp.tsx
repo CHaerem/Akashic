@@ -1,4 +1,4 @@
-import { useCallback, useState, useEffect } from 'react';
+import { useCallback, useState, useEffect, useRef } from 'react';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import { useTrekData } from '../hooks/useTrekData';
 import { useIsMobile } from '../hooks/useMediaQuery';
@@ -11,6 +11,7 @@ import { OfflineIndicator } from './OfflineIndicator';
 import { GlobeSelectionPanel } from './home/GlobeSelectionPanel';
 import { GlobeHint } from './home/GlobeHint';
 import { InfoPanel, type PanelState } from './trek/InfoPanel';
+import { PhotoLightbox } from './common/PhotoLightbox';
 import { colors, radius, transitions, typography } from '../styles/liquidGlass';
 
 // --- Main Component ---
@@ -19,6 +20,8 @@ export default function AkashicApp() {
     const isMobile = useIsMobile();
     const [panelState, setPanelState] = useState<PanelState>('normal');
     const [photos, setPhotos] = useState<Photo[]>([]);
+    const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+    const flyToPhotoRef = useRef<((photo: Photo) => void) | null>(null);
     const { getMediaUrl } = useMedia();
     const { refetch: refetchJourneys } = useJourneys();
 
@@ -66,6 +69,22 @@ export default function AkashicApp() {
         setPanelState(state);
     }, []);
 
+    // Handle photo click from map markers - open lightbox
+    const handleMapPhotoClick = useCallback((_photo: Photo, index: number) => {
+        setLightboxIndex(index);
+    }, []);
+
+    // Handle "View on Map" from lightbox - close lightbox and fly to photo
+    const handleViewOnMap = useCallback((photo: Photo) => {
+        setLightboxIndex(null); // Close lightbox
+        if (flyToPhotoRef.current && photo.coordinates) {
+            flyToPhotoRef.current(photo);
+        }
+    }, []);
+
+    // Filter photos with coordinates for map display
+    const photosWithCoords = photos.filter(p => p.coordinates && p.coordinates.length === 2);
+
     return (
         <div style={{ position: 'fixed', inset: 0, background: colors.background.base }}>
             {/* Mapbox Globe */}
@@ -75,6 +94,10 @@ export default function AkashicApp() {
                     selectedCamp={selectedCamp}
                     onSelectTrek={selectTrek}
                     view={view}
+                    photos={photosWithCoords}
+                    onPhotoClick={handleMapPhotoClick}
+                    flyToPhotoRef={flyToPhotoRef}
+                    onCampSelect={handleCampSelect}
                 />
             </div>
 
@@ -157,8 +180,19 @@ export default function AkashicApp() {
                     photos={photos}
                     getMediaUrl={getMediaUrl}
                     onJourneyUpdate={refetchJourneys}
+                    onViewPhotoOnMap={handleViewOnMap}
                 />
             )}
+
+            {/* Photo Lightbox - triggered from map photo markers */}
+            <PhotoLightbox
+                photos={photosWithCoords}
+                initialIndex={lightboxIndex ?? 0}
+                isOpen={lightboxIndex !== null}
+                onClose={() => setLightboxIndex(null)}
+                getMediaUrl={getMediaUrl}
+                onViewOnMap={handleViewOnMap}
+            />
         </div>
     );
 }

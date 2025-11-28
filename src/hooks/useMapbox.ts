@@ -5,12 +5,31 @@
 import { useState, useRef, useEffect, useCallback, type RefObject, type MutableRefObject } from 'react';
 import mapboxgl from 'mapbox-gl';
 import { useJourneys } from '../contexts/JourneysContext';
-import { calculateBearing, findCoordIndex } from '../utils/geography';
-import type { TrekConfig, TrekData, Camp } from '../types/trek';
+import { calculateBearing, findCoordIndex, getDistanceFromLatLonInKm } from '../utils/geography';
+import { buildMediaUrl, getAccessToken } from '../lib/media';
+import type { TrekConfig, TrekData, Camp, Photo } from '../types/trek';
+
+// Route click information
+export interface RouteClickInfo {
+    coordinates: [number, number];
+    distanceFromStart: number; // in km
+    elevation: number | null;
+    nearestCamp: Camp | null;
+    distanceToNearestCamp: number | null; // km
+}
 
 interface UseMapboxOptions {
     containerRef: RefObject<HTMLDivElement | null>;
     onTrekSelect: (trek: TrekConfig) => void;
+    onPhotoClick?: (photo: Photo) => void;
+    onRouteClick?: (info: RouteClickInfo) => void;
+}
+
+// Playback state for journey animation
+export interface PlaybackState {
+    isPlaying: boolean;
+    progress: number; // 0-100 percentage
+    currentCampIndex: number;
 }
 
 interface UseMapboxReturn {
@@ -20,30 +39,65 @@ interface UseMapboxReturn {
     flyToGlobe: (selectedTrek?: TrekConfig | null) => void;
     flyToTrek: (selectedTrek: TrekConfig, selectedCamp?: Camp | null) => void;
     highlightSegment: (trekData: TrekData, selectedCamp: Camp) => void;
+    updatePhotoMarkers: (photos: Photo[], selectedCampId?: string | null) => void;
+    updateCampMarkers: (camps: Camp[], selectedCampId?: string | null) => void;
+    flyToPhoto: (photo: Photo) => void;
     startRotation: () => void;
     stopRotation: () => void;
+    // Playback controls
+    startPlayback: (trekData: TrekData, onCampReached?: (camp: Camp) => void) => void;
+    stopPlayback: () => void;
+    playbackState: PlaybackState;
 }
 
 /**
  * Initialize Mapbox map with globe projection and terrain
  */
-export function useMapbox({ containerRef, onTrekSelect }: UseMapboxOptions): UseMapboxReturn {
+export function useMapbox({ containerRef, onTrekSelect, onPhotoClick, onRouteClick }: UseMapboxOptions): UseMapboxReturn {
     const { treks, trekDataMap } = useJourneys();
     const mapRef = useRef<mapboxgl.Map | null>(null);
     const rotationAnimationRef = useRef<number | null>(null);
     const interactionListenerRef = useRef<(() => void) | null>(null);
+    const photosRef = useRef<Photo[]>([]);
+    const photoMarkersRef = useRef<Map<string, mapboxgl.Marker>>(new Map());
+    const authTokenRef = useRef<string | null>(null);
+    const selectedTrekRef = useRef<string | null>(null);
+    const playbackAnimationRef = useRef<number | null>(null);
+    const playbackCallbackRef = useRef<((camp: Camp) => void) | null>(null);
     const [mapReady, setMapReady] = useState(false);
     const [dataLayersReady, setDataLayersReady] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [playbackState, setPlaybackState] = useState<PlaybackState>({
+        isPlaying: false,
+        progress: 0,
+        currentCampIndex: 0
+    });
 
     // Store callbacks and data in refs to avoid dependency issues
     const onTrekSelectRef = useRef(onTrekSelect);
+    const onPhotoClickRef = useRef(onPhotoClick);
+    const onRouteClickRef = useRef(onRouteClick);
     const treksRef = useRef(treks);
     const trekDataMapRef = useRef(trekDataMap);
 
     useEffect(() => {
         onTrekSelectRef.current = onTrekSelect;
     }, [onTrekSelect]);
+
+    useEffect(() => {
+        onPhotoClickRef.current = onPhotoClick;
+    }, [onPhotoClick]);
+
+    useEffect(() => {
+        onRouteClickRef.current = onRouteClick;
+    }, [onRouteClick]);
+
+    // Fetch auth token for media URLs
+    useEffect(() => {
+        getAccessToken().then(token => {
+            authTokenRef.current = token;
+        });
+    }, []);
 
     useEffect(() => {
         treksRef.current = treks;
@@ -147,7 +201,214 @@ export function useMapbox({ containerRef, onTrekSelect }: UseMapboxOptions): Use
                     paint: { 'line-color': '#00ffff', 'line-width': 4 }
                 });
 
+                // Photo markers source & layers (with clustering)
+                map.addSource('photo-markers', {
+                    type: 'geojson',
+                    data: { type: 'FeatureCollection', features: [] },
+                    cluster: true,
+                    clusterMaxZoom: 14, // Max zoom to cluster points
+                    clusterRadius: 50 // Radius of each cluster in pixels
+                });
+
+                // Cluster circles - outer glow (cool blue tint - distinct from warm camps)
+                map.addLayer({
+                    id: 'photo-clusters-glow',
+                    type: 'circle',
+                    source: 'photo-markers',
+                    filter: ['has', 'point_count'],
+                    layout: { 'visibility': 'none' },
+                    paint: {
+                        'circle-color': 'rgba(147, 197, 253, 0.7)',
+                        'circle-radius': [
+                            'step',
+                            ['get', 'point_count'],
+                            14, // radius for < 5 photos
+                            5, 17, // radius for 5-9 photos
+                            10, 20 // radius for 10+ photos
+                        ],
+                        'circle-opacity': 0.4,
+                        'circle-blur': 0.6
+                    }
+                });
+
+                // Cluster circles - main (cool blue-tinted glass)
+                map.addLayer({
+                    id: 'photo-clusters-circle',
+                    type: 'circle',
+                    source: 'photo-markers',
+                    filter: ['has', 'point_count'],
+                    layout: { 'visibility': 'none' },
+                    paint: {
+                        'circle-color': 'rgba(219, 234, 254, 0.92)',
+                        'circle-radius': [
+                            'step',
+                            ['get', 'point_count'],
+                            10, // radius for < 5 photos
+                            5, 12, // radius for 5-9 photos
+                            10, 14 // radius for 10+ photos
+                        ],
+                        'circle-stroke-width': 1.5,
+                        'circle-stroke-color': 'rgba(96, 165, 250, 0.5)'
+                    }
+                });
+
+                // Cluster count labels (blue-tinted text)
+                map.addLayer({
+                    id: 'photo-clusters-count',
+                    type: 'symbol',
+                    source: 'photo-markers',
+                    filter: ['has', 'point_count'],
+                    layout: {
+                        'visibility': 'none',
+                        'text-field': ['get', 'point_count_abbreviated'],
+                        'text-font': ['DIN Pro Bold', 'Arial Unicode MS Bold'],
+                        'text-size': 10,
+                        'text-allow-overlap': true
+                    },
+                    paint: {
+                        'text-color': 'rgba(30, 64, 175, 0.9)',
+                        'text-halo-color': 'rgba(219, 234, 254, 0.5)',
+                        'text-halo-width': 1
+                    }
+                });
+
+                // Photo marker glow (cool blue starlight)
+                map.addLayer({
+                    id: 'photo-markers-glow',
+                    type: 'circle',
+                    source: 'photo-markers',
+                    filter: ['!', ['has', 'point_count']],
+                    layout: { 'visibility': 'none' },
+                    paint: {
+                        'circle-color': ['case', ['get', 'highlighted'], 'rgba(96, 165, 250, 0.8)', 'rgba(147, 197, 253, 0.6)'],
+                        'circle-radius': ['case', ['get', 'highlighted'], 10, 6],
+                        'circle-opacity': ['case', ['get', 'highlighted'], 0.5, 0.3],
+                        'circle-blur': 0.7
+                    }
+                });
+
+                // Photo marker circles - blue-tinted crystalline dots
+                map.addLayer({
+                    id: 'photo-markers-circle',
+                    type: 'circle',
+                    source: 'photo-markers',
+                    filter: ['!', ['has', 'point_count']],
+                    layout: { 'visibility': 'none' },
+                    paint: {
+                        'circle-color': ['case', ['get', 'highlighted'], 'rgba(219, 234, 254, 0.98)', 'rgba(241, 245, 249, 0.9)'],
+                        'circle-radius': ['case', ['get', 'highlighted'], 5, 3],
+                        'circle-stroke-width': ['case', ['get', 'highlighted'], 1.5, 0.5],
+                        'circle-stroke-color': ['case', ['get', 'highlighted'], 'rgba(59, 130, 246, 0.7)', 'rgba(147, 197, 253, 0.5)']
+                    }
+                });
+
+                // Camp markers source & layers
+                map.addSource('camp-markers', {
+                    type: 'geojson',
+                    data: { type: 'FeatureCollection', features: [] }
+                });
+
+                // Camp marker outer glow (warm amber tint - clearly distinct from photos)
+                map.addLayer({
+                    id: 'camp-markers-glow',
+                    type: 'circle',
+                    source: 'camp-markers',
+                    layout: { 'visibility': 'none' },
+                    paint: {
+                        'circle-color': ['case', ['get', 'selected'], 'rgba(251, 191, 36, 0.8)', 'rgba(253, 224, 168, 0.7)'],
+                        'circle-radius': ['case', ['get', 'selected'], 18, 14],
+                        'circle-opacity': ['case', ['get', 'selected'], 0.5, 0.35],
+                        'circle-blur': 0.6
+                    }
+                });
+
+                // Camp marker circles (warm cream/amber glass - distinct from cool photo markers)
+                map.addLayer({
+                    id: 'camp-markers-circle',
+                    type: 'circle',
+                    source: 'camp-markers',
+                    layout: { 'visibility': 'none' },
+                    paint: {
+                        'circle-color': ['case', ['get', 'selected'], 'rgba(254, 243, 199, 0.95)', 'rgba(254, 249, 235, 0.9)'],
+                        'circle-radius': ['case', ['get', 'selected'], 12, 9],
+                        'circle-stroke-width': ['case', ['get', 'selected'], 2, 1.5],
+                        'circle-stroke-color': ['case', ['get', 'selected'], 'rgba(251, 191, 36, 0.7)', 'rgba(253, 211, 106, 0.5)']
+                    }
+                });
+
+                // Camp marker labels (day number with warm styling)
+                map.addLayer({
+                    id: 'camp-markers-label',
+                    type: 'symbol',
+                    source: 'camp-markers',
+                    layout: {
+                        'visibility': 'none',
+                        'text-field': ['get', 'dayNumber'],
+                        'text-size': ['case', ['get', 'selected'], 11, 9],
+                        'text-font': ['DIN Pro Bold', 'Arial Unicode MS Bold'],
+                        'text-allow-overlap': true
+                    },
+                    paint: {
+                        'text-color': ['case', ['get', 'selected'], 'rgba(120, 53, 15, 0.95)', 'rgba(146, 64, 14, 0.85)'],
+                        'text-halo-color': 'rgba(254, 243, 199, 0.6)',
+                        'text-halo-width': 1
+                    }
+                });
+
                 setMapReady(true);
+            });
+
+            // Photo marker interaction handlers
+            map.on('mouseenter', 'photo-markers-circle', () => {
+                map.getCanvas().style.cursor = 'pointer';
+            });
+
+            map.on('mouseleave', 'photo-markers-circle', () => {
+                map.getCanvas().style.cursor = '';
+            });
+
+            map.on('click', 'photo-markers-circle', (e) => {
+                if (e.features && e.features.length > 0) {
+                    const photoId = e.features[0].properties?.id;
+                    if (photoId && onPhotoClickRef.current) {
+                        const photo = photosRef.current.find(p => p.id === photoId);
+                        if (photo) {
+                            onPhotoClickRef.current(photo);
+                        }
+                    }
+                    e.originalEvent.stopPropagation();
+                }
+            });
+
+            // Cluster interaction handlers - zoom in on click
+            map.on('mouseenter', 'photo-clusters-circle', () => {
+                map.getCanvas().style.cursor = 'pointer';
+            });
+
+            map.on('mouseleave', 'photo-clusters-circle', () => {
+                map.getCanvas().style.cursor = '';
+            });
+
+            map.on('click', 'photo-clusters-circle', (e) => {
+                if (e.features && e.features.length > 0) {
+                    const clusterId = e.features[0].properties?.cluster_id;
+                    const source = map.getSource('photo-markers') as mapboxgl.GeoJSONSource;
+
+                    if (source && clusterId !== undefined) {
+                        // Get cluster expansion zoom level
+                        source.getClusterExpansionZoom(clusterId, (err, zoom) => {
+                            if (err) return;
+
+                            const geometry = e.features![0].geometry as GeoJSON.Point;
+                            map.easeTo({
+                                center: geometry.coordinates as [number, number],
+                                zoom: zoom || 15,
+                                duration: 500
+                            });
+                        });
+                    }
+                    e.originalEvent.stopPropagation();
+                }
             });
 
             // Interaction handlers
@@ -181,6 +442,12 @@ export function useMapbox({ containerRef, onTrekSelect }: UseMapboxOptions): Use
         }
 
         return () => {
+            // Clean up HTML photo markers
+            for (const marker of photoMarkersRef.current.values()) {
+                marker.remove();
+            }
+            photoMarkersRef.current.clear();
+
             if (mapRef.current) {
                 mapRef.current.remove();
                 mapRef.current = null;
@@ -210,16 +477,16 @@ export function useMapbox({ containerRef, onTrekSelect }: UseMapboxOptions): Use
                 }
             });
 
-            // Trek marker layers
+            // Trek marker layers (Apple Liquid Glass - luminous glass beads)
             map.addLayer({
                 id: 'trek-markers-circle',
                 type: 'circle',
                 source: 'trek-markers',
                 paint: {
-                    'circle-color': '#ffffff',
+                    'circle-color': 'rgba(255, 255, 255, 0.92)',
                     'circle-radius': 6,
-                    'circle-stroke-width': 2,
-                    'circle-stroke-color': 'rgba(0,0,0,0.2)',
+                    'circle-stroke-width': 1,
+                    'circle-stroke-color': 'rgba(255, 255, 255, 0.35)',
                     'circle-emissive-strength': 1
                 }
             });
@@ -229,10 +496,10 @@ export function useMapbox({ containerRef, onTrekSelect }: UseMapboxOptions): Use
                 type: 'circle',
                 source: 'trek-markers',
                 paint: {
-                    'circle-color': '#ffffff',
+                    'circle-color': 'rgba(255, 255, 255, 0.75)',
                     'circle-radius': 12,
-                    'circle-opacity': 0.3,
-                    'circle-blur': 0.5,
+                    'circle-opacity': 0.25,
+                    'circle-blur': 0.75,
                     'circle-emissive-strength': 1
                 },
                 beforeId: 'trek-markers-circle'
@@ -263,6 +530,71 @@ export function useMapbox({ containerRef, onTrekSelect }: UseMapboxOptions): Use
                 source: `route-${trekData.id}`,
                 layout: { 'line-join': 'round', 'line-cap': 'round', 'visibility': 'none' },
                 paint: { 'line-color': 'rgba(255,255,255,0.8)', 'line-width': 2 }
+            });
+
+            // Route click handler - use the glow layer (wider, easier to click)
+            map.on('click', `route-glow-${trekData.id}`, (e) => {
+                if (!onRouteClickRef.current) return;
+
+                const coords = e.lngLat;
+                const routeCoords = trekData.route.coordinates;
+                const camps = trekData.camps;
+
+                // Find nearest point on route and calculate distance
+                let minDist = Infinity;
+                let nearestIdx = 0;
+                for (let i = 0; i < routeCoords.length; i++) {
+                    const c = routeCoords[i];
+                    const d = getDistanceFromLatLonInKm(coords.lat, coords.lng, c[1], c[0]);
+                    if (d < minDist) {
+                        minDist = d;
+                        nearestIdx = i;
+                    }
+                }
+
+                // Calculate distance from start to this point
+                let distFromStart = 0;
+                for (let i = 1; i <= nearestIdx; i++) {
+                    const prev = routeCoords[i - 1];
+                    const curr = routeCoords[i];
+                    distFromStart += getDistanceFromLatLonInKm(prev[1], prev[0], curr[1], curr[0]);
+                }
+
+                // Get elevation at this point
+                const nearestCoord = routeCoords[nearestIdx];
+                const elevation = nearestCoord[2] !== undefined ? nearestCoord[2] : null;
+
+                // Find nearest camp
+                let nearestCamp: Camp | null = null;
+                let distToNearestCamp = Infinity;
+                camps.forEach(camp => {
+                    const d = getDistanceFromLatLonInKm(
+                        coords.lat, coords.lng,
+                        camp.coordinates[1], camp.coordinates[0]
+                    );
+                    if (d < distToNearestCamp) {
+                        distToNearestCamp = d;
+                        nearestCamp = camp;
+                    }
+                });
+
+                onRouteClickRef.current({
+                    coordinates: [coords.lng, coords.lat],
+                    distanceFromStart: Math.round(distFromStart * 10) / 10, // 1 decimal
+                    elevation: elevation !== null ? Math.round(elevation) : null,
+                    nearestCamp,
+                    distanceToNearestCamp: nearestCamp ? Math.round(distToNearestCamp * 10) / 10 : null
+                });
+
+                e.originalEvent.stopPropagation();
+            });
+
+            // Cursor on route hover
+            map.on('mouseenter', `route-glow-${trekData.id}`, () => {
+                map.getCanvas().style.cursor = 'pointer';
+            });
+            map.on('mouseleave', `route-glow-${trekData.id}`, () => {
+                map.getCanvas().style.cursor = '';
             });
         });
 
@@ -533,6 +865,277 @@ export function useMapbox({ containerRef, onTrekSelect }: UseMapboxOptions): Use
         };
     }, [stopRotation]);
 
+    // Update photo markers on the map - uses HTML thumbnail markers
+    const updatePhotoMarkers = useCallback((photos: Photo[], selectedCampId: string | null = null) => {
+        const map = mapRef.current;
+        if (!map || !mapReady) return;
+
+        // Store photos for click handler reference
+        photosRef.current = photos;
+
+        // Filter photos with coordinates
+        const photosWithCoords = photos.filter(p => p.coordinates && p.coordinates.length === 2);
+
+        // Create GeoJSON features for clustering
+        const features: GeoJSON.Feature[] = photosWithCoords.map(photo => {
+            const isHighlighted = selectedCampId ? photo.waypoint_id === selectedCampId : false;
+            return {
+                type: 'Feature',
+                properties: {
+                    id: photo.id,
+                    highlighted: isHighlighted,
+                    waypoint_id: photo.waypoint_id || null,
+                    url: photo.thumbnail_url || photo.url
+                },
+                geometry: {
+                    type: 'Point',
+                    coordinates: photo.coordinates as [number, number]
+                }
+            };
+        });
+
+        const source = map.getSource('photo-markers') as mapboxgl.GeoJSONSource;
+        if (source) {
+            source.setData({
+                type: 'FeatureCollection',
+                features
+            });
+
+            // Show/hide cluster layers based on whether we have photos
+            const visibility = features.length > 0 ? 'visible' : 'none';
+            // Hide the old circle layers - we use HTML markers now
+            map.setLayoutProperty('photo-markers-circle', 'visibility', 'none');
+            map.setLayoutProperty('photo-markers-glow', 'visibility', 'none');
+            // Cluster layers (still use native circles)
+            map.setLayoutProperty('photo-clusters-circle', 'visibility', visibility);
+            map.setLayoutProperty('photo-clusters-glow', 'visibility', visibility);
+            map.setLayoutProperty('photo-clusters-count', 'visibility', visibility);
+        }
+
+        // Remove old HTML markers that are no longer needed
+        const currentPhotoIds = new Set(photosWithCoords.map(p => p.id));
+        for (const [photoId, marker] of photoMarkersRef.current.entries()) {
+            if (!currentPhotoIds.has(photoId)) {
+                marker.remove();
+                photoMarkersRef.current.delete(photoId);
+            }
+        }
+
+        // Create or update HTML markers for each photo
+        const token = authTokenRef.current;
+        photosWithCoords.forEach(photo => {
+            const isHighlighted = selectedCampId ? photo.waypoint_id === selectedCampId : false;
+            const existingMarker = photoMarkersRef.current.get(photo.id);
+
+            if (existingMarker) {
+                // Update existing marker's highlight state
+                const el = existingMarker.getElement();
+                if (isHighlighted) {
+                    el.classList.add('photo-marker-highlighted');
+                } else {
+                    el.classList.remove('photo-marker-highlighted');
+                }
+            } else {
+                // Create new HTML marker with thumbnail
+                const el = document.createElement('div');
+                el.className = 'photo-thumbnail-marker' + (isHighlighted ? ' photo-marker-highlighted' : '');
+
+                // Build authenticated URL
+                const photoUrl = photo.thumbnail_url || photo.url;
+                const imgUrl = buildMediaUrl(photoUrl, token);
+
+                // Create image element
+                const img = document.createElement('img');
+                img.src = imgUrl;
+                img.alt = photo.caption || 'Photo';
+                img.draggable = false;
+                el.appendChild(img);
+
+                // Create marker
+                const marker = new mapboxgl.Marker({
+                    element: el,
+                    anchor: 'center'
+                })
+                    .setLngLat(photo.coordinates as [number, number])
+                    .addTo(map);
+
+                // Click handler
+                el.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    if (onPhotoClickRef.current) {
+                        onPhotoClickRef.current(photo);
+                    }
+                });
+
+                photoMarkersRef.current.set(photo.id, marker);
+            }
+        });
+    }, [mapReady]);
+
+    // Update camp markers on the map
+    const updateCampMarkers = useCallback((camps: Camp[], selectedCampId: string | null = null) => {
+        const map = mapRef.current;
+        if (!map || !mapReady) return;
+
+        // Create GeoJSON features for camps
+        const features: GeoJSON.Feature[] = camps.map(camp => ({
+            type: 'Feature',
+            properties: {
+                id: camp.id,
+                name: camp.name,
+                dayNumber: camp.dayNumber.toString(),
+                elevation: camp.elevation,
+                selected: camp.id === selectedCampId
+            },
+            geometry: {
+                type: 'Point',
+                coordinates: camp.coordinates as [number, number]
+            }
+        }));
+
+        const source = map.getSource('camp-markers') as mapboxgl.GeoJSONSource;
+        if (source) {
+            source.setData({
+                type: 'FeatureCollection',
+                features
+            });
+
+            // Show/hide camp markers based on whether we have camps
+            const visibility = features.length > 0 ? 'visible' : 'none';
+            map.setLayoutProperty('camp-markers-circle', 'visibility', visibility);
+            map.setLayoutProperty('camp-markers-glow', 'visibility', visibility);
+            map.setLayoutProperty('camp-markers-label', 'visibility', visibility);
+        }
+    }, [mapReady]);
+
+    // Fly to a photo's location
+    const flyToPhoto = useCallback((photo: Photo) => {
+        const map = mapRef.current;
+        if (!map || !mapReady || !photo.coordinates) return;
+
+        map.flyTo({
+            center: photo.coordinates as [number, number],
+            zoom: 16,
+            pitch: 45,
+            duration: 1500,
+            essential: true,
+            easing: (t) => 1 - Math.pow(1 - t, 3)
+        });
+    }, [mapReady]);
+
+    // Stop playback animation
+    const stopPlayback = useCallback(() => {
+        if (playbackAnimationRef.current) {
+            cancelAnimationFrame(playbackAnimationRef.current);
+            playbackAnimationRef.current = null;
+        }
+        playbackCallbackRef.current = null;
+        setPlaybackState({
+            isPlaying: false,
+            progress: 0,
+            currentCampIndex: 0
+        });
+    }, []);
+
+    // Start playback - animate through the journey
+    const startPlayback = useCallback((trekData: TrekData, onCampReached?: (camp: Camp) => void) => {
+        const map = mapRef.current;
+        if (!map || !mapReady || !trekData.route?.coordinates) return;
+
+        // Stop any existing playback
+        stopPlayback();
+
+        const camps = trekData.camps;
+        const routeCoords = trekData.route.coordinates;
+        const totalPoints = routeCoords.length;
+
+        // Store callback
+        playbackCallbackRef.current = onCampReached || null;
+
+        // Calculate camp positions as route indices
+        const campIndices: number[] = camps.map(camp => {
+            let minDist = Infinity;
+            let nearestIdx = 0;
+            for (let i = 0; i < routeCoords.length; i++) {
+                const c = routeCoords[i];
+                const d = getDistanceFromLatLonInKm(camp.coordinates[1], camp.coordinates[0], c[1], c[0]);
+                if (d < minDist) {
+                    minDist = d;
+                    nearestIdx = i;
+                }
+            }
+            return nearestIdx;
+        }).sort((a, b) => a - b);
+
+        let currentIndex = 0;
+        let lastCampIndex = -1;
+        const startTime = performance.now();
+        // 3 seconds per day, minimum 5 seconds total
+        const daysCount = trekData.stats.duration || camps.length || 1;
+        const duration = Math.max(daysCount * 3000, 5000);
+
+        setPlaybackState({
+            isPlaying: true,
+            progress: 0,
+            currentCampIndex: 0
+        });
+
+        const animate = () => {
+            const elapsed = performance.now() - startTime;
+            const progress = Math.min(elapsed / duration, 1);
+
+            currentIndex = Math.floor(progress * (totalPoints - 1));
+            const coord = routeCoords[currentIndex];
+
+            // Calculate bearing to next point for smooth camera orientation
+            const nextIdx = Math.min(currentIndex + 10, totalPoints - 1);
+            const nextCoord = routeCoords[nextIdx];
+            const bearing = calculateBearing(coord[1], coord[0], nextCoord[1], nextCoord[0]);
+
+            // Move camera
+            map.easeTo({
+                center: [coord[0], coord[1]],
+                zoom: 14,
+                pitch: 60,
+                bearing: bearing,
+                duration: 50,
+                easing: (t) => t
+            });
+
+            // Check if we reached a camp
+            const campReached = campIndices.findIndex(idx => currentIndex >= idx);
+            if (campReached > lastCampIndex && campReached < camps.length) {
+                lastCampIndex = campReached;
+                if (playbackCallbackRef.current) {
+                    playbackCallbackRef.current(camps[campReached]);
+                }
+            }
+
+            // Update state
+            setPlaybackState({
+                isPlaying: true,
+                progress: progress * 100,
+                currentCampIndex: lastCampIndex >= 0 ? lastCampIndex : 0
+            });
+
+            // Continue or finish
+            if (progress < 1) {
+                playbackAnimationRef.current = requestAnimationFrame(animate);
+            } else {
+                // Finished - reset state
+                setPlaybackState({
+                    isPlaying: false,
+                    progress: 100,
+                    currentCampIndex: camps.length - 1
+                });
+                playbackAnimationRef.current = null;
+            }
+        };
+
+        // Start animation
+        playbackAnimationRef.current = requestAnimationFrame(animate);
+    }, [mapReady, stopPlayback]);
+
     return {
         map: mapRef,
         mapReady,
@@ -540,7 +1143,13 @@ export function useMapbox({ containerRef, onTrekSelect }: UseMapboxOptions): Use
         flyToGlobe,
         flyToTrek,
         highlightSegment,
+        updatePhotoMarkers,
+        updateCampMarkers,
+        flyToPhoto,
         startRotation,
-        stopRotation
+        stopRotation,
+        startPlayback,
+        stopPlayback,
+        playbackState
     };
 }

@@ -49,7 +49,7 @@ export function useTrekData(): UseTrekDataReturn {
         if (!trekData) return { extendedStats: null, elevationProfile: null };
         return {
             extendedStats: calculateStats(trekData),
-            elevationProfile: generateElevationProfile(trekData.route?.coordinates)
+            elevationProfile: generateElevationProfile(trekData.route?.coordinates, trekData.camps)
         };
     }, [trekData]);
 

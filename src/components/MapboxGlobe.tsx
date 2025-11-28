@@ -2,16 +2,41 @@
  * Mapbox Globe component with 3D terrain visualization
  */
 
-import { useRef, useEffect } from 'react';
-import { useMapbox } from '../hooks/useMapbox';
+import { useRef, useEffect, useCallback, useState } from 'react';
+import { useMapbox, type RouteClickInfo } from '../hooks/useMapbox';
+import { useJourneys } from '../contexts/JourneysContext';
 import { MapErrorFallback } from './common/ErrorBoundary';
-import type { TrekConfig, Camp, ViewMode } from '../types/trek';
+import { colors, radius, glassFloating, glassButton } from '../styles/liquidGlass';
+import type { TrekConfig, Camp, ViewMode, Photo } from '../types/trek';
+
+// Check if running in E2E test mode
+const isE2ETestMode = import.meta.env.VITE_E2E_TEST_MODE === 'true';
+
+// Test helpers interface for E2E testing
+interface TestHelpers {
+    selectTrek: (id: string) => boolean;
+    getTreks: () => Array<{ id: string; name: string }>;
+    getSelectedTrek: () => string | null;
+    isMapReady: () => boolean;
+    isDataLoaded: () => boolean;
+}
+
+// Declare global window extension for test helpers
+declare global {
+    interface Window {
+        testHelpers?: TestHelpers;
+    }
+}
 
 interface MapboxGlobeProps {
     selectedTrek: TrekConfig | null;
     selectedCamp: Camp | null;
     onSelectTrek: (trek: TrekConfig) => void;
     view: ViewMode;
+    photos?: Photo[];
+    onPhotoClick?: (photo: Photo, index: number) => void;
+    flyToPhotoRef?: React.MutableRefObject<((photo: Photo) => void) | null>;
+    onCampSelect?: (camp: Camp) => void;
 }
 
 // Generate realistic starfield - seeded positions for consistency
@@ -101,13 +126,78 @@ const starfieldStyle: React.CSSProperties = {
     zIndex: 0
 };
 
-export function MapboxGlobe({ selectedTrek, selectedCamp, onSelectTrek, view }: MapboxGlobeProps) {
+export function MapboxGlobe({ selectedTrek, selectedCamp, onSelectTrek, view, photos = [], onPhotoClick, flyToPhotoRef, onCampSelect }: MapboxGlobeProps) {
     const containerRef = useRef<HTMLDivElement>(null);
+    const { treks, trekDataMap, loading: journeysLoading } = useJourneys();
+    const [routeInfo, setRouteInfo] = useState<RouteClickInfo | null>(null);
 
-    const { mapReady, error, flyToGlobe, flyToTrek, startRotation, stopRotation } = useMapbox({
+    // Get camps for the selected trek
+    const camps = selectedTrek ? trekDataMap[selectedTrek.id]?.camps || [] : [];
+
+    // Handle photo click from map marker
+    const handlePhotoClick = useCallback((photo: Photo) => {
+        if (onPhotoClick) {
+            const index = photos.findIndex(p => p.id === photo.id);
+            onPhotoClick(photo, index >= 0 ? index : 0);
+        }
+    }, [photos, onPhotoClick]);
+
+    // Handle route click - show info popup
+    const handleRouteClick = useCallback((info: RouteClickInfo) => {
+        setRouteInfo(info);
+    }, []);
+
+    // Clear route info when clicking elsewhere or changing trek
+    useEffect(() => {
+        setRouteInfo(null);
+    }, [selectedTrek, selectedCamp]);
+
+    const { mapReady, error, flyToGlobe, flyToTrek, updatePhotoMarkers, updateCampMarkers, flyToPhoto, startRotation, stopRotation } = useMapbox({
         containerRef,
-        onTrekSelect: onSelectTrek
+        onTrekSelect: onSelectTrek,
+        onPhotoClick: handlePhotoClick,
+        onRouteClick: handleRouteClick
     });
+
+    // Expose test helpers for E2E testing
+    useEffect(() => {
+        if (!isE2ETestMode) return;
+
+        // Create test helpers object
+        const testHelpers: TestHelpers = {
+            selectTrek: (id: string) => {
+                const trek = treks.find(t => t.id === id);
+                if (trek) {
+                    onSelectTrek(trek);
+                    return true;
+                }
+                return false;
+            },
+            getTreks: () => treks.map(t => ({ id: t.id, name: t.name })),
+            getSelectedTrek: () => selectedTrek?.id || null,
+            isMapReady: () => mapReady,
+            isDataLoaded: () => !journeysLoading && treks.length > 0
+        };
+
+        // Register on window
+        window.testHelpers = testHelpers;
+
+        return () => {
+            delete window.testHelpers;
+        };
+    }, [mapReady, treks, selectedTrek, onSelectTrek, journeysLoading]);
+
+    // Expose flyToPhoto to parent via ref
+    useEffect(() => {
+        if (flyToPhotoRef) {
+            flyToPhotoRef.current = flyToPhoto;
+        }
+        return () => {
+            if (flyToPhotoRef) {
+                flyToPhotoRef.current = null;
+            }
+        };
+    }, [flyToPhotoRef, flyToPhoto]);
 
     // Handle view transitions
     useEffect(() => {
@@ -129,9 +219,45 @@ export function MapboxGlobe({ selectedTrek, selectedCamp, onSelectTrek, view }: 
         }
     }, [view, selectedTrek, selectedCamp, mapReady, flyToGlobe, flyToTrek, startRotation, stopRotation]);
 
+    // Update photo markers when photos or selected camp changes
+    useEffect(() => {
+        if (!mapReady || view !== 'trek') return;
+        updatePhotoMarkers(photos, selectedCamp?.id || null);
+    }, [mapReady, view, photos, selectedCamp, updatePhotoMarkers]);
+
+    // Hide photo markers when leaving trek view
+    useEffect(() => {
+        if (!mapReady) return;
+        if (view !== 'trek') {
+            updatePhotoMarkers([], null);
+        }
+    }, [mapReady, view, updatePhotoMarkers]);
+
+    // Update camp markers when trek or camp selection changes
+    useEffect(() => {
+        if (!mapReady || view !== 'trek') return;
+        updateCampMarkers(camps, selectedCamp?.id || null);
+    }, [mapReady, view, camps, selectedCamp, updateCampMarkers]);
+
+    // Hide camp markers when leaving trek view
+    useEffect(() => {
+        if (!mapReady) return;
+        if (view !== 'trek') {
+            updateCampMarkers([], null);
+        }
+    }, [mapReady, view, updateCampMarkers]);
+
     if (error) {
         return <MapErrorFallback error={error} />;
     }
+
+    // Handle clicking the nearest camp from route info
+    const handleGoToNearestCamp = useCallback(() => {
+        if (routeInfo?.nearestCamp && onCampSelect) {
+            onCampSelect(routeInfo.nearestCamp);
+            setRouteInfo(null);
+        }
+    }, [routeInfo, onCampSelect]);
 
     return (
         <div style={{ position: 'relative', width: '100%', height: '100%' }}>
@@ -139,6 +265,92 @@ export function MapboxGlobe({ selectedTrek, selectedCamp, onSelectTrek, view }: 
             <div style={starfieldStyle} />
             {/* Map container */}
             <div ref={containerRef} style={{ position: 'relative', width: '100%', height: '100%', zIndex: 1 }} />
+
+            {/* Route Info Popup */}
+            {routeInfo && view === 'trek' && (
+                <div
+                    style={{
+                        position: 'absolute',
+                        top: '50%',
+                        left: '50%',
+                        transform: 'translate(-50%, -50%)',
+                        ...glassFloating,
+                        borderRadius: radius.lg,
+                        padding: '20px 24px',
+                        zIndex: 100,
+                        minWidth: 200,
+                        animation: 'popupIn 0.25s cubic-bezier(0.32, 0.72, 0, 1)',
+                    }}
+                >
+                    <style>{`@keyframes popupIn { from { opacity: 0; transform: translate(-50%, -50%) scale(0.95); } to { opacity: 1; transform: translate(-50%, -50%) scale(1); } }`}</style>
+
+                    {/* Close button */}
+                    <button
+                        onClick={() => setRouteInfo(null)}
+                        style={{
+                            position: 'absolute',
+                            top: 8,
+                            right: 8,
+                            background: 'none',
+                            border: 'none',
+                            color: colors.text.subtle,
+                            cursor: 'pointer',
+                            padding: 4,
+                            fontSize: 16,
+                            lineHeight: 1
+                        }}
+                    >
+                        ×
+                    </button>
+
+                    <div style={{ fontSize: 11, color: colors.text.subtle, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 12 }}>
+                        Route Point
+                    </div>
+
+                    <div style={{ display: 'grid', gap: 12 }}>
+                        <div>
+                            <div style={{ fontSize: 24, fontWeight: 500, color: colors.text.primary }}>
+                                {routeInfo.distanceFromStart} km
+                            </div>
+                            <div style={{ fontSize: 12, color: colors.text.tertiary }}>from start</div>
+                        </div>
+
+                        {routeInfo.elevation !== null && (
+                            <div>
+                                <div style={{ fontSize: 18, fontWeight: 500, color: colors.text.primary }}>
+                                    {routeInfo.elevation.toLocaleString()}m
+                                </div>
+                                <div style={{ fontSize: 12, color: colors.text.tertiary }}>elevation</div>
+                            </div>
+                        )}
+
+                        {routeInfo.nearestCamp && (
+                            <div style={{ marginTop: 8, paddingTop: 12, borderTop: `1px solid ${colors.glass.borderSubtle}` }}>
+                                <div style={{ fontSize: 12, color: colors.text.tertiary, marginBottom: 8 }}>
+                                    Nearest: {routeInfo.nearestCamp.name} ({routeInfo.distanceToNearestCamp} km)
+                                </div>
+                                {onCampSelect && (
+                                    <button
+                                        onClick={handleGoToNearestCamp}
+                                        style={{
+                                            ...glassButton,
+                                            width: '100%',
+                                            padding: '10px 16px',
+                                            borderRadius: radius.sm,
+                                            fontSize: 13,
+                                            fontWeight: 500,
+                                            color: colors.text.primary,
+                                            cursor: 'pointer',
+                                        }}
+                                    >
+                                        Go to Day {routeInfo.nearestCamp.dayNumber}
+                                    </button>
+                                )}
+                            </div>
+                        )}
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
