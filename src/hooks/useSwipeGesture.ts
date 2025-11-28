@@ -31,7 +31,7 @@ interface SwipeGestureOptions {
   haptic?: boolean;
   /** Callback with current drag offset during gesture */
   onDragUpdate?: (offset: number, velocity: number) => void;
-  /** Callback when drag starts */
+  /** Callback when drag starts (for performance optimization) */
   onDragStart?: () => void;
   /** Callback when drag ends (with final velocity) */
   onDragEnd?: (velocity: number) => void;
@@ -59,12 +59,15 @@ export function useSwipeGesture({
   threshold = 50,
   velocityThreshold = 300,
   haptic = true,
+  onDragStart,
+  onDragEnd,
 }: SwipeGestureOptions): SwipeHandlers {
   const startY = useRef<number>(0);
   const startX = useRef<number>(0);
   const currentY = useRef<number>(0);
   const velocityTracker = useRef(new VelocityTracker());
   const isTracking = useRef(false);
+  const hasFiredDragStart = useRef(false);
 
   const onTouchStart = useCallback((e: React.TouchEvent) => {
     const touch = e.touches[0];
@@ -74,6 +77,7 @@ export function useSwipeGesture({
     velocityTracker.current.reset();
     velocityTracker.current.addPoint(touch.clientX, touch.clientY);
     isTracking.current = true;
+    hasFiredDragStart.current = false;
   }, []);
 
   const onTouchMove = useCallback((e: React.TouchEvent) => {
@@ -89,11 +93,21 @@ export function useSwipeGesture({
 
     if (dx > dy && dx > SCROLL_CANCEL_THRESHOLD) {
       isTracking.current = false;
+      return;
     }
-  }, []);
+
+    // Fire dragStart once we detect vertical movement
+    if (!hasFiredDragStart.current && dy > MIN_MOVEMENT_THRESHOLD) {
+      hasFiredDragStart.current = true;
+      onDragStart?.();
+    }
+  }, [onDragStart]);
 
   const onTouchEnd = useCallback(() => {
-    if (!isTracking.current) {
+    const wasTracking = isTracking.current;
+    const wasDragging = hasFiredDragStart.current;
+
+    if (!wasTracking) {
       isTracking.current = false;
       return;
     }
@@ -119,7 +133,13 @@ export function useSwipeGesture({
     startX.current = 0;
     currentY.current = 0;
     isTracking.current = false;
-  }, [onSwipeUp, onSwipeDown, threshold, velocityThreshold, haptic]);
+    hasFiredDragStart.current = false;
+
+    // Fire dragEnd if we were actually dragging
+    if (wasDragging) {
+      onDragEnd?.(vy);
+    }
+  }, [onSwipeUp, onSwipeDown, threshold, velocityThreshold, haptic, onDragEnd]);
 
   return { onTouchStart, onTouchMove, onTouchEnd };
 }

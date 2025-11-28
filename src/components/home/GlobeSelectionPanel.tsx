@@ -1,6 +1,8 @@
+import { memo } from 'react';
 import type { TrekConfig } from '../../types/trek';
 import { GlassButton } from '../common/GlassButton';
 import { colors, radius, typography } from '../../styles/liquidGlass';
+import { liquidTransitions } from '../../hooks/useTouchFeedback';
 
 interface GlobeSelectionPanelProps {
     selectedTrek: TrekConfig;
@@ -9,7 +11,7 @@ interface GlobeSelectionPanelProps {
     isMobile: boolean;
 }
 
-export function GlobeSelectionPanel({ selectedTrek, onBack, onExplore, isMobile }: GlobeSelectionPanelProps) {
+export const GlobeSelectionPanel = memo(function GlobeSelectionPanel({ selectedTrek, onBack, onExplore, isMobile }: GlobeSelectionPanelProps) {
     return (
         <div style={{
             position: 'absolute',
@@ -30,6 +32,10 @@ export function GlobeSelectionPanel({ selectedTrek, onBack, onExplore, isMobile 
                     transparent 100%
                   )`
                 : 'transparent',
+            // GPU acceleration for smooth entry/exit
+            transform: 'translateZ(0)',
+            willChange: 'opacity, transform',
+            transition: `opacity ${liquidTransitions.smooth}, transform ${liquidTransitions.smooth}`,
         }}>
             {/* Back button with glass styling */}
             <GlassButton
@@ -107,4 +113,4 @@ export function GlobeSelectionPanel({ selectedTrek, onBack, onExplore, isMobile 
             </GlassButton>
         </div>
     );
-}
+});

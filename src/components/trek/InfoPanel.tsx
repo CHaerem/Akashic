@@ -9,6 +9,7 @@ import { StatsTab } from './StatsTab';
 import { PhotosTab } from './PhotosTab';
 import { JourneyEditModal } from './JourneyEditModal';
 import { colors, radius, transitions, typography } from '../../styles/liquidGlass';
+import { liquidTransitions } from '../../hooks/useTouchFeedback';
 
 export type PanelState = 'minimized' | 'normal' | 'expanded';
 
@@ -46,6 +47,7 @@ export const InfoPanel = memo(function InfoPanel({
     const padding = isMobile ? 16 : 24;
     const [showEditModal, setShowEditModal] = useState(false);
     const [editMode, setEditMode] = useState(false);
+    const [isDragging, setIsDragging] = useState(false);
 
     // Swipe gestures for mobile bottom sheet
     const handleSwipeUp = useCallback(() => {
@@ -61,7 +63,11 @@ export const InfoPanel = memo(function InfoPanel({
     const swipeHandlers = useSwipeGesture({
         onSwipeUp: handleSwipeUp,
         onSwipeDown: handleSwipeDown,
-        threshold: 30
+        threshold: 30,
+        haptic: true,
+        // Performance optimization: reduce blur during drag
+        onDragStart: useCallback(() => setIsDragging(true), []),
+        onDragEnd: useCallback(() => setIsDragging(false), []),
     });
 
     // Panel height based on state - using dvh for better mobile support
@@ -73,7 +79,7 @@ export const InfoPanel = memo(function InfoPanel({
         }
     };
 
-    // Mobile bottom sheet style - Liquid Glass design
+    // Mobile bottom sheet style - Liquid Glass design with GPU optimization
     const mobileStyle: React.CSSProperties = {
         position: 'absolute',
         left: 0,
@@ -88,20 +94,28 @@ export const InfoPanel = memo(function InfoPanel({
             rgba(255, 255, 255, 0.06) 10%,
             rgba(12, 12, 18, 0.95) 40%
         )`,
-        backdropFilter: 'blur(32px) saturate(180%)',
-        WebkitBackdropFilter: 'blur(32px) saturate(180%)',
+        // Reduce blur during active gestures for smoother performance
+        backdropFilter: isDragging ? 'blur(16px) saturate(150%)' : 'blur(32px) saturate(180%)',
+        WebkitBackdropFilter: isDragging ? 'blur(16px) saturate(150%)' : 'blur(32px) saturate(180%)',
         borderTop: `1px solid ${colors.glass.border}`,
         borderRadius: `${radius.xxl}px ${radius.xxl}px 0 0`,
         display: 'flex',
         flexDirection: 'column',
         zIndex: 20,
-        transition: `height ${transitions.glass}`,
+        // GPU-accelerated transition with will-change hint
+        transition: isDragging ? 'none' : `height ${liquidTransitions.glass}`,
+        willChange: 'height, backdrop-filter',
+        // Force GPU layer for smoother animations
+        transform: 'translateZ(0)',
+        backfaceVisibility: 'hidden',
         paddingBottom: 'env(safe-area-inset-bottom)',
         boxShadow: `
             0 -16px 48px rgba(0, 0, 0, 0.4),
             inset 0 1px 0 rgba(255, 255, 255, 0.15),
             inset 0 2px 20px rgba(255, 255, 255, 0.05)
         `,
+        // Contain layout for better performance
+        contain: 'layout style',
     };
 
     // Desktop side panel style - Liquid Glass design
@@ -150,8 +164,8 @@ export const InfoPanel = memo(function InfoPanel({
                         padding: '14px 0 10px',
                         display: 'flex',
                         justifyContent: 'center',
-                        cursor: 'grab',
-                        touchAction: 'none'
+                        cursor: isDragging ? 'grabbing' : 'grab',
+                        touchAction: 'none',
                     }}
                 >
                     <div style={{
@@ -309,8 +323,11 @@ export const InfoPanel = memo(function InfoPanel({
                     overflow: 'auto',
                     padding: padding,
                     WebkitOverflowScrolling: 'touch',
-                    overscrollBehavior: 'contain'
-                }} className="glass-scrollbar">
+                    overscrollBehavior: 'contain',
+                    // Performance: only render visible content
+                    contentVisibility: 'auto',
+                    containIntrinsicSize: '0 500px',
+                } as React.CSSProperties} className="glass-scrollbar">
                     {activeTab === 'overview' && <OverviewTab trekData={trekData} />}
                     {activeTab === 'journey' && (
                         <JourneyTab
