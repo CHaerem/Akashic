@@ -11,7 +11,7 @@
 
 import { memo, useState, useCallback, useRef, type ReactNode, type CSSProperties, type ButtonHTMLAttributes } from 'react';
 import { colors, radius, transitions } from '../../styles/liquidGlass';
-import { triggerHaptic, liquidTransitions } from '../../hooks/useTouchFeedback';
+import { triggerHaptic, liquidTransitions, SCROLL_CANCEL_THRESHOLD } from '../../hooks/useTouchFeedback';
 
 export type GlassButtonVariant = 'default' | 'primary' | 'subtle' | 'ghost' | 'danger';
 export type GlassButtonSize = 'sm' | 'md' | 'lg';
@@ -323,7 +323,7 @@ export const GlassButton = memo(function GlassButton({
     const dy = Math.abs(touch.clientY - touchStartRef.current.y);
 
     // Cancel press if moved too far (user is scrolling)
-    if (dx > 10 || dy > 10) {
+    if (dx > SCROLL_CANCEL_THRESHOLD || dy > SCROLL_CANCEL_THRESHOLD) {
       setIsPressed(false);
       setPressPoint(null);
     }

@@ -10,7 +10,7 @@
 
 import { memo, useState, useCallback, useRef, type ReactNode, type CSSProperties } from 'react';
 import { glassCard, colors, radius, transitions } from '../../styles/liquidGlass';
-import { triggerHaptic, liquidTransitions } from '../../hooks/useTouchFeedback';
+import { triggerHaptic, liquidTransitions, SCROLL_CANCEL_THRESHOLD } from '../../hooks/useTouchFeedback';
 
 export type GlassCardVariant = 'default' | 'subtle' | 'elevated' | 'interactive';
 
@@ -105,7 +105,7 @@ export const GlassCard = memo(function GlassCard({
     const dx = Math.abs(touch.clientX - touchStartRef.current.x);
     const dy = Math.abs(touch.clientY - touchStartRef.current.y);
 
-    if (dx > 10 || dy > 10) {
+    if (dx > SCROLL_CANCEL_THRESHOLD || dy > SCROLL_CANCEL_THRESHOLD) {
       setIsPressed(false);
     }
   }, []);

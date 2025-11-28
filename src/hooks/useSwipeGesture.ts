@@ -6,7 +6,13 @@
  */
 
 import { useRef, useCallback, useState } from 'react';
-import { VelocityTracker, triggerHaptic, rubberBand } from './useTouchFeedback';
+import {
+  VelocityTracker,
+  triggerHaptic,
+  rubberBand,
+  SCROLL_CANCEL_THRESHOLD,
+  MIN_MOVEMENT_THRESHOLD,
+} from './useTouchFeedback';
 
 // ============================================================================
 // TYPES
@@ -81,7 +87,7 @@ export function useSwipeGesture({
     const dx = Math.abs(touch.clientX - startX.current);
     const dy = Math.abs(touch.clientY - startY.current);
 
-    if (dx > dy && dx > 10) {
+    if (dx > dy && dx > SCROLL_CANCEL_THRESHOLD) {
       isTracking.current = false;
     }
   }, []);
@@ -180,7 +186,7 @@ export function useAdvancedSwipeGesture({
       const absDx = Math.abs(dx);
       const absDy = Math.abs(dy);
 
-      if (absDx < 5 && absDy < 5) return; // Not enough movement yet
+      if (absDx < MIN_MOVEMENT_THRESHOLD && absDy < MIN_MOVEMENT_THRESHOLD) return; // Not enough movement yet
 
       if (direction === 'vertical' && absDx > absDy) {
         isTracking.current = false;
@@ -329,7 +335,7 @@ export function useBottomSheet({
     const dy = touch.clientY - startY.current;
 
     // Cancel if horizontal scroll
-    if (dx > Math.abs(dy) && dx > 10) {
+    if (dx > Math.abs(dy) && dx > SCROLL_CANCEL_THRESHOLD) {
       isTracking.current = false;
       setIsDragging(false);
       setDragOffset(0);

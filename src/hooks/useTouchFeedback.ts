@@ -12,6 +12,19 @@
 import { useState, useCallback, useRef, type CSSProperties } from 'react';
 
 // ============================================================================
+// TOUCH THRESHOLD CONSTANTS
+// ============================================================================
+
+/** Distance (px) user must move before press is cancelled (indicates scrolling) */
+export const SCROLL_CANCEL_THRESHOLD = 10;
+
+/** Minimum movement (px) to detect gesture direction */
+export const MIN_MOVEMENT_THRESHOLD = 5;
+
+/** Direction detection threshold - movement in primary direction must exceed this ratio */
+export const DIRECTION_RATIO_THRESHOLD = 10;
+
+// ============================================================================
 // HAPTIC FEEDBACK
 // ============================================================================
 
@@ -159,7 +172,7 @@ export function useTouchPress(options: UseTouchPressOptions = {}): [TouchPressSt
       const dy = Math.abs(touch.clientY - touchStartRef.current.y);
 
       // Cancel press if moved too far (indicates scrolling)
-      if (dx > 10 || dy > 10) {
+      if (dx > SCROLL_CANCEL_THRESHOLD || dy > SCROLL_CANCEL_THRESHOLD) {
         endPress();
       }
     }, [endPress]),
@@ -397,6 +410,13 @@ export function getSwipeDirection(
 
 /**
  * Calculate rubber band effect for over-scroll
+ *
+ * @param offset - The current drag offset in pixels
+ * @param limit - Maximum offset before rubber banding begins
+ * @param elasticity - Resistance factor (0-1). Values closer to 0 produce stiffer
+ *                     resistance, values closer to 1 produce more elastic behavior.
+ *                     Default: 0.55 (balanced feel)
+ * @returns The adjusted offset with rubber band resistance applied
  */
 export function rubberBand(
   offset: number,

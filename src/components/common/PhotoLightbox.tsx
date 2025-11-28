@@ -33,6 +33,13 @@ const VELOCITY_THRESHOLD = 400; // px/s
 const DISMISS_THRESHOLD = 100; // px for vertical dismiss
 const CONTROLS_TIMEOUT = 5000; // ms
 
+// Rubber band effect constants
+const HORIZONTAL_RUBBER_BAND_LIMIT = 150; // px - max distance before resistance
+const HORIZONTAL_ELASTICITY = 0.4; // 0-1, lower = stiffer
+const VERTICAL_RUBBER_BAND_LIMIT = 200; // px
+const VERTICAL_ELASTICITY = 0.5; // 0-1, slightly more elastic for dismiss gesture
+const DIRECTION_DETECT_THRESHOLD = 10; // px - minimum movement to detect direction
+
 export const PhotoLightbox = memo(function PhotoLightbox({
   photos,
   initialIndex,
@@ -164,7 +171,7 @@ export const PhotoLightbox = memo(function PhotoLightbox({
       const absDx = Math.abs(dx);
       const absDy = Math.abs(dy);
 
-      if (absDx < 10 && absDy < 10) return; // Not enough movement
+      if (absDx < DIRECTION_DETECT_THRESHOLD && absDy < DIRECTION_DETECT_THRESHOLD) return; // Not enough movement
 
       if (absDx > absDy * 1.2) {
         setDragDirection('horizontal');
@@ -179,13 +186,13 @@ export const PhotoLightbox = memo(function PhotoLightbox({
       // Apply rubber band at edges
       let adjustedDx = dx;
       if ((currentIndex === 0 && dx > 0) || (currentIndex === photos.length - 1 && dx < 0)) {
-        adjustedDx = rubberBand(Math.abs(dx), 150, 0.4) * Math.sign(dx);
+        adjustedDx = rubberBand(Math.abs(dx), HORIZONTAL_RUBBER_BAND_LIMIT, HORIZONTAL_ELASTICITY) * Math.sign(dx);
       }
       setTouchDeltaX(adjustedDx);
       setTouchDeltaY(0);
     } else if (dragDirection === 'vertical') {
       // Vertical drag for dismiss - apply rubber band
-      const adjustedDy = rubberBand(Math.abs(dy), 200, 0.5) * Math.sign(dy);
+      const adjustedDy = rubberBand(Math.abs(dy), VERTICAL_RUBBER_BAND_LIMIT, VERTICAL_ELASTICITY) * Math.sign(dy);
       setTouchDeltaY(adjustedDy);
       setTouchDeltaX(0);
     }
