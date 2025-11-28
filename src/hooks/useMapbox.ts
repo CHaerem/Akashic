@@ -159,14 +159,14 @@ export function useMapbox({ containerRef, onTrekSelect, onPhotoClick, onRouteCli
                     'star-intensity': 0 // Disable Mapbox stars
                 });
 
-                // Add terrain source
+                // Add terrain source - use smaller tiles on mobile for better performance
                 map.addSource('mapbox-dem', {
                     type: 'raster-dem',
                     url: 'mapbox://mapbox.terrain-rgb',
-                    tileSize: 512,
-                    maxzoom: 16
+                    tileSize: isMobile ? 256 : 512,
+                    maxzoom: isMobile ? 14 : 16
                 });
-                map.setTerrain({ source: 'mapbox-dem', exaggeration: 1.2 });
+                map.setTerrain({ source: 'mapbox-dem', exaggeration: isMobile ? 1.0 : 1.2 });
 
                 // Add sky layer
                 map.addLayer({
@@ -821,8 +821,14 @@ export function useMapbox({ containerRef, onTrekSelect, onPhotoClick, onRouteCli
         // Clean up any existing listeners first
         stopRotation();
 
+        // Throttle on mobile to save battery (30fps instead of 60fps)
+        const isMobile = window.matchMedia('(max-width: 768px)').matches;
+        const targetFps = isMobile ? 30 : 60;
+        const frameInterval = 1000 / targetFps;
+
         let lastTime = performance.now();
-        const rotationSpeed = 2; // degrees per second
+        let lastFrameTime = performance.now();
+        const rotationSpeed = isMobile ? 1.5 : 2; // Slower on mobile
 
         // Create and store the interaction listener
         const onInteraction = () => stopRotation();
@@ -844,8 +850,15 @@ export function useMapbox({ containerRef, onTrekSelect, onPhotoClick, onRouteCli
         const animate = (currentTime: number) => {
             if (!mapRef.current || !rotationAnimationRef.current) return;
 
+            // Throttle frame rate on mobile
+            if (currentTime - lastFrameTime < frameInterval) {
+                rotationAnimationRef.current = requestAnimationFrame(animate);
+                return;
+            }
+
             const deltaTime = (currentTime - lastTime) / 1000;
             lastTime = currentTime;
+            lastFrameTime = currentTime;
 
             // Spin globe by moving center longitude
             // Decrease longitude = Earth appears to rotate eastward (natural direction)
