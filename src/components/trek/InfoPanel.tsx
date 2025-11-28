@@ -73,8 +73,8 @@ export const InfoPanel = memo(function InfoPanel({
     });
 
     // Panel height based on state - using dvh for better mobile support
-    // During drag, dynamically adjust height so content renders properly
-    const getPanelHeight = (): string => {
+    // During drag, compute actual pixel height for reliable real-time updates
+    const getPanelHeight = (): string | number => {
         const baseHeights: Record<PanelState, string> = {
             minimized: '100px',
             normal: '42dvh',
@@ -85,15 +85,25 @@ export const InfoPanel = memo(function InfoPanel({
             return baseHeights[panelState];
         }
 
-        // During drag: adjust height based on offset
+        // During drag: compute pixel height for reliable updates
+        // Using window.innerHeight for dvh equivalent
+        const vh = typeof window !== 'undefined' ? window.innerHeight / 100 : 8;
+        const baseHeightPx: Record<PanelState, number> = {
+            minimized: 100,
+            normal: 42 * vh,
+            expanded: 88 * vh
+        };
+
         // Dragging down (positive offset) = shorter panel
         // Dragging up (negative offset) = taller panel
-        // Use calc() to subtract the offset from base height
-        return `calc(${baseHeights[panelState]} - ${dragState.dragOffset}px)`;
+        const newHeight = baseHeightPx[panelState] - dragState.dragOffset;
+
+        // Clamp to reasonable bounds
+        const minH = 80;
+        const maxH = vh * 100 - 60; // 100dvh - 60px
+        return Math.max(minH, Math.min(maxH, newHeight));
     };
 
-    // Clamp height during drag to reasonable bounds
-    const minHeight = 80; // Don't go smaller than minimized
     const maxHeight = 'calc(100dvh - 60px)';
 
     // Mobile bottom sheet style - Liquid Glass design
@@ -103,8 +113,7 @@ export const InfoPanel = memo(function InfoPanel({
         right: 0,
         bottom: 0,
         height: getPanelHeight(),
-        minHeight: dragState.isDragging ? minHeight : undefined,
-        maxHeight,
+        maxHeight: dragState.isDragging ? undefined : maxHeight, // Remove max during drag (already clamped)
         // Liquid Glass gradient background
         background: `linear-gradient(
             180deg,
