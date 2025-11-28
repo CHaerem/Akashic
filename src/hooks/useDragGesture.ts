@@ -1,4 +1,4 @@
-import { useRef, useCallback, useState } from 'react';
+import { useRef, useCallback, useState, type RefObject } from 'react';
 
 interface DragGestureOptions {
     /** Snap points as percentages of viewport height (0-100) */
@@ -7,17 +7,16 @@ interface DragGestureOptions {
     currentSnapIndex: number;
     /** Called when snap point changes */
     onSnapChange: (index: number) => void;
+    /** Ref to the panel element for direct DOM manipulation */
+    panelRef: RefObject<HTMLDivElement | null>;
     /** Minimum velocity (px/ms) to trigger a snap */
     velocityThreshold?: number;
     /** Distance threshold to trigger snap without velocity */
     distanceThreshold?: number;
-    /** Rubber band resistance (0-1, lower = more resistance) */
-    rubberBandResistance?: number;
 }
 
 interface DragState {
     isDragging: boolean;
-    dragOffset: number;
 }
 
 interface DragHandlers {
@@ -27,56 +26,53 @@ interface DragHandlers {
 }
 
 /**
- * iOS-like drag gesture hook with:
- * - Drag-to-follow (panel follows finger)
- * - Velocity-based snap decisions
- * - Rubber-banding at boundaries
- * - Spring physics animation
+ * iOS-like drag gesture hook with direct DOM manipulation for instant feedback.
+ * Uses refs to update panel height directly during drag, bypassing React's
+ * rendering cycle for smooth 60fps interactions.
  */
 export function useDragGesture({
     snapPoints,
     currentSnapIndex,
     onSnapChange,
+    panelRef,
     velocityThreshold = 0.5,
     distanceThreshold = 50,
-    rubberBandResistance = 0.4
 }: DragGestureOptions): [DragState, DragHandlers] {
-    const [dragState, setDragState] = useState<DragState>({
-        isDragging: false,
-        dragOffset: 0
-    });
+    const [isDragging, setIsDragging] = useState(false);
 
     const startY = useRef<number>(0);
-    const startTime = useRef<number>(0);
     const lastY = useRef<number>(0);
     const lastTime = useRef<number>(0);
     const velocity = useRef<number>(0);
+    const currentIndexRef = useRef(currentSnapIndex);
 
-    // Calculate rubber band effect for overscroll
-    const rubberBand = useCallback((offset: number, maxOffset: number): number => {
-        if (offset >= 0 && offset <= maxOffset) return offset;
+    // Keep ref in sync with prop
+    currentIndexRef.current = currentSnapIndex;
 
-        const excess = offset < 0 ? -offset : offset - maxOffset;
-        const dampened = Math.pow(excess, rubberBandResistance) * 10;
-
-        return offset < 0 ? -dampened : maxOffset + dampened;
-    }, [rubberBandResistance]);
+    // Get base height in pixels for current snap point
+    const getBaseHeightPx = useCallback(() => {
+        const vh = window.innerHeight / 100;
+        return snapPoints[currentIndexRef.current] * vh;
+    }, [snapPoints]);
 
     const onTouchStart = useCallback((e: React.TouchEvent) => {
         const touch = e.touches[0];
         startY.current = touch.clientY;
         lastY.current = touch.clientY;
-        startTime.current = Date.now();
         lastTime.current = Date.now();
         velocity.current = 0;
 
-        setDragState({
-            isDragging: true,
-            dragOffset: 0
-        });
-    }, []);
+        // Mark as dragging and disable transitions
+        setIsDragging(true);
+        if (panelRef.current) {
+            panelRef.current.style.transition = 'none';
+        }
+    }, [panelRef]);
 
     const onTouchMove = useCallback((e: React.TouchEvent) => {
+        const panel = panelRef.current;
+        if (!panel) return;
+
         const touch = e.touches[0];
         const currentTime = Date.now();
         const deltaTime = currentTime - lastTime.current;
@@ -93,71 +89,81 @@ export function useDragGesture({
         // Calculate drag offset from start
         const totalOffset = touch.clientY - startY.current;
 
-        // Get current snap point height in pixels
+        // Calculate new height
         const vh = window.innerHeight / 100;
-        const currentHeight = snapPoints[currentSnapIndex] * vh;
-        const minHeight = snapPoints[0] * vh;
-        const maxHeight = snapPoints[snapPoints.length - 1] * vh;
+        const baseHeight = getBaseHeightPx();
+        const minHeight = 80;
+        const maxHeight = vh * 100 - 60;
 
-        // Calculate the new height if we were to apply the offset
-        // Positive offset (drag down) = smaller panel
-        // Negative offset (drag up) = taller panel
-        const newHeight = currentHeight - totalOffset;
+        // Dragging down (positive offset) = shorter panel
+        // Dragging up (negative offset) = taller panel
+        let newHeight = baseHeight - totalOffset;
 
         // Apply rubber banding at boundaries
-        const clampedHeight = rubberBand(newHeight, maxHeight - minHeight);
-        const adjustedOffset = currentHeight - clampedHeight - minHeight;
+        if (newHeight < minHeight) {
+            const excess = minHeight - newHeight;
+            newHeight = minHeight - Math.sqrt(excess) * 5;
+        } else if (newHeight > maxHeight) {
+            const excess = newHeight - maxHeight;
+            newHeight = maxHeight + Math.sqrt(excess) * 5;
+        }
 
-        setDragState({
-            isDragging: true,
-            dragOffset: totalOffset
-        });
-    }, [snapPoints, currentSnapIndex, rubberBand]);
+        // Direct DOM update for instant feedback
+        panel.style.height = `${Math.max(60, newHeight)}px`;
+    }, [panelRef, getBaseHeightPx]);
 
     const onTouchEnd = useCallback(() => {
+        const panel = panelRef.current;
         const totalOffset = lastY.current - startY.current;
         const finalVelocity = velocity.current;
 
         // Determine target snap point based on velocity and distance
-        let targetIndex = currentSnapIndex;
+        let targetIndex = currentIndexRef.current;
 
         // Fast swipe - use velocity to determine direction
         if (Math.abs(finalVelocity) > velocityThreshold) {
-            if (finalVelocity > 0 && currentSnapIndex > 0) {
+            if (finalVelocity > 0 && currentIndexRef.current > 0) {
                 // Swiping down (positive velocity) - go to smaller snap point
-                targetIndex = currentSnapIndex - 1;
-            } else if (finalVelocity < 0 && currentSnapIndex < snapPoints.length - 1) {
+                targetIndex = currentIndexRef.current - 1;
+            } else if (finalVelocity < 0 && currentIndexRef.current < snapPoints.length - 1) {
                 // Swiping up (negative velocity) - go to larger snap point
-                targetIndex = currentSnapIndex + 1;
+                targetIndex = currentIndexRef.current + 1;
             }
         }
         // Slow drag - use distance threshold
         else if (Math.abs(totalOffset) > distanceThreshold) {
-            if (totalOffset > 0 && currentSnapIndex > 0) {
+            if (totalOffset > 0 && currentIndexRef.current > 0) {
                 // Dragged down - go to smaller snap point
-                targetIndex = currentSnapIndex - 1;
-            } else if (totalOffset < 0 && currentSnapIndex < snapPoints.length - 1) {
+                targetIndex = currentIndexRef.current - 1;
+            } else if (totalOffset < 0 && currentIndexRef.current < snapPoints.length - 1) {
                 // Dragged up - go to larger snap point
-                targetIndex = currentSnapIndex + 1;
+                targetIndex = currentIndexRef.current + 1;
             }
         }
 
-        // Reset drag state
-        setDragState({
-            isDragging: false,
-            dragOffset: 0
-        });
+        // Re-enable transitions for snap animation
+        if (panel) {
+            panel.style.transition = 'height 0.4s cubic-bezier(0.32, 0.72, 0, 1)';
 
-        // Trigger snap change if needed
-        if (targetIndex !== currentSnapIndex) {
-            onSnapChange(targetIndex);
+            // Animate to target snap point
+            const vh = window.innerHeight / 100;
+            const targetHeight = snapPoints[targetIndex] * vh;
+            panel.style.height = `${targetHeight}px`;
+        }
+
+        setIsDragging(false);
+
+        // Trigger snap change if needed (after a small delay to let animation start)
+        if (targetIndex !== currentIndexRef.current) {
+            // Use setTimeout to avoid state update during animation setup
+            setTimeout(() => onSnapChange(targetIndex), 10);
         }
 
         // Reset refs
         startY.current = 0;
         lastY.current = 0;
         velocity.current = 0;
-    }, [currentSnapIndex, snapPoints.length, velocityThreshold, distanceThreshold, onSnapChange]);
+    }, [snapPoints, velocityThreshold, distanceThreshold, onSnapChange, panelRef]);
 
-    return [dragState, { onTouchStart, onTouchMove, onTouchEnd }];
+    return [{ isDragging }, { onTouchStart, onTouchMove, onTouchEnd }];
 }

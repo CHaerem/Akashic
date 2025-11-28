@@ -1,4 +1,4 @@
-import { memo, useCallback, useState, useMemo } from 'react';
+import { memo, useCallback, useState, useMemo, useRef } from 'react';
 import type { TrekData, Camp, ExtendedStats, ElevationProfile, TabType, Photo } from '../../types/trek';
 import { useDragGesture } from '../../hooks/useDragGesture';
 import { TabButton } from '../common/TabButton';
@@ -51,6 +51,7 @@ export const InfoPanel = memo(function InfoPanel({
     const padding = isMobile ? 16 : 24;
     const [showEditModal, setShowEditModal] = useState(false);
     const [editMode, setEditMode] = useState(false);
+    const panelRef = useRef<HTMLDivElement>(null);
 
     // Convert panel state to snap index
     const currentSnapIndex = useMemo(() =>
@@ -63,57 +64,37 @@ export const InfoPanel = memo(function InfoPanel({
         onPanelStateChange(PANEL_STATES[index]);
     }, [onPanelStateChange]);
 
-    // iOS-like drag gesture with velocity detection
+    // iOS-like drag gesture with direct DOM manipulation for instant feedback
     const [dragState, dragHandlers] = useDragGesture({
         snapPoints: SNAP_POINTS_VH,
         currentSnapIndex,
         onSnapChange: handleSnapChange,
-        velocityThreshold: 0.4,  // Slightly lower for more responsive feel
-        distanceThreshold: 40,   // 40px threshold for slow drags
+        panelRef,
+        velocityThreshold: 0.4,
+        distanceThreshold: 40,
     });
 
-    // Panel height based on state - using dvh for better mobile support
-    // During drag, compute actual pixel height for reliable real-time updates
-    const getPanelHeight = (): string | number => {
+    // Panel height based on state (only used for initial render and non-drag state)
+    const getPanelHeight = (): string => {
         const baseHeights: Record<PanelState, string> = {
             minimized: '100px',
             normal: '42dvh',
             expanded: '88dvh'
         };
-
-        if (!dragState.isDragging) {
-            return baseHeights[panelState];
-        }
-
-        // During drag: compute pixel height for reliable updates
-        // Using window.innerHeight for dvh equivalent
-        const vh = typeof window !== 'undefined' ? window.innerHeight / 100 : 8;
-        const baseHeightPx: Record<PanelState, number> = {
-            minimized: 100,
-            normal: 42 * vh,
-            expanded: 88 * vh
-        };
-
-        // Dragging down (positive offset) = shorter panel
-        // Dragging up (negative offset) = taller panel
-        const newHeight = baseHeightPx[panelState] - dragState.dragOffset;
-
-        // Clamp to reasonable bounds
-        const minH = 80;
-        const maxH = vh * 100 - 60; // 100dvh - 60px
-        return Math.max(minH, Math.min(maxH, newHeight));
+        return baseHeights[panelState];
     };
 
     const maxHeight = 'calc(100dvh - 60px)';
 
     // Mobile bottom sheet style - Liquid Glass design
+    // Note: height and transition are manipulated directly via panelRef during drag
     const mobileStyle: React.CSSProperties = {
         position: 'absolute',
         left: 0,
         right: 0,
         bottom: 0,
         height: getPanelHeight(),
-        maxHeight: dragState.isDragging ? undefined : maxHeight, // Remove max during drag (already clamped)
+        maxHeight,
         // Liquid Glass gradient background
         background: `linear-gradient(
             180deg,
@@ -130,10 +111,8 @@ export const InfoPanel = memo(function InfoPanel({
         display: 'flex',
         flexDirection: 'column',
         zIndex: 20,
-        // iOS-like spring animation on release
-        transition: dragState.isDragging
-            ? 'none'  // No transition during drag for instant follow
-            : `height 0.4s cubic-bezier(0.32, 0.72, 0, 1)`,
+        // Default transition (overridden by direct DOM manipulation during drag)
+        transition: `height 0.4s cubic-bezier(0.32, 0.72, 0, 1)`,
         paddingBottom: 'env(safe-area-inset-bottom)',
         boxShadow: `
             0 -16px 48px rgba(0, 0, 0, 0.4),
@@ -178,7 +157,7 @@ export const InfoPanel = memo(function InfoPanel({
     }, [panelState, onPanelStateChange]);
 
     return (
-        <div style={isMobile ? mobileStyle : desktopStyle} className="glass-scrollbar">
+        <div ref={isMobile ? panelRef : null} style={isMobile ? mobileStyle : desktopStyle} className="glass-scrollbar">
             {/* Mobile drag handle with iOS-like gesture support */}
             {isMobile && (
                 <div
