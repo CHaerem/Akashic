@@ -59,6 +59,8 @@ export interface TrekData {
     segments?: RouteSegment[];
     /** Notable route highlights/sections */
     routeHighlights?: RouteHighlight[];
+    /** Historical/cultural sites for historically significant journeys */
+    historicalSites?: HistoricalSite[];
 }
 
 export interface TrekConfig {
@@ -77,8 +79,18 @@ export interface TrekConfig {
 export interface ExtendedStats {
     avgDailyDistance: string;
     maxDailyGain: number;
+    maxDailyLoss: number;
+    totalElevationGain: number;
+    totalElevationLoss: number;
     difficulty: string;
     startElevation: number;
+    endElevation: number;
+    avgAltitude: number;
+    longestDayDistance: number;
+    longestDayNumber: number;
+    estimatedTotalTime: string;
+    steepestDayGradient: number;
+    steepestDayNumber: number;
 }
 
 export interface ElevationPoint {
@@ -190,6 +202,33 @@ export interface RouteHighlight {
     endDistanceKm: number;
     description?: string;
     color?: string;  // Custom color for visualization
+}
+
+/**
+ * Historical or cultural site along the journey
+ * For journeys with historical significance (e.g., Inca Trail)
+ */
+export interface HistoricalSite {
+    id: string;
+    name: string;
+    coordinates: [number, number];  // [lng, lat]
+    elevation?: number;
+    /** Distance from journey start along route (km) */
+    routeDistanceKm?: number;
+    /** Brief summary shown in list */
+    summary: string;
+    /** Detailed description for expanded view */
+    description?: string;
+    /** Historical period or date range */
+    period?: string;
+    /** Significance or importance */
+    significance?: 'major' | 'minor' | 'notable';
+    /** Related images */
+    imageUrls?: string[];
+    /** External links for more info */
+    links?: { label: string; url: string }[];
+    /** Tags for categorization */
+    tags?: string[];
 }
 
 export type ViewMode = 'globe' | 'trek';

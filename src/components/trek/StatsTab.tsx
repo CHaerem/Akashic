@@ -1,7 +1,15 @@
 import { memo, useState, useCallback, useRef } from 'react';
-import type { TrekData, Camp, ExtendedStats, ElevationProfile, CampMarker } from '../../types/trek';
+import type { TrekData, Camp, ExtendedStats, ElevationProfile, CampMarker, HistoricalSite } from '../../types/trek';
 import { StatCard } from '../common/StatCard';
 import { colors, radius } from '../../styles/liquidGlass';
+
+// Difficulty color mapping
+const DIFFICULTY_COLORS: Record<string, string> = {
+    'Easy': '#22c55e',
+    'Moderate': '#eab308',
+    'Hard': '#f97316',
+    'Extreme': '#ef4444'
+};
 
 interface ElevationProfileProps {
     elevationProfile: ElevationProfile;
@@ -351,6 +359,156 @@ const InteractiveElevationProfile = memo(function InteractiveElevationProfile({
     );
 });
 
+// Historical Site Card Component
+interface HistoricalSiteCardProps {
+    site: HistoricalSite;
+    isExpanded: boolean;
+    onToggle: () => void;
+}
+
+const HistoricalSiteCard = memo(function HistoricalSiteCard({
+    site,
+    isExpanded,
+    onToggle
+}: HistoricalSiteCardProps) {
+    const significanceColors = {
+        major: '#f59e0b',
+        notable: '#3b82f6',
+        minor: colors.text.subtle
+    };
+
+    return (
+        <div
+            style={{
+                border: `1px solid ${colors.glass.borderSubtle}`,
+                borderRadius: radius.md,
+                marginBottom: 12,
+                overflow: 'hidden',
+                background: colors.glass.subtle,
+            }}
+        >
+            <button
+                onClick={onToggle}
+                style={{
+                    width: '100%',
+                    padding: '14px 16px',
+                    display: 'flex',
+                    alignItems: 'flex-start',
+                    gap: 12,
+                    background: 'transparent',
+                    border: 'none',
+                    cursor: 'pointer',
+                    textAlign: 'left',
+                }}
+            >
+                <div
+                    style={{
+                        width: 8,
+                        height: 8,
+                        borderRadius: '50%',
+                        background: significanceColors[site.significance || 'minor'],
+                        marginTop: 6,
+                        flexShrink: 0,
+                    }}
+                />
+                <div style={{ flex: 1 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span style={{ color: colors.text.primary, fontSize: 14, fontWeight: 500 }}>
+                            {site.name}
+                        </span>
+                        {site.routeDistanceKm != null && (
+                            <span style={{ color: colors.text.subtle, fontSize: 11 }}>
+                                {site.routeDistanceKm.toFixed(1)} km
+                            </span>
+                        )}
+                    </div>
+                    <p style={{ color: colors.text.secondary, fontSize: 12, marginTop: 4, lineHeight: 1.4 }}>
+                        {site.summary}
+                    </p>
+                    {site.period && (
+                        <span style={{
+                            display: 'inline-block',
+                            marginTop: 6,
+                            padding: '2px 8px',
+                            background: 'rgba(255, 255, 255, 0.05)',
+                            borderRadius: 4,
+                            fontSize: 10,
+                            color: colors.text.subtle,
+                        }}>
+                            {site.period}
+                        </span>
+                    )}
+                </div>
+                <span style={{
+                    color: colors.text.subtle,
+                    fontSize: 14,
+                    transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
+                    transition: 'transform 0.2s',
+                }}>
+                    ▼
+                </span>
+            </button>
+
+            {isExpanded && site.description && (
+                <div style={{
+                    padding: '0 16px 16px 36px',
+                    borderTop: `1px solid ${colors.glass.borderSubtle}`,
+                }}>
+                    <p style={{
+                        color: colors.text.secondary,
+                        fontSize: 13,
+                        lineHeight: 1.6,
+                        marginTop: 12,
+                    }}>
+                        {site.description}
+                    </p>
+                    {site.tags && site.tags.length > 0 && (
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 12 }}>
+                            {site.tags.map(tag => (
+                                <span
+                                    key={tag}
+                                    style={{
+                                        padding: '3px 8px',
+                                        background: 'rgba(59, 130, 246, 0.15)',
+                                        borderRadius: 4,
+                                        fontSize: 10,
+                                        color: '#60a5fa',
+                                    }}
+                                >
+                                    {tag}
+                                </span>
+                            ))}
+                        </div>
+                    )}
+                    {site.links && site.links.length > 0 && (
+                        <div style={{ marginTop: 12 }}>
+                            {site.links.map(link => (
+                                <a
+                                    key={link.url}
+                                    href={link.url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    style={{
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: 4,
+                                        color: '#60a5fa',
+                                        fontSize: 12,
+                                        textDecoration: 'none',
+                                        marginRight: 16,
+                                    }}
+                                >
+                                    {link.label} →
+                                </a>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            )}
+        </div>
+    );
+});
+
 interface StatsTabProps {
     trekData: TrekData;
     extendedStats: ExtendedStats | null;
@@ -368,6 +526,12 @@ export const StatsTab = memo(function StatsTab({
     selectedCamp = null,
     onCampSelect = () => {}
 }: StatsTabProps) {
+    const [showAllStats, setShowAllStats] = useState(false);
+    const [expandedSiteId, setExpandedSiteId] = useState<string | null>(null);
+
+    const historicalSites = trekData.historicalSites || [];
+    const hasHistoricalSites = historicalSites.length > 0;
+
     return (
         <div>
             {/* Summit card with glass styling */}
@@ -403,11 +567,140 @@ export const StatsTab = memo(function StatsTab({
             </div>
 
             {extendedStats && (
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                    <StatCard label="Avg Daily Dist" value={`${extendedStats.avgDailyDistance} km`} />
-                    <StatCard label="Max Daily Gain" value={`+${extendedStats.maxDailyGain}m`} color={colors.accent.secondary} />
-                    <StatCard label="Start Elevation" value={`${extendedStats.startElevation}m`} />
-                    <StatCard label="Difficulty" value={extendedStats.difficulty} color={colors.accent.warning} />
+                <>
+                    {/* Primary Stats Grid */}
+                    <div style={{ marginBottom: 16 }}>
+                        <p style={{ color: colors.text.subtle, fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 12 }}>
+                            Journey Stats
+                        </p>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                            <StatCard label="Total Distance" value={`${trekData.stats.totalDistance} km`} />
+                            <StatCard label="Duration" value={`${trekData.stats.duration} days`} />
+                            <StatCard label="Est. Hiking Time" value={extendedStats.estimatedTotalTime} color="#8b5cf6" />
+                            <StatCard
+                                label="Difficulty"
+                                value={extendedStats.difficulty}
+                                color={DIFFICULTY_COLORS[extendedStats.difficulty] || colors.accent.warning}
+                            />
+                        </div>
+                    </div>
+
+                    {/* Elevation Stats */}
+                    <div style={{ marginBottom: 16 }}>
+                        <p style={{ color: colors.text.subtle, fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 12 }}>
+                            Elevation
+                        </p>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                            <StatCard label="Total Ascent" value={`+${extendedStats.totalElevationGain}m`} color="#22c55e" />
+                            <StatCard label="Total Descent" value={`-${extendedStats.totalElevationLoss}m`} color="#ef4444" />
+                            <StatCard label="Start Elev." value={`${extendedStats.startElevation}m`} />
+                            <StatCard label="End Elev." value={`${extendedStats.endElevation}m`} />
+                        </div>
+                    </div>
+
+                    {/* Expandable detailed stats */}
+                    <button
+                        onClick={() => setShowAllStats(!showAllStats)}
+                        style={{
+                            width: '100%',
+                            padding: '12px 16px',
+                            background: colors.glass.subtle,
+                            border: `1px solid ${colors.glass.borderSubtle}`,
+                            borderRadius: radius.md,
+                            cursor: 'pointer',
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                            marginBottom: 16,
+                        }}
+                    >
+                        <span style={{ color: colors.text.secondary, fontSize: 13 }}>
+                            {showAllStats ? 'Hide' : 'Show'} Detailed Stats
+                        </span>
+                        <span style={{
+                            color: colors.text.subtle,
+                            fontSize: 12,
+                            transform: showAllStats ? 'rotate(180deg)' : 'rotate(0deg)',
+                            transition: 'transform 0.2s',
+                        }}>
+                            ▼
+                        </span>
+                    </button>
+
+                    {showAllStats && (
+                        <div style={{ marginBottom: 24 }}>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                                <StatCard label="Avg Daily Dist" value={`${extendedStats.avgDailyDistance} km`} />
+                                <StatCard label="Avg Altitude" value={`${extendedStats.avgAltitude}m`} />
+                                <StatCard label="Max Daily Gain" value={`+${extendedStats.maxDailyGain}m`} color="#22c55e" />
+                                <StatCard label="Max Daily Loss" value={`-${extendedStats.maxDailyLoss}m`} color="#ef4444" />
+                                <StatCard
+                                    label="Longest Day"
+                                    value={`${extendedStats.longestDayDistance} km`}
+                                    sublabel={`Day ${extendedStats.longestDayNumber}`}
+                                />
+                                <StatCard
+                                    label="Steepest Day"
+                                    value={`${extendedStats.steepestDayGradient}m/km`}
+                                    sublabel={`Day ${extendedStats.steepestDayNumber}`}
+                                    color="#f97316"
+                                />
+                            </div>
+                        </div>
+                    )}
+                </>
+            )}
+
+            {/* Historical Sites Section */}
+            {hasHistoricalSites && (
+                <div style={{ marginTop: 24 }}>
+                    <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 8,
+                        marginBottom: 16,
+                    }}>
+                        <span style={{
+                            color: '#f59e0b',
+                            fontSize: 16,
+                        }}>
+                            ★
+                        </span>
+                        <p style={{ color: colors.text.subtle, fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase' }}>
+                            Historical Sites
+                        </p>
+                        <span style={{
+                            marginLeft: 'auto',
+                            padding: '2px 8px',
+                            background: 'rgba(245, 158, 11, 0.15)',
+                            borderRadius: 10,
+                            fontSize: 11,
+                            color: '#f59e0b',
+                        }}>
+                            {historicalSites.length} sites
+                        </span>
+                    </div>
+                    <p style={{
+                        color: colors.text.secondary,
+                        fontSize: 12,
+                        lineHeight: 1.5,
+                        marginBottom: 16,
+                    }}>
+                        This journey passes through sites of historical and cultural significance.
+                        Tap to learn more about each location.
+                    </p>
+                    {historicalSites
+                        .sort((a, b) => (a.routeDistanceKm || 0) - (b.routeDistanceKm || 0))
+                        .map(site => (
+                            <HistoricalSiteCard
+                                key={site.id}
+                                site={site}
+                                isExpanded={expandedSiteId === site.id}
+                                onToggle={() => setExpandedSiteId(
+                                    expandedSiteId === site.id ? null : site.id
+                                )}
+                            />
+                        ))}
                 </div>
             )}
         </div>
