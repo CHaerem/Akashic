@@ -366,24 +366,27 @@ export function useMapbox({ containerRef, onTrekSelect }: UseMapboxOptions): Use
         const trekConfig = treksRef.current.find(t => t.id === selectedTrek.id);
         if (!trekData || !trekConfig) return;
 
-        // Set day mode atmosphere
-        map.setFog({
-            'range': [0.5, 10],
-            'color': 'rgb(186, 210, 235)',
-            'high-color': 'rgb(36, 92, 223)',
-            'horizon-blend': 0.02,
-            'space-color': 'rgb(11, 11, 25)',
-            'star-intensity': 0.0
-        });
-        map.setTerrain({ source: 'mapbox-dem', exaggeration: 1.2 });
+        // Defer non-critical updates to avoid blocking the UI during transition
+        // This allows the camera animation to start immediately
+        requestAnimationFrame(() => {
+            // Set day mode atmosphere (terrain already enabled on init)
+            map.setFog({
+                'range': [0.5, 10],
+                'color': 'rgb(186, 210, 235)',
+                'high-color': 'rgb(36, 92, 223)',
+                'horizon-blend': 0.02,
+                'space-color': 'rgb(11, 11, 25)',
+                'star-intensity': 0.0
+            });
 
-        // Show selected route, hide others
-        Object.keys(trekDataMapRef.current).forEach(id => {
-            if (map.getLayer(`route-${id}`)) {
-                const visibility = id === selectedTrek.id ? 'visible' : 'none';
-                map.setLayoutProperty(`route-${id}`, 'visibility', visibility);
-                map.setLayoutProperty(`route-glow-${id}`, 'visibility', visibility);
-            }
+            // Show selected route, hide others
+            Object.keys(trekDataMapRef.current).forEach(id => {
+                if (map.getLayer(`route-${id}`)) {
+                    const visibility = id === selectedTrek.id ? 'visible' : 'none';
+                    map.setLayoutProperty(`route-${id}`, 'visibility', visibility);
+                    map.setLayoutProperty(`route-glow-${id}`, 'visibility', visibility);
+                }
+            });
         });
 
         if (selectedCamp) {

@@ -87,8 +87,10 @@ export const InfoPanel = memo(function InfoPanel({
             rgba(255, 255, 255, 0.06) 10%,
             rgba(12, 12, 18, 0.95) 40%
         )`,
-        backdropFilter: 'blur(32px) saturate(180%)',
-        WebkitBackdropFilter: 'blur(32px) saturate(180%)',
+        // Reduced blur for mobile performance (16px vs 32px on desktop)
+        backdropFilter: 'blur(16px) saturate(150%)',
+        WebkitBackdropFilter: 'blur(16px) saturate(150%)',
+        willChange: 'transform, height',
         borderTop: `1px solid ${colors.glass.border}`,
         borderRadius: `${radius.xxl}px ${radius.xxl}px 0 0`,
         display: 'flex',
