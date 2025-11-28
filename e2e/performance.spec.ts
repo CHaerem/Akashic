@@ -68,6 +68,26 @@ async function selectFirstTrek(page: Page): Promise<boolean> {
     });
 }
 
+// Helper to select Kenya trek specifically (the one with photos)
+async function selectKenyaTrek(page: Page): Promise<boolean> {
+    return await page.evaluate(() => {
+        const treks = window.testHelpers?.getTreks() || [];
+        // Find Kenya trek by name or id
+        const kenya = treks.find((t: { id: string; name: string }) =>
+            t.name.toLowerCase().includes('kenya') ||
+            t.id.toLowerCase().includes('kenya')
+        );
+        if (kenya) {
+            return window.testHelpers?.selectTrek(kenya.id) || false;
+        }
+        // Fallback to first trek if Kenya not found
+        if (treks.length > 0) {
+            return window.testHelpers?.selectTrek(treks[0].id) || false;
+        }
+        return false;
+    });
+}
+
 test.describe('Performance Tests', () => {
     test.describe('Desktop Performance', () => {
         test.beforeEach(async ({ page }) => {
@@ -149,6 +169,53 @@ test.describe('Performance Tests', () => {
 
             const transitionTime = Date.now() - startTime;
             console.log(`Trek transition time: ${transitionTime}ms`);
+            expect(transitionTime).toBeLessThan(THRESHOLDS.transitionTime);
+        });
+
+        test('Kenya journey with photos transitions smoothly', async ({ page }) => {
+            await page.waitForSelector('canvas', { timeout: 30000 });
+            await waitForMapReady(page);
+
+            // Select Kenya specifically (has photos - main lag source)
+            const selected = await selectKenyaTrek(page);
+            if (!selected) {
+                test.skip();
+                return;
+            }
+
+            // Wait for selection panel
+            await page.waitForTimeout(500);
+
+            // Click explore
+            const exploreButton = page.getByText('Explore Journey →');
+            if (!(await exploreButton.isVisible().catch(() => false))) {
+                test.skip();
+                return;
+            }
+
+            // Clear long tasks before transition
+            await page.evaluate(() => { (window as any).__longTasks = []; });
+
+            const startTime = Date.now();
+            await exploreButton.click();
+
+            // Wait for info panel
+            await expect(page.getByRole('button', { name: /overview/i })).toBeVisible({
+                timeout: THRESHOLDS.transitionTime,
+            });
+
+            const transitionTime = Date.now() - startTime;
+
+            // Wait for photos to load and markers to render
+            await page.waitForTimeout(1000);
+
+            // Get long tasks during transition
+            const longTasks = await page.evaluate(() => (window as any).__longTasks || []);
+            const excessiveTasks = longTasks.filter((t: { duration: number }) => t.duration > 100);
+
+            console.log(`Kenya transition time: ${transitionTime}ms`);
+            console.log(`Long tasks: ${longTasks.length}, Excessive (>100ms): ${excessiveTasks.length}`);
+
             expect(transitionTime).toBeLessThan(THRESHOLDS.transitionTime);
         });
 
