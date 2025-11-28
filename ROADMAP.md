@@ -244,9 +244,12 @@ Make the route line itself interactive.
 
 Meditative "walk through" experience.
 
+**Status**: Implementation stashed (`git stash list` to see). Revisit when more photos are added to journeys.
+
 - [ ] Play button starts automatic camp-to-camp progression
 - [ ] Camera moves smoothly between waypoints
-- [ ] Photos fade in as you "arrive" at each day
+- [ ] Day/night cycle simulation (dawn → midday → sunset per day segment)
+- [ ] Photos fade in as you "arrive" at each day (5 second pause with gallery)
 - [ ] Pause/resume, manual control with arrow keys
 - [ ] Optional ambient mode (minimal UI)
 
