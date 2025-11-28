@@ -37,6 +37,7 @@ interface MapboxGlobeProps {
     onPhotoClick?: (photo: Photo, index: number) => void;
     flyToPhotoRef?: React.MutableRefObject<((photo: Photo) => void) | null>;
     onCampSelect?: (camp: Camp) => void;
+    getMediaUrl?: (path: string) => string;
 }
 
 // Generate realistic starfield - seeded positions for consistency
@@ -126,7 +127,7 @@ const starfieldStyle: React.CSSProperties = {
     zIndex: 0
 };
 
-export function MapboxGlobe({ selectedTrek, selectedCamp, onSelectTrek, view, photos = [], onPhotoClick, flyToPhotoRef, onCampSelect }: MapboxGlobeProps) {
+export function MapboxGlobe({ selectedTrek, selectedCamp, onSelectTrek, view, photos = [], onPhotoClick, flyToPhotoRef, onCampSelect, getMediaUrl }: MapboxGlobeProps) {
     const containerRef = useRef<HTMLDivElement>(null);
     const { treks, trekDataMap, loading: journeysLoading } = useJourneys();
     const [routeInfo, setRouteInfo] = useState<RouteClickInfo | null>(null);
@@ -156,7 +157,8 @@ export function MapboxGlobe({ selectedTrek, selectedCamp, onSelectTrek, view, ph
         containerRef,
         onTrekSelect: onSelectTrek,
         onPhotoClick: handlePhotoClick,
-        onRouteClick: handleRouteClick
+        onRouteClick: handleRouteClick,
+        getMediaUrl
     });
 
     // Expose test helpers for E2E testing
@@ -220,24 +222,10 @@ export function MapboxGlobe({ selectedTrek, selectedCamp, onSelectTrek, view, ph
     }, [view, selectedTrek, selectedCamp, mapReady, flyToGlobe, flyToTrek, startRotation, stopRotation]);
 
     // Update photo markers when photos or selected camp changes
-    // Defer marker creation to not block camera animation
+    // Native Mapbox layers are GPU-accelerated - no delays needed
     useEffect(() => {
         if (!mapReady || view !== 'trek') return;
-
-        // If no photos, update immediately (clearing markers)
-        if (photos.length === 0) {
-            updatePhotoMarkers(photos, selectedCamp?.id || null);
-            return;
-        }
-
-        // Defer photo marker creation to let Mapbox camera animation start first
-        // This prevents stutter when transitioning to trek view with many photos
-        // Use 500ms delay to ensure animation is well underway before creating markers
-        const timerId = setTimeout(() => {
-            updatePhotoMarkers(photos, selectedCamp?.id || null);
-        }, 500);
-
-        return () => clearTimeout(timerId);
+        updatePhotoMarkers(photos, selectedCamp?.id || null);
     }, [mapReady, view, photos, selectedCamp, updatePhotoMarkers]);
 
     // Hide photo markers when leaving trek view

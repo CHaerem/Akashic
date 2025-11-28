@@ -6,7 +6,6 @@ import { useState, useRef, useEffect, useCallback, type RefObject, type MutableR
 import mapboxgl from 'mapbox-gl';
 import { useJourneys } from '../contexts/JourneysContext';
 import { calculateBearing, findCoordIndex, getDistanceFromLatLonInKm } from '../utils/geography';
-import { buildMediaUrl, getAccessToken } from '../lib/media';
 import type { TrekConfig, TrekData, Camp, Photo } from '../types/trek';
 
 // Route click information
@@ -23,6 +22,7 @@ interface UseMapboxOptions {
     onTrekSelect: (trek: TrekConfig) => void;
     onPhotoClick?: (photo: Photo) => void;
     onRouteClick?: (info: RouteClickInfo) => void;
+    getMediaUrl?: (path: string) => string;
 }
 
 // Playback state for journey animation
@@ -53,14 +53,13 @@ interface UseMapboxReturn {
 /**
  * Initialize Mapbox map with globe projection and terrain
  */
-export function useMapbox({ containerRef, onTrekSelect, onPhotoClick, onRouteClick }: UseMapboxOptions): UseMapboxReturn {
+export function useMapbox({ containerRef, onTrekSelect, onPhotoClick, onRouteClick, getMediaUrl }: UseMapboxOptions): UseMapboxReturn {
     const { treks, trekDataMap } = useJourneys();
     const mapRef = useRef<mapboxgl.Map | null>(null);
     const rotationAnimationRef = useRef<number | null>(null);
     const interactionListenerRef = useRef<(() => void) | null>(null);
     const photosRef = useRef<Photo[]>([]);
     const photoMarkersRef = useRef<Map<string, mapboxgl.Marker>>(new Map());
-    const authTokenRef = useRef<string | null>(null);
     const selectedTrekRef = useRef<string | null>(null);
     const playbackAnimationRef = useRef<number | null>(null);
     const playbackCallbackRef = useRef<((camp: Camp) => void) | null>(null);
@@ -91,13 +90,6 @@ export function useMapbox({ containerRef, onTrekSelect, onPhotoClick, onRouteCli
     useEffect(() => {
         onRouteClickRef.current = onRouteClick;
     }, [onRouteClick]);
-
-    // Fetch auth token for media URLs
-    useEffect(() => {
-        getAccessToken().then(token => {
-            authTokenRef.current = token;
-        });
-    }, []);
 
     useEffect(() => {
         treksRef.current = treks;
@@ -698,10 +690,16 @@ export function useMapbox({ containerRef, onTrekSelect, onPhotoClick, onRouteCli
         const trekConfig = treksRef.current.find(t => t.id === selectedTrek.id);
         if (!trekData || !trekConfig) return;
 
-        // Defer non-critical updates until after animation has started
-        // Use setTimeout to ensure we don't compete with animation frames
-        setTimeout(() => {
-            // Set day mode atmosphere (terrain already enabled on init)
+        // Defer fog/route updates until animation is nearly complete
+        // Animation is 2000-2500ms, delay updates until 1800ms to avoid jank
+        const isMobileForTerrain = window.matchMedia('(max-width: 768px)').matches;
+        const scheduleMapUpdates = () => {
+            // Re-enable terrain after animation (was disabled on mobile for smooth animation)
+            if (isMobileForTerrain) {
+                map.setTerrain({ source: 'mapbox-dem', exaggeration: 1.0 });
+            }
+
+            // Set day mode atmosphere
             map.setFog({
                 'range': [0.5, 10],
                 'color': 'rgb(186, 210, 235)',
@@ -719,12 +717,34 @@ export function useMapbox({ containerRef, onTrekSelect, onPhotoClick, onRouteCli
                     map.setLayoutProperty(`route-glow-${id}`, 'visibility', visibility);
                 }
             });
-        }, 100);
+        };
 
-        if (selectedCamp) {
-            // Calculate camera settings
-            let bearing = trekConfig.preferredBearing;
-            const pitch = selectedCamp.pitch || 55;
+        // Use requestIdleCallback if available for lowest priority, fallback to setTimeout
+        if ('requestIdleCallback' in window) {
+            // Wait 1800ms then schedule during idle time
+            setTimeout(() => {
+                (window as typeof window & { requestIdleCallback: (cb: () => void) => void }).requestIdleCallback(scheduleMapUpdates);
+            }, 1800);
+        } else {
+            setTimeout(scheduleMapUpdates, 1800);
+        }
+
+        // Temporarily disable terrain during camera animation for smooth performance
+        // Terrain rendering is expensive during camera movement; re-enable after animation
+        if (isMobileForTerrain) {
+            map.setTerrain(null);
+        }
+
+        // Defer camera animation to next frame to let React settle
+        // This prevents jank from overlapping React commits with Mapbox animation
+        requestAnimationFrame(() => {
+            // Verify map still exists (component might have unmounted)
+            if (!mapRef.current) return;
+
+            if (selectedCamp) {
+                // Calculate camera settings
+                let bearing = trekConfig.preferredBearing;
+                const pitch = selectedCamp.pitch || 55;
 
             if (selectedCamp.bearing !== undefined) {
                 bearing = selectedCamp.bearing;
@@ -805,6 +825,7 @@ export function useMapbox({ containerRef, onTrekSelect, onPhotoClick, onRouteCli
                 map.setLayoutProperty('active-segment-glow', 'visibility', 'none');
             }
         }
+        }); // Close requestAnimationFrame
     }, [mapReady, highlightSegment]);
 
     // Stop rotation - defined first so startRotation can reference it
@@ -897,133 +918,240 @@ export function useMapbox({ containerRef, onTrekSelect, onPhotoClick, onRouteCli
         };
     }, [stopRotation]);
 
-    // Update photo markers on the map - uses HTML thumbnail markers
+    // Track current selected camp for thumbnail updates
+    const selectedCampIdRef = useRef<string | null>(null);
+    // Track current photo groups by representative photo ID to avoid recreating markers
+    const photoGroupsRef = useRef<Map<string, { photos: Photo[]; marker: mapboxgl.Marker }>>(new Map());
+    // Debounce timer for marker updates during animation
+    const markerUpdateTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    // Track last zoom level used for grouping (round to avoid regrouping on minor zoom changes)
+    const lastGroupingZoomRef = useRef<number | null>(null);
+
+    // Group photos by spatial grid cell based on zoom level
+    // Returns groups with a representative photo (most recent) and count
+    const groupPhotosByLocation = useCallback((photos: Photo[], zoom: number) => {
+        // Grid cell size in degrees - smaller at higher zoom
+        // At zoom 10: ~0.05 degrees (~5km), at zoom 15: ~0.002 degrees (~200m)
+        const cellSize = 0.1 / Math.pow(2, zoom - 8);
+
+        const groups = new Map<string, Photo[]>();
+
+        for (const photo of photos) {
+            if (!photo.coordinates || photo.coordinates.length !== 2) continue;
+            const [lng, lat] = photo.coordinates;
+
+            // Calculate grid cell key
+            const cellX = Math.floor(lng / cellSize);
+            const cellY = Math.floor(lat / cellSize);
+            const key = `${cellX},${cellY}`;
+
+            if (!groups.has(key)) {
+                groups.set(key, []);
+            }
+            groups.get(key)!.push(photo);
+        }
+
+        // Convert to array of group objects, sorted by photo count (largest first)
+        return Array.from(groups.entries()).map(([key, groupPhotos]) => ({
+            key,
+            photos: groupPhotos,
+            // Use first photo as representative (could sort by date if available)
+            representative: groupPhotos[0],
+            count: groupPhotos.length,
+            // Center of the group
+            center: [
+                groupPhotos.reduce((sum, p) => sum + (p.coordinates as [number, number])[0], 0) / groupPhotos.length,
+                groupPhotos.reduce((sum, p) => sum + (p.coordinates as [number, number])[1], 0) / groupPhotos.length
+            ] as [number, number]
+        }));
+    }, []);
+
+    // Update photo markers on the map
+    // Uses smart grouping based on zoom level for performance
     const updatePhotoMarkers = useCallback((photos: Photo[], selectedCampId: string | null = null) => {
         const map = mapRef.current;
         if (!map || !mapReady) return;
 
-        // Store photos for click handler reference
+        // Store for reference
         photosRef.current = photos;
+        selectedCampIdRef.current = selectedCampId;
 
-        // Filter photos with coordinates
-        const photosWithCoords = photos.filter(p => p.coordinates && p.coordinates.length === 2);
+        // Hide native Mapbox layers - we use custom thumbnail markers
+        map.setLayoutProperty('photo-markers-circle', 'visibility', 'none');
+        map.setLayoutProperty('photo-markers-glow', 'visibility', 'none');
+        map.setLayoutProperty('photo-clusters-circle', 'visibility', 'none');
+        map.setLayoutProperty('photo-clusters-glow', 'visibility', 'none');
+        map.setLayoutProperty('photo-clusters-count', 'visibility', 'none');
 
-        // Create GeoJSON features for clustering
-        const features: GeoJSON.Feature[] = photosWithCoords.map(photo => {
-            const isHighlighted = selectedCampId ? photo.waypoint_id === selectedCampId : false;
-            return {
-                type: 'Feature',
-                properties: {
-                    id: photo.id,
-                    highlighted: isHighlighted,
-                    waypoint_id: photo.waypoint_id || null,
-                    url: photo.thumbnail_url || photo.url
-                },
-                geometry: {
-                    type: 'Point',
-                    coordinates: photo.coordinates as [number, number]
-                }
-            };
-        });
-
+        // Clear existing source data
         const source = map.getSource('photo-markers') as mapboxgl.GeoJSONSource;
         if (source) {
-            source.setData({
-                type: 'FeatureCollection',
-                features
+            source.setData({ type: 'FeatureCollection', features: [] });
+        }
+
+        // Debounce marker updates to prevent lag during animations
+        if (markerUpdateTimerRef.current) {
+            clearTimeout(markerUpdateTimerRef.current);
+        }
+
+        // Delay marker creation until after camera animation settles
+        // Initial fitBounds takes ~2000ms, we wait a bit after
+        const delay = photos.length > 0 ? 100 : 0;
+        markerUpdateTimerRef.current = setTimeout(() => {
+            updateThumbnailMarkers();
+        }, delay);
+    }, [mapReady]);
+
+    // Create/update thumbnail stack markers
+    const updateThumbnailMarkers = useCallback(() => {
+        const map = mapRef.current;
+        if (!map || !mapReady) return;
+
+        const photos = photosRef.current;
+        const selectedCampId = selectedCampIdRef.current;
+
+        // Remove all markers if no photos
+        if (photos.length === 0) {
+            for (const group of photoGroupsRef.current.values()) {
+                group.marker.remove();
+            }
+            photoGroupsRef.current.clear();
+            lastGroupingZoomRef.current = null;
+            return;
+        }
+
+        const zoom = map.getZoom();
+        const bounds = map.getBounds();
+        if (!bounds) return;
+
+        // Round zoom to avoid regrouping on minor changes (only regroup on whole zoom levels)
+        const roundedZoom = Math.round(zoom);
+
+        // Filter to viewport with buffer
+        const buffer = 0.05;
+        const west = bounds.getWest() - buffer;
+        const east = bounds.getEast() + buffer;
+        const south = bounds.getSouth() - buffer;
+        const north = bounds.getNorth() + buffer;
+
+        const visiblePhotos = photos.filter(photo => {
+            if (!photo.coordinates || photo.coordinates.length !== 2) return false;
+            const [lng, lat] = photo.coordinates;
+            return lng >= west && lng <= east && lat >= south && lat <= north;
+        });
+
+        // Group photos by location at current zoom
+        const groups = groupPhotosByLocation(visiblePhotos, roundedZoom);
+
+        // Use representative photo ID as key for stability during panning
+        const processedIds = new Set<string>();
+
+        // Update or create markers for each group
+        for (const group of groups) {
+            // Use the representative photo ID as the stable key
+            const stableKey = group.representative.id;
+            processedIds.add(stableKey);
+
+            const existingGroup = photoGroupsRef.current.get(stableKey);
+
+            // If marker exists for this photo, just update position - don't recreate
+            if (existingGroup) {
+                // Update marker position (may have changed due to regrouping center)
+                existingGroup.marker.setLngLat(group.center);
+                // Update the stored photos for the group
+                existingGroup.photos = group.photos;
+                continue;
+            }
+
+            const isHighlighted = selectedCampId
+                ? group.photos.some(p => p.waypoint_id === selectedCampId)
+                : false;
+
+            // Create marker element with stack appearance
+            const el = document.createElement('div');
+            el.className = 'photo-thumbnail-marker photo-stack' + (isHighlighted ? ' photo-marker-highlighted' : '');
+
+            // Stack effect - show offset backgrounds for stacks of 2+
+            if (group.count >= 3) {
+                const bg2 = document.createElement('div');
+                bg2.className = 'photo-stack-bg photo-stack-bg-2';
+                el.appendChild(bg2);
+            }
+            if (group.count >= 2) {
+                const bg1 = document.createElement('div');
+                bg1.className = 'photo-stack-bg photo-stack-bg-1';
+                el.appendChild(bg1);
+            }
+
+            // Main thumbnail
+            const imgContainer = document.createElement('div');
+            imgContainer.className = 'photo-stack-main';
+
+            const img = document.createElement('img');
+            img.loading = 'lazy';
+            img.decoding = 'async';
+            img.alt = group.representative.caption || 'Photo';
+            img.draggable = false;
+            img.style.opacity = '0';
+            img.style.transition = 'opacity 0.2s ease-out';
+            img.onload = () => { img.style.opacity = '1'; };
+            const photoUrl = group.representative.thumbnail_url || group.representative.url;
+            img.src = getMediaUrl ? getMediaUrl(photoUrl) : photoUrl;
+            imgContainer.appendChild(img);
+            el.appendChild(imgContainer);
+
+            // Create Mapbox marker
+            const marker = new mapboxgl.Marker({ element: el, anchor: 'center' })
+                .setLngLat(group.center)
+                .addTo(map);
+
+            // Click handler - open first photo in group
+            el.addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (onPhotoClickRef.current) {
+                    onPhotoClickRef.current(group.representative);
+                }
             });
 
-            // Show/hide cluster layers based on whether we have photos
-            const visibility = features.length > 0 ? 'visible' : 'none';
-            // Hide the old circle layers - we use HTML markers now
-            map.setLayoutProperty('photo-markers-circle', 'visibility', 'none');
-            map.setLayoutProperty('photo-markers-glow', 'visibility', 'none');
-            // Cluster layers (still use native circles)
-            map.setLayoutProperty('photo-clusters-circle', 'visibility', visibility);
-            map.setLayoutProperty('photo-clusters-glow', 'visibility', visibility);
-            map.setLayoutProperty('photo-clusters-count', 'visibility', visibility);
+            photoGroupsRef.current.set(stableKey, { photos: group.photos, marker });
         }
 
-        // Remove old HTML markers that are no longer needed
-        const currentPhotoIds = new Set(photosWithCoords.map(p => p.id));
-        for (const [photoId, marker] of photoMarkersRef.current.entries()) {
-            if (!currentPhotoIds.has(photoId)) {
-                marker.remove();
-                photoMarkersRef.current.delete(photoId);
+        // Remove markers for groups no longer visible
+        for (const [key, groupData] of photoGroupsRef.current.entries()) {
+            if (!processedIds.has(key)) {
+                groupData.marker.remove();
+                photoGroupsRef.current.delete(key);
             }
         }
 
-        // Create or update HTML markers for each photo
-        // Batch creation to avoid blocking the main thread during animations
-        const token = authTokenRef.current;
-        const BATCH_SIZE = 5; // Create 5 markers per frame
-        let index = 0;
+        // Update last grouping zoom
+        lastGroupingZoomRef.current = roundedZoom;
+    }, [mapReady, groupPhotosByLocation, getMediaUrl]);
 
-        const createMarkerBatch = () => {
-            const endIndex = Math.min(index + BATCH_SIZE, photosWithCoords.length);
+    // Listen for zoom/move changes to regroup photos
+    useEffect(() => {
+        const map = mapRef.current;
+        if (!map || !mapReady) return;
 
-            for (let i = index; i < endIndex; i++) {
-                const photo = photosWithCoords[i];
-                const isHighlighted = selectedCampId ? photo.waypoint_id === selectedCampId : false;
-                const existingMarker = photoMarkersRef.current.get(photo.id);
-
-                if (existingMarker) {
-                    // Update existing marker's highlight state
-                    const el = existingMarker.getElement();
-                    if (isHighlighted) {
-                        el.classList.add('photo-marker-highlighted');
-                    } else {
-                        el.classList.remove('photo-marker-highlighted');
-                    }
-                } else {
-                    // Create new HTML marker with thumbnail
-                    const el = document.createElement('div');
-                    el.className = 'photo-thumbnail-marker' + (isHighlighted ? ' photo-marker-highlighted' : '');
-
-                    // Build authenticated URL
-                    const photoUrl = photo.thumbnail_url || photo.url;
-                    const imgUrl = buildMediaUrl(photoUrl, token);
-
-                    // Create image element
-                    const img = document.createElement('img');
-                    img.src = imgUrl;
-                    img.alt = photo.caption || 'Photo';
-                    img.draggable = false;
-                    el.appendChild(img);
-
-                    // Create marker
-                    const marker = new mapboxgl.Marker({
-                        element: el,
-                        anchor: 'center'
-                    })
-                        .setLngLat(photo.coordinates as [number, number])
-                        .addTo(map);
-
-                    // Click handler
-                    el.addEventListener('click', (e) => {
-                        e.stopPropagation();
-                        if (onPhotoClickRef.current) {
-                            onPhotoClickRef.current(photo);
-                        }
-                    });
-
-                    photoMarkersRef.current.set(photo.id, marker);
-                }
-            }
-
-            index = endIndex;
-
-            // Continue with next batch if there are more photos
-            if (index < photosWithCoords.length) {
-                requestAnimationFrame(createMarkerBatch);
-            }
+        // Throttle updates during continuous zoom/pan
+        let updateScheduled = false;
+        const scheduleUpdate = () => {
+            if (updateScheduled) return;
+            updateScheduled = true;
+            requestAnimationFrame(() => {
+                updateThumbnailMarkers();
+                updateScheduled = false;
+            });
         };
 
-        // Start batched marker creation
-        if (photosWithCoords.length > 0) {
-            requestAnimationFrame(createMarkerBatch);
-        }
-    }, [mapReady]);
+        map.on('zoomend', scheduleUpdate);
+        map.on('moveend', scheduleUpdate);
+
+        return () => {
+            map.off('zoomend', scheduleUpdate);
+            map.off('moveend', scheduleUpdate);
+        };
+    }, [mapReady, updateThumbnailMarkers]);
 
     // Update camp markers on the map
     const updateCampMarkers = useCallback((camps: Camp[], selectedCampId: string | null = null) => {

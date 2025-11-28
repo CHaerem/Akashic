@@ -1,4 +1,4 @@
-import { useCallback, useState, useEffect, useRef, lazy, Suspense, useDeferredValue, startTransition } from 'react';
+import { useCallback, useState, useEffect, useRef, lazy, Suspense, useDeferredValue } from 'react';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import { useTrekData } from '../hooks/useTrekData';
 import { useIsMobile } from '../hooks/useMediaQuery';
@@ -46,10 +46,10 @@ export default function AkashicApp() {
         handleCampSelect
     } = useTrekData();
 
-    // Fetch photos when trek changes
-    // Use startTransition to prevent blocking animations when photos load
+    // Fetch photos when in trek view
+    // Native Mapbox layers handle photos efficiently - no delays needed
     useEffect(() => {
-        if (!selectedTrek) {
+        if (!selectedTrek || view !== 'trek') {
             setPhotos([]);
             return;
         }
@@ -61,10 +61,7 @@ export default function AkashicApp() {
             if (journeyId && !cancelled) {
                 const journeyPhotos = await fetchPhotos(journeyId);
                 if (!cancelled) {
-                    // Mark photo updates as low priority to not interrupt animations
-                    startTransition(() => {
-                        setPhotos(journeyPhotos);
-                    });
+                    setPhotos(journeyPhotos);
                 }
             }
         }
@@ -72,7 +69,8 @@ export default function AkashicApp() {
         loadPhotos();
 
         return () => { cancelled = true; };
-    }, [selectedTrek]);
+    }, [selectedTrek, view]);
+
 
     const handlePanelStateChange = useCallback((state: PanelState) => {
         setPanelState(state);
@@ -108,6 +106,7 @@ export default function AkashicApp() {
                     onPhotoClick={handleMapPhotoClick}
                     flyToPhotoRef={flyToPhotoRef}
                     onCampSelect={handleCampSelect}
+                    getMediaUrl={getMediaUrl}
                 />
             </div>
 
