@@ -2,8 +2,8 @@
  * React context for journey data from Supabase
  */
 
-import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
-import { fetchJourneys, getJourneyCache } from '../lib/journeys';
+import { createContext, useContext, useEffect, useState, useCallback, useMemo, type ReactNode } from 'react';
+import { fetchJourneys } from '../lib/journeys';
 import type { TrekConfig, TrekData } from '../types/trek';
 
 interface JourneysContextValue {
@@ -28,7 +28,7 @@ export function JourneysProvider({ children }: JourneysProviderProps) {
         trekDataMap: Record<string, TrekData>;
     }>({ treks: [], trekDataMap: {} });
 
-    const loadData = async () => {
+    const loadData = useCallback(async () => {
         setLoading(true);
         setError(null);
 
@@ -41,19 +41,20 @@ export function JourneysProvider({ children }: JourneysProviderProps) {
         } finally {
             setLoading(false);
         }
-    };
+    }, []);
 
     useEffect(() => {
         loadData();
-    }, []);
+    }, [loadData]);
 
-    const value: JourneysContextValue = {
+    // Memoize context value to prevent unnecessary re-renders
+    const value = useMemo<JourneysContextValue>(() => ({
         treks: data.treks,
         trekDataMap: data.trekDataMap,
         loading,
         error,
         refetch: loadData
-    };
+    }), [data.treks, data.trekDataMap, loading, error, loadData]);
 
     return (
         <JourneysContext.Provider value={value}>
