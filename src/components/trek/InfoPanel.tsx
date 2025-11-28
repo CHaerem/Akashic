@@ -73,13 +73,28 @@ export const InfoPanel = memo(function InfoPanel({
     });
 
     // Panel height based on state - using dvh for better mobile support
-    const getPanelHeight = () => {
-        switch (panelState) {
-            case 'minimized': return '100px';
-            case 'normal': return '42dvh';
-            case 'expanded': return '88dvh';
+    // During drag, dynamically adjust height so content renders properly
+    const getPanelHeight = (): string => {
+        const baseHeights: Record<PanelState, string> = {
+            minimized: '100px',
+            normal: '42dvh',
+            expanded: '88dvh'
+        };
+
+        if (!dragState.isDragging) {
+            return baseHeights[panelState];
         }
+
+        // During drag: adjust height based on offset
+        // Dragging down (positive offset) = shorter panel
+        // Dragging up (negative offset) = taller panel
+        // Use calc() to subtract the offset from base height
+        return `calc(${baseHeights[panelState]} - ${dragState.dragOffset}px)`;
     };
+
+    // Clamp height during drag to reasonable bounds
+    const minHeight = 80; // Don't go smaller than minimized
+    const maxHeight = 'calc(100dvh - 60px)';
 
     // Mobile bottom sheet style - Liquid Glass design
     const mobileStyle: React.CSSProperties = {
@@ -88,7 +103,8 @@ export const InfoPanel = memo(function InfoPanel({
         right: 0,
         bottom: 0,
         height: getPanelHeight(),
-        maxHeight: 'calc(100dvh - 60px)',
+        minHeight: dragState.isDragging ? minHeight : undefined,
+        maxHeight,
         // Liquid Glass gradient background
         background: `linear-gradient(
             180deg,
@@ -99,17 +115,16 @@ export const InfoPanel = memo(function InfoPanel({
         // Reduced blur for mobile performance (16px vs 32px on desktop)
         backdropFilter: 'blur(16px) saturate(150%)',
         WebkitBackdropFilter: 'blur(16px) saturate(150%)',
-        willChange: 'transform, height',
+        willChange: 'height',
         borderTop: `1px solid ${colors.glass.border}`,
         borderRadius: `${radius.xxl}px ${radius.xxl}px 0 0`,
         display: 'flex',
         flexDirection: 'column',
         zIndex: 20,
-        // iOS-like: panel follows finger during drag, smooth spring on release
-        transform: dragState.isDragging ? `translateY(${dragState.dragOffset}px)` : 'translateY(0)',
+        // iOS-like spring animation on release
         transition: dragState.isDragging
             ? 'none'  // No transition during drag for instant follow
-            : `height 0.4s cubic-bezier(0.32, 0.72, 0, 1), transform 0.4s cubic-bezier(0.32, 0.72, 0, 1)`,
+            : `height 0.4s cubic-bezier(0.32, 0.72, 0, 1)`,
         paddingBottom: 'env(safe-area-inset-bottom)',
         boxShadow: `
             0 -16px 48px rgba(0, 0, 0, 0.4),
