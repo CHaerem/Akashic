@@ -45,30 +45,23 @@ jobs:
           projectName: akashic
           directory: dist
           gitHubToken: ${{ secrets.GITHUB_TOKEN }}
-          branch: ${{ github.head_ref || github.ref_name }}
+          # For PRs, deploy to 'staging' branch to get static staging.akashic.pages.dev URL
+          branch: ${{ github.event_name == 'pull_request' && 'staging' || github.ref_name }}
 
       - name: Comment PR with preview URL
         if: github.event_name == 'pull_request'
         uses: actions/github-script@v7
-        env:
-          DEPLOY_URL: ${{ steps.deploy.outputs.url }}
-          DEPLOY_ALIAS: ${{ steps.deploy.outputs.alias }}
         with:
           script: |
-            // Use the actual deployment URL from Cloudflare
-            const deployUrl = process.env.DEPLOY_URL;
-            const aliasUrl = process.env.DEPLOY_ALIAS;
-
-            // Prefer alias URL (branch-based) if available, otherwise use deployment URL
-            const previewUrl = aliasUrl || deployUrl;
-
             const body = `## 🚀 Staging Deployment Ready!
 
-            Your PR has been deployed to a staging environment for testing.
+            Your PR has been deployed to the staging environment.
 
-            **Preview URL:** ${previewUrl}
+            **Preview URL:** https://staging.akashic.pages.dev
 
             This staging environment uses the same database and authentication as production, so you can test with real data.
+
+            > **Note:** This URL always shows the latest PR deployment. If multiple PRs are open, the most recently pushed one will be live.
 
             ---
             <sub>Deployed via Cloudflare Pages</sub>`;
