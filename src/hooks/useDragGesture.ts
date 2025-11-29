@@ -9,10 +9,14 @@ interface DragGestureOptions {
     onSnapChange: (index: number) => void;
     /** Ref to the panel element for direct DOM manipulation */
     panelRef: RefObject<HTMLDivElement | null>;
+    /** Called when user drags down past minimum to dismiss */
+    onDismiss?: () => void;
     /** Minimum velocity (px/ms) to trigger a snap */
     velocityThreshold?: number;
     /** Distance threshold to trigger snap without velocity */
     distanceThreshold?: number;
+    /** Distance to drag past minimum to trigger dismiss */
+    dismissThreshold?: number;
 }
 
 interface DragState {
@@ -35,8 +39,10 @@ export function useDragGesture({
     currentSnapIndex,
     onSnapChange,
     panelRef,
+    onDismiss,
     velocityThreshold = 0.5,
     distanceThreshold = 50,
+    dismissThreshold = 100,
 }: DragGestureOptions): [DragState, DragHandlers] {
     const [isDragging, setIsDragging] = useState(false);
 
@@ -117,6 +123,27 @@ export function useDragGesture({
         const totalOffset = lastY.current - startY.current;
         const finalVelocity = velocity.current;
 
+        // Check for dismiss gesture: at minimized (index 0) and dragged down enough
+        const isAtMinimized = currentIndexRef.current === 0;
+        const draggedDownEnough = totalOffset > dismissThreshold;
+        const fastSwipeDown = finalVelocity > velocityThreshold;
+
+        if (isAtMinimized && (draggedDownEnough || fastSwipeDown) && onDismiss) {
+            // Animate panel off screen then dismiss
+            if (panel) {
+                panel.style.transition = 'height 0.3s cubic-bezier(0.32, 0.72, 0, 1)';
+                panel.style.height = '0px';
+            }
+            setIsDragging(false);
+            setTimeout(() => onDismiss(), 300);
+
+            // Reset refs
+            startY.current = 0;
+            lastY.current = 0;
+            velocity.current = 0;
+            return;
+        }
+
         // Determine target snap point based on velocity and distance
         let targetIndex = currentIndexRef.current;
 
@@ -163,7 +190,7 @@ export function useDragGesture({
         startY.current = 0;
         lastY.current = 0;
         velocity.current = 0;
-    }, [snapPoints, velocityThreshold, distanceThreshold, onSnapChange, panelRef]);
+    }, [snapPoints, velocityThreshold, distanceThreshold, dismissThreshold, onSnapChange, onDismiss, panelRef]);
 
     return [{ isDragging }, { onTouchStart, onTouchMove, onTouchEnd }];
 }

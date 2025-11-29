@@ -70,8 +70,10 @@ export const InfoPanel = memo(function InfoPanel({
         currentSnapIndex,
         onSnapChange: handleSnapChange,
         panelRef,
+        onDismiss: onBack, // Swipe down from minimized to go back to globe
         velocityThreshold: 0.4,
         distanceThreshold: 40,
+        dismissThreshold: 80, // 80px to dismiss
     });
 
     // Panel height based on state (only used for initial render and non-drag state)
@@ -196,16 +198,23 @@ export const InfoPanel = memo(function InfoPanel({
                 </div>
             )}
 
-            {/* Header */}
-            <div style={{
-                padding: isMobile ? `8px ${padding}px 16px` : `${padding}px`,
-                borderBottom: panelState !== 'minimized' ? `1px solid ${colors.glass.borderSubtle}` : 'none',
-                display: 'flex',
-                flexDirection: isMobile ? 'row' : 'column',
-                alignItems: isMobile ? 'center' : 'stretch',
-                justifyContent: isMobile ? 'space-between' : 'flex-start',
-                flexShrink: 0
-            }}>
+            {/* Header - also draggable on mobile for larger touch target */}
+            <div
+                onTouchStart={isMobile ? dragHandlers.onTouchStart : undefined}
+                onTouchMove={isMobile ? dragHandlers.onTouchMove : undefined}
+                onTouchEnd={isMobile ? dragHandlers.onTouchEnd : undefined}
+                style={{
+                    padding: isMobile ? `8px ${padding}px 16px` : `${padding}px`,
+                    borderBottom: panelState !== 'minimized' ? `1px solid ${colors.glass.borderSubtle}` : 'none',
+                    display: 'flex',
+                    flexDirection: isMobile ? 'row' : 'column',
+                    alignItems: isMobile ? 'center' : 'stretch',
+                    justifyContent: isMobile ? 'space-between' : 'flex-start',
+                    flexShrink: 0,
+                    touchAction: isMobile ? 'none' : 'auto',
+                    cursor: isMobile ? (dragState.isDragging ? 'grabbing' : 'grab') : 'default',
+                }}
+            >
                 {!isMobile && (
                     <GlassButton
                         variant="ghost"
