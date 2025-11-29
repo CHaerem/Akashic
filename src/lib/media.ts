@@ -46,10 +46,10 @@ export function buildMediaUrl(path: string, token?: string | null): string {
 }
 
 /**
- * Get a photo path for a journey
+ * Get a photo path for a journey (uses UUID for immutable paths)
  */
-export function getJourneyPhotoPath(journeySlug: string, photoId: string, extension = 'jpg'): string {
-    return `journeys/${journeySlug}/photos/${photoId}.${extension}`;
+export function getJourneyPhotoPath(journeyId: string, photoId: string, extension = 'jpg'): string {
+    return `journeys/${journeyId}/photos/${photoId}.${extension}`;
 }
 
 /**
@@ -67,11 +67,11 @@ export interface UploadResult {
 
 /**
  * Upload a photo to R2 storage
- * @param journeySlug - The journey to upload to
+ * @param journeyId - The journey UUID to upload to
  * @param file - The file to upload
  * @returns Upload result with photo ID and path
  */
-export async function uploadPhoto(journeySlug: string, file: File): Promise<UploadResult> {
+export async function uploadPhoto(journeyId: string, file: File): Promise<UploadResult> {
     const token = await getAccessToken();
 
     if (!token) {
@@ -81,7 +81,7 @@ export async function uploadPhoto(journeySlug: string, file: File): Promise<Uplo
     const formData = new FormData();
     formData.append('file', file);
 
-    const response = await fetch(`${MEDIA_BASE_URL}/upload/journeys/${journeySlug}/photos`, {
+    const response = await fetch(`${MEDIA_BASE_URL}/upload/journeys/${journeyId}/photos`, {
         method: 'POST',
         headers: {
             'Authorization': `Bearer ${token}`,

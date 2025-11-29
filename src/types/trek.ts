@@ -118,6 +118,32 @@ export interface Photo {
     is_hero?: boolean;
     sort_order?: number;
     created_at?: string;
+    /** User ID of who uploaded this photo */
+    uploaded_by?: string | null;
+}
+
+/** User profile for display */
+export interface Profile {
+    id: string;
+    email: string;
+    display_name?: string | null;
+    avatar_url?: string | null;
+    created_at?: string;
+}
+
+/** Journey membership role */
+export type JourneyRole = 'owner' | 'editor' | 'viewer';
+
+/** Journey member record */
+export interface JourneyMember {
+    id: string;
+    journey_id: string;
+    user_id: string;
+    role: JourneyRole;
+    invited_by?: string | null;
+    created_at?: string;
+    /** Profile info (when joined) */
+    profile?: Profile;
 }
 
 export type ViewMode = 'globe' | 'trek';

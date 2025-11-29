@@ -6,11 +6,17 @@
  *
  * URL patterns:
  * GET:
- * - /journeys/{journey_slug}/photos/{photo_id}.jpg - Journey photo
+ * - /journeys/{journey_id}/photos/{photo_id}.jpg - Journey photo (UUID-based)
  * - /public/{path} - Public assets (no auth required)
  *
  * POST:
- * - /upload/journeys/{journey_slug}/photos - Upload a photo (multipart/form-data)
+ * - /upload/journeys/{journey_id}/photos - Upload a photo (multipart/form-data)
+ *
+ * Access Control:
+ * - Uses journey_members table for role-based access
+ * - viewer: can view photos
+ * - editor: can view + upload photos
+ * - owner: full control
  */
 
 export interface Env {
@@ -27,9 +33,14 @@ interface JWTPayload {
     iat: number;
 }
 
-interface JourneyAccess {
-    id: string;
+interface JourneyMember {
+    journey_id: string;
     user_id: string;
+    role: 'owner' | 'editor' | 'viewer';
+}
+
+interface Journey {
+    id: string;
     is_public: boolean;
 }
 
@@ -160,17 +171,41 @@ async function verifyJWT(token: string, supabaseUrl: string): Promise<JWTPayload
     }
 }
 
-// Check if user has access to a journey via Supabase
+// Check if user has access to a journey via journey_members table
 async function checkJourneyAccess(
-    journeySlug: string,
+    journeyId: string,
     userId: string | null,
+    requiredRole: 'viewer' | 'editor' | 'owner',
     supabaseUrl: string,
     supabaseKey: string
 ): Promise<boolean> {
     try {
-        // Query journey by slug to check ownership and public status
-        const response = await fetch(
-            `${supabaseUrl}/rest/v1/journeys?slug=eq.${journeySlug}&select=id,user_id,is_public`,
+        // First check if journey is public (for viewer access)
+        if (requiredRole === 'viewer') {
+            const journeyResponse = await fetch(
+                `${supabaseUrl}/rest/v1/journeys?id=eq.${journeyId}&select=id,is_public`,
+                {
+                    headers: {
+                        'apikey': supabaseKey,
+                        'Authorization': `Bearer ${supabaseKey}`,
+                    }
+                }
+            );
+
+            if (journeyResponse.ok) {
+                const journeys = await journeyResponse.json() as Journey[];
+                if (journeys.length > 0 && journeys[0].is_public) {
+                    return true; // Public journeys are viewable by anyone
+                }
+            }
+        }
+
+        // If no user, cannot have member access
+        if (!userId) return false;
+
+        // Check membership in journey_members table
+        const memberResponse = await fetch(
+            `${supabaseUrl}/rest/v1/journey_members?journey_id=eq.${journeyId}&user_id=eq.${userId}&select=role`,
             {
                 headers: {
                     'apikey': supabaseKey,
@@ -179,17 +214,24 @@ async function checkJourneyAccess(
             }
         );
 
-        if (!response.ok) return false;
+        if (!memberResponse.ok) return false;
 
-        const journeys = await response.json() as JourneyAccess[];
-        if (journeys.length === 0) return false;
+        const members = await memberResponse.json() as JourneyMember[];
+        if (members.length === 0) return false;
 
-        const journey = journeys[0];
+        const userRole = members[0].role;
 
-        // MVP: Allow any authenticated user to see any journey
-        // Future: Check ownership or sharing permissions
-        // return journey.is_public || journey.user_id === userId || isSharedWith(userId);
-        return journey.is_public || userId !== null;
+        // Check if user's role meets the required level
+        switch (requiredRole) {
+            case 'viewer':
+                return ['owner', 'editor', 'viewer'].includes(userRole);
+            case 'editor':
+                return ['owner', 'editor'].includes(userRole);
+            case 'owner':
+                return userRole === 'owner';
+            default:
+                return false;
+        }
     } catch {
         return false;
     }
@@ -241,7 +283,7 @@ interface UploadResult {
 async function handleUpload(
     request: Request,
     env: Env,
-    journeySlug: string,
+    journeyId: string,
     userId: string
 ): Promise<Response> {
     const corsHeaders = {
@@ -299,10 +341,10 @@ async function handleUpload(
             });
         }
 
-        // Generate photo ID and path
+        // Generate photo ID and path (using journey UUID for immutable paths)
         const photoId = generatePhotoId();
         const ext = getExtensionFromContentType(file.type);
-        const path = `journeys/${journeySlug}/photos/${photoId}.${ext}`;
+        const path = `journeys/${journeyId}/photos/${photoId}.${ext}`;
 
         // Upload to R2
         const arrayBuffer = await file.arrayBuffer();
@@ -356,7 +398,7 @@ export default {
 
         // Handle POST requests (uploads)
         if (request.method === 'POST') {
-            // Pattern: upload/journeys/{journey_slug}/photos
+            // Pattern: upload/journeys/{journey_id}/photos (UUID-based)
             const uploadMatch = path.match(/^upload\/journeys\/([^/]+)\/photos$/);
 
             if (!uploadMatch) {
@@ -366,7 +408,7 @@ export default {
                 });
             }
 
-            const journeySlug = uploadMatch[1];
+            const journeyId = uploadMatch[1];
 
             // Get and verify token
             let token = request.headers.get('Authorization')?.replace('Bearer ', '');
@@ -389,9 +431,23 @@ export default {
                 });
             }
 
-            // For MVP: any authenticated user can upload to any journey
-            // Future: Check if user owns or has write access to the journey
-            return handleUpload(request, env, journeySlug, payload.sub);
+            // Check if user has editor role for this journey
+            const hasAccess = await checkJourneyAccess(
+                journeyId,
+                payload.sub,
+                'editor',
+                env.SUPABASE_URL,
+                env.SUPABASE_ANON_KEY
+            );
+
+            if (!hasAccess) {
+                return new Response(JSON.stringify({ error: 'Forbidden: editor role required' }), {
+                    status: 403,
+                    headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+                });
+            }
+
+            return handleUpload(request, env, journeyId, payload.sub);
         }
 
         // Only allow GET requests for non-upload paths
@@ -433,16 +489,17 @@ export default {
         }
 
         // Extract journey ID from path
-        // Pattern: journeys/{journey_id}/...
+        // Pattern: journeys/{journey_id}/... (UUID-based)
         const journeyMatch = path.match(/^journeys\/([^/]+)\//);
 
         if (journeyMatch) {
             const journeyId = journeyMatch[1];
 
-            // Check access using anon key to query journey
+            // Check viewer access using journey_members table
             const hasAccess = await checkJourneyAccess(
                 journeyId,
                 userId,
+                'viewer',
                 env.SUPABASE_URL,
                 env.SUPABASE_ANON_KEY
             );

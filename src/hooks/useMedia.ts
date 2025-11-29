@@ -11,8 +11,8 @@ interface UseMediaReturn {
     token: string | null;
     /** Build an authenticated URL for any media path */
     getMediaUrl: (path: string) => string;
-    /** Get authenticated photo URL */
-    getPhotoUrl: (journeySlug: string, photoId: string, extension?: string) => string;
+    /** Get authenticated photo URL (using journey UUID) */
+    getPhotoUrl: (journeyId: string, photoId: string, extension?: string) => string;
     /** Whether the token is being loaded */
     loading: boolean;
 }
@@ -49,8 +49,8 @@ export function useMedia(): UseMediaReturn {
         return buildMediaUrl(path, token);
     }, [token]);
 
-    const getPhotoUrl = useCallback((journeySlug: string, photoId: string, extension = 'jpg') => {
-        return buildMediaUrl(getJourneyPhotoPath(journeySlug, photoId, extension), token);
+    const getPhotoUrl = useCallback((journeyId: string, photoId: string, extension = 'jpg') => {
+        return buildMediaUrl(getJourneyPhotoPath(journeyId, photoId, extension), token);
     }, [token]);
 
     return {

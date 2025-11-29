@@ -8,7 +8,7 @@ import { uploadPhoto, type UploadResult } from '../../lib/media';
 import { extractPhotoMetadata } from '../../lib/exif';
 
 interface PhotoUploadProps {
-    journeySlug: string;
+    journeyId: string;
     onUploadComplete: (result: UploadResult) => void;
     onUploadError: (error: string) => void;
 }
@@ -19,7 +19,7 @@ interface UploadingFile {
     error?: string;
 }
 
-export function PhotoUpload({ journeySlug, onUploadComplete, onUploadError }: PhotoUploadProps) {
+export function PhotoUpload({ journeyId, onUploadComplete, onUploadError }: PhotoUploadProps) {
     const [isDragging, setIsDragging] = useState(false);
     const [uploading, setUploading] = useState<UploadingFile[]>([]);
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -46,8 +46,8 @@ export function PhotoUpload({ journeySlug, onUploadComplete, onUploadError }: Ph
                 // Extract EXIF metadata before upload
                 const metadata = await extractPhotoMetadata(file);
 
-                // Upload to R2
-                const result = await uploadPhoto(journeySlug, file);
+                // Upload to R2 (using journey UUID)
+                const result = await uploadPhoto(journeyId, file);
 
                 // Combine upload result with extracted metadata
                 const resultWithMetadata: UploadResult = {
@@ -72,7 +72,7 @@ export function PhotoUpload({ journeySlug, onUploadComplete, onUploadError }: Ph
                 onUploadError(`Failed to upload ${file.name}: ${errorMessage}`);
             }
         }
-    }, [journeySlug, onUploadComplete, onUploadError]);
+    }, [journeyId, onUploadComplete, onUploadError]);
 
     const handleDragOver = useCallback((e: React.DragEvent) => {
         e.preventDefault();
