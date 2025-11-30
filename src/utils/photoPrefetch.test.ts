@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { Photo } from '../types/trek';
-import { preloadPhotoImages } from './photoPrefetch';
+import { preloadPhotoImages, preloadPhotoImagesAsync } from './photoPrefetch';
 
 describe('preloadPhotoImages', () => {
     const photos: Photo[] = [
@@ -57,5 +57,16 @@ describe('preloadPhotoImages', () => {
         expect(cache.size).toBe(2);
         expect(cache.has('https://cdn.test/thumbs/image-1.jpg')).toBe(true);
         expect(cache.has('https://cdn.test/full/image-2.jpg')).toBe(true);
+    });
+
+    it('waits for thumbnail decoding to complete when requested', async () => {
+        const decode = vi.fn().mockResolvedValue(undefined);
+        const createImage = vi.fn(() => ({ src: '', decode }));
+        const cache = new Set<string>();
+
+        await preloadPhotoImagesAsync(photos, path => `https://cdn.test${path}`, { cache, createImage });
+
+        expect(decode).toHaveBeenCalledTimes(2);
+        expect(cache.size).toBe(2);
     });
 });
