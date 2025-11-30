@@ -2,6 +2,7 @@
 
 interface ImportMetaEnv {
     readonly VITE_MAPBOX_TOKEN: string;
+    readonly VITE_STAGING_BRANCH?: string;
 }
 
 interface ImportMeta {

@@ -211,7 +211,7 @@ export function PhotosTab({ trekData, isMobile, editMode = false, onViewPhotoOnM
             )}
 
             {/* Upload section - only show in edit mode */}
-            {editMode && (
+            {editMode && journeyDbId && (
                 <div style={{ marginBottom: 24 }}>
                     <h3 style={{
                         color: 'rgba(255,255,255,0.9)',
@@ -224,7 +224,7 @@ export function PhotosTab({ trekData, isMobile, editMode = false, onViewPhotoOnM
                         Add Photos
                     </h3>
                     <PhotoUpload
-                        journeySlug={trekData.id}
+                        journeyId={journeyDbId}
                         onUploadComplete={handleUploadComplete}
                         onUploadError={handleUploadError}
                     />

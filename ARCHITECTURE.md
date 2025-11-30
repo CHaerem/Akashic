@@ -70,38 +70,58 @@ Managed by Supabase Auth - provides:
 ### Database Schema
 
 ```sql
--- Journeys: A trek/trip/vacation created by a user
+-- User profiles (synced from auth.users via trigger)
+CREATE TABLE profiles (
+  id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+  email TEXT NOT NULL,
+  display_name TEXT,
+  avatar_url TEXT,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- Journey membership with role-based access
+CREATE TABLE journey_members (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  journey_id UUID REFERENCES journeys(id) ON DELETE CASCADE,
+  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+  role TEXT NOT NULL CHECK (role IN ('owner', 'editor', 'viewer')),
+  invited_by UUID REFERENCES auth.users(id),
+  created_at TIMESTAMPTZ DEFAULT now(),
+  UNIQUE(journey_id, user_id)
+);
+
+-- Journeys: A trek/trip/vacation
 CREATE TABLE journeys (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+  created_by UUID REFERENCES auth.users(id),  -- Original creator
 
   -- Basic info
-  name TEXT NOT NULL,              -- "Kilimanjaro Summit" or "Paris 2024"
-  slug TEXT UNIQUE NOT NULL,       -- "kilimanjaro-2024"
+  name TEXT NOT NULL,
+  slug TEXT UNIQUE NOT NULL,
   description TEXT,
   country TEXT,
-  journey_type TEXT DEFAULT 'trek', -- 'trek', 'vacation', 'road_trip'
+  journey_type TEXT DEFAULT 'trek',
 
   -- Trek-specific (optional)
-  summit_elevation INTEGER,        -- meters (null for vacations)
-  total_distance NUMERIC,          -- kilometers (null for vacations)
+  summit_elevation INTEGER,
+  total_distance NUMERIC,
   total_days INTEGER,
   date_started DATE,
   date_ended DATE,
 
-  -- Media
-  hero_image_url TEXT,             -- R2 URL
-  gpx_url TEXT,                    -- R2 URL (optional - treks only)
+  -- Media (R2 paths use journey UUID, not slug)
+  hero_image_url TEXT,
+  gpx_url TEXT,
 
   -- Map settings
-  center_coordinates JSONB,        -- [lng, lat]
+  center_coordinates JSONB,
   default_zoom NUMERIC,
-  preferred_bearing NUMERIC,       -- Camera bearing for map view
-  preferred_pitch NUMERIC DEFAULT 60, -- Camera pitch for map view
+  preferred_bearing NUMERIC,
+  preferred_pitch NUMERIC DEFAULT 60,
 
-  -- Route data (trek-specific)
-  route JSONB,                     -- GeoJSON LineString geometry
-  stats JSONB,                     -- Computed stats (distance, elevation, etc.)
+  -- Route data
+  route JSONB,
+  stats JSONB,
 
   -- Metadata
   is_public BOOLEAN DEFAULT false,
@@ -109,109 +129,93 @@ CREATE TABLE journeys (
   updated_at TIMESTAMPTZ DEFAULT now()
 );
 
--- Waypoints: Stops/locations along a journey (camps for treks, places for vacations)
--- Optional - a journey can have zero waypoints (just photos with coordinates)
+-- Waypoints with route position data
 CREATE TABLE waypoints (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   journey_id UUID REFERENCES journeys(id) ON DELETE CASCADE,
-
-  -- Basic info
-  name TEXT NOT NULL,              -- "Machame Camp" or "Eiffel Tower"
-  waypoint_type TEXT DEFAULT 'camp', -- 'camp', 'location', 'landmark', 'hotel'
-  day_number INTEGER,              -- Day 1, Day 2, etc. (optional)
-
-  -- Location
-  coordinates JSONB NOT NULL,      -- [lng, lat]
-  elevation INTEGER,               -- meters (optional)
-
-  -- Content
+  name TEXT NOT NULL,
+  waypoint_type TEXT DEFAULT 'camp',
+  day_number INTEGER,
+  coordinates JSONB NOT NULL,
+  elevation INTEGER,
   description TEXT,
-  highlights TEXT[],               -- Array of highlights
-
-  -- Timing (optional)
-  arrival_time TEXT,               -- "14:00"
-  departure_time TEXT,
-  date_visited DATE,               -- For vacations without day numbers
-
-  -- Order
+  highlights TEXT[],
   sort_order INTEGER,
-
+  route_distance_km NUMERIC,     -- Distance along route (from RouteEditor)
+  route_point_index INTEGER,     -- Index in route array
   created_at TIMESTAMPTZ DEFAULT now()
 );
 
--- Photos: Images associated with journeys/waypoints
+-- Photos with uploader attribution
 CREATE TABLE photos (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   journey_id UUID REFERENCES journeys(id) ON DELETE CASCADE,
   waypoint_id UUID REFERENCES waypoints(id) ON DELETE SET NULL,
-
-  -- Storage
-  url TEXT NOT NULL,               -- R2 URL
-  thumbnail_url TEXT,              -- R2 URL (smaller version)
-
-  -- Metadata
+  url TEXT NOT NULL,             -- R2 path: journeys/{journey_uuid}/photos/{id}.jpg
+  thumbnail_url TEXT,
   caption TEXT,
-  coordinates JSONB,               -- [lng, lat] if geotagged
+  coordinates JSONB,
   taken_at TIMESTAMPTZ,
-
-  -- Display
-  is_hero BOOLEAN DEFAULT false,   -- Featured photo for waypoint
+  is_hero BOOLEAN DEFAULT false,
   sort_order INTEGER,
-
+  uploaded_by UUID REFERENCES auth.users(id),  -- Who uploaded
   created_at TIMESTAMPTZ DEFAULT now()
 );
 
--- Row Level Security (RLS) policies
+-- Helper function for membership-based access checks
+CREATE FUNCTION user_has_journey_access(journey_uuid UUID, required_role TEXT DEFAULT 'viewer')
+RETURNS BOOLEAN AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM journey_members
+    WHERE journey_id = journey_uuid
+    AND user_id = auth.uid()
+    AND (
+      CASE required_role
+        WHEN 'viewer' THEN role IN ('owner', 'editor', 'viewer')
+        WHEN 'editor' THEN role IN ('owner', 'editor')
+        WHEN 'owner' THEN role = 'owner'
+      END
+    )
+  );
+$$ LANGUAGE sql SECURITY DEFINER;
+
+-- RLS Policies (membership-based)
 ALTER TABLE journeys ENABLE ROW LEVEL SECURITY;
 ALTER TABLE waypoints ENABLE ROW LEVEL SECURITY;
 ALTER TABLE photos ENABLE ROW LEVEL SECURITY;
+ALTER TABLE journey_members ENABLE ROW LEVEL SECURITY;
+ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
 
--- Users can read public journeys or their own
-CREATE POLICY "Public journeys readable by all" ON journeys
-  FOR SELECT USING (is_public = true OR auth.uid() = user_id);
+-- Journeys: public OR member with viewer+ role
+CREATE POLICY "Journey access" ON journeys
+  FOR SELECT USING (is_public = true OR user_has_journey_access(id));
+CREATE POLICY "Journey modify" ON journeys
+  FOR ALL USING (user_has_journey_access(id, 'editor'));
 
--- Users can only modify their own journeys
-CREATE POLICY "Users can manage own journeys" ON journeys
-  FOR ALL USING (auth.uid() = user_id);
+-- Waypoints/Photos: inherit from journey membership
+CREATE POLICY "Waypoint access" ON waypoints FOR SELECT USING (user_has_journey_access(journey_id));
+CREATE POLICY "Waypoint modify" ON waypoints FOR ALL USING (user_has_journey_access(journey_id, 'editor'));
+CREATE POLICY "Photo access" ON photos FOR SELECT USING (user_has_journey_access(journey_id));
+CREATE POLICY "Photo modify" ON photos FOR ALL USING (user_has_journey_access(journey_id, 'editor'));
 
--- Waypoints inherit journey permissions
-CREATE POLICY "Waypoints follow journey permissions" ON waypoints
-  FOR SELECT USING (
-    EXISTS (
-      SELECT 1 FROM journeys
-      WHERE journeys.id = waypoints.journey_id
-      AND (journeys.is_public = true OR journeys.user_id = auth.uid())
-    )
-  );
+-- Members: owners can manage, members can view
+CREATE POLICY "Member view" ON journey_members FOR SELECT USING (user_has_journey_access(journey_id));
+CREATE POLICY "Member manage" ON journey_members FOR ALL USING (user_has_journey_access(journey_id, 'owner'));
 
-CREATE POLICY "Users can manage own waypoints" ON waypoints
-  FOR ALL USING (
-    EXISTS (
-      SELECT 1 FROM journeys
-      WHERE journeys.id = waypoints.journey_id
-      AND journeys.user_id = auth.uid()
-    )
-  );
+-- Profiles: all authenticated users can view (for member dropdown)
+CREATE POLICY "Profile view" ON profiles FOR SELECT USING (auth.role() = 'authenticated');
 
--- Photos inherit journey permissions
-CREATE POLICY "Photos follow journey permissions" ON photos
-  FOR SELECT USING (
-    EXISTS (
-      SELECT 1 FROM journeys
-      WHERE journeys.id = photos.journey_id
-      AND (journeys.is_public = true OR journeys.user_id = auth.uid())
-    )
-  );
-
-CREATE POLICY "Users can manage own photos" ON photos
-  FOR ALL USING (
-    EXISTS (
-      SELECT 1 FROM journeys
-      WHERE journeys.id = photos.journey_id
-      AND journeys.user_id = auth.uid()
-    )
-  );
+-- Triggers: auto-create profile, auto-add creator as owner
+-- (See migration file for full implementation)
 ```
+
+### Roles
+
+| Role | Permissions |
+|------|-------------|
+| **owner** | Full control - edit journey, manage members, delete journey |
+| **editor** | Edit journey details, upload/edit photos, edit waypoints |
+| **viewer** | Read-only access to journey, photos, and waypoints |
 
 ### Storage Structure (R2)
 
@@ -220,7 +224,7 @@ CREATE POLICY "Users can manage own photos" ON photos
 ```
 akashic-media/
 └── journeys/
-    └── {journey_slug}/
+    └── {journey_uuid}/
         └── photos/
             ├── {photo_id}.jpg
             └── {photo_id}_thumb.jpg
@@ -228,9 +232,9 @@ akashic-media/
 
 **Access**: All R2 content is served through an authenticated Cloudflare Worker (`workers/media-proxy/`). The Worker:
 - Verifies Supabase JWT tokens using JWKS (public key)
-- Checks journey access permissions
-- MVP: Any authenticated user can access all journeys
-- Future: Support for private/shared/public access levels
+- Checks journey membership via `journey_members` table
+- Role-based access: owner, editor, viewer
+- Public journeys accessible without authentication
 
 **Worker URL**: `https://akashic-media.chris-haerem.workers.dev`
 
@@ -290,22 +294,36 @@ akashic-media/
    - ⏳ EXIF metadata extraction (pending)
    - ⏳ Photo map markers (pending)
 
-### Phase 3: Multi-user Features (Future)
+### Phase 3: Multi-user Foundation ✅
 
-7. **User Dashboard**
+7. **Database Schema** ✅
+   - ✅ `profiles` table with auth.users sync trigger
+   - ✅ `journey_members` table with role-based access
+   - ✅ RLS policies using `user_has_journey_access()` helper
+   - ✅ Auto-create owner membership on journey creation
+
+8. **Member Management** ✅
+   - ✅ Add/remove journey members
+   - ✅ Role management (owner, editor, viewer)
+   - ✅ Member management UI in JourneyEditModal
+   - ✅ R2 paths migrated from slug to UUID
+
+### Phase 4: Multi-user Features (Future)
+
+9. **User Dashboard**
    - View own journeys
    - Create new journey
    - Edit journey details
 
-8. **Journey Editor**
-   - Add/edit camps
-   - Upload photos
-   - Draw/import GPX routes
+10. **Journey Editor**
+    - Add/edit camps
+    - Upload photos
+    - Draw/import GPX routes
 
-9. **Sharing**
-   - Public/private toggle
-   - Share links
-   - Embed support
+11. **Sharing**
+    - Public/private toggle
+    - Share links
+    - Embed support
 
 ---
 

@@ -74,6 +74,13 @@ export function useMapbox({ containerRef, onTrekSelect, onPhotoClick, onRouteCli
     const selectedTrekRef = useRef<string | null>(null);
     const playbackAnimationRef = useRef<number | null>(null);
     const playbackCallbackRef = useRef<((camp: Camp) => void) | null>(null);
+    // Track if we're in globe view mode (for auto-recentering)
+    const isGlobeViewRef = useRef<boolean>(true);
+    // Track if we should skip the next recenter (to avoid conflicts with flyToGlobe)
+    const skipRecenterRef = useRef<boolean>(false);
+    // Expected globe center coordinates
+    const GLOBE_CENTER: [number, number] = [30, 15];
+    const GLOBE_ZOOM_THRESHOLD = 2.5; // Zoom level below which we consider it "globe view"
     const [mapReady, setMapReady] = useState(false);
     const [dataLayersReady, setDataLayersReady] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -605,6 +612,70 @@ export function useMapbox({ containerRef, onTrekSelect, onPhotoClick, onRouteCli
         };
     }, [containerRef]);
 
+    // Auto-recenter globe when zooming back out to globe level
+    // This fixes the issue where zooming in, panning, and zooming out causes the globe to be off-center
+    useEffect(() => {
+        const map = mapRef.current;
+        if (!map || !mapReady) return;
+
+        let isUserZooming = false;
+        let lastUserZoom = map.getZoom();
+
+        const onZoomStart = () => {
+            isUserZooming = true;
+            lastUserZoom = map.getZoom();
+        };
+
+        const onZoomEnd = () => {
+            if (!mapRef.current || !isUserZooming) return;
+
+            const currentZoom = mapRef.current.getZoom();
+            const wasZoomingOut = currentZoom < lastUserZoom;
+            isUserZooming = false;
+
+            // Only recenter if:
+            // 1. We're in globe view mode (not viewing a trek)
+            // 2. No trek is selected
+            // 3. We zoomed OUT (not in)
+            // 4. We're now at or below the globe zoom threshold
+            // 5. We're not skipping recenter (e.g., flyToGlobe is handling it)
+            if (
+                isGlobeViewRef.current &&
+                !selectedTrekRef.current &&
+                wasZoomingOut &&
+                currentZoom <= GLOBE_ZOOM_THRESHOLD &&
+                !skipRecenterRef.current
+            ) {
+                const center = mapRef.current.getCenter();
+                const distanceFromCenter = Math.sqrt(
+                    Math.pow(center.lng - GLOBE_CENTER[0], 2) +
+                    Math.pow(center.lat - GLOBE_CENTER[1], 2)
+                );
+
+                // Only recenter if we've drifted more than 5 degrees from center
+                if (distanceFromCenter > 5) {
+                    const isMobile = window.matchMedia('(max-width: 768px)').matches;
+                    mapRef.current.easeTo({
+                        center: GLOBE_CENTER,
+                        zoom: isMobile ? 1.2 : 1.5,
+                        pitch: 0,
+                        bearing: 0,
+                        duration: 1500,
+                        easing: (t) => 1 - Math.pow(1 - t, 3) // ease-out cubic
+                    });
+                }
+            }
+        };
+
+        map.on('zoomstart', onZoomStart);
+        map.on('zoomend', onZoomEnd);
+
+        return () => {
+            map.off('zoomstart', onZoomStart);
+            map.off('zoomend', onZoomEnd);
+        };
+    }, [mapReady]);
+
     // Add trek markers and routes when data is available
     useEffect(() => {
         const map = mapRef.current;
@@ -794,6 +865,11 @@ export function useMapbox({ containerRef, onTrekSelect, onPhotoClick, onRouteCli
         const map = mapRef.current;
         if (!map || !mapReady) return;
 
+        // Mark that we're in globe view mode
+        isGlobeViewRef.current = true;
+        // Skip the next auto-recenter since flyToGlobe handles centering
+        skipRecenterRef.current = true;
+
         // Set globe atmosphere - transparent space so CSS starfield shows through
         map.setFog({
             'range': [1, 12],
@@ -821,6 +897,8 @@ export function useMapbox({ containerRef, onTrekSelect, onPhotoClick, onRouteCli
         const isMobile = window.matchMedia('(max-width: 768px)').matches;
 
         if (selectedTrek) {
+            // When focused on a trek at globe level, use trek position
+            selectedTrekRef.current = selectedTrek.id;
             map.flyTo({
                 center: [selectedTrek.lng, selectedTrek.lat],
                 zoom: isMobile ? 3 : 3.5,
@@ -832,8 +910,10 @@ export function useMapbox({ containerRef, onTrekSelect, onPhotoClick, onRouteCli
                 easing: (t) => 1 - Math.pow(1 - t, 3) // ease-out cubic
             });
         } else {
+            // No trek selected - fly to default globe center
+            selectedTrekRef.current = null;
             map.flyTo({
-                center: [30, 15],
+                center: GLOBE_CENTER,
                 zoom: isMobile ? 1.2 : 1.5,
                 pitch: 0,
                 bearing: 0,
@@ -843,6 +923,11 @@ export function useMapbox({ containerRef, onTrekSelect, onPhotoClick, onRouteCli
                 easing: (t) => 1 - Math.pow(1 - t, 3)
             });
         }
+
+        // Reset skip flag after animation completes
+        setTimeout(() => {
+            skipRecenterRef.current = false;
+        }, 3500);
     }, [mapReady]);
 
     // Highlight trek segment (defined before flyToTrek which uses it)
@@ -881,6 +966,10 @@ export function useMapbox({ containerRef, onTrekSelect, onPhotoClick, onRouteCli
     const flyToTrek = useCallback((selectedTrek: TrekConfig, selectedCamp: Camp | null = null) => {
         const map = mapRef.current;
         if (!map || !mapReady || !selectedTrek) return;
+
+        // Mark that we're NOT in globe view mode (we're viewing a trek)
+        isGlobeViewRef.current = false;
+        selectedTrekRef.current = selectedTrek.id;
 
         const trekData = trekDataMapRef.current[selectedTrek.id];
         const trekConfig = treksRef.current.find(t => t.id === selectedTrek.id);

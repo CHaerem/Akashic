@@ -1,6 +1,6 @@
-import { memo, useCallback, useState } from 'react';
+import { memo, useCallback, useState, useMemo, useRef } from 'react';
 import type { TrekData, Camp, ExtendedStats, ElevationProfile, TabType, Photo } from '../../types/trek';
-import { useSwipeGesture } from '../../hooks/useSwipeGesture';
+import { useDragGesture } from '../../hooks/useDragGesture';
 import { TabButton } from '../common/TabButton';
 import { GlassButton } from '../common/GlassButton';
 import { OverviewTab } from './OverviewTab';
@@ -38,6 +38,11 @@ interface InfoPanelProps {
     onViewPhotoOnMap?: (photo: Photo) => void;
 }
 
+// Snap points as vh percentages (from smallest to largest panel height)
+// minimized: ~10vh, normal: 42vh, expanded: 88vh
+const SNAP_POINTS_VH = [10, 42, 88];
+const PANEL_STATES: PanelState[] = ['minimized', 'normal', 'expanded'];
+
 export const InfoPanel = memo(function InfoPanel({
     trekData, activeTab, setActiveTab, selectedCamp, onCampSelect, onBack,
     extendedStats, elevationProfile, isMobile, panelState, onPanelStateChange,
@@ -46,41 +51,52 @@ export const InfoPanel = memo(function InfoPanel({
     const padding = isMobile ? 16 : 24;
     const [showEditModal, setShowEditModal] = useState(false);
     const [editMode, setEditMode] = useState(false);
+    const panelRef = useRef<HTMLDivElement>(null);
 
-    // Swipe gestures for mobile bottom sheet
-    const handleSwipeUp = useCallback(() => {
-        if (panelState === 'minimized') onPanelStateChange('normal');
-        else if (panelState === 'normal') onPanelStateChange('expanded');
-    }, [panelState, onPanelStateChange]);
+    // Convert panel state to snap index
+    const currentSnapIndex = useMemo(() =>
+        PANEL_STATES.indexOf(panelState),
+        [panelState]
+    );
 
-    const handleSwipeDown = useCallback(() => {
-        if (panelState === 'expanded') onPanelStateChange('normal');
-        else if (panelState === 'normal') onPanelStateChange('minimized');
-    }, [panelState, onPanelStateChange]);
+    // Handle snap changes from drag gesture
+    const handleSnapChange = useCallback((index: number) => {
+        onPanelStateChange(PANEL_STATES[index]);
+    }, [onPanelStateChange]);
 
-    const swipeHandlers = useSwipeGesture({
-        onSwipeUp: handleSwipeUp,
-        onSwipeDown: handleSwipeDown,
-        threshold: 30
+    // iOS-like drag gesture with direct DOM manipulation for instant feedback
+    const [dragState, dragHandlers] = useDragGesture({
+        snapPoints: SNAP_POINTS_VH,
+        currentSnapIndex,
+        onSnapChange: handleSnapChange,
+        panelRef,
+        onDismiss: onBack, // Swipe down from minimized to go back to globe
+        velocityThreshold: 0.4,
+        distanceThreshold: 40,
+        dismissThreshold: 80, // 80px to dismiss
     });
 
-    // Panel height based on state - using dvh for better mobile support
-    const getPanelHeight = () => {
-        switch (panelState) {
-            case 'minimized': return '100px';
-            case 'normal': return '42dvh';
-            case 'expanded': return '88dvh';
-        }
+    // Panel height based on state (only used for initial render and non-drag state)
+    const getPanelHeight = (): string => {
+        const baseHeights: Record<PanelState, string> = {
+            minimized: '100px',
+            normal: '42dvh',
+            expanded: '88dvh'
+        };
+        return baseHeights[panelState];
     };
 
+    const maxHeight = 'calc(100dvh - 60px)';
+
     // Mobile bottom sheet style - Liquid Glass design
+    // Note: height and transition are manipulated directly via panelRef during drag
     const mobileStyle: React.CSSProperties = {
         position: 'absolute',
         left: 0,
         right: 0,
         bottom: 0,
         height: getPanelHeight(),
-        maxHeight: 'calc(100dvh - 60px)',
+        maxHeight,
         // Liquid Glass gradient background
         background: `linear-gradient(
             180deg,
@@ -91,13 +107,14 @@ export const InfoPanel = memo(function InfoPanel({
         // Reduced blur for mobile performance (16px vs 32px on desktop)
         backdropFilter: 'blur(16px) saturate(150%)',
         WebkitBackdropFilter: 'blur(16px) saturate(150%)',
-        willChange: 'transform, height',
+        willChange: 'height',
         borderTop: `1px solid ${colors.glass.border}`,
         borderRadius: `${radius.xxl}px ${radius.xxl}px 0 0`,
         display: 'flex',
         flexDirection: 'column',
         zIndex: 20,
-        transition: `height ${transitions.glass}`,
+        // Default transition (overridden by direct DOM manipulation during drag)
+        transition: `height 0.4s cubic-bezier(0.32, 0.72, 0, 1)`,
         paddingBottom: 'env(safe-area-inset-bottom)',
         boxShadow: `
             0 -16px 48px rgba(0, 0, 0, 0.4),
@@ -142,46 +159,62 @@ export const InfoPanel = memo(function InfoPanel({
     }, [panelState, onPanelStateChange]);
 
     return (
-        <div style={isMobile ? mobileStyle : desktopStyle} className="glass-scrollbar">
-            {/* Mobile drag handle with swipe support - Liquid Glass pill */}
+        <div ref={isMobile ? panelRef : null} style={isMobile ? mobileStyle : desktopStyle} className="glass-scrollbar">
+            {/* Mobile drag handle with iOS-like gesture support */}
             {isMobile && (
                 <div
                     onClick={handleDragHandleClick}
-                    {...swipeHandlers}
+                    onTouchStart={dragHandlers.onTouchStart}
+                    onTouchMove={dragHandlers.onTouchMove}
+                    onTouchEnd={dragHandlers.onTouchEnd}
                     style={{
                         padding: '14px 0 10px',
                         display: 'flex',
                         justifyContent: 'center',
-                        cursor: 'grab',
+                        cursor: dragState.isDragging ? 'grabbing' : 'grab',
                         touchAction: 'none'
                     }}
                 >
                     <div style={{
-                        width: panelState === 'expanded' ? 48 : 40,
+                        width: dragState.isDragging ? 52 : (panelState === 'expanded' ? 48 : 40),
                         height: 5,
-                        background: `linear-gradient(
-                            90deg,
-                            rgba(255, 255, 255, 0.2) 0%,
-                            rgba(255, 255, 255, 0.4) 50%,
-                            rgba(255, 255, 255, 0.2) 100%
-                        )`,
+                        background: dragState.isDragging
+                            ? `linear-gradient(
+                                90deg,
+                                rgba(255, 255, 255, 0.3) 0%,
+                                rgba(255, 255, 255, 0.6) 50%,
+                                rgba(255, 255, 255, 0.3) 100%
+                            )`
+                            : `linear-gradient(
+                                90deg,
+                                rgba(255, 255, 255, 0.2) 0%,
+                                rgba(255, 255, 255, 0.4) 50%,
+                                rgba(255, 255, 255, 0.2) 100%
+                            )`,
                         borderRadius: radius.pill,
-                        transition: `all ${transitions.smooth}`,
+                        transition: dragState.isDragging ? 'none' : `all ${transitions.smooth}`,
                         boxShadow: 'inset 0 1px 0 rgba(255, 255, 255, 0.3)',
                     }} />
                 </div>
             )}
 
-            {/* Header */}
-            <div style={{
-                padding: isMobile ? `8px ${padding}px 16px` : `${padding}px`,
-                borderBottom: panelState !== 'minimized' ? `1px solid ${colors.glass.borderSubtle}` : 'none',
-                display: 'flex',
-                flexDirection: isMobile ? 'row' : 'column',
-                alignItems: isMobile ? 'center' : 'stretch',
-                justifyContent: isMobile ? 'space-between' : 'flex-start',
-                flexShrink: 0
-            }}>
+            {/* Header - also draggable on mobile for larger touch target */}
+            <div
+                onTouchStart={isMobile ? dragHandlers.onTouchStart : undefined}
+                onTouchMove={isMobile ? dragHandlers.onTouchMove : undefined}
+                onTouchEnd={isMobile ? dragHandlers.onTouchEnd : undefined}
+                style={{
+                    padding: isMobile ? `8px ${padding}px 16px` : `${padding}px`,
+                    borderBottom: panelState !== 'minimized' ? `1px solid ${colors.glass.borderSubtle}` : 'none',
+                    display: 'flex',
+                    flexDirection: isMobile ? 'row' : 'column',
+                    alignItems: isMobile ? 'center' : 'stretch',
+                    justifyContent: isMobile ? 'space-between' : 'flex-start',
+                    flexShrink: 0,
+                    touchAction: isMobile ? 'none' : 'auto',
+                    cursor: isMobile ? (dragState.isDragging ? 'grabbing' : 'grab') : 'default',
+                }}
+            >
                 {!isMobile && (
                     <GlassButton
                         variant="ghost"

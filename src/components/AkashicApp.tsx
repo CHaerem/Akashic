@@ -157,6 +157,17 @@ export default function AkashicApp() {
                     transition: `color ${transitions.smooth}`,
                 }}>
                     Akashic
+                    {import.meta.env.VITE_STAGING_BRANCH && (
+                        <span style={{
+                            fontSize: isMobile ? 8 : 9,
+                            letterSpacing: '0.1em',
+                            opacity: 0.5,
+                            marginLeft: 8,
+                            fontWeight: 400,
+                        }}>
+                            [{import.meta.env.VITE_STAGING_BRANCH}]
+                        </span>
+                    )}
                 </span>
             </div>
 

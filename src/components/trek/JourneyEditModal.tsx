@@ -1,8 +1,20 @@
 import { memo, useState, useEffect, useCallback } from 'react';
-import { getJourneyForEdit, updateJourney, type DbJourney, type JourneyUpdate } from '../../lib/journeys';
+import {
+    getJourneyForEdit,
+    updateJourney,
+    getJourneyMembers,
+    getRegisteredUsers,
+    addJourneyMember,
+    removeJourneyMember,
+    updateMemberRole,
+    getUserJourneyRole,
+    type DbJourney,
+    type JourneyUpdate
+} from '../../lib/journeys';
+import type { JourneyMember, Profile, JourneyRole } from '../../types/trek';
 import { GlassModal, glassInputStyle, glassLabelStyle, glassInfoBoxStyle, glassErrorBoxStyle } from '../common/GlassModal';
 import { GlassButton } from '../common/GlassButton';
-import { colors, transitions } from '../../styles/liquidGlass';
+import { colors, transitions, radius } from '../../styles/liquidGlass';
 
 interface JourneyEditModalProps {
     slug: string;
@@ -104,14 +116,24 @@ export const JourneyEditModal = memo(function JourneyEditModal({
     const [totalDistance, setTotalDistance] = useState('');
     const [summitElevation, setSummitElevation] = useState('');
 
+    // Member management state
+    const [members, setMembers] = useState<JourneyMember[]>([]);
+    const [registeredUsers, setRegisteredUsers] = useState<Profile[]>([]);
+    const [userRole, setUserRole] = useState<JourneyRole | null>(null);
+    const [selectedUserId, setSelectedUserId] = useState('');
+    const [selectedRole, setSelectedRole] = useState<JourneyRole>('editor');
+    const [addingMember, setAddingMember] = useState(false);
+    const [memberError, setMemberError] = useState<string | null>(null);
+
     // Load journey data
     useEffect(() => {
         if (!isOpen || !slug) return;
 
         setLoading(true);
         setError(null);
+        setMemberError(null);
 
-        getJourneyForEdit(slug).then(data => {
+        getJourneyForEdit(slug).then(async data => {
             if (data) {
                 setJourney(data);
                 setName(data.name || '');
@@ -122,6 +144,16 @@ export const JourneyEditModal = memo(function JourneyEditModal({
                 setTotalDays(data.total_days?.toString() || '');
                 setTotalDistance(data.total_distance?.toString() || '');
                 setSummitElevation(data.summit_elevation?.toString() || '');
+
+                // Load members and user role using journey UUID
+                const [membersData, role, users] = await Promise.all([
+                    getJourneyMembers(data.id),
+                    getUserJourneyRole(data.id),
+                    getRegisteredUsers()
+                ]);
+                setMembers(membersData);
+                setUserRole(role);
+                setRegisteredUsers(users);
             }
             setLoading(false);
         }).catch(err => {
@@ -157,6 +189,57 @@ export const JourneyEditModal = memo(function JourneyEditModal({
             setSaving(false);
         }
     }, [journey, slug, name, description, country, dateStarted, dateEnded, totalDays, totalDistance, summitElevation, onSave, onClose]);
+
+    // Member management handlers
+    const handleAddMember = useCallback(async () => {
+        if (!journey || !selectedUserId) return;
+
+        setAddingMember(true);
+        setMemberError(null);
+
+        try {
+            const newMember = await addJourneyMember(journey.id, selectedUserId, selectedRole);
+            if (newMember) {
+                setMembers(prev => [...prev, newMember]);
+            }
+            setSelectedUserId('');
+        } catch (err) {
+            setMemberError(err instanceof Error ? err.message : 'Failed to add member');
+        } finally {
+            setAddingMember(false);
+        }
+    }, [journey, selectedUserId, selectedRole]);
+
+    const handleRemoveMember = useCallback(async (userId: string) => {
+        if (!journey) return;
+
+        try {
+            await removeJourneyMember(journey.id, userId);
+            setMembers(prev => prev.filter(m => m.user_id !== userId));
+        } catch (err) {
+            setMemberError(err instanceof Error ? err.message : 'Failed to remove member');
+        }
+    }, [journey]);
+
+    const handleRoleChange = useCallback(async (userId: string, newRole: JourneyRole) => {
+        if (!journey) return;
+
+        try {
+            await updateMemberRole(journey.id, userId, newRole);
+            setMembers(prev => prev.map(m =>
+                m.user_id === userId ? { ...m, role: newRole } : m
+            ));
+        } catch (err) {
+            setMemberError(err instanceof Error ? err.message : 'Failed to update role');
+        }
+    }, [journey]);
+
+    // Filter out users who are already members
+    const availableUsers = registeredUsers.filter(
+        user => !members.some(m => m.user_id === user.id)
+    );
+
+    const isOwner = userRole === 'owner';
 
     const footer = (
         <>
@@ -287,6 +370,203 @@ export const JourneyEditModal = memo(function JourneyEditModal({
                             Day 1 = {new Date(dateStarted).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                         </div>
                     )}
+
+                    {/* Members Section */}
+                    <div style={{
+                        marginTop: 24,
+                        paddingTop: 24,
+                        borderTop: `1px solid ${colors.glass.borderSubtle}`
+                    }}>
+                        <label style={{
+                            ...glassLabelStyle,
+                            fontSize: 14,
+                            marginBottom: 16,
+                            display: 'block'
+                        }}>
+                            Team Members
+                        </label>
+
+                        {memberError && (
+                            <div style={{ ...glassErrorBoxStyle, marginBottom: 16 }}>
+                                {memberError}
+                            </div>
+                        )}
+
+                        {/* Current Members List */}
+                        <div style={{
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: 8,
+                            marginBottom: 16
+                        }}>
+                            {members.map(member => (
+                                <div
+                                    key={member.id}
+                                    style={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: 12,
+                                        padding: '10px 12px',
+                                        background: 'rgba(255, 255, 255, 0.05)',
+                                        borderRadius: radius.md,
+                                        border: `1px solid ${colors.glass.borderSubtle}`
+                                    }}
+                                >
+                                    <div style={{ flex: 1, minWidth: 0 }}>
+                                        <div style={{
+                                            color: colors.text.primary,
+                                            fontSize: 14,
+                                            fontWeight: 500,
+                                            overflow: 'hidden',
+                                            textOverflow: 'ellipsis',
+                                            whiteSpace: 'nowrap'
+                                        }}>
+                                            {member.profile?.display_name || member.profile?.email || 'Unknown'}
+                                        </div>
+                                        <div style={{
+                                            color: colors.text.subtle,
+                                            fontSize: 12
+                                        }}>
+                                            {member.profile?.email}
+                                        </div>
+                                    </div>
+
+                                    {/* Role selector (owners can change roles) */}
+                                    {isOwner && member.role !== 'owner' ? (
+                                        <select
+                                            value={member.role}
+                                            onChange={(e) => handleRoleChange(member.user_id, e.target.value as JourneyRole)}
+                                            style={{
+                                                ...glassInputStyle,
+                                                width: 'auto',
+                                                padding: '6px 10px',
+                                                fontSize: 12,
+                                                cursor: 'pointer'
+                                            }}
+                                        >
+                                            <option value="editor">Editor</option>
+                                            <option value="viewer">Viewer</option>
+                                        </select>
+                                    ) : (
+                                        <span style={{
+                                            padding: '4px 10px',
+                                            borderRadius: radius.sm,
+                                            fontSize: 12,
+                                            fontWeight: 500,
+                                            textTransform: 'uppercase',
+                                            letterSpacing: '0.05em',
+                                            background: member.role === 'owner'
+                                                ? 'rgba(251, 191, 36, 0.2)'
+                                                : member.role === 'editor'
+                                                    ? 'rgba(96, 165, 250, 0.2)'
+                                                    : 'rgba(255, 255, 255, 0.1)',
+                                            color: member.role === 'owner'
+                                                ? '#fbbf24'
+                                                : member.role === 'editor'
+                                                    ? '#60a5fa'
+                                                    : colors.text.secondary
+                                        }}>
+                                            {member.role}
+                                        </span>
+                                    )}
+
+                                    {/* Remove button (owners can remove non-owners) */}
+                                    {isOwner && member.role !== 'owner' && (
+                                        <button
+                                            onClick={() => handleRemoveMember(member.user_id)}
+                                            style={{
+                                                background: 'rgba(239, 68, 68, 0.2)',
+                                                border: 'none',
+                                                borderRadius: radius.sm,
+                                                padding: '6px 10px',
+                                                color: '#ef4444',
+                                                fontSize: 12,
+                                                cursor: 'pointer',
+                                                transition: `all ${transitions.fast}`
+                                            }}
+                                        >
+                                            Remove
+                                        </button>
+                                    )}
+                                </div>
+                            ))}
+
+                            {members.length === 0 && (
+                                <div style={{
+                                    color: colors.text.subtle,
+                                    fontSize: 14,
+                                    textAlign: 'center',
+                                    padding: 20
+                                }}>
+                                    No members yet
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Add Member (owners only) */}
+                        {isOwner && availableUsers.length > 0 && (
+                            <div style={{
+                                display: 'flex',
+                                gap: 8,
+                                alignItems: 'flex-end'
+                            }}>
+                                <div style={{ flex: 1 }}>
+                                    <label style={{ ...glassLabelStyle, fontSize: 12 }}>Add Member</label>
+                                    <select
+                                        value={selectedUserId}
+                                        onChange={(e) => setSelectedUserId(e.target.value)}
+                                        style={{
+                                            ...glassInputStyle,
+                                            cursor: 'pointer'
+                                        }}
+                                    >
+                                        <option value="">Select user...</option>
+                                        {availableUsers.map(user => (
+                                            <option key={user.id} value={user.id}>
+                                                {user.display_name || user.email}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label style={{ ...glassLabelStyle, fontSize: 12 }}>Role</label>
+                                    <select
+                                        value={selectedRole}
+                                        onChange={(e) => setSelectedRole(e.target.value as JourneyRole)}
+                                        style={{
+                                            ...glassInputStyle,
+                                            width: 'auto',
+                                            cursor: 'pointer'
+                                        }}
+                                    >
+                                        <option value="editor">Editor</option>
+                                        <option value="viewer">Viewer</option>
+                                    </select>
+                                </div>
+                                <GlassButton
+                                    variant="primary"
+                                    size="sm"
+                                    onClick={handleAddMember}
+                                    disabled={!selectedUserId || addingMember}
+                                    style={{ marginBottom: 0 }}
+                                >
+                                    {addingMember ? '...' : 'Add'}
+                                </GlassButton>
+                            </div>
+                        )}
+
+                        {isOwner && availableUsers.length === 0 && members.length > 0 && (
+                            <div style={glassInfoBoxStyle}>
+                                All registered users are already members of this journey.
+                            </div>
+                        )}
+
+                        {!isOwner && (
+                            <div style={glassInfoBoxStyle}>
+                                Only journey owners can manage members.
+                            </div>
+                        )}
+                    </div>
                 </div>
             )}
         </GlassModal>
