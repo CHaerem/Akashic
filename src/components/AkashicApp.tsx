@@ -6,6 +6,7 @@ import { useMedia } from '../hooks/useMedia';
 import { useJourneys } from '../contexts/JourneysContext';
 import { fetchPhotos, getJourneyIdBySlug } from '../lib/journeys';
 import type { Photo } from '../types/trek';
+import { preloadPhotoImages } from '../utils/photoPrefetch';
 import { MapboxGlobe } from './MapboxGlobe';
 import { OfflineIndicator } from './OfflineIndicator';
 import { GlobeSelectionPanel } from './home/GlobeSelectionPanel';
@@ -24,6 +25,7 @@ export default function AkashicApp() {
     const [panelState, setPanelState] = useState<PanelState>('normal');
     const [photos, setPhotos] = useState<Photo[]>([]);
     const photoCacheRef = useRef<Record<string, Photo[]>>({});
+    const imageCacheRef = useRef<Set<string>>(new Set());
     // Defer photo updates to prevent re-renders during camera animations
     const deferredPhotos = useDeferredValue(photos);
     const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
@@ -47,6 +49,12 @@ export default function AkashicApp() {
         handleCampSelect
     } = useTrekData();
 
+    const warmPhotoThumbnails = useCallback((journeyPhotos: Photo[]) => {
+        preloadPhotoImages(journeyPhotos, getMediaUrl, {
+            cache: imageCacheRef.current,
+        });
+    }, [getMediaUrl]);
+
     // Prefetch photos in the background when a trek is selected to avoid UI jank during transition
     useEffect(() => {
         if (!selectedTrek) return;
@@ -64,6 +72,7 @@ export default function AkashicApp() {
             if (cancelled) return;
 
             photoCacheRef.current[trekId] = journeyPhotos;
+            warmPhotoThumbnails(journeyPhotos);
 
             // If user explored while we were prefetching, hydrate the UI immediately
             if (view === 'trek' && selectedTrek?.id === trekId) {
@@ -85,6 +94,7 @@ export default function AkashicApp() {
         const cachedPhotos = photoCacheRef.current[trekId];
 
         if (cachedPhotos) {
+            warmPhotoThumbnails(cachedPhotos);
             setPhotos(cachedPhotos);
             return;
         }
@@ -99,6 +109,7 @@ export default function AkashicApp() {
             if (cancelled) return;
 
             photoCacheRef.current[trekId] = journeyPhotos;
+            warmPhotoThumbnails(journeyPhotos);
             setPhotos(journeyPhotos);
         }
 
