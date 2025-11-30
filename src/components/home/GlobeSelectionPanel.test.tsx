@@ -57,4 +57,20 @@ describe('GlobeSelectionPanel', () => {
         fireEvent.click(screen.getByText('Explore Journey →'));
         expect(handleExplore).toHaveBeenCalled();
     });
+
+    it('disables explore while loading', () => {
+        const handleExplore = vi.fn();
+        render(
+            <GlobeSelectionPanel
+                selectedTrek={mockTrek}
+                onBack={() => {}}
+                onExplore={handleExplore}
+                isMobile={false}
+                isLoading
+            />
+        );
+
+        const button = screen.getByRole('button', { name: 'Preparing Journey…' });
+        expect(button).toBeDisabled();
+    });
 });

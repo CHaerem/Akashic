@@ -6,10 +6,11 @@ interface GlobeSelectionPanelProps {
     selectedTrek: TrekConfig;
     onBack: () => void;
     onExplore: () => void;
+    isLoading?: boolean;
     isMobile: boolean;
 }
 
-export function GlobeSelectionPanel({ selectedTrek, onBack, onExplore, isMobile }: GlobeSelectionPanelProps) {
+export function GlobeSelectionPanel({ selectedTrek, onBack, onExplore, isLoading = false, isMobile }: GlobeSelectionPanelProps) {
     return (
         <div style={{
             position: 'absolute',
@@ -98,12 +99,13 @@ export function GlobeSelectionPanel({ selectedTrek, onBack, onExplore, isMobile 
                 size={isMobile ? 'lg' : 'md'}
                 fullWidth={isMobile}
                 onClick={onExplore}
+                disabled={isLoading}
                 style={{
                     ...typography.label,
                     letterSpacing: '0.15em',
                 }}
             >
-                Explore Journey →
+                {isLoading ? 'Preparing Journey…' : 'Explore Journey →'}
             </GlassButton>
         </div>
     );
