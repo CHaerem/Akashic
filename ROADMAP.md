@@ -99,13 +99,13 @@ photos (
 ```
 akashic-media/
 └── journeys/
-    └── {journey_slug}/
+    └── {journey_uuid}/
         └── photos/
             ├── {photo_id}.jpg
             └── {photo_id}_thumb.jpg
 ```
 
-**Note**: Photos are served through authenticated Worker, not directly from R2.
+**Note**: Photos are served through authenticated Worker, not directly from R2. Paths use journey UUIDs (migrated from slug-based paths).
 
 ---
 
@@ -284,7 +284,40 @@ Quality-of-life improvements and additional features.
 
 ---
 
-## Future: Multi-User Platform
+## Phase 4: Multi-User Foundation ✅
+
+### Goal
+
+Role-based access control allowing journey owners to invite collaborators.
+
+### Completed Features
+
+#### Database Schema ✅
+
+- [x] `profiles` table with auth.users sync trigger
+- [x] `journey_members` table with role-based access (owner/editor/viewer)
+- [x] RLS policies using `user_has_journey_access()` helper function
+- [x] Auto-create owner membership when journey is created
+
+#### Member Management ✅
+
+- [x] Add/remove journey members from JourneyEditModal
+- [x] Change member roles (owner, editor, viewer)
+- [x] View current members and their roles
+- [x] R2 paths migrated from slug to UUID (8 photos migrated)
+
+#### Sharing Model
+
+- [x] Role-based access: owner, editor, viewer
+- [x] Owners can manage members
+- [x] Editors can modify journey content
+- [x] Viewers have read-only access
+- [ ] Public journey links (opt-in per journey)
+- [ ] Email invitations
+
+---
+
+## Future: Extended Multi-User Platform
 
 ### Vision
 
@@ -295,21 +328,18 @@ A platform where anyone can create and share their travel journeys.
 #### User Management
 
 - [ ] Self-service registration (currently disabled)
-- [ ] User profiles
 - [ ] User dashboard (my journeys)
+- [ ] User profile editing
 
-#### Sharing Model (private/shared)
+#### Extended Sharing
 
-- [x] MVP: All journeys private, shared with all authenticated family members
-- [ ] Future: Share journey with specific users (email invite)
-- [ ] Future: Public journey links (opt-in per journey)
+- [ ] Share journey with specific users (email invite)
+- [ ] Public journey links (opt-in per journey)
 - [ ] Embed widget for blogs
 - [ ] Social sharing
 
 #### Collaboration
 
-- [x] MVP: Any authenticated user can edit any journey
-- [ ] Future: Per-journey role permissions (owner, editor, viewer)
 - [ ] Comments on journeys
 
 ### Scale Considerations
@@ -336,7 +366,7 @@ A platform where anyone can create and share their travel journeys.
 | Phase 2 (Journey UI)                  | ✅ Complete      | Journey editing, Route Editor A+B+C (intelligent drawing) done |
 | **Phase 2.5 (Immersive Exploration)** | ✅ Core Complete | Elevation profile, photo markers, view-on-map done             |
 | Phase 3 (Polish)                      | 📋 Planned       | After immersive exploration                                    |
-| Multi-user                            | 🔮 Future        | Post-MVP                                                       |
+| **Phase 4 (Multi-user Foundation)**   | ✅ Complete      | Role-based access, member management UI                        |
 
 ---
 
@@ -353,6 +383,7 @@ A platform where anyone can create and share their travel journeys.
 | 2024-11 | Photo display UX TBD                                 | Will experiment with map markers, lightbox, timeline                                       |
 | 2024-11 | Collaborative over admin-only                        | Family members can all contribute photos                                                   |
 | 2024-11 | Free tier limits enforced server-side                | Worker: 20MB max, Supabase triggers: 20 journeys, 100 photos/journey, 30 waypoints/journey |
+| 2024-11 | Multi-user via journey_members table                 | Role-based (owner/editor/viewer), RLS helper function, migrated R2 paths to UUID           |
 
 ---
 
