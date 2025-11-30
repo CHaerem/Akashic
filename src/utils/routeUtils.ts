@@ -2,6 +2,8 @@
  * Route utility functions for calculating distances and snapping waypoints to routes
  */
 
+import type { Camp, RouteSegment, PointOfInterest } from '../types/trek';
+
 export type RouteCoordinate = [number, number, number]; // [lng, lat, elevation]
 export type Coordinate = [number, number]; // [lng, lat]
 
@@ -450,3 +452,202 @@ export const SIMPLIFY_TOLERANCE = {
     /** ~50 meters - aggressive simplification */
     veryLow: 0.0005
 } as const;
+
+// ============================================
+// Journey Segment and Interactivity Utilities
+// ============================================
+
+/**
+ * Estimate hiking time using Naismith's Rule with Tranter's corrections
+ * Base: 5km/hr on flat + 1 minute per 10m of ascent
+ * Adjusted for descent and difficulty
+ *
+ * @param distanceKm Distance in kilometers
+ * @param elevationGain Total elevation gain in meters
+ * @param elevationLoss Total elevation loss in meters
+ * @returns Estimated time as a formatted string (e.g., "4-5 hours")
+ */
+export function estimateHikingTime(
+    distanceKm: number,
+    elevationGain: number,
+    elevationLoss: number
+): string {
+    // Base time from horizontal distance (5 km/hr = 12 min/km)
+    let timeMinutes = distanceKm * 12;
+
+    // Add time for ascent (1 minute per 10m of ascent)
+    timeMinutes += elevationGain / 10;
+
+    // Add time for steep descent (1 minute per 25m of descent over 300m/km gradient)
+    // Gentle descent doesn't add time
+    const avgDescentGradient = distanceKm > 0 ? elevationLoss / distanceKm : 0;
+    if (avgDescentGradient > 100) { // More than 10% average descent gradient
+        timeMinutes += elevationLoss / 25;
+    }
+
+    // Convert to hours with range
+    const hours = timeMinutes / 60;
+    const lowerBound = Math.max(0.5, Math.floor(hours * 0.9)); // 10% faster
+    const upperBound = Math.ceil(hours * 1.1); // 10% slower
+
+    if (lowerBound >= upperBound) {
+        return `${lowerBound} hour${lowerBound !== 1 ? 's' : ''}`;
+    }
+    return `${lowerBound}-${upperBound} hours`;
+}
+
+/**
+ * Determine segment difficulty based on distance and elevation
+ */
+export function calculateDifficulty(
+    distanceKm: number,
+    elevationGain: number,
+    elevationLoss: number
+): 'easy' | 'moderate' | 'challenging' | 'difficult' {
+    // Calculate effort score: distance + elevation factor
+    // Roughly: 100m gain = 1km of flat walking
+    const effortScore = distanceKm + (elevationGain / 100) + (elevationLoss / 150);
+
+    // Also consider steepness (gain per km)
+    const steepness = distanceKm > 0 ? elevationGain / distanceKm : 0;
+
+    if (effortScore < 8 && steepness < 200) {
+        return 'easy';
+    } else if (effortScore < 15 && steepness < 400) {
+        return 'moderate';
+    } else if (effortScore < 25 || steepness < 600) {
+        return 'challenging';
+    }
+    return 'difficult';
+}
+
+/**
+ * Get descriptive difficulty label with icon
+ */
+export function getDifficultyLabel(difficulty: 'easy' | 'moderate' | 'challenging' | 'difficult'): string {
+    switch (difficulty) {
+        case 'easy': return 'Easy';
+        case 'moderate': return 'Moderate';
+        case 'challenging': return 'Challenging';
+        case 'difficult': return 'Difficult';
+    }
+}
+
+/**
+ * Calculate complete segment information between two camps
+ */
+export function calculateRouteSegment(
+    fromCamp: Camp,
+    toCamp: Camp,
+    route: RouteCoordinate[],
+    cumulativeDistances: number[]
+): RouteSegment {
+    // Get indices for the segment
+    const fromIndex = fromCamp.routePointIndex ?? findNearestPointOnRoute(fromCamp.coordinates, route)?.index ?? 0;
+    const toIndex = toCamp.routePointIndex ?? findNearestPointOnRoute(toCamp.coordinates, route)?.index ?? route.length - 1;
+
+    // Get segment coordinates
+    const segment = getRouteSegment(route, fromIndex, toIndex);
+    const stats = calculateSegmentStats(segment);
+
+    // Calculate distance from cumulative distances if available
+    const distance = cumulativeDistances.length > toIndex
+        ? (cumulativeDistances[toIndex] || 0) - (cumulativeDistances[fromIndex] || 0)
+        : stats.distance;
+
+    const difficulty = calculateDifficulty(distance, stats.elevationGain, stats.elevationLoss);
+    const estimatedTime = estimateHikingTime(distance, stats.elevationGain, stats.elevationLoss);
+
+    return {
+        fromCampId: fromCamp.id,
+        toCampId: toCamp.id,
+        distance: Math.round(distance * 10) / 10, // Round to 1 decimal
+        elevationGain: Math.round(stats.elevationGain),
+        elevationLoss: Math.round(stats.elevationLoss),
+        estimatedTime,
+        difficulty
+    };
+}
+
+/**
+ * Calculate all segments between camps in a journey
+ */
+export function calculateAllSegments(
+    camps: Camp[],
+    route: RouteCoordinate[]
+): RouteSegment[] {
+    if (camps.length < 2) return [];
+
+    const sortedCamps = [...camps].sort((a, b) => a.dayNumber - b.dayNumber);
+    const cumulativeDistances = calculateRouteDistances(route);
+    const segments: RouteSegment[] = [];
+
+    for (let i = 1; i < sortedCamps.length; i++) {
+        segments.push(calculateRouteSegment(
+            sortedCamps[i - 1],
+            sortedCamps[i],
+            route,
+            cumulativeDistances
+        ));
+    }
+
+    return segments;
+}
+
+/**
+ * Get gradient color for difficulty visualization
+ */
+export function getDifficultyColor(difficulty: 'easy' | 'moderate' | 'challenging' | 'difficult'): string {
+    switch (difficulty) {
+        case 'easy': return 'rgba(34, 197, 94, 0.8)';      // Green
+        case 'moderate': return 'rgba(234, 179, 8, 0.8)';  // Yellow
+        case 'challenging': return 'rgba(251, 146, 60, 0.8)'; // Orange
+        case 'difficult': return 'rgba(239, 68, 68, 0.8)'; // Red
+    }
+}
+
+/**
+ * Format distance for display
+ */
+export function formatDistance(distanceKm: number): string {
+    if (distanceKm < 1) {
+        return `${Math.round(distanceKm * 1000)}m`;
+    }
+    return `${distanceKm.toFixed(1)} km`;
+}
+
+/**
+ * Format elevation for display
+ */
+export function formatElevation(meters: number, showSign = false): string {
+    const prefix = showSign && meters > 0 ? '+' : '';
+    return `${prefix}${Math.round(meters)}m`;
+}
+
+/**
+ * Get nearby POIs for a given position on the route
+ */
+export function getNearbyPOIs(
+    routeDistanceKm: number,
+    pois: PointOfInterest[],
+    rangeKm: number = 2
+): PointOfInterest[] {
+    return pois.filter(poi =>
+        poi.routeDistanceKm !== undefined &&
+        Math.abs(poi.routeDistanceKm - routeDistanceKm) <= rangeKm
+    ).sort((a, b) => (a.routeDistanceKm || 0) - (b.routeDistanceKm || 0));
+}
+
+/**
+ * Get the next POI coming up on the route
+ */
+export function getNextPOI(
+    routeDistanceKm: number,
+    pois: PointOfInterest[]
+): PointOfInterest | null {
+    const upcoming = pois
+        .filter(poi => poi.routeDistanceKm !== undefined && poi.routeDistanceKm > routeDistanceKm)
+        .sort((a, b) => (a.routeDistanceKm || 0) - (b.routeDistanceKm || 0));
+
+    return upcoming.length > 0 ? upcoming[0] : null;
+}

@@ -1,11 +1,12 @@
 import { memo, useCallback, useMemo, useState } from 'react';
-import type { TrekData, Camp, Photo } from '../../types/trek';
+import type { TrekData, Camp, Photo, RouteSegment } from '../../types/trek';
 import { WaypointEditModal } from './WaypointEditModal';
 import { PhotoAssignModal } from './PhotoAssignModal';
 import { RouteEditor } from './RouteEditor';
 import { PhotoLightbox } from '../common/PhotoLightbox';
 import { GlassButton } from '../common/GlassButton';
 import { colors, radius, transitions } from '../../styles/liquidGlass';
+import { calculateAllSegments, getDifficultyColor } from '../../utils/routeUtils';
 
 /**
  * Get the actual date for a specific day number based on journey start date
@@ -105,6 +106,96 @@ const DayPhotos = memo(function DayPhotos({ photos, getMediaUrl, isMobile, onPho
                     +{photos.length - maxVisible}
                 </div>
             )}
+        </div>
+    );
+});
+
+/**
+ * Segment info component showing details between two camps
+ */
+interface SegmentInfoProps {
+    segment: RouteSegment;
+    fromCamp: Camp;
+    toCamp: Camp;
+    isMobile?: boolean;
+}
+
+const SegmentInfo = memo(function SegmentInfo({ segment, fromCamp, toCamp, isMobile = false }: SegmentInfoProps) {
+    const difficultyColor = getDifficultyColor(segment.difficulty);
+
+    return (
+        <div style={{
+            margin: isMobile ? '0 -16px' : '0 -24px',
+            padding: isMobile ? '12px 16px' : '12px 24px',
+            background: `linear-gradient(90deg, ${colors.glass.subtle} 0%, transparent 50%, ${colors.glass.subtle} 100%)`,
+            borderTop: `1px solid ${colors.glass.borderSubtle}`,
+            borderBottom: `1px solid ${colors.glass.borderSubtle}`,
+        }}>
+            <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: 12
+            }}>
+                {/* Distance & Time */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 4,
+                        color: colors.text.secondary,
+                        fontSize: 12
+                    }}>
+                        <span style={{ opacity: 0.6 }}>↓</span>
+                        <span style={{ fontWeight: 500 }}>{segment.distance} km</span>
+                    </div>
+                    <div style={{
+                        width: 1,
+                        height: 12,
+                        background: colors.glass.borderSubtle
+                    }} />
+                    <div style={{
+                        color: colors.text.tertiary,
+                        fontSize: 11
+                    }}>
+                        {segment.estimatedTime}
+                    </div>
+                </div>
+
+                {/* Elevation changes */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    {segment.elevationGain > 0 && (
+                        <span style={{
+                            fontSize: 11,
+                            color: 'rgba(34, 197, 94, 0.9)',
+                            fontWeight: 500
+                        }}>
+                            +{segment.elevationGain}m
+                        </span>
+                    )}
+                    {segment.elevationLoss > 0 && (
+                        <span style={{
+                            fontSize: 11,
+                            color: 'rgba(239, 68, 68, 0.8)',
+                            fontWeight: 500
+                        }}>
+                            -{segment.elevationLoss}m
+                        </span>
+                    )}
+                    <div style={{
+                        padding: '2px 6px',
+                        borderRadius: 4,
+                        background: difficultyColor.replace('0.8', '0.15'),
+                        color: difficultyColor,
+                        fontSize: 9,
+                        fontWeight: 600,
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.05em'
+                    }}>
+                        {segment.difficulty}
+                    </div>
+                </div>
+            </div>
         </div>
     );
 });
@@ -369,6 +460,24 @@ export const JourneyTab = memo(function JourneyTab({
         return result;
     }, [photos]);
 
+    // Calculate segments between camps
+    const segments = useMemo(() => {
+        if (!trekData.route?.coordinates || trekData.camps.length < 2) return [];
+        return calculateAllSegments(trekData.camps, trekData.route.coordinates);
+    }, [trekData.camps, trekData.route]);
+
+    // Create a map of segment by toCampId for easy lookup
+    const segmentByToCamp = useMemo(() => {
+        const map = new Map<string, RouteSegment>();
+        segments.forEach(seg => map.set(seg.toCampId, seg));
+        return map;
+    }, [segments]);
+
+    // Sort camps by day number
+    const sortedCamps = useMemo(() => {
+        return [...trekData.camps].sort((a, b) => a.dayNumber - b.dayNumber);
+    }, [trekData.camps]);
+
     const handleEdit = useCallback((camp: Camp) => {
         setEditingCamp(camp);
     }, []);
@@ -406,24 +515,39 @@ export const JourneyTab = memo(function JourneyTab({
                 </div>
             )}
 
-            {trekData.camps.map((camp, i) => (
-                <CampItem
-                    key={camp.id}
-                    camp={camp}
-                    isSelected={selectedCamp?.id === camp.id}
-                    onClick={onCampSelect}
-                    onEdit={handleEdit}
-                    onAssignPhotos={handleAssignPhotos}
-                    onPhotoClick={handlePhotoClick}
-                    isLast={i === trekData.camps.length - 1}
-                    isMobile={isMobile}
-                    dayDate={getDateForDay(trekData.dateStarted, camp.dayNumber)}
-                    photos={photosByDay[camp.dayNumber] || []}
-                    assignedPhotos={photosByWaypoint[camp.id] || []}
-                    getMediaUrl={getMediaUrl}
-                    editMode={editMode}
-                />
-            ))}
+            {sortedCamps.map((camp, i) => {
+                const segment = segmentByToCamp.get(camp.id);
+                const prevCamp = i > 0 ? sortedCamps[i - 1] : null;
+
+                return (
+                    <div key={camp.id}>
+                        {/* Show segment info before this camp (except for first camp) */}
+                        {segment && prevCamp && (
+                            <SegmentInfo
+                                segment={segment}
+                                fromCamp={prevCamp}
+                                toCamp={camp}
+                                isMobile={isMobile}
+                            />
+                        )}
+                        <CampItem
+                            camp={camp}
+                            isSelected={selectedCamp?.id === camp.id}
+                            onClick={onCampSelect}
+                            onEdit={handleEdit}
+                            onAssignPhotos={handleAssignPhotos}
+                            onPhotoClick={handlePhotoClick}
+                            isLast={i === sortedCamps.length - 1}
+                            isMobile={isMobile}
+                            dayDate={getDateForDay(trekData.dateStarted, camp.dayNumber)}
+                            photos={photosByDay[camp.dayNumber] || []}
+                            assignedPhotos={photosByWaypoint[camp.id] || []}
+                            getMediaUrl={getMediaUrl}
+                            editMode={editMode}
+                        />
+                    </div>
+                );
+            })}
 
             {/* Edit Modal */}
             {editingCamp && (

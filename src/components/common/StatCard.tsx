@@ -4,6 +4,7 @@ import { colors, radius, typography } from '../../styles/liquidGlass';
 interface StatCardProps {
     label: string;
     value: string;
+    sublabel?: string;
     color?: string;
     size?: 'sm' | 'md' | 'lg';
 }
@@ -17,6 +18,7 @@ const sizeConfig = {
 export const StatCard = memo(function StatCard({
     label,
     value,
+    sublabel,
     color = colors.text.primary,
     size = 'md'
 }: StatCardProps) {
@@ -56,6 +58,16 @@ export const StatCard = memo(function StatCard({
             }}>
                 {value}
             </p>
+            {sublabel && (
+                <p style={{
+                    fontSize: config.labelSize - 1,
+                    color: colors.text.subtle,
+                    marginTop: 4,
+                    opacity: 0.7,
+                }}>
+                    {sublabel}
+                </p>
+            )}
         </div>
     );
 });
