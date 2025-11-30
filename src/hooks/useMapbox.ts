@@ -1280,10 +1280,21 @@ export function useMapbox({ containerRef, onTrekSelect, onPhotoClick, onRouteCli
         }
 
         // Delay marker creation until after camera animation settles
-        // Initial fitBounds takes ~2000ms, we wait a bit after
-        const delay = photos.length > 0 ? 100 : 0;
+        // flyToTrek takes 2000-2500ms, wait until animation completes to avoid jank
+        // Use 2600ms to ensure animation is fully done before creating markers
+        const delay = photos.length > 0 ? 2600 : 0;
         markerUpdateTimerRef.current = setTimeout(() => {
-            updateThumbnailMarkers();
+            // Only create markers if map is not moving (animation complete)
+            if (mapRef.current && !mapRef.current.isMoving()) {
+                updateThumbnailMarkers();
+            } else if (mapRef.current) {
+                // If still moving, wait for moveend event
+                const onMoveEnd = () => {
+                    mapRef.current?.off('moveend', onMoveEnd);
+                    updateThumbnailMarkers();
+                };
+                mapRef.current.once('moveend', onMoveEnd);
+            }
         }, delay);
     }, [mapReady]);
 

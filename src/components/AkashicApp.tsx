@@ -17,6 +17,11 @@ import { colors, radius, transitions, typography } from '../styles/liquidGlass';
 // Lazy load InfoPanel to prevent blocking Mapbox animations during transition
 const InfoPanel = lazy(() => import('./trek/InfoPanel').then(m => ({ default: m.InfoPanel })));
 
+// Preload function for InfoPanel - call when trek is selected to avoid chunk load during animation
+const preloadInfoPanel = () => {
+    import('./trek/InfoPanel');
+};
+
 // --- Main Component ---
 
 export default function AkashicApp() {
@@ -45,6 +50,14 @@ export default function AkashicApp() {
         handleBackToSelection,
         handleCampSelect
     } = useTrekData();
+
+    // Preload InfoPanel when a trek is selected (before explore is clicked)
+    // This ensures the chunk is loaded before the camera animation starts
+    useEffect(() => {
+        if (selectedTrek) {
+            preloadInfoPanel();
+        }
+    }, [selectedTrek]);
 
     // Fetch photos when in trek view
     // Native Mapbox layers handle photos efficiently - no delays needed
