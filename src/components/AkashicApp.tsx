@@ -23,6 +23,7 @@ export default function AkashicApp() {
     const isMobile = useIsMobile();
     const [panelState, setPanelState] = useState<PanelState>('normal');
     const [photos, setPhotos] = useState<Photo[]>([]);
+    const photoCacheRef = useRef<Record<string, Photo[]>>({});
     // Defer photo updates to prevent re-renders during camera animations
     const deferredPhotos = useDeferredValue(photos);
     const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
@@ -46,24 +47,59 @@ export default function AkashicApp() {
         handleCampSelect
     } = useTrekData();
 
-    // Fetch photos when in trek view
-    // Native Mapbox layers handle photos efficiently - no delays needed
+    // Prefetch photos in the background when a trek is selected to avoid UI jank during transition
+    useEffect(() => {
+        if (!selectedTrek) return;
+
+        const trekId = selectedTrek.id;
+        if (photoCacheRef.current[trekId]) return;
+
+        let cancelled = false;
+
+        (async () => {
+            const journeyId = await getJourneyIdBySlug(trekId);
+            if (!journeyId || cancelled) return;
+
+            const journeyPhotos = await fetchPhotos(journeyId);
+            if (cancelled) return;
+
+            photoCacheRef.current[trekId] = journeyPhotos;
+
+            // If user explored while we were prefetching, hydrate the UI immediately
+            if (view === 'trek' && selectedTrek?.id === trekId) {
+                setPhotos(journeyPhotos);
+            }
+        })();
+
+        return () => { cancelled = true; };
+    }, [selectedTrek, view]);
+
+    // Fetch photos when in trek view, using cache first to keep transition smooth
     useEffect(() => {
         if (!selectedTrek || view !== 'trek') {
             setPhotos([]);
             return;
         }
 
+        const trekId = selectedTrek.id;
+        const cachedPhotos = photoCacheRef.current[trekId];
+
+        if (cachedPhotos) {
+            setPhotos(cachedPhotos);
+            return;
+        }
+
         let cancelled = false;
 
         async function loadPhotos() {
-            const journeyId = await getJourneyIdBySlug(selectedTrek!.id);
-            if (journeyId && !cancelled) {
-                const journeyPhotos = await fetchPhotos(journeyId);
-                if (!cancelled) {
-                    setPhotos(journeyPhotos);
-                }
-            }
+            const journeyId = await getJourneyIdBySlug(trekId);
+            if (!journeyId || cancelled) return;
+
+            const journeyPhotos = await fetchPhotos(journeyId);
+            if (cancelled) return;
+
+            photoCacheRef.current[trekId] = journeyPhotos;
+            setPhotos(journeyPhotos);
         }
 
         loadPhotos();
