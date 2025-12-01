@@ -11,6 +11,7 @@
  *
  * POST:
  * - /upload/journeys/{journey_id}/photos - Upload a photo (multipart/form-data)
+ * - /mcp - MCP (Model Context Protocol) JSON-RPC endpoint
  *
  * Access Control:
  * - Uses journey_members table for role-based access
@@ -18,6 +19,8 @@
  * - editor: can view + upload photos
  * - owner: full control
  */
+
+import { handleMcpRequest } from './mcp';
 
 export interface Env {
     MEDIA_BUCKET: R2Bucket;
@@ -394,6 +397,11 @@ export default {
         // Handle CORS preflight
         if (request.method === 'OPTIONS') {
             return new Response(null, { headers: corsHeaders });
+        }
+
+        // Handle MCP requests
+        if (path === 'mcp' && request.method === 'POST') {
+            return handleMcpRequest(request, env, verifyJWT);
         }
 
         // Handle POST requests (uploads)

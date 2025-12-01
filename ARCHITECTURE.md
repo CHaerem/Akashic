@@ -24,6 +24,7 @@ The data model is designed to be flexible - routes, camps, and structured waypoi
 | Auth | Supabase Auth (Google OAuth) | ✅ Active |
 | Media Storage | Cloudflare R2 (`akashic-media`) | ✅ Active |
 | Media API | Cloudflare Worker (authenticated) | ✅ Active |
+| MCP API | Cloudflare Worker (JSON-RPC) | ✅ Active |
 | Database | Supabase PostgreSQL | ✅ Active (data migrated) |
 | Domain | akashic.no | ✅ Active (Cloudflare DNS) |
 
@@ -241,6 +242,58 @@ akashic-media/
 **Frontend utilities**:
 - `src/lib/media.ts` - URL building helpers
 - `src/hooks/useMedia.ts` - React hook for authenticated media URLs
+
+### MCP (Model Context Protocol) API
+
+The media Worker also exposes an MCP endpoint for AI assistant integration (e.g., Claude Desktop).
+
+**Endpoint**: `POST /mcp`
+
+**Protocol**: JSON-RPC 2.0 over HTTP
+
+**Available Tools**:
+
+| Tool | Description | Auth Required |
+|------|-------------|---------------|
+| `list_journeys` | List user's accessible journeys | Yes |
+| `get_journey_details` | Full journey with camps, route, stats | Yes |
+| `search_journeys` | Search by name/country/description | Yes |
+| `get_journey_stats` | Computed difficulty, times, elevation | Yes |
+| `get_journey_photos` | Photos with GPS and dates | Yes |
+
+**Authentication**: All tool calls require a valid Supabase JWT token in the `Authorization: Bearer <token>` header.
+
+**Example Usage**:
+
+```bash
+# List available tools
+curl -X POST https://akashic-media.chris-haerem.workers.dev/mcp \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
+
+# Call a tool (requires auth)
+curl -X POST https://akashic-media.chris-haerem.workers.dev/mcp \
+  -H "Authorization: Bearer <jwt_token>" \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"list_journeys","arguments":{}}}'
+```
+
+**Claude Desktop Integration**:
+
+Add to your MCP settings (`~/Library/Application Support/Claude/claude_desktop_config.json`):
+
+```json
+{
+  "mcpServers": {
+    "akashic": {
+      "type": "http",
+      "url": "https://akashic-media.chris-haerem.workers.dev/mcp"
+    }
+  }
+}
+```
+
+**Source**: `workers/media-proxy/src/mcp/`
 
 ---
 
