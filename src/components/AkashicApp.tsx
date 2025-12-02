@@ -137,7 +137,7 @@ export default function AkashicApp() {
             <OfflineIndicator isMobile={isMobile} />
 
             {/* Mobile-first experience layer */}
-            {isMobile && view === 'trek' && trekData && (
+            {isMobile && view === 'trek' && trekData && panelState === 'minimized' && (
                 <MobileExperience
                     trekData={trekData}
                     selectedCamp={selectedCamp}

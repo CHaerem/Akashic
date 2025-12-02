@@ -35,17 +35,20 @@ function isPhotoFromDay(photo: Photo, targetDate: Date): boolean {
 }
 
 export function MobileExperience({
-  trekData,
-  selectedCamp,
-  activeTab,
-  setActiveTab,
-  onCampSelect,
-  panelState,
-  onPanelStateChange,
-  photos,
-  getMediaUrl = (path) => path,
-  onBack,
+    trekData,
+    selectedCamp,
+    activeTab,
+    setActiveTab,
+    onCampSelect,
+    panelState,
+    onPanelStateChange,
+    photos,
+    getMediaUrl = (path) => path,
+    onBack,
 }: MobileExperienceProps) {
+  // Only render when the bottom sheet is minimized to avoid stacking overlays
+  if (panelState !== 'minimized') return null;
+
   const sortedCamps = useMemo(
     () => [...trekData.camps].sort((a, b) => a.dayNumber - b.dayNumber),
     [trekData.camps]
