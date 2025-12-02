@@ -1,5 +1,37 @@
 import { render, screen } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
+
+// Mock journeys data/hooks so the app renders without the real provider
+vi.mock('../contexts/JourneysContext', () => ({
+    useJourneys: () => ({
+        treks: [],
+        trekDataMap: {},
+        loading: false,
+        error: null,
+        refetch: vi.fn()
+    })
+}));
+
+vi.mock('../hooks/useTrekData', () => ({
+    useTrekData: () => ({
+        view: 'globe',
+        selectedTrek: null,
+        selectedCamp: null,
+        activeTab: 'overview',
+        trekData: null,
+        extendedStats: null,
+        elevationProfile: null,
+        loading: false,
+        setView: vi.fn(),
+        setActiveTab: vi.fn(),
+        selectTrek: vi.fn(),
+        handleExplore: vi.fn(),
+        handleBackToGlobe: vi.fn(),
+        handleBackToSelection: vi.fn(),
+        handleCampSelect: vi.fn()
+    })
+}));
+
 import AkashicApp from './AkashicApp';
 
 // Mock Mapbox GL JS

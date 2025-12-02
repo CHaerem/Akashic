@@ -19,6 +19,7 @@ describe('TabButton', () => {
     it('shows active state styling', () => {
         render(<TabButton tab="overview" activeTab="overview" onClick={() => {}} />);
         const button = screen.getByText('overview');
-        expect(button).toHaveStyle({ borderBottom: '2px solid rgba(255,255,255,0.6)' });
+        expect(button).toHaveStyle({ color: 'rgba(255, 255, 255, 0.95)' });
+        expect(button.getAttribute('style')).toContain('rgba(255, 255, 255, 0.15)');
     });
 });

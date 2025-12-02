@@ -1,7 +1,58 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
+import type { TrekConfig, Camp, TrekData } from '../types/trek';
+
+// Provide a stable journeys context for the hook
+const mockTrekData: TrekData = {
+    id: 'kilimanjaro',
+    name: 'Kilimanjaro',
+    country: 'Tanzania',
+    description: 'Summit the roof of Africa',
+    stats: {
+        duration: 7,
+        totalDistance: 70,
+        totalElevationGain: 3000,
+        highestPoint: { name: 'Uhuru Peak', elevation: 5895 }
+    },
+    camps: [
+        { id: 'c1', name: 'Machame Camp', dayNumber: 1, elevation: 2835, coordinates: [37.35, -3.06], elevationGainFromPrevious: 1000, notes: 'Forest camp' },
+        { id: 'c2', name: 'Shira Camp', dayNumber: 2, elevation: 3750, coordinates: [37.36, -3.07], elevationGainFromPrevious: 915, notes: 'Shira plateau' },
+        { id: 'c3', name: 'Barranco Camp', dayNumber: 3, elevation: 3976, coordinates: [37.37, -3.08], elevationGainFromPrevious: 200, notes: 'Barranco wall views' }
+    ],
+    route: {
+        type: 'LineString',
+        coordinates: [
+            [37.35, -3.06, 1800],
+            [37.36, -3.07, 2600],
+            [37.37, -3.08, 3800],
+            [37.38, -3.09, 4200]
+        ]
+    }
+};
+
+const mockJourneysValue = {
+    treks: [{
+        id: 'kilimanjaro',
+        name: 'Kilimanjaro',
+        country: 'Tanzania',
+        elevation: '5,895m',
+        lat: -3.0674,
+        lng: 37.3556,
+        preferredBearing: 180,
+        preferredPitch: 60,
+        slug: 'kilimanjaro'
+    }],
+    trekDataMap: { kilimanjaro: mockTrekData },
+    loading: false,
+    error: null,
+    refetch: vi.fn()
+};
+
+vi.mock('../contexts/JourneysContext', () => ({
+    useJourneys: () => mockJourneysValue
+}));
+
 import { useTrekData } from './useTrekData';
-import type { TrekConfig, Camp } from '../types/trek';
 
 describe('useTrekData hook', () => {
     describe('initial state', () => {

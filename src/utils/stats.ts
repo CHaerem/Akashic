@@ -97,20 +97,24 @@ function calculateDifficultyRating(
     // Calculate effort score based on multiple factors
     let score = 0;
 
-    // Daily distance factor
-    if (avgDailyDist > 20) score += 3;
-    else if (avgDailyDist > 15) score += 2;
-    else if (avgDailyDist > 10) score += 1;
+    // Daily distance factor (treat 10km days as a baseline effort)
+    if (avgDailyDist >= 20) score += 3;
+    else if (avgDailyDist >= 15) score += 2;
+    else if (avgDailyDist >= 10) score += 1;
+
+    // Journey length factor
+    if (totalDistance >= 90) score += 2;
+    else if (totalDistance >= 60) score += 1;
 
     // Max daily gain factor
-    if (maxDayGain > 1500) score += 3;
-    else if (maxDayGain > 1000) score += 2;
-    else if (maxDayGain > 600) score += 1;
+    if (maxDayGain >= 1500) score += 3;
+    else if (maxDayGain >= 1000) score += 2;
+    else if (maxDayGain >= 600) score += 1;
 
     // Total elevation factor
     const totalElev = totalGain + totalLoss;
-    if (totalElev > 8000) score += 2;
-    else if (totalElev > 5000) score += 1;
+    if (totalElev >= 8000) score += 2;
+    else if (totalElev >= 4000) score += 1;
 
     // Map to difficulty rating
     if (score >= 6) return 'Extreme';
@@ -187,11 +191,18 @@ export function calculateStats(trekData: TrekData): ExtendedStats {
     }
 
     // Also use the elevationGainFromPrevious if it's larger (computed in journeys.ts)
+    let fallbackGain = 0;
     camps.forEach(camp => {
         if (camp.elevationGainFromPrevious > maxDailyGain) {
             maxDailyGain = camp.elevationGainFromPrevious;
         }
+        fallbackGain += Math.max(0, camp.elevationGainFromPrevious || 0);
     });
+
+    // If the route samples are too sparse to compute gain, fall back to camp deltas
+    if (totalGain === 0 && fallbackGain > 0) {
+        totalGain = fallbackGain;
+    }
 
     // Calculate average altitude
     const avgAltitude = coords.length > 0

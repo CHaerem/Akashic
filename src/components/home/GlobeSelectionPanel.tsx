@@ -1,3 +1,4 @@
+import type { CSSProperties } from 'react';
 import type { TrekConfig } from '../../types/trek';
 import { GlassButton } from '../common/GlassButton';
 import { colors, radius, typography } from '../../styles/liquidGlass';
@@ -10,27 +11,50 @@ interface GlobeSelectionPanelProps {
 }
 
 export function GlobeSelectionPanel({ selectedTrek, onBack, onExplore, isMobile }: GlobeSelectionPanelProps) {
+    const containerStyle: CSSProperties = isMobile ? {
+        position: 'absolute',
+        left: 12,
+        right: 12,
+        bottom: 'max(18px, env(safe-area-inset-bottom))',
+        zIndex: 20,
+        padding: '18px 16px 26px',
+        background: `linear-gradient(
+            175deg,
+            rgba(255, 255, 255, 0.12) 0%,
+            rgba(10, 10, 15, 0.88) 50%,
+            rgba(8, 8, 12, 0.94) 100%
+        )`,
+        backdropFilter: 'blur(18px) saturate(180%)',
+        WebkitBackdropFilter: 'blur(18px) saturate(180%)',
+        border: `1px solid ${colors.glass.border}`,
+        borderRadius: radius.xxl,
+        boxShadow: `
+            0 18px 52px rgba(0, 0, 0, 0.45),
+            inset 0 1px 0 rgba(255, 255, 255, 0.12)
+        `,
+    } : {
+        position: 'absolute',
+        left: 24,
+        bottom: 0,
+        zIndex: 20,
+        maxWidth: 420,
+        paddingBottom: 48,
+    };
+
+    const nameCardStyle: CSSProperties = isMobile ? {
+        background: colors.glass.subtle,
+        border: `1px solid ${colors.glass.borderSubtle}`,
+        borderRadius: radius.lg,
+        padding: '18px',
+        marginBottom: 18,
+        boxShadow: `
+            0 10px 26px rgba(0, 0, 0, 0.35),
+            inset 0 1px 0 rgba(255, 255, 255, 0.08)
+        `,
+    } : { marginBottom: 12 };
+
     return (
-        <div style={{
-            position: 'absolute',
-            left: isMobile ? 0 : 24,
-            right: isMobile ? 0 : 'auto',
-            bottom: 0,
-            zIndex: 20,
-            maxWidth: isMobile ? '100%' : 420,
-            padding: isMobile ? '24px 20px 32px' : 0,
-            paddingBottom: isMobile ? 'max(32px, env(safe-area-inset-bottom))' : 48,
-            // Liquid Glass gradient for mobile
-            background: isMobile
-                ? `linear-gradient(
-                    to top,
-                    rgba(12, 12, 18, 0.98) 0%,
-                    rgba(12, 12, 18, 0.9) 50%,
-                    rgba(12, 12, 18, 0.6) 80%,
-                    transparent 100%
-                  )`
-                : 'transparent',
-        }}>
+        <div style={containerStyle}>
             {/* Back button with glass styling */}
             <GlassButton
                 variant="ghost"
@@ -56,23 +80,7 @@ export function GlobeSelectionPanel({ selectedTrek, onBack, onExplore, isMobile 
             </p>
 
             {/* Trek name with glass card effect on mobile */}
-            <div style={isMobile ? {
-                background: `linear-gradient(
-                    135deg,
-                    rgba(255, 255, 255, 0.08) 0%,
-                    rgba(255, 255, 255, 0.03) 100%
-                )`,
-                backdropFilter: 'blur(16px) saturate(180%)',
-                WebkitBackdropFilter: 'blur(16px) saturate(180%)',
-                border: `1px solid ${colors.glass.borderSubtle}`,
-                borderRadius: radius.lg,
-                padding: '20px',
-                marginBottom: 20,
-                boxShadow: `
-                    0 8px 32px rgba(0, 0, 0, 0.25),
-                    inset 0 1px 0 rgba(255, 255, 255, 0.1)
-                `,
-            } : { marginBottom: 12 }}>
+            <div style={nameCardStyle}>
                 <h2 style={{
                     ...typography.display,
                     fontSize: isMobile ? 28 : 38,

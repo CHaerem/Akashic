@@ -39,8 +39,8 @@ interface InfoPanelProps {
 }
 
 // Snap points as vh percentages (from smallest to largest panel height)
-// minimized: ~10vh, normal: 42vh, expanded: 88vh
-const SNAP_POINTS_VH = [10, 42, 88];
+// Tuned for mobile to keep more map visible while still offering deep dive space
+const SNAP_POINTS_VH = [14, 50, 84];
 const PANEL_STATES: PanelState[] = ['minimized', 'normal', 'expanded'];
 
 export const InfoPanel = memo(function InfoPanel({
@@ -79,48 +79,50 @@ export const InfoPanel = memo(function InfoPanel({
     // Panel height based on state (only used for initial render and non-drag state)
     const getPanelHeight = (): string => {
         const baseHeights: Record<PanelState, string> = {
-            minimized: '100px',
-            normal: '42dvh',
-            expanded: '88dvh'
+            minimized: '14dvh',
+            normal: '50dvh',
+            expanded: '84dvh'
         };
         return baseHeights[panelState];
     };
 
-    const maxHeight = 'calc(100dvh - 60px)';
+    const maxHeight = 'calc(100dvh - 96px)';
 
     // Mobile bottom sheet style - Liquid Glass design
     // Note: height and transition are manipulated directly via panelRef during drag
     const mobileStyle: React.CSSProperties = {
         position: 'absolute',
-        left: 0,
-        right: 0,
-        bottom: 0,
+        left: 12,
+        right: 12,
+        bottom: 'max(12px, env(safe-area-inset-bottom))',
         height: getPanelHeight(),
         maxHeight,
         // Liquid Glass gradient background
         background: `linear-gradient(
-            180deg,
-            rgba(255, 255, 255, 0.12) 0%,
-            rgba(255, 255, 255, 0.06) 10%,
-            rgba(12, 12, 18, 0.95) 40%
+            175deg,
+            rgba(255, 255, 255, 0.14) 0%,
+            rgba(255, 255, 255, 0.07) 12%,
+            rgba(12, 12, 18, 0.88) 48%,
+            rgba(10, 10, 15, 0.96) 100%
         )`,
-        // Reduced blur for mobile performance (16px vs 32px on desktop)
-        backdropFilter: 'blur(16px) saturate(150%)',
-        WebkitBackdropFilter: 'blur(16px) saturate(150%)',
+        // Reduced blur for mobile performance but still glassy
+        backdropFilter: 'blur(18px) saturate(180%)',
+        WebkitBackdropFilter: 'blur(18px) saturate(180%)',
         willChange: 'height',
-        borderTop: `1px solid ${colors.glass.border}`,
-        borderRadius: `${radius.xxl}px ${radius.xxl}px 0 0`,
+        border: `1px solid ${colors.glass.border}`,
+        borderRadius: radius.xxl,
         display: 'flex',
         flexDirection: 'column',
         zIndex: 20,
         // Default transition (overridden by direct DOM manipulation during drag)
         transition: `height 0.4s cubic-bezier(0.32, 0.72, 0, 1)`,
-        paddingBottom: 'env(safe-area-inset-bottom)',
+        paddingBottom: 'calc(env(safe-area-inset-bottom) + 12px)',
         boxShadow: `
-            0 -16px 48px rgba(0, 0, 0, 0.4),
-            inset 0 1px 0 rgba(255, 255, 255, 0.15),
-            inset 0 2px 20px rgba(255, 255, 255, 0.05)
+            0 18px 54px rgba(0, 0, 0, 0.45),
+            inset 0 1px 0 rgba(255, 255, 255, 0.14),
+            inset 0 2px 20px rgba(255, 255, 255, 0.04)
         `,
+        overflow: 'hidden',
     };
 
     // Desktop side panel style - Liquid Glass design
@@ -313,7 +315,21 @@ export const InfoPanel = memo(function InfoPanel({
 
             {/* Tabs - hidden when minimized - Liquid Glass pill container */}
             {panelState !== 'minimized' && (
-                <div style={{
+                <div style={isMobile ? {
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+                    gap: 8,
+                    padding: `10px ${padding}px 12px`,
+                    margin: `0 ${padding - 6}px 6px`,
+                    background: colors.glass.subtle,
+                    border: `1px solid ${colors.glass.borderSubtle}`,
+                    borderRadius: radius.lg,
+                    boxShadow: `
+                        inset 0 1px 0 rgba(255, 255, 255, 0.08),
+                        0 6px 18px rgba(0, 0, 0, 0.25)
+                    `,
+                    flexShrink: 0
+                } : {
                     display: 'flex',
                     gap: 6,
                     padding: `8px ${padding}px 12px`,

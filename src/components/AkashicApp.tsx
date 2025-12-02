@@ -12,6 +12,7 @@ import { GlobeSelectionPanel } from './home/GlobeSelectionPanel';
 import { GlobeHint } from './home/GlobeHint';
 import type { PanelState } from './trek/InfoPanel';
 import { PhotoLightbox } from './common/PhotoLightbox';
+import { MobileExperience } from './mobile/MobileExperience';
 import { colors, radius, transitions, typography } from '../styles/liquidGlass';
 
 // Lazy load InfoPanel to prevent blocking Mapbox animations during transition
@@ -89,6 +90,15 @@ export default function AkashicApp() {
         setPanelState(state);
     }, []);
 
+    // On mobile, entering trek view should start with more map focus
+    const lastViewRef = useRef<typeof view>(view);
+    useEffect(() => {
+        if (isMobile && view === 'trek' && lastViewRef.current !== 'trek') {
+            setPanelState('minimized');
+        }
+        lastViewRef.current = view;
+    }, [isMobile, view]);
+
     // Handle photo click from map markers - open lightbox
     const handleMapPhotoClick = useCallback((_photo: Photo, index: number) => {
         setLightboxIndex(index);
@@ -125,6 +135,22 @@ export default function AkashicApp() {
 
             {/* Offline Status */}
             <OfflineIndicator isMobile={isMobile} />
+
+            {/* Mobile-first experience layer */}
+            {isMobile && view === 'trek' && trekData && (
+                <MobileExperience
+                    trekData={trekData}
+                    selectedCamp={selectedCamp}
+                    activeTab={activeTab}
+                    setActiveTab={setActiveTab}
+                    onCampSelect={handleCampSelect}
+                    panelState={panelState}
+                    onPanelStateChange={handlePanelStateChange}
+                    photos={deferredPhotos}
+                    getMediaUrl={getMediaUrl}
+                    onBack={handleBackToGlobe}
+                />
+            )}
 
             {/* Title - Liquid Glass pill style when viewing trek */}
             <div
