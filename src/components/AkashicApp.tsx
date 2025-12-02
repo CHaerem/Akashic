@@ -6,6 +6,7 @@ import { useMedia } from '../hooks/useMedia';
 import { useJourneys } from '../contexts/JourneysContext';
 import { fetchPhotos, getJourneyIdBySlug } from '../lib/journeys';
 import type { Photo } from '../types/trek';
+import { preloadPhotoImagesAsync } from '../utils/photoPrefetch';
 import { MapboxGlobe } from './MapboxGlobe';
 import { OfflineIndicator } from './OfflineIndicator';
 import { GlobeSelectionPanel } from './home/GlobeSelectionPanel';
@@ -29,6 +30,10 @@ export default function AkashicApp() {
     const isMobile = useIsMobile();
     const [panelState, setPanelState] = useState<PanelState>('normal');
     const [photos, setPhotos] = useState<Photo[]>([]);
+    const photoCacheRef = useRef<Record<string, Photo[]>>({});
+    const imageCacheRef = useRef<Set<string>>(new Set());
+    const thumbnailWarmPromisesRef = useRef<Record<string, Promise<Set<string>>>>({});
+    const [isPreparingTrek, setIsPreparingTrek] = useState(false);
     // Defer photo updates to prevent re-renders during camera animations
     const deferredPhotos = useDeferredValue(photos);
     const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
@@ -52,6 +57,47 @@ export default function AkashicApp() {
         handleCampSelect
     } = useTrekData();
 
+    const warmPhotoThumbnails = useCallback((journeyPhotos: Photo[], trekId?: string) => {
+        const warmPromise = preloadPhotoImagesAsync(journeyPhotos, getMediaUrl, {
+            cache: imageCacheRef.current,
+        });
+
+        if (trekId) {
+            thumbnailWarmPromisesRef.current[trekId] = warmPromise;
+        }
+
+        warmPromise.catch(() => {});
+        return warmPromise;
+    }, [getMediaUrl]);
+
+    const awaitWarmthWithTimeout = useCallback(async (trekId: string, timeoutMs = 800) => {
+        const warmPromise = thumbnailWarmPromisesRef.current[trekId];
+        if (!warmPromise) return;
+
+        await Promise.race([
+            warmPromise,
+            new Promise<void>(resolve => setTimeout(resolve, timeoutMs)),
+        ]);
+    }, []);
+
+    const ensurePhotosReady = useCallback(async (trekId: string) => {
+        const cachedPhotos = photoCacheRef.current[trekId];
+        if (cachedPhotos) {
+            warmPhotoThumbnails(cachedPhotos, trekId);
+            await awaitWarmthWithTimeout(trekId);
+            return cachedPhotos;
+        }
+
+        const journeyId = await getJourneyIdBySlug(trekId);
+        if (!journeyId) return [];
+
+        const journeyPhotos = await fetchPhotos(journeyId);
+        photoCacheRef.current[trekId] = journeyPhotos;
+        warmPhotoThumbnails(journeyPhotos, trekId);
+        await awaitWarmthWithTimeout(trekId, 1200);
+        return journeyPhotos;
+    }, [awaitWarmthWithTimeout, warmPhotoThumbnails]);
+
     // Preload InfoPanel when a trek is selected (before explore is clicked)
     // This ensures the chunk is loaded before the camera animation starts
     useEffect(() => {
@@ -60,30 +106,80 @@ export default function AkashicApp() {
         }
     }, [selectedTrek]);
 
-    // Fetch photos when in trek view
-    // Native Mapbox layers handle photos efficiently - no delays needed
+    // Prefetch photos in the background when a trek is selected to avoid UI jank during transition
+    useEffect(() => {
+        if (!selectedTrek) return;
+
+        const trekId = selectedTrek.id;
+        if (photoCacheRef.current[trekId]) return;
+
+        let cancelled = false;
+
+        (async () => {
+            const journeyId = await getJourneyIdBySlug(trekId);
+            if (!journeyId || cancelled) return;
+
+            const journeyPhotos = await fetchPhotos(journeyId);
+            if (cancelled) return;
+
+            photoCacheRef.current[trekId] = journeyPhotos;
+            warmPhotoThumbnails(journeyPhotos, trekId);
+
+            // If user explored while we were prefetching, hydrate the UI immediately after thumbnails are ready
+            if (view === 'trek' && selectedTrek?.id === trekId) {
+                await awaitWarmthWithTimeout(trekId);
+                if (!cancelled) {
+                    setPhotos(journeyPhotos);
+                }
+            }
+        })();
+
+        return () => { cancelled = true; };
+    }, [awaitWarmthWithTimeout, selectedTrek, view, warmPhotoThumbnails]);
+
+    // Fetch photos when in trek view, using cache first to keep transition smooth
     useEffect(() => {
         if (!selectedTrek || view !== 'trek') {
             setPhotos([]);
             return;
         }
 
+        const trekId = selectedTrek.id;
+        const cachedPhotos = photoCacheRef.current[trekId];
         let cancelled = false;
 
         async function loadPhotos() {
-            const journeyId = await getJourneyIdBySlug(selectedTrek!.id);
-            if (journeyId && !cancelled) {
-                const journeyPhotos = await fetchPhotos(journeyId);
-                if (!cancelled) {
-                    setPhotos(journeyPhotos);
-                }
+            const journeyPhotos = cachedPhotos ?? await ensurePhotosReady(trekId);
+            if (cancelled) return;
+
+            await awaitWarmthWithTimeout(trekId);
+            if (!cancelled) {
+                setPhotos(journeyPhotos);
             }
         }
 
         loadPhotos();
 
         return () => { cancelled = true; };
-    }, [selectedTrek, view]);
+    }, [awaitWarmthWithTimeout, ensurePhotosReady, selectedTrek, view]);
+
+
+    const handleExploreWithPrefetch = useCallback(async () => {
+        if (!selectedTrek) return;
+
+        const trekId = selectedTrek.id;
+        setIsPreparingTrek(true);
+
+        try {
+            const journeyPhotos = await ensurePhotosReady(trekId);
+            await awaitWarmthWithTimeout(trekId, 1200);
+            setPhotos(journeyPhotos);
+        } finally {
+            setIsPreparingTrek(false);
+        }
+
+        handleExplore();
+    }, [awaitWarmthWithTimeout, ensurePhotosReady, handleExplore, selectedTrek]);
 
 
     const handlePanelStateChange = useCallback((state: PanelState) => {
@@ -215,7 +311,8 @@ export default function AkashicApp() {
                 <GlobeSelectionPanel
                     selectedTrek={selectedTrek}
                     onBack={handleBackToSelection}
-                    onExplore={handleExplore}
+                    onExplore={handleExploreWithPrefetch}
+                    isLoading={isPreparingTrek}
                     isMobile={isMobile}
                 />
             )}
