@@ -13,7 +13,6 @@ import { GlobeSelectionPanel } from './home/GlobeSelectionPanel';
 import { GlobeHint } from './home/GlobeHint';
 import type { PanelState } from './trek/InfoPanel';
 import { PhotoLightbox } from './common/PhotoLightbox';
-import { MobileExperience } from './mobile/MobileExperience';
 import { colors, radius, transitions, typography } from '../styles/liquidGlass';
 
 // Lazy load InfoPanel to prevent blocking Mapbox animations during transition
@@ -231,22 +230,6 @@ export default function AkashicApp() {
 
             {/* Offline Status */}
             <OfflineIndicator isMobile={isMobile} />
-
-            {/* Mobile-first experience layer */}
-            {isMobile && view === 'trek' && trekData && panelState === 'minimized' && (
-                <MobileExperience
-                    trekData={trekData}
-                    selectedCamp={selectedCamp}
-                    activeTab={activeTab}
-                    setActiveTab={setActiveTab}
-                    onCampSelect={handleCampSelect}
-                    panelState={panelState}
-                    onPanelStateChange={handlePanelStateChange}
-                    photos={deferredPhotos}
-                    getMediaUrl={getMediaUrl}
-                    onBack={handleBackToGlobe}
-                />
-            )}
 
             {/* Title - Liquid Glass pill style when viewing trek */}
             <div
