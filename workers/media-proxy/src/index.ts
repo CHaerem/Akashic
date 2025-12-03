@@ -25,7 +25,7 @@ import { handleMcpRequest } from './mcp';
 export interface Env {
     MEDIA_BUCKET: R2Bucket;
     SUPABASE_URL: string;
-    SUPABASE_ANON_KEY: string;
+    SUPABASE_SERVICE_KEY: string;  // Service role key to bypass RLS for permission checks
 }
 
 interface JWTPayload {
@@ -445,7 +445,7 @@ export default {
                 payload.sub,
                 'editor',
                 env.SUPABASE_URL,
-                env.SUPABASE_ANON_KEY
+                env.SUPABASE_SERVICE_KEY
             );
 
             if (!hasAccess) {
@@ -509,7 +509,7 @@ export default {
                 userId,
                 'viewer',
                 env.SUPABASE_URL,
-                env.SUPABASE_ANON_KEY
+                env.SUPABASE_SERVICE_KEY
             );
 
             if (!hasAccess) {

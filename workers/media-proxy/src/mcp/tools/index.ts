@@ -136,8 +136,8 @@ async function supabaseQuery<T>(
     const response = await fetch(`${env.SUPABASE_URL}/rest/v1/${endpoint}`, {
         method: options.method || 'GET',
         headers: {
-            'apikey': env.SUPABASE_ANON_KEY,
-            'Authorization': `Bearer ${env.SUPABASE_ANON_KEY}`,
+            'apikey': env.SUPABASE_SERVICE_KEY,
+            'Authorization': `Bearer ${env.SUPABASE_SERVICE_KEY}`,
             'Content-Type': 'application/json',
         },
         body: options.body ? JSON.stringify(options.body) : undefined,

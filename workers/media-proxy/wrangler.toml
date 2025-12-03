@@ -11,6 +11,6 @@ bucket_name = "akashic-media"
 SUPABASE_URL = "https://pbqvnxeldpgvcrdbxcvr.supabase.co"
 
 # Secrets (set via `wrangler secret put <NAME>` in this directory):
-# - SUPABASE_ANON_KEY: Anon key for querying journey access
+# - SUPABASE_SERVICE_KEY: Service role key for querying journey_members (bypasses RLS)
 #
 # Note: JWT verification uses JWKS (public key) from Supabase - no secret needed!
