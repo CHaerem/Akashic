@@ -25,7 +25,7 @@ import { handleMcpRequest } from './mcp';
 export interface Env {
     MEDIA_BUCKET: R2Bucket;
     SUPABASE_URL: string;
-    SUPABASE_ANON_KEY: string;
+    SUPABASE_SERVICE_KEY: string;  // Service role key to bypass RLS for permission checks
 }
 
 interface JWTPayload {
@@ -262,6 +262,8 @@ function getExtensionFromContentType(contentType: string): string | null {
         'image/png': 'png',
         'image/gif': 'gif',
         'image/webp': 'webp',
+        'image/heic': 'heic',
+        'image/heif': 'heif',
     };
     return types[contentType] || null;
 }
@@ -271,8 +273,8 @@ function generatePhotoId(): string {
     return crypto.randomUUID();
 }
 
-// Allowed image types for upload
-const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+// Allowed image types for upload (including HEIC/HEIF from iOS)
+const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/heic', 'image/heif'];
 const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20MB
 
 interface UploadResult {
@@ -445,7 +447,7 @@ export default {
                 payload.sub,
                 'editor',
                 env.SUPABASE_URL,
-                env.SUPABASE_ANON_KEY
+                env.SUPABASE_SERVICE_KEY
             );
 
             if (!hasAccess) {
@@ -509,7 +511,7 @@ export default {
                 userId,
                 'viewer',
                 env.SUPABASE_URL,
-                env.SUPABASE_ANON_KEY
+                env.SUPABASE_SERVICE_KEY
             );
 
             if (!hasAccess) {
