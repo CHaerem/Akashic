@@ -10,6 +10,8 @@ export default defineConfig({
 		VitePWA({
 			registerType: "autoUpdate",
 			includeAssets: ["favicon.ico", "robots.txt", "apple-touch-icon.png"],
+			// Import custom share target handler
+			injectRegister: "auto",
 			manifest: {
 				name: "Akashic - Trek Explorer",
 				short_name: "Akashic",
@@ -36,8 +38,23 @@ export default defineConfig({
 						purpose: "any maskable",
 					},
 				],
+				share_target: {
+					action: "/share-target",
+					method: "POST",
+					enctype: "multipart/form-data",
+					params: {
+						files: [
+							{
+								name: "photos",
+								accept: ["image/jpeg", "image/png", "image/gif", "image/webp", "image/heic", "image/heif"],
+							},
+						],
+					},
+				},
 			},
 			workbox: {
+				// Import custom share target handler
+				importScripts: ["sw-share-target.js"],
 				// Pre-cache app shell and trek data
 				globPatterns: ["**/*.{js,css,html,ico,png,svg,json,woff,woff2}"],
 				// Increase max file size for Mapbox GL JS and large photos

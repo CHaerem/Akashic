@@ -5,11 +5,13 @@ import { useIsMobile } from '../hooks/useMediaQuery';
 import { useMedia } from '../hooks/useMedia';
 import { useJourneys } from '../contexts/JourneysContext';
 import { fetchPhotos, getJourneyIdBySlug } from '../lib/journeys';
+import { hasPendingShares } from '../lib/shareTarget';
 import type { Photo } from '../types/trek';
 import { MapboxGlobe } from './MapboxGlobe';
 import { OfflineIndicator } from './OfflineIndicator';
 import { GlobeSelectionPanel } from './home/GlobeSelectionPanel';
 import { GlobeHint } from './home/GlobeHint';
+import { ShareTargetModal } from './ShareTargetModal';
 import type { PanelState } from './trek/InfoPanel';
 import { PhotoLightbox } from './common/PhotoLightbox';
 import { colors, radius, transitions, typography } from '../styles/liquidGlass';
@@ -31,6 +33,7 @@ export default function AkashicApp() {
     // Defer photo updates to prevent re-renders during camera animations
     const deferredPhotos = useDeferredValue(photos);
     const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+    const [showShareTarget, setShowShareTarget] = useState(false);
     const flyToPhotoRef = useRef<((photo: Photo) => void) | null>(null);
     const { getMediaUrl } = useMedia();
     const { refetch: refetchJourneys } = useJourneys();
@@ -58,6 +61,26 @@ export default function AkashicApp() {
             preloadInfoPanel();
         }
     }, [selectedTrek]);
+
+    // Check for pending shared photos (from PWA share target)
+    useEffect(() => {
+        async function checkSharedFiles() {
+            // Check URL for share target redirect
+            const params = new URLSearchParams(window.location.search);
+            if (params.get('shared') === 'pending') {
+                // Clear the URL parameter
+                window.history.replaceState({}, '', window.location.pathname);
+            }
+
+            // Check IndexedDB for pending files
+            const hasPending = await hasPendingShares();
+            if (hasPending) {
+                setShowShareTarget(true);
+            }
+        }
+
+        checkSharedFiles();
+    }, []);
 
     // Fetch photos when in trek view
     // Native Mapbox layers handle photos efficiently - no delays needed
@@ -227,6 +250,13 @@ export default function AkashicApp() {
                 onClose={() => setLightboxIndex(null)}
                 getMediaUrl={getMediaUrl}
                 onViewOnMap={handleViewOnMap}
+            />
+
+            {/* Share Target Modal - for photos shared from other apps */}
+            <ShareTargetModal
+                isOpen={showShareTarget}
+                onClose={() => setShowShareTarget(false)}
+                onUploadComplete={refetchJourneys}
             />
         </div>
     );

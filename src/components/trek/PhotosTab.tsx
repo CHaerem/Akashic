@@ -227,6 +227,7 @@ export function PhotosTab({ trekData, isMobile, editMode = false, onViewPhotoOnM
                         journeyId={journeyDbId}
                         onUploadComplete={handleUploadComplete}
                         onUploadError={handleUploadError}
+                        isMobile={isMobile}
                     />
                 </div>
             )}
