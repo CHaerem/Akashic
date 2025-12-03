@@ -1,9 +1,22 @@
-import { memo, useState, useCallback } from 'react';
+import { memo, useState, useCallback, useEffect } from 'react';
 import { assignPhotoToWaypoint } from '../../lib/journeys';
 import type { Camp, Photo } from '../../types/trek';
-import { GlassModal, glassErrorBoxStyle } from '../common/GlassModal';
-import { GlassButton } from '../common/GlassButton';
-import { colors, gradients, radius, transitions } from '../../styles/liquidGlass';
+import {
+    Dialog,
+    DialogContent,
+    DialogHeader,
+    DialogTitle,
+    DialogFooter,
+} from '../ui/dialog';
+import {
+    Sheet,
+    SheetContent,
+    SheetHeader,
+    SheetTitle,
+    SheetFooter,
+} from '../ui/sheet';
+import { Button } from '../ui/button';
+import { cn } from '@/lib/utils';
 
 interface PhotoAssignModalProps {
     camp: Camp;
@@ -32,10 +45,13 @@ export const PhotoAssignModal = memo(function PhotoAssignModal({
     const availablePhotos = photos.filter(p => !p.waypoint_id || p.waypoint_id === camp.id);
     const alreadyAssigned = photos.filter(p => p.waypoint_id === camp.id);
 
-    // Initialize selection with already assigned photos
-    useState(() => {
-        setSelectedPhotos(new Set(alreadyAssigned.map(p => p.id)));
-    });
+    // Initialize selection with already assigned photos when modal opens
+    useEffect(() => {
+        if (isOpen) {
+            setSelectedPhotos(new Set(alreadyAssigned.map(p => p.id)));
+            setError(null);
+        }
+    }, [isOpen, camp.id]);
 
     const togglePhoto = useCallback((photoId: string) => {
         setSelectedPhotos(prev => {
@@ -77,130 +93,62 @@ export const PhotoAssignModal = memo(function PhotoAssignModal({
         }
     }, [availablePhotos, alreadyAssigned, selectedPhotos, camp.id, onAssign, onClose]);
 
-    const footer = (
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
-            <span style={{ color: colors.text.tertiary, fontSize: 13 }}>
-                {selectedPhotos.size} photo{selectedPhotos.size !== 1 ? 's' : ''} selected
-            </span>
-            <div style={{ display: 'flex', gap: 12 }}>
-                <GlassButton variant="subtle" onClick={onClose}>
-                    Cancel
-                </GlassButton>
-                <GlassButton
-                    variant="primary"
-                    onClick={handleSave}
-                    disabled={saving}
-                >
-                    {saving ? 'Saving...' : 'Assign Photos'}
-                </GlassButton>
-            </div>
-        </div>
-    );
-
-    return (
-        <GlassModal
-            isOpen={isOpen}
-            onClose={onClose}
-            title={`Assign Photos to Day ${camp.dayNumber}`}
-            footer={footer}
-            isMobile={isMobile}
-            maxWidth={600}
-        >
+    const formContent = (
+        <div className="flex flex-col gap-4">
             {/* Subtitle */}
-            <p style={{ color: colors.text.tertiary, fontSize: 13, margin: '-8px 0 16px' }}>
+            <p className="text-white/50 light:text-slate-500 text-sm -mt-2">
                 {camp.name}
             </p>
 
             {error && (
-                <div style={{ ...glassErrorBoxStyle, marginBottom: 16 }}>
+                <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
                     {error}
                 </div>
             )}
 
             {availablePhotos.length === 0 ? (
-                <div style={{
-                    textAlign: 'center',
-                    padding: 40,
-                    color: colors.text.tertiary
-                }}>
-                    <p style={{ margin: 0 }}>No photos available to assign.</p>
-                    <p style={{ margin: '8px 0 0', fontSize: 13, color: colors.text.subtle }}>
+                <div className="text-center py-10">
+                    <p className="text-white/50 light:text-slate-500">No photos available to assign.</p>
+                    <p className="text-white/35 light:text-slate-400 text-sm mt-2">
                         Upload photos in the Photos tab first.
                     </p>
                 </div>
             ) : (
                 <>
-                    <p style={{
-                        color: colors.text.tertiary,
-                        fontSize: 13,
-                        marginBottom: 16
-                    }}>
+                    <p className="text-white/50 light:text-slate-500 text-sm">
                         Tap photos to select/deselect. Selected photos will be assigned to this day.
                     </p>
-                    <div style={{
-                        display: 'grid',
-                        gridTemplateColumns: `repeat(${isMobile ? 3 : 4}, 1fr)`,
-                        gap: 8
-                    }}>
+                    <div className={cn(
+                        "grid gap-2",
+                        isMobile ? "grid-cols-3" : "grid-cols-4"
+                    )}>
                         {availablePhotos.map(photo => {
                             const isSelected = selectedPhotos.has(photo.id);
                             return (
                                 <div
                                     key={photo.id}
                                     onClick={() => togglePhoto(photo.id)}
-                                    style={{
-                                        aspectRatio: '1',
-                                        borderRadius: radius.sm,
-                                        overflow: 'hidden',
-                                        position: 'relative',
-                                        cursor: 'pointer',
-                                        border: isSelected
-                                            ? `3px solid ${colors.accent.primary}`
-                                            : '3px solid transparent',
-                                        opacity: isSelected ? 1 : 0.6,
-                                        transition: `all ${transitions.normal}`
-                                    }}
+                                    className={cn(
+                                        "aspect-square rounded-lg overflow-hidden relative cursor-pointer",
+                                        "transition-all duration-200",
+                                        isSelected
+                                            ? "ring-3 ring-blue-500 opacity-100"
+                                            : "ring-3 ring-transparent opacity-60 hover:opacity-80"
+                                    )}
                                 >
                                     <img
                                         src={getMediaUrl(photo.thumbnail_url || photo.url)}
                                         alt={photo.caption || 'Photo'}
-                                        style={{
-                                            width: '100%',
-                                            height: '100%',
-                                            objectFit: 'cover'
-                                        }}
+                                        className="w-full h-full object-cover"
                                         loading="lazy"
                                     />
                                     {isSelected && (
-                                        <div style={{
-                                            position: 'absolute',
-                                            top: 6,
-                                            right: 6,
-                                            width: 24,
-                                            height: 24,
-                                            borderRadius: '50%',
-                                            background: colors.accent.primary,
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            justifyContent: 'center',
-                                            color: 'white',
-                                            fontSize: 14,
-                                            boxShadow: '0 2px 8px rgba(0, 0, 0, 0.3)'
-                                        }}>
+                                        <div className="absolute top-1.5 right-1.5 w-6 h-6 rounded-full bg-blue-500 flex items-center justify-center text-white text-sm shadow-lg">
                                             ✓
                                         </div>
                                     )}
                                     {photo.taken_at && (
-                                        <div style={{
-                                            position: 'absolute',
-                                            bottom: 0,
-                                            left: 0,
-                                            right: 0,
-                                            padding: '16px 6px 6px',
-                                            background: gradients.overlay.bottomSubtle,
-                                            color: colors.text.primary,
-                                            fontSize: 10
-                                        }}>
+                                        <div className="absolute bottom-0 left-0 right-0 px-1.5 pt-4 pb-1.5 bg-gradient-to-t from-black/60 to-transparent text-white text-[10px]">
                                             {new Date(photo.taken_at).toLocaleDateString('en-US', {
                                                 month: 'short',
                                                 day: 'numeric'
@@ -213,6 +161,59 @@ export const PhotoAssignModal = memo(function PhotoAssignModal({
                     </div>
                 </>
             )}
-        </GlassModal>
+        </div>
+    );
+
+    const footerContent = (
+        <div className="flex items-center justify-between w-full">
+            <span className="text-white/50 light:text-slate-500 text-sm">
+                {selectedPhotos.size} photo{selectedPhotos.size !== 1 ? 's' : ''} selected
+            </span>
+            <div className="flex gap-3">
+                <Button variant="subtle" onClick={onClose}>
+                    Cancel
+                </Button>
+                <Button
+                    variant="primary"
+                    onClick={handleSave}
+                    disabled={saving}
+                >
+                    {saving ? 'Saving...' : 'Assign Photos'}
+                </Button>
+            </div>
+        </div>
+    );
+
+    // Use Sheet for mobile, Dialog for desktop
+    if (isMobile) {
+        return (
+            <Sheet open={isOpen} onOpenChange={(open) => !open && onClose()}>
+                <SheetContent side="bottom" className="max-h-[90dvh] overflow-y-auto">
+                    <SheetHeader>
+                        <SheetTitle>Assign Photos to Day {camp.dayNumber}</SheetTitle>
+                    </SheetHeader>
+                    <div className="px-6 py-4 overflow-y-auto">
+                        {formContent}
+                    </div>
+                    <SheetFooter className="flex-row justify-between">
+                        {footerContent}
+                    </SheetFooter>
+                </SheetContent>
+            </Sheet>
+        );
+    }
+
+    return (
+        <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
+            <DialogContent className="max-w-xl max-h-[85vh] overflow-y-auto">
+                <DialogHeader>
+                    <DialogTitle>Assign Photos to Day {camp.dayNumber}</DialogTitle>
+                </DialogHeader>
+                {formContent}
+                <DialogFooter className="flex-row justify-between sm:justify-between">
+                    {footerContent}
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
     );
 });
