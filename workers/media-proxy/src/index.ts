@@ -262,6 +262,8 @@ function getExtensionFromContentType(contentType: string): string | null {
         'image/png': 'png',
         'image/gif': 'gif',
         'image/webp': 'webp',
+        'image/heic': 'heic',
+        'image/heif': 'heif',
     };
     return types[contentType] || null;
 }
@@ -271,8 +273,8 @@ function generatePhotoId(): string {
     return crypto.randomUUID();
 }
 
-// Allowed image types for upload
-const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+// Allowed image types for upload (including HEIC/HEIF from iOS)
+const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/heic', 'image/heif'];
 const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20MB
 
 interface UploadResult {
