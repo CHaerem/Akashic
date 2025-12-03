@@ -1,7 +1,7 @@
 import { memo, useState, useCallback, useRef } from 'react';
 import type { TrekData, Camp, ExtendedStats, ElevationProfile, CampMarker, HistoricalSite } from '../../types/trek';
-import { StatCard } from '../common/StatCard';
-import { colors, radius } from '../../styles/liquidGlass';
+import { Card } from '../ui/card';
+import { cn } from '@/lib/utils';
 
 // Difficulty color mapping
 const DIFFICULTY_COLORS: Record<string, string> = {
@@ -10,6 +10,38 @@ const DIFFICULTY_COLORS: Record<string, string> = {
     'Hard': '#f97316',
     'Extreme': '#ef4444'
 };
+
+// Simple stat card for grids
+function StatItem({
+    label,
+    value,
+    sublabel,
+    color
+}: {
+    label: string;
+    value: string;
+    sublabel?: string;
+    color?: string;
+}) {
+    return (
+        <Card variant="subtle" className="p-4">
+            <p className="text-[10px] tracking-[0.1em] uppercase text-white/40 light:text-slate-400 mb-1">
+                {label}
+            </p>
+            <p
+                className="text-xl font-light text-white/95 light:text-slate-900"
+                style={color ? { color } : undefined}
+            >
+                {value}
+            </p>
+            {sublabel && (
+                <p className="text-xs text-white/40 light:text-slate-400 mt-0.5">
+                    {sublabel}
+                </p>
+            )}
+        </Card>
+    );
+}
 
 interface ElevationProfileProps {
     elevationProfile: ElevationProfile;
@@ -44,7 +76,6 @@ const InteractiveElevationProfile = memo(function InteractiveElevationProfile({
         const scaleX = 300 / rect.width;
         const mouseX = (e.clientX - rect.left) * scaleX;
 
-        // Find closest point
         let closestPoint = elevationProfile.points[0];
         let minDist = Math.abs(mouseX - closestPoint.x);
 
@@ -56,7 +87,6 @@ const InteractiveElevationProfile = memo(function InteractiveElevationProfile({
             }
         }
 
-        // Check if near a camp marker
         let nearestCamp: CampMarker | undefined;
         for (const marker of elevationProfile.campMarkers) {
             if (Math.abs(mouseX - marker.x) < 10) {
@@ -85,7 +115,6 @@ const InteractiveElevationProfile = memo(function InteractiveElevationProfile({
         const scaleX = 300 / rect.width;
         const mouseX = (e.clientX - rect.left) * scaleX;
 
-        // Find closest camp marker
         let closestMarker: CampMarker | null = null;
         let minDist = Infinity;
 
@@ -97,7 +126,6 @@ const InteractiveElevationProfile = memo(function InteractiveElevationProfile({
             }
         }
 
-        // If clicked within reasonable distance of a camp, select it
         if (closestMarker && minDist < 20) {
             const camp = camps.find(c => c.id === closestMarker!.campId);
             if (camp) {
@@ -106,7 +134,6 @@ const InteractiveElevationProfile = memo(function InteractiveElevationProfile({
         }
     }, [elevationProfile, camps, onCampSelect]);
 
-    // Touch handlers for mobile
     const handleTouchMove = useCallback((e: React.TouchEvent<SVGSVGElement>) => {
         if (!svgRef.current || e.touches.length === 0) return;
 
@@ -115,7 +142,6 @@ const InteractiveElevationProfile = memo(function InteractiveElevationProfile({
         const scaleX = 300 / rect.width;
         const touchX = (touch.clientX - rect.left) * scaleX;
 
-        // Find closest point
         let closestPoint = elevationProfile.points[0];
         let minDist = Math.abs(touchX - closestPoint.x);
 
@@ -127,10 +153,9 @@ const InteractiveElevationProfile = memo(function InteractiveElevationProfile({
             }
         }
 
-        // Check if near a camp marker
         let nearestCamp: CampMarker | undefined;
         for (const marker of elevationProfile.campMarkers) {
-            if (Math.abs(touchX - marker.x) < 15) { // Larger touch target
+            if (Math.abs(touchX - marker.x) < 15) {
                 nearestCamp = marker;
                 break;
             }
@@ -145,27 +170,25 @@ const InteractiveElevationProfile = memo(function InteractiveElevationProfile({
         });
     }, [elevationProfile]);
 
-    const handleTouchEnd = useCallback((_e: React.TouchEvent<SVGSVGElement>) => {
-        // If there's a hovered camp marker, select it on touch end
+    const handleTouchEnd = useCallback(() => {
         if (hoverInfo?.campMarker) {
             const camp = camps.find(c => c.id === hoverInfo.campMarker!.campId);
             if (camp) {
                 onCampSelect(camp);
             }
         }
-        // Clear hover info after a short delay (allows user to see selection)
         setTimeout(() => setHoverInfo(null), 300);
     }, [hoverInfo, camps, onCampSelect]);
 
     return (
-        <div style={{ position: 'relative', height: 140, width: '100%', paddingRight: isMobile ? 0 : 30 }}>
+        <div className={cn("relative h-[140px] w-full", !isMobile && "pr-8")}>
             <svg
                 ref={svgRef}
                 width="100%"
                 height="120"
                 viewBox="0 0 300 120"
                 preserveAspectRatio="none"
-                style={{ overflow: 'visible', cursor: 'crosshair', touchAction: 'none' }}
+                className="overflow-visible cursor-crosshair touch-none"
                 onMouseMove={handleMouseMove}
                 onMouseLeave={handleMouseLeave}
                 onClick={handleClick}
@@ -174,7 +197,7 @@ const InteractiveElevationProfile = memo(function InteractiveElevationProfile({
             >
                 <defs>
                     <linearGradient id="elevationGradient" x1="0" x2="0" y1="0" y2="1">
-                        <stop offset="0%" stopColor={colors.glass.light} />
+                        <stop offset="0%" stopColor="rgba(255,255,255,0.15)" />
                         <stop offset="100%" stopColor="rgba(255, 255, 255, 0)" />
                     </linearGradient>
                     <linearGradient id="selectedGradient" x1="0" x2="0" y1="0" y2="1">
@@ -184,13 +207,13 @@ const InteractiveElevationProfile = memo(function InteractiveElevationProfile({
                 </defs>
 
                 {/* Grid lines */}
-                <line x1="0" y1="0" x2="300" y2="0" stroke={colors.glass.borderSubtle} strokeWidth="1" />
-                <line x1="0" y1="60" x2="300" y2="60" stroke={colors.glass.borderSubtle} strokeWidth="1" />
-                <line x1="0" y1="120" x2="300" y2="120" stroke={colors.glass.borderSubtle} strokeWidth="1" />
+                <line x1="0" y1="0" x2="300" y2="0" stroke="rgba(255,255,255,0.08)" strokeWidth="1" />
+                <line x1="0" y1="60" x2="300" y2="60" stroke="rgba(255,255,255,0.08)" strokeWidth="1" />
+                <line x1="0" y1="120" x2="300" y2="120" stroke="rgba(255,255,255,0.08)" strokeWidth="1" />
 
                 {/* Main elevation area and line */}
                 <path d={elevationProfile.areaPath} fill="url(#elevationGradient)" />
-                <path d={elevationProfile.linePath} fill="none" stroke={colors.text.primary} strokeWidth="1.5" />
+                <path d={elevationProfile.linePath} fill="none" stroke="rgba(255,255,255,0.9)" strokeWidth="1.5" />
 
                 {/* Selected camp highlight */}
                 {selectedCamp && (() => {
@@ -198,8 +221,6 @@ const InteractiveElevationProfile = memo(function InteractiveElevationProfile({
                     if (!marker) return null;
 
                     const endX = marker.x;
-
-                    // Draw highlighted segment from start to selected camp
                     const segmentPoints = elevationProfile.points.filter(p => p.x <= endX);
                     if (segmentPoints.length < 2) return null;
 
@@ -221,7 +242,6 @@ const InteractiveElevationProfile = memo(function InteractiveElevationProfile({
 
                     return (
                         <g key={marker.campId}>
-                            {/* Marker glow when selected/hovered */}
                             {(isSelected || isHovered) && (
                                 <circle
                                     cx={marker.x}
@@ -230,22 +250,20 @@ const InteractiveElevationProfile = memo(function InteractiveElevationProfile({
                                     fill={isSelected ? 'rgba(59, 130, 246, 0.3)' : 'rgba(255, 255, 255, 0.2)'}
                                 />
                             )}
-                            {/* Main marker */}
                             <circle
                                 cx={marker.x}
                                 cy={marker.y}
                                 r={isSelected ? 5 : 4}
-                                fill={isSelected ? '#3b82f6' : colors.text.primary}
+                                fill={isSelected ? '#3b82f6' : 'rgba(255,255,255,0.9)'}
                                 stroke={isSelected ? '#60a5fa' : 'rgba(0, 0, 0, 0.5)'}
                                 strokeWidth={isSelected ? 2 : 1}
-                                style={{ cursor: 'pointer' }}
+                                className="cursor-pointer"
                             />
-                            {/* Day number label */}
                             <text
                                 x={marker.x}
                                 y={marker.y - 12}
                                 textAnchor="middle"
-                                fill={isSelected ? '#60a5fa' : colors.text.subtle}
+                                fill={isSelected ? '#60a5fa' : 'rgba(255,255,255,0.4)'}
                                 fontSize="8"
                                 fontWeight={isSelected ? 600 : 400}
                             >
@@ -282,28 +300,15 @@ const InteractiveElevationProfile = memo(function InteractiveElevationProfile({
             {/* Hover tooltip */}
             {hoverInfo && (
                 <div
-                    style={{
-                        position: 'absolute',
-                        left: `${(hoverInfo.x / 300) * 100}%`,
-                        top: -8,
-                        transform: 'translateX(-50%)',
-                        background: 'rgba(0, 0, 0, 0.85)',
-                        border: `1px solid ${colors.glass.border}`,
-                        borderRadius: radius.sm,
-                        padding: '4px 8px',
-                        fontSize: 10,
-                        color: colors.text.primary,
-                        whiteSpace: 'nowrap',
-                        pointerEvents: 'none',
-                        zIndex: 10,
-                    }}
+                    className="absolute top-[-8px] -translate-x-1/2 bg-black/85 border border-white/15 rounded-md px-2 py-1 text-[10px] text-white/90 whitespace-nowrap pointer-events-none z-10"
+                    style={{ left: `${(hoverInfo.x / 300) * 100}%` }}
                 >
                     {hoverInfo.campMarker ? (
-                        <span style={{ fontWeight: 500 }}>{hoverInfo.campMarker.name}</span>
+                        <span className="font-medium">{hoverInfo.campMarker.name}</span>
                     ) : (
                         <>
-                            <span style={{ color: colors.text.subtle }}>{hoverInfo.dist.toFixed(1)} km</span>
-                            <span style={{ margin: '0 6px', color: colors.glass.border }}>·</span>
+                            <span className="text-white/50">{hoverInfo.dist.toFixed(1)} km</span>
+                            <span className="mx-1.5 text-white/20">·</span>
                             <span>{Math.round(hoverInfo.ele)}m</span>
                         </>
                     )}
@@ -311,48 +316,33 @@ const InteractiveElevationProfile = memo(function InteractiveElevationProfile({
             )}
 
             {/* Distance labels */}
-            <div style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                marginTop: 8,
-                color: colors.text.subtle,
-                fontSize: 10
-            }}>
+            <div className="flex justify-between mt-2 text-white/40 light:text-slate-400 text-[10px]">
                 <span>0 km</span>
                 <span>{Math.round(elevationProfile.totalDist)} km</span>
             </div>
 
             {/* Elevation labels */}
             {isMobile ? (
-                <div style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    marginTop: 4,
-                    color: colors.text.subtle,
-                    fontSize: 10
-                }}>
+                <div className="flex justify-between mt-1 text-white/40 light:text-slate-400 text-[10px]">
                     <span>{Math.round(elevationProfile.minEle)}m min</span>
                     <span>{Math.round(elevationProfile.maxEle)}m max</span>
                 </div>
             ) : (
                 <>
-                    <div style={{ position: 'absolute', top: 0, right: 0, color: colors.text.subtle, fontSize: 10 }}>
+                    <div className="absolute top-0 right-0 text-white/40 light:text-slate-400 text-[10px]">
                         {Math.round(elevationProfile.maxEle)}m
                     </div>
-                    <div style={{ position: 'absolute', top: 100, right: 0, color: colors.text.subtle, fontSize: 10 }}>
+                    <div className="absolute top-[100px] right-0 text-white/40 light:text-slate-400 text-[10px]">
                         {Math.round(elevationProfile.minEle)}m
                     </div>
                 </>
             )}
 
             {/* Click hint */}
-            <p style={{
-                color: colors.text.subtle,
-                fontSize: 9,
-                marginTop: isMobile ? 8 : 4,
-                textAlign: 'center',
-                opacity: 0.6
-            }}>
+            <p className={cn(
+                "text-white/30 light:text-slate-400 text-[9px] text-center",
+                isMobile ? "mt-2" : "mt-1"
+            )}>
                 Click a day marker to explore
             </p>
         </div>
@@ -374,106 +364,58 @@ const HistoricalSiteCard = memo(function HistoricalSiteCard({
     const significanceColors = {
         major: '#f59e0b',
         notable: '#3b82f6',
-        minor: colors.text.subtle
+        minor: 'rgba(255,255,255,0.4)'
     };
 
     return (
-        <div
-            style={{
-                border: `1px solid ${colors.glass.borderSubtle}`,
-                borderRadius: radius.md,
-                marginBottom: 12,
-                overflow: 'hidden',
-                background: colors.glass.subtle,
-            }}
-        >
+        <Card variant="subtle" className="mb-3 overflow-hidden">
             <button
                 onClick={onToggle}
-                style={{
-                    width: '100%',
-                    padding: '14px 16px',
-                    display: 'flex',
-                    alignItems: 'flex-start',
-                    gap: 12,
-                    background: 'transparent',
-                    border: 'none',
-                    cursor: 'pointer',
-                    textAlign: 'left',
-                }}
+                className="w-full p-4 flex items-start gap-3 bg-transparent border-none cursor-pointer text-left"
             >
                 <div
-                    style={{
-                        width: 8,
-                        height: 8,
-                        borderRadius: '50%',
-                        background: significanceColors[site.significance || 'minor'],
-                        marginTop: 6,
-                        flexShrink: 0,
-                    }}
+                    className="w-2 h-2 rounded-full mt-1.5 flex-shrink-0"
+                    style={{ background: significanceColors[site.significance || 'minor'] }}
                 />
-                <div style={{ flex: 1 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <span style={{ color: colors.text.primary, fontSize: 14, fontWeight: 500 }}>
+                <div className="flex-1">
+                    <div className="flex items-center gap-2">
+                        <span className="text-white/95 light:text-slate-900 text-sm font-medium">
                             {site.name}
                         </span>
                         {site.routeDistanceKm != null && (
-                            <span style={{ color: colors.text.subtle, fontSize: 11 }}>
+                            <span className="text-white/40 light:text-slate-400 text-[11px]">
                                 {site.routeDistanceKm.toFixed(1)} km
                             </span>
                         )}
                     </div>
-                    <p style={{ color: colors.text.secondary, fontSize: 12, marginTop: 4, lineHeight: 1.4 }}>
+                    <p className="text-white/60 light:text-slate-600 text-xs mt-1 leading-snug">
                         {site.summary}
                     </p>
                     {site.period && (
-                        <span style={{
-                            display: 'inline-block',
-                            marginTop: 6,
-                            padding: '2px 8px',
-                            background: 'rgba(255, 255, 255, 0.05)',
-                            borderRadius: 4,
-                            fontSize: 10,
-                            color: colors.text.subtle,
-                        }}>
+                        <span className="inline-block mt-1.5 px-2 py-0.5 bg-white/5 light:bg-black/5 rounded text-[10px] text-white/40 light:text-slate-400">
                             {site.period}
                         </span>
                     )}
                 </div>
-                <span style={{
-                    color: colors.text.subtle,
-                    fontSize: 14,
-                    transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
-                    transition: 'transform 0.2s',
-                }}>
+                <span className={cn(
+                    "text-white/40 light:text-slate-400 text-sm transition-transform duration-200",
+                    isExpanded && "rotate-180"
+                )}>
                     ▼
                 </span>
             </button>
 
             {isExpanded && site.description && (
-                <div style={{
-                    padding: '0 16px 16px 36px',
-                    borderTop: `1px solid ${colors.glass.borderSubtle}`,
-                }}>
-                    <p style={{
-                        color: colors.text.secondary,
-                        fontSize: 13,
-                        lineHeight: 1.6,
-                        marginTop: 12,
-                    }}>
+                <div className="px-4 pb-4 pl-9 border-t border-white/10 light:border-black/5">
+                    <p className="text-white/60 light:text-slate-600 text-[13px] leading-relaxed mt-3">
                         {site.description}
                     </p>
                     {site.tags && site.tags.length > 0 && (
-                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 12 }}>
+                        <div className="flex flex-wrap gap-1.5 mt-3">
                             {site.tags.map(tag => (
                                 <span
                                     key={tag}
-                                    style={{
-                                        padding: '3px 8px',
-                                        background: 'rgba(59, 130, 246, 0.15)',
-                                        borderRadius: 4,
-                                        fontSize: 10,
-                                        color: '#60a5fa',
-                                    }}
+                                    className="px-2 py-0.5 bg-blue-500/15 rounded text-[10px] text-blue-400"
                                 >
                                     {tag}
                                 </span>
@@ -481,22 +423,14 @@ const HistoricalSiteCard = memo(function HistoricalSiteCard({
                         </div>
                     )}
                     {site.links && site.links.length > 0 && (
-                        <div style={{ marginTop: 12 }}>
+                        <div className="mt-3">
                             {site.links.map(link => (
                                 <a
                                     key={link.url}
                                     href={link.url}
                                     target="_blank"
                                     rel="noopener noreferrer"
-                                    style={{
-                                        display: 'inline-flex',
-                                        alignItems: 'center',
-                                        gap: 4,
-                                        color: '#60a5fa',
-                                        fontSize: 12,
-                                        textDecoration: 'none',
-                                        marginRight: 16,
-                                    }}
+                                    className="inline-flex items-center gap-1 text-blue-400 text-xs no-underline mr-4 hover:underline"
                                 >
                                     {link.label} →
                                 </a>
@@ -505,7 +439,7 @@ const HistoricalSiteCard = memo(function HistoricalSiteCard({
                     )}
                 </div>
             )}
-        </div>
+        </Card>
     );
 });
 
@@ -534,25 +468,15 @@ export const StatsTab = memo(function StatsTab({
 
     return (
         <div>
-            {/* Summit card with glass styling */}
-            <div style={{
-                border: `1px solid ${colors.glass.borderSubtle}`,
-                borderRadius: radius.md,
-                padding: 20,
-                marginBottom: 24,
-                background: `linear-gradient(135deg, ${colors.glass.medium} 0%, ${colors.glass.subtle} 100%)`,
-                boxShadow: `
-                    0 4px 16px rgba(0, 0, 0, 0.2),
-                    inset 0 1px 0 rgba(255, 255, 255, 0.08)
-                `,
-            }}>
-                <p style={{ color: colors.text.subtle, fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 8 }}>Summit</p>
-                <p style={{ color: colors.text.primary, fontSize: 28, fontWeight: 300 }}>{trekData.stats.highestPoint.elevation}m</p>
-                <p style={{ color: colors.text.subtle, fontSize: 14 }}>{trekData.stats.highestPoint.name}</p>
-            </div>
+            {/* Summit card */}
+            <Card variant="elevated" className="p-5 mb-6">
+                <p className="text-[10px] tracking-[0.1em] uppercase text-white/40 light:text-slate-400 mb-2">Summit</p>
+                <p className="text-3xl font-light text-white/95 light:text-slate-900">{trekData.stats.highestPoint.elevation}m</p>
+                <p className="text-sm text-white/50 light:text-slate-500">{trekData.stats.highestPoint.name}</p>
+            </Card>
 
-            <div style={{ marginBottom: 32 }}>
-                <p style={{ color: colors.text.subtle, fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 16 }}>
+            <div className="mb-8">
+                <p className="text-[10px] tracking-[0.1em] uppercase text-white/40 light:text-slate-400 mb-4">
                     Elevation Profile
                 </p>
                 {elevationProfile && (
@@ -569,77 +493,64 @@ export const StatsTab = memo(function StatsTab({
             {extendedStats && (
                 <>
                     {/* Primary Stats Grid */}
-                    <div style={{ marginBottom: 16 }}>
-                        <p style={{ color: colors.text.subtle, fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 12 }}>
+                    <div className="mb-4">
+                        <p className="text-[10px] tracking-[0.1em] uppercase text-white/40 light:text-slate-400 mb-3">
                             Journey Stats
                         </p>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                            <StatCard label="Total Distance" value={`${trekData.stats.totalDistance} km`} />
-                            <StatCard label="Duration" value={`${trekData.stats.duration} days`} />
-                            <StatCard label="Est. Hiking Time" value={extendedStats.estimatedTotalTime} color="#8b5cf6" />
-                            <StatCard
+                        <div className="grid grid-cols-2 gap-3">
+                            <StatItem label="Total Distance" value={`${trekData.stats.totalDistance} km`} />
+                            <StatItem label="Duration" value={`${trekData.stats.duration} days`} />
+                            <StatItem label="Est. Hiking Time" value={extendedStats.estimatedTotalTime} color="#8b5cf6" />
+                            <StatItem
                                 label="Difficulty"
                                 value={extendedStats.difficulty}
-                                color={DIFFICULTY_COLORS[extendedStats.difficulty] || colors.accent.warning}
+                                color={DIFFICULTY_COLORS[extendedStats.difficulty]}
                             />
                         </div>
                     </div>
 
                     {/* Elevation Stats */}
-                    <div style={{ marginBottom: 16 }}>
-                        <p style={{ color: colors.text.subtle, fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 12 }}>
+                    <div className="mb-4">
+                        <p className="text-[10px] tracking-[0.1em] uppercase text-white/40 light:text-slate-400 mb-3">
                             Elevation
                         </p>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                            <StatCard label="Total Ascent" value={`+${extendedStats.totalElevationGain}m`} color="#22c55e" />
-                            <StatCard label="Total Descent" value={`-${extendedStats.totalElevationLoss}m`} color="#ef4444" />
-                            <StatCard label="Start Elev." value={`${extendedStats.startElevation}m`} />
-                            <StatCard label="End Elev." value={`${extendedStats.endElevation}m`} />
+                        <div className="grid grid-cols-2 gap-3">
+                            <StatItem label="Total Ascent" value={`+${extendedStats.totalElevationGain}m`} color="#22c55e" />
+                            <StatItem label="Total Descent" value={`-${extendedStats.totalElevationLoss}m`} color="#ef4444" />
+                            <StatItem label="Start Elev." value={`${extendedStats.startElevation}m`} />
+                            <StatItem label="End Elev." value={`${extendedStats.endElevation}m`} />
                         </div>
                     </div>
 
                     {/* Expandable detailed stats */}
                     <button
                         onClick={() => setShowAllStats(!showAllStats)}
-                        style={{
-                            width: '100%',
-                            padding: '12px 16px',
-                            background: colors.glass.subtle,
-                            border: `1px solid ${colors.glass.borderSubtle}`,
-                            borderRadius: radius.md,
-                            cursor: 'pointer',
-                            display: 'flex',
-                            justifyContent: 'space-between',
-                            alignItems: 'center',
-                            marginBottom: 16,
-                        }}
+                        className="w-full p-3 bg-white/5 light:bg-black/5 border border-white/10 light:border-black/5 rounded-xl cursor-pointer flex justify-between items-center mb-4"
                     >
-                        <span style={{ color: colors.text.secondary, fontSize: 13 }}>
+                        <span className="text-white/60 light:text-slate-600 text-[13px]">
                             {showAllStats ? 'Hide' : 'Show'} Detailed Stats
                         </span>
-                        <span style={{
-                            color: colors.text.subtle,
-                            fontSize: 12,
-                            transform: showAllStats ? 'rotate(180deg)' : 'rotate(0deg)',
-                            transition: 'transform 0.2s',
-                        }}>
+                        <span className={cn(
+                            "text-white/40 light:text-slate-400 text-xs transition-transform duration-200",
+                            showAllStats && "rotate-180"
+                        )}>
                             ▼
                         </span>
                     </button>
 
                     {showAllStats && (
-                        <div style={{ marginBottom: 24 }}>
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                                <StatCard label="Avg Daily Dist" value={`${extendedStats.avgDailyDistance} km`} />
-                                <StatCard label="Avg Altitude" value={`${extendedStats.avgAltitude}m`} />
-                                <StatCard label="Max Daily Gain" value={`+${extendedStats.maxDailyGain}m`} color="#22c55e" />
-                                <StatCard label="Max Daily Loss" value={`-${extendedStats.maxDailyLoss}m`} color="#ef4444" />
-                                <StatCard
+                        <div className="mb-6">
+                            <div className="grid grid-cols-2 gap-3">
+                                <StatItem label="Avg Daily Dist" value={`${extendedStats.avgDailyDistance} km`} />
+                                <StatItem label="Avg Altitude" value={`${extendedStats.avgAltitude}m`} />
+                                <StatItem label="Max Daily Gain" value={`+${extendedStats.maxDailyGain}m`} color="#22c55e" />
+                                <StatItem label="Max Daily Loss" value={`-${extendedStats.maxDailyLoss}m`} color="#ef4444" />
+                                <StatItem
                                     label="Longest Day"
                                     value={`${extendedStats.longestDayDistance} km`}
                                     sublabel={`Day ${extendedStats.longestDayNumber}`}
                                 />
-                                <StatCard
+                                <StatItem
                                     label="Steepest Day"
                                     value={`${extendedStats.steepestDayGradient}m/km`}
                                     sublabel={`Day ${extendedStats.steepestDayNumber}`}
@@ -653,39 +564,17 @@ export const StatsTab = memo(function StatsTab({
 
             {/* Historical Sites Section */}
             {hasHistoricalSites && (
-                <div style={{ marginTop: 24 }}>
-                    <div style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 8,
-                        marginBottom: 16,
-                    }}>
-                        <span style={{
-                            color: '#f59e0b',
-                            fontSize: 16,
-                        }}>
-                            ★
-                        </span>
-                        <p style={{ color: colors.text.subtle, fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase' }}>
+                <div className="mt-6">
+                    <div className="flex items-center gap-2 mb-4">
+                        <span className="text-amber-500 text-base">★</span>
+                        <p className="text-[10px] tracking-[0.1em] uppercase text-white/40 light:text-slate-400">
                             Historical Sites
                         </p>
-                        <span style={{
-                            marginLeft: 'auto',
-                            padding: '2px 8px',
-                            background: 'rgba(245, 158, 11, 0.15)',
-                            borderRadius: 10,
-                            fontSize: 11,
-                            color: '#f59e0b',
-                        }}>
+                        <span className="ml-auto px-2 py-0.5 bg-amber-500/15 rounded-full text-[11px] text-amber-500">
                             {historicalSites.length} sites
                         </span>
                     </div>
-                    <p style={{
-                        color: colors.text.secondary,
-                        fontSize: 12,
-                        lineHeight: 1.5,
-                        marginBottom: 16,
-                    }}>
+                    <p className="text-white/60 light:text-slate-600 text-xs leading-relaxed mb-4">
                         This journey passes through sites of historical and cultural significance.
                         Tap to learn more about each location.
                     </p>
