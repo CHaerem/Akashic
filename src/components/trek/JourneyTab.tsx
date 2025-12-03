@@ -4,8 +4,8 @@ import { WaypointEditModal } from './WaypointEditModal';
 import { PhotoAssignModal } from './PhotoAssignModal';
 import { RouteEditor } from './RouteEditor';
 import { PhotoLightbox } from '../common/PhotoLightbox';
-import { GlassButton } from '../common/GlassButton';
-import { colors, radius, transitions } from '../../styles/liquidGlass';
+import { Button } from '../ui/button';
+import { cn } from '@/lib/utils';
 import { calculateAllSegments, getDifficultyColor } from '../../utils/routeUtils';
 
 /**
@@ -53,11 +53,10 @@ const DayPhotos = memo(function DayPhotos({ photos, getMediaUrl, isMobile, onPho
     const maxVisible = isMobile ? 6 : 8;
 
     return (
-        <div style={{
-            display: 'grid',
-            gridTemplateColumns: `repeat(${isMobile ? 3 : 4}, 1fr)`,
-            gap: 6
-        }}>
+        <div className={cn(
+            "grid gap-1.5",
+            isMobile ? "grid-cols-3" : "grid-cols-4"
+        )}>
             {photos.slice(0, maxVisible).map((photo, index) => (
                 <div
                     key={photo.id}
@@ -65,22 +64,12 @@ const DayPhotos = memo(function DayPhotos({ photos, getMediaUrl, isMobile, onPho
                         e.stopPropagation();
                         onPhotoClick(index);
                     }}
-                    style={{
-                        aspectRatio: '1',
-                        borderRadius: radius.sm,
-                        overflow: 'hidden',
-                        background: colors.glass.subtle,
-                        cursor: 'pointer'
-                    }}
+                    className="aspect-square rounded-lg overflow-hidden bg-white/5 light:bg-black/5 cursor-pointer"
                 >
                     <img
                         src={getMediaUrl(photo.thumbnail_url || photo.url)}
                         alt={photo.caption || 'Journey photo'}
-                        style={{
-                            width: '100%',
-                            height: '100%',
-                            objectFit: 'cover'
-                        }}
+                        className="w-full h-full object-cover"
                         loading="lazy"
                     />
                 </div>
@@ -91,17 +80,7 @@ const DayPhotos = memo(function DayPhotos({ photos, getMediaUrl, isMobile, onPho
                         e.stopPropagation();
                         onPhotoClick(maxVisible);
                     }}
-                    style={{
-                        aspectRatio: '1',
-                        borderRadius: radius.sm,
-                        background: colors.glass.subtle,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        color: colors.text.subtle,
-                        fontSize: 12,
-                        cursor: 'pointer'
-                    }}
+                    className="aspect-square rounded-lg bg-white/5 light:bg-black/5 flex items-center justify-center text-white/40 light:text-slate-400 text-xs cursor-pointer"
                 >
                     +{photos.length - maxVisible}
                 </div>
@@ -115,83 +94,51 @@ const DayPhotos = memo(function DayPhotos({ photos, getMediaUrl, isMobile, onPho
  */
 interface SegmentInfoProps {
     segment: RouteSegment;
-    fromCamp: Camp;
-    toCamp: Camp;
     isMobile?: boolean;
 }
 
-const SegmentInfo = memo(function SegmentInfo({ segment, fromCamp, toCamp, isMobile = false }: SegmentInfoProps) {
+const SegmentInfo = memo(function SegmentInfo({ segment, isMobile = false }: SegmentInfoProps) {
     const difficultyColor = getDifficultyColor(segment.difficulty);
 
     return (
-        <div style={{
-            margin: isMobile ? '0 -16px' : '0 -24px',
-            padding: isMobile ? '12px 16px' : '12px 24px',
-            background: `linear-gradient(90deg, ${colors.glass.subtle} 0%, transparent 50%, ${colors.glass.subtle} 100%)`,
-            borderTop: `1px solid ${colors.glass.borderSubtle}`,
-            borderBottom: `1px solid ${colors.glass.borderSubtle}`,
-        }}>
-            <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                gap: 12
-            }}>
+        <div className={cn(
+            "py-3 border-y border-white/8 light:border-black/5",
+            isMobile ? "-mx-4 px-4" : "-mx-6 px-6"
+        )}
+            style={{ background: 'linear-gradient(90deg, rgba(255,255,255,0.03) 0%, transparent 50%, rgba(255,255,255,0.03) 100%)' }}
+        >
+            <div className="flex items-center justify-between gap-3">
                 {/* Distance & Time */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                    <div style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 4,
-                        color: colors.text.secondary,
-                        fontSize: 12
-                    }}>
-                        <span style={{ opacity: 0.6 }}>↓</span>
-                        <span style={{ fontWeight: 500 }}>{segment.distance} km</span>
+                <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-1 text-white/70 light:text-slate-600 text-xs">
+                        <span className="opacity-60">↓</span>
+                        <span className="font-medium">{segment.distance} km</span>
                     </div>
-                    <div style={{
-                        width: 1,
-                        height: 12,
-                        background: colors.glass.borderSubtle
-                    }} />
-                    <div style={{
-                        color: colors.text.tertiary,
-                        fontSize: 11
-                    }}>
+                    <div className="w-px h-3 bg-white/10 light:bg-black/10" />
+                    <div className="text-white/50 light:text-slate-500 text-[11px]">
                         {segment.estimatedTime}
                     </div>
                 </div>
 
                 {/* Elevation changes */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div className="flex items-center gap-2">
                     {segment.elevationGain > 0 && (
-                        <span style={{
-                            fontSize: 11,
-                            color: 'rgba(34, 197, 94, 0.9)',
-                            fontWeight: 500
-                        }}>
+                        <span className="text-[11px] text-green-400 font-medium">
                             +{segment.elevationGain}m
                         </span>
                     )}
                     {segment.elevationLoss > 0 && (
-                        <span style={{
-                            fontSize: 11,
-                            color: 'rgba(239, 68, 68, 0.8)',
-                            fontWeight: 500
-                        }}>
+                        <span className="text-[11px] text-red-400 font-medium">
                             -{segment.elevationLoss}m
                         </span>
                     )}
-                    <div style={{
-                        padding: '2px 6px',
-                        borderRadius: 4,
-                        background: difficultyColor.replace('0.8', '0.15'),
-                        color: difficultyColor,
-                        fontSize: 9,
-                        fontWeight: 600,
-                        textTransform: 'uppercase',
-                        letterSpacing: '0.05em'
-                    }}>
+                    <div
+                        className="px-1.5 py-0.5 rounded text-[9px] font-semibold uppercase tracking-wide"
+                        style={{
+                            background: difficultyColor.replace('0.8', '0.15'),
+                            color: difficultyColor
+                        }}
+                    >
                         {segment.difficulty}
                     </div>
                 </div>
@@ -241,8 +188,6 @@ const CampItem = memo(function CampItem({
         onAssignPhotos(camp);
     }, [onAssignPhotos, camp]);
 
-    const padding = isMobile ? 16 : 24;
-
     // Combine auto-matched photos (by date) with manually assigned photos
     const allPhotos = useMemo(() => {
         const photoIds = new Set<string>();
@@ -267,102 +212,81 @@ const CampItem = memo(function CampItem({
         return combined;
     }, [photos, assignedPhotos]);
 
-    const containerStyle = useMemo(() => ({
-        padding: '20px 0',
-        borderBottom: !isLast ? `1px solid ${colors.glass.borderSubtle}` : 'none',
-        cursor: 'pointer',
-        transition: `all ${transitions.smooth}`,
-        background: isSelected ? colors.glass.subtle : 'transparent',
-        margin: `0 -${padding}px`,
-        paddingLeft: isSelected ? padding - 3 : padding, // Compensate for border
-        paddingRight: padding,
-        minHeight: 44,
-        // Selection indicator - colored left border
-        borderLeft: isSelected ? `3px solid ${colors.accent.primary}` : '3px solid transparent',
-        // Subtle glow when selected
-        boxShadow: isSelected ? `inset 6px 0 16px -8px ${colors.glow.blue}` : 'none',
-    }), [isLast, isSelected, padding]);
-
     const dayLabel = dayDate
         ? `Day ${camp.dayNumber} · ${formatDate(dayDate)}`
         : `Day ${camp.dayNumber}`;
 
-    const actionButtonStyle: React.CSSProperties = {
-        background: colors.glass.medium,
-        border: `1px solid ${colors.glass.borderSubtle}`,
-        color: colors.text.secondary,
-        fontSize: 12,
-        padding: '8px 12px',
-        borderRadius: radius.sm,
-        cursor: 'pointer',
-        minHeight: 36,
-        transition: `all ${transitions.normal}`
-    };
-
     return (
-        <div onClick={handleClick} style={containerStyle}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                <span style={{
-                    color: isSelected ? colors.accent.primary : colors.text.subtle,
-                    fontSize: 10,
-                    letterSpacing: '0.1em',
-                    textTransform: 'uppercase'
-                }}>
+        <div
+            onClick={handleClick}
+            className={cn(
+                "py-5 cursor-pointer transition-all duration-300 min-h-11",
+                !isLast && "border-b border-white/8 light:border-black/5",
+                isSelected && "bg-white/5 light:bg-black/3",
+                isMobile ? "-mx-4 px-4" : "-mx-6 px-6",
+                isSelected && "border-l-3 border-l-blue-500"
+            )}
+            style={{
+                paddingLeft: isSelected ? (isMobile ? 13 : 21) : (isMobile ? 16 : 24),
+                boxShadow: isSelected ? 'inset 6px 0 16px -8px rgba(59,130,246,0.3)' : 'none'
+            }}
+        >
+            <div className="flex justify-between mb-1">
+                <span className={cn(
+                    "text-[10px] tracking-[0.1em] uppercase",
+                    isSelected ? "text-blue-400" : "text-white/40 light:text-slate-400"
+                )}>
                     {dayLabel}
                 </span>
-                <span style={{ color: colors.text.subtle, fontSize: 12 }}>
+                <span className="text-white/40 light:text-slate-400 text-xs">
                     {camp.elevation}m
                 </span>
             </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <p style={{
-                    color: isSelected ? colors.text.primary : colors.text.secondary,
-                    fontSize: 16,
-                    marginTop: 0,
-                    marginBottom: isSelected ? 12 : 0,
-                    marginLeft: 0,
-                    marginRight: 0
-                }}>
+            <div className="flex justify-between items-center">
+                <p className={cn(
+                    "text-base m-0",
+                    isSelected
+                        ? "text-white/95 light:text-slate-900 mb-3"
+                        : "text-white/70 light:text-slate-600"
+                )}>
                     {camp.name}
                 </p>
                 {!isSelected && allPhotos.length > 0 && (
-                    <span style={{
-                        background: colors.glass.medium,
-                        padding: '2px 8px',
-                        borderRadius: 10,
-                        fontSize: 10,
-                        color: colors.text.tertiary
-                    }}>
+                    <span className="bg-white/10 light:bg-black/5 px-2 py-0.5 rounded-full text-[10px] text-white/50 light:text-slate-500">
                         {allPhotos.length} photo{allPhotos.length !== 1 ? 's' : ''}
                     </span>
                 )}
             </div>
 
             {isSelected && (
-                <div style={{ animation: 'expandIn 0.4s cubic-bezier(0.32, 0.72, 0, 1)', marginTop: 12 }}>
-                    <style>{`@keyframes expandIn { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: translateY(0); } }`}</style>
-
+                <div className="mt-3 animate-in fade-in slide-in-from-top-2 duration-400">
                     {/* Action buttons - only show in edit mode */}
                     {editMode && (
-                        <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
-                            <button onClick={handleEdit} style={actionButtonStyle}>
+                        <div className="flex gap-2 mb-4">
+                            <button
+                                onClick={handleEdit}
+                                className="bg-white/10 light:bg-black/5 border border-white/10 light:border-black/5 text-white/70 light:text-slate-600 text-xs px-3 py-2 rounded-lg cursor-pointer min-h-9 hover:bg-white/15 light:hover:bg-black/8 transition-colors"
+                            >
                                 Edit Day
                             </button>
-                            <button onClick={handleAssignPhotos} style={actionButtonStyle}>
+                            <button
+                                onClick={handleAssignPhotos}
+                                className="bg-white/10 light:bg-black/5 border border-white/10 light:border-black/5 text-white/70 light:text-slate-600 text-xs px-3 py-2 rounded-lg cursor-pointer min-h-9 hover:bg-white/15 light:hover:bg-black/8 transition-colors"
+                            >
                                 Assign Photos
                             </button>
                         </div>
                     )}
 
                     {camp.notes && (
-                        <p style={{ color: colors.text.tertiary, fontSize: 14, lineHeight: 1.6, marginBottom: 16, marginTop: 0 }}>
+                        <p className="text-white/50 light:text-slate-500 text-sm leading-relaxed mb-4 m-0">
                             {camp.notes}
                         </p>
                     )}
                     {camp.highlights && camp.highlights.length > 0 && (
-                        <ul style={{ marginBottom: 20, paddingLeft: 16, marginTop: 0 }}>
+                        <ul className="mb-5 pl-4 m-0">
                             {camp.highlights.map((highlight, idx) => (
-                                <li key={idx} style={{ color: colors.text.secondary, fontSize: 13, marginBottom: 4 }}>
+                                <li key={idx} className="text-white/60 light:text-slate-600 text-[13px] mb-1">
                                     {highlight}
                                 </li>
                             ))}
@@ -377,19 +301,11 @@ const CampItem = memo(function CampItem({
                             onPhotoClick={(index) => onPhotoClick(allPhotos, index)}
                         />
                     ) : (
-                        <div style={{
-                            width: '100%',
-                            height: isMobile ? 80 : 100,
-                            background: colors.glass.subtle,
-                            border: `1px dashed ${colors.glass.borderSubtle}`,
-                            borderRadius: radius.sm,
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            color: colors.text.disabled,
-                            fontSize: 11,
-                            letterSpacing: '0.05em'
-                        }}>
+                        <div className={cn(
+                            "w-full bg-white/5 light:bg-black/5 border border-dashed border-white/10 light:border-black/10 rounded-lg",
+                            "flex items-center justify-center text-white/30 light:text-slate-400 text-[11px] tracking-wide",
+                            isMobile ? "h-20" : "h-24"
+                        )}>
                             No photos for this day
                         </div>
                     )}
@@ -503,15 +419,15 @@ export const JourneyTab = memo(function JourneyTab({
         <div>
             {/* Edit Route button - only in edit mode */}
             {editMode && (
-                <div style={{ marginBottom: 16 }}>
-                    <GlassButton
+                <div className="mb-4">
+                    <Button
                         variant="primary"
                         size="md"
-                        fullWidth
                         onClick={() => setShowRouteEditor(true)}
+                        className="w-full"
                     >
                         Edit Route & Camp Positions
-                    </GlassButton>
+                    </Button>
                 </div>
             )}
 
@@ -525,8 +441,6 @@ export const JourneyTab = memo(function JourneyTab({
                         {segment && prevCamp && (
                             <SegmentInfo
                                 segment={segment}
-                                fromCamp={prevCamp}
-                                toCamp={camp}
                                 isMobile={isMobile}
                             />
                         )}
