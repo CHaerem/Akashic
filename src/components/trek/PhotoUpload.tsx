@@ -7,7 +7,8 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { uploadPhoto, type UploadResult } from '../../lib/media';
 import { extractPhotoMetadata, type PhotoMetadata } from '../../lib/exif';
-import { colors, radius, transitions } from '../../styles/liquidGlass';
+import { Button } from '../ui/button';
+import { cn } from '@/lib/utils';
 
 interface PhotoUploadProps {
     journeyId: string;
@@ -56,7 +57,6 @@ export function PhotoUpload({ journeyId, onUploadComplete, onUploadError, isMobi
             return;
         }
 
-        // Process files and extract metadata
         const newPending: PendingFile[] = await Promise.all(
             fileArray.map(async (file) => {
                 const id = `pending-${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -82,7 +82,6 @@ export function PhotoUpload({ journeyId, onUploadComplete, onUploadError, isMobi
     const uploadAll = useCallback(async () => {
         if (pending.length === 0) return;
 
-        // Move all pending to uploading state
         const toUpload = pending.map(p => ({
             ...p,
             status: 'uploading' as const,
@@ -91,27 +90,22 @@ export function PhotoUpload({ journeyId, onUploadComplete, onUploadError, isMobi
         setUploading(toUpload);
         setPending([]);
 
-        // Upload each file
         for (const item of toUpload) {
             try {
                 const result = await uploadPhoto(journeyId, item.file);
 
-                // Combine upload result with extracted metadata
                 const resultWithMetadata: UploadResult = {
                     ...result,
                     coordinates: item.metadata.coordinates,
                     takenAt: item.metadata.takenAt,
                 };
 
-                // Update status
                 setUploading(prev => prev.map(u =>
                     u.id === item.id ? { ...u, status: 'done' } : u
                 ));
 
-                // Notify parent
                 onUploadComplete(resultWithMetadata);
 
-                // Remove after short delay to show success
                 setTimeout(() => {
                     setUploading(prev => {
                         const toRemove = prev.find(u => u.id === item.id);
@@ -198,22 +192,17 @@ export function PhotoUpload({ journeyId, onUploadComplete, onUploadError, isMobi
                 onDragOver={handleDragOver}
                 onDragLeave={handleDragLeave}
                 onDrop={handleDrop}
-                style={{
-                    border: `2px dashed ${isDragging ? 'rgba(59, 130, 246, 0.6)' : 'rgba(255,255,255,0.2)'}`,
-                    borderRadius: radius.lg,
-                    padding: isMobile ? 24 : 32,
-                    textAlign: 'center',
-                    cursor: isUploading ? 'default' : 'pointer',
-                    background: isDragging ? 'rgba(59, 130, 246, 0.1)' : 'transparent',
-                    transition: `all ${transitions.fast}`,
-                    opacity: isUploading ? 0.6 : 1,
-                    pointerEvents: isUploading ? 'none' : 'auto',
-                    minHeight: isMobile ? 80 : 'auto',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                }}
+                className={cn(
+                    "border-2 border-dashed rounded-xl text-center transition-all duration-200",
+                    "flex flex-col items-center justify-center",
+                    isMobile ? "p-6 min-h-20" : "p-8",
+                    isDragging
+                        ? "border-blue-500/60 bg-blue-500/10"
+                        : "border-white/20 light:border-black/20",
+                    isUploading
+                        ? "opacity-60 pointer-events-none cursor-default"
+                        : "cursor-pointer"
+                )}
             >
                 <input
                     ref={fileInputRef}
@@ -221,103 +210,61 @@ export function PhotoUpload({ journeyId, onUploadComplete, onUploadError, isMobi
                     accept="image/jpeg,image/png,image/gif,image/webp,image/heic,image/heif"
                     multiple
                     onChange={handleFileChange}
-                    style={{ display: 'none' }}
+                    className="hidden"
                 />
 
-                <div style={{
-                    width: isMobile ? 48 : 40,
-                    height: isMobile ? 48 : 40,
-                    borderRadius: '50%',
-                    background: 'rgba(255,255,255,0.1)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    marginBottom: 12,
-                }}>
-                    <svg width={isMobile ? 24 : 20} height={isMobile ? 24 : 20} viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.6)" strokeWidth="2">
+                <div className={cn(
+                    "rounded-full bg-white/10 light:bg-black/5 flex items-center justify-center mb-3",
+                    isMobile ? "w-12 h-12" : "w-10 h-10"
+                )}>
+                    <svg width={isMobile ? 24 : 20} height={isMobile ? 24 : 20} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-white/60 light:text-slate-400">
                         <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
                         <polyline points="17 8 12 3 7 8" />
                         <line x1="12" y1="3" x2="12" y2="15" />
                     </svg>
                 </div>
 
-                <p style={{
-                    color: colors.text.secondary,
-                    fontSize: isMobile ? 15 : 14,
-                    margin: 0,
-                    marginBottom: 4,
-                    fontWeight: 500,
-                }}>
+                <p className={cn(
+                    "text-white/70 light:text-slate-600 m-0 mb-1 font-medium",
+                    isMobile ? "text-[15px]" : "text-sm"
+                )}>
                     {isDragging ? 'Drop photos here' : isMobile ? 'Tap to add photos' : 'Drop photos or click to browse'}
                 </p>
 
-                <p style={{
-                    color: colors.text.tertiary,
-                    fontSize: 11,
-                    margin: 0,
-                }}>
+                <p className="text-white/40 light:text-slate-400 text-[11px] m-0">
                     GPS location and date will be extracted automatically
                 </p>
             </div>
 
             {/* Pending photos preview */}
             {pending.length > 0 && (
-                <div style={{ marginTop: 16 }}>
-                    <div style={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                        marginBottom: 12,
-                    }}>
-                        <span style={{
-                            fontSize: 12,
-                            color: colors.text.secondary,
-                            fontWeight: 500,
-                        }}>
+                <div className="mt-4">
+                    <div className="flex justify-between items-center mb-3">
+                        <span className="text-xs text-white/70 light:text-slate-600 font-medium">
                             {pending.length} photo{pending.length !== 1 ? 's' : ''} ready
                         </span>
-                        <button
+                        <Button
+                            variant="primary"
+                            size="sm"
                             onClick={uploadAll}
-                            style={{
-                                padding: isMobile ? '10px 20px' : '8px 16px',
-                                fontSize: 13,
-                                fontWeight: 500,
-                                background: 'rgba(59, 130, 246, 0.8)',
-                                border: 'none',
-                                borderRadius: radius.md,
-                                color: '#fff',
-                                cursor: 'pointer',
-                                transition: `all ${transitions.fast}`,
-                            }}
                         >
                             Upload All
-                        </button>
+                        </Button>
                     </div>
 
-                    <div style={{
-                        display: 'grid',
-                        gridTemplateColumns: isMobile ? 'repeat(3, 1fr)' : 'repeat(4, 1fr)',
-                        gap: 8,
-                    }}>
+                    <div className={cn(
+                        "grid gap-2",
+                        isMobile ? "grid-cols-3" : "grid-cols-4"
+                    )}>
                         {pending.map((item) => (
                             <div
                                 key={item.id}
-                                style={{
-                                    position: 'relative',
-                                    aspectRatio: '1',
-                                    borderRadius: radius.md,
-                                    overflow: 'hidden',
-                                    background: 'rgba(255,255,255,0.05)',
-                                }}
+                                className="relative aspect-square rounded-lg overflow-hidden bg-white/5 light:bg-black/5"
                             >
                                 <img
                                     src={item.previewUrl}
                                     alt="Preview"
-                                    style={{
-                                        width: '100%',
-                                        height: '100%',
-                                        objectFit: 'cover',
-                                    }}
+                                    className="w-full h-full object-cover"
                                 />
 
                                 {/* Remove button */}
@@ -326,48 +273,20 @@ export function PhotoUpload({ journeyId, onUploadComplete, onUploadError, isMobi
                                         e.stopPropagation();
                                         removePending(item.id);
                                     }}
-                                    style={{
-                                        position: 'absolute',
-                                        top: 4,
-                                        right: 4,
-                                        width: isMobile ? 28 : 24,
-                                        height: isMobile ? 28 : 24,
-                                        borderRadius: '50%',
-                                        background: 'rgba(0,0,0,0.6)',
-                                        border: 'none',
-                                        color: '#fff',
-                                        cursor: 'pointer',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'center',
-                                        fontSize: 14,
-                                    }}
+                                    className={cn(
+                                        "absolute top-1 right-1 rounded-full bg-black/60 border-none text-white",
+                                        "cursor-pointer flex items-center justify-center text-sm",
+                                        isMobile ? "w-7 h-7" : "w-6 h-6"
+                                    )}
                                 >
                                     ✕
                                 </button>
 
                                 {/* Metadata indicators */}
-                                <div style={{
-                                    position: 'absolute',
-                                    bottom: 0,
-                                    left: 0,
-                                    right: 0,
-                                    padding: 4,
-                                    background: 'linear-gradient(transparent, rgba(0,0,0,0.7))',
-                                    display: 'flex',
-                                    gap: 4,
-                                }}>
+                                <div className="absolute bottom-0 left-0 right-0 p-1 bg-gradient-to-t from-black/70 to-transparent flex gap-1">
                                     {item.metadata.coordinates && (
                                         <div
-                                            style={{
-                                                width: 18,
-                                                height: 18,
-                                                borderRadius: '50%',
-                                                background: 'rgba(59, 130, 246, 0.8)',
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                justifyContent: 'center',
-                                            }}
+                                            className="w-[18px] h-[18px] rounded-full bg-blue-500/80 flex items-center justify-center"
                                             title="Has GPS location"
                                         >
                                             <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5">
@@ -377,17 +296,7 @@ export function PhotoUpload({ journeyId, onUploadComplete, onUploadError, isMobi
                                         </div>
                                     )}
                                     {item.metadata.takenAt && (
-                                        <div
-                                            style={{
-                                                flex: 1,
-                                                fontSize: 9,
-                                                color: 'rgba(255,255,255,0.8)',
-                                                overflow: 'hidden',
-                                                textOverflow: 'ellipsis',
-                                                whiteSpace: 'nowrap',
-                                                lineHeight: '18px',
-                                            }}
-                                        >
+                                        <div className="flex-1 text-[9px] text-white/80 overflow-hidden text-ellipsis whitespace-nowrap leading-[18px]">
                                             {formatDate(item.metadata.takenAt)}
                                         </div>
                                     )}
@@ -397,24 +306,15 @@ export function PhotoUpload({ journeyId, onUploadComplete, onUploadError, isMobi
                     </div>
 
                     {/* Metadata summary */}
-                    <div style={{
-                        marginTop: 12,
-                        padding: 10,
-                        background: 'rgba(255, 255, 255, 0.03)',
-                        borderRadius: radius.md,
-                        fontSize: 11,
-                        color: colors.text.tertiary,
-                        display: 'flex',
-                        gap: 16,
-                    }}>
+                    <div className="mt-3 p-2.5 bg-white/5 light:bg-black/5 rounded-lg text-[11px] text-white/40 light:text-slate-500 flex gap-4">
                         <span>
-                            <span style={{ color: 'rgba(59, 130, 246, 0.9)' }}>
+                            <span className="text-blue-400">
                                 {pending.filter(p => p.metadata.coordinates).length}
                             </span>{' '}
                             with GPS
                         </span>
                         <span>
-                            <span style={{ color: 'rgba(34, 197, 94, 0.9)' }}>
+                            <span className="text-green-400">
                                 {pending.filter(p => p.metadata.takenAt).length}
                             </span>{' '}
                             with date
@@ -425,56 +325,34 @@ export function PhotoUpload({ journeyId, onUploadComplete, onUploadError, isMobi
 
             {/* Upload progress */}
             {uploading.length > 0 && (
-                <div style={{ marginTop: 16 }}>
-                    <div style={{
-                        display: 'grid',
-                        gridTemplateColumns: isMobile ? 'repeat(3, 1fr)' : 'repeat(4, 1fr)',
-                        gap: 8,
-                    }}>
+                <div className="mt-4">
+                    <div className={cn(
+                        "grid gap-2",
+                        isMobile ? "grid-cols-3" : "grid-cols-4"
+                    )}>
                         {uploading.map((item) => (
                             <div
                                 key={item.id}
-                                style={{
-                                    position: 'relative',
-                                    aspectRatio: '1',
-                                    borderRadius: radius.md,
-                                    overflow: 'hidden',
-                                    background: 'rgba(255,255,255,0.05)',
-                                }}
+                                className="relative aspect-square rounded-lg overflow-hidden bg-white/5 light:bg-black/5"
                             >
                                 <img
                                     src={item.previewUrl}
                                     alt="Uploading"
-                                    style={{
-                                        width: '100%',
-                                        height: '100%',
-                                        objectFit: 'cover',
-                                        opacity: item.status === 'uploading' ? 0.5 : 1,
-                                    }}
+                                    className={cn(
+                                        "w-full h-full object-cover",
+                                        item.status === 'uploading' && "opacity-50"
+                                    )}
                                 />
 
                                 {/* Status overlay */}
-                                <div style={{
-                                    position: 'absolute',
-                                    inset: 0,
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    background: item.status === 'error'
-                                        ? 'rgba(255, 100, 100, 0.3)'
-                                        : item.status === 'done'
-                                            ? 'rgba(34, 197, 94, 0.3)'
-                                            : 'rgba(0, 0, 0, 0.3)',
-                                }}>
+                                <div className={cn(
+                                    "absolute inset-0 flex items-center justify-center",
+                                    item.status === 'error' && "bg-red-500/30",
+                                    item.status === 'done' && "bg-green-500/30",
+                                    item.status === 'uploading' && "bg-black/30"
+                                )}>
                                     {item.status === 'uploading' && (
-                                        <div style={{
-                                            width: 24,
-                                            height: 24,
-                                            border: '2px solid rgba(255,255,255,0.3)',
-                                            borderTopColor: 'rgba(255,255,255,0.9)',
-                                            borderRadius: '50%',
-                                            animation: 'spin 1s linear infinite',
-                                        }} />
+                                        <div className="w-6 h-6 border-2 border-white/30 border-t-white/90 rounded-full animate-spin" />
                                     )}
                                     {item.status === 'done' && (
                                         <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="2.5">
@@ -484,15 +362,7 @@ export function PhotoUpload({ journeyId, onUploadComplete, onUploadError, isMobi
                                     {item.status === 'error' && (
                                         <button
                                             onClick={() => clearError(item.id)}
-                                            style={{
-                                                background: 'rgba(0,0,0,0.5)',
-                                                border: 'none',
-                                                borderRadius: radius.sm,
-                                                padding: '4px 8px',
-                                                color: '#fff',
-                                                fontSize: 10,
-                                                cursor: 'pointer',
-                                            }}
+                                            className="bg-black/50 border-none rounded px-2 py-1 text-white text-[10px] cursor-pointer"
                                         >
                                             Failed - tap to dismiss
                                         </button>
@@ -503,13 +373,6 @@ export function PhotoUpload({ journeyId, onUploadComplete, onUploadError, isMobi
                     </div>
                 </div>
             )}
-
-            {/* CSS for spinner animation */}
-            <style>{`
-                @keyframes spin {
-                    to { transform: rotate(360deg); }
-                }
-            `}</style>
         </div>
     );
 }

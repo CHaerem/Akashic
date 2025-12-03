@@ -9,7 +9,7 @@
 import { useState, useCallback, useRef, useEffect, memo } from 'react';
 import { createPortal } from 'react-dom';
 import type { Photo } from '../../types/trek';
-import { colors, gradients, transitions } from '../../styles/liquidGlass';
+import { cn } from '@/lib/utils';
 
 interface PhotoLightboxProps {
     photos: Photo[];
@@ -50,7 +50,6 @@ export const PhotoLightbox = memo(function PhotoLightbox({
             setCurrentIndex(initialIndex);
             setImageLoaded(false);
             setIsEntering(true);
-            // Small delay to allow the fade-in
             const timer = setTimeout(() => setIsEntering(false), 50);
             return () => clearTimeout(timer);
         }
@@ -61,7 +60,7 @@ export const PhotoLightbox = memo(function PhotoLightbox({
         setImageLoaded(false);
     }, [currentIndex]);
 
-    // Auto-hide controls after 5 seconds of inactivity (longer for calm UX)
+    // Auto-hide controls after 5 seconds of inactivity
     const resetControlsTimeout = useCallback(() => {
         if (controlsTimeoutRef.current) {
             clearTimeout(controlsTimeoutRef.current);
@@ -133,7 +132,6 @@ export const PhotoLightbox = memo(function PhotoLightbox({
         const deltaX = e.touches[0].clientX - touchStart.x;
         const deltaY = Math.abs(e.touches[0].clientY - touchStart.y);
 
-        // Only track horizontal swipes (ignore vertical)
         if (deltaY < Math.abs(deltaX) * 0.5) {
             setTouchDelta(deltaX);
         }
@@ -155,7 +153,6 @@ export const PhotoLightbox = memo(function PhotoLightbox({
     }, [touchStart, touchDelta, navigateNext, navigatePrev]);
 
     const handleContainerClick = useCallback((e: React.MouseEvent) => {
-        // Close when clicking the backdrop (outside the image)
         if (e.target === containerRef.current) {
             onClose();
         } else {
@@ -186,7 +183,6 @@ export const PhotoLightbox = memo(function PhotoLightbox({
     const canGoPrev = currentIndex > 0;
     const canGoNext = currentIndex < photos.length - 1;
 
-    // Use portal to render at document root, avoiding stacking context issues from parent transforms/filters
     return createPortal(
         <div
             ref={containerRef}
@@ -194,48 +190,27 @@ export const PhotoLightbox = memo(function PhotoLightbox({
             onTouchStart={handleTouchStart}
             onTouchMove={handleTouchMove}
             onTouchEnd={handleTouchEnd}
-            style={{
-                position: 'fixed',
-                inset: 0,
-                background: 'rgb(0, 0, 0)',
-                zIndex: 9999,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                cursor: 'pointer',
-                touchAction: 'pan-y',
-                opacity: isEntering ? 0 : 1,
-                transition: 'opacity 0.2s ease-out'
-            }}
+            className={cn(
+                "fixed inset-0 bg-black z-[9999] flex items-center justify-center cursor-pointer",
+                "touch-pan-y transition-opacity duration-200",
+                isEntering ? "opacity-0" : "opacity-100"
+            )}
         >
-            {/* Top bar - fades in/out */}
-            <div style={{
-                position: 'absolute',
-                top: 0,
-                left: 0,
-                right: 0,
-                padding: 'max(16px, env(safe-area-inset-top)) 16px 24px',
-                background: gradients.overlay.top,
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                opacity: showControls ? 1 : 0,
-                transition: `opacity ${transitions.normal}`,
-                pointerEvents: showControls ? 'auto' : 'none'
-            }}>
+            {/* Top bar */}
+            <div className={cn(
+                "absolute top-0 left-0 right-0 flex justify-between items-center transition-opacity duration-300",
+                "pt-[max(16px,env(safe-area-inset-top))] px-4 pb-6",
+                showControls ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"
+            )}
+                style={{ background: 'linear-gradient(to bottom, rgba(0,0,0,0.6), transparent)' }}
+            >
                 {/* Photo counter */}
-                <span style={{
-                    color: colors.text.primary,
-                    fontSize: 14,
-                    fontWeight: 400,
-                    letterSpacing: '0.02em',
-                    fontVariantNumeric: 'tabular-nums'
-                }}>
+                <span className="text-white/95 text-sm font-normal tracking-wide tabular-nums">
                     {currentIndex + 1} / {photos.length}
                 </span>
 
                 {/* Action buttons */}
-                <div style={{ display: 'flex', gap: 12 }}>
+                <div className="flex gap-3">
                     {editMode && onEdit && (
                         <button
                             onClick={(e) => {
@@ -243,19 +218,7 @@ export const PhotoLightbox = memo(function PhotoLightbox({
                                 onClose();
                                 onEdit(currentPhoto);
                             }}
-                            style={{
-                                background: colors.glass.light,
-                                border: 'none',
-                                color: colors.text.primary,
-                                width: 44,
-                                height: 44,
-                                borderRadius: '50%',
-                                cursor: 'pointer',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                transition: `background ${transitions.normal}`
-                            }}
+                            className="w-11 h-11 rounded-full bg-white/15 border-none text-white flex items-center justify-center cursor-pointer transition-colors hover:bg-white/25"
                             aria-label="Edit photo"
                         >
                             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -272,19 +235,7 @@ export const PhotoLightbox = memo(function PhotoLightbox({
                                     handleDelete();
                                 }
                             }}
-                            style={{
-                                background: `rgba(248, 113, 113, 0.2)`,
-                                border: 'none',
-                                color: colors.accent.error,
-                                width: 44,
-                                height: 44,
-                                borderRadius: '50%',
-                                cursor: 'pointer',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                transition: `background ${transitions.normal}`
-                            }}
+                            className="w-11 h-11 rounded-full bg-red-400/20 border-none text-red-400 flex items-center justify-center cursor-pointer transition-colors hover:bg-red-400/30"
                             aria-label="Delete photo"
                         >
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
@@ -297,19 +248,7 @@ export const PhotoLightbox = memo(function PhotoLightbox({
                             e.stopPropagation();
                             onClose();
                         }}
-                        style={{
-                            background: colors.glass.light,
-                            border: 'none',
-                            color: colors.text.primary,
-                            width: 44,
-                            height: 44,
-                            borderRadius: '50%',
-                            cursor: 'pointer',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            transition: `background ${transitions.normal}`
-                        }}
+                        className="w-11 h-11 rounded-full bg-white/15 border-none text-white flex items-center justify-center cursor-pointer transition-colors hover:bg-white/25"
                         aria-label="Close"
                     >
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
@@ -326,25 +265,12 @@ export const PhotoLightbox = memo(function PhotoLightbox({
                         e.stopPropagation();
                         navigatePrev();
                     }}
-                    style={{
-                        position: 'absolute',
-                        left: 20,
-                        top: '50%',
-                        transform: 'translateY(-50%)',
-                        background: colors.glass.medium,
-                        border: 'none',
-                        color: colors.text.primary,
-                        width: 52,
-                        height: 52,
-                        borderRadius: '50%',
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        opacity: showControls ? 1 : 0,
-                        transition: `opacity ${transitions.normal}, background ${transitions.normal}`,
-                        pointerEvents: showControls ? 'auto' : 'none'
-                    }}
+                    className={cn(
+                        "absolute left-5 top-1/2 -translate-y-1/2 w-13 h-13 rounded-full",
+                        "bg-white/20 border-none text-white flex items-center justify-center cursor-pointer",
+                        "transition-opacity duration-300 hover:bg-white/30",
+                        showControls ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"
+                    )}
                     aria-label="Previous photo"
                 >
                     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -359,25 +285,12 @@ export const PhotoLightbox = memo(function PhotoLightbox({
                         e.stopPropagation();
                         navigateNext();
                     }}
-                    style={{
-                        position: 'absolute',
-                        right: 20,
-                        top: '50%',
-                        transform: 'translateY(-50%)',
-                        background: colors.glass.medium,
-                        border: 'none',
-                        color: colors.text.primary,
-                        width: 52,
-                        height: 52,
-                        borderRadius: '50%',
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        opacity: showControls ? 1 : 0,
-                        transition: `opacity ${transitions.normal}, background ${transitions.normal}`,
-                        pointerEvents: showControls ? 'auto' : 'none'
-                    }}
+                    className={cn(
+                        "absolute right-5 top-1/2 -translate-y-1/2 w-13 h-13 rounded-full",
+                        "bg-white/20 border-none text-white flex items-center justify-center cursor-pointer",
+                        "transition-opacity duration-300 hover:bg-white/30",
+                        showControls ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"
+                    )}
                     aria-label="Next photo"
                 >
                     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -388,33 +301,16 @@ export const PhotoLightbox = memo(function PhotoLightbox({
 
             {/* Photo container with swipe animation */}
             <div
+                className="flex items-center justify-center cursor-default pointer-events-none"
                 style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
                     transform: `translateX(${touchDelta * 0.4}px)`,
-                    transition: touchDelta === 0 ? 'transform 0.25s cubic-bezier(0.25, 0.1, 0.25, 1)' : 'none',
-                    cursor: 'default',
-                    pointerEvents: 'none'
+                    transition: touchDelta === 0 ? 'transform 0.25s cubic-bezier(0.25, 0.1, 0.25, 1)' : 'none'
                 }}
             >
                 {/* Loading indicator */}
                 {!imageLoaded && (
-                    <div style={{
-                        position: 'absolute',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center'
-                    }}>
-                        <div style={{
-                            width: 32,
-                            height: 32,
-                            border: `2px solid ${colors.glass.borderSubtle}`,
-                            borderTopColor: colors.text.tertiary,
-                            borderRadius: '50%',
-                            animation: 'spin 0.8s linear infinite'
-                        }} />
-                        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+                    <div className="absolute flex items-center justify-center">
+                        <div className="w-8 h-8 border-2 border-white/20 border-t-white/50 rounded-full animate-spin" />
                     </div>
                 )}
 
@@ -427,81 +323,46 @@ export const PhotoLightbox = memo(function PhotoLightbox({
                         e.stopPropagation();
                         resetControlsTimeout();
                     }}
-                    style={{
-                        maxWidth: 'calc(100vw - 160px)',
-                        maxHeight: 'calc(100vh - 180px)',
-                        objectFit: 'contain',
-                        userSelect: 'none',
-                        WebkitUserDrag: 'none',
-                        opacity: imageLoaded && !isAnimating ? 1 : 0,
-                        transform: imageLoaded ? 'scale(1)' : 'scale(0.98)',
-                        transition: 'opacity 0.2s ease, transform 0.2s ease',
-                        borderRadius: 2,
-                        pointerEvents: 'auto',
-                        cursor: 'default'
-                    } as React.CSSProperties}
+                    className={cn(
+                        "max-w-[calc(100vw-160px)] max-h-[calc(100vh-180px)] object-contain",
+                        "select-none rounded-sm pointer-events-auto cursor-default",
+                        "transition-all duration-200",
+                        imageLoaded && !isAnimating ? "opacity-100 scale-100" : "opacity-0 scale-[0.98]"
+                    )}
+                    style={{ WebkitUserDrag: 'none' } as React.CSSProperties}
                     draggable={false}
                 />
             </div>
 
             {/* Bottom info bar - caption and location */}
             {(currentPhoto.caption || currentPhoto.coordinates) && (
-                <div style={{
-                    position: 'absolute',
-                    bottom: 0,
-                    left: 0,
-                    right: 0,
-                    padding: '32px 24px max(24px, env(safe-area-inset-bottom))',
-                    background: gradients.overlay.bottom,
-                    opacity: showControls ? 1 : 0,
-                    transition: `opacity ${transitions.normal}`,
-                    pointerEvents: showControls ? 'auto' : 'none'
-                }}>
-                    {/* Caption */}
+                <div
+                    className={cn(
+                        "absolute bottom-0 left-0 right-0 transition-opacity duration-300",
+                        "pt-8 px-6 pb-[max(24px,env(safe-area-inset-bottom))]",
+                        showControls ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"
+                    )}
+                    style={{ background: 'linear-gradient(to top, rgba(0,0,0,0.6), transparent)' }}
+                >
                     {currentPhoto.caption && (
-                        <p style={{
-                            color: colors.text.primary,
-                            fontSize: 15,
-                            textAlign: 'center',
-                            margin: 0,
-                            fontWeight: 400,
-                            lineHeight: 1.5,
-                            maxWidth: 560,
-                            marginLeft: 'auto',
-                            marginRight: 'auto',
-                            marginBottom: currentPhoto.coordinates ? 12 : 0
-                        }}>
+                        <p className={cn(
+                            "text-white/95 text-[15px] text-center font-normal leading-relaxed",
+                            "max-w-[560px] mx-auto m-0",
+                            currentPhoto.coordinates ? "mb-3" : "mb-0"
+                        )}>
                             {currentPhoto.caption}
                         </p>
                     )}
 
-                    {/* Location info and View on Map button */}
                     {currentPhoto.coordinates && onViewOnMap && (
-                        <div style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            gap: 12
-                        }}>
+                        <div className="flex items-center justify-center gap-3">
                             <button
                                 onClick={(e) => {
                                     e.stopPropagation();
-                                    onClose(); // Close lightbox first
+                                    onClose();
                                     onViewOnMap(currentPhoto);
                                 }}
-                                style={{
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: 6,
-                                    background: colors.glass.medium,
-                                    border: `1px solid ${colors.glass.border}`,
-                                    borderRadius: 20,
-                                    padding: '8px 16px',
-                                    color: colors.text.secondary,
-                                    fontSize: 12,
-                                    cursor: 'pointer',
-                                    transition: `all ${transitions.normal}`
-                                }}
+                                className="flex items-center gap-1.5 bg-white/20 border border-white/20 rounded-full px-4 py-2 text-white/70 text-xs cursor-pointer transition-colors hover:bg-white/30"
                             >
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                                     <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/>
@@ -514,48 +375,33 @@ export const PhotoLightbox = memo(function PhotoLightbox({
                 </div>
             )}
 
-            {/* Progress indicator - simple dots for few photos, line for many */}
+            {/* Progress indicator */}
             {photos.length > 1 && (
-                <div style={{
-                    position: 'absolute',
-                    bottom: (currentPhoto.caption || currentPhoto.coordinates) ? 110 : 32,
-                    left: '50%',
-                    transform: 'translateX(-50%)',
-                    opacity: showControls ? 0.7 : 0,
-                    transition: `opacity ${transitions.normal}`
-                }}>
+                <div className={cn(
+                    "absolute left-1/2 -translate-x-1/2 transition-opacity duration-300",
+                    (currentPhoto.caption || currentPhoto.coordinates) ? "bottom-[110px]" : "bottom-8",
+                    showControls ? "opacity-70" : "opacity-0"
+                )}>
                     {photos.length <= 10 ? (
-                        // Dots for few photos
-                        <div style={{ display: 'flex', gap: 6 }}>
+                        <div className="flex gap-1.5">
                             {photos.map((_, idx) => (
                                 <div
                                     key={idx}
-                                    style={{
-                                        width: idx === currentIndex ? 20 : 6,
-                                        height: 6,
-                                        borderRadius: 3,
-                                        background: idx === currentIndex ? colors.text.primary : colors.text.subtle,
-                                        transition: `all ${transitions.normal}`
-                                    }}
+                                    className={cn(
+                                        "h-1.5 rounded-sm transition-all duration-300",
+                                        idx === currentIndex
+                                            ? "w-5 bg-white/95"
+                                            : "w-1.5 bg-white/40"
+                                    )}
                                 />
                             ))}
                         </div>
                     ) : (
-                        // Progress bar for many photos
-                        <div style={{
-                            width: 120,
-                            height: 3,
-                            background: colors.glass.light,
-                            borderRadius: 2,
-                            overflow: 'hidden'
-                        }}>
-                            <div style={{
-                                width: `${((currentIndex + 1) / photos.length) * 100}%`,
-                                height: '100%',
-                                background: colors.text.primary,
-                                borderRadius: 2,
-                                transition: `width ${transitions.normal}`
-                            }} />
+                        <div className="w-30 h-[3px] bg-white/20 rounded-sm overflow-hidden">
+                            <div
+                                className="h-full bg-white/95 rounded-sm transition-all duration-300"
+                                style={{ width: `${((currentIndex + 1) / photos.length) * 100}%` }}
+                            />
                         </div>
                     )}
                 </div>
