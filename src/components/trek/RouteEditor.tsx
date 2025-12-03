@@ -20,8 +20,10 @@ import { createPortal } from 'react-dom';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import type { TrekData, Camp, Route } from '../../types/trek';
-import { GlassButton } from '../common/GlassButton';
-import { colors, radius, transitions, effects, shadows, glassFloating, glassPanel, glassButton, typography } from '../../styles/liquidGlass';
+import { Button } from '../ui/button';
+import { cn } from '@/lib/utils';
+// TODO: Migrate remaining inline styles to Tailwind - keeping liquidGlass import for now
+import { colors, radius, transitions, effects, shadows, glassFloating, glassPanel, typography } from '../../styles/liquidGlass';
 import { findNearestPointOnRoute, haversineDistance, type RouteCoordinate, type Coordinate } from '../../utils/routeUtils';
 import { processDrawnSegment as processWithMapMatching, snapRouteToTrails } from '../../lib/mapMatching';
 import { updateWaypoint, createWaypoint, deleteWaypoint, getJourneyIdBySlug, updateJourneyRoute } from '../../lib/journeys';
@@ -29,7 +31,7 @@ import { updateWaypoint, createWaypoint, deleteWaypoint, getJourneyIdBySlug, upd
 type EditorMode = 'camps' | 'route';
 type RouteSubMode = 'edit' | 'draw' | 'select';
 
-// Reusable mode toggle button with hover state
+// Reusable mode toggle button
 const ModeToggleButton = memo(function ModeToggleButton({
     label,
     isActive,
@@ -39,42 +41,15 @@ const ModeToggleButton = memo(function ModeToggleButton({
     isActive: boolean;
     onClick: () => void;
 }) {
-    const [isHovered, setIsHovered] = useState(false);
-
-    const baseStyle: React.CSSProperties = {
-        padding: '10px 18px',
-        borderRadius: radius.lg,
-        fontSize: 11,
-        fontWeight: isActive ? 500 : 400,
-        letterSpacing: '0.08em',
-        textTransform: 'uppercase',
-        cursor: 'pointer',
-        transition: `all ${transitions.smooth}`,
-    };
-
-    const stateStyle: React.CSSProperties = isActive
-        ? {
-            ...glassButton,
-            color: colors.text.primary,
-        }
-        : isHovered
-        ? {
-            background: 'rgba(255, 255, 255, 0.06)',
-            border: `1px solid ${colors.glass.borderSubtle}`,
-            color: colors.text.secondary,
-        }
-        : {
-            background: 'transparent',
-            border: '1px solid transparent',
-            color: colors.text.tertiary,
-        };
-
     return (
         <button
             onClick={onClick}
-            onMouseEnter={() => setIsHovered(true)}
-            onMouseLeave={() => setIsHovered(false)}
-            style={{ ...baseStyle, ...stateStyle }}
+            className={cn(
+                "px-4 py-2.5 rounded-lg text-[11px] font-medium tracking-[0.08em] uppercase cursor-pointer transition-all duration-200 border",
+                isActive
+                    ? "bg-white/12 border-white/15 text-white/95 shadow-[0_4px_16px_rgba(0,0,0,0.2),inset_0_1px_0_rgba(255,255,255,0.15)]"
+                    : "bg-transparent border-transparent text-white/50 hover:text-white/70 hover:bg-white/6 hover:border-white/10"
+            )}
         >
             {label}
         </button>
@@ -1728,8 +1703,8 @@ export const RouteEditor = memo(function RouteEditor({
                 )}
 
                 {/* Undo/Redo buttons */}
-                <div style={{ display: 'flex', gap: 8 }}>
-                    <GlassButton
+                <div className="flex gap-2">
+                    <Button
                         variant="subtle"
                         size="sm"
                         onClick={handleUndo}
@@ -1737,8 +1712,8 @@ export const RouteEditor = memo(function RouteEditor({
                         title="Undo (⌘Z)"
                     >
                         ↶ Undo
-                    </GlassButton>
-                    <GlassButton
+                    </Button>
+                    <Button
                         variant="subtle"
                         size="sm"
                         onClick={handleRedo}
@@ -1746,21 +1721,21 @@ export const RouteEditor = memo(function RouteEditor({
                         title="Redo (⌘⇧Z)"
                     >
                         ↷ Redo
-                    </GlassButton>
+                    </Button>
                 </div>
 
-                <div style={{ display: 'flex', gap: 12 }}>
-                    <GlassButton variant="subtle" size="md" onClick={onClose} disabled={saving}>
+                <div className="flex gap-3">
+                    <Button variant="subtle" size="md" onClick={onClose} disabled={saving}>
                         Cancel
-                    </GlassButton>
-                    <GlassButton
+                    </Button>
+                    <Button
                         variant="primary"
                         size="md"
                         onClick={handleSave}
                         disabled={saving || (!hasChanges && !routeHasChanges)}
                     >
                         {saving ? 'Saving...' : 'Save Changes'}
-                    </GlassButton>
+                    </Button>
                 </div>
             </div>
 
@@ -1942,23 +1917,22 @@ export const RouteEditor = memo(function RouteEditor({
                                     </span>
                                 )}
                             </div>
-                            <div style={{ display: 'flex', gap: 8 }}>
-                                <GlassButton
+                            <div className="flex gap-2">
+                                <Button
                                     variant="subtle"
                                     size="sm"
                                     onClick={() => flyToCamp(selectedCamp)}
-                                    style={{ flex: 1 }}
+                                    className="flex-1"
                                 >
                                     Zoom To
-                                </GlassButton>
-                                <GlassButton
-                                    variant="subtle"
+                                </Button>
+                                <Button
+                                    variant="danger"
                                     size="sm"
                                     onClick={handleDeleteCamp}
-                                    style={{ color: '#ef4444' }}
                                 >
                                     Delete
-                                </GlassButton>
+                                </Button>
                             </div>
                         </div>
                     )}
@@ -2134,9 +2108,9 @@ export const RouteEditor = memo(function RouteEditor({
                                             )}
                                         </div>
                                     </div>
-                                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                                    <div className="flex gap-2 flex-wrap">
                                         {selectedRoutePoints.size === 1 && (
-                                            <GlassButton
+                                            <Button
                                                 variant="subtle"
                                                 size="sm"
                                                 onClick={() => {
@@ -2149,37 +2123,36 @@ export const RouteEditor = memo(function RouteEditor({
                                                         });
                                                     }
                                                 }}
-                                                style={{ flex: 1 }}
+                                                className="flex-1"
                                             >
                                                 Zoom To
-                                            </GlassButton>
+                                            </Button>
                                         )}
-                                        <GlassButton
+                                        <Button
                                             variant="subtle"
                                             size="sm"
                                             onClick={handleClearSelection}
                                         >
                                             Clear
-                                        </GlassButton>
+                                        </Button>
                                         {selectedRoutePoints.size >= 2 && (
-                                            <GlassButton
+                                            <Button
                                                 variant="subtle"
                                                 size="sm"
                                                 onClick={handleSnapSelectedToTrail}
                                                 disabled={isSnapping}
-                                                style={{ color: '#60a5fa' }}
+                                                className="text-blue-400"
                                             >
                                                 {isSnapping ? `Snapping ${Math.round(snapProgress * 100)}%` : '🛤️ Snap'}
-                                            </GlassButton>
+                                            </Button>
                                         )}
-                                        <GlassButton
-                                            variant="subtle"
+                                        <Button
+                                            variant="danger"
                                             size="sm"
                                             onClick={handleDeleteRoutePoints}
-                                            style={{ color: '#ef4444' }}
                                         >
                                             Delete {selectedRoutePoints.size > 1 ? `(${selectedRoutePoints.size})` : ''}
-                                        </GlassButton>
+                                        </Button>
                                     </div>
                                 </div>
                             )}
@@ -2217,19 +2190,19 @@ export const RouteEditor = memo(function RouteEditor({
                                 </div>
 
                                 {/* Snap to Trail button */}
-                                <GlassButton
+                                <Button
                                     variant="subtle"
                                     size="sm"
                                     onClick={handleSnapToTrail}
                                     disabled={isSnapping || routeCoordinates.length < 2}
-                                    style={{ width: '100%' }}
+                                    className="w-full"
                                 >
                                     {isSnapping ? (
                                         <>Snapping... {Math.round(snapProgress * 100)}%</>
                                     ) : (
                                         <>🛤️ Snap Route to Trails</>
                                     )}
-                                </GlassButton>
+                                </Button>
                                 <div style={{
                                     fontSize: 11,
                                     color: colors.text.tertiary,
@@ -2257,22 +2230,22 @@ export const RouteEditor = memo(function RouteEditor({
 
                                 {/* Quick select buttons */}
                                 <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
-                                    <GlassButton
+                                    <Button
                                         variant="subtle"
                                         size="sm"
                                         onClick={handleSelectAllVisible}
-                                        style={{ flex: 1 }}
+                                        className="flex-1"
                                     >
                                         Select Visible
-                                    </GlassButton>
+                                    </Button>
                                     {selectedRoutePoints.size > 0 && (
-                                        <GlassButton
+                                        <Button
                                             variant="subtle"
                                             size="sm"
                                             onClick={handleClearSelection}
                                         >
                                             Clear
-                                        </GlassButton>
+                                        </Button>
                                     )}
                                 </div>
 
@@ -2317,7 +2290,7 @@ export const RouteEditor = memo(function RouteEditor({
                                         }}
                                         id="range-end"
                                     />
-                                    <GlassButton
+                                    <Button
                                         variant="subtle"
                                         size="sm"
                                         onClick={() => {
@@ -2331,7 +2304,7 @@ export const RouteEditor = memo(function RouteEditor({
                                         }}
                                     >
                                         Select
-                                    </GlassButton>
+                                    </Button>
                                 </div>
 
                                 <div style={{
