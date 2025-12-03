@@ -1,6 +1,6 @@
 import { memo, useState, useEffect } from 'react';
 import { useOnlineStatus } from '../hooks/useOnlineStatus';
-import { colors, radius, typography } from '../styles/liquidGlass';
+import { cn } from '@/lib/utils';
 
 interface OfflineIndicatorProps {
     isMobile: boolean;
@@ -27,48 +27,34 @@ export const OfflineIndicator = memo(function OfflineIndicator({ isMobile }: Off
 
     return (
         <div
+            className={cn(
+                "fixed z-[200] flex items-center gap-2",
+                "backdrop-blur-xl saturate-[180%]",
+                "border border-white/15 light:border-black/10",
+                "rounded-full px-3.5 py-2",
+                "shadow-[0_4px_16px_rgba(0,0,0,0.2),inset_0_1px_0_rgba(255,255,255,0.15)]",
+                "animate-in zoom-in-95 duration-400"
+            )}
             style={{
-                position: 'fixed',
                 top: isMobile ? 'max(60px, calc(env(safe-area-inset-top) + 50px))' : 70,
                 left: isMobile ? 16 : 24,
-                zIndex: 200,
-                display: 'flex',
-                alignItems: 'center',
-                gap: 8,
-                // Liquid Glass pill styling
-                background: `linear-gradient(
-                    135deg,
-                    rgba(255, 255, 255, 0.1) 0%,
-                    rgba(255, 255, 255, 0.05) 100%
-                )`,
-                backdropFilter: 'blur(16px) saturate(180%)',
-                WebkitBackdropFilter: 'blur(16px) saturate(180%)',
-                border: `1px solid ${colors.glass.border}`,
-                borderRadius: radius.pill,
-                padding: '8px 14px',
-                boxShadow: `
-                    0 4px 16px rgba(0, 0, 0, 0.2),
-                    inset 0 1px 0 rgba(255, 255, 255, 0.15)
-                `,
-                animation: 'scaleIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1)'
+                background: 'linear-gradient(135deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.05) 100%)'
             }}
         >
             {/* Status dot with glow effect */}
-            <div style={{
-                width: 8,
-                height: 8,
-                borderRadius: '50%',
-                background: isOnline ? colors.accent.secondary : colors.accent.error,
-                boxShadow: isOnline
-                    ? `0 0 12px ${colors.accent.secondary}`
-                    : `0 0 12px ${colors.accent.error}`,
-            }} />
+            <div
+                className={cn(
+                    "w-2 h-2 rounded-full",
+                    isOnline ? "bg-green-400" : "bg-red-400"
+                )}
+                style={{
+                    boxShadow: isOnline
+                        ? '0 0 12px #22c55e'
+                        : '0 0 12px #ef4444'
+                }}
+            />
 
-            <span style={{
-                ...typography.label,
-                fontSize: 10,
-                color: colors.text.secondary,
-            }}>
+            <span className="text-[10px] uppercase tracking-[0.1em] text-white/70 light:text-slate-600">
                 {isOnline ? 'Online' : 'Offline'}
             </span>
         </div>
