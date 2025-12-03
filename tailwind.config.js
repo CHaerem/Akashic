@@ -1,3 +1,6 @@
+import plugin from 'tailwindcss/plugin'
+import animate from 'tailwindcss-animate'
+
 /** @type {import('tailwindcss').Config} */
 export default {
   content: [
@@ -35,8 +38,15 @@ export default {
           800: '#9a3412',
           900: '#7c2d12',
         }
-      }
+      },
     },
   },
-  plugins: [],
+  plugins: [
+    // Radix animations (animate-in, animate-out, fade-in, slide-in, etc.)
+    animate,
+    // Add light: variant for light mode styling
+    plugin(function({ addVariant }) {
+      addVariant('light', '.light &')
+    }),
+  ],
 }
