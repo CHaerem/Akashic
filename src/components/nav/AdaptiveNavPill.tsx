@@ -16,6 +16,7 @@ import { PhotosTab } from '../trek/PhotosTab';
 import { JourneyEditModal } from '../trek/JourneyEditModal';
 import { Button } from '../ui/button';
 import { ErrorBoundary, ComponentErrorFallback } from '../common/ErrorBoundary';
+import { TimelineScrubber } from './TimelineScrubber';
 
 // Magnification constants
 const MAGNIFICATION = {
@@ -688,8 +689,9 @@ export const AdaptiveNavPill = memo(function AdaptiveNavPill({
           transition={{ duration: 0.3, ease: 'easeOut' }}
           style={{
             display: 'flex',
-            alignItems: 'flex-end',
-            gap: 12,
+            flexDirection: 'column',
+            alignItems: 'center',
+            gap: 10,
             touchAction: 'none',
             pointerEvents: 'auto',
           }}
@@ -797,6 +799,16 @@ export const AdaptiveNavPill = memo(function AdaptiveNavPill({
             </motion.div>
           )}
         </motion.div>
+
+        {/* Timeline Scrubber - always visible below pill */}
+        <TimelineScrubber
+          camps={trekData.camps}
+          photos={photos}
+          selectedCamp={selectedCamp}
+          onCampSelect={onCampSelect}
+          getMediaUrl={getMediaUrl}
+          isMobile={isMobile}
+        />
         </motion.div>
       </div>
     </>
