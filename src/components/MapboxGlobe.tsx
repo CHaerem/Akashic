@@ -3,7 +3,7 @@
  */
 
 import { useRef, useEffect, useCallback, useState } from 'react';
-import { useMapbox, type RouteClickInfo } from '../hooks/useMapbox';
+import { useMapbox } from '../hooks/useMapbox';
 import { useJourneys } from '../contexts/JourneysContext';
 import { MapErrorFallback } from './common/ErrorBoundary';
 import { colors, radius, glassFloating, glassButton } from '../styles/liquidGlass';
@@ -144,7 +144,6 @@ const starfieldStyle: React.CSSProperties = {
 export function MapboxGlobe({ selectedTrek, selectedCamp, onSelectTrek, view, photos = [], onPhotoClick, flyToPhotoRef, onCampSelect, getMediaUrl }: MapboxGlobeProps) {
     const containerRef = useRef<HTMLDivElement>(null);
     const { treks, trekDataMap, loading: journeysLoading } = useJourneys();
-    const [routeInfo, setRouteInfo] = useState<RouteClickInfo | null>(null);
     const [poiInfo, setPOIInfo] = useState<PointOfInterest | null>(null);
 
     // Get camps and POIs for the selected trek
@@ -159,21 +158,13 @@ export function MapboxGlobe({ selectedTrek, selectedCamp, onSelectTrek, view, ph
         }
     }, [photos, onPhotoClick]);
 
-    // Handle route click - show info popup
-    const handleRouteClick = useCallback((info: RouteClickInfo) => {
-        setPOIInfo(null); // Clear POI popup
-        setRouteInfo(info);
-    }, []);
-
     // Handle POI click - show POI popup
     const handlePOIClick = useCallback((poi: PointOfInterest) => {
-        setRouteInfo(null); // Clear route popup
         setPOIInfo(poi);
     }, []);
 
-    // Clear popups when clicking elsewhere or changing trek
+    // Clear popups when changing trek
     useEffect(() => {
-        setRouteInfo(null);
         setPOIInfo(null);
     }, [selectedTrek, selectedCamp]);
 
@@ -181,7 +172,6 @@ export function MapboxGlobe({ selectedTrek, selectedCamp, onSelectTrek, view, ph
         containerRef,
         onTrekSelect: onSelectTrek,
         onPhotoClick: handlePhotoClick,
-        onRouteClick: handleRouteClick,
         onPOIClick: handlePOIClick,
         getMediaUrl
     });
@@ -293,199 +283,12 @@ export function MapboxGlobe({ selectedTrek, selectedCamp, onSelectTrek, view, ph
         return <MapErrorFallback error={error} />;
     }
 
-    // Handle clicking the nearest camp from route info
-    const handleGoToNearestCamp = useCallback(() => {
-        if (routeInfo?.nearestCamp && onCampSelect) {
-            onCampSelect(routeInfo.nearestCamp);
-            setRouteInfo(null);
-        }
-    }, [routeInfo, onCampSelect]);
-
     return (
         <div style={{ position: 'relative', width: '100%', height: '100%' }}>
             {/* Static starfield background */}
             <div style={starfieldStyle} />
             {/* Map container */}
             <div ref={containerRef} style={{ position: 'relative', width: '100%', height: '100%', zIndex: 1 }} />
-
-            {/* Route Info Popup */}
-            {routeInfo && view === 'trek' && (
-                <div
-                    style={{
-                        position: 'absolute',
-                        top: '50%',
-                        left: '50%',
-                        transform: 'translate(-50%, -50%)',
-                        ...glassFloating,
-                        borderRadius: radius.lg,
-                        padding: '20px 24px',
-                        zIndex: 100,
-                        minWidth: 240,
-                        maxWidth: 300,
-                        animation: 'popupIn 0.25s cubic-bezier(0.32, 0.72, 0, 1)',
-                    }}
-                >
-                    <style>{`@keyframes popupIn { from { opacity: 0; transform: translate(-50%, -50%) scale(0.95); } to { opacity: 1; transform: translate(-50%, -50%) scale(1); } }`}</style>
-
-                    {/* Close button */}
-                    <button
-                        onClick={() => setRouteInfo(null)}
-                        style={{
-                            position: 'absolute',
-                            top: 8,
-                            right: 8,
-                            background: 'none',
-                            border: 'none',
-                            color: colors.text.subtle,
-                            cursor: 'pointer',
-                            padding: 4,
-                            fontSize: 16,
-                            lineHeight: 1
-                        }}
-                    >
-                        ×
-                    </button>
-
-                    {/* Progress indicator */}
-                    <div style={{ marginBottom: 16 }}>
-                        <div style={{
-                            display: 'flex',
-                            justifyContent: 'space-between',
-                            alignItems: 'baseline',
-                            marginBottom: 8
-                        }}>
-                            <span style={{ fontSize: 11, color: colors.text.subtle, textTransform: 'uppercase', letterSpacing: '0.1em' }}>
-                                Journey Progress
-                            </span>
-                            <span style={{ fontSize: 13, color: colors.text.secondary, fontWeight: 500 }}>
-                                {routeInfo.progressPercent}%
-                            </span>
-                        </div>
-                        <div style={{
-                            height: 4,
-                            background: colors.glass.subtle,
-                            borderRadius: 2,
-                            overflow: 'hidden'
-                        }}>
-                            <div style={{
-                                height: '100%',
-                                width: `${routeInfo.progressPercent}%`,
-                                background: `linear-gradient(90deg, ${colors.accent.primary}, ${colors.accent.secondary})`,
-                                borderRadius: 2,
-                                transition: 'width 0.3s ease'
-                            }} />
-                        </div>
-                    </div>
-
-                    {/* Main stats */}
-                    <div style={{ display: 'flex', gap: 20, marginBottom: 16 }}>
-                        <div style={{ flex: 1 }}>
-                            <div style={{ fontSize: 22, fontWeight: 500, color: colors.text.primary }}>
-                                {routeInfo.distanceFromStart} km
-                            </div>
-                            <div style={{ fontSize: 11, color: colors.text.tertiary }}>completed</div>
-                        </div>
-                        <div style={{ flex: 1, textAlign: 'right' }}>
-                            <div style={{ fontSize: 22, fontWeight: 500, color: colors.text.secondary }}>
-                                {(routeInfo.totalDistance - routeInfo.distanceFromStart).toFixed(1)} km
-                            </div>
-                            <div style={{ fontSize: 11, color: colors.text.tertiary }}>remaining</div>
-                        </div>
-                    </div>
-
-                    {/* Elevation */}
-                    {routeInfo.elevation !== null && (
-                        <div style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 8,
-                            padding: '10px 12px',
-                            background: colors.glass.subtle,
-                            borderRadius: radius.sm,
-                            marginBottom: 16
-                        }}>
-                            <span style={{ fontSize: 14 }}>⛰</span>
-                            <div>
-                                <div style={{ fontSize: 15, fontWeight: 500, color: colors.text.primary }}>
-                                    {routeInfo.elevation.toLocaleString()}m
-                                </div>
-                                <div style={{ fontSize: 10, color: colors.text.tertiary }}>current elevation</div>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* Between camps indicator */}
-                    {(routeInfo.previousCamp || routeInfo.nextCamp) && (
-                        <div style={{
-                            padding: '12px',
-                            background: colors.glass.subtle,
-                            borderRadius: radius.sm,
-                            marginBottom: 16
-                        }}>
-                            <div style={{ fontSize: 10, color: colors.text.subtle, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>
-                                Current Segment
-                            </div>
-                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-                                {routeInfo.previousCamp ? (
-                                    <div style={{ flex: 1, textAlign: 'left' }}>
-                                        <div style={{ fontSize: 12, color: colors.text.secondary, fontWeight: 500 }}>
-                                            Day {routeInfo.previousCamp.dayNumber}
-                                        </div>
-                                        <div style={{ fontSize: 10, color: colors.text.tertiary }}>
-                                            {routeInfo.distanceToPreviousCamp} km ago
-                                        </div>
-                                    </div>
-                                ) : (
-                                    <div style={{ flex: 1, textAlign: 'left' }}>
-                                        <div style={{ fontSize: 12, color: colors.text.tertiary }}>Start</div>
-                                    </div>
-                                )}
-                                <div style={{ color: colors.text.disabled, fontSize: 12 }}>→</div>
-                                {routeInfo.nextCamp ? (
-                                    <div style={{ flex: 1, textAlign: 'right' }}>
-                                        <div style={{ fontSize: 12, color: colors.text.secondary, fontWeight: 500 }}>
-                                            Day {routeInfo.nextCamp.dayNumber}
-                                        </div>
-                                        <div style={{ fontSize: 10, color: colors.text.tertiary }}>
-                                            in {routeInfo.distanceToNextCamp} km
-                                        </div>
-                                    </div>
-                                ) : (
-                                    <div style={{ flex: 1, textAlign: 'right' }}>
-                                        <div style={{ fontSize: 12, color: colors.text.tertiary }}>End</div>
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-                    )}
-
-                    {/* Quick action */}
-                    {routeInfo.nearestCamp && onCampSelect && (
-                        <button
-                            onClick={handleGoToNearestCamp}
-                            style={{
-                                ...glassButton,
-                                width: '100%',
-                                padding: '12px 16px',
-                                borderRadius: radius.sm,
-                                fontSize: 13,
-                                fontWeight: 500,
-                                color: colors.text.primary,
-                                cursor: 'pointer',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                gap: 8
-                            }}
-                        >
-                            <span>View Day {routeInfo.nearestCamp.dayNumber}</span>
-                            <span style={{ fontSize: 10, color: colors.text.tertiary }}>
-                                ({routeInfo.distanceToNearestCamp} km away)
-                            </span>
-                        </button>
-                    )}
-                </div>
-            )}
 
             {/* POI Info Popup */}
             {poiInfo && view === 'trek' && (
