@@ -235,9 +235,10 @@ interface ContentCardProps {
   onCampSelect: (camp: Camp) => void;
   onPhotoClick: (photo: Photo) => void;
   isMobile: boolean;
+  cardRef: React.RefObject<HTMLDivElement | null>;
 }
 
-function ContentCard({ activeTab, trekData, extendedStats, elevationProfile, selectedCamp, photos, getMediaUrl, onClose, onCampSelect, onPhotoClick, isMobile }: ContentCardProps) {
+function ContentCard({ activeTab, trekData, extendedStats, elevationProfile, selectedCamp, photos, getMediaUrl, onClose, onCampSelect, onPhotoClick, isMobile, cardRef }: ContentCardProps) {
   const glassStyle: React.CSSProperties = {
     background: `linear-gradient(135deg, rgba(255, 255, 255, 0.12) 0%, rgba(255, 255, 255, 0.06) 100%)`,
     backdropFilter: `${effects.blur.strong} ${effects.saturation.enhanced}`,
@@ -266,6 +267,7 @@ function ContentCard({ activeTab, trekData, extendedStats, elevationProfile, sel
       }}
     >
       <motion.div
+        ref={cardRef}
         initial={{ opacity: 0, scale: 0.95, y: 10 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.98, y: 5 }}
@@ -388,6 +390,7 @@ export const AdaptiveNavPill = memo(function AdaptiveNavPill({
   const [hoveredDay, setHoveredDay] = useState<number | null>(null);
 
   const pillRef = useRef<HTMLDivElement>(null);
+  const cardRef = useRef<HTMLDivElement>(null);
   const mouseX = useMotionValue(Infinity);
 
   // Refs for each nav option
@@ -482,7 +485,11 @@ export const AdaptiveNavPill = memo(function AdaptiveNavPill({
   // Handle click outside
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent | TouchEvent) => {
-      if (pillRef.current && !pillRef.current.contains(e.target as Node)) {
+      const target = e.target as Node;
+      const isInsidePill = pillRef.current?.contains(target);
+      const isInsideCard = cardRef.current?.contains(target);
+
+      if (!isInsidePill && !isInsideCard) {
         if (mode !== 'collapsed') {
           setMode('collapsed');
           setShowContent(false);
@@ -588,6 +595,7 @@ export const AdaptiveNavPill = memo(function AdaptiveNavPill({
             onCampSelect={onCampSelect}
             onPhotoClick={onViewPhotoOnMap}
             isMobile={isMobile}
+            cardRef={cardRef}
           />
         )}
       </AnimatePresence>
