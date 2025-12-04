@@ -1,4 +1,3 @@
-import plugin from 'tailwindcss/plugin'
 import animate from 'tailwindcss-animate'
 
 /** @type {import('tailwindcss').Config} */
@@ -44,9 +43,5 @@ export default {
   plugins: [
     // Radix animations (animate-in, animate-out, fade-in, slide-in, etc.)
     animate,
-    // Add light: variant for light mode styling
-    plugin(function({ addVariant }) {
-      addVariant('light', '.light &')
-    }),
   ],
 }

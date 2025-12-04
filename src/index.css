@@ -1,6 +1,10 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+
+/* Load JS config for theme extensions */
+@config "../tailwind.config.js";
+
+/* Define light: variant for light mode styling */
+@custom-variant light (.light &);
 
 /* ============================================================================
    LIQUID GLASS DESIGN SYSTEM - CSS Variables & Base Styles
