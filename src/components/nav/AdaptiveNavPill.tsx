@@ -71,6 +71,24 @@ const CloseIcon = ({ size = 18 }: { size?: number }) => (
   </svg>
 );
 
+const ChevronIcon = ({ direction, size = 14 }: { direction: 'left' | 'right' | 'up'; size?: number }) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2.5"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    style={{
+      transform: direction === 'up' ? 'rotate(-90deg)' : direction === 'right' ? 'rotate(180deg)' : undefined
+    }}
+  >
+    <polyline points="15 18 9 12 15 6"/>
+  </svg>
+);
+
 const PencilIcon = ({ size = 16 }: { size?: number }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/>
@@ -448,15 +466,16 @@ export const AdaptiveNavPill = memo(function AdaptiveNavPill({
 }: AdaptiveNavPillProps) {
   const [mode, setMode] = useState<NavMode>('expanded'); // Start with menu visible
   const [showContent, setShowContent] = useState(false);
-  const [showContext, setShowContext] = useState(false);
+  // Removed showContext state - simplified to just tap to expand
   const [isDragging, setIsDragging] = useState(false);
   const [hoveredOption, setHoveredOption] = useState<string | null>(null);
   const [hoveredDay, setHoveredDay] = useState<number | null>(null);
   const [swipeDirection, setSwipeDirection] = useState<'left' | 'right' | null>(null);
+  const [swipeOffset, setSwipeOffset] = useState(0); // Track drag offset for visual feedback
+  const [hasInteracted, setHasInteracted] = useState(false); // Track if user has interacted
 
   const pillRef = useRef<HTMLDivElement>(null);
   const cardRef = useRef<HTMLDivElement>(null);
-  const contextRef = useRef<HTMLDivElement>(null);
   const mouseX = useMotionValue(Infinity);
 
   // Refs for each nav option
@@ -465,21 +484,15 @@ export const AdaptiveNavPill = memo(function AdaptiveNavPill({
 
   const currentDay = selectedCamp?.dayNumber ?? 1;
   const currentCampName = selectedCamp?.name ?? 'Start';
-  const currentCamp = selectedCamp ?? trekData.camps[0];
-
-  // Get photos for current day
-  const dayPhotos = useMemo(() => {
-    if (!currentCamp) return [];
-    return photos.filter(p => {
-      if (!p.taken_at || !currentCamp.date) return false;
-      const photoDate = new Date(p.taken_at).toDateString();
-      const campDate = new Date(currentCamp.date).toDateString();
-      return photoDate === campDate;
-    });
-  }, [photos, currentCamp]);
 
   // Swipe handlers for collapsed pill
+  const handleSwipeDrag = useCallback((_: any, info: { offset: { x: number } }) => {
+    setSwipeOffset(info.offset.x);
+    if (!hasInteracted) setHasInteracted(true);
+  }, [hasInteracted]);
+
   const handleSwipeDragEnd = useCallback((_: any, info: { offset: { x: number }; velocity: { x: number } }) => {
+    setSwipeOffset(0);
     const threshold = 50;
     const velocityThreshold = 500;
 
@@ -500,12 +513,6 @@ export const AdaptiveNavPill = memo(function AdaptiveNavPill({
     }
   }, [currentDay, totalDays, onDaySelect]);
 
-  // Toggle context card
-  const handleContextToggle = useCallback(() => {
-    if (mode === 'collapsed') {
-      setShowContext(prev => !prev);
-    }
-  }, [mode]);
 
   // Find which item is under the pointer position
   const findItemUnderPointer = useCallback((clientX: number) => {
@@ -595,9 +602,8 @@ export const AdaptiveNavPill = memo(function AdaptiveNavPill({
       const target = e.target as Node;
       const isInsidePill = pillRef.current?.contains(target);
       const isInsideCard = cardRef.current?.contains(target);
-      const isInsideContext = contextRef.current?.contains(target);
 
-      if (!isInsidePill && !isInsideCard && !isInsideContext) {
+      if (!isInsidePill && !isInsideCard) {
         // If content card is showing, close it and return to menu
         if (showContent) {
           setShowContent(false);
@@ -607,7 +613,6 @@ export const AdaptiveNavPill = memo(function AdaptiveNavPill({
         else if (mode === 'expanded' || mode === 'days') {
           setMode('collapsed');
         }
-        setShowContext(false);
         mouseX.set(Infinity);
       }
     };
@@ -620,13 +625,6 @@ export const AdaptiveNavPill = memo(function AdaptiveNavPill({
       document.removeEventListener('touchstart', handleClickOutside);
     };
   }, [mode, showContent, mouseX]);
-
-  // Close context when mode changes away from collapsed
-  useEffect(() => {
-    if (mode !== 'collapsed') {
-      setShowContext(false);
-    }
-  }, [mode]);
 
   // Cancel drag on pointer up anywhere
   useEffect(() => {
@@ -649,8 +647,9 @@ export const AdaptiveNavPill = memo(function AdaptiveNavPill({
     if (mode === 'collapsed') {
       setMode('expanded');
       setShowContent(false);
+      if (!hasInteracted) setHasInteracted(true);
     }
-  }, [mode]);
+  }, [mode, hasInteracted]);
 
   const handleOptionClick = useCallback((optionId: TabType) => {
     if (isDragging) return; // Don't handle click during drag
@@ -806,177 +805,13 @@ export const AdaptiveNavPill = memo(function AdaptiveNavPill({
             })()}
           </AnimatePresence>
 
-          {/* Context Card - shows day details when collapsed pill is tapped */}
-          <AnimatePresence>
-            {showContext && mode === 'collapsed' && currentCamp && (
-              <motion.div
-                ref={contextRef}
-                key="context-card"
-                initial={{ opacity: 0, y: 12, scale: 0.95 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                exit={{ opacity: 0, y: 8, scale: 0.98 }}
-                transition={{ type: 'spring', ...SPRING_CONFIG }}
-                style={{
-                  background: `linear-gradient(180deg, rgba(255, 255, 255, 0.12) 0%, rgba(255, 255, 255, 0.06) 100%)`,
-                  backdropFilter: `${effects.blur.intense} ${effects.saturation.enhanced}`,
-                  WebkitBackdropFilter: `${effects.blur.intense} ${effects.saturation.enhanced}`,
-                  border: `1px solid ${colors.glass.border}`,
-                  boxShadow: shadows.glass.panel,
-                  borderRadius: radius.xl,
-                  padding: 16,
-                  width: isMobile ? 'calc(100vw - 48px)' : 340,
-                  maxWidth: 380,
-                }}
-              >
-                {/* Header */}
-                <div style={{ marginBottom: 12 }}>
-                  <div style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 8,
-                    marginBottom: 6,
-                  }}>
-                    <span style={{
-                      fontSize: 11,
-                      fontWeight: 600,
-                      color: colors.accent.primary,
-                      textTransform: 'uppercase',
-                      letterSpacing: '0.08em',
-                      background: 'rgba(96, 165, 250, 0.15)',
-                      padding: '3px 8px',
-                      borderRadius: 6,
-                    }}>
-                      Day {currentCamp.dayNumber}
-                    </span>
-                    {currentCamp.date && (
-                      <span style={{ fontSize: 12, color: colors.text.tertiary }}>
-                        {new Date(currentCamp.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                      </span>
-                    )}
-                    <span style={{
-                      marginLeft: 'auto',
-                      fontSize: 12,
-                      color: colors.text.secondary,
-                      background: 'rgba(255, 255, 255, 0.08)',
-                      padding: '2px 8px',
-                      borderRadius: 4,
-                    }}>
-                      {currentCamp.elevation}m
-                    </span>
-                  </div>
-                  <h3 style={{
-                    fontSize: 18,
-                    fontWeight: 600,
-                    color: colors.text.primary,
-                    margin: 0,
-                  }}>
-                    {currentCamp.name}
-                  </h3>
-                </div>
-
-                {/* Description / Notes */}
-                {currentCamp.notes && (
-                  <p style={{
-                    fontSize: 13,
-                    lineHeight: 1.5,
-                    color: colors.text.secondary,
-                    margin: 0,
-                    marginBottom: dayPhotos.length > 0 ? 12 : 0,
-                  }}>
-                    {currentCamp.notes}
-                  </p>
-                )}
-
-                {/* Highlights */}
-                {currentCamp.highlights && currentCamp.highlights.length > 0 && (
-                  <ul style={{
-                    margin: 0,
-                    marginBottom: dayPhotos.length > 0 ? 12 : 0,
-                    paddingLeft: 16,
-                  }}>
-                    {currentCamp.highlights.slice(0, 3).map((highlight, idx) => (
-                      <li key={idx} style={{
-                        fontSize: 12,
-                        color: colors.text.secondary,
-                        marginBottom: 2,
-                      }}>
-                        {highlight}
-                      </li>
-                    ))}
-                  </ul>
-                )}
-
-                {/* Photo strip */}
-                {dayPhotos.length > 0 && (
-                  <div style={{
-                    display: 'flex',
-                    gap: 8,
-                    overflowX: 'auto',
-                    marginLeft: -4,
-                    marginRight: -4,
-                    paddingLeft: 4,
-                    paddingRight: 4,
-                    paddingBottom: 4,
-                    WebkitOverflowScrolling: 'touch',
-                  }}>
-                    {dayPhotos.slice(0, 5).map((photo, idx) => (
-                      <motion.div
-                        key={photo.id}
-                        whileHover={{ scale: 1.05 }}
-                        whileTap={{ scale: 0.95 }}
-                        onClick={() => onViewPhotoOnMap(photo)}
-                        style={{
-                          flexShrink: 0,
-                          width: 64,
-                          height: 64,
-                          borderRadius: radius.md,
-                          overflow: 'hidden',
-                          cursor: 'pointer',
-                          border: `1px solid ${colors.glass.borderSubtle}`,
-                        }}
-                      >
-                        <img
-                          src={getMediaUrl(photo.url)}
-                          alt={photo.caption || `Photo ${idx + 1}`}
-                          style={{
-                            width: '100%',
-                            height: '100%',
-                            objectFit: 'cover',
-                          }}
-                        />
-                      </motion.div>
-                    ))}
-                    {dayPhotos.length > 5 && (
-                      <div style={{
-                        flexShrink: 0,
-                        width: 64,
-                        height: 64,
-                        borderRadius: radius.md,
-                        background: 'rgba(255, 255, 255, 0.08)',
-                        border: `1px solid ${colors.glass.borderSubtle}`,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        color: colors.text.secondary,
-                        fontSize: 13,
-                        fontWeight: 500,
-                      }}>
-                        +{dayPhotos.length - 5}
-                      </div>
-                    )}
-                  </div>
-                )}
-
-              </motion.div>
-            )}
-          </AnimatePresence>
-
         <motion.div
-          onClick={mode === 'collapsed' ? handleContextToggle : undefined}
+          onClick={mode === 'collapsed' ? handlePillClick : undefined}
           layout
           drag={mode === 'collapsed' ? 'x' : false}
           dragConstraints={{ left: 0, right: 0 }}
           dragElastic={0.2}
+          onDrag={mode === 'collapsed' ? handleSwipeDrag : undefined}
           onDragEnd={mode === 'collapsed' ? handleSwipeDragEnd : undefined}
           whileTap={mode === 'collapsed' ? { scale: 0.98 } : undefined}
           style={{
@@ -996,40 +831,105 @@ export const AdaptiveNavPill = memo(function AdaptiveNavPill({
         >
           {/* Collapsed State - Swipeable */}
           {mode === 'collapsed' && (
-            <motion.div
-              key={currentDay}
-              initial={{ opacity: 0, x: swipeDirection === 'left' ? 20 : swipeDirection === 'right' ? -20 : 0 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ duration: 0.2 }}
-              style={{
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+            }}>
+              {/* Left swipe hint */}
+              <motion.div
+                animate={{
+                  opacity: currentDay > 1 ? (swipeOffset > 0 ? 0.9 : 0.4) : 0.15,
+                  x: swipeOffset > 0 ? Math.min(swipeOffset * 0.1, 4) : 0,
+                }}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  color: colors.text.tertiary,
+                }}
+              >
+                <ChevronIcon direction="left" size={12} />
+              </motion.div>
+
+              {/* Day content */}
+              <motion.div
+                key={currentDay}
+                initial={{ opacity: 0, x: swipeDirection === 'left' ? 20 : swipeDirection === 'right' ? -20 : 0 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ duration: 0.2 }}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 10,
+                  color: colors.text.primary,
+                }}
+              >
+                <span style={{
+                  fontSize: 11,
+                  fontWeight: 600,
+                  color: colors.accent.primary,
+                  background: 'rgba(96, 165, 250, 0.15)',
+                  padding: '3px 8px',
+                  borderRadius: 6,
+                }}>
+                  {currentDay}/{totalDays}
+                </span>
+                <span style={{
+                  fontSize: isMobile ? 14 : 15,
+                  fontWeight: 500,
+                  whiteSpace: 'nowrap',
+                  maxWidth: isMobile ? 140 : 180,
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                }}>
+                  {currentCampName}
+                </span>
+              </motion.div>
+
+              {/* Right swipe hint */}
+              <motion.div
+                animate={{
+                  opacity: currentDay < totalDays ? (swipeOffset < 0 ? 0.9 : 0.4) : 0.15,
+                  x: swipeOffset < 0 ? Math.max(swipeOffset * 0.1, -4) : 0,
+                }}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  color: colors.text.tertiary,
+                }}
+              >
+                <ChevronIcon direction="right" size={12} />
+              </motion.div>
+
+              {/* Expand hint - subtle vertical line separator + chevron */}
+              <div style={{
                 display: 'flex',
                 alignItems: 'center',
-                gap: 10,
-                color: colors.text.primary,
-                paddingBottom: 2,
-              }}
-            >
-              <span style={{
-                fontSize: 11,
-                fontWeight: 600,
-                color: colors.accent.primary,
-                background: 'rgba(96, 165, 250, 0.15)',
-                padding: '3px 8px',
-                borderRadius: 6,
+                gap: 4,
+                marginLeft: 4,
+                paddingLeft: 8,
+                borderLeft: `1px solid ${colors.glass.borderSubtle}`,
               }}>
-                {currentDay}/{totalDays}
-              </span>
-              <span style={{
-                fontSize: isMobile ? 14 : 15,
-                fontWeight: 500,
-                whiteSpace: 'nowrap',
-                maxWidth: isMobile ? 160 : 200,
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-              }}>
-                {currentCampName}
-              </span>
-            </motion.div>
+                <motion.div
+                  animate={!hasInteracted ? {
+                    y: [0, -2, 0],
+                  } : {}}
+                  transition={{
+                    duration: 1.5,
+                    repeat: hasInteracted ? 0 : Infinity,
+                    repeatDelay: 2,
+                  }}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    color: colors.text.tertiary,
+                    opacity: 0.6,
+                  }}
+                >
+                  <ChevronIcon direction="up" size={12} />
+                </motion.div>
+              </div>
+            </div>
           )}
 
           {/* Expanded State - Main menu */}
