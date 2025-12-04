@@ -11,6 +11,7 @@ import { fetchPhotos, createPhoto, deletePhoto, getJourneyIdBySlug, updatePhoto 
 import { PhotoUpload } from './PhotoUpload';
 import { PhotoLightbox } from '../common/PhotoLightbox';
 import { PhotoEditModal } from './PhotoEditModal';
+import { SkeletonPhotoGrid } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 
 interface PhotosTabProps {
@@ -175,8 +176,11 @@ export function PhotosTab({ trekData, isMobile, editMode = false, onViewPhotoOnM
 
     if (loading || tokenLoading) {
         return (
-            <div className="flex items-center justify-center py-10 text-white/40 light:text-slate-400">
-                Loading photos...
+            <div className="space-y-4">
+                <div className="flex items-center gap-2">
+                    <div className="h-4 w-32 bg-white/10 rounded animate-pulse" />
+                </div>
+                <SkeletonPhotoGrid count={6} columns={3} />
             </div>
         );
     }
