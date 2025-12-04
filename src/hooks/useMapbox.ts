@@ -30,6 +30,7 @@ interface UseMapboxOptions {
     onPhotoClick?: (photo: Photo) => void;
     onRouteClick?: (info: RouteClickInfo) => void;
     onPOIClick?: (poi: PointOfInterest) => void;
+    onCampClick?: (camp: Camp) => void;
     getMediaUrl?: (path: string) => string;
 }
 
@@ -63,13 +64,14 @@ interface UseMapboxReturn {
 /**
  * Initialize Mapbox map with globe projection and terrain
  */
-export function useMapbox({ containerRef, onTrekSelect, onPhotoClick, onRouteClick, onPOIClick, getMediaUrl }: UseMapboxOptions): UseMapboxReturn {
+export function useMapbox({ containerRef, onTrekSelect, onPhotoClick, onRouteClick, onPOIClick, onCampClick, getMediaUrl }: UseMapboxOptions): UseMapboxReturn {
     const { treks, trekDataMap } = useJourneys();
     const mapRef = useRef<mapboxgl.Map | null>(null);
     const rotationAnimationRef = useRef<number | null>(null);
     const interactionListenerRef = useRef<(() => void) | null>(null);
     const photosRef = useRef<Photo[]>([]);
     const poisRef = useRef<PointOfInterest[]>([]);
+    const campsRef = useRef<Camp[]>([]);
     const photoMarkersRef = useRef<Map<string, mapboxgl.Marker>>(new Map());
     const selectedTrekRef = useRef<string | null>(null);
     const playbackAnimationRef = useRef<number | null>(null);
@@ -95,6 +97,7 @@ export function useMapbox({ containerRef, onTrekSelect, onPhotoClick, onRouteCli
     const onPhotoClickRef = useRef(onPhotoClick);
     const onRouteClickRef = useRef(onRouteClick);
     const onPOIClickRef = useRef(onPOIClick);
+    const onCampClickRef = useRef(onCampClick);
     const treksRef = useRef(treks);
     const trekDataMapRef = useRef(trekDataMap);
 
@@ -113,6 +116,10 @@ export function useMapbox({ containerRef, onTrekSelect, onPhotoClick, onRouteCli
     useEffect(() => {
         onPOIClickRef.current = onPOIClick;
     }, [onPOIClick]);
+
+    useEffect(() => {
+        onCampClickRef.current = onCampClick;
+    }, [onCampClick]);
 
     useEffect(() => {
         treksRef.current = treks;
@@ -562,6 +569,28 @@ export function useMapbox({ containerRef, onTrekSelect, onPhotoClick, onRouteCli
                         const poi = poisRef.current.find(p => p.id === poiId);
                         if (poi) {
                             onPOIClickRef.current(poi);
+                        }
+                    }
+                    e.originalEvent.stopPropagation();
+                }
+            });
+
+            // Camp marker interaction handlers
+            map.on('mouseenter', 'camp-markers-circle', () => {
+                map.getCanvas().style.cursor = 'pointer';
+            });
+
+            map.on('mouseleave', 'camp-markers-circle', () => {
+                map.getCanvas().style.cursor = '';
+            });
+
+            map.on('click', 'camp-markers-circle', (e) => {
+                if (e.features && e.features.length > 0) {
+                    const campId = e.features[0].properties?.id;
+                    if (campId && onCampClickRef.current) {
+                        const camp = campsRef.current.find(c => c.id === campId);
+                        if (camp) {
+                            onCampClickRef.current(camp);
                         }
                     }
                     e.originalEvent.stopPropagation();
@@ -1453,6 +1482,9 @@ export function useMapbox({ containerRef, onTrekSelect, onPhotoClick, onRouteCli
     const updateCampMarkers = useCallback((camps: Camp[], selectedCampId: string | null = null) => {
         const map = mapRef.current;
         if (!map || !mapReady) return;
+
+        // Store camps in ref for click handler
+        campsRef.current = camps;
 
         // Create GeoJSON features for camps
         const features: GeoJSON.Feature[] = camps.map(camp => ({

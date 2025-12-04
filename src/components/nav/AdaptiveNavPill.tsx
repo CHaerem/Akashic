@@ -89,6 +89,15 @@ const ChevronIcon = ({ direction, size = 14 }: { direction: 'left' | 'right' | '
   </svg>
 );
 
+// Minimal grid/menu icon - three dots in a row
+const MenuDotsIcon = ({ size = 16 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor">
+    <circle cx="6" cy="12" r="2" />
+    <circle cx="12" cy="12" r="2" />
+    <circle cx="18" cy="12" r="2" />
+  </svg>
+);
+
 const PencilIcon = ({ size = 16 }: { size?: number }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/>
@@ -464,9 +473,9 @@ export const AdaptiveNavPill = memo(function AdaptiveNavPill({
   onJourneyUpdate,
   isMobile,
 }: AdaptiveNavPillProps) {
-  const [mode, setMode] = useState<NavMode>('expanded'); // Start with menu visible
+  const [mode, setMode] = useState<NavMode>('collapsed'); // Start collapsed - map is hero
   const [showContent, setShowContent] = useState(false);
-  // Removed showContext state - simplified to just tap to expand
+  const [showContext, setShowContext] = useState(false); // Day info context card
   const [isDragging, setIsDragging] = useState(false);
   const [hoveredOption, setHoveredOption] = useState<string | null>(null);
   const [hoveredDay, setHoveredDay] = useState<number | null>(null);
@@ -476,6 +485,7 @@ export const AdaptiveNavPill = memo(function AdaptiveNavPill({
 
   const pillRef = useRef<HTMLDivElement>(null);
   const cardRef = useRef<HTMLDivElement>(null);
+  const contextRef = useRef<HTMLDivElement>(null);
   const mouseX = useMotionValue(Infinity);
 
   // Refs for each nav option
@@ -484,6 +494,29 @@ export const AdaptiveNavPill = memo(function AdaptiveNavPill({
 
   const currentDay = selectedCamp?.dayNumber ?? 1;
   const currentCampName = selectedCamp?.name ?? 'Start';
+  const currentCamp = selectedCamp ?? trekData.camps[0];
+
+  // Calculate date for current day based on journey start date
+  const currentDayDate = useMemo(() => {
+    if (!trekData.dateStarted || !currentCamp) return null;
+    const start = new Date(trekData.dateStarted);
+    start.setDate(start.getDate() + (currentCamp.dayNumber - 1));
+    return start;
+  }, [trekData.dateStarted, currentCamp]);
+
+  // Get photos for current day
+  const dayPhotos = useMemo(() => {
+    if (!currentCamp || !currentDayDate) return [];
+    return photos.filter(p => {
+      if (!p.taken_at) return false;
+      const photoDate = new Date(p.taken_at);
+      return (
+        photoDate.getFullYear() === currentDayDate.getFullYear() &&
+        photoDate.getMonth() === currentDayDate.getMonth() &&
+        photoDate.getDate() === currentDayDate.getDate()
+      );
+    });
+  }, [photos, currentCamp, currentDayDate]);
 
   // Swipe handlers for collapsed pill
   const handleSwipeDrag = useCallback((_: any, info: { offset: { x: number } }) => {
@@ -602,12 +635,17 @@ export const AdaptiveNavPill = memo(function AdaptiveNavPill({
       const target = e.target as Node;
       const isInsidePill = pillRef.current?.contains(target);
       const isInsideCard = cardRef.current?.contains(target);
+      const isInsideContext = contextRef.current?.contains(target);
 
-      if (!isInsidePill && !isInsideCard) {
-        // If content card is showing, close it and return to menu
+      if (!isInsidePill && !isInsideCard && !isInsideContext) {
+        // If content card is showing, close it and return to collapsed
         if (showContent) {
           setShowContent(false);
-          setMode('expanded');
+          setMode('collapsed');
+        }
+        // If context is showing, close it
+        else if (showContext) {
+          setShowContext(false);
         }
         // If in expanded mode or days mode, collapse
         else if (mode === 'expanded' || mode === 'days') {
@@ -624,7 +662,7 @@ export const AdaptiveNavPill = memo(function AdaptiveNavPill({
       document.removeEventListener('mousedown', handleClickOutside);
       document.removeEventListener('touchstart', handleClickOutside);
     };
-  }, [mode, showContent, mouseX]);
+  }, [mode, showContent, showContext, mouseX]);
 
   // Cancel drag on pointer up anywhere
   useEffect(() => {
@@ -643,13 +681,31 @@ export const AdaptiveNavPill = memo(function AdaptiveNavPill({
     };
   }, [isDragging, handlePointerUp]);
 
-  const handlePillClick = useCallback(() => {
+  // Tap main pill area → show context card
+  const handlePillTap = useCallback(() => {
     if (mode === 'collapsed') {
-      setMode('expanded');
-      setShowContent(false);
+      setShowContext(prev => !prev);
       if (!hasInteracted) setHasInteracted(true);
     }
   }, [mode, hasInteracted]);
+
+  // Tap expand icon → show full menu
+  const handleExpandTap = useCallback((e: React.MouseEvent | React.TouchEvent) => {
+    e.stopPropagation(); // Don't trigger pill tap
+    if (mode === 'collapsed') {
+      setShowContext(false);
+      setMode('expanded');
+      if (!hasInteracted) setHasInteracted(true);
+    }
+  }, [mode, hasInteracted]);
+
+  // Open content card from context card action buttons
+  const handleOpenContent = useCallback((tab: TabType) => {
+    setShowContext(false);
+    onTabChange(tab);
+    setShowContent(true);
+    setMode('content');
+  }, [onTabChange]);
 
   const handleOptionClick = useCallback((optionId: TabType) => {
     if (isDragging) return; // Don't handle click during drag
@@ -805,8 +861,245 @@ export const AdaptiveNavPill = memo(function AdaptiveNavPill({
             })()}
           </AnimatePresence>
 
+          {/* Context Card - shows day info when pill is tapped */}
+          <AnimatePresence>
+            {showContext && mode === 'collapsed' && currentCamp && (
+              <motion.div
+                ref={contextRef}
+                key="context-card"
+                initial={{ opacity: 0, y: 12, scale: 0.95 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: 8, scale: 0.98 }}
+                transition={{ type: 'spring', ...SPRING_CONFIG }}
+                style={{
+                  background: `linear-gradient(180deg, rgba(255, 255, 255, 0.12) 0%, rgba(255, 255, 255, 0.06) 100%)`,
+                  backdropFilter: `${effects.blur.intense} ${effects.saturation.enhanced}`,
+                  WebkitBackdropFilter: `${effects.blur.intense} ${effects.saturation.enhanced}`,
+                  border: `1px solid ${colors.glass.border}`,
+                  boxShadow: `0 16px 48px rgba(0, 0, 0, 0.3)`,
+                  borderRadius: radius.xl,
+                  padding: 16,
+                  width: isMobile ? 'calc(100vw - 48px)' : 340,
+                  maxWidth: 380,
+                }}
+              >
+                {/* Header with close button */}
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'flex-start',
+                  justifyContent: 'space-between',
+                  marginBottom: 12,
+                }}>
+                  <div>
+                    <div style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 8,
+                      marginBottom: 6,
+                    }}>
+                      <span style={{
+                        fontSize: 11,
+                        fontWeight: 600,
+                        color: colors.accent.primary,
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.08em',
+                        background: 'rgba(96, 165, 250, 0.15)',
+                        padding: '3px 8px',
+                        borderRadius: 6,
+                      }}>
+                        Day {currentCamp.dayNumber}
+                      </span>
+                      {currentDayDate && (
+                        <span style={{ fontSize: 12, color: colors.text.tertiary }}>
+                          {currentDayDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                        </span>
+                      )}
+                      <span style={{
+                        fontSize: 12,
+                        color: colors.text.secondary,
+                        background: 'rgba(255, 255, 255, 0.08)',
+                        padding: '2px 8px',
+                        borderRadius: 4,
+                      }}>
+                        {currentCamp.elevation}m
+                      </span>
+                    </div>
+                    <h3 style={{
+                      fontSize: 18,
+                      fontWeight: 600,
+                      color: colors.text.primary,
+                      margin: 0,
+                    }}>
+                      {currentCamp.name}
+                    </h3>
+                  </div>
+                  <button
+                    onClick={() => setShowContext(false)}
+                    style={{
+                      background: 'transparent',
+                      border: 'none',
+                      cursor: 'pointer',
+                      color: colors.text.tertiary,
+                      padding: 4,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <CloseIcon size={16} />
+                  </button>
+                </div>
+
+                {/* Notes */}
+                {currentCamp.notes && (
+                  <p style={{
+                    fontSize: 13,
+                    lineHeight: 1.5,
+                    color: colors.text.secondary,
+                    margin: 0,
+                    marginBottom: 12,
+                  }}>
+                    {currentCamp.notes.length > 150
+                      ? `${currentCamp.notes.slice(0, 150)}...`
+                      : currentCamp.notes}
+                  </p>
+                )}
+
+                {/* Photo strip */}
+                {dayPhotos.length > 0 && (
+                  <div style={{
+                    display: 'flex',
+                    gap: 8,
+                    overflowX: 'auto',
+                    marginBottom: 12,
+                    paddingBottom: 4,
+                    WebkitOverflowScrolling: 'touch',
+                  }}>
+                    {dayPhotos.slice(0, 5).map((photo, idx) => (
+                      <motion.div
+                        key={photo.id}
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.95 }}
+                        onClick={() => onViewPhotoOnMap(photo)}
+                        style={{
+                          flexShrink: 0,
+                          width: 56,
+                          height: 56,
+                          borderRadius: radius.md,
+                          overflow: 'hidden',
+                          cursor: 'pointer',
+                          border: `1px solid ${colors.glass.borderSubtle}`,
+                        }}
+                      >
+                        <img
+                          src={getMediaUrl(photo.url)}
+                          alt={photo.caption || `Photo ${idx + 1}`}
+                          style={{
+                            width: '100%',
+                            height: '100%',
+                            objectFit: 'cover',
+                          }}
+                        />
+                      </motion.div>
+                    ))}
+                    {dayPhotos.length > 5 && (
+                      <div style={{
+                        flexShrink: 0,
+                        width: 56,
+                        height: 56,
+                        borderRadius: radius.md,
+                        background: 'rgba(255, 255, 255, 0.08)',
+                        border: `1px solid ${colors.glass.borderSubtle}`,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        color: colors.text.secondary,
+                        fontSize: 13,
+                        fontWeight: 500,
+                      }}>
+                        +{dayPhotos.length - 5}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Highlights */}
+                {currentCamp.highlights && currentCamp.highlights.length > 0 && (
+                  <ul style={{
+                    margin: 0,
+                    marginBottom: 12,
+                    paddingLeft: 16,
+                  }}>
+                    {currentCamp.highlights.slice(0, 3).map((highlight, idx) => (
+                      <li key={idx} style={{
+                        fontSize: 12,
+                        color: colors.text.secondary,
+                        marginBottom: 2,
+                      }}>
+                        {highlight}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+
+                {/* Action buttons */}
+                <div style={{
+                  display: 'flex',
+                  gap: 8,
+                }}>
+                  <motion.button
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={() => handleOpenContent('photos')}
+                    style={{
+                      flex: 1,
+                      padding: '10px 12px',
+                      background: 'rgba(96, 165, 250, 0.15)',
+                      border: 'none',
+                      borderRadius: radius.md,
+                      cursor: 'pointer',
+                      color: colors.accent.primary,
+                      fontSize: 12,
+                      fontWeight: 600,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 6,
+                    }}
+                  >
+                    <PhotoIcon size={14} />
+                    All Photos
+                  </motion.button>
+                  <motion.button
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={() => handleOpenContent('overview')}
+                    style={{
+                      flex: 1,
+                      padding: '10px 12px',
+                      background: 'rgba(255, 255, 255, 0.08)',
+                      border: 'none',
+                      borderRadius: radius.md,
+                      cursor: 'pointer',
+                      color: colors.text.secondary,
+                      fontSize: 12,
+                      fontWeight: 600,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 6,
+                    }}
+                  >
+                    <InfoIcon size={14} />
+                    Journey Info
+                  </motion.button>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
         <motion.div
-          onClick={mode === 'collapsed' ? handlePillClick : undefined}
+          onClick={mode === 'collapsed' ? handlePillTap : undefined}
           layout
           drag={mode === 'collapsed' ? 'x' : false}
           dragConstraints={{ left: 0, right: 0 }}
@@ -901,34 +1194,35 @@ export const AdaptiveNavPill = memo(function AdaptiveNavPill({
                 <ChevronIcon direction="right" size={12} />
               </motion.div>
 
-              {/* Expand hint - subtle vertical line separator + chevron */}
-              <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 4,
-                marginLeft: 4,
-                paddingLeft: 8,
-                borderLeft: `1px solid ${colors.glass.borderSubtle}`,
-              }}>
-                <motion.div
-                  animate={!hasInteracted ? {
-                    y: [0, -2, 0],
-                  } : {}}
-                  transition={{
-                    duration: 1.5,
-                    repeat: hasInteracted ? 0 : Infinity,
-                    repeatDelay: 2,
-                  }}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    color: colors.text.tertiary,
-                    opacity: 0.6,
-                  }}
-                >
-                  <ChevronIcon direction="up" size={12} />
-                </motion.div>
-              </div>
+              {/* Expand hint - minimal menu button */}
+              <motion.button
+                onClick={handleExpandTap}
+                whileHover={{ scale: 1.1, opacity: 1 }}
+                whileTap={{ scale: 0.9 }}
+                animate={!hasInteracted ? {
+                  opacity: [0.5, 0.8, 0.5],
+                } : { opacity: 0.6 }}
+                transition={{
+                  duration: 2,
+                  repeat: hasInteracted ? 0 : Infinity,
+                  ease: 'easeInOut',
+                }}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  marginLeft: 8,
+                  paddingLeft: 10,
+                  borderLeft: `1px solid ${colors.glass.borderSubtle}`,
+                  background: 'transparent',
+                  border: 'none',
+                  cursor: 'pointer',
+                  color: colors.text.secondary,
+                  padding: '6px 6px 6px 14px',
+                }}
+              >
+                <MenuDotsIcon size={14} />
+              </motion.button>
             </div>
           )}
 

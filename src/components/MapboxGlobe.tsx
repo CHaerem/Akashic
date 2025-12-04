@@ -168,11 +168,19 @@ export function MapboxGlobe({ selectedTrek, selectedCamp, onSelectTrek, view, ph
         setPOIInfo(null);
     }, [selectedTrek, selectedCamp]);
 
+    // Handle camp click - select the camp
+    const handleCampClick = useCallback((camp: Camp) => {
+        if (onCampSelect) {
+            onCampSelect(camp);
+        }
+    }, [onCampSelect]);
+
     const { mapReady, error, flyToGlobe, flyToTrek, updatePhotoMarkers, updateCampMarkers, updatePOIMarkers, flyToPhoto, flyToPOI, startRotation, stopRotation } = useMapbox({
         containerRef,
         onTrekSelect: onSelectTrek,
         onPhotoClick: handlePhotoClick,
         onPOIClick: handlePOIClick,
+        onCampClick: handleCampClick,
         getMediaUrl
     });
 
