@@ -297,6 +297,60 @@ Add to your MCP settings (`~/Library/Application Support/Claude/claude_desktop_c
 
 ---
 
+## UI Components
+
+### Design System
+
+The UI uses a **Liquid Glass** design system inspired by iOS/macOS glass morphism:
+
+| Layer | Purpose |
+|-------|---------|
+| `src/styles/liquidGlass.ts` | Core design tokens (colors, blur, shadows) |
+| `src/components/ui/` | shadcn/ui components with glass theme |
+| `src/contexts/ThemeContext.tsx` | Dark mode (Liquid Glass is dark-only) |
+
+### Navigation
+
+The main navigation uses **AdaptiveNavPill** - a floating glass pill with Viaplay-style drag-to-select:
+
+```
+src/components/nav/
+└── AdaptiveNavPill.tsx     # Floating nav with magnification effect
+```
+
+**States:**
+- **Collapsed**: Shows current day/camp
+- **Expanded**: Nav options with dock magnification
+- **Days**: Day selector with scrub-to-select
+- **Content**: Floating glass card with tab content
+
+**See [DESIGN-LIQUID-GLASS-NAV.md](./DESIGN-LIQUID-GLASS-NAV.md) for full documentation.**
+
+### Tab Components
+
+Content cards render these tab components:
+
+| Component | Purpose |
+|-----------|---------|
+| `StatsTab` | Interactive elevation profile, journey stats |
+| `JourneyTab` | Day-by-day breakdown with segments |
+| `OverviewTab` | Trek description and key stats |
+| `PhotosTab` | Photo gallery with upload |
+
+### Component Library (shadcn/ui)
+
+Base components in `src/components/ui/`:
+
+- `Button` - 5 variants, 44px mobile touch targets
+- `Card` - Glass morphism cards
+- `Dialog` - Modal dialogs
+- `Sheet` - Bottom sheets for mobile
+- `Tabs` - Tab navigation
+- Form components: `Input`, `Textarea`, `Select`, `Label`
+- `Skeleton` - Loading states
+
+---
+
 ## Migration Plan
 
 ### Phase 1: Infrastructure Setup ✅

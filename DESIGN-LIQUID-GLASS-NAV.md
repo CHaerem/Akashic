@@ -1,226 +1,191 @@
 # Adaptive Liquid Glass Navigation
 
-## Problem Statement
+## Status: ✅ Implemented
 
-The current InfoPanel design creates a **disconnect between map and content**:
-- Bottom sheet covers significant map area when expanded
-- Binary states (minimized vs expanded) feel jarring
-- Map becomes "background" rather than the primary experience
-- No natural synergy between photos and map markers
-
-## Design Goals
-
-1. **Map-first experience**: Keep the map visible and interactive at all times
-2. **Contextual information**: Show relevant info based on map location/selection
-3. **Adaptive controls**: Floating glass controls that expand on demand
-4. **Photo-map integration**: Photos feel connected to their map locations
+This design has been fully implemented in `src/components/nav/AdaptiveNavPill.tsx`.
 
 ---
 
-## Proposed Design: Floating Adaptive Navigation
+## Overview
 
-### Core Concept
+The navigation uses a **floating glass pill** inspired by macOS dock magnification and Viaplay's drag-to-select interface. It replaces the traditional bottom sheet with a minimal, map-first navigation system.
 
-Replace the traditional bottom sheet with a **floating glass pill** that:
-- Stays minimal by default (shows current context)
-- Expands on tap to reveal navigation options
-- Supports drag-to-select with magnification effect
-- Can morph into content cards when needed
+### Key Features
 
-### Visual Hierarchy
-
-```
-┌─────────────────────────────────┐
-│  [Akashic]                      │  ← Glass pill (top-left)
-│                                 │
-│           🏔️                    │
-│      MAP CONTENT                │
-│        📍 ← Photo markers       │
-│                                 │
-│                                 │
-│                         ╭─────╮ │
-│                         │Day 3│ │  ← Adaptive nav pill
-│                         ╰─────╯ │
-└─────────────────────────────────┘
-```
+- **Collapsed state**: Shows current day/camp as a minimal pill
+- **Expanded state**: Reveals nav options (Days, Info, Photos, Stats) with magnification
+- **Day selector**: Scrub through days with dock-style magnification
+- **Content cards**: Glass morphism floating cards for rich content
+- **Interactive elevation profile**: Click/tap camp markers to navigate
 
 ---
 
-## Component Design
-
-### 1. AdaptiveNavPill (Collapsed State)
-
-A floating glass pill in the bottom-right corner showing current context:
+## Component Structure
 
 ```
-╭────────────╮
-│  📅 Day 3  │
-╰────────────╯
-```
-
-**Properties:**
-- Position: `bottom: 24px, right: 16px` (above safe area)
-- Size: ~80-100px width, 44px height (touch-friendly)
-- Style: Liquid glass with blur, subtle border, shadow
-- Content: Current day/location indicator
-
-### 2. AdaptiveNavPill (Expanded State)
-
-On tap, expands to show navigation options with magnification:
-
-```
-╭──────────────────────────────────────╮
-│                                      │
-│   📅      📍      📸      📊        │
-│  Days    Map    Photos   Stats       │
-│   ●                                  │  ← Selection indicator
-╰──────────────────────────────────────╯
-```
-
-**Interactions:**
-- Tap option → navigate to that mode
-- Drag across → magnification follows finger, select on release
-- Tap outside → collapse back to pill
-
-### 3. Day Selector Mode
-
-When "Days" is selected, pill morphs to show timeline:
-
-```
-╭──────────────────────────────────────╮
-│   1    2   [3]   4    5    6    7   │
-│            ↑ magnified              │
-╰──────────────────────────────────────╯
-```
-
-**Interactions:**
-- Drag to scrub through days
-- Magnification effect on hovered day
-- Release → jump to that day on map
-- Photos from that day highlight on map
-
-### 4. Photo Cluster Cards
-
-When tapping a photo cluster on the map, show a **floating glass card** near the cluster:
-
-```
-        ╭─────────────────╮
-        │  ┌───┬───┬───┐  │
-        │  │ 📷│ 📷│ 📷│  │  ← Photo thumbnails
-        │  └───┴───┴───┘  │
-        │  Day 3 • Summit │
-        ╰─────────────────╯
-             ▼
-           📍 (cluster marker)
-```
-
-This keeps photos connected to their map location rather than pulling them into a separate panel.
-
----
-
-## Implementation Approach
-
-### Phase 1: Adaptive Nav Pill
-
-Create the core floating navigation component:
-
-```typescript
-// New components
 src/components/nav/
-├── AdaptiveNavPill.tsx      // Main container with expand/collapse
-├── NavOption.tsx            // Individual nav option with magnification
-├── DayTimeline.tsx          // Day selector timeline
-└── useMagnification.ts      // Hook for magnification effect
+└── AdaptiveNavPill.tsx     # Main component with all states
 ```
 
-**Key Features:**
-- CSS `scale()` transforms for magnification
-- `touch-action: none` for custom gesture handling
-- `backdrop-filter: blur()` for glass effect
-- Spring animations for smooth transitions
+### Internal Components
 
-### Phase 2: Photo Integration
+| Component | Purpose |
+|-----------|---------|
+| `DockItem` | Nav option with magnification effect |
+| `DayItem` | Day number with magnification effect |
+| `ContentCard` | Floating glass card for tab content |
 
-Replace panel-based photo viewing with map-integrated cards:
+---
+
+## States & Modes
 
 ```typescript
-src/components/map/
-├── PhotoClusterCard.tsx     // Floating card near cluster
-├── PhotoMarkerPopup.tsx     // Single photo popup
-└── usePhotoSelection.ts     // Track selected photos/clusters
+type NavMode = 'collapsed' | 'expanded' | 'days' | 'content';
 ```
 
-### Phase 3: Contextual Content
+### 1. Collapsed (Default)
 
-Add smart content display based on map interaction:
+```
+╭────────────────────╮
+│  📅 Day 3 • Namche │
+╰────────────────────╯
+```
 
-- Tap camp marker → show camp info card near marker
-- Tap route segment → show segment stats inline
-- Tap photo cluster → show photo preview card
-- Pinch to zoom out → show journey overview
+Shows current context. Tap to expand.
 
----
+### 2. Expanded
 
-## Technical Considerations
+```
+╭──────────────────────────────────────╮
+│   📅      📍      📸      📊        │
+│  Days    Info   Photos   Stats       │
+╰──────────────────────────────────────╯
+```
 
-### PWA Feasibility
+Drag across for magnification effect. Release to select.
 
-| Effect | Implementation | Feasibility |
-|--------|---------------|-------------|
-| Glass blur | `backdrop-filter: blur(20px)` | ✅ Excellent |
-| Magnification | CSS `scale()` + spring animation | ✅ Excellent |
-| Drag selection | Touch events + position tracking | ✅ Excellent |
-| Haptic feedback | `navigator.vibrate()` | 🟡 Basic only |
-| 60fps animations | `transform` + `will-change` | ✅ Excellent |
+### 3. Days (Day Selector)
 
-### Performance Notes
+```
+╭──────────────────────────────────────╮
+│  ←   1    2   [3]   4    5    6    7 │
+│              ↑ magnified             │
+╰──────────────────────────────────────╯
+```
 
-- Use `transform` and `opacity` only for animations (GPU accelerated)
-- Minimize DOM updates during drag (use refs for position)
-- Debounce map interactions during nav pill animation
-- Consider `useDeferredValue` for photo updates
+Drag to scrub through days. Release to select and fly to that camp.
 
----
+### 4. Content (Card Visible)
 
-## Design Questions to Resolve
+A floating glass card appears centered on screen with the selected tab's content:
 
-1. **Info depth**: How much detail should floating cards show vs needing a full panel?
-   - Option A: Cards show preview, tap for full panel
-   - Option B: Cards expand in place for more detail
-   - Option C: Hybrid - basic info in cards, "See more" opens panel
-
-2. **Desktop adaptation**: How should this work on desktop?
-   - Option A: Same floating pill (bottom-right)
-   - Option B: Keep side panel for desktop, pill for mobile only
-   - Option C: Horizontal toolbar at bottom
-
-3. **Journey tab content**: The current Journey tab has rich day-by-day content. Where does this live?
-   - Option A: Day cards that expand inline
-   - Option B: Full-screen overlay when a day is selected
-   - Option C: Keep a minimal panel for long-form content
-
-4. **Stats/Overview content**: Where do detailed stats and overview text go?
-   - Option A: Expandable cards from the nav pill
-   - Option B: Swipe up from nav pill to reveal sheet
-   - Option C: Dedicated "Info" mode with larger overlay
+- **Overview**: Trek name, description, key stats
+- **Stats**: Interactive elevation profile, journey stats, historical sites
+- **Journey**: Day-by-day breakdown with segments, photos
+- **Photos**: Photo gallery with lightbox
 
 ---
 
-## Next Steps
+## Interactions
 
-1. **Get Viaplay screenshots** to confirm exact interaction pattern
-2. **Prototype the nav pill** with basic expand/collapse
-3. **Test magnification effect** on real devices
-4. **User test** with your mom to validate the approach before full implementation
+### Drag-to-Select (Viaplay Style)
+
+1. Touch down on pill → start tracking pointer
+2. Move finger → magnification follows, hover state updates
+3. Release → select hovered item
+
+### Magnification Effect
+
+Uses `useTransform` from framer-motion:
+
+```typescript
+const distance = useTransform(mouseX, (val) => {
+  const bounds = ref.current?.getBoundingClientRect();
+  return val - bounds.x - bounds.width / 2;
+});
+
+const scale = useTransform(
+  distance,
+  [-MAGNIFICATION.distance, 0, MAGNIFICATION.distance],
+  [1, MAGNIFICATION.scale, 1]
+);
+```
+
+### Click Outside Handling
+
+The component tracks two refs:
+- `pillRef` - The navigation pill
+- `cardRef` - The content card
+
+Clicking outside both closes the nav back to collapsed state.
 
 ---
 
-## Reference: Viaplay Pattern (To Be Updated)
+## Content Integration
 
-*Awaiting screenshots to document the exact interaction pattern*
+The ContentCard renders the existing tab components:
 
-Expected features:
-- Collapsed pill with icon indicators
-- Expand on tap/hold
-- Magnification effect on drag
-- Smooth spring animations
+```typescript
+{activeTab === 'stats' && (
+  <StatsTab
+    trekData={trekData}
+    extendedStats={extendedStats}
+    elevationProfile={elevationProfile}
+    selectedCamp={selectedCamp}
+    onCampSelect={onCampSelect}
+  />
+)}
+```
+
+### Tab Components Used
+
+| Tab | Component | Features |
+|-----|-----------|----------|
+| Overview | `OverviewTab` | Description, basic stats |
+| Stats | `StatsTab` | Interactive elevation profile, journey stats, historical sites |
+| Journey | `JourneyTab` | Day-by-day with segments, photos per day |
+| Photos | `PhotosTab` | Photo grid, lightbox, upload (edit mode) |
+
+---
+
+## Styling
+
+Uses the liquid glass design system from `src/styles/liquidGlass.ts`:
+
+```typescript
+const glassStyle = {
+  background: 'linear-gradient(135deg, rgba(255,255,255,0.14) 0%, rgba(255,255,255,0.07) 100%)',
+  backdropFilter: 'blur(20px) saturate(180%)',
+  border: '1px solid rgba(255,255,255,0.2)',
+  boxShadow: '0 8px 32px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.2)',
+};
+```
+
+---
+
+## Mobile Considerations
+
+- **Safe areas**: Pill positioned above `env(safe-area-inset-bottom)`
+- **Touch targets**: Minimum 44px for all interactive elements
+- **Card height**: Limited to avoid overlap with pill
+- **Touch events**: Proper `touch-action: none` for drag handling
+
+---
+
+## Future Improvements
+
+1. **Photo map integration**: Show photo cluster cards near map markers
+2. **Haptic feedback**: Vibrate on day selection (where supported)
+3. **Gesture shortcuts**: Swipe up from collapsed to expand
+4. **Camp previews**: Show camp info on elevation profile hover
+
+---
+
+## Related Files
+
+- `src/components/nav/AdaptiveNavPill.tsx` - Main component
+- `src/components/trek/StatsTab.tsx` - Stats with elevation profile
+- `src/components/trek/JourneyTab.tsx` - Journey day breakdown
+- `src/components/trek/OverviewTab.tsx` - Overview content
+- `src/components/trek/PhotosTab.tsx` - Photo gallery
+- `src/styles/liquidGlass.ts` - Glass design tokens
