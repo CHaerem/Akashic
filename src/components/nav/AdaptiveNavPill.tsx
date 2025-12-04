@@ -216,31 +216,27 @@ function ContentCard({ activeTab, trekData, extendedStats, photos, getMediaUrl, 
     boxShadow: shadows.glass.elevated,
   };
 
-  const cardWidth = isMobile ? 'calc(100vw - 32px)' : '400px';
-  const maxHeight = isMobile ? '50vh' : '60vh';
-  // Position card above the pill (pill height ~80px + 12px gap + pill bottom position)
-  const cardBottom = isMobile
-    ? 'calc(24px + env(safe-area-inset-bottom) + 80px + 12px)'
-    : 'calc(32px + 80px + 12px)';
+  const cardWidth = isMobile ? 'calc(100vw - 32px)' : '420px';
+  const maxHeight = isMobile ? '60vh' : '70vh';
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 20, scale: 0.95 }}
-      animate={{ opacity: 1, y: 0, scale: 1 }}
-      exit={{ opacity: 0, y: 10, scale: 0.98 }}
+      initial={{ opacity: 0, scale: 0.95 }}
+      animate={{ opacity: 1, scale: 1 }}
+      exit={{ opacity: 0, scale: 0.98 }}
       transition={{ type: 'spring', ...SPRING_CONFIG }}
       style={{
         ...glassStyle,
-        position: 'absolute',
-        bottom: cardBottom,
+        position: 'fixed',
+        top: '50%',
         left: '50%',
-        transform: 'translateX(-50%)',
+        transform: 'translate(-50%, -50%)',
         width: cardWidth,
         maxWidth: cardWidth,
         maxHeight,
         borderRadius: radius.xl,
         overflow: 'hidden',
-        zIndex: 49,
+        zIndex: 100,
       }}
     >
       {/* Header */}
