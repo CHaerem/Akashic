@@ -967,87 +967,6 @@ export const AdaptiveNavPill = memo(function AdaptiveNavPill({
                   </div>
                 )}
 
-                {/* Day navigation controls */}
-                <div style={{
-                  marginTop: 12,
-                  paddingTop: 12,
-                  borderTop: `1px solid ${colors.glass.borderSubtle}`,
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                }}>
-                  {/* Previous day button */}
-                  <motion.button
-                    onClick={() => currentDay > 1 && onDaySelect(currentDay - 1)}
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                    disabled={currentDay <= 1}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 4,
-                      background: 'rgba(255, 255, 255, 0.08)',
-                      border: 'none',
-                      borderRadius: radius.md,
-                      padding: '6px 10px',
-                      cursor: currentDay > 1 ? 'pointer' : 'default',
-                      color: currentDay > 1 ? colors.text.secondary : colors.text.subtle,
-                      fontSize: 12,
-                      fontWeight: 500,
-                      opacity: currentDay > 1 ? 1 : 0.4,
-                    }}
-                  >
-                    <span style={{ fontSize: 14 }}>←</span>
-                    <span>Day {currentDay - 1}</span>
-                  </motion.button>
-
-                  {/* Day dots */}
-                  <div style={{ display: 'flex', gap: 6 }}>
-                    {Array.from({ length: totalDays }, (_, i) => i + 1).map((day) => (
-                      <motion.div
-                        key={day}
-                        onClick={() => onDaySelect(day)}
-                        whileHover={{ scale: 1.3 }}
-                        whileTap={{ scale: 0.9 }}
-                        style={{
-                          width: day === currentDay ? 10 : 6,
-                          height: day === currentDay ? 10 : 6,
-                          borderRadius: '50%',
-                          background: day === currentDay
-                            ? colors.accent.primary
-                            : 'rgba(255, 255, 255, 0.3)',
-                          cursor: 'pointer',
-                          transition: 'all 0.2s ease',
-                        }}
-                      />
-                    ))}
-                  </div>
-
-                  {/* Next day button */}
-                  <motion.button
-                    onClick={() => currentDay < totalDays && onDaySelect(currentDay + 1)}
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                    disabled={currentDay >= totalDays}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 4,
-                      background: 'rgba(255, 255, 255, 0.08)',
-                      border: 'none',
-                      borderRadius: radius.md,
-                      padding: '6px 10px',
-                      cursor: currentDay < totalDays ? 'pointer' : 'default',
-                      color: currentDay < totalDays ? colors.text.secondary : colors.text.subtle,
-                      fontSize: 12,
-                      fontWeight: 500,
-                      opacity: currentDay < totalDays ? 1 : 0.4,
-                    }}
-                  >
-                    <span>Day {currentDay + 1}</span>
-                    <span style={{ fontSize: 14 }}>→</span>
-                  </motion.button>
-                </div>
               </motion.div>
             )}
           </AnimatePresence>
@@ -1078,97 +997,38 @@ export const AdaptiveNavPill = memo(function AdaptiveNavPill({
           {/* Collapsed State - Swipeable */}
           {mode === 'collapsed' && (
             <motion.div
+              key={currentDay}
+              initial={{ opacity: 0, x: swipeDirection === 'left' ? 20 : swipeDirection === 'right' ? -20 : 0 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ duration: 0.2 }}
               style={{
                 display: 'flex',
                 alignItems: 'center',
-                gap: 0,
+                gap: 10,
+                color: colors.text.primary,
                 paddingBottom: 2,
               }}
             >
-              {/* Left chevron - previous day hint */}
-              <motion.div
-                animate={{ opacity: currentDay > 1 ? 0.4 : 0.15 }}
-                style={{
-                  color: colors.text.tertiary,
-                  fontSize: 14,
-                  marginRight: 6,
-                }}
-              >
-                ‹
-              </motion.div>
-
-              {/* Day info - animated on change */}
-              <motion.div
-                key={currentDay}
-                initial={{ opacity: 0, x: swipeDirection === 'left' ? 20 : swipeDirection === 'right' ? -20 : 0 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ duration: 0.2 }}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 8,
-                  color: colors.text.primary,
-                }}
-              >
-                <span style={{
-                  fontSize: 11,
-                  fontWeight: 600,
-                  color: colors.accent.primary,
-                  background: 'rgba(96, 165, 250, 0.15)',
-                  padding: '2px 6px',
-                  borderRadius: 4,
-                }}>
-                  {currentDay}/{totalDays}
-                </span>
-                <span style={{
-                  fontSize: isMobile ? 14 : 15,
-                  fontWeight: 500,
-                  whiteSpace: 'nowrap',
-                  maxWidth: isMobile ? 140 : 180,
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                }}>
-                  {currentCampName}
-                </span>
-              </motion.div>
-
-              {/* Right chevron - next day hint */}
-              <motion.div
-                animate={{ opacity: currentDay < totalDays ? 0.4 : 0.15 }}
-                style={{
-                  color: colors.text.tertiary,
-                  fontSize: 14,
-                  marginLeft: 6,
-                }}
-              >
-                ›
-              </motion.div>
-
-              {/* Menu button */}
-              <motion.button
-                onClick={(e) => { e.stopPropagation(); handlePillClick(); }}
-                whileHover={{ scale: 1.1, background: 'rgba(255, 255, 255, 0.15)' }}
-                whileTap={{ scale: 0.9 }}
-                style={{
-                  background: 'rgba(255, 255, 255, 0.08)',
-                  border: 'none',
-                  borderRadius: radius.md,
-                  width: 28,
-                  height: 28,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  cursor: 'pointer',
-                  color: colors.text.secondary,
-                  marginLeft: 8,
-                }}
-              >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <line x1="4" y1="6" x2="20" y2="6"/>
-                  <line x1="4" y1="12" x2="20" y2="12"/>
-                  <line x1="4" y1="18" x2="20" y2="18"/>
-                </svg>
-              </motion.button>
+              <span style={{
+                fontSize: 11,
+                fontWeight: 600,
+                color: colors.accent.primary,
+                background: 'rgba(96, 165, 250, 0.15)',
+                padding: '3px 8px',
+                borderRadius: 6,
+              }}>
+                {currentDay}/{totalDays}
+              </span>
+              <span style={{
+                fontSize: isMobile ? 14 : 15,
+                fontWeight: 500,
+                whiteSpace: 'nowrap',
+                maxWidth: isMobile ? 160 : 200,
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+              }}>
+                {currentCampName}
+              </span>
             </motion.div>
           )}
 
@@ -1288,37 +1148,6 @@ export const AdaptiveNavPill = memo(function AdaptiveNavPill({
             </motion.div>
           )}
         </motion.div>
-
-        {/* Day progress dots - only show when collapsed */}
-        {mode === 'collapsed' && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            style={{
-              display: 'flex',
-              gap: 6,
-              marginTop: 8,
-            }}
-          >
-            {Array.from({ length: totalDays }, (_, i) => i + 1).map((day) => (
-              <motion.div
-                key={day}
-                animate={{
-                  scale: day === currentDay ? 1 : 0.8,
-                  opacity: day === currentDay ? 1 : 0.5,
-                }}
-                style={{
-                  width: 6,
-                  height: 6,
-                  borderRadius: '50%',
-                  background: day === currentDay
-                    ? colors.accent.primary
-                    : 'rgba(255, 255, 255, 0.4)',
-                }}
-              />
-            ))}
-          </motion.div>
-        )}
         </motion.div>
       </div>
     </>
