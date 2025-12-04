@@ -6,7 +6,7 @@
   "homepage": "https://chaerem.github.io/Akashic",
   "scripts": {
     "dev": "vite",
-    "build": "VITE_DEPLOY_TIME=$(date -u +\"%Y-%m-%dT%H:%M:%SZ\") vite build",
+    "build": "node scripts/build.js",
     "lint": "eslint .",
     "preview": "vite preview",
     "test": "vitest",
