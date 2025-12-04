@@ -230,8 +230,8 @@ export default function AkashicApp() {
 
             {!selectedTrek && view === 'globe' && <GlobeHint isMobile={isMobile} />}
 
-            {/* Trek View Info Panel - lazy loaded to not block Mapbox camera animation */}
-            {view === 'trek' && trekData && (
+            {/* Trek View Info Panel - desktop only (mobile uses AdaptiveNavPill) */}
+            {view === 'trek' && trekData && !isMobile && (
                 <Suspense fallback={null}>
                     <InfoPanel
                         trekData={trekData}
