@@ -40,3 +40,4 @@ gpx-data/
 # Test artifacts
 test-results/
 playwright-report/
+viaplay*/
