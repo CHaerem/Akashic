@@ -460,7 +460,6 @@ export const StatsTab = memo(function StatsTab({
     selectedCamp = null,
     onCampSelect = () => {}
 }: StatsTabProps) {
-    const [showAllStats, setShowAllStats] = useState(false);
     const [expandedSiteId, setExpandedSiteId] = useState<string | null>(null);
 
     const historicalSites = trekData.historicalSites || [];
@@ -522,43 +521,6 @@ export const StatsTab = memo(function StatsTab({
                         </div>
                     </div>
 
-                    {/* Expandable detailed stats */}
-                    <button
-                        onClick={() => setShowAllStats(!showAllStats)}
-                        className="w-full p-3 bg-white/5 light:bg-black/5 border border-white/10 light:border-black/5 rounded-xl cursor-pointer flex justify-between items-center mb-4"
-                    >
-                        <span className="text-white/60 light:text-slate-600 text-[13px]">
-                            {showAllStats ? 'Hide' : 'Show'} Detailed Stats
-                        </span>
-                        <span className={cn(
-                            "text-white/40 light:text-slate-400 text-xs transition-transform duration-200",
-                            showAllStats && "rotate-180"
-                        )}>
-                            ▼
-                        </span>
-                    </button>
-
-                    {showAllStats && (
-                        <div className="mb-6">
-                            <div className="grid grid-cols-2 gap-3">
-                                <StatItem label="Avg Daily Dist" value={`${extendedStats.avgDailyDistance} km`} />
-                                <StatItem label="Avg Altitude" value={`${extendedStats.avgAltitude}m`} />
-                                <StatItem label="Max Daily Gain" value={`+${extendedStats.maxDailyGain}m`} color="#22c55e" />
-                                <StatItem label="Max Daily Loss" value={`-${extendedStats.maxDailyLoss}m`} color="#ef4444" />
-                                <StatItem
-                                    label="Longest Day"
-                                    value={`${extendedStats.longestDayDistance} km`}
-                                    sublabel={`Day ${extendedStats.longestDayNumber}`}
-                                />
-                                <StatItem
-                                    label="Steepest Day"
-                                    value={`${extendedStats.steepestDayGradient}m/km`}
-                                    sublabel={`Day ${extendedStats.steepestDayNumber}`}
-                                    color="#f97316"
-                                />
-                            </div>
-                        </div>
-                    )}
                 </>
             )}
 
