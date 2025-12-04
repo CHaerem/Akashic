@@ -218,6 +218,10 @@ function ContentCard({ activeTab, trekData, extendedStats, photos, getMediaUrl, 
 
   const cardWidth = isMobile ? 'calc(100vw - 32px)' : '400px';
   const maxHeight = isMobile ? '50vh' : '60vh';
+  // Position card above the pill (pill height ~80px + 12px gap + pill bottom position)
+  const cardBottom = isMobile
+    ? 'calc(24px + env(safe-area-inset-bottom) + 80px + 12px)'
+    : 'calc(32px + 80px + 12px)';
 
   return (
     <motion.div
@@ -228,7 +232,7 @@ function ContentCard({ activeTab, trekData, extendedStats, photos, getMediaUrl, 
       style={{
         ...glassStyle,
         position: 'absolute',
-        bottom: isMobile ? 100 : 110,
+        bottom: cardBottom,
         left: '50%',
         transform: 'translateX(-50%)',
         width: cardWidth,
