@@ -2,6 +2,7 @@ import type { TrekConfig } from '../../types/trek';
 import { Button } from '../ui/button';
 import { Card } from '../ui/card';
 import { cn } from '@/lib/utils';
+import { useTheme } from '@/contexts/ThemeContext';
 
 interface GlobeSelectionPanelProps {
     selectedTrek: TrekConfig;
@@ -11,6 +12,26 @@ interface GlobeSelectionPanelProps {
 }
 
 export function GlobeSelectionPanel({ selectedTrek, onBack, onExplore, isMobile }: GlobeSelectionPanelProps) {
+    const { resolvedTheme } = useTheme();
+    const isLightMode = resolvedTheme === 'light';
+
+    // Theme-aware gradient for mobile
+    const mobileGradient = isLightMode
+        ? `linear-gradient(
+            to top,
+            rgba(248, 250, 252, 0.98) 0%,
+            rgba(248, 250, 252, 0.9) 50%,
+            rgba(248, 250, 252, 0.6) 80%,
+            transparent 100%
+        )`
+        : `linear-gradient(
+            to top,
+            rgba(12, 12, 18, 0.98) 0%,
+            rgba(12, 12, 18, 0.9) 50%,
+            rgba(12, 12, 18, 0.6) 80%,
+            transparent 100%
+        )`;
+
     return (
         <div
             className={cn(
@@ -19,15 +40,7 @@ export function GlobeSelectionPanel({ selectedTrek, onBack, onExplore, isMobile 
                     ? "left-0 right-0 px-5 pt-6 pb-8 pb-[max(32px,env(safe-area-inset-bottom))]"
                     : "left-6 pb-12 max-w-[420px]"
             )}
-            style={isMobile ? {
-                background: `linear-gradient(
-                    to top,
-                    rgba(12, 12, 18, 0.98) 0%,
-                    rgba(12, 12, 18, 0.9) 50%,
-                    rgba(12, 12, 18, 0.6) 80%,
-                    transparent 100%
-                )`
-            } : undefined}
+            style={isMobile ? { background: mobileGradient } : undefined}
         >
             {/* Back button */}
             <Button
