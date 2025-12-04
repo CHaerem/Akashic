@@ -40,7 +40,7 @@ interface ShareTargetModalProps {
 }
 
 export function ShareTargetModal({ isOpen, onClose, onUploadComplete }: ShareTargetModalProps) {
-    const { journeys } = useJourneys();
+    const { treks } = useJourneys();
     const [photos, setPhotos] = useState<PhotoPreview[]>([]);
     const [selectedJourney, setSelectedJourney] = useState<string>('');
     const [uploading, setUploading] = useState(false);
@@ -67,8 +67,8 @@ export function ShareTargetModal({ isOpen, onClose, onUploadComplete }: ShareTar
                 setPhotos(previews);
 
                 // Auto-select first journey if only one exists
-                if (journeys.length === 1) {
-                    setSelectedJourney(journeys[0].id);
+                if (treks.length === 1) {
+                    setSelectedJourney(treks[0].id);
                 }
             } catch (err) {
                 console.error('Failed to load shared files:', err);
@@ -82,7 +82,7 @@ export function ShareTargetModal({ isOpen, onClose, onUploadComplete }: ShareTar
         return () => {
             photos.forEach(p => URL.revokeObjectURL(p.previewUrl));
         };
-    }, [isOpen, journeys]);
+    }, [isOpen, treks]);
 
     const handleUpload = useCallback(async () => {
         if (!selectedJourney || photos.length === 0) return;
@@ -181,9 +181,9 @@ export function ShareTargetModal({ isOpen, onClose, onUploadComplete }: ShareTar
                                 <SelectValue placeholder="Choose a journey..." />
                             </SelectTrigger>
                             <SelectContent>
-                                {journeys.map((journey) => (
-                                    <SelectItem key={journey.id} value={journey.id}>
-                                        {journey.name}
+                                {treks.map((trek) => (
+                                    <SelectItem key={trek.id} value={trek.id}>
+                                        {trek.name}
                                     </SelectItem>
                                 ))}
                             </SelectContent>
