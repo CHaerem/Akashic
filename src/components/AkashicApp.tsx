@@ -13,7 +13,8 @@ import { GlobeSelectionPanel } from './home/GlobeSelectionPanel';
 import { GlobeHint } from './home/GlobeHint';
 import { ShareTargetModal } from './ShareTargetModal';
 import { PhotoLightbox } from './common/PhotoLightbox';
-import { AdaptiveNavPill } from './nav/AdaptiveNavPill';
+import { JourneySheet } from './journey/JourneySheet';
+import { DayPill } from './nav/DayPill';
 import { colors, radius, transitions, typography } from '../styles/liquidGlass';
 
 // --- Main Component ---
@@ -225,24 +226,29 @@ export default function AkashicApp() {
 
             {!selectedTrek && view === 'globe' && <GlobeHint isMobile={isMobile} />}
 
-            {/* Adaptive Nav Pill - floating glass navigation (mobile-first, works on desktop too) */}
+            {/* Journey Sheet - immersive bottom sheet for exploring the journey */}
             {view === 'trek' && trekData && (
-                <AdaptiveNavPill
-                    selectedCamp={selectedCamp}
-                    totalDays={trekData.stats.duration}
-                    activeTab={activeTab}
-                    onTabChange={setActiveTab}
-                    onDaySelect={handleDaySelect}
-                    onCampSelect={handleCampSelect}
-                    trekData={trekData}
-                    extendedStats={extendedStats}
-                    elevationProfile={elevationProfile}
-                    photos={deferredPhotos}
-                    getMediaUrl={getMediaUrl}
-                    onViewPhotoOnMap={handleViewOnMap}
-                    onJourneyUpdate={refetchJourneys}
-                    isMobile={isMobile}
-                />
+                <>
+                    <JourneySheet
+                        trekData={trekData}
+                        extendedStats={extendedStats}
+                        elevationProfile={elevationProfile}
+                        photos={deferredPhotos}
+                        getMediaUrl={getMediaUrl}
+                        selectedCamp={selectedCamp}
+                        onCampSelect={handleCampSelect}
+                        onDayChange={handleDaySelect}
+                        onPhotoClick={handleViewOnMap}
+                        onJourneyUpdate={refetchJourneys}
+                        isMobile={isMobile}
+                    />
+                    <DayPill
+                        selectedCamp={selectedCamp}
+                        totalDays={trekData.stats.duration}
+                        onDaySelect={handleDaySelect}
+                        isMobile={isMobile}
+                    />
+                </>
             )}
 
             {/* Photo Lightbox - triggered from map photo markers */}
