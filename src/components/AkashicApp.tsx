@@ -6,7 +6,7 @@ import { useMedia } from '../hooks/useMedia';
 import { useJourneys } from '../contexts/JourneysContext';
 import { fetchPhotos, getJourneyIdBySlug } from '../lib/journeys';
 import { hasPendingShares } from '../lib/shareTarget';
-import type { Photo } from '../types/trek';
+import type { Photo, Camp } from '../types/trek';
 import { MapboxGlobe } from './MapboxGlobe';
 import { OfflineIndicator } from './OfflineIndicator';
 import { GlobeSelectionPanel } from './home/GlobeSelectionPanel';
@@ -14,6 +14,7 @@ import { GlobeHint } from './home/GlobeHint';
 import { ShareTargetModal } from './ShareTargetModal';
 import type { PanelState } from './trek/InfoPanel';
 import { PhotoLightbox } from './common/PhotoLightbox';
+import { AdaptiveNavPill } from './nav/AdaptiveNavPill';
 import { colors, radius, transitions, typography } from '../styles/liquidGlass';
 
 // Lazy load InfoPanel to prevent blocking Mapbox animations during transition
@@ -124,6 +125,16 @@ export default function AkashicApp() {
             flyToPhotoRef.current(photo);
         }
     }, []);
+
+    // Handle day selection from AdaptiveNavPill
+    const handleDaySelect = useCallback((dayNumber: number) => {
+        if (trekData) {
+            const camp = trekData.camps.find((c: Camp) => c.dayNumber === dayNumber);
+            if (camp) {
+                handleCampSelect(camp);
+            }
+        }
+    }, [trekData, handleCampSelect]);
 
     // Filter photos with coordinates for map display
     // Use deferred photos to prevent map re-renders during camera animations
@@ -240,6 +251,18 @@ export default function AkashicApp() {
                         onViewPhotoOnMap={handleViewOnMap}
                     />
                 </Suspense>
+            )}
+
+            {/* Adaptive Nav Pill - floating glass navigation for mobile */}
+            {view === 'trek' && trekData && isMobile && (
+                <AdaptiveNavPill
+                    selectedCamp={selectedCamp}
+                    totalDays={trekData.stats.duration}
+                    activeTab={activeTab}
+                    onTabChange={setActiveTab}
+                    onDaySelect={handleDaySelect}
+                    panelVisible={panelState !== 'minimized'}
+                />
             )}
 
             {/* Photo Lightbox - triggered from map photo markers */}
