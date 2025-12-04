@@ -13,7 +13,7 @@ import { GlobeSelectionPanel } from './home/GlobeSelectionPanel';
 import { GlobeHint } from './home/GlobeHint';
 import { ShareTargetModal } from './ShareTargetModal';
 import { PhotoLightbox } from './common/PhotoLightbox';
-import { JourneySheet } from './journey/JourneySheet';
+import { AdaptiveNavPill } from './nav/AdaptiveNavPill';
 import { colors, radius, transitions, typography } from '../styles/liquidGlass';
 
 // --- Main Component ---
@@ -225,18 +225,21 @@ export default function AkashicApp() {
 
             {!selectedTrek && view === 'globe' && <GlobeHint isMobile={isMobile} />}
 
-            {/* Journey Sheet - unified pill + sheet for exploring the journey */}
+            {/* Adaptive Nav Pill - original Liquid Glass design */}
             {view === 'trek' && trekData && (
-                <JourneySheet
+                <AdaptiveNavPill
+                    selectedCamp={selectedCamp}
+                    totalDays={trekData.stats.duration}
+                    activeTab={activeTab}
+                    onTabChange={setActiveTab}
+                    onDaySelect={handleDaySelect}
+                    onCampSelect={handleCampSelect}
                     trekData={trekData}
                     extendedStats={extendedStats}
                     elevationProfile={elevationProfile}
                     photos={deferredPhotos}
                     getMediaUrl={getMediaUrl}
-                    selectedCamp={selectedCamp}
-                    onCampSelect={handleCampSelect}
-                    onDayChange={handleDaySelect}
-                    onPhotoClick={handleViewOnMap}
+                    onViewPhotoOnMap={handleViewOnMap}
                     onJourneyUpdate={refetchJourneys}
                     isMobile={isMobile}
                 />
