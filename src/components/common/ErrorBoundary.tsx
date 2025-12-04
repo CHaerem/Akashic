@@ -2,6 +2,8 @@ import { Component, type ReactNode, type ErrorInfo } from 'react';
 
 interface ErrorBoundaryProps {
     children: ReactNode;
+    fallback?: ReactNode;
+    onError?: (error: Error, errorInfo: ErrorInfo) => void;
 }
 
 interface ErrorBoundaryState {
@@ -24,10 +26,15 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
 
     componentDidCatch(error: Error, errorInfo: ErrorInfo): void {
         console.error('ErrorBoundary caught an error:', error, errorInfo);
+        this.props.onError?.(error, errorInfo);
     }
 
     render(): ReactNode {
         if (this.state.hasError) {
+            // Use custom fallback if provided
+            if (this.props.fallback) {
+                return this.props.fallback;
+            }
             return (
                 <div className="fixed inset-0 bg-[var(--lg-bg-base)] flex flex-col items-center justify-center p-6">
                     {/* Glass card container */}
@@ -69,6 +76,40 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
 
         return this.props.children;
     }
+}
+
+interface ComponentErrorFallbackProps {
+    message?: string;
+    onRetry?: () => void;
+}
+
+/**
+ * Lightweight error fallback for use inside cards/tabs
+ */
+export function ComponentErrorFallback({
+    message = 'Failed to load content',
+    onRetry
+}: ComponentErrorFallbackProps) {
+    return (
+        <div className="flex flex-col items-center justify-center py-8 px-4 text-center">
+            <div className="w-10 h-10 rounded-full bg-red-500/10 flex items-center justify-center mb-3">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-red-400">
+                    <circle cx="12" cy="12" r="10"/>
+                    <line x1="12" y1="8" x2="12" y2="12"/>
+                    <line x1="12" y1="16" x2="12.01" y2="16"/>
+                </svg>
+            </div>
+            <p className="text-sm text-white/50 mb-3">{message}</p>
+            {onRetry && (
+                <button
+                    onClick={onRetry}
+                    className="px-3 py-1.5 rounded-lg text-xs font-medium bg-white/10 hover:bg-white/15 text-white/80 transition-colors"
+                >
+                    Try again
+                </button>
+            )}
+        </div>
+    );
 }
 
 interface MapErrorFallbackProps {

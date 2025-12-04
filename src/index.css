@@ -101,6 +101,31 @@ body {
   font-family: 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  /* Prevent text selection callout on long press */
+  -webkit-touch-callout: none;
+}
+
+/* ============================================================================
+   MOBILE TOUCH IMPROVEMENTS
+   ============================================================================ */
+
+/* Prevent double-tap zoom and remove tap highlight on interactive elements */
+button, a, [role="button"], [tabindex] {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Smooth momentum scrolling for iOS */
+.overflow-y-auto,
+.overflow-x-auto,
+.overflow-auto,
+[style*="overflow"] {
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Prevent pull-to-refresh on main container */
+html {
+  overscroll-behavior: none;
 }
 
 /* ============================================================================

@@ -15,6 +15,7 @@ import { OverviewTab } from '../trek/OverviewTab';
 import { PhotosTab } from '../trek/PhotosTab';
 import { JourneyEditModal } from '../trek/JourneyEditModal';
 import { Button } from '../ui/button';
+import { ErrorBoundary, ComponentErrorFallback } from '../common/ErrorBoundary';
 
 // Magnification constants
 const MAGNIFICATION = {
@@ -350,41 +351,49 @@ function ContentCard({ activeTab, trekData, extendedStats, elevationProfile, sel
       {/* Content */}
       <div style={{ padding: 16, overflowY: 'auto', maxHeight: `calc(${maxHeight} - 60px)` }}>
         {activeTab === 'overview' && (
-          <OverviewTab trekData={trekData} />
+          <ErrorBoundary fallback={<ComponentErrorFallback message="Failed to load overview" />}>
+            <OverviewTab trekData={trekData} />
+          </ErrorBoundary>
         )}
 
         {activeTab === 'stats' && (
-          <StatsTab
-            trekData={trekData}
-            extendedStats={extendedStats}
-            elevationProfile={elevationProfile}
-            isMobile={isMobile}
-            selectedCamp={selectedCamp}
-            onCampSelect={onCampSelect}
-          />
+          <ErrorBoundary fallback={<ComponentErrorFallback message="Failed to load stats" />}>
+            <StatsTab
+              trekData={trekData}
+              extendedStats={extendedStats}
+              elevationProfile={elevationProfile}
+              isMobile={isMobile}
+              selectedCamp={selectedCamp}
+              onCampSelect={onCampSelect}
+            />
+          </ErrorBoundary>
         )}
 
         {activeTab === 'photos' && (
-          <PhotosTab
-            trekData={trekData}
-            isMobile={isMobile}
-            editMode={editMode}
-            onViewPhotoOnMap={onPhotoClick}
-          />
+          <ErrorBoundary fallback={<ComponentErrorFallback message="Failed to load photos" />}>
+            <PhotosTab
+              trekData={trekData}
+              isMobile={isMobile}
+              editMode={editMode}
+              onViewPhotoOnMap={onPhotoClick}
+            />
+          </ErrorBoundary>
         )}
 
         {activeTab === 'journey' && (
-          <JourneyTab
-            trekData={trekData}
-            selectedCamp={selectedCamp}
-            onCampSelect={onCampSelect}
-            isMobile={isMobile}
-            photos={photos}
-            getMediaUrl={getMediaUrl}
-            onUpdate={onJourneyUpdate}
-            editMode={editMode}
-            onViewPhotoOnMap={onPhotoClick}
-          />
+          <ErrorBoundary fallback={<ComponentErrorFallback message="Failed to load journey" />}>
+            <JourneyTab
+              trekData={trekData}
+              selectedCamp={selectedCamp}
+              onCampSelect={onCampSelect}
+              isMobile={isMobile}
+              photos={photos}
+              getMediaUrl={getMediaUrl}
+              onUpdate={onJourneyUpdate}
+              editMode={editMode}
+              onViewPhotoOnMap={onPhotoClick}
+            />
+          </ErrorBoundary>
         )}
       </div>
 

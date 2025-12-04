@@ -10,7 +10,7 @@ export default defineConfig({
 		react(),
 		VitePWA({
 			registerType: "autoUpdate",
-			includeAssets: ["favicon.ico", "robots.txt", "apple-touch-icon.png"],
+			includeAssets: ["favicon.ico", "robots.txt", "apple-touch-icon.png", "offline.html"],
 			// Import custom share target handler
 			injectRegister: "auto",
 			manifest: {
@@ -60,7 +60,41 @@ export default defineConfig({
 				globPatterns: ["**/*.{js,css,html,ico,png,svg,json,woff,woff2}"],
 				// Increase max file size for Mapbox GL JS and large photos
 				maximumFileSizeToCacheInBytes: 20 * 1024 * 1024, // 20MB
+				// Offline fallback
+				navigateFallback: "/index.html",
+				navigateFallbackDenylist: [/^\/api/, /^\/share-target/],
 				runtimeCaching: [
+					// Supabase API - cache journey data for offline access
+					{
+						urlPattern: /^https:\/\/.*\.supabase\.co\/rest\/v1\//,
+						handler: "NetworkFirst",
+						options: {
+							cacheName: "supabase-api",
+							expiration: {
+								maxEntries: 50,
+								maxAgeSeconds: 60 * 60 * 24, // 24 hours
+							},
+							networkTimeoutSeconds: 10,
+							cacheableResponse: {
+								statuses: [0, 200],
+							},
+						},
+					},
+					// R2 media - cache photos for offline viewing
+					{
+						urlPattern: /^https:\/\/akashic-media\..*\.workers\.dev\//,
+						handler: "CacheFirst",
+						options: {
+							cacheName: "r2-media",
+							expiration: {
+								maxEntries: 200,
+								maxAgeSeconds: 60 * 60 * 24 * 30, // 30 days
+							},
+							cacheableResponse: {
+								statuses: [0, 200],
+							},
+						},
+					},
 					// Mapbox Style API
 					{
 						urlPattern: /^https:\/\/api\.mapbox\.com\/styles\//,
