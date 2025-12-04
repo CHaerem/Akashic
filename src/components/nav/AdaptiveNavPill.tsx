@@ -12,15 +12,15 @@ import type { Camp, TabType, TrekData, ExtendedStats, Photo } from '../../types/
 
 // Magnification constants
 const MAGNIFICATION = {
-  scale: 1.4,
-  distance: 80,
+  scale: 1.5,
+  distance: 70,
   baseSize: 48,
 };
 
 const SPRING_CONFIG = {
   mass: 0.1,
-  stiffness: 170,
-  damping: 12,
+  stiffness: 200,
+  damping: 15,
 };
 
 // Icons
@@ -79,21 +79,30 @@ const NAV_OPTIONS: NavOption[] = [
   { id: 'stats', icon: <StatsIcon />, label: 'Stats' },
 ];
 
-// Dock item with magnification
+// Dock item with magnification and drag-to-select
 interface DockItemProps {
   mouseX: MotionValue<number>;
   icon: React.ReactNode;
   label: string;
   isActive: boolean;
+  isHovered: boolean; // For drag-to-select highlight
   onClick: () => void;
+  onHover: () => void;
   isMobile: boolean;
+  setRef: (el: HTMLButtonElement | null) => void;
 }
 
-function DockItem({ mouseX, icon, label, isActive, onClick, isMobile }: DockItemProps) {
-  const ref = useRef<HTMLButtonElement>(null);
+function DockItem({ mouseX, icon, label, isActive, isHovered, onClick, onHover, isMobile, setRef }: DockItemProps) {
+  const localRef = useRef<HTMLButtonElement>(null);
+
+  // Set the external ref whenever our local ref changes
+  useEffect(() => {
+    setRef(localRef.current);
+    return () => setRef(null);
+  }, [setRef]);
 
   const distance = useTransform(mouseX, (val) => {
-    const bounds = ref.current?.getBoundingClientRect() ?? { x: 0, width: 0 };
+    const bounds = localRef.current?.getBoundingClientRect() ?? { x: 0, width: 0 };
     return val - bounds.x - bounds.width / 2;
   });
 
@@ -104,18 +113,20 @@ function DockItem({ mouseX, icon, label, isActive, onClick, isMobile }: DockItem
   );
 
   const scaleSpring = useSpring(scale, SPRING_CONFIG);
-
   const baseSize = isMobile ? MAGNIFICATION.baseSize : MAGNIFICATION.baseSize + 8;
 
-  const activeBubbleStyle = isActive ? {
-    background: `linear-gradient(135deg, rgba(255, 255, 255, 0.22) 0%, rgba(255, 255, 255, 0.1) 100%)`,
-    boxShadow: `0 4px 16px rgba(0, 0, 0, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.3), 0 0 0 1px rgba(255, 255, 255, 0.2)`,
+  // Selection bubble appears when hovered during drag OR when active
+  const showBubble = isHovered || isActive;
+  const bubbleStyle = showBubble ? {
+    background: `linear-gradient(135deg, rgba(255, 255, 255, ${isHovered ? 0.28 : 0.22}) 0%, rgba(255, 255, 255, ${isHovered ? 0.14 : 0.1}) 100%)`,
+    boxShadow: `0 4px 20px rgba(0, 0, 0, ${isHovered ? 0.35 : 0.25}), inset 0 1px 0 rgba(255, 255, 255, ${isHovered ? 0.4 : 0.3}), 0 0 0 1px rgba(255, 255, 255, ${isHovered ? 0.25 : 0.2})`,
   } : {};
 
   return (
     <motion.button
-      ref={ref}
+      ref={localRef}
       onClick={onClick}
+      onPointerEnter={onHover}
       style={{
         scale: scaleSpring,
         display: 'flex',
@@ -129,9 +140,10 @@ function DockItem({ mouseX, icon, label, isActive, onClick, isMobile }: DockItem
         border: 'none',
         borderRadius: radius.lg,
         cursor: 'pointer',
-        color: isActive ? colors.text.primary : colors.text.secondary,
+        color: (isHovered || isActive) ? colors.text.primary : colors.text.secondary,
         transformOrigin: 'bottom center',
-        ...activeBubbleStyle,
+        touchAction: 'none',
+        ...bubbleStyle,
       }}
       whileTap={{ scale: 0.95 }}
     >
@@ -143,34 +155,44 @@ function DockItem({ mouseX, icon, label, isActive, onClick, isMobile }: DockItem
   );
 }
 
-// Day item with magnification
+// Day item with magnification and drag-to-select
 interface DayItemProps {
   mouseX: MotionValue<number>;
   day: number;
   isActive: boolean;
+  isHovered: boolean;
   onClick: () => void;
+  onHover: () => void;
+  setRef: (el: HTMLButtonElement | null) => void;
 }
 
-function DayItem({ mouseX, day, isActive, onClick }: DayItemProps) {
-  const ref = useRef<HTMLButtonElement>(null);
+function DayItem({ mouseX, day, isActive, isHovered, onClick, onHover, setRef }: DayItemProps) {
+  const localRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    setRef(localRef.current);
+    return () => setRef(null);
+  }, [setRef]);
 
   const distance = useTransform(mouseX, (val) => {
-    const bounds = ref.current?.getBoundingClientRect() ?? { x: 0, width: 0 };
+    const bounds = localRef.current?.getBoundingClientRect() ?? { x: 0, width: 0 };
     return val - bounds.x - bounds.width / 2;
   });
 
-  const scale = useTransform(distance, [-60, 0, 60], [1, 1.35, 1]);
+  const scale = useTransform(distance, [-50, 0, 50], [1, 1.4, 1]);
   const scaleSpring = useSpring(scale, SPRING_CONFIG);
 
-  const activeBubbleStyle = isActive ? {
-    background: `linear-gradient(135deg, rgba(255, 255, 255, 0.22) 0%, rgba(255, 255, 255, 0.1) 100%)`,
-    boxShadow: `0 4px 12px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.35), 0 0 0 1px rgba(255, 255, 255, 0.2)`,
+  const showBubble = isHovered || isActive;
+  const bubbleStyle = showBubble ? {
+    background: `linear-gradient(135deg, rgba(255, 255, 255, ${isHovered ? 0.28 : 0.22}) 0%, rgba(255, 255, 255, ${isHovered ? 0.14 : 0.1}) 100%)`,
+    boxShadow: `0 4px 16px rgba(0, 0, 0, ${isHovered ? 0.3 : 0.2}), inset 0 1px 0 rgba(255, 255, 255, ${isHovered ? 0.4 : 0.35}), 0 0 0 1px rgba(255, 255, 255, ${isHovered ? 0.25 : 0.2})`,
   } : {};
 
   return (
     <motion.button
-      ref={ref}
+      ref={localRef}
       onClick={onClick}
+      onPointerEnter={onHover}
       style={{
         scale: scaleSpring,
         display: 'flex',
@@ -182,11 +204,12 @@ function DayItem({ mouseX, day, isActive, onClick }: DayItemProps) {
         border: 'none',
         borderRadius: radius.pill,
         cursor: 'pointer',
-        color: isActive ? colors.text.primary : colors.text.secondary,
-        fontSize: isActive ? 15 : 14,
-        fontWeight: isActive ? 600 : 500,
+        color: (isHovered || isActive) ? colors.text.primary : colors.text.secondary,
+        fontSize: (isHovered || isActive) ? 15 : 14,
+        fontWeight: (isHovered || isActive) ? 600 : 500,
         transformOrigin: 'bottom center',
-        ...activeBubbleStyle,
+        touchAction: 'none',
+        ...bubbleStyle,
       }}
       whileTap={{ scale: 0.9 }}
     >
@@ -217,28 +240,39 @@ function ContentCard({ activeTab, trekData, extendedStats, photos, getMediaUrl, 
   };
 
   const cardWidth = isMobile ? 'calc(100vw - 32px)' : '420px';
-  const maxHeight = isMobile ? '60vh' : '70vh';
+  // Leave space for nav pill (approx 100px) + safe area on mobile
+  const maxHeight = isMobile ? 'calc(100vh - 160px - env(safe-area-inset-top) - env(safe-area-inset-bottom))' : '70vh';
 
   return (
-    <motion.div
-      initial={{ opacity: 0, scale: 0.95 }}
-      animate={{ opacity: 1, scale: 1 }}
-      exit={{ opacity: 0, scale: 0.98 }}
-      transition={{ type: 'spring', ...SPRING_CONFIG }}
+    // Wrapper for centering - handles the positioning
+    <div
       style={{
-        ...glassStyle,
         position: 'fixed',
-        top: '50%',
-        left: '50%',
-        transform: 'translate(-50%, -50%)',
-        width: cardWidth,
-        maxWidth: cardWidth,
-        maxHeight,
-        borderRadius: radius.xl,
-        overflow: 'hidden',
+        inset: 0,
+        display: 'flex',
+        alignItems: isMobile ? 'flex-start' : 'center',
+        justifyContent: 'center',
+        paddingTop: isMobile ? 'calc(60px + env(safe-area-inset-top))' : 0,
+        paddingBottom: isMobile ? 'calc(100px + env(safe-area-inset-bottom))' : 0,
         zIndex: 100,
+        pointerEvents: 'none',
       }}
     >
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95, y: 10 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.98, y: 5 }}
+        transition={{ type: 'spring', ...SPRING_CONFIG }}
+        style={{
+          ...glassStyle,
+          width: cardWidth,
+          maxWidth: cardWidth,
+          maxHeight,
+          borderRadius: radius.xl,
+          overflow: 'hidden',
+          pointerEvents: 'auto',
+        }}
+      >
       {/* Header */}
       <div style={{
         display: 'flex',
@@ -353,7 +387,8 @@ function ContentCard({ activeTab, trekData, extendedStats, photos, getMediaUrl, 
           </div>
         )}
       </div>
-    </motion.div>
+      </motion.div>
+    </div>
   );
 }
 
@@ -404,25 +439,109 @@ export const AdaptiveNavPill = memo(function AdaptiveNavPill({
 }: AdaptiveNavPillProps) {
   const [mode, setMode] = useState<NavMode>('collapsed');
   const [showContent, setShowContent] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
+  const [hoveredOption, setHoveredOption] = useState<string | null>(null);
+  const [hoveredDay, setHoveredDay] = useState<number | null>(null);
+
   const pillRef = useRef<HTMLDivElement>(null);
   const mouseX = useMotionValue(Infinity);
+
+  // Refs for each nav option
+  const navRefs = useRef<Map<string, HTMLButtonElement | null>>(new Map());
+  const dayRefs = useRef<Map<number, HTMLButtonElement | null>>(new Map());
 
   const currentDay = selectedCamp?.dayNumber ?? 1;
   const currentCampName = selectedCamp?.name ?? 'Start';
 
+  // Find which item is under the pointer position
+  const findItemUnderPointer = useCallback((clientX: number) => {
+    if (mode === 'expanded' || mode === 'content') {
+      for (const [id, ref] of navRefs.current.entries()) {
+        if (ref) {
+          const rect = ref.getBoundingClientRect();
+          if (clientX >= rect.left && clientX <= rect.right) {
+            return { type: 'nav' as const, id };
+          }
+        }
+      }
+    } else if (mode === 'days') {
+      for (const [day, ref] of dayRefs.current.entries()) {
+        if (ref) {
+          const rect = ref.getBoundingClientRect();
+          if (clientX >= rect.left && clientX <= rect.right) {
+            return { type: 'day' as const, day };
+          }
+        }
+      }
+    }
+    return null;
+  }, [mode]);
+
+  // Pointer/touch handlers for drag-to-select
+  const handlePointerDown = useCallback((e: React.PointerEvent) => {
+    if (mode === 'collapsed') return;
+    setIsDragging(true);
+    mouseX.set(e.clientX);
+
+    const item = findItemUnderPointer(e.clientX);
+    if (item?.type === 'nav') setHoveredOption(item.id);
+    else if (item?.type === 'day') setHoveredDay(item.day);
+  }, [mode, mouseX, findItemUnderPointer]);
+
   const handlePointerMove = useCallback((e: React.PointerEvent) => {
     mouseX.set(e.clientX);
-  }, [mouseX]);
+
+    if (isDragging) {
+      const item = findItemUnderPointer(e.clientX);
+      if (item?.type === 'nav') {
+        setHoveredOption(item.id);
+        setHoveredDay(null);
+      } else if (item?.type === 'day') {
+        setHoveredDay(item.day);
+        setHoveredOption(null);
+      } else {
+        setHoveredOption(null);
+        setHoveredDay(null);
+      }
+    }
+  }, [isDragging, mouseX, findItemUnderPointer]);
+
+  const handlePointerUp = useCallback(() => {
+    if (isDragging) {
+      // Select the hovered item on release
+      if (hoveredOption) {
+        if (hoveredOption === 'journey') {
+          setMode('days');
+          setShowContent(false);
+        } else {
+          onTabChange(hoveredOption as TabType);
+          setShowContent(true);
+          setMode('content');
+        }
+      } else if (hoveredDay !== null) {
+        onDaySelect(hoveredDay);
+        setMode('collapsed');
+        setShowContent(false);
+      }
+    }
+    setIsDragging(false);
+    setHoveredOption(null);
+    setHoveredDay(null);
+  }, [isDragging, hoveredOption, hoveredDay, onTabChange, onDaySelect]);
 
   const handlePointerLeave = useCallback(() => {
-    mouseX.set(Infinity);
-  }, [mouseX]);
+    if (!isDragging) {
+      mouseX.set(Infinity);
+    }
+  }, [isDragging, mouseX]);
 
+  // Handle click outside
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent | TouchEvent) => {
       if (pillRef.current && !pillRef.current.contains(e.target as Node)) {
         if (mode !== 'collapsed') {
           setMode('collapsed');
+          setShowContent(false);
         }
         mouseX.set(Infinity);
       }
@@ -437,6 +556,23 @@ export const AdaptiveNavPill = memo(function AdaptiveNavPill({
     };
   }, [mode, mouseX]);
 
+  // Cancel drag on pointer up anywhere
+  useEffect(() => {
+    const handleGlobalPointerUp = () => {
+      if (isDragging) {
+        handlePointerUp();
+      }
+    };
+
+    window.addEventListener('pointerup', handleGlobalPointerUp);
+    window.addEventListener('touchend', handleGlobalPointerUp);
+
+    return () => {
+      window.removeEventListener('pointerup', handleGlobalPointerUp);
+      window.removeEventListener('touchend', handleGlobalPointerUp);
+    };
+  }, [isDragging, handlePointerUp]);
+
   const handlePillClick = useCallback(() => {
     if (mode === 'collapsed') {
       setMode('expanded');
@@ -445,6 +581,7 @@ export const AdaptiveNavPill = memo(function AdaptiveNavPill({
   }, [mode]);
 
   const handleOptionClick = useCallback((optionId: TabType) => {
+    if (isDragging) return; // Don't handle click during drag
     if (optionId === 'journey') {
       setMode('days');
       setShowContent(false);
@@ -453,13 +590,14 @@ export const AdaptiveNavPill = memo(function AdaptiveNavPill({
       setShowContent(true);
       setMode('content');
     }
-  }, [onTabChange]);
+  }, [isDragging, onTabChange]);
 
   const handleDayClick = useCallback((dayNumber: number) => {
+    if (isDragging) return;
     onDaySelect(dayNumber);
     setMode('collapsed');
     setShowContent(false);
-  }, [onDaySelect]);
+  }, [isDragging, onDaySelect]);
 
   const handleBackFromDays = useCallback(() => {
     setMode('expanded');
@@ -479,6 +617,15 @@ export const AdaptiveNavPill = memo(function AdaptiveNavPill({
     border: `1px solid ${colors.glass.border}`,
     boxShadow: shadows.glass.elevated,
   };
+
+  // Create ref callbacks for nav items
+  const setNavRef = useCallback((id: string) => (el: HTMLButtonElement | null) => {
+    navRefs.current.set(id, el);
+  }, []);
+
+  const setDayRef = useCallback((day: number) => (el: HTMLButtonElement | null) => {
+    dayRefs.current.set(day, el);
+  }, []);
 
   return (
     <>
@@ -501,7 +648,9 @@ export const AdaptiveNavPill = memo(function AdaptiveNavPill({
       {/* Navigation Pill */}
       <motion.div
         ref={pillRef}
+        onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
         onPointerLeave={handlePointerLeave}
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -515,6 +664,7 @@ export const AdaptiveNavPill = memo(function AdaptiveNavPill({
           display: 'flex',
           alignItems: 'flex-end',
           gap: 12,
+          touchAction: 'none',
         }}
       >
         <motion.div
@@ -530,6 +680,7 @@ export const AdaptiveNavPill = memo(function AdaptiveNavPill({
             alignItems: 'flex-end',
             justifyContent: 'center',
             gap: 4,
+            userSelect: 'none',
           }}
           transition={{ type: 'spring', ...SPRING_CONFIG }}
         >
@@ -553,7 +704,7 @@ export const AdaptiveNavPill = memo(function AdaptiveNavPill({
             </motion.div>
           )}
 
-          {/* Expanded State */}
+          {/* Expanded State - Drag to select */}
           {(mode === 'expanded' || mode === 'content') && (
             <motion.div
               initial={{ opacity: 0 }}
@@ -567,14 +718,17 @@ export const AdaptiveNavPill = memo(function AdaptiveNavPill({
                   icon={option.icon}
                   label={option.label}
                   isActive={option.id === activeTab && showContent}
+                  isHovered={hoveredOption === option.id}
                   onClick={() => handleOptionClick(option.id)}
+                  onHover={() => !isDragging && setHoveredOption(option.id)}
                   isMobile={isMobile}
+                  setRef={setNavRef(option.id)}
                 />
               ))}
             </motion.div>
           )}
 
-          {/* Days Selector */}
+          {/* Days Selector - Drag to select */}
           {mode === 'days' && (
             <motion.div
               initial={{ opacity: 0 }}
@@ -607,7 +761,10 @@ export const AdaptiveNavPill = memo(function AdaptiveNavPill({
                   mouseX={mouseX}
                   day={day}
                   isActive={day === currentDay}
+                  isHovered={hoveredDay === day}
                   onClick={() => handleDayClick(day)}
+                  onHover={() => !isDragging && setHoveredDay(day)}
+                  setRef={setDayRef(day)}
                 />
               ))}
             </motion.div>

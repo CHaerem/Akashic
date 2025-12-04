@@ -1,4 +1,4 @@
-import { useCallback, useState, useEffect, useRef, useDeferredValue } from 'react';
+import { useCallback, useState, useEffect, useMemo, useRef, useDeferredValue } from 'react';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import { useTrekData } from '../hooks/useTrekData';
 import { useIsMobile } from '../hooks/useMediaQuery';
@@ -28,6 +28,23 @@ export default function AkashicApp() {
     const flyToPhotoRef = useRef<((photo: Photo) => void) | null>(null);
     const { getMediaUrl } = useMedia();
     const { refetch: refetchJourneys } = useJourneys();
+    const stagingBranch = import.meta.env.VITE_STAGING_BRANCH;
+    const deployTimeRaw = import.meta.env.VITE_DEPLOY_TIME;
+
+    const formattedDeployTime = useMemo(() => {
+        if (!deployTimeRaw) return null;
+
+        const parsed = new Date(deployTimeRaw);
+        if (Number.isNaN(parsed.getTime())) return null;
+
+        return `${parsed.toLocaleString('en-US', {
+            timeZone: 'UTC',
+            month: 'short',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit'
+        })} UTC`;
+    }, [deployTimeRaw]);
 
     const {
         view,
@@ -180,7 +197,7 @@ export default function AkashicApp() {
                     transition: `color ${transitions.smooth}`,
                 }}>
                     Akashic
-                    {import.meta.env.VITE_STAGING_BRANCH && (
+                    {stagingBranch && (
                         <span style={{
                             fontSize: isMobile ? 8 : 9,
                             letterSpacing: '0.1em',
@@ -188,7 +205,8 @@ export default function AkashicApp() {
                             marginLeft: 8,
                             fontWeight: 400,
                         }}>
-                            [{import.meta.env.VITE_STAGING_BRANCH}]
+                            [{stagingBranch}
+                            {formattedDeployTime ? ` • ${formattedDeployTime}` : ''}]
                         </span>
                     )}
                 </span>
