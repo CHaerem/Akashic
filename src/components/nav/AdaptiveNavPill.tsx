@@ -13,6 +13,8 @@ import { StatsTab } from '../trek/StatsTab';
 import { JourneyTab } from '../trek/JourneyTab';
 import { OverviewTab } from '../trek/OverviewTab';
 import { PhotosTab } from '../trek/PhotosTab';
+import { JourneyEditModal } from '../trek/JourneyEditModal';
+import { Button } from '../ui/button';
 
 // Magnification constants
 const MAGNIFICATION = {
@@ -65,6 +67,13 @@ const CloseIcon = ({ size = 18 }: { size?: number }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <line x1="18" y1="6" x2="6" y2="18"/>
     <line x1="6" y1="6" x2="18" y2="18"/>
+  </svg>
+);
+
+const PencilIcon = ({ size = 16 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/>
+    <path d="m15 5 4 4"/>
   </svg>
 );
 
@@ -234,11 +243,15 @@ interface ContentCardProps {
   onClose: () => void;
   onCampSelect: (camp: Camp) => void;
   onPhotoClick: (photo: Photo) => void;
+  onJourneyUpdate: () => void;
   isMobile: boolean;
   cardRef: React.RefObject<HTMLDivElement | null>;
 }
 
-function ContentCard({ activeTab, trekData, extendedStats, elevationProfile, selectedCamp, photos, getMediaUrl, onClose, onCampSelect, onPhotoClick, isMobile, cardRef }: ContentCardProps) {
+function ContentCard({ activeTab, trekData, extendedStats, elevationProfile, selectedCamp, photos, getMediaUrl, onClose, onCampSelect, onPhotoClick, onJourneyUpdate, isMobile, cardRef }: ContentCardProps) {
+  const [editMode, setEditMode] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+
   const glassStyle: React.CSSProperties = {
     background: `linear-gradient(135deg, rgba(255, 255, 255, 0.12) 0%, rgba(255, 255, 255, 0.06) 100%)`,
     backdropFilter: `${effects.blur.strong} ${effects.saturation.enhanced}`,
@@ -293,22 +306,46 @@ function ContentCard({ activeTab, trekData, extendedStats, elevationProfile, sel
         <span style={{ fontSize: 14, fontWeight: 600, color: colors.text.primary, textTransform: 'capitalize' }}>
           {activeTab === 'overview' ? 'Journey Info' : activeTab}
         </span>
-        <button
-          onClick={onClose}
-          style={{
-            background: 'transparent',
-            border: 'none',
-            cursor: 'pointer',
-            color: colors.text.tertiary,
-            padding: 4,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
-        >
-          <CloseIcon />
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          {/* Edit toggle button */}
+          <Button
+            variant={editMode ? 'primary' : 'subtle'}
+            size="icon"
+            onClick={() => setEditMode(!editMode)}
+          >
+            <PencilIcon />
+          </Button>
+          <button
+            onClick={onClose}
+            style={{
+              background: 'transparent',
+              border: 'none',
+              cursor: 'pointer',
+              color: colors.text.tertiary,
+              padding: 4,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <CloseIcon />
+          </button>
+        </div>
       </div>
+
+      {/* Edit Journey Details button */}
+      {editMode && (
+        <div style={{ padding: '0 16px 12px' }}>
+          <Button
+            variant="primary"
+            size="md"
+            onClick={() => setShowEditModal(true)}
+            className="w-full"
+          >
+            Edit Journey Details
+          </Button>
+        </div>
+      )}
 
       {/* Content */}
       <div style={{ padding: 16, overflowY: 'auto', maxHeight: `calc(${maxHeight} - 60px)` }}>
@@ -331,6 +368,7 @@ function ContentCard({ activeTab, trekData, extendedStats, elevationProfile, sel
           <PhotosTab
             trekData={trekData}
             isMobile={isMobile}
+            editMode={editMode}
             onViewPhotoOnMap={onPhotoClick}
           />
         )}
@@ -343,10 +381,24 @@ function ContentCard({ activeTab, trekData, extendedStats, elevationProfile, sel
             isMobile={isMobile}
             photos={photos}
             getMediaUrl={getMediaUrl}
+            onUpdate={onJourneyUpdate}
+            editMode={editMode}
             onViewPhotoOnMap={onPhotoClick}
           />
         )}
       </div>
+
+      {/* Journey Edit Modal */}
+      <JourneyEditModal
+        slug={trekData.id}
+        isOpen={showEditModal}
+        onClose={() => setShowEditModal(false)}
+        onSave={() => {
+          onJourneyUpdate();
+          setShowEditModal(false);
+        }}
+        isMobile={isMobile}
+      />
       </motion.div>
     </div>
   );
@@ -365,6 +417,7 @@ interface AdaptiveNavPillProps {
   photos: Photo[];
   getMediaUrl: (path: string) => string;
   onViewPhotoOnMap: (photo: Photo) => void;
+  onJourneyUpdate: () => void;
   isMobile: boolean;
 }
 
@@ -381,6 +434,7 @@ export const AdaptiveNavPill = memo(function AdaptiveNavPill({
   photos,
   getMediaUrl,
   onViewPhotoOnMap,
+  onJourneyUpdate,
   isMobile,
 }: AdaptiveNavPillProps) {
   const [mode, setMode] = useState<NavMode>('collapsed');
@@ -594,6 +648,7 @@ export const AdaptiveNavPill = memo(function AdaptiveNavPill({
             onClose={handleCloseContent}
             onCampSelect={onCampSelect}
             onPhotoClick={onViewPhotoOnMap}
+            onJourneyUpdate={onJourneyUpdate}
             isMobile={isMobile}
             cardRef={cardRef}
           />

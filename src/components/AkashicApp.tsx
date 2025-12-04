@@ -240,6 +240,7 @@ export default function AkashicApp() {
                     photos={deferredPhotos}
                     getMediaUrl={getMediaUrl}
                     onViewPhotoOnMap={handleViewOnMap}
+                    onJourneyUpdate={refetchJourneys}
                     isMobile={isMobile}
                 />
             )}
