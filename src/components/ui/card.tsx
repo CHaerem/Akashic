@@ -12,45 +12,46 @@ const cardVariants = cva(
     variants: {
       variant: {
         default: [
-          // Glass background
+          // Glass background - dark mode
           "bg-gradient-to-br from-white/10 via-white/5 to-white/8",
           "backdrop-blur-xl saturate-[180%]",
           "border border-white/15",
           "shadow-[0_8px_32px_rgba(0,0,0,0.3),0_0_0_1px_rgba(255,255,255,0.08),inset_0_1px_0_rgba(255,255,255,0.15),inset_0_-1px_0_rgba(0,0,0,0.1)]",
-          // Light mode
-          "light:from-white/80 light:via-white/70 light:to-white/75",
-          "light:border-black/10",
-          "light:shadow-[0_8px_32px_rgba(0,0,0,0.1),inset_0_1px_0_rgba(255,255,255,0.8)]",
+          // Light mode - frosted white
+          "light:from-white/95 light:via-white/90 light:to-white/92",
+          "light:border-black/8",
+          "light:shadow-[0_8px_32px_rgba(0,0,0,0.06),0_2px_8px_rgba(0,0,0,0.04),inset_0_1px_0_rgba(255,255,255,1)]",
         ],
         subtle: [
-          // Subtle glass
+          // Subtle glass - dark mode
           "bg-gradient-to-br from-white/6 to-white/3",
           "backdrop-blur-md saturate-[180%]",
           "border border-white/8",
           "shadow-[0_4px_16px_rgba(0,0,0,0.2),inset_0_1px_0_rgba(255,255,255,0.08)]",
           // Light mode
-          "light:from-white/60 light:to-white/40",
+          "light:from-white/80 light:to-white/70",
           "light:border-black/5",
-          "light:shadow-[0_4px_16px_rgba(0,0,0,0.05)]",
+          "light:shadow-[0_4px_16px_rgba(0,0,0,0.04),inset_0_1px_0_rgba(255,255,255,0.9)]",
         ],
         elevated: [
-          // Elevated glass
+          // Elevated glass - dark mode
           "bg-gradient-to-b from-white/14 via-white/8 to-white/6",
           "backdrop-blur-2xl saturate-[200%]",
           "border border-white/15",
           "shadow-[0_16px_48px_rgba(0,0,0,0.4),0_0_0_1px_rgba(255,255,255,0.1),inset_0_1px_0_rgba(255,255,255,0.2),inset_0_-1px_0_rgba(0,0,0,0.15)]",
           // Light mode
-          "light:from-white/90 light:via-white/85 light:to-white/80",
-          "light:shadow-[0_16px_48px_rgba(0,0,0,0.12)]",
+          "light:from-white/98 light:via-white/95 light:to-white/96",
+          "light:border-black/10",
+          "light:shadow-[0_16px_48px_rgba(0,0,0,0.08),0_4px_16px_rgba(0,0,0,0.04),inset_0_1px_0_rgba(255,255,255,1)]",
         ],
         interactive: [
-          // Interactive glass
+          // Interactive glass - dark mode
           "bg-gradient-to-br from-white/10 via-white/5 to-white/8",
           "backdrop-blur-xl saturate-[180%]",
           "border border-white/15",
           "shadow-[0_8px_32px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.15)]",
           "cursor-pointer",
-          // Hover
+          // Hover - dark mode
           "hover:from-white/14 hover:to-white/10",
           "hover:border-white/25",
           "hover:shadow-[0_12px_40px_rgba(0,0,0,0.35),inset_0_1px_0_rgba(255,255,255,0.2)]",
@@ -58,8 +59,12 @@ const cardVariants = cva(
           // Active
           "active:translate-y-0",
           // Light mode
-          "light:from-white/80 light:to-white/70",
-          "light:hover:from-white/90 light:hover:to-white/80",
+          "light:from-white/92 light:to-white/85",
+          "light:border-black/8",
+          "light:shadow-[0_8px_32px_rgba(0,0,0,0.06),inset_0_1px_0_rgba(255,255,255,1)]",
+          "light:hover:from-white/98 light:hover:to-white/95",
+          "light:hover:border-black/12",
+          "light:hover:shadow-[0_12px_40px_rgba(0,0,0,0.1),inset_0_1px_0_rgba(255,255,255,1)]",
         ],
       },
     },

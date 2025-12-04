@@ -160,7 +160,7 @@ body {
    ============================================================================ */
 
 @layer utilities {
-  /* Glass backgrounds - Apple Liquid Glass style */
+  /* ========== Glass backgrounds - Dark Mode (Default) ========== */
   .glass {
     background: linear-gradient(
       180deg,
@@ -171,18 +171,31 @@ body {
     );
     backdrop-filter: blur(28px) saturate(180%);
     -webkit-backdrop-filter: blur(28px) saturate(180%);
-    border: 1px solid var(--lg-glass-border);
+    border: 1px solid rgba(255, 255, 255, 0.18);
     box-shadow:
-      /* Outer depth shadows */
       0 8px 32px rgba(0, 0, 0, 0.25),
       0 2px 8px rgba(0, 0, 0, 0.15),
-      /* Border highlight ring */
       0 0 0 1px rgba(255, 255, 255, 0.08),
-      /* Specular highlight (top edge glow) */
       inset 0 1px 0 rgba(255, 255, 255, 0.25),
       inset 0 2px 8px rgba(255, 255, 255, 0.08),
-      /* Bottom edge depth */
       inset 0 -1px 0 rgba(0, 0, 0, 0.12);
+  }
+
+  /* Light mode glass - frosted white with subtle depth */
+  .light .glass {
+    background: linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.92) 0%,
+      rgba(255, 255, 255, 0.85) 50%,
+      rgba(255, 255, 255, 0.88) 100%
+    );
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    box-shadow:
+      0 8px 32px rgba(0, 0, 0, 0.08),
+      0 2px 8px rgba(0, 0, 0, 0.04),
+      0 0 0 1px rgba(255, 255, 255, 0.5),
+      inset 0 1px 0 rgba(255, 255, 255, 1),
+      inset 0 -1px 0 rgba(0, 0, 0, 0.03);
   }
 
   .glass-subtle {
@@ -193,10 +206,22 @@ body {
     );
     backdrop-filter: blur(16px) saturate(180%);
     -webkit-backdrop-filter: blur(16px) saturate(180%);
-    border: 1px solid var(--lg-glass-border-subtle);
+    border: 1px solid rgba(255, 255, 255, 0.10);
     box-shadow:
       0 4px 16px rgba(0, 0, 0, 0.2),
       inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  }
+
+  .light .glass-subtle {
+    background: linear-gradient(
+      135deg,
+      rgba(255, 255, 255, 0.75) 0%,
+      rgba(255, 255, 255, 0.6) 100%
+    );
+    border: 1px solid rgba(0, 0, 0, 0.05);
+    box-shadow:
+      0 4px 16px rgba(0, 0, 0, 0.04),
+      inset 0 1px 0 rgba(255, 255, 255, 0.8);
   }
 
   .glass-elevated {
@@ -218,6 +243,22 @@ body {
       inset 0 -1px 0 rgba(0, 0, 0, 0.15);
   }
 
+  .light .glass-elevated {
+    background: linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.98) 0%,
+      rgba(255, 255, 255, 0.92) 50%,
+      rgba(255, 255, 255, 0.95) 100%
+    );
+    border: 1px solid rgba(0, 0, 0, 0.1);
+    box-shadow:
+      0 20px 60px rgba(0, 0, 0, 0.1),
+      0 8px 24px rgba(0, 0, 0, 0.06),
+      0 0 0 1px rgba(255, 255, 255, 0.8),
+      inset 0 1px 0 rgba(255, 255, 255, 1),
+      inset 0 -1px 0 rgba(0, 0, 0, 0.02);
+  }
+
   .glass-button {
     background: linear-gradient(
       180deg,
@@ -227,13 +268,27 @@ body {
     );
     backdrop-filter: blur(12px) saturate(180%);
     -webkit-backdrop-filter: blur(12px) saturate(180%);
-    border: 1px solid var(--lg-glass-border);
+    border: 1px solid rgba(255, 255, 255, 0.18);
     box-shadow:
       0 4px 16px rgba(0, 0, 0, 0.2),
       0 0 0 1px rgba(255, 255, 255, 0.1),
       inset 0 1px 0 rgba(255, 255, 255, 0.25),
       inset 0 1px 4px rgba(255, 255, 255, 0.1);
     transition: all var(--lg-transition-smooth);
+  }
+
+  .light .glass-button {
+    background: linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.95) 0%,
+      rgba(255, 255, 255, 0.85) 40%,
+      rgba(255, 255, 255, 0.9) 100%
+    );
+    border: 1px solid rgba(0, 0, 0, 0.1);
+    box-shadow:
+      0 4px 16px rgba(0, 0, 0, 0.06),
+      0 0 0 1px rgba(255, 255, 255, 0.5),
+      inset 0 1px 0 rgba(255, 255, 255, 1);
   }
 
   .glass-button:hover {
@@ -243,13 +298,27 @@ body {
       rgba(255, 255, 255, 0.16) 40%,
       rgba(255, 255, 255, 0.12) 100%
     );
-    border-color: var(--lg-glass-border-strong);
+    border-color: rgba(255, 255, 255, 0.25);
     box-shadow:
       0 6px 24px rgba(0, 0, 0, 0.25),
       0 0 0 1px rgba(255, 255, 255, 0.15),
       inset 0 1px 0 rgba(255, 255, 255, 0.35),
       inset 0 1px 6px rgba(255, 255, 255, 0.15);
     transform: translateY(-1px);
+  }
+
+  .light .glass-button:hover {
+    background: linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 1) 0%,
+      rgba(255, 255, 255, 0.95) 40%,
+      rgba(255, 255, 255, 0.98) 100%
+    );
+    border-color: rgba(0, 0, 0, 0.15);
+    box-shadow:
+      0 8px 24px rgba(0, 0, 0, 0.1),
+      0 0 0 1px rgba(255, 255, 255, 0.8),
+      inset 0 1px 0 rgba(255, 255, 255, 1);
   }
 
   .glass-button:active {
@@ -260,9 +329,15 @@ body {
     background: rgba(0, 0, 0, 0.3);
     backdrop-filter: blur(8px);
     -webkit-backdrop-filter: blur(8px);
-    border: 1px solid var(--lg-glass-border-subtle);
+    border: 1px solid rgba(255, 255, 255, 0.10);
     box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.2);
     transition: all var(--lg-transition-normal);
+  }
+
+  .light .glass-input {
+    background: rgba(255, 255, 255, 0.9);
+    border: 1px solid rgba(0, 0, 0, 0.1);
+    box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.03);
   }
 
   .glass-input:focus {
@@ -271,6 +346,12 @@ body {
       inset 0 2px 4px rgba(0, 0, 0, 0.2),
       0 0 0 3px rgba(96, 165, 250, 0.2);
     outline: none;
+  }
+
+  .light .glass-input:focus {
+    box-shadow:
+      inset 0 2px 4px rgba(0, 0, 0, 0.03),
+      0 0 0 3px rgba(59, 130, 246, 0.15);
   }
 
   /* Glow effects */
@@ -305,6 +386,14 @@ body {
     );
     border-radius: inherit;
     pointer-events: none;
+  }
+
+  .light .glass-specular::before {
+    background: linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.6) 0%,
+      rgba(255, 255, 255, 0) 100%
+    );
   }
 
   /* Animations */
@@ -491,6 +580,28 @@ body {
     180deg,
     rgba(255, 255, 255, 0.25) 0%,
     rgba(255, 255, 255, 0.15) 100%
+  );
+}
+
+/* Light mode scrollbar */
+.light .glass-scrollbar::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.03);
+}
+
+.light .glass-scrollbar::-webkit-scrollbar-thumb {
+  background: linear-gradient(
+    180deg,
+    rgba(0, 0, 0, 0.12) 0%,
+    rgba(0, 0, 0, 0.08) 100%
+  );
+  border: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.light .glass-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(
+    180deg,
+    rgba(0, 0, 0, 0.18) 0%,
+    rgba(0, 0, 0, 0.12) 100%
   );
 }
 

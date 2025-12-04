@@ -21,7 +21,7 @@ const buttonVariants = cva(
     variants: {
       variant: {
         default: [
-          // Glass background
+          // Glass background - dark mode
           "bg-gradient-to-br from-white/12 to-white/6",
           "backdrop-blur-sm saturate-[180%]",
           "border border-white/15",
@@ -36,14 +36,16 @@ const buttonVariants = cva(
           "active:translate-y-0 active:scale-[0.98]",
           // Focus
           "focus-visible:ring-blue-400/50",
-          // Light mode
-          "light:from-white/70 light:to-white/50",
+          // Light mode - frosted white button
+          "light:from-white/95 light:to-white/85",
           "light:border-black/10",
-          "light:text-slate-900/90",
-          "light:shadow-[0_4px_16px_rgba(0,0,0,0.1),inset_0_1px_0_rgba(255,255,255,0.8)]",
+          "light:text-slate-800",
+          "light:shadow-[0_4px_16px_rgba(0,0,0,0.06),inset_0_1px_0_rgba(255,255,255,1)]",
+          "light:hover:from-white light:hover:to-white/95",
+          "light:hover:shadow-[0_6px_20px_rgba(0,0,0,0.1),inset_0_1px_0_rgba(255,255,255,1)]",
         ],
         primary: [
-          // Blue glass
+          // Blue glass - dark mode
           "bg-gradient-to-br from-blue-400/25 to-blue-400/15",
           "backdrop-blur-sm saturate-[180%]",
           "border border-blue-400/40",
@@ -58,12 +60,16 @@ const buttonVariants = cva(
           "active:translate-y-0 active:scale-[0.98]",
           // Focus
           "focus-visible:ring-blue-400/50",
-          // Light mode
-          "light:from-blue-500/30 light:to-blue-500/20",
-          "light:text-blue-700",
+          // Light mode - solid blue button
+          "light:from-blue-500 light:to-blue-600",
+          "light:border-blue-600",
+          "light:text-white",
+          "light:shadow-[0_4px_16px_rgba(59,130,246,0.25),inset_0_1px_0_rgba(255,255,255,0.2)]",
+          "light:hover:from-blue-600 light:hover:to-blue-700",
+          "light:hover:shadow-[0_6px_24px_rgba(59,130,246,0.35)]",
         ],
         subtle: [
-          // Subtle glass
+          // Subtle glass - dark mode
           "bg-gradient-to-br from-white/6 to-white/3",
           "backdrop-blur-[4px]",
           "border border-white/8",
@@ -77,13 +83,16 @@ const buttonVariants = cva(
           // Focus
           "focus-visible:ring-white/30",
           // Light mode
-          "light:from-black/5 light:to-black/3",
-          "light:border-black/5",
+          "light:from-slate-100 light:to-slate-50",
+          "light:border-slate-200",
           "light:text-slate-600",
+          "light:shadow-[inset_0_1px_0_rgba(255,255,255,0.8)]",
+          "light:hover:from-slate-200 light:hover:to-slate-100",
           "light:hover:text-slate-900",
+          "light:hover:border-slate-300",
         ],
         ghost: [
-          // Transparent
+          // Transparent - dark mode
           "bg-transparent",
           "border border-transparent",
           "text-white/50",
@@ -94,12 +103,12 @@ const buttonVariants = cva(
           // Focus
           "focus-visible:ring-white/30",
           // Light mode
-          "light:text-slate-500",
-          "light:hover:bg-black/5",
+          "light:text-slate-600",
+          "light:hover:bg-slate-100",
           "light:hover:text-slate-900",
         ],
         danger: [
-          // Red glass
+          // Red glass - dark mode
           "bg-gradient-to-br from-red-400/20 to-red-400/10",
           "backdrop-blur-sm saturate-[180%]",
           "border border-red-400/30",
@@ -114,9 +123,12 @@ const buttonVariants = cva(
           "active:translate-y-0 active:scale-[0.98]",
           // Focus
           "focus-visible:ring-red-400/50",
-          // Light mode
-          "light:from-red-500/25 light:to-red-500/15",
-          "light:text-red-700",
+          // Light mode - solid red button
+          "light:from-red-500 light:to-red-600",
+          "light:border-red-600",
+          "light:text-white",
+          "light:shadow-[0_4px_16px_rgba(239,68,68,0.25)]",
+          "light:hover:from-red-600 light:hover:to-red-700",
         ],
       },
       size: {
