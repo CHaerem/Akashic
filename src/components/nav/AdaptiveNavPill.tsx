@@ -446,7 +446,7 @@ export const AdaptiveNavPill = memo(function AdaptiveNavPill({
   onJourneyUpdate,
   isMobile,
 }: AdaptiveNavPillProps) {
-  const [mode, setMode] = useState<NavMode>('collapsed');
+  const [mode, setMode] = useState<NavMode>('expanded'); // Start with menu visible
   const [showContent, setShowContent] = useState(false);
   const [showContext, setShowContext] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
@@ -598,9 +598,14 @@ export const AdaptiveNavPill = memo(function AdaptiveNavPill({
       const isInsideContext = contextRef.current?.contains(target);
 
       if (!isInsidePill && !isInsideCard && !isInsideContext) {
-        if (mode !== 'collapsed') {
-          setMode('collapsed');
+        // If content card is showing, close it and return to menu
+        if (showContent) {
           setShowContent(false);
+          setMode('expanded');
+        }
+        // If in expanded mode or days mode, collapse
+        else if (mode === 'expanded' || mode === 'days') {
+          setMode('collapsed');
         }
         setShowContext(false);
         mouseX.set(Infinity);
@@ -614,7 +619,7 @@ export const AdaptiveNavPill = memo(function AdaptiveNavPill({
       document.removeEventListener('mousedown', handleClickOutside);
       document.removeEventListener('touchstart', handleClickOutside);
     };
-  }, [mode, mouseX]);
+  }, [mode, showContent, mouseX]);
 
   // Close context when mode changes away from collapsed
   useEffect(() => {
@@ -672,7 +677,7 @@ export const AdaptiveNavPill = memo(function AdaptiveNavPill({
 
   const handleCloseContent = useCallback(() => {
     setShowContent(false);
-    setMode('collapsed');
+    setMode('expanded'); // Return to menu instead of collapsed
   }, []);
 
   const days = Array.from({ length: totalDays }, (_, i) => i + 1);
@@ -1167,27 +1172,77 @@ export const AdaptiveNavPill = memo(function AdaptiveNavPill({
             </motion.div>
           )}
 
-          {/* Expanded State - Drag to select */}
+          {/* Expanded State - Main menu */}
           {(mode === 'expanded' || mode === 'content') && (
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              style={{ display: 'flex', alignItems: 'flex-end', gap: 2, paddingBottom: 4 }}
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: 8,
+              }}
             >
-              {NAV_OPTIONS.map((option) => (
-                <DockItem
-                  key={option.id}
-                  mouseX={mouseX}
-                  icon={option.icon}
-                  label={option.label}
-                  isActive={option.id === activeTab && showContent}
-                  isHovered={hoveredOption === option.id}
-                  onClick={() => handleOptionClick(option.id)}
-                  onHover={() => !isDragging && setHoveredOption(option.id)}
-                  isMobile={isMobile}
-                  setRef={setNavRef(option.id)}
-                />
-              ))}
+              {/* Current day indicator - clickable to collapse */}
+              <motion.div
+                onClick={() => setMode('collapsed')}
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  padding: '6px 12px',
+                  background: 'rgba(255, 255, 255, 0.06)',
+                  borderRadius: radius.pill,
+                  cursor: 'pointer',
+                  marginBottom: 4,
+                }}
+              >
+                <span style={{
+                  fontSize: 10,
+                  fontWeight: 600,
+                  color: colors.accent.primary,
+                  background: 'rgba(96, 165, 250, 0.15)',
+                  padding: '2px 6px',
+                  borderRadius: 4,
+                }}>
+                  {currentDay}/{totalDays}
+                </span>
+                <span style={{
+                  fontSize: 13,
+                  fontWeight: 500,
+                  color: colors.text.primary,
+                  maxWidth: 150,
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }}>
+                  {currentCampName}
+                </span>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={colors.text.tertiary} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="6 9 12 15 18 9"/>
+                </svg>
+              </motion.div>
+
+              {/* Nav options with magnification */}
+              <div style={{ display: 'flex', alignItems: 'flex-end', gap: 2, paddingBottom: 4 }}>
+                {NAV_OPTIONS.map((option) => (
+                  <DockItem
+                    key={option.id}
+                    mouseX={mouseX}
+                    icon={option.icon}
+                    label={option.label}
+                    isActive={option.id === activeTab && showContent}
+                    isHovered={hoveredOption === option.id}
+                    onClick={() => handleOptionClick(option.id)}
+                    onHover={() => !isDragging && setHoveredOption(option.id)}
+                    isMobile={isMobile}
+                    setRef={setNavRef(option.id)}
+                  />
+                ))}
+              </div>
             </motion.div>
           )}
 
