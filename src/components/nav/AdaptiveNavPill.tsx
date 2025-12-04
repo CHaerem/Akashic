@@ -1,4 +1,4 @@
-import { memo, useState, useCallback, useRef, useEffect } from 'react';
+import { memo, useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import {
   motion,
   useMotionValue,
@@ -448,12 +448,15 @@ export const AdaptiveNavPill = memo(function AdaptiveNavPill({
 }: AdaptiveNavPillProps) {
   const [mode, setMode] = useState<NavMode>('collapsed');
   const [showContent, setShowContent] = useState(false);
+  const [showContext, setShowContext] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [hoveredOption, setHoveredOption] = useState<string | null>(null);
   const [hoveredDay, setHoveredDay] = useState<number | null>(null);
+  const [swipeDirection, setSwipeDirection] = useState<'left' | 'right' | null>(null);
 
   const pillRef = useRef<HTMLDivElement>(null);
   const cardRef = useRef<HTMLDivElement>(null);
+  const contextRef = useRef<HTMLDivElement>(null);
   const mouseX = useMotionValue(Infinity);
 
   // Refs for each nav option
@@ -462,6 +465,47 @@ export const AdaptiveNavPill = memo(function AdaptiveNavPill({
 
   const currentDay = selectedCamp?.dayNumber ?? 1;
   const currentCampName = selectedCamp?.name ?? 'Start';
+  const currentCamp = selectedCamp ?? trekData.camps[0];
+
+  // Get photos for current day
+  const dayPhotos = useMemo(() => {
+    if (!currentCamp) return [];
+    return photos.filter(p => {
+      if (!p.taken_at || !currentCamp.date) return false;
+      const photoDate = new Date(p.taken_at).toDateString();
+      const campDate = new Date(currentCamp.date).toDateString();
+      return photoDate === campDate;
+    });
+  }, [photos, currentCamp]);
+
+  // Swipe handlers for collapsed pill
+  const handleSwipeDragEnd = useCallback((_: any, info: { offset: { x: number }; velocity: { x: number } }) => {
+    const threshold = 50;
+    const velocityThreshold = 500;
+
+    if (info.offset.x > threshold || info.velocity.x > velocityThreshold) {
+      // Swipe right - previous day
+      if (currentDay > 1) {
+        setSwipeDirection('right');
+        onDaySelect(currentDay - 1);
+        setTimeout(() => setSwipeDirection(null), 200);
+      }
+    } else if (info.offset.x < -threshold || info.velocity.x < -velocityThreshold) {
+      // Swipe left - next day
+      if (currentDay < totalDays) {
+        setSwipeDirection('left');
+        onDaySelect(currentDay + 1);
+        setTimeout(() => setSwipeDirection(null), 200);
+      }
+    }
+  }, [currentDay, totalDays, onDaySelect]);
+
+  // Toggle context card
+  const handleContextToggle = useCallback(() => {
+    if (mode === 'collapsed') {
+      setShowContext(prev => !prev);
+    }
+  }, [mode]);
 
   // Find which item is under the pointer position
   const findItemUnderPointer = useCallback((clientX: number) => {
@@ -551,12 +595,14 @@ export const AdaptiveNavPill = memo(function AdaptiveNavPill({
       const target = e.target as Node;
       const isInsidePill = pillRef.current?.contains(target);
       const isInsideCard = cardRef.current?.contains(target);
+      const isInsideContext = contextRef.current?.contains(target);
 
-      if (!isInsidePill && !isInsideCard) {
+      if (!isInsidePill && !isInsideCard && !isInsideContext) {
         if (mode !== 'collapsed') {
           setMode('collapsed');
           setShowContent(false);
         }
+        setShowContext(false);
         mouseX.set(Infinity);
       }
     };
@@ -569,6 +615,13 @@ export const AdaptiveNavPill = memo(function AdaptiveNavPill({
       document.removeEventListener('touchstart', handleClickOutside);
     };
   }, [mode, mouseX]);
+
+  // Close context when mode changes away from collapsed
+  useEffect(() => {
+    if (mode !== 'collapsed') {
+      setShowContext(false);
+    }
+  }, [mode]);
 
   // Cancel drag on pointer up anywhere
   useEffect(() => {
@@ -748,9 +801,208 @@ export const AdaptiveNavPill = memo(function AdaptiveNavPill({
             })()}
           </AnimatePresence>
 
+          {/* Context Card - shows day details when collapsed pill is tapped */}
+          <AnimatePresence>
+            {showContext && mode === 'collapsed' && currentCamp && (
+              <motion.div
+                ref={contextRef}
+                key="context-card"
+                initial={{ opacity: 0, y: 12, scale: 0.95 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: 8, scale: 0.98 }}
+                transition={{ type: 'spring', ...SPRING_CONFIG }}
+                style={{
+                  background: `linear-gradient(180deg, rgba(255, 255, 255, 0.12) 0%, rgba(255, 255, 255, 0.06) 100%)`,
+                  backdropFilter: `${effects.blur.intense} ${effects.saturation.enhanced}`,
+                  WebkitBackdropFilter: `${effects.blur.intense} ${effects.saturation.enhanced}`,
+                  border: `1px solid ${colors.glass.border}`,
+                  boxShadow: shadows.glass.panel,
+                  borderRadius: radius.xl,
+                  padding: 16,
+                  width: isMobile ? 'calc(100vw - 48px)' : 340,
+                  maxWidth: 380,
+                }}
+              >
+                {/* Header */}
+                <div style={{ marginBottom: 12 }}>
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 8,
+                    marginBottom: 6,
+                  }}>
+                    <span style={{
+                      fontSize: 11,
+                      fontWeight: 600,
+                      color: colors.accent.primary,
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.08em',
+                      background: 'rgba(96, 165, 250, 0.15)',
+                      padding: '3px 8px',
+                      borderRadius: 6,
+                    }}>
+                      Day {currentCamp.dayNumber}
+                    </span>
+                    {currentCamp.date && (
+                      <span style={{ fontSize: 12, color: colors.text.tertiary }}>
+                        {new Date(currentCamp.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                      </span>
+                    )}
+                    <span style={{
+                      marginLeft: 'auto',
+                      fontSize: 12,
+                      color: colors.text.secondary,
+                      background: 'rgba(255, 255, 255, 0.08)',
+                      padding: '2px 8px',
+                      borderRadius: 4,
+                    }}>
+                      {currentCamp.elevation}m
+                    </span>
+                  </div>
+                  <h3 style={{
+                    fontSize: 18,
+                    fontWeight: 600,
+                    color: colors.text.primary,
+                    margin: 0,
+                  }}>
+                    {currentCamp.name}
+                  </h3>
+                </div>
+
+                {/* Description / Notes */}
+                {currentCamp.notes && (
+                  <p style={{
+                    fontSize: 13,
+                    lineHeight: 1.5,
+                    color: colors.text.secondary,
+                    margin: 0,
+                    marginBottom: dayPhotos.length > 0 ? 12 : 0,
+                  }}>
+                    {currentCamp.notes}
+                  </p>
+                )}
+
+                {/* Highlights */}
+                {currentCamp.highlights && currentCamp.highlights.length > 0 && (
+                  <ul style={{
+                    margin: 0,
+                    marginBottom: dayPhotos.length > 0 ? 12 : 0,
+                    paddingLeft: 16,
+                  }}>
+                    {currentCamp.highlights.slice(0, 3).map((highlight, idx) => (
+                      <li key={idx} style={{
+                        fontSize: 12,
+                        color: colors.text.secondary,
+                        marginBottom: 2,
+                      }}>
+                        {highlight}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+
+                {/* Photo strip */}
+                {dayPhotos.length > 0 && (
+                  <div style={{
+                    display: 'flex',
+                    gap: 8,
+                    overflowX: 'auto',
+                    marginLeft: -4,
+                    marginRight: -4,
+                    paddingLeft: 4,
+                    paddingRight: 4,
+                    paddingBottom: 4,
+                    WebkitOverflowScrolling: 'touch',
+                  }}>
+                    {dayPhotos.slice(0, 5).map((photo, idx) => (
+                      <motion.div
+                        key={photo.id}
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.95 }}
+                        onClick={() => onViewPhotoOnMap(photo)}
+                        style={{
+                          flexShrink: 0,
+                          width: 64,
+                          height: 64,
+                          borderRadius: radius.md,
+                          overflow: 'hidden',
+                          cursor: 'pointer',
+                          border: `1px solid ${colors.glass.borderSubtle}`,
+                        }}
+                      >
+                        <img
+                          src={getMediaUrl(photo.url)}
+                          alt={photo.caption || `Photo ${idx + 1}`}
+                          style={{
+                            width: '100%',
+                            height: '100%',
+                            objectFit: 'cover',
+                          }}
+                        />
+                      </motion.div>
+                    ))}
+                    {dayPhotos.length > 5 && (
+                      <div style={{
+                        flexShrink: 0,
+                        width: 64,
+                        height: 64,
+                        borderRadius: radius.md,
+                        background: 'rgba(255, 255, 255, 0.08)',
+                        border: `1px solid ${colors.glass.borderSubtle}`,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        color: colors.text.secondary,
+                        fontSize: 13,
+                        fontWeight: 500,
+                      }}>
+                        +{dayPhotos.length - 5}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Navigation hint */}
+                <div style={{
+                  marginTop: 12,
+                  paddingTop: 12,
+                  borderTop: `1px solid ${colors.glass.borderSubtle}`,
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  fontSize: 11,
+                  color: colors.text.tertiary,
+                }}>
+                  <span>Swipe pill to change days</span>
+                  <div style={{ display: 'flex', gap: 4 }}>
+                    {Array.from({ length: totalDays }, (_, i) => i + 1).map((day) => (
+                      <div
+                        key={day}
+                        style={{
+                          width: day === currentDay ? 8 : 5,
+                          height: day === currentDay ? 8 : 5,
+                          borderRadius: '50%',
+                          background: day === currentDay
+                            ? colors.text.primary
+                            : 'rgba(255, 255, 255, 0.3)',
+                          transition: 'all 0.2s ease',
+                        }}
+                      />
+                    ))}
+                  </div>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
         <motion.div
-          onClick={mode === 'collapsed' ? handlePillClick : undefined}
+          onClick={mode === 'collapsed' ? handleContextToggle : undefined}
           layout
+          drag={mode === 'collapsed' ? 'x' : false}
+          dragConstraints={{ left: 0, right: 0 }}
+          dragElastic={0.2}
+          onDragEnd={mode === 'collapsed' ? handleSwipeDragEnd : undefined}
+          whileTap={mode === 'collapsed' ? { scale: 0.98 } : undefined}
           style={{
             ...glassStyle,
             borderRadius: mode === 'collapsed' ? radius.pill : radius.xl,
@@ -762,14 +1014,17 @@ export const AdaptiveNavPill = memo(function AdaptiveNavPill({
             justifyContent: 'center',
             gap: 4,
             userSelect: 'none',
+            touchAction: mode === 'collapsed' ? 'pan-y' : 'none',
           }}
           transition={{ type: 'spring', ...SPRING_CONFIG }}
         >
-          {/* Collapsed State */}
+          {/* Collapsed State - Swipeable */}
           {mode === 'collapsed' && (
             <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
+              key={currentDay}
+              initial={{ opacity: 0, x: swipeDirection === 'left' ? 20 : swipeDirection === 'right' ? -20 : 0 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ duration: 0.2 }}
               style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -782,6 +1037,25 @@ export const AdaptiveNavPill = memo(function AdaptiveNavPill({
               <span style={{ fontSize: isMobile ? 14 : 15, fontWeight: 500, whiteSpace: 'nowrap' }}>
                 Day {currentDay} <span style={{ color: colors.text.tertiary, margin: '0 2px' }}>•</span> {currentCampName}
               </span>
+              {/* Expand button */}
+              <motion.button
+                onClick={(e) => { e.stopPropagation(); handlePillClick(); }}
+                whileHover={{ scale: 1.1 }}
+                whileTap={{ scale: 0.9 }}
+                style={{
+                  background: 'rgba(255, 255, 255, 0.1)',
+                  border: 'none',
+                  borderRadius: radius.md,
+                  padding: '4px 8px',
+                  cursor: 'pointer',
+                  color: colors.text.secondary,
+                  fontSize: 10,
+                  fontWeight: 500,
+                  marginLeft: 4,
+                }}
+              >
+                ···
+              </motion.button>
             </motion.div>
           )}
 
