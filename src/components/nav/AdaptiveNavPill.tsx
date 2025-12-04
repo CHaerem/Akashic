@@ -645,28 +645,36 @@ export const AdaptiveNavPill = memo(function AdaptiveNavPill({
         )}
       </AnimatePresence>
 
-      {/* Navigation Pill */}
-      <motion.div
-        ref={pillRef}
-        onPointerDown={handlePointerDown}
-        onPointerMove={handlePointerMove}
-        onPointerUp={handlePointerUp}
-        onPointerLeave={handlePointerLeave}
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3, ease: 'easeOut' }}
+      {/* Navigation Pill - wrapper for centering */}
+      <div
         style={{
           position: 'absolute',
           bottom: isMobile ? 'calc(24px + env(safe-area-inset-bottom))' : 32,
-          left: '50%',
-          transform: 'translateX(-50%)',
-          zIndex: 50,
+          left: 0,
+          right: 0,
           display: 'flex',
-          alignItems: 'flex-end',
-          gap: 12,
-          touchAction: 'none',
+          justifyContent: 'center',
+          zIndex: 50,
+          pointerEvents: 'none',
         }}
       >
+        <motion.div
+          ref={pillRef}
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerUp}
+          onPointerLeave={handlePointerLeave}
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3, ease: 'easeOut' }}
+          style={{
+            display: 'flex',
+            alignItems: 'flex-end',
+            gap: 12,
+            touchAction: 'none',
+            pointerEvents: 'auto',
+          }}
+        >
         <motion.div
           onClick={mode === 'collapsed' ? handlePillClick : undefined}
           layout
@@ -770,7 +778,8 @@ export const AdaptiveNavPill = memo(function AdaptiveNavPill({
             </motion.div>
           )}
         </motion.div>
-      </motion.div>
+        </motion.div>
+      </div>
     </>
   );
 });
