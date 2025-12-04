@@ -1,6 +1,7 @@
 import { memo, useState, useCallback, useRef } from 'react';
 import type { TrekData, Camp, ExtendedStats, ElevationProfile, CampMarker, HistoricalSite } from '../../types/trek';
 import { Card } from '../ui/card';
+import { Skeleton } from '../ui/skeleton';
 import { cn } from '@/lib/utils';
 
 // Difficulty color mapping
@@ -478,7 +479,7 @@ export const StatsTab = memo(function StatsTab({
                 <p className="text-[10px] tracking-[0.1em] uppercase text-white/40 light:text-slate-400 mb-4">
                     Elevation Profile
                 </p>
-                {elevationProfile && (
+                {elevationProfile ? (
                     <InteractiveElevationProfile
                         elevationProfile={elevationProfile}
                         isMobile={isMobile}
@@ -486,6 +487,14 @@ export const StatsTab = memo(function StatsTab({
                         onCampSelect={onCampSelect}
                         camps={trekData.camps}
                     />
+                ) : (
+                    <div className="space-y-2">
+                        <Skeleton variant="glass" className="h-[120px] w-full" />
+                        <div className="flex justify-between">
+                            <Skeleton variant="text" className="h-3 w-12" />
+                            <Skeleton variant="text" className="h-3 w-12" />
+                        </div>
+                    </div>
                 )}
             </div>
 
