@@ -9,7 +9,6 @@ import { StatsTab } from './StatsTab';
 import { PhotosTab } from './PhotosTab';
 import { JourneyEditModal } from './JourneyEditModal';
 import { cn } from '@/lib/utils';
-import { useTheme } from '@/contexts/ThemeContext';
 
 export type PanelState = 'minimized' | 'normal' | 'expanded';
 
@@ -52,8 +51,6 @@ export const InfoPanel = memo(function InfoPanel({
     const [showEditModal, setShowEditModal] = useState(false);
     const [editMode, setEditMode] = useState(false);
     const panelRef = useRef<HTMLDivElement>(null);
-    const { resolvedTheme } = useTheme();
-    const isLightMode = resolvedTheme === 'light';
 
     // Convert panel state to snap index
     const currentSnapIndex = useMemo(() =>
@@ -121,23 +118,15 @@ export const InfoPanel = memo(function InfoPanel({
                 ]
             )}
             style={{
-                // Theme-aware gradient backgrounds
+                // Gradient backgrounds for dark liquid glass
                 background: isMobile
-                    ? (isLightMode
-                        ? `linear-gradient(180deg, rgba(255,255,255,0.95) 0%, rgba(248,250,252,0.98) 40%, rgba(248,250,252,1) 100%)`
-                        : `linear-gradient(180deg, rgba(255,255,255,0.12) 0%, rgba(255,255,255,0.06) 10%, rgba(12,12,18,0.95) 40%)`)
-                    : (isLightMode
-                        ? `linear-gradient(135deg, rgba(255,255,255,0.95) 0%, rgba(248,250,252,0.98) 30%, rgba(248,250,252,1) 100%)`
-                        : `linear-gradient(135deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.05) 30%, rgba(10,10,15,0.85) 100%)`),
+                    ? `linear-gradient(180deg, rgba(255,255,255,0.12) 0%, rgba(255,255,255,0.06) 10%, rgba(12,12,18,0.95) 40%)`
+                    : `linear-gradient(135deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.05) 30%, rgba(10,10,15,0.85) 100%)`,
                 height: isMobile ? getPanelHeight() : undefined,
                 maxHeight: isMobile ? 'calc(100dvh - 60px)' : undefined,
                 boxShadow: isMobile
-                    ? (isLightMode
-                        ? '0 -16px 48px rgba(0,0,0,0.08), inset 0 1px 0 rgba(255,255,255,1)'
-                        : '0 -16px 48px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.15)')
-                    : (isLightMode
-                        ? '-8px 0 40px rgba(0,0,0,0.06), inset 1px 0 0 rgba(255,255,255,1)'
-                        : '-8px 0 40px rgba(0,0,0,0.3), inset 1px 0 0 rgba(255,255,255,0.1)'),
+                    ? '0 -16px 48px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.15)'
+                    : '-8px 0 40px rgba(0,0,0,0.3), inset 1px 0 0 rgba(255,255,255,0.1)',
             }}
         >
             {/* Mobile drag handle */}

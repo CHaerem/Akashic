@@ -57,4 +57,3 @@ export {
   SkeletonStat,
   SkeletonList,
 } from "./skeleton"
-export { ThemeToggle } from "./theme-toggle"

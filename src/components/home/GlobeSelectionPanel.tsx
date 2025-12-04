@@ -2,7 +2,6 @@ import type { TrekConfig } from '../../types/trek';
 import { Button } from '../ui/button';
 import { Card } from '../ui/card';
 import { cn } from '@/lib/utils';
-import { useTheme } from '@/contexts/ThemeContext';
 
 interface GlobeSelectionPanelProps {
     selectedTrek: TrekConfig;
@@ -11,27 +10,16 @@ interface GlobeSelectionPanelProps {
     isMobile: boolean;
 }
 
+// Dark mode gradient for mobile bottom fade
+const MOBILE_GRADIENT = `linear-gradient(
+    to top,
+    rgba(12, 12, 18, 0.98) 0%,
+    rgba(12, 12, 18, 0.9) 50%,
+    rgba(12, 12, 18, 0.6) 80%,
+    transparent 100%
+)`;
+
 export function GlobeSelectionPanel({ selectedTrek, onBack, onExplore, isMobile }: GlobeSelectionPanelProps) {
-    const { resolvedTheme } = useTheme();
-    const isLightMode = resolvedTheme === 'light';
-
-    // Theme-aware gradient for mobile
-    const mobileGradient = isLightMode
-        ? `linear-gradient(
-            to top,
-            rgba(248, 250, 252, 0.98) 0%,
-            rgba(248, 250, 252, 0.9) 50%,
-            rgba(248, 250, 252, 0.6) 80%,
-            transparent 100%
-        )`
-        : `linear-gradient(
-            to top,
-            rgba(12, 12, 18, 0.98) 0%,
-            rgba(12, 12, 18, 0.9) 50%,
-            rgba(12, 12, 18, 0.6) 80%,
-            transparent 100%
-        )`;
-
     return (
         <div
             className={cn(
@@ -40,7 +28,7 @@ export function GlobeSelectionPanel({ selectedTrek, onBack, onExplore, isMobile 
                     ? "left-0 right-0 px-5 pt-6 pb-8 pb-[max(32px,env(safe-area-inset-bottom))]"
                     : "left-6 pb-12 max-w-[420px]"
             )}
-            style={isMobile ? { background: mobileGradient } : undefined}
+            style={isMobile ? { background: MOBILE_GRADIENT } : undefined}
         >
             {/* Back button */}
             <Button
@@ -57,7 +45,7 @@ export function GlobeSelectionPanel({ selectedTrek, onBack, onExplore, isMobile 
 
             {/* Country label */}
             <p className={cn(
-                "tracking-[0.2em] uppercase text-white/40 light:text-slate-400",
+                "tracking-[0.2em] uppercase text-white/40",
                 isMobile ? "text-[11px] mb-2.5" : "text-[10px] mb-3.5"
             )}>
                 {selectedTrek.country}
@@ -66,19 +54,19 @@ export function GlobeSelectionPanel({ selectedTrek, onBack, onExplore, isMobile 
             {/* Trek name with glass card effect on mobile */}
             {isMobile ? (
                 <Card variant="elevated" className="p-5 mb-5">
-                    <h2 className="text-[28px] font-medium mb-2 text-white/95 light:text-slate-900">
+                    <h2 className="text-[28px] font-medium mb-2 text-white/95">
                         {selectedTrek.name}
                     </h2>
-                    <p className="text-sm text-white/50 light:text-slate-500 m-0">
+                    <p className="text-sm text-white/50 m-0">
                         Summit: {selectedTrek.elevation}
                     </p>
                 </Card>
             ) : (
                 <div className="mb-3">
-                    <h2 className="text-[38px] font-medium mb-2 text-white/95 light:text-slate-900">
+                    <h2 className="text-[38px] font-medium mb-2 text-white/95">
                         {selectedTrek.name}
                     </h2>
-                    <p className="text-[15px] text-white/50 light:text-slate-500 m-0">
+                    <p className="text-[15px] text-white/50 m-0">
                         Summit: {selectedTrek.elevation}
                     </p>
                 </div>
