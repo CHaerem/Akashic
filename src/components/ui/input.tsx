@@ -12,9 +12,10 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
         type={type}
         className={cn(
           "flex w-full",
-          // Minimum touch target
-          "min-h-11 px-4 py-3",
-          "text-sm",
+          // Minimum touch target (48px)
+          "min-h-12 px-4 py-3",
+          // 16px prevents iOS zoom on focus
+          "text-base",
           "rounded-xl",
           // Glass styling
           "bg-black/30 backdrop-blur-sm",

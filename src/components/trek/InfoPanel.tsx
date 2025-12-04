@@ -137,15 +137,18 @@ export const InfoPanel = memo(function InfoPanel({
                     onTouchMove={dragHandlers.onTouchMove}
                     onTouchEnd={dragHandlers.onTouchEnd}
                     className={cn(
-                        "py-3 flex justify-center touch-none",
+                        // Larger touch target (48px min height)
+                        "py-4 min-h-[48px] flex justify-center items-center touch-none",
                         dragState.isDragging ? "cursor-grabbing" : "cursor-grab"
                     )}
                 >
                     <div className={cn(
                         "h-1.5 rounded-full transition-all duration-200",
-                        "bg-gradient-to-r from-white/20 via-white/40 to-white/20",
-                        "light:from-black/15 light:via-black/30 light:to-black/15",
-                        dragState.isDragging ? "w-13" : (panelState === 'expanded' ? "w-12" : "w-10")
+                        // Higher contrast handle
+                        "bg-gradient-to-r from-white/25 via-white/45 to-white/25",
+                        "light:from-black/20 light:via-black/35 light:to-black/20",
+                        // Wider handle when dragging
+                        dragState.isDragging ? "w-16" : (panelState === 'expanded' ? "w-14" : "w-10")
                     )} />
                 </div>
             )}

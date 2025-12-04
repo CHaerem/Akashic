@@ -11,7 +11,7 @@ registerSW({ immediate: true });
 const rootElement = document.getElementById('root');
 if (rootElement) {
     createRoot(rootElement).render(
-        <ThemeProvider defaultTheme="dark">
+        <ThemeProvider defaultTheme="system">
             <AuthGuard>
                 <App />
             </AuthGuard>

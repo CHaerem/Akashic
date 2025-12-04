@@ -219,8 +219,9 @@ export function PhotosTab({ trekData, isMobile, editMode = false, onViewPhotoOnM
                         )}
                     </div>
                     <div className={cn(
-                        "grid gap-2",
-                        isMobile ? "grid-cols-2" : "grid-cols-3"
+                        "grid gap-3",
+                        // Responsive grid with minimum item width
+                        "grid-cols-2 sm:grid-cols-3 lg:grid-cols-4"
                     )}>
                         {photos.map((photo, index) => (
                             <div
@@ -255,14 +256,14 @@ export function PhotosTab({ trekData, isMobile, editMode = false, onViewPhotoOnM
                                     </div>
                                 )}
 
-                                {/* Edit button in edit mode */}
+                                {/* Edit button in edit mode - 44px touch target */}
                                 {editMode && (
                                     <button
                                         onClick={(e) => {
                                             e.stopPropagation();
                                             handleEditPhoto(photo);
                                         }}
-                                        className="absolute top-1.5 right-1.5 bg-black/50 border-none rounded-md px-2.5 py-1.5 text-white/95 text-[11px] cursor-pointer opacity-90 hover:bg-black/70 transition-colors"
+                                        className="absolute top-1 right-1 min-w-[44px] min-h-[44px] bg-black/60 backdrop-blur-sm border border-white/20 rounded-xl flex items-center justify-center text-white/95 text-xs font-medium cursor-pointer hover:bg-black/80 transition-colors"
                                     >
                                         Edit
                                     </button>

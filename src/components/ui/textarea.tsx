@@ -12,7 +12,8 @@ const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(
         className={cn(
           "flex w-full",
           "min-h-[120px] px-4 py-3",
-          "text-sm",
+          // 16px prevents iOS zoom on focus
+          "text-base",
           "rounded-xl",
           "resize-none",
           // Glass styling
