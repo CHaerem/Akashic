@@ -36,6 +36,7 @@
     "clsx": "^2.1.1",
     "exif-parser": "^0.1.12",
     "exifr": "^7.1.3",
+    "framer-motion": "^12.23.25",
     "image-size": "^2.0.2",
     "mapbox-gl": "^3.16.0",
     "photoswipe": "^5.4.4",
