@@ -8,7 +8,11 @@ import {
   type MotionValue,
 } from 'framer-motion';
 import { colors, radius, shadows, effects } from '../../styles/liquidGlass';
-import type { Camp, TabType, TrekData, ExtendedStats, Photo } from '../../types/trek';
+import type { Camp, TabType, TrekData, ExtendedStats, ElevationProfile, Photo } from '../../types/trek';
+import { StatsTab } from '../trek/StatsTab';
+import { JourneyTab } from '../trek/JourneyTab';
+import { OverviewTab } from '../trek/OverviewTab';
+import { PhotosTab } from '../trek/PhotosTab';
 
 // Magnification constants
 const MAGNIFICATION = {
@@ -223,14 +227,17 @@ interface ContentCardProps {
   activeTab: TabType;
   trekData: TrekData;
   extendedStats: ExtendedStats | null;
+  elevationProfile: ElevationProfile | null;
+  selectedCamp: Camp | null;
   photos: Photo[];
   getMediaUrl: (path: string) => string;
   onClose: () => void;
+  onCampSelect: (camp: Camp) => void;
   onPhotoClick: (photo: Photo) => void;
   isMobile: boolean;
 }
 
-function ContentCard({ activeTab, trekData, extendedStats, photos, getMediaUrl, onClose, onPhotoClick, isMobile }: ContentCardProps) {
+function ContentCard({ activeTab, trekData, extendedStats, elevationProfile, selectedCamp, photos, getMediaUrl, onClose, onCampSelect, onPhotoClick, isMobile }: ContentCardProps) {
   const glassStyle: React.CSSProperties = {
     background: `linear-gradient(135deg, rgba(255, 255, 255, 0.12) 0%, rgba(255, 255, 255, 0.06) 100%)`,
     backdropFilter: `${effects.blur.strong} ${effects.saturation.enhanced}`,
@@ -304,108 +311,41 @@ function ContentCard({ activeTab, trekData, extendedStats, photos, getMediaUrl, 
       {/* Content */}
       <div style={{ padding: 16, overflowY: 'auto', maxHeight: `calc(${maxHeight} - 60px)` }}>
         {activeTab === 'overview' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            <h3 style={{ margin: 0, fontSize: 18, fontWeight: 600, color: colors.text.primary }}>{trekData.name}</h3>
-            <p style={{ margin: 0, fontSize: 13, color: colors.text.secondary, lineHeight: 1.5 }}>{trekData.description}</p>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginTop: 8 }}>
-              <StatItem label="Duration" value={`${trekData.stats.duration} days`} />
-              <StatItem label="Distance" value={`${trekData.stats.totalDistance} km`} />
-              <StatItem label="Elevation Gain" value={`${trekData.stats.totalElevationGain}m`} />
-              <StatItem label="Highest Point" value={`${trekData.stats.highestPoint.elevation}m`} />
-            </div>
-          </div>
+          <OverviewTab trekData={trekData} />
         )}
 
-        {activeTab === 'stats' && extendedStats && (
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <StatItem label="Avg Daily Distance" value={extendedStats.avgDailyDistance} />
-            <StatItem label="Max Daily Gain" value={`${extendedStats.maxDailyGain}m`} />
-            <StatItem label="Total Elevation Gain" value={`${extendedStats.totalElevationGain}m`} />
-            <StatItem label="Total Elevation Loss" value={`${extendedStats.totalElevationLoss}m`} />
-            <StatItem label="Difficulty" value={extendedStats.difficulty} />
-            <StatItem label="Est. Total Time" value={extendedStats.estimatedTotalTime} />
-          </div>
+        {activeTab === 'stats' && (
+          <StatsTab
+            trekData={trekData}
+            extendedStats={extendedStats}
+            elevationProfile={elevationProfile}
+            isMobile={isMobile}
+            selectedCamp={selectedCamp}
+            onCampSelect={onCampSelect}
+          />
         )}
 
         {activeTab === 'photos' && (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
-            {photos.slice(0, 12).map((photo, index) => (
-              <motion.div
-                key={photo.id}
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.98 }}
-                onClick={() => onPhotoClick(photo)}
-                style={{
-                  aspectRatio: '1',
-                  borderRadius: radius.md,
-                  overflow: 'hidden',
-                  cursor: 'pointer',
-                  background: colors.glass.subtle,
-                }}
-              >
-                <img
-                  src={getMediaUrl(photo.thumbnail_url || photo.url)}
-                  alt={photo.caption || `Photo ${index + 1}`}
-                  style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                  loading="lazy"
-                />
-              </motion.div>
-            ))}
-            {photos.length > 12 && (
-              <div style={{
-                aspectRatio: '1',
-                borderRadius: radius.md,
-                background: colors.glass.medium,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: colors.text.secondary,
-                fontSize: 13,
-                fontWeight: 500,
-              }}>
-                +{photos.length - 12}
-              </div>
-            )}
-          </div>
+          <PhotosTab
+            trekData={trekData}
+            isMobile={isMobile}
+            onViewPhotoOnMap={onPhotoClick}
+          />
         )}
 
         {activeTab === 'journey' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            {trekData.camps.map((camp) => (
-              <div key={camp.id} style={{
-                padding: 12,
-                borderRadius: radius.md,
-                background: colors.glass.subtle,
-              }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                  <span style={{ fontSize: 11, fontWeight: 600, color: colors.accent.primary }}>Day {camp.dayNumber}</span>
-                  <span style={{ fontSize: 11, color: colors.text.tertiary }}>{camp.elevation}m</span>
-                </div>
-                <span style={{ fontSize: 14, fontWeight: 500, color: colors.text.primary }}>{camp.name}</span>
-              </div>
-            ))}
-          </div>
+          <JourneyTab
+            trekData={trekData}
+            selectedCamp={selectedCamp}
+            onCampSelect={onCampSelect}
+            isMobile={isMobile}
+            photos={photos}
+            getMediaUrl={getMediaUrl}
+            onViewPhotoOnMap={onPhotoClick}
+          />
         )}
       </div>
       </motion.div>
-    </div>
-  );
-}
-
-// Stat item helper
-function StatItem({ label, value }: { label: string; value: string }) {
-  return (
-    <div style={{
-      padding: 12,
-      borderRadius: radius.md,
-      background: colors.glass.subtle,
-    }}>
-      <div style={{ fontSize: 10, fontWeight: 500, color: colors.text.tertiary, marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-        {label}
-      </div>
-      <div style={{ fontSize: 15, fontWeight: 600, color: colors.text.primary }}>
-        {value}
-      </div>
     </div>
   );
 }
@@ -416,8 +356,10 @@ interface AdaptiveNavPillProps {
   activeTab: TabType;
   onTabChange: (tab: TabType) => void;
   onDaySelect: (dayNumber: number) => void;
+  onCampSelect: (camp: Camp) => void;
   trekData: TrekData;
   extendedStats: ExtendedStats | null;
+  elevationProfile: ElevationProfile | null;
   photos: Photo[];
   getMediaUrl: (path: string) => string;
   onViewPhotoOnMap: (photo: Photo) => void;
@@ -430,8 +372,10 @@ export const AdaptiveNavPill = memo(function AdaptiveNavPill({
   activeTab,
   onTabChange,
   onDaySelect,
+  onCampSelect,
   trekData,
   extendedStats,
+  elevationProfile,
   photos,
   getMediaUrl,
   onViewPhotoOnMap,
@@ -636,9 +580,12 @@ export const AdaptiveNavPill = memo(function AdaptiveNavPill({
             activeTab={activeTab}
             trekData={trekData}
             extendedStats={extendedStats}
+            elevationProfile={elevationProfile}
+            selectedCamp={selectedCamp}
             photos={photos}
             getMediaUrl={getMediaUrl}
             onClose={handleCloseContent}
+            onCampSelect={onCampSelect}
             onPhotoClick={onViewPhotoOnMap}
             isMobile={isMobile}
           />

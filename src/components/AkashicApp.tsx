@@ -53,6 +53,7 @@ export default function AkashicApp() {
         activeTab,
         trekData,
         extendedStats,
+        elevationProfile,
         setActiveTab,
         selectTrek,
         handleExplore,
@@ -232,8 +233,10 @@ export default function AkashicApp() {
                     activeTab={activeTab}
                     onTabChange={setActiveTab}
                     onDaySelect={handleDaySelect}
+                    onCampSelect={handleCampSelect}
                     trekData={trekData}
                     extendedStats={extendedStats}
+                    elevationProfile={elevationProfile}
                     photos={deferredPhotos}
                     getMediaUrl={getMediaUrl}
                     onViewPhotoOnMap={handleViewOnMap}
