@@ -16,7 +16,6 @@ import { PhotosTab } from '../trek/PhotosTab';
 import { JourneyEditModal } from '../trek/JourneyEditModal';
 import { Button } from '../ui/button';
 import { ErrorBoundary, ComponentErrorFallback } from '../common/ErrorBoundary';
-import { TimelineScrubber } from './TimelineScrubber';
 
 // Magnification constants
 const MAGNIFICATION = {
@@ -696,6 +695,59 @@ export const AdaptiveNavPill = memo(function AdaptiveNavPill({
             pointerEvents: 'auto',
           }}
         >
+          {/* Camp Info Tooltip - shows when hovering day in days mode */}
+          <AnimatePresence>
+            {mode === 'days' && hoveredDay !== null && (() => {
+              const camp = trekData.camps.find(c => c.dayNumber === hoveredDay);
+              if (!camp) return null;
+              return (
+                <motion.div
+                  key="camp-tooltip"
+                  initial={{ opacity: 0, y: 8, scale: 0.95 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: 4, scale: 0.98 }}
+                  transition={{ type: 'spring', ...SPRING_CONFIG }}
+                  style={{
+                    background: `linear-gradient(135deg, rgba(255, 255, 255, 0.14) 0%, rgba(255, 255, 255, 0.07) 100%)`,
+                    backdropFilter: `${effects.blur.strong} ${effects.saturation.enhanced}`,
+                    WebkitBackdropFilter: `${effects.blur.strong} ${effects.saturation.enhanced}`,
+                    border: `1px solid ${colors.glass.border}`,
+                    boxShadow: shadows.glass.elevated,
+                    borderRadius: radius.lg,
+                    padding: '10px 14px',
+                    minWidth: 140,
+                    textAlign: 'center',
+                  }}
+                >
+                  <div style={{
+                    fontSize: 10,
+                    fontWeight: 600,
+                    color: colors.accent.primary,
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.08em',
+                    marginBottom: 4,
+                  }}>
+                    Day {camp.dayNumber}
+                  </div>
+                  <div style={{
+                    fontSize: 14,
+                    fontWeight: 600,
+                    color: colors.text.primary,
+                    marginBottom: 2,
+                  }}>
+                    {camp.name}
+                  </div>
+                  <div style={{
+                    fontSize: 12,
+                    color: colors.text.secondary,
+                  }}>
+                    {camp.elevation}m
+                  </div>
+                </motion.div>
+              );
+            })()}
+          </AnimatePresence>
+
         <motion.div
           onClick={mode === 'collapsed' ? handlePillClick : undefined}
           layout
@@ -757,12 +809,12 @@ export const AdaptiveNavPill = memo(function AdaptiveNavPill({
             </motion.div>
           )}
 
-          {/* Days Selector - Timeline Scrubber */}
+          {/* Days Selector with magnification */}
           {mode === 'days' && (
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              style={{ display: 'flex', alignItems: 'center', gap: 8 }}
+              style={{ display: 'flex', alignItems: 'flex-end', gap: 2, paddingBottom: 4 }}
             >
               <motion.button
                 onClick={handleBackFromDays}
@@ -772,7 +824,7 @@ export const AdaptiveNavPill = memo(function AdaptiveNavPill({
                   alignItems: 'center',
                   justifyContent: 'center',
                   width: 36,
-                  height: 36,
+                  height: 52,
                   background: 'transparent',
                   border: 'none',
                   borderRadius: radius.md,
@@ -784,17 +836,18 @@ export const AdaptiveNavPill = memo(function AdaptiveNavPill({
               >
                 ←
               </motion.button>
-              <TimelineScrubber
-                camps={trekData.camps}
-                photos={photos}
-                selectedCamp={selectedCamp}
-                onCampSelect={(camp) => {
-                  onCampSelect(camp);
-                }}
-                getMediaUrl={getMediaUrl}
-                isMobile={isMobile}
-                inline={true}
-              />
+              {days.map((day) => (
+                <DayItem
+                  key={day}
+                  mouseX={mouseX}
+                  day={day}
+                  isActive={day === currentDay}
+                  isHovered={hoveredDay === day}
+                  onClick={() => handleDayClick(day)}
+                  onHover={() => !isDragging && setHoveredDay(day)}
+                  setRef={setDayRef(day)}
+                />
+              ))}
             </motion.div>
           )}
         </motion.div>
