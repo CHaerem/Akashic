@@ -1,3 +1,5 @@
+import animate from 'tailwindcss-animate'
+
 /** @type {import('tailwindcss').Config} */
 export default {
   content: [
@@ -7,7 +9,7 @@ export default {
   theme: {
     extend: {
       fontFamily: {
-        sans: ['Inter', 'sans-serif'],
+        sans: ['Roboto', 'sans-serif'],
         display: ['Playfair Display', 'serif'],
       },
       colors: {
@@ -35,8 +37,11 @@ export default {
           800: '#9a3412',
           900: '#7c2d12',
         }
-      }
+      },
     },
   },
-  plugins: [],
+  plugins: [
+    // Radix animations (animate-in, animate-out, fade-in, slide-in, etc.)
+    animate,
+  ],
 }

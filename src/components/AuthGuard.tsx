@@ -1,8 +1,8 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { supabase, isAuthEnabled } from '../lib/supabase';
 import type { User } from '@supabase/supabase-js';
-import { colors, gradients, radius, transitions, typography } from '../styles/liquidGlass';
-import { GlassButton } from './common/GlassButton';
+import { Button } from './ui/button';
+import { Card } from './ui/card';
 
 interface AuthGuardProps {
     children: ReactNode;
@@ -58,18 +58,8 @@ export function AuthGuard({ children }: AuthGuardProps) {
     // Loading state
     if (loading) {
         return (
-            <div style={{
-                position: 'fixed',
-                inset: 0,
-                background: colors.background.base,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center'
-            }}>
-                <p style={{
-                    ...typography.label,
-                    color: colors.text.subtle
-                }}>
+            <div className="fixed inset-0 bg-[var(--lg-bg-base)] flex items-center justify-center">
+                <p className="text-sm text-white/35 light:text-slate-400">
                     Loading...
                 </p>
             </div>
@@ -83,75 +73,31 @@ export function AuthGuard({ children }: AuthGuardProps) {
 
     // Login screen - Google only (sign-ups disabled in Supabase)
     return (
-        <div style={{
-            position: 'fixed',
-            inset: 0,
-            background: colors.background.base,
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: 24
-        }}>
-            {/* Subtle glass card for login */}
-            <div style={{
-                background: gradients.glass.subtle,
-                backdropFilter: 'blur(16px) saturate(180%)',
-                WebkitBackdropFilter: 'blur(16px) saturate(180%)',
-                border: `1px solid ${colors.glass.borderSubtle}`,
-                borderRadius: radius.xl,
-                padding: '48px 40px',
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                boxShadow: `
-                    0 16px 48px rgba(0, 0, 0, 0.3),
-                    inset 0 1px 0 rgba(255, 255, 255, 0.1)
-                `,
-            }}>
-                <h1 style={{
-                    ...typography.label,
-                    fontSize: 14,
-                    letterSpacing: '0.3em',
-                    color: colors.text.secondary,
-                    marginBottom: 40,
-                }}>
+        <div className="fixed inset-0 bg-[var(--lg-bg-base)] flex flex-col items-center justify-center p-6">
+            <Card variant="elevated" className="px-10 py-12 flex flex-col items-center">
+                <h1 className="text-sm font-medium tracking-[0.3em] text-white/70 light:text-slate-600 mb-10">
                     Akashic
                 </h1>
 
-                <GlassButton
+                <Button
                     variant="default"
                     size="lg"
                     onClick={handleGoogleSignIn}
-                    style={{
-                        ...typography.label,
-                        letterSpacing: '0.15em',
-                    }}
+                    className="tracking-wider"
                 >
                     Sign in with Google
-                </GlassButton>
+                </Button>
 
                 {error && (
-                    <p style={{
-                        color: colors.accent.error,
-                        fontSize: 12,
-                        marginTop: 24,
-                        textAlign: 'center',
-                        transition: `opacity ${transitions.normal}`,
-                    }}>
+                    <p className="text-red-400 text-xs mt-6 text-center transition-opacity">
                         {error}
                     </p>
                 )}
 
-                <p style={{
-                    color: colors.text.subtle,
-                    fontSize: 11,
-                    marginTop: 32,
-                    textAlign: 'center'
-                }}>
+                <p className="text-white/35 light:text-slate-400 text-xs mt-8 text-center">
                     Access restricted to authorized users
                 </p>
-            </div>
+            </Card>
         </div>
     );
 }

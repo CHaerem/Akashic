@@ -9,7 +9,23 @@ import { extractPhotoMetadata, type PhotoMetadata } from '../lib/exif';
 import { uploadPhoto, type UploadResult } from '../lib/media';
 import { createPhoto, getJourneyIdBySlug } from '../lib/journeys';
 import { useJourneys } from '../contexts/JourneysContext';
-import { colors, radius, transitions } from '../styles/liquidGlass';
+import {
+    Dialog,
+    DialogContent,
+    DialogHeader,
+    DialogTitle,
+    DialogDescription,
+    DialogFooter,
+} from './ui/dialog';
+import { Button } from './ui/button';
+import { Label } from './ui/label';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from './ui/select';
 
 interface PhotoPreview {
     sharedFile: SharedFile;
@@ -24,7 +40,7 @@ interface ShareTargetModalProps {
 }
 
 export function ShareTargetModal({ isOpen, onClose, onUploadComplete }: ShareTargetModalProps) {
-    const { journeys } = useJourneys();
+    const { treks } = useJourneys();
     const [photos, setPhotos] = useState<PhotoPreview[]>([]);
     const [selectedJourney, setSelectedJourney] = useState<string>('');
     const [uploading, setUploading] = useState(false);
@@ -51,8 +67,8 @@ export function ShareTargetModal({ isOpen, onClose, onUploadComplete }: ShareTar
                 setPhotos(previews);
 
                 // Auto-select first journey if only one exists
-                if (journeys.length === 1) {
-                    setSelectedJourney(journeys[0].id);
+                if (treks.length === 1) {
+                    setSelectedJourney(treks[0].id);
                 }
             } catch (err) {
                 console.error('Failed to load shared files:', err);
@@ -66,7 +82,7 @@ export function ShareTargetModal({ isOpen, onClose, onUploadComplete }: ShareTar
         return () => {
             photos.forEach(p => URL.revokeObjectURL(p.previewUrl));
         };
-    }, [isOpen, journeys]);
+    }, [isOpen, treks]);
 
     const handleUpload = useCallback(async () => {
         if (!selectedJourney || photos.length === 0) return;
@@ -136,183 +152,63 @@ export function ShareTargetModal({ isOpen, onClose, onUploadComplete }: ShareTar
         });
     };
 
-    if (!isOpen) return null;
-
     return (
-        <div
-            style={{
-                position: 'fixed',
-                inset: 0,
-                zIndex: 10000,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                background: 'rgba(0, 0, 0, 0.8)',
-                backdropFilter: 'blur(8px)',
-                padding: 16,
-            }}
-            onClick={(e) => e.target === e.currentTarget && !uploading && handleCancel()}
-        >
-            <div
-                style={{
-                    background: colors.glass.medium,
-                    borderRadius: radius.xl,
-                    border: `1px solid ${colors.glass.border}`,
-                    width: '100%',
-                    maxWidth: 500,
-                    maxHeight: '90vh',
-                    overflow: 'hidden',
-                    display: 'flex',
-                    flexDirection: 'column',
-                }}
-            >
-                {/* Header */}
-                <div
-                    style={{
-                        padding: '20px 24px',
-                        borderBottom: `1px solid ${colors.glass.borderSubtle}`,
-                    }}
-                >
-                    <h2
-                        style={{
-                            margin: 0,
-                            fontSize: 18,
-                            fontWeight: 600,
-                            color: colors.text.primary,
-                        }}
-                    >
-                        Upload Shared Photos
-                    </h2>
-                    <p
-                        style={{
-                            margin: '8px 0 0',
-                            fontSize: 13,
-                            color: colors.text.tertiary,
-                        }}
-                    >
+        <Dialog open={isOpen} onOpenChange={(open) => !open && !uploading && handleCancel()}>
+            <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
+                <DialogHeader>
+                    <DialogTitle>Upload Shared Photos</DialogTitle>
+                    <DialogDescription>
                         {photos.length} photo{photos.length !== 1 ? 's' : ''} ready to upload
-                    </p>
-                </div>
+                    </DialogDescription>
+                </DialogHeader>
 
-                {/* Photo previews */}
-                <div
-                    style={{
-                        flex: 1,
-                        overflow: 'auto',
-                        padding: 16,
-                    }}
-                >
+                <div className="flex flex-col gap-4">
                     {error && (
-                        <div
-                            style={{
-                                background: 'rgba(255, 100, 100, 0.1)',
-                                border: '1px solid rgba(255, 100, 100, 0.3)',
-                                borderRadius: radius.md,
-                                padding: 12,
-                                marginBottom: 16,
-                                color: 'rgba(255, 150, 150, 0.9)',
-                                fontSize: 13,
-                            }}
-                        >
+                        <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
                             {error}
                         </div>
                     )}
 
                     {/* Journey selector */}
-                    <div style={{ marginBottom: 16 }}>
-                        <label
-                            style={{
-                                display: 'block',
-                                fontSize: 12,
-                                fontWeight: 500,
-                                color: colors.text.secondary,
-                                marginBottom: 8,
-                                textTransform: 'uppercase',
-                                letterSpacing: '0.05em',
-                            }}
-                        >
-                            Select Journey
-                        </label>
-                        <select
+                    <div className="space-y-2">
+                        <Label>Select Journey</Label>
+                        <Select
                             value={selectedJourney}
-                            onChange={(e) => setSelectedJourney(e.target.value)}
+                            onValueChange={setSelectedJourney}
                             disabled={uploading}
-                            style={{
-                                width: '100%',
-                                padding: '12px 16px',
-                                fontSize: 14,
-                                background: 'rgba(255, 255, 255, 0.05)',
-                                border: `1px solid ${colors.glass.border}`,
-                                borderRadius: radius.md,
-                                color: colors.text.primary,
-                                cursor: uploading ? 'not-allowed' : 'pointer',
-                                opacity: uploading ? 0.6 : 1,
-                            }}
                         >
-                            <option value="">Choose a journey...</option>
-                            {journeys.map((journey) => (
-                                <option key={journey.id} value={journey.id}>
-                                    {journey.name}
-                                </option>
-                            ))}
-                        </select>
+                            <SelectTrigger>
+                                <SelectValue placeholder="Choose a journey..." />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {treks.map((trek) => (
+                                    <SelectItem key={trek.id} value={trek.id}>
+                                        {trek.name}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
                     </div>
 
                     {/* Photo grid */}
-                    <div
-                        style={{
-                            display: 'grid',
-                            gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))',
-                            gap: 8,
-                        }}
-                    >
+                    <div className="grid grid-cols-3 gap-2">
                         {photos.map((photo, index) => (
                             <div
                                 key={photo.sharedFile.id}
-                                style={{
-                                    position: 'relative',
-                                    aspectRatio: '1',
-                                    borderRadius: radius.md,
-                                    overflow: 'hidden',
-                                    background: 'rgba(255, 255, 255, 0.05)',
-                                }}
+                                className="relative aspect-square rounded-lg overflow-hidden bg-white/5"
                             >
                                 <img
                                     src={photo.previewUrl}
                                     alt={`Photo ${index + 1}`}
-                                    style={{
-                                        width: '100%',
-                                        height: '100%',
-                                        objectFit: 'cover',
-                                    }}
+                                    className="w-full h-full object-cover"
                                 />
 
                                 {/* Metadata indicators */}
-                                <div
-                                    style={{
-                                        position: 'absolute',
-                                        bottom: 0,
-                                        left: 0,
-                                        right: 0,
-                                        padding: 4,
-                                        background: 'linear-gradient(transparent, rgba(0,0,0,0.7))',
-                                        display: 'flex',
-                                        gap: 4,
-                                        justifyContent: 'flex-end',
-                                    }}
-                                >
+                                <div className="absolute bottom-0 left-0 right-0 p-1 bg-gradient-to-t from-black/70 to-transparent flex gap-1 justify-end">
                                     {/* Location indicator */}
                                     {photo.metadata.coordinates && (
                                         <div
-                                            style={{
-                                                width: 20,
-                                                height: 20,
-                                                borderRadius: '50%',
-                                                background: 'rgba(59, 130, 246, 0.8)',
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                justifyContent: 'center',
-                                            }}
+                                            className="w-5 h-5 rounded-full bg-blue-500/80 flex items-center justify-center"
                                             title="Has GPS location"
                                         >
                                             <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5">
@@ -325,15 +221,7 @@ export function ShareTargetModal({ isOpen, onClose, onUploadComplete }: ShareTar
                                     {/* Date indicator */}
                                     {photo.metadata.takenAt && (
                                         <div
-                                            style={{
-                                                width: 20,
-                                                height: 20,
-                                                borderRadius: '50%',
-                                                background: 'rgba(34, 197, 94, 0.8)',
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                justifyContent: 'center',
-                                            }}
+                                            className="w-5 h-5 rounded-full bg-green-500/80 flex items-center justify-center"
                                             title={formatDate(photo.metadata.takenAt)}
                                         >
                                             <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5">
@@ -351,25 +239,16 @@ export function ShareTargetModal({ isOpen, onClose, onUploadComplete }: ShareTar
 
                     {/* Metadata summary */}
                     {photos.length > 0 && (
-                        <div
-                            style={{
-                                marginTop: 16,
-                                padding: 12,
-                                background: 'rgba(255, 255, 255, 0.03)',
-                                borderRadius: radius.md,
-                                fontSize: 12,
-                                color: colors.text.tertiary,
-                            }}
-                        >
-                            <div style={{ display: 'flex', gap: 16 }}>
+                        <div className="p-3 rounded-lg bg-white/5 light:bg-black/5 text-xs text-white/50 light:text-slate-500">
+                            <div className="flex gap-4">
                                 <span>
-                                    <span style={{ color: 'rgba(59, 130, 246, 0.9)' }}>
+                                    <span className="text-blue-400">
                                         {photos.filter(p => p.metadata.coordinates).length}
                                     </span>{' '}
                                     with GPS
                                 </span>
                                 <span>
-                                    <span style={{ color: 'rgba(34, 197, 94, 0.9)' }}>
+                                    <span className="text-green-400">
                                         {photos.filter(p => p.metadata.takenAt).length}
                                     </span>{' '}
                                     with date
@@ -379,59 +258,25 @@ export function ShareTargetModal({ isOpen, onClose, onUploadComplete }: ShareTar
                     )}
                 </div>
 
-                {/* Footer */}
-                <div
-                    style={{
-                        padding: '16px 24px',
-                        borderTop: `1px solid ${colors.glass.borderSubtle}`,
-                        display: 'flex',
-                        gap: 12,
-                        justifyContent: 'flex-end',
-                    }}
-                >
-                    <button
+                <DialogFooter>
+                    <Button
+                        variant="subtle"
                         onClick={handleCancel}
                         disabled={uploading}
-                        style={{
-                            padding: '10px 20px',
-                            fontSize: 14,
-                            fontWeight: 500,
-                            background: 'transparent',
-                            border: `1px solid ${colors.glass.border}`,
-                            borderRadius: radius.md,
-                            color: colors.text.secondary,
-                            cursor: uploading ? 'not-allowed' : 'pointer',
-                            opacity: uploading ? 0.5 : 1,
-                            transition: `all ${transitions.fast}`,
-                        }}
                     >
                         Cancel
-                    </button>
-                    <button
+                    </Button>
+                    <Button
+                        variant="primary"
                         onClick={handleUpload}
                         disabled={!selectedJourney || uploading || photos.length === 0}
-                        style={{
-                            padding: '10px 24px',
-                            fontSize: 14,
-                            fontWeight: 500,
-                            background: selectedJourney && !uploading
-                                ? 'rgba(59, 130, 246, 0.8)'
-                                : 'rgba(255, 255, 255, 0.1)',
-                            border: 'none',
-                            borderRadius: radius.md,
-                            color: selectedJourney && !uploading
-                                ? '#fff'
-                                : colors.text.tertiary,
-                            cursor: !selectedJourney || uploading ? 'not-allowed' : 'pointer',
-                            transition: `all ${transitions.fast}`,
-                        }}
                     >
                         {uploading
                             ? `Uploading ${uploadProgress?.current}/${uploadProgress?.total}...`
                             : `Upload ${photos.length} Photo${photos.length !== 1 ? 's' : ''}`}
-                    </button>
-                </div>
-            </div>
-        </div>
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
     );
 }

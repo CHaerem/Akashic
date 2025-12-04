@@ -12,9 +12,27 @@ import {
     type JourneyUpdate
 } from '../../lib/journeys';
 import type { JourneyMember, Profile, JourneyRole } from '../../types/trek';
-import { GlassModal, glassInputStyle, glassLabelStyle, glassInfoBoxStyle, glassErrorBoxStyle } from '../common/GlassModal';
-import { GlassButton } from '../common/GlassButton';
-import { colors, transitions, radius } from '../../styles/liquidGlass';
+import {
+    Dialog,
+    DialogContent,
+    DialogHeader,
+    DialogTitle,
+    DialogFooter,
+} from '../ui/dialog';
+import {
+    Sheet,
+    SheetContent,
+    SheetHeader,
+    SheetTitle,
+    SheetFooter,
+} from '../ui/sheet';
+import { Button } from '../ui/button';
+import { Input } from '../ui/input';
+import { Textarea } from '../ui/textarea';
+import { Label } from '../ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
+import { Card } from '../ui/card';
+import { cn } from '@/lib/utils';
 
 interface JourneyEditModalProps {
     slug: string;
@@ -22,76 +40,6 @@ interface JourneyEditModalProps {
     onClose: () => void;
     onSave: () => void;
     isMobile: boolean;
-}
-
-// Enhanced input with focus state handling
-function GlassInput({
-    type = 'text',
-    value,
-    onChange,
-    placeholder,
-    style,
-    ...props
-}: React.InputHTMLAttributes<HTMLInputElement> & { style?: React.CSSProperties }) {
-    const [focused, setFocused] = useState(false);
-
-    return (
-        <input
-            type={type}
-            value={value}
-            onChange={onChange}
-            placeholder={placeholder}
-            onFocus={() => setFocused(true)}
-            onBlur={() => setFocused(false)}
-            style={{
-                ...glassInputStyle,
-                ...(focused && {
-                    borderColor: colors.accent.primary,
-                    boxShadow: `
-                        inset 0 2px 4px rgba(0, 0, 0, 0.2),
-                        0 0 0 3px rgba(96, 165, 250, 0.2)
-                    `,
-                }),
-                ...style,
-            }}
-            {...props}
-        />
-    );
-}
-
-// Enhanced textarea with focus state handling
-function GlassTextarea({
-    value,
-    onChange,
-    placeholder,
-    style,
-    ...props
-}: React.TextareaHTMLAttributes<HTMLTextAreaElement> & { style?: React.CSSProperties }) {
-    const [focused, setFocused] = useState(false);
-
-    return (
-        <textarea
-            value={value}
-            onChange={onChange}
-            placeholder={placeholder}
-            onFocus={() => setFocused(true)}
-            onBlur={() => setFocused(false)}
-            style={{
-                ...glassInputStyle,
-                minHeight: 100,
-                resize: 'vertical' as const,
-                ...(focused && {
-                    borderColor: colors.accent.primary,
-                    boxShadow: `
-                        inset 0 2px 4px rgba(0, 0, 0, 0.2),
-                        0 0 0 3px rgba(96, 165, 250, 0.2)
-                    `,
-                }),
-                ...style,
-            }}
-            {...props}
-        />
-    );
 }
 
 export const JourneyEditModal = memo(function JourneyEditModal({
@@ -241,45 +189,22 @@ export const JourneyEditModal = memo(function JourneyEditModal({
 
     const isOwner = userRole === 'owner';
 
-    const footer = (
+    const formContent = (
         <>
-            <GlassButton variant="subtle" size="md" onClick={onClose}>
-                Cancel
-            </GlassButton>
-            <GlassButton
-                variant="primary"
-                size="md"
-                onClick={handleSave}
-                disabled={saving || loading}
-                style={{ opacity: saving || loading ? 0.5 : 1 }}
-            >
-                {saving ? 'Saving...' : 'Save Changes'}
-            </GlassButton>
-        </>
-    );
-
-    return (
-        <GlassModal
-            isOpen={isOpen}
-            onClose={onClose}
-            title="Edit Journey"
-            footer={footer}
-            isMobile={isMobile}
-        >
             {loading ? (
-                <div style={{ color: colors.text.tertiary, textAlign: 'center', padding: 40 }}>
+                <div className="text-white/50 light:text-slate-400 text-center py-10">
                     Loading...
                 </div>
             ) : error ? (
-                <div style={glassErrorBoxStyle}>
+                <div className="p-4 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
                     {error}
                 </div>
             ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+                <div className="flex flex-col gap-5">
                     {/* Name */}
-                    <div>
-                        <label style={glassLabelStyle}>Name</label>
-                        <GlassInput
+                    <div className="space-y-2">
+                        <Label>Name</Label>
+                        <Input
                             type="text"
                             value={name}
                             onChange={e => setName(e.target.value)}
@@ -288,9 +213,9 @@ export const JourneyEditModal = memo(function JourneyEditModal({
                     </div>
 
                     {/* Country */}
-                    <div>
-                        <label style={glassLabelStyle}>Country</label>
-                        <GlassInput
+                    <div className="space-y-2">
+                        <Label>Country</Label>
+                        <Input
                             type="text"
                             value={country}
                             onChange={e => setCountry(e.target.value)}
@@ -299,9 +224,9 @@ export const JourneyEditModal = memo(function JourneyEditModal({
                     </div>
 
                     {/* Description */}
-                    <div>
-                        <label style={glassLabelStyle}>Description</label>
-                        <GlassTextarea
+                    <div className="space-y-2">
+                        <Label>Description</Label>
+                        <Textarea
                             value={description}
                             onChange={e => setDescription(e.target.value)}
                             placeholder="Journey description..."
@@ -309,32 +234,32 @@ export const JourneyEditModal = memo(function JourneyEditModal({
                     </div>
 
                     {/* Dates */}
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                        <div>
-                            <label style={glassLabelStyle}>Start Date</label>
-                            <GlassInput
+                    <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-2">
+                            <Label>Start Date</Label>
+                            <Input
                                 type="date"
                                 value={dateStarted}
                                 onChange={e => setDateStarted(e.target.value)}
-                                style={{ colorScheme: 'dark' }}
+                                className="[color-scheme:dark] light:[color-scheme:light]"
                             />
                         </div>
-                        <div>
-                            <label style={glassLabelStyle}>End Date</label>
-                            <GlassInput
+                        <div className="space-y-2">
+                            <Label>End Date</Label>
+                            <Input
                                 type="date"
                                 value={dateEnded}
                                 onChange={e => setDateEnded(e.target.value)}
-                                style={{ colorScheme: 'dark' }}
+                                className="[color-scheme:dark] light:[color-scheme:light]"
                             />
                         </div>
                     </div>
 
                     {/* Stats */}
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
-                        <div>
-                            <label style={glassLabelStyle}>Days</label>
-                            <GlassInput
+                    <div className="grid grid-cols-3 gap-3">
+                        <div className="space-y-2">
+                            <Label>Days</Label>
+                            <Input
                                 type="number"
                                 value={totalDays}
                                 onChange={e => setTotalDays(e.target.value)}
@@ -342,9 +267,9 @@ export const JourneyEditModal = memo(function JourneyEditModal({
                                 min={1}
                             />
                         </div>
-                        <div>
-                            <label style={glassLabelStyle}>Distance (km)</label>
-                            <GlassInput
+                        <div className="space-y-2">
+                            <Label>Distance (km)</Label>
+                            <Input
                                 type="number"
                                 value={totalDistance}
                                 onChange={e => setTotalDistance(e.target.value)}
@@ -352,9 +277,9 @@ export const JourneyEditModal = memo(function JourneyEditModal({
                                 step={0.1}
                             />
                         </div>
-                        <div>
-                            <label style={glassLabelStyle}>Summit (m)</label>
-                            <GlassInput
+                        <div className="space-y-2">
+                            <Label>Summit (m)</Label>
+                            <Input
                                 type="number"
                                 value={summitElevation}
                                 onChange={e => setSummitElevation(e.target.value)}
@@ -365,139 +290,80 @@ export const JourneyEditModal = memo(function JourneyEditModal({
 
                     {/* Info about date matching */}
                     {dateStarted && (
-                        <div style={glassInfoBoxStyle}>
+                        <div className="p-3 rounded-xl bg-blue-500/10 border border-blue-500/20 text-blue-300 light:text-blue-700 text-sm">
                             Photos will be matched to days based on this start date.
                             Day 1 = {new Date(dateStarted).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                         </div>
                     )}
 
                     {/* Members Section */}
-                    <div style={{
-                        marginTop: 24,
-                        paddingTop: 24,
-                        borderTop: `1px solid ${colors.glass.borderSubtle}`
-                    }}>
-                        <label style={{
-                            ...glassLabelStyle,
-                            fontSize: 14,
-                            marginBottom: 16,
-                            display: 'block'
-                        }}>
-                            Team Members
-                        </label>
+                    <div className="mt-6 pt-6 border-t border-white/10 light:border-black/5">
+                        <Label className="text-sm mb-4 block">Team Members</Label>
 
                         {memberError && (
-                            <div style={{ ...glassErrorBoxStyle, marginBottom: 16 }}>
+                            <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-sm mb-4">
                                 {memberError}
                             </div>
                         )}
 
                         {/* Current Members List */}
-                        <div style={{
-                            display: 'flex',
-                            flexDirection: 'column',
-                            gap: 8,
-                            marginBottom: 16
-                        }}>
+                        <div className="flex flex-col gap-2 mb-4">
                             {members.map(member => (
-                                <div
+                                <Card
                                     key={member.id}
-                                    style={{
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        gap: 12,
-                                        padding: '10px 12px',
-                                        background: 'rgba(255, 255, 255, 0.05)',
-                                        borderRadius: radius.md,
-                                        border: `1px solid ${colors.glass.borderSubtle}`
-                                    }}
+                                    variant="subtle"
+                                    className="flex items-center gap-3 p-3"
                                 >
-                                    <div style={{ flex: 1, minWidth: 0 }}>
-                                        <div style={{
-                                            color: colors.text.primary,
-                                            fontSize: 14,
-                                            fontWeight: 500,
-                                            overflow: 'hidden',
-                                            textOverflow: 'ellipsis',
-                                            whiteSpace: 'nowrap'
-                                        }}>
+                                    <div className="flex-1 min-w-0">
+                                        <div className="text-white/95 light:text-slate-900 text-sm font-medium truncate">
                                             {member.profile?.display_name || member.profile?.email || 'Unknown'}
                                         </div>
-                                        <div style={{
-                                            color: colors.text.subtle,
-                                            fontSize: 12
-                                        }}>
+                                        <div className="text-white/35 light:text-slate-400 text-xs">
                                             {member.profile?.email}
                                         </div>
                                     </div>
 
                                     {/* Role selector (owners can change roles) */}
                                     {isOwner && member.role !== 'owner' ? (
-                                        <select
+                                        <Select
                                             value={member.role}
-                                            onChange={(e) => handleRoleChange(member.user_id, e.target.value as JourneyRole)}
-                                            style={{
-                                                ...glassInputStyle,
-                                                width: 'auto',
-                                                padding: '6px 10px',
-                                                fontSize: 12,
-                                                cursor: 'pointer'
-                                            }}
+                                            onValueChange={(value) => handleRoleChange(member.user_id, value as JourneyRole)}
                                         >
-                                            <option value="editor">Editor</option>
-                                            <option value="viewer">Viewer</option>
-                                        </select>
+                                            <SelectTrigger className="w-24 h-9 text-xs">
+                                                <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="editor">Editor</SelectItem>
+                                                <SelectItem value="viewer">Viewer</SelectItem>
+                                            </SelectContent>
+                                        </Select>
                                     ) : (
-                                        <span style={{
-                                            padding: '4px 10px',
-                                            borderRadius: radius.sm,
-                                            fontSize: 12,
-                                            fontWeight: 500,
-                                            textTransform: 'uppercase',
-                                            letterSpacing: '0.05em',
-                                            background: member.role === 'owner'
-                                                ? 'rgba(251, 191, 36, 0.2)'
-                                                : member.role === 'editor'
-                                                    ? 'rgba(96, 165, 250, 0.2)'
-                                                    : 'rgba(255, 255, 255, 0.1)',
-                                            color: member.role === 'owner'
-                                                ? '#fbbf24'
-                                                : member.role === 'editor'
-                                                    ? '#60a5fa'
-                                                    : colors.text.secondary
-                                        }}>
+                                        <span className={cn(
+                                            "px-2.5 py-1 rounded-lg text-xs font-medium uppercase tracking-wide",
+                                            member.role === 'owner' && "bg-yellow-500/20 text-yellow-400",
+                                            member.role === 'editor' && "bg-blue-500/20 text-blue-400",
+                                            member.role === 'viewer' && "bg-white/10 text-white/70 light:bg-black/5 light:text-slate-600"
+                                        )}>
                                             {member.role}
                                         </span>
                                     )}
 
                                     {/* Remove button (owners can remove non-owners) */}
                                     {isOwner && member.role !== 'owner' && (
-                                        <button
+                                        <Button
+                                            variant="danger"
+                                            size="sm"
                                             onClick={() => handleRemoveMember(member.user_id)}
-                                            style={{
-                                                background: 'rgba(239, 68, 68, 0.2)',
-                                                border: 'none',
-                                                borderRadius: radius.sm,
-                                                padding: '6px 10px',
-                                                color: '#ef4444',
-                                                fontSize: 12,
-                                                cursor: 'pointer',
-                                                transition: `all ${transitions.fast}`
-                                            }}
+                                            className="h-9"
                                         >
                                             Remove
-                                        </button>
+                                        </Button>
                                     )}
-                                </div>
+                                </Card>
                             ))}
 
                             {members.length === 0 && (
-                                <div style={{
-                                    color: colors.text.subtle,
-                                    fontSize: 14,
-                                    textAlign: 'center',
-                                    padding: 20
-                                }}>
+                                <div className="text-white/35 light:text-slate-400 text-sm text-center py-5">
                                     No members yet
                                 </div>
                             )}
@@ -505,70 +371,107 @@ export const JourneyEditModal = memo(function JourneyEditModal({
 
                         {/* Add Member (owners only) */}
                         {isOwner && availableUsers.length > 0 && (
-                            <div style={{
-                                display: 'flex',
-                                gap: 8,
-                                alignItems: 'flex-end'
-                            }}>
-                                <div style={{ flex: 1 }}>
-                                    <label style={{ ...glassLabelStyle, fontSize: 12 }}>Add Member</label>
-                                    <select
-                                        value={selectedUserId}
-                                        onChange={(e) => setSelectedUserId(e.target.value)}
-                                        style={{
-                                            ...glassInputStyle,
-                                            cursor: 'pointer'
-                                        }}
-                                    >
-                                        <option value="">Select user...</option>
-                                        {availableUsers.map(user => (
-                                            <option key={user.id} value={user.id}>
-                                                {user.display_name || user.email}
-                                            </option>
-                                        ))}
-                                    </select>
+                            <div className="flex gap-2 items-end">
+                                <div className="flex-1 space-y-2">
+                                    <Label className="text-xs">Add Member</Label>
+                                    <Select value={selectedUserId} onValueChange={setSelectedUserId}>
+                                        <SelectTrigger>
+                                            <SelectValue placeholder="Select user..." />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {availableUsers.map(user => (
+                                                <SelectItem key={user.id} value={user.id}>
+                                                    {user.display_name || user.email}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
                                 </div>
-                                <div>
-                                    <label style={{ ...glassLabelStyle, fontSize: 12 }}>Role</label>
-                                    <select
-                                        value={selectedRole}
-                                        onChange={(e) => setSelectedRole(e.target.value as JourneyRole)}
-                                        style={{
-                                            ...glassInputStyle,
-                                            width: 'auto',
-                                            cursor: 'pointer'
-                                        }}
-                                    >
-                                        <option value="editor">Editor</option>
-                                        <option value="viewer">Viewer</option>
-                                    </select>
+                                <div className="space-y-2">
+                                    <Label className="text-xs">Role</Label>
+                                    <Select value={selectedRole} onValueChange={(v) => setSelectedRole(v as JourneyRole)}>
+                                        <SelectTrigger className="w-24">
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="editor">Editor</SelectItem>
+                                            <SelectItem value="viewer">Viewer</SelectItem>
+                                        </SelectContent>
+                                    </Select>
                                 </div>
-                                <GlassButton
+                                <Button
                                     variant="primary"
                                     size="sm"
                                     onClick={handleAddMember}
                                     disabled={!selectedUserId || addingMember}
-                                    style={{ marginBottom: 0 }}
                                 >
                                     {addingMember ? '...' : 'Add'}
-                                </GlassButton>
+                                </Button>
                             </div>
                         )}
 
                         {isOwner && availableUsers.length === 0 && members.length > 0 && (
-                            <div style={glassInfoBoxStyle}>
+                            <div className="p-3 rounded-xl bg-blue-500/10 border border-blue-500/20 text-blue-300 light:text-blue-700 text-sm">
                                 All registered users are already members of this journey.
                             </div>
                         )}
 
                         {!isOwner && (
-                            <div style={glassInfoBoxStyle}>
+                            <div className="p-3 rounded-xl bg-blue-500/10 border border-blue-500/20 text-blue-300 light:text-blue-700 text-sm">
                                 Only journey owners can manage members.
                             </div>
                         )}
                     </div>
                 </div>
             )}
-        </GlassModal>
+        </>
+    );
+
+    const footerContent = (
+        <>
+            <Button variant="subtle" onClick={onClose}>
+                Cancel
+            </Button>
+            <Button
+                variant="primary"
+                onClick={handleSave}
+                disabled={saving || loading}
+            >
+                {saving ? 'Saving...' : 'Save Changes'}
+            </Button>
+        </>
+    );
+
+    // Use Sheet for mobile, Dialog for desktop
+    if (isMobile) {
+        return (
+            <Sheet open={isOpen} onOpenChange={(open) => !open && onClose()}>
+                <SheetContent side="bottom" className="max-h-[90dvh] overflow-y-auto">
+                    <SheetHeader>
+                        <SheetTitle>Edit Journey</SheetTitle>
+                    </SheetHeader>
+                    <div className="px-6 py-4 overflow-y-auto">
+                        {formContent}
+                    </div>
+                    <SheetFooter>
+                        {footerContent}
+                    </SheetFooter>
+                </SheetContent>
+            </Sheet>
+        );
+    }
+
+    return (
+        <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
+            <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+                <DialogHeader>
+                    <DialogTitle>Edit Journey</DialogTitle>
+                </DialogHeader>
+                {formContent}
+                <DialogFooter>
+                    {footerContent}
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
     );
 });

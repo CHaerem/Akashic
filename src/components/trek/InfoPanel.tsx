@@ -1,14 +1,14 @@
 import { memo, useCallback, useState, useMemo, useRef } from 'react';
 import type { TrekData, Camp, ExtendedStats, ElevationProfile, TabType, Photo } from '../../types/trek';
 import { useDragGesture } from '../../hooks/useDragGesture';
-import { TabButton } from '../common/TabButton';
-import { GlassButton } from '../common/GlassButton';
+import { Button } from '../ui/button';
+import { Tabs, TabsList, TabsTrigger } from '../ui/tabs';
 import { OverviewTab } from './OverviewTab';
 import { JourneyTab } from './JourneyTab';
 import { StatsTab } from './StatsTab';
 import { PhotosTab } from './PhotosTab';
 import { JourneyEditModal } from './JourneyEditModal';
-import { colors, radius, transitions, typography } from '../../styles/liquidGlass';
+import { cn } from '@/lib/utils';
 
 export type PanelState = 'minimized' | 'normal' | 'expanded';
 
@@ -48,7 +48,6 @@ export const InfoPanel = memo(function InfoPanel({
     extendedStats, elevationProfile, isMobile, panelState, onPanelStateChange,
     photos = [], getMediaUrl = (path) => path, onJourneyUpdate, onViewPhotoOnMap
 }: InfoPanelProps) {
-    const padding = isMobile ? 16 : 24;
     const [showEditModal, setShowEditModal] = useState(false);
     const [editMode, setEditMode] = useState(false);
     const panelRef = useRef<HTMLDivElement>(null);
@@ -70,13 +69,13 @@ export const InfoPanel = memo(function InfoPanel({
         currentSnapIndex,
         onSnapChange: handleSnapChange,
         panelRef,
-        onDismiss: onBack, // Swipe down from minimized to go back to globe
+        onDismiss: onBack,
         velocityThreshold: 0.4,
         distanceThreshold: 40,
-        dismissThreshold: 80, // 80px to dismiss
+        dismissThreshold: 80,
     });
 
-    // Panel height based on state (only used for initial render and non-drag state)
+    // Panel height based on state
     const getPanelHeight = (): string => {
         const baseHeights: Record<PanelState, string> = {
             minimized: '100px',
@@ -86,266 +85,202 @@ export const InfoPanel = memo(function InfoPanel({
         return baseHeights[panelState];
     };
 
-    const maxHeight = 'calc(100dvh - 60px)';
-
-    // Mobile bottom sheet style - Liquid Glass design
-    // Note: height and transition are manipulated directly via panelRef during drag
-    const mobileStyle: React.CSSProperties = {
-        position: 'absolute',
-        left: 0,
-        right: 0,
-        bottom: 0,
-        height: getPanelHeight(),
-        maxHeight,
-        // Liquid Glass gradient background
-        background: `linear-gradient(
-            180deg,
-            rgba(255, 255, 255, 0.12) 0%,
-            rgba(255, 255, 255, 0.06) 10%,
-            rgba(12, 12, 18, 0.95) 40%
-        )`,
-        // Reduced blur for mobile performance (16px vs 32px on desktop)
-        backdropFilter: 'blur(16px) saturate(150%)',
-        WebkitBackdropFilter: 'blur(16px) saturate(150%)',
-        willChange: 'height',
-        borderTop: `1px solid ${colors.glass.border}`,
-        borderRadius: `${radius.xxl}px ${radius.xxl}px 0 0`,
-        display: 'flex',
-        flexDirection: 'column',
-        zIndex: 20,
-        // Default transition (overridden by direct DOM manipulation during drag)
-        transition: `height 0.4s cubic-bezier(0.32, 0.72, 0, 1)`,
-        paddingBottom: 'env(safe-area-inset-bottom)',
-        boxShadow: `
-            0 -16px 48px rgba(0, 0, 0, 0.4),
-            inset 0 1px 0 rgba(255, 255, 255, 0.15),
-            inset 0 2px 20px rgba(255, 255, 255, 0.05)
-        `,
-    };
-
-    // Desktop side panel style - Liquid Glass design
-    const desktopStyle: React.CSSProperties = {
-        position: 'absolute',
-        top: 0,
-        right: 0,
-        bottom: 0,
-        width: '38%',
-        minWidth: 360,
-        maxWidth: 480,
-        // Liquid Glass gradient background
-        background: `linear-gradient(
-            135deg,
-            rgba(255, 255, 255, 0.1) 0%,
-            rgba(255, 255, 255, 0.05) 30%,
-            rgba(10, 10, 15, 0.85) 100%
-        )`,
-        backdropFilter: 'blur(32px) saturate(180%)',
-        WebkitBackdropFilter: 'blur(32px) saturate(180%)',
-        borderLeft: `1px solid ${colors.glass.border}`,
-        display: 'flex',
-        flexDirection: 'column',
-        zIndex: 20,
-        boxShadow: `
-            -8px 0 40px rgba(0, 0, 0, 0.3),
-            inset 1px 0 0 rgba(255, 255, 255, 0.1)
-        `,
-    };
-
     const handleDragHandleClick = useCallback(() => {
-        // Cycle through states on tap
         if (panelState === 'minimized') onPanelStateChange('normal');
         else if (panelState === 'normal') onPanelStateChange('expanded');
         else onPanelStateChange('normal');
     }, [panelState, onPanelStateChange]);
 
+    const handleTabChange = useCallback((value: string) => {
+        setActiveTab(value as TabType);
+    }, [setActiveTab]);
+
     return (
-        <div ref={isMobile ? panelRef : null} style={isMobile ? mobileStyle : desktopStyle} className="glass-scrollbar">
-            {/* Mobile drag handle with iOS-like gesture support */}
+        <div
+            ref={isMobile ? panelRef : null}
+            className={cn(
+                "flex flex-col z-20",
+                // Glass morphism
+                "backdrop-blur-2xl saturate-[180%]",
+                isMobile ? [
+                    // Mobile bottom sheet
+                    "absolute inset-x-0 bottom-0",
+                    "rounded-t-2xl",
+                    "border-t border-white/15 light:border-black/10",
+                    "pb-[env(safe-area-inset-bottom)]",
+                    "transition-[height] duration-400 ease-[cubic-bezier(0.32,0.72,0,1)]",
+                    "will-change-[height]",
+                ] : [
+                    // Desktop side panel
+                    "absolute top-0 right-0 bottom-0",
+                    "w-[38%] min-w-[360px] max-w-[480px]",
+                    "border-l border-white/15 light:border-black/10",
+                ]
+            )}
+            style={{
+                // Gradient backgrounds for dark liquid glass
+                background: isMobile
+                    ? `linear-gradient(180deg, rgba(255,255,255,0.12) 0%, rgba(255,255,255,0.06) 10%, rgba(12,12,18,0.95) 40%)`
+                    : `linear-gradient(135deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.05) 30%, rgba(10,10,15,0.85) 100%)`,
+                height: isMobile ? getPanelHeight() : undefined,
+                maxHeight: isMobile ? 'calc(100dvh - 60px)' : undefined,
+                boxShadow: isMobile
+                    ? '0 -16px 48px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.15)'
+                    : '-8px 0 40px rgba(0,0,0,0.3), inset 1px 0 0 rgba(255,255,255,0.1)',
+            }}
+        >
+            {/* Mobile drag handle */}
             {isMobile && (
                 <div
                     onClick={handleDragHandleClick}
                     onTouchStart={dragHandlers.onTouchStart}
                     onTouchMove={dragHandlers.onTouchMove}
                     onTouchEnd={dragHandlers.onTouchEnd}
-                    style={{
-                        padding: '14px 0 10px',
-                        display: 'flex',
-                        justifyContent: 'center',
-                        cursor: dragState.isDragging ? 'grabbing' : 'grab',
-                        touchAction: 'none'
-                    }}
+                    className={cn(
+                        // Larger touch target (48px min height)
+                        "py-4 min-h-[48px] flex justify-center items-center touch-none",
+                        dragState.isDragging ? "cursor-grabbing" : "cursor-grab"
+                    )}
                 >
-                    <div style={{
-                        width: dragState.isDragging ? 52 : (panelState === 'expanded' ? 48 : 40),
-                        height: 5,
-                        background: dragState.isDragging
-                            ? `linear-gradient(
-                                90deg,
-                                rgba(255, 255, 255, 0.3) 0%,
-                                rgba(255, 255, 255, 0.6) 50%,
-                                rgba(255, 255, 255, 0.3) 100%
-                            )`
-                            : `linear-gradient(
-                                90deg,
-                                rgba(255, 255, 255, 0.2) 0%,
-                                rgba(255, 255, 255, 0.4) 50%,
-                                rgba(255, 255, 255, 0.2) 100%
-                            )`,
-                        borderRadius: radius.pill,
-                        transition: dragState.isDragging ? 'none' : `all ${transitions.smooth}`,
-                        boxShadow: 'inset 0 1px 0 rgba(255, 255, 255, 0.3)',
-                    }} />
+                    <div className={cn(
+                        "h-1.5 rounded-full transition-all duration-200",
+                        // Higher contrast handle
+                        "bg-gradient-to-r from-white/25 via-white/45 to-white/25",
+                        "light:from-black/20 light:via-black/35 light:to-black/20",
+                        // Wider handle when dragging
+                        dragState.isDragging ? "w-16" : (panelState === 'expanded' ? "w-14" : "w-10")
+                    )} />
                 </div>
             )}
 
-            {/* Header - also draggable on mobile for larger touch target */}
+            {/* Header */}
             <div
                 onTouchStart={isMobile ? dragHandlers.onTouchStart : undefined}
                 onTouchMove={isMobile ? dragHandlers.onTouchMove : undefined}
                 onTouchEnd={isMobile ? dragHandlers.onTouchEnd : undefined}
-                style={{
-                    padding: isMobile ? `8px ${padding}px 16px` : `${padding}px`,
-                    borderBottom: panelState !== 'minimized' ? `1px solid ${colors.glass.borderSubtle}` : 'none',
-                    display: 'flex',
-                    flexDirection: isMobile ? 'row' : 'column',
-                    alignItems: isMobile ? 'center' : 'stretch',
-                    justifyContent: isMobile ? 'space-between' : 'flex-start',
-                    flexShrink: 0,
-                    touchAction: isMobile ? 'none' : 'auto',
-                    cursor: isMobile ? (dragState.isDragging ? 'grabbing' : 'grab') : 'default',
-                }}
+                className={cn(
+                    "flex-shrink-0",
+                    isMobile ? [
+                        "px-4 pt-2 pb-4",
+                        "flex flex-row items-center justify-between",
+                        "touch-none",
+                        dragState.isDragging ? "cursor-grabbing" : "cursor-grab"
+                    ] : [
+                        "p-6 flex flex-col",
+                        panelState !== 'minimized' && "border-b border-white/10 light:border-black/5"
+                    ]
+                )}
             >
+                {/* Desktop back button */}
                 {!isMobile && (
-                    <GlassButton
+                    <Button
                         variant="ghost"
                         size="sm"
                         onClick={onBack}
-                        style={{
-                            alignSelf: 'flex-start',
-                            marginBottom: 20,
-                            ...typography.label,
-                        }}
+                        className="self-start mb-5 text-xs tracking-wider"
                     >
                         ← Globe
-                    </GlassButton>
+                    </Button>
                 )}
-                <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: isMobile ? 4 : 8 }}>
-                        <p style={{
-                            ...typography.label,
-                            fontSize: 10,
-                            letterSpacing: '0.2em',
-                            color: colors.text.subtle,
-                            margin: 0
-                        }}>
+
+                <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                        <p className="text-[10px] tracking-[0.2em] uppercase text-white/35 light:text-slate-400 m-0">
                             {trekData.country}
                         </p>
+                        {/* Desktop edit toggle */}
                         {!isMobile && (
-                            <GlassButton
+                            <Button
                                 variant={editMode ? 'primary' : 'subtle'}
                                 size="sm"
                                 onClick={() => setEditMode(!editMode)}
-                                icon={<PencilIcon />}
-                                style={{ marginLeft: 'auto' }}
+                                className="ml-auto"
                             >
-                                {editMode ? 'Editing' : ''}
-                            </GlassButton>
+                                <PencilIcon />
+                                {editMode && <span className="ml-1">Editing</span>}
+                            </Button>
                         )}
                     </div>
-                    <h1 style={{
-                        ...typography.display,
-                        fontSize: isMobile ? 20 : 26,
-                        fontWeight: 500,
-                        margin: 0,
-                        whiteSpace: 'nowrap',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        color: colors.text.primary,
-                    }}>
+                    <h1 className={cn(
+                        "font-medium m-0 truncate text-white/95 light:text-slate-900",
+                        isMobile ? "text-xl" : "text-2xl"
+                    )}>
                         {trekData.name}
                     </h1>
-                    {/* Edit Journey button - only in edit mode, desktop */}
+                    {/* Desktop edit button */}
                     {editMode && !isMobile && (
-                        <GlassButton
+                        <Button
                             variant="primary"
                             size="sm"
                             onClick={() => setShowEditModal(true)}
-                            style={{ marginTop: 12 }}
+                            className="mt-3"
                         >
                             Edit Journey Details
-                        </GlassButton>
+                        </Button>
                     )}
                 </div>
+
+                {/* Mobile buttons */}
                 {isMobile && (
-                    <div style={{ display: 'flex', gap: 8, marginLeft: 12, flexShrink: 0 }}>
-                        <GlassButton
+                    <div className="flex gap-2 ml-3 flex-shrink-0">
+                        <Button
                             variant={editMode ? 'primary' : 'subtle'}
-                            size="sm"
+                            size="icon"
                             onClick={() => setEditMode(!editMode)}
-                            icon={<PencilIcon />}
-                            style={{ minWidth: 44, padding: '10px' }}
-                        />
-                        <GlassButton
+                        >
+                            <PencilIcon />
+                        </Button>
+                        <Button
                             variant="subtle"
-                            size="sm"
+                            size="icon"
                             onClick={onBack}
-                            style={{ minWidth: 44, padding: '10px' }}
                         >
                             ✕
-                        </GlassButton>
+                        </Button>
                     </div>
                 )}
             </div>
 
-            {/* Edit Journey button for mobile - only in edit mode */}
+            {/* Mobile edit journey button */}
             {editMode && isMobile && panelState !== 'minimized' && (
-                <div style={{ padding: `0 ${padding}px 12px` }}>
-                    <GlassButton
+                <div className="px-4 pb-3">
+                    <Button
                         variant="primary"
                         size="md"
-                        fullWidth
                         onClick={() => setShowEditModal(true)}
+                        className="w-full"
                     >
                         Edit Journey Details
-                    </GlassButton>
+                    </Button>
                 </div>
             )}
 
-            {/* Tabs - hidden when minimized - Liquid Glass pill container */}
+            {/* Tabs - hidden when minimized */}
             {panelState !== 'minimized' && (
-                <div style={{
-                    display: 'flex',
-                    gap: 6,
-                    padding: `8px ${padding}px 12px`,
-                    background: `linear-gradient(
-                        180deg,
-                        rgba(255, 255, 255, 0.04) 0%,
-                        transparent 100%
-                    )`,
-                    borderBottom: `1px solid ${colors.glass.borderSubtle}`,
-                    flexShrink: 0
-                }}>
-                    {(['overview', 'journey', 'stats', 'photos'] as const).map(tab => (
-                        <TabButton
-                            key={tab}
-                            tab={tab}
-                            activeTab={activeTab}
-                            onClick={setActiveTab}
-                            isMobile={isMobile}
-                        />
-                    ))}
+                <div className={cn(
+                    "flex-shrink-0 border-b border-white/10 light:border-black/5",
+                    isMobile ? "px-4 py-2" : "px-6 py-2"
+                )}>
+                    <Tabs value={activeTab} onValueChange={handleTabChange}>
+                        <TabsList className="w-full justify-start">
+                            <TabsTrigger value="overview" className="flex-1">Overview</TabsTrigger>
+                            <TabsTrigger value="journey" className="flex-1">Journey</TabsTrigger>
+                            <TabsTrigger value="stats" className="flex-1">Stats</TabsTrigger>
+                            <TabsTrigger value="photos" className="flex-1">Photos</TabsTrigger>
+                        </TabsList>
+                    </Tabs>
                 </div>
             )}
 
-            {/* Tab Content - hidden when minimized */}
+            {/* Tab Content */}
             {panelState !== 'minimized' && (
-                <div style={{
-                    flex: 1,
-                    overflow: 'auto',
-                    padding: padding,
-                    WebkitOverflowScrolling: 'touch',
-                    overscrollBehavior: 'contain'
-                }} className="glass-scrollbar">
+                <div className={cn(
+                    "flex-1 overflow-auto glass-scrollbar",
+                    "overscroll-contain",
+                    isMobile ? "p-4" : "p-6"
+                )}
+                    style={{ WebkitOverflowScrolling: 'touch' }}
+                >
                     {activeTab === 'overview' && <OverviewTab trekData={trekData} />}
                     {activeTab === 'journey' && (
                         <JourneyTab

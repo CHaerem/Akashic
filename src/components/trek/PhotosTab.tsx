@@ -11,7 +11,7 @@ import { fetchPhotos, createPhoto, deletePhoto, getJourneyIdBySlug, updatePhoto 
 import { PhotoUpload } from './PhotoUpload';
 import { PhotoLightbox } from '../common/PhotoLightbox';
 import { PhotoEditModal } from './PhotoEditModal';
-import { colors, radius } from '../../styles/liquidGlass';
+import { cn } from '@/lib/utils';
 
 interface PhotosTabProps {
     trekData: TrekData;
@@ -84,7 +84,6 @@ export function PhotosTab({ trekData, isMobile, editMode = false, onViewPhotoOnM
 
     const handleUploadError = useCallback((errorMsg: string) => {
         setError(errorMsg);
-        // Clear error after 5 seconds
         setTimeout(() => setError(null), 5000);
     }, []);
 
@@ -100,7 +99,6 @@ export function PhotosTab({ trekData, isMobile, editMode = false, onViewPhotoOnM
         try {
             await deletePhoto(photo.id);
             setPhotos(prev => prev.filter(p => p.id !== photo.id));
-            // Lightbox will handle index adjustment
         } catch (err) {
             console.error('Error deleting photo:', err);
             setError('Failed to delete photo');
@@ -130,7 +128,6 @@ export function PhotosTab({ trekData, isMobile, editMode = false, onViewPhotoOnM
     }, [draggedIndex]);
 
     const handleDragLeave = useCallback(() => {
-        // Small delay to prevent flickering
         if (dragTimeoutRef.current) {
             clearTimeout(dragTimeoutRef.current);
         }
@@ -146,12 +143,10 @@ export function PhotosTab({ trekData, isMobile, editMode = false, onViewPhotoOnM
             return;
         }
 
-        // Reorder photos locally
         const newPhotos = [...photos];
         const [draggedPhoto] = newPhotos.splice(draggedIndex, 1);
         newPhotos.splice(targetIndex, 0, draggedPhoto);
 
-        // Update sort_order for all affected photos
         const updatedPhotos = newPhotos.map((photo, index) => ({
             ...photo,
             sort_order: index
@@ -161,7 +156,6 @@ export function PhotosTab({ trekData, isMobile, editMode = false, onViewPhotoOnM
         setDraggedIndex(null);
         setDragOverIndex(null);
 
-        // Save to database
         try {
             await Promise.all(
                 updatedPhotos.map((photo, index) =>
@@ -181,13 +175,7 @@ export function PhotosTab({ trekData, isMobile, editMode = false, onViewPhotoOnM
 
     if (loading || tokenLoading) {
         return (
-            <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                padding: 40,
-                color: 'rgba(255,255,255,0.4)'
-            }}>
+            <div className="flex items-center justify-center py-10 text-white/40 light:text-slate-400">
                 Loading photos...
             </div>
         );
@@ -197,30 +185,15 @@ export function PhotosTab({ trekData, isMobile, editMode = false, onViewPhotoOnM
         <div>
             {/* Error message */}
             {error && (
-                <div style={{
-                    background: 'rgba(255,100,100,0.1)',
-                    border: '1px solid rgba(255,100,100,0.3)',
-                    borderRadius: 8,
-                    padding: 12,
-                    marginBottom: 16,
-                    color: 'rgba(255,150,150,0.9)',
-                    fontSize: 13
-                }}>
+                <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3 mb-4 text-red-300 text-[13px]">
                     {error}
                 </div>
             )}
 
             {/* Upload section - only show in edit mode */}
             {editMode && journeyDbId && (
-                <div style={{ marginBottom: 24 }}>
-                    <h3 style={{
-                        color: 'rgba(255,255,255,0.9)',
-                        fontSize: 14,
-                        fontWeight: 500,
-                        marginBottom: 12,
-                        textTransform: 'uppercase',
-                        letterSpacing: '0.1em'
-                    }}>
+                <div className="mb-6">
+                    <h3 className="text-white/90 light:text-slate-900 text-sm font-medium mb-3 uppercase tracking-[0.1em]">
                         Add Photos
                     </h3>
                     <PhotoUpload
@@ -235,36 +208,21 @@ export function PhotosTab({ trekData, isMobile, editMode = false, onViewPhotoOnM
             {/* Photo grid */}
             {photos.length > 0 && (
                 <div>
-                    <div style={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                        marginBottom: 12
-                    }}>
-                        <h3 style={{
-                            color: 'rgba(255,255,255,0.9)',
-                            fontSize: 14,
-                            fontWeight: 500,
-                            margin: 0,
-                            textTransform: 'uppercase',
-                            letterSpacing: '0.1em'
-                        }}>
+                    <div className="flex justify-between items-center mb-3">
+                        <h3 className="text-white/90 light:text-slate-900 text-sm font-medium m-0 uppercase tracking-[0.1em]">
                             Journey Photos ({photos.length})
                         </h3>
                         {editMode && photos.length > 1 && (
-                            <span style={{
-                                fontSize: 11,
-                                color: colors.text.tertiary
-                            }}>
+                            <span className="text-[11px] text-white/40 light:text-slate-400">
                                 Drag to reorder
                             </span>
                         )}
                     </div>
-                    <div style={{
-                        display: 'grid',
-                        gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(3, 1fr)',
-                        gap: 8
-                    }}>
+                    <div className={cn(
+                        "grid gap-3",
+                        // Responsive grid with minimum item width
+                        "grid-cols-2 sm:grid-cols-3 lg:grid-cols-4"
+                    )}>
                         {photos.map((photo, index) => (
                             <div
                                 key={photo.id}
@@ -275,73 +233,37 @@ export function PhotosTab({ trekData, isMobile, editMode = false, onViewPhotoOnM
                                 onDragLeave={() => editMode && handleDragLeave()}
                                 onDrop={() => editMode && handleDrop(index)}
                                 onDragEnd={() => editMode && handleDragEnd()}
-                                style={{
-                                    aspectRatio: '1',
-                                    borderRadius: 8,
-                                    overflow: 'hidden',
-                                    cursor: editMode ? 'grab' : 'pointer',
-                                    background: 'rgba(255,255,255,0.05)',
-                                    position: 'relative',
-                                    border: photo.is_hero
-                                        ? '2px solid #fbbf24'
-                                        : dragOverIndex === index
-                                            ? '2px solid #3b82f6'
-                                            : 'none',
-                                    opacity: draggedIndex === index ? 0.5 : 1,
-                                    transform: dragOverIndex === index ? 'scale(1.02)' : 'scale(1)',
-                                    transition: 'transform 0.15s ease, opacity 0.15s ease, border 0.15s ease'
-                                }}
+                                className={cn(
+                                    "aspect-square rounded-lg overflow-hidden relative bg-white/5 light:bg-black/5",
+                                    "transition-all duration-150",
+                                    editMode ? "cursor-grab" : "cursor-pointer",
+                                    photo.is_hero && "ring-2 ring-amber-400",
+                                    dragOverIndex === index && "ring-2 ring-blue-500 scale-[1.02]",
+                                    draggedIndex === index && "opacity-50"
+                                )}
                             >
                                 <img
                                     src={getMediaUrl(photo.thumbnail_url || photo.url)}
                                     alt={photo.caption || 'Journey photo'}
-                                    style={{
-                                        width: '100%',
-                                        height: '100%',
-                                        objectFit: 'cover'
-                                    }}
+                                    className="w-full h-full object-cover"
                                     loading="lazy"
                                 />
 
                                 {/* Hero badge */}
                                 {photo.is_hero && (
-                                    <div style={{
-                                        position: 'absolute',
-                                        top: 6,
-                                        left: 6,
-                                        background: '#fbbf24',
-                                        color: '#000',
-                                        fontSize: 9,
-                                        fontWeight: 600,
-                                        padding: '2px 6px',
-                                        borderRadius: 4,
-                                        textTransform: 'uppercase',
-                                        letterSpacing: '0.05em'
-                                    }}>
+                                    <div className="absolute top-1.5 left-1.5 bg-amber-400 text-black text-[9px] font-semibold px-1.5 py-0.5 rounded uppercase tracking-wide">
                                         Hero
                                     </div>
                                 )}
 
-                                {/* Edit button in edit mode */}
+                                {/* Edit button in edit mode - 44px touch target */}
                                 {editMode && (
                                     <button
                                         onClick={(e) => {
                                             e.stopPropagation();
                                             handleEditPhoto(photo);
                                         }}
-                                        style={{
-                                            position: 'absolute',
-                                            top: 6,
-                                            right: 6,
-                                            background: colors.glass.medium,
-                                            border: 'none',
-                                            borderRadius: radius.sm,
-                                            padding: '6px 10px',
-                                            color: colors.text.primary,
-                                            fontSize: 11,
-                                            cursor: 'pointer',
-                                            opacity: 0.9
-                                        }}
+                                        className="absolute top-1 right-1 min-w-[44px] min-h-[44px] bg-black/60 backdrop-blur-sm border border-white/20 rounded-xl flex items-center justify-center text-white/95 text-xs font-medium cursor-pointer hover:bg-black/80 transition-colors"
                                     >
                                         Edit
                                     </button>
@@ -349,18 +271,10 @@ export function PhotosTab({ trekData, isMobile, editMode = false, onViewPhotoOnM
 
                                 {/* Location indicator */}
                                 {photo.coordinates && (
-                                    <div style={{
-                                        position: 'absolute',
-                                        bottom: photo.caption ? 32 : 6,
-                                        right: 6,
-                                        background: 'rgba(0,0,0,0.5)',
-                                        borderRadius: '50%',
-                                        width: 24,
-                                        height: 24,
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'center'
-                                    }}>
+                                    <div className={cn(
+                                        "absolute right-1.5 bg-black/50 rounded-full w-6 h-6 flex items-center justify-center",
+                                        photo.caption ? "bottom-8" : "bottom-1.5"
+                                    )}>
                                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
                                             <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/>
                                             <circle cx="12" cy="10" r="3"/>
@@ -369,16 +283,7 @@ export function PhotosTab({ trekData, isMobile, editMode = false, onViewPhotoOnM
                                 )}
 
                                 {photo.caption && (
-                                    <div style={{
-                                        position: 'absolute',
-                                        bottom: 0,
-                                        left: 0,
-                                        right: 0,
-                                        background: 'linear-gradient(transparent, rgba(0,0,0,0.7))',
-                                        padding: '20px 8px 8px',
-                                        fontSize: 11,
-                                        color: 'rgba(255,255,255,0.9)'
-                                    }}>
+                                    <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent px-2 pt-5 pb-2 text-[11px] text-white/90">
                                         {photo.caption}
                                     </div>
                                 )}
@@ -390,13 +295,9 @@ export function PhotosTab({ trekData, isMobile, editMode = false, onViewPhotoOnM
 
             {/* Empty state */}
             {photos.length === 0 && !loading && (
-                <div style={{
-                    textAlign: 'center',
-                    padding: 40,
-                    color: 'rgba(255,255,255,0.4)'
-                }}>
-                    <p style={{ margin: 0, marginBottom: 8 }}>No photos yet</p>
-                    <p style={{ margin: 0, fontSize: 12 }}>
+                <div className="text-center py-10 text-white/40 light:text-slate-400">
+                    <p className="m-0 mb-2">No photos yet</p>
+                    <p className="m-0 text-xs">
                         Be the first to add photos to this journey!
                     </p>
                 </div>

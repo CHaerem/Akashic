@@ -413,7 +413,7 @@ export const tabBar = {
 export const typography = {
   // Display text - for large headings
   display: {
-    fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif",
+    fontFamily: "'Roboto', -apple-system, BlinkMacSystemFont, sans-serif",
     fontWeight: 600,
     letterSpacing: '-0.02em',
     color: colors.text.primary,
@@ -421,7 +421,7 @@ export const typography = {
 
   // Heading text
   heading: {
-    fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif",
+    fontFamily: "'Roboto', -apple-system, BlinkMacSystemFont, sans-serif",
     fontWeight: 500,
     letterSpacing: '-0.01em',
     color: colors.text.primary,
@@ -429,7 +429,7 @@ export const typography = {
 
   // Body text
   body: {
-    fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif",
+    fontFamily: "'Roboto', -apple-system, BlinkMacSystemFont, sans-serif",
     fontWeight: 400,
     letterSpacing: '0',
     color: colors.text.secondary,
@@ -437,7 +437,7 @@ export const typography = {
 
   // Label text - uppercase small
   label: {
-    fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif",
+    fontFamily: "'Roboto', -apple-system, BlinkMacSystemFont, sans-serif",
     fontWeight: 500,
     fontSize: 11,
     letterSpacing: '0.08em',
@@ -447,7 +447,7 @@ export const typography = {
 
   // Caption text
   caption: {
-    fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif",
+    fontFamily: "'Roboto', -apple-system, BlinkMacSystemFont, sans-serif",
     fontWeight: 400,
     fontSize: 12,
     color: colors.text.subtle,

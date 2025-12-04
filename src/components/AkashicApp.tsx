@@ -1,4 +1,4 @@
-import { useCallback, useState, useEffect, useMemo, useRef, lazy, Suspense, useDeferredValue } from 'react';
+import { useCallback, useState, useEffect, useMemo, useRef, useDeferredValue } from 'react';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import { useTrekData } from '../hooks/useTrekData';
 import { useIsMobile } from '../hooks/useMediaQuery';
@@ -6,29 +6,20 @@ import { useMedia } from '../hooks/useMedia';
 import { useJourneys } from '../contexts/JourneysContext';
 import { fetchPhotos, getJourneyIdBySlug } from '../lib/journeys';
 import { hasPendingShares } from '../lib/shareTarget';
-import type { Photo } from '../types/trek';
+import type { Photo, Camp } from '../types/trek';
 import { MapboxGlobe } from './MapboxGlobe';
 import { OfflineIndicator } from './OfflineIndicator';
 import { GlobeSelectionPanel } from './home/GlobeSelectionPanel';
 import { GlobeHint } from './home/GlobeHint';
 import { ShareTargetModal } from './ShareTargetModal';
-import type { PanelState } from './trek/InfoPanel';
 import { PhotoLightbox } from './common/PhotoLightbox';
+import { AdaptiveNavPill } from './nav/AdaptiveNavPill';
 import { colors, radius, transitions, typography } from '../styles/liquidGlass';
-
-// Lazy load InfoPanel to prevent blocking Mapbox animations during transition
-const InfoPanel = lazy(() => import('./trek/InfoPanel').then(m => ({ default: m.InfoPanel })));
-
-// Preload function for InfoPanel - call when trek is selected to avoid chunk load during animation
-const preloadInfoPanel = () => {
-    import('./trek/InfoPanel');
-};
 
 // --- Main Component ---
 
 export default function AkashicApp() {
     const isMobile = useIsMobile();
-    const [panelState, setPanelState] = useState<PanelState>('normal');
     const [photos, setPhotos] = useState<Photo[]>([]);
     // Defer photo updates to prevent re-renders during camera animations
     const deferredPhotos = useDeferredValue(photos);
@@ -70,14 +61,6 @@ export default function AkashicApp() {
         handleBackToSelection,
         handleCampSelect
     } = useTrekData();
-
-    // Preload InfoPanel when a trek is selected (before explore is clicked)
-    // This ensures the chunk is loaded before the camera animation starts
-    useEffect(() => {
-        if (selectedTrek) {
-            preloadInfoPanel();
-        }
-    }, [selectedTrek]);
 
     // Check for pending shared photos (from PWA share target)
     useEffect(() => {
@@ -124,11 +107,6 @@ export default function AkashicApp() {
         return () => { cancelled = true; };
     }, [selectedTrek, view]);
 
-
-    const handlePanelStateChange = useCallback((state: PanelState) => {
-        setPanelState(state);
-    }, []);
-
     // Handle photo click from map markers - open lightbox
     const handleMapPhotoClick = useCallback((_photo: Photo, index: number) => {
         setLightboxIndex(index);
@@ -141,6 +119,16 @@ export default function AkashicApp() {
             flyToPhotoRef.current(photo);
         }
     }, []);
+
+    // Handle day selection from AdaptiveNavPill
+    const handleDaySelect = useCallback((dayNumber: number) => {
+        if (trekData) {
+            const camp = trekData.camps.find((c: Camp) => c.dayNumber === dayNumber);
+            if (camp) {
+                handleCampSelect(camp);
+            }
+        }
+    }, [trekData, handleCampSelect]);
 
     // Filter photos with coordinates for map display
     // Use deferred photos to prevent map re-renders during camera animations
@@ -237,27 +225,23 @@ export default function AkashicApp() {
 
             {!selectedTrek && view === 'globe' && <GlobeHint isMobile={isMobile} />}
 
-            {/* Trek View Info Panel - lazy loaded to not block Mapbox camera animation */}
+            {/* Adaptive Nav Pill - floating glass navigation (mobile-first, works on desktop too) */}
             {view === 'trek' && trekData && (
-                <Suspense fallback={null}>
-                    <InfoPanel
-                        trekData={trekData}
-                        activeTab={activeTab}
-                        setActiveTab={setActiveTab}
-                        selectedCamp={selectedCamp}
-                        onCampSelect={handleCampSelect}
-                        onBack={handleBackToGlobe}
-                        extendedStats={extendedStats}
-                        elevationProfile={elevationProfile}
-                        isMobile={isMobile}
-                        panelState={panelState}
-                        onPanelStateChange={handlePanelStateChange}
-                        photos={deferredPhotos}
-                        getMediaUrl={getMediaUrl}
-                        onJourneyUpdate={refetchJourneys}
-                        onViewPhotoOnMap={handleViewOnMap}
-                    />
-                </Suspense>
+                <AdaptiveNavPill
+                    selectedCamp={selectedCamp}
+                    totalDays={trekData.stats.duration}
+                    activeTab={activeTab}
+                    onTabChange={setActiveTab}
+                    onDaySelect={handleDaySelect}
+                    onCampSelect={handleCampSelect}
+                    trekData={trekData}
+                    extendedStats={extendedStats}
+                    elevationProfile={elevationProfile}
+                    photos={deferredPhotos}
+                    getMediaUrl={getMediaUrl}
+                    onViewPhotoOnMap={handleViewOnMap}
+                    isMobile={isMobile}
+                />
             )}
 
             {/* Photo Lightbox - triggered from map photo markers */}

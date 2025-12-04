@@ -1,9 +1,24 @@
 import { memo, useState, useEffect, useCallback } from 'react';
 import { getWaypoint, updateWaypoint, type DbWaypoint, type WaypointUpdate } from '../../lib/journeys';
 import type { Camp, Photo } from '../../types/trek';
-import { GlassModal, glassInputStyle, glassLabelStyle, glassErrorBoxStyle } from '../common/GlassModal';
-import { GlassButton } from '../common/GlassButton';
-import { colors, radius } from '../../styles/liquidGlass';
+import {
+    Dialog,
+    DialogContent,
+    DialogHeader,
+    DialogTitle,
+    DialogFooter,
+} from '../ui/dialog';
+import {
+    Sheet,
+    SheetContent,
+    SheetHeader,
+    SheetTitle,
+    SheetFooter,
+} from '../ui/sheet';
+import { Button } from '../ui/button';
+import { Input } from '../ui/input';
+import { Textarea } from '../ui/textarea';
+import { Label } from '../ui/label';
 
 interface WaypointEditModalProps {
     camp: Camp;
@@ -13,77 +28,6 @@ interface WaypointEditModalProps {
     isMobile: boolean;
     photos?: Photo[];
     getMediaUrl?: (path: string) => string;
-}
-
-// Enhanced input with focus state handling
-function GlassInput({
-    type = 'text',
-    value,
-    onChange,
-    placeholder,
-    style,
-    ...props
-}: React.InputHTMLAttributes<HTMLInputElement> & { style?: React.CSSProperties }) {
-    const [focused, setFocused] = useState(false);
-
-    return (
-        <input
-            type={type}
-            value={value}
-            onChange={onChange}
-            placeholder={placeholder}
-            onFocus={() => setFocused(true)}
-            onBlur={() => setFocused(false)}
-            style={{
-                ...glassInputStyle,
-                ...(focused && {
-                    borderColor: colors.accent.primary,
-                    boxShadow: `
-                        inset 0 2px 4px rgba(0, 0, 0, 0.2),
-                        0 0 0 3px rgba(96, 165, 250, 0.2)
-                    `,
-                }),
-                ...style,
-            }}
-            {...props}
-        />
-    );
-}
-
-// Enhanced textarea with focus state handling
-function GlassTextarea({
-    value,
-    onChange,
-    placeholder,
-    style,
-    minHeight = 80,
-    ...props
-}: React.TextareaHTMLAttributes<HTMLTextAreaElement> & { style?: React.CSSProperties; minHeight?: number }) {
-    const [focused, setFocused] = useState(false);
-
-    return (
-        <textarea
-            value={value}
-            onChange={onChange}
-            placeholder={placeholder}
-            onFocus={() => setFocused(true)}
-            onBlur={() => setFocused(false)}
-            style={{
-                ...glassInputStyle,
-                minHeight,
-                resize: 'vertical' as const,
-                ...(focused && {
-                    borderColor: colors.accent.primary,
-                    boxShadow: `
-                        inset 0 2px 4px rgba(0, 0, 0, 0.2),
-                        0 0 0 3px rgba(96, 165, 250, 0.2)
-                    `,
-                }),
-                ...style,
-            }}
-            {...props}
-        />
-    );
 }
 
 export const WaypointEditModal = memo(function WaypointEditModal({
@@ -163,45 +107,22 @@ export const WaypointEditModal = memo(function WaypointEditModal({
     // Photos assigned to this waypoint
     const assignedPhotos = photos.filter(p => p.waypoint_id === camp.id);
 
-    const footer = (
+    const formContent = (
         <>
-            <GlassButton variant="subtle" size="md" onClick={onClose}>
-                Cancel
-            </GlassButton>
-            <GlassButton
-                variant="primary"
-                size="md"
-                onClick={handleSave}
-                disabled={saving || loading}
-                style={{ opacity: saving || loading ? 0.5 : 1 }}
-            >
-                {saving ? 'Saving...' : 'Save Changes'}
-            </GlassButton>
-        </>
-    );
-
-    return (
-        <GlassModal
-            isOpen={isOpen}
-            onClose={onClose}
-            title={`Edit Day ${camp.dayNumber}`}
-            footer={footer}
-            isMobile={isMobile}
-        >
             {loading ? (
-                <div style={{ color: colors.text.tertiary, textAlign: 'center', padding: 40 }}>
+                <div className="text-white/50 light:text-slate-400 text-center py-10">
                     Loading...
                 </div>
             ) : error ? (
-                <div style={glassErrorBoxStyle}>
+                <div className="p-4 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
                     {error}
                 </div>
             ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+                <div className="flex flex-col gap-5">
                     {/* Name */}
-                    <div>
-                        <label style={glassLabelStyle}>Camp/Location Name</label>
-                        <GlassInput
+                    <div className="space-y-2">
+                        <Label>Camp/Location Name</Label>
+                        <Input
                             type="text"
                             value={name}
                             onChange={e => setName(e.target.value)}
@@ -210,10 +131,10 @@ export const WaypointEditModal = memo(function WaypointEditModal({
                     </div>
 
                     {/* Day Number & Elevation */}
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                        <div>
-                            <label style={glassLabelStyle}>Day Number</label>
-                            <GlassInput
+                    <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-2">
+                            <Label>Day Number</Label>
+                            <Input
                                 type="number"
                                 value={dayNumber}
                                 onChange={e => setDayNumber(e.target.value)}
@@ -221,9 +142,9 @@ export const WaypointEditModal = memo(function WaypointEditModal({
                                 min={1}
                             />
                         </div>
-                        <div>
-                            <label style={glassLabelStyle}>Elevation (m)</label>
-                            <GlassInput
+                        <div className="space-y-2">
+                            <Label>Elevation (m)</Label>
+                            <Input
                                 type="number"
                                 value={elevation}
                                 onChange={e => setElevation(e.target.value)}
@@ -233,67 +154,48 @@ export const WaypointEditModal = memo(function WaypointEditModal({
                     </div>
 
                     {/* Description */}
-                    <div>
-                        <label style={glassLabelStyle}>Description</label>
-                        <GlassTextarea
+                    <div className="space-y-2">
+                        <Label>Description</Label>
+                        <Textarea
                             value={description}
                             onChange={e => setDescription(e.target.value)}
                             placeholder="Notes about this day..."
-                            minHeight={80}
+                            rows={3}
                         />
                     </div>
 
                     {/* Highlights */}
-                    <div>
-                        <label style={glassLabelStyle}>Highlights (one per line)</label>
-                        <GlassTextarea
+                    <div className="space-y-2">
+                        <Label>Highlights (one per line)</Label>
+                        <Textarea
                             value={highlightsText}
                             onChange={e => setHighlightsText(e.target.value)}
                             placeholder={`Scenic viewpoint\nWildlife sighting\nChallenging terrain`}
-                            minHeight={80}
+                            rows={3}
                         />
                     </div>
 
                     {/* Assigned Photos */}
                     {assignedPhotos.length > 0 && (
-                        <div>
-                            <label style={glassLabelStyle}>Assigned Photos ({assignedPhotos.length})</label>
-                            <div style={{
-                                display: 'grid',
-                                gridTemplateColumns: 'repeat(4, 1fr)',
-                                gap: 8,
-                                marginTop: 4,
-                            }}>
+                        <div className="space-y-2">
+                            <Label>Assigned Photos ({assignedPhotos.length})</Label>
+                            <div className="grid grid-cols-4 gap-2">
                                 {assignedPhotos.slice(0, 8).map(photo => (
                                     <div
                                         key={photo.id}
-                                        style={{
-                                            aspectRatio: '1',
-                                            borderRadius: radius.sm,
-                                            overflow: 'hidden',
-                                            background: `linear-gradient(
-                                                135deg,
-                                                rgba(255, 255, 255, 0.06) 0%,
-                                                rgba(255, 255, 255, 0.02) 100%
-                                            )`,
-                                            border: `1px solid ${colors.glass.borderSubtle}`,
-                                        }}
+                                        className="aspect-square rounded-lg overflow-hidden bg-gradient-to-br from-white/6 to-white/2 border border-white/10 light:border-black/5"
                                     >
                                         <img
                                             src={getMediaUrl(photo.thumbnail_url || photo.url)}
                                             alt={photo.caption || 'Photo'}
-                                            style={{
-                                                width: '100%',
-                                                height: '100%',
-                                                objectFit: 'cover'
-                                            }}
+                                            className="w-full h-full object-cover"
                                             loading="lazy"
                                         />
                                     </div>
                                 ))}
                             </div>
                             {assignedPhotos.length > 8 && (
-                                <p style={{ color: colors.text.subtle, fontSize: 12, marginTop: 8 }}>
+                                <p className="text-white/40 light:text-slate-400 text-xs mt-1">
                                     +{assignedPhotos.length - 8} more photos
                                 </p>
                             )}
@@ -301,6 +203,54 @@ export const WaypointEditModal = memo(function WaypointEditModal({
                     )}
                 </div>
             )}
-        </GlassModal>
+        </>
+    );
+
+    const footerContent = (
+        <>
+            <Button variant="subtle" onClick={onClose}>
+                Cancel
+            </Button>
+            <Button
+                variant="primary"
+                onClick={handleSave}
+                disabled={saving || loading}
+            >
+                {saving ? 'Saving...' : 'Save Changes'}
+            </Button>
+        </>
+    );
+
+    // Use Sheet for mobile, Dialog for desktop
+    if (isMobile) {
+        return (
+            <Sheet open={isOpen} onOpenChange={(open) => !open && onClose()}>
+                <SheetContent side="bottom" className="max-h-[90dvh] overflow-y-auto">
+                    <SheetHeader>
+                        <SheetTitle>Edit Day {camp.dayNumber}</SheetTitle>
+                    </SheetHeader>
+                    <div className="px-6 py-4 overflow-y-auto">
+                        {formContent}
+                    </div>
+                    <SheetFooter>
+                        {footerContent}
+                    </SheetFooter>
+                </SheetContent>
+            </Sheet>
+        );
+    }
+
+    return (
+        <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
+            <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+                <DialogHeader>
+                    <DialogTitle>Edit Day {camp.dayNumber}</DialogTitle>
+                </DialogHeader>
+                {formContent}
+                <DialogFooter>
+                    {footerContent}
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
     );
 });
