@@ -757,12 +757,12 @@ export const AdaptiveNavPill = memo(function AdaptiveNavPill({
             </motion.div>
           )}
 
-          {/* Days Selector - Drag to select */}
+          {/* Days Selector - Timeline Scrubber */}
           {mode === 'days' && (
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              style={{ display: 'flex', alignItems: 'flex-end', gap: 2 }}
+              style={{ display: 'flex', alignItems: 'center', gap: 8 }}
             >
               <motion.button
                 onClick={handleBackFromDays}
@@ -779,36 +779,25 @@ export const AdaptiveNavPill = memo(function AdaptiveNavPill({
                   cursor: 'pointer',
                   color: colors.text.secondary,
                   fontSize: 18,
-                  marginRight: 4,
+                  flexShrink: 0,
                 }}
               >
                 ←
               </motion.button>
-              {days.map((day) => (
-                <DayItem
-                  key={day}
-                  mouseX={mouseX}
-                  day={day}
-                  isActive={day === currentDay}
-                  isHovered={hoveredDay === day}
-                  onClick={() => handleDayClick(day)}
-                  onHover={() => !isDragging && setHoveredDay(day)}
-                  setRef={setDayRef(day)}
-                />
-              ))}
+              <TimelineScrubber
+                camps={trekData.camps}
+                photos={photos}
+                selectedCamp={selectedCamp}
+                onCampSelect={(camp) => {
+                  onCampSelect(camp);
+                }}
+                getMediaUrl={getMediaUrl}
+                isMobile={isMobile}
+                inline={true}
+              />
             </motion.div>
           )}
         </motion.div>
-
-        {/* Timeline Scrubber - always visible below pill */}
-        <TimelineScrubber
-          camps={trekData.camps}
-          photos={photos}
-          selectedCamp={selectedCamp}
-          onCampSelect={onCampSelect}
-          getMediaUrl={getMediaUrl}
-          isMobile={isMobile}
-        />
         </motion.div>
       </div>
     </>

@@ -20,6 +20,7 @@ interface TimelineScrubberProps {
     onCampSelect: (camp: Camp) => void;
     getMediaUrl: (path: string) => string;
     isMobile: boolean;
+    inline?: boolean; // When true, removes outer glass styling for embedding
 }
 
 export const TimelineScrubber = memo(function TimelineScrubber({
@@ -29,6 +30,7 @@ export const TimelineScrubber = memo(function TimelineScrubber({
     onCampSelect,
     getMediaUrl,
     isMobile,
+    inline = false,
 }: TimelineScrubberProps) {
     const [isDragging, setIsDragging] = useState(false);
     const [hoverCamp, setHoverCamp] = useState<Camp | null>(null);
@@ -140,8 +142,8 @@ export const TimelineScrubber = memo(function TimelineScrubber({
         <div
             style={{
                 position: 'relative',
-                width: isMobile ? 'calc(100% - 32px)' : 360,
-                maxWidth: 400,
+                width: inline ? (isMobile ? 240 : 280) : (isMobile ? 'calc(100% - 32px)' : 360),
+                maxWidth: inline ? 320 : 400,
             }}
         >
             {/* Tooltip */}
@@ -278,12 +280,13 @@ export const TimelineScrubber = memo(function TimelineScrubber({
                 onPointerUp={handlePointerUp}
                 onPointerCancel={handlePointerUp}
                 style={{
-                    ...glassStyle,
-                    borderRadius: radius.pill,
-                    padding: '12px 16px',
+                    ...(inline ? {} : glassStyle),
+                    borderRadius: inline ? radius.md : radius.pill,
+                    padding: inline ? '8px 12px' : '12px 16px',
                     cursor: isDragging ? 'grabbing' : 'grab',
                     touchAction: 'none',
                     userSelect: 'none',
+                    background: inline ? 'rgba(255, 255, 255, 0.06)' : glassStyle.background,
                 }}
             >
                 {/* Track line */}
