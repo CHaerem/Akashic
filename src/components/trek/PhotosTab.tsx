@@ -13,7 +13,7 @@ import { PhotoLightbox } from '../common/PhotoLightbox';
 import { PhotoEditModal } from './PhotoEditModal';
 import { SkeletonPhotoGrid } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
-import { getDistanceFromLatLonInKm } from '../../utils/geography';
+import { getDistanceFromLatLonInKm, findNearestCoordIndex } from '../../utils/geography';
 
 type DayFilter = 'all' | number; // 'all' or day number
 
@@ -68,7 +68,41 @@ export function PhotosTab({ trekData, isMobile, editMode = false, onViewPhotoOnM
             }
         }
 
-        // Fall back to location-based estimation: find nearest camp
+        // Fall back to location-based estimation using route segments
+        // Find which segment of the route the photo is on (more accurate than nearest camp)
+        if (photo.coordinates && trekData.route?.coordinates && trekData.camps.length > 0) {
+            const routeCoords = trekData.route.coordinates;
+            const [photoLng, photoLat] = photo.coordinates;
+
+            // Find nearest point on the route
+            const nearestRouteIdx = findNearestCoordIndex(routeCoords, [photoLng, photoLat]);
+
+            // Check distance to ensure photo is actually on/near the route (within 2km)
+            const nearestPoint = routeCoords[nearestRouteIdx];
+            const distToRoute = getDistanceFromLatLonInKm(photoLat, photoLng, nearestPoint[1], nearestPoint[0]);
+
+            if (distToRoute < 2) {
+                // Sort camps by routePointIndex to find which segment the photo is in
+                const sortedCamps = [...trekData.camps]
+                    .filter(c => c.routePointIndex != null)
+                    .sort((a, b) => (a.routePointIndex || 0) - (b.routePointIndex || 0));
+
+                // Find which day segment contains this route index
+                // Day N ends at camp N's routePointIndex
+                for (const camp of sortedCamps) {
+                    if (nearestRouteIdx <= (camp.routePointIndex || 0)) {
+                        return camp.dayNumber;
+                    }
+                }
+
+                // If past all camps, assign to last day
+                if (sortedCamps.length > 0) {
+                    return sortedCamps[sortedCamps.length - 1].dayNumber;
+                }
+            }
+        }
+
+        // Final fallback: find nearest camp (less accurate but works without route data)
         if (photo.coordinates && trekData.camps.length > 0) {
             const [photoLng, photoLat] = photo.coordinates;
             let nearestDay: number | null = null;
@@ -83,14 +117,14 @@ export function PhotosTab({ trekData, isMobile, editMode = false, onViewPhotoOnM
                 }
             }
 
-            // Only assign if reasonably close (within 10km of a camp)
-            if (nearestDay !== null && minDistance < 10) {
+            // Only assign if reasonably close (within 5km of a camp)
+            if (nearestDay !== null && minDistance < 5) {
                 return nearestDay;
             }
         }
 
         return null;
-    }, [waypointToDayMap, trekData.dateStarted, trekData.camps.length, trekData.camps]);
+    }, [waypointToDayMap, trekData.dateStarted, trekData.camps.length, trekData.camps, trekData.route?.coordinates]);
 
     // Group photos by day
     const photosByDay = useMemo(() => {
