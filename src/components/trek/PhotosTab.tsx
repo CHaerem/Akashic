@@ -13,6 +13,7 @@ import { PhotoLightbox } from '../common/PhotoLightbox';
 import { PhotoEditModal } from './PhotoEditModal';
 import { SkeletonPhotoGrid } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
+import { getDistanceFromLatLonInKm } from '../../utils/geography';
 
 type DayFilter = 'all' | number; // 'all' or day number
 
@@ -45,7 +46,7 @@ export function PhotosTab({ trekData, isMobile, editMode = false, onViewPhotoOnM
         return map;
     }, [trekData.camps]);
 
-    // Get the day number for a photo (from waypoint or date)
+    // Get the day number for a photo (from waypoint, date, or location)
     const getPhotoDay = useCallback((photo: Photo): number | null => {
         // First check waypoint_id
         if (photo.waypoint_id) {
@@ -67,8 +68,29 @@ export function PhotosTab({ trekData, isMobile, editMode = false, onViewPhotoOnM
             }
         }
 
+        // Fall back to location-based estimation: find nearest camp
+        if (photo.coordinates && trekData.camps.length > 0) {
+            const [photoLng, photoLat] = photo.coordinates;
+            let nearestDay: number | null = null;
+            let minDistance = Infinity;
+
+            for (const camp of trekData.camps) {
+                const [campLng, campLat] = camp.coordinates;
+                const distance = getDistanceFromLatLonInKm(photoLat, photoLng, campLat, campLng);
+                if (distance < minDistance) {
+                    minDistance = distance;
+                    nearestDay = camp.dayNumber;
+                }
+            }
+
+            // Only assign if reasonably close (within 10km of a camp)
+            if (nearestDay !== null && minDistance < 10) {
+                return nearestDay;
+            }
+        }
+
         return null;
-    }, [waypointToDayMap, trekData.dateStarted, trekData.camps.length]);
+    }, [waypointToDayMap, trekData.dateStarted, trekData.camps.length, trekData.camps]);
 
     // Group photos by day
     const photosByDay = useMemo(() => {
