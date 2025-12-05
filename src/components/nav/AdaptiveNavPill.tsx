@@ -89,15 +89,6 @@ const ChevronIcon = ({ direction, size = 14 }: { direction: 'left' | 'right' | '
   </svg>
 );
 
-// Minimal grid/menu icon - three dots in a row
-const MenuDotsIcon = ({ size = 16 }: { size?: number }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor">
-    <circle cx="6" cy="12" r="2" />
-    <circle cx="12" cy="12" r="2" />
-    <circle cx="18" cy="12" r="2" />
-  </svg>
-);
-
 const PencilIcon = ({ size = 16 }: { size?: number }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/>
@@ -480,7 +471,6 @@ export const AdaptiveNavPill = memo(function AdaptiveNavPill({
   const [hoveredOption, setHoveredOption] = useState<string | null>(null);
   const [hoveredDay, setHoveredDay] = useState<number | null>(null);
   const [swipeDirection, setSwipeDirection] = useState<'left' | 'right' | null>(null);
-  const [swipeOffset, setSwipeOffset] = useState(0); // Track drag offset for visual feedback
   const [hasInteracted, setHasInteracted] = useState(false); // Track if user has interacted
 
   const pillRef = useRef<HTMLDivElement>(null);
@@ -518,14 +508,12 @@ export const AdaptiveNavPill = memo(function AdaptiveNavPill({
     });
   }, [photos, currentCamp, currentDayDate]);
 
-  // Swipe handlers for collapsed pill
-  const handleSwipeDrag = useCallback((_: any, info: { offset: { x: number } }) => {
-    setSwipeOffset(info.offset.x);
+  // Swipe handlers for collapsed pill (mobile gesture support)
+  const handleSwipeDrag = useCallback(() => {
     if (!hasInteracted) setHasInteracted(true);
   }, [hasInteracted]);
 
   const handleSwipeDragEnd = useCallback((_: any, info: { offset: { x: number }; velocity: { x: number } }) => {
-    setSwipeOffset(0);
     const threshold = 50;
     const velocityThreshold = 500;
 
@@ -1122,29 +1110,44 @@ export const AdaptiveNavPill = memo(function AdaptiveNavPill({
           }}
           transition={{ type: 'spring', ...SPRING_CONFIG }}
         >
-          {/* Collapsed State - Swipeable */}
+          {/* Collapsed State - Clickable navigation */}
           {mode === 'collapsed' && (
             <div style={{
               display: 'flex',
               alignItems: 'center',
-              gap: 6,
+              gap: 4,
             }}>
-              {/* Left swipe hint */}
-              <motion.div
-                animate={{
-                  opacity: currentDay > 1 ? (swipeOffset > 0 ? 0.9 : 0.4) : 0.15,
-                  x: swipeOffset > 0 ? Math.min(swipeOffset * 0.1, 4) : 0,
+              {/* Previous day button - always visible, clickable */}
+              <motion.button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (currentDay > 1) {
+                    setSwipeDirection('right');
+                    onDaySelect(currentDay - 1);
+                    setTimeout(() => setSwipeDirection(null), 200);
+                  }
                 }}
+                whileHover={currentDay > 1 ? { scale: 1.15, backgroundColor: 'rgba(255, 255, 255, 0.1)' } : {}}
+                whileTap={currentDay > 1 ? { scale: 0.9 } : {}}
                 style={{
                   display: 'flex',
                   alignItems: 'center',
-                  color: colors.text.tertiary,
+                  justifyContent: 'center',
+                  width: 32,
+                  height: 32,
+                  background: 'transparent',
+                  border: 'none',
+                  borderRadius: radius.md,
+                  cursor: currentDay > 1 ? 'pointer' : 'default',
+                  color: currentDay > 1 ? colors.text.secondary : colors.text.subtle,
+                  opacity: currentDay > 1 ? 1 : 0.3,
+                  transition: 'all 0.15s ease',
                 }}
               >
-                <ChevronIcon direction="left" size={12} />
-              </motion.div>
+                <ChevronIcon direction="left" size={16} />
+              </motion.button>
 
-              {/* Day content */}
+              {/* Day content - tap to show context */}
               <motion.div
                 key={currentDay}
                 initial={{ opacity: 0, x: swipeDirection === 'left' ? 20 : swipeDirection === 'right' ? -20 : 0 }}
@@ -1155,6 +1158,7 @@ export const AdaptiveNavPill = memo(function AdaptiveNavPill({
                   alignItems: 'center',
                   gap: 10,
                   color: colors.text.primary,
+                  padding: '4px 8px',
                 }}
               >
                 <span style={{
@@ -1171,7 +1175,7 @@ export const AdaptiveNavPill = memo(function AdaptiveNavPill({
                   fontSize: isMobile ? 14 : 15,
                   fontWeight: 500,
                   whiteSpace: 'nowrap',
-                  maxWidth: isMobile ? 140 : 180,
+                  maxWidth: isMobile ? 120 : 160,
                   overflow: 'hidden',
                   textOverflow: 'ellipsis',
                 }}>
@@ -1179,49 +1183,67 @@ export const AdaptiveNavPill = memo(function AdaptiveNavPill({
                 </span>
               </motion.div>
 
-              {/* Right swipe hint */}
-              <motion.div
-                animate={{
-                  opacity: currentDay < totalDays ? (swipeOffset < 0 ? 0.9 : 0.4) : 0.15,
-                  x: swipeOffset < 0 ? Math.max(swipeOffset * 0.1, -4) : 0,
-                }}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  color: colors.text.tertiary,
-                }}
-              >
-                <ChevronIcon direction="right" size={12} />
-              </motion.div>
-
-              {/* Expand hint - minimal menu button */}
+              {/* Next day button - always visible, clickable */}
               <motion.button
-                onClick={handleExpandTap}
-                whileHover={{ scale: 1.1, opacity: 1 }}
-                whileTap={{ scale: 0.9 }}
-                animate={!hasInteracted ? {
-                  opacity: [0.5, 0.8, 0.5],
-                } : { opacity: 0.6 }}
-                transition={{
-                  duration: 2,
-                  repeat: hasInteracted ? 0 : Infinity,
-                  ease: 'easeInOut',
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (currentDay < totalDays) {
+                    setSwipeDirection('left');
+                    onDaySelect(currentDay + 1);
+                    setTimeout(() => setSwipeDirection(null), 200);
+                  }
                 }}
+                whileHover={currentDay < totalDays ? { scale: 1.15, backgroundColor: 'rgba(255, 255, 255, 0.1)' } : {}}
+                whileTap={currentDay < totalDays ? { scale: 0.9 } : {}}
                 style={{
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  marginLeft: 8,
-                  paddingLeft: 10,
-                  borderLeft: `1px solid ${colors.glass.borderSubtle}`,
+                  width: 32,
+                  height: 32,
                   background: 'transparent',
                   border: 'none',
-                  cursor: 'pointer',
-                  color: colors.text.secondary,
-                  padding: '6px 6px 6px 14px',
+                  borderRadius: radius.md,
+                  cursor: currentDay < totalDays ? 'pointer' : 'default',
+                  color: currentDay < totalDays ? colors.text.secondary : colors.text.subtle,
+                  opacity: currentDay < totalDays ? 1 : 0.3,
+                  transition: 'all 0.15s ease',
                 }}
               >
-                <MenuDotsIcon size={14} />
+                <ChevronIcon direction="right" size={16} />
+              </motion.button>
+
+              {/* Divider */}
+              <div style={{
+                width: 1,
+                height: 20,
+                background: colors.glass.borderSubtle,
+                marginLeft: 4,
+                marginRight: 4,
+              }} />
+
+              {/* More button - opens the menu */}
+              <motion.button
+                onClick={handleExpandTap}
+                whileHover={{ scale: 1.05, backgroundColor: 'rgba(255, 255, 255, 0.1)' }}
+                whileTap={{ scale: 0.95 }}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 4,
+                  background: 'transparent',
+                  border: 'none',
+                  borderRadius: radius.md,
+                  cursor: 'pointer',
+                  color: colors.text.secondary,
+                  padding: '6px 10px',
+                  fontSize: 12,
+                  fontWeight: 500,
+                }}
+              >
+                <span>More</span>
+                <ChevronIcon direction="up" size={12} />
               </motion.button>
             </div>
           )}
