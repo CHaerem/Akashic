@@ -11,9 +11,10 @@
 
 import { useState, useCallback, useRef, useEffect, memo, useMemo } from 'react';
 import { createPortal } from 'react-dom';
-import { motion, AnimatePresence, type PanInfo } from 'framer-motion';
-import type { Photo, Camp, TrekData } from '../../types/trek';
-import { colors, radius, effects } from '../../styles/liquidGlass';
+import { motion, AnimatePresence } from 'framer-motion';
+import type { Photo, TrekData } from '../../types/trek';
+import { colors, radius } from '../../styles/liquidGlass';
+import { getDistanceFromLatLonInKm, findNearestCoordIndex } from '../../utils/geography';
 
 interface DayGalleryProps {
   isOpen: boolean;
@@ -54,21 +55,83 @@ export const DayGallery = memo(function DayGallery({
     return start;
   }, [trekData.dateStarted]);
 
-  // Get photos for a specific day
-  const getPhotosForDay = useCallback((dayNumber: number): Photo[] => {
-    const dayDate = getDayDate(dayNumber);
-    if (!dayDate) return [];
+  // Build waypoint to day map
+  const waypointToDayMap = useMemo(() => {
+    const map = new Map<string, number>();
+    trekData.camps.forEach(camp => map.set(camp.id, camp.dayNumber));
+    return map;
+  }, [trekData.camps]);
 
-    return photos.filter(p => {
-      if (!p.taken_at) return false;
-      const photoDate = new Date(p.taken_at);
-      return (
-        photoDate.getFullYear() === dayDate.getFullYear() &&
-        photoDate.getMonth() === dayDate.getMonth() &&
-        photoDate.getDate() === dayDate.getDate()
-      );
-    });
-  }, [photos, getDayDate]);
+  // Get photo day using comprehensive matching (waypoint, date, location)
+  const getPhotoDay = useCallback((photo: Photo): number | null => {
+    // 1. Check waypoint_id
+    if (photo.waypoint_id) {
+      const day = waypointToDayMap.get(photo.waypoint_id);
+      if (day !== undefined) return day;
+    }
+
+    // 2. Date matching
+    if (photo.taken_at && trekData.dateStarted) {
+      const photoDate = new Date(photo.taken_at);
+      const startDate = new Date(trekData.dateStarted);
+      const diffTime = photoDate.getTime() - startDate.getTime();
+      const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+      const dayNum = diffDays + 1;
+      if (dayNum >= 1 && dayNum <= trekData.camps.length) {
+        return dayNum;
+      }
+    }
+
+    // 3. Location-based estimation using route segments
+    if (photo.coordinates && trekData.route?.coordinates && trekData.camps.length > 0) {
+      const routeCoords = trekData.route.coordinates;
+      const [photoLng, photoLat] = photo.coordinates;
+      const nearestRouteIdx = findNearestCoordIndex(routeCoords, [photoLng, photoLat]);
+      const nearestPoint = routeCoords[nearestRouteIdx];
+      const distToRoute = getDistanceFromLatLonInKm(photoLat, photoLng, nearestPoint[1], nearestPoint[0]);
+
+      if (distToRoute < 2) {
+        const sortedCamps = [...trekData.camps]
+          .filter(c => c.routePointIndex != null)
+          .sort((a, b) => (a.routePointIndex || 0) - (b.routePointIndex || 0));
+
+        for (const camp of sortedCamps) {
+          if (nearestRouteIdx <= (camp.routePointIndex || 0)) {
+            return camp.dayNumber;
+          }
+        }
+        if (sortedCamps.length > 0) {
+          return sortedCamps[sortedCamps.length - 1].dayNumber;
+        }
+      }
+    }
+
+    // 4. Nearest camp fallback
+    if (photo.coordinates && trekData.camps.length > 0) {
+      const [photoLng, photoLat] = photo.coordinates;
+      let nearestDay: number | null = null;
+      let minDistance = Infinity;
+
+      for (const camp of trekData.camps) {
+        const [campLng, campLat] = camp.coordinates;
+        const distance = getDistanceFromLatLonInKm(photoLat, photoLng, campLat, campLng);
+        if (distance < minDistance) {
+          minDistance = distance;
+          nearestDay = camp.dayNumber;
+        }
+      }
+      if (nearestDay !== null && minDistance < 5) {
+        return nearestDay;
+      }
+    }
+
+    return null;
+  }, [waypointToDayMap, trekData.dateStarted, trekData.camps, trekData.route?.coordinates]);
+
+  // Get photos for a specific day using comprehensive matching
+  const getPhotosForDay = useCallback((dayNumber: number): Photo[] => {
+    return photos.filter(p => getPhotoDay(p) === dayNumber);
+  }, [photos, getPhotoDay]);
 
   // Current day's photos
   const dayPhotos = useMemo(() => getPhotosForDay(currentDay), [getPhotosForDay, currentDay]);
@@ -82,21 +145,14 @@ export const DayGallery = memo(function DayGallery({
   // Total days with photos
   const daysWithPhotos = useMemo(() => {
     const days = new Set<number>();
-    const startDate = trekData.dateStarted ? new Date(trekData.dateStarted) : null;
-
     photos.forEach(p => {
-      if (p.taken_at && startDate) {
-        const photoDate = new Date(p.taken_at);
-        const diffTime = photoDate.getTime() - startDate.getTime();
-        const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24)) + 1;
-        if (diffDays >= 1 && diffDays <= trekData.camps.length) {
-          days.add(diffDays);
-        }
+      const day = getPhotoDay(p);
+      if (day !== null) {
+        days.add(day);
       }
     });
-
     return Array.from(days).sort((a, b) => a - b);
-  }, [photos, trekData.dateStarted, trekData.camps.length]);
+  }, [photos, getPhotoDay]);
 
   // Reset when opening
   useEffect(() => {
