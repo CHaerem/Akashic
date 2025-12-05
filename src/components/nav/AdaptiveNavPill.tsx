@@ -729,7 +729,7 @@ export const AdaptiveNavPill = memo(function AdaptiveNavPill({
 
   const handleCloseContent = useCallback(() => {
     setShowContent(false);
-    setMode('expanded'); // Return to menu instead of collapsed
+    setMode('collapsed'); // Return to collapsed state - map is hero
   }, []);
 
   const days = Array.from({ length: totalDays }, (_, i) => i + 1);
