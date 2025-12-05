@@ -14,8 +14,10 @@ import { JourneyTab } from '../trek/JourneyTab';
 import { OverviewTab } from '../trek/OverviewTab';
 import { PhotosTab } from '../trek/PhotosTab';
 import { JourneyEditModal } from '../trek/JourneyEditModal';
+import { DayGallery } from '../common/DayGallery';
 import { Button } from '../ui/button';
 import { ErrorBoundary, ComponentErrorFallback } from '../common/ErrorBoundary';
+import { getDistanceFromLatLonInKm, findNearestCoordIndex } from '../../utils/geography';
 
 // Magnification constants
 const MAGNIFICATION = {
@@ -499,6 +501,7 @@ export const AdaptiveNavPill = memo(function AdaptiveNavPill({
   const [mode, setMode] = useState<NavMode>('collapsed'); // Start collapsed - map is hero
   const [showContent, setShowContent] = useState(false);
   const [showContext, setShowContext] = useState(false); // Day info context card
+  const [showDayGallery, setShowDayGallery] = useState(false); // Fullscreen day photo gallery
   const [isDragging, setIsDragging] = useState(false);
   const [hoveredOption, setHoveredOption] = useState<string | null>(null);
   const [hoveredDay, setHoveredDay] = useState<number | null>(null);
@@ -526,19 +529,84 @@ export const AdaptiveNavPill = memo(function AdaptiveNavPill({
     return start;
   }, [trekData.dateStarted, currentCamp]);
 
-  // Get photos for current day
+  // Build waypoint to day map
+  const waypointToDayMap = useMemo(() => {
+    const map = new Map<string, number>();
+    trekData.camps.forEach(camp => map.set(camp.id, camp.dayNumber));
+    return map;
+  }, [trekData.camps]);
+
+  // Get photo day using comprehensive matching (waypoint, date, location)
+  const getPhotoDay = useCallback((photo: Photo): number | null => {
+    // 1. Check waypoint_id
+    if (photo.waypoint_id) {
+      const day = waypointToDayMap.get(photo.waypoint_id);
+      if (day !== undefined) return day;
+    }
+
+    // 2. Date matching
+    if (photo.taken_at && trekData.dateStarted) {
+      const photoDate = new Date(photo.taken_at);
+      const startDate = new Date(trekData.dateStarted);
+      const diffTime = photoDate.getTime() - startDate.getTime();
+      const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+      const dayNum = diffDays + 1;
+      if (dayNum >= 1 && dayNum <= trekData.camps.length) {
+        return dayNum;
+      }
+    }
+
+    // 3. Location-based estimation using route segments
+    if (photo.coordinates && trekData.route?.coordinates && trekData.camps.length > 0) {
+      const routeCoords = trekData.route.coordinates;
+      const [photoLng, photoLat] = photo.coordinates;
+      const nearestRouteIdx = findNearestCoordIndex(routeCoords, [photoLng, photoLat]);
+      const nearestPoint = routeCoords[nearestRouteIdx];
+      const distToRoute = getDistanceFromLatLonInKm(photoLat, photoLng, nearestPoint[1], nearestPoint[0]);
+
+      if (distToRoute < 2) {
+        const sortedCamps = [...trekData.camps]
+          .filter(c => c.routePointIndex != null)
+          .sort((a, b) => (a.routePointIndex || 0) - (b.routePointIndex || 0));
+
+        for (const camp of sortedCamps) {
+          if (nearestRouteIdx <= (camp.routePointIndex || 0)) {
+            return camp.dayNumber;
+          }
+        }
+        if (sortedCamps.length > 0) {
+          return sortedCamps[sortedCamps.length - 1].dayNumber;
+        }
+      }
+    }
+
+    // 4. Nearest camp fallback
+    if (photo.coordinates && trekData.camps.length > 0) {
+      const [photoLng, photoLat] = photo.coordinates;
+      let nearestDay: number | null = null;
+      let minDistance = Infinity;
+
+      for (const camp of trekData.camps) {
+        const [campLng, campLat] = camp.coordinates;
+        const distance = getDistanceFromLatLonInKm(photoLat, photoLng, campLat, campLng);
+        if (distance < minDistance) {
+          minDistance = distance;
+          nearestDay = camp.dayNumber;
+        }
+      }
+      if (nearestDay !== null && minDistance < 5) {
+        return nearestDay;
+      }
+    }
+
+    return null;
+  }, [waypointToDayMap, trekData.dateStarted, trekData.camps, trekData.route?.coordinates]);
+
+  // Get photos for current day using comprehensive matching
   const dayPhotos = useMemo(() => {
-    if (!currentCamp || !currentDayDate) return [];
-    return photos.filter(p => {
-      if (!p.taken_at) return false;
-      const photoDate = new Date(p.taken_at);
-      return (
-        photoDate.getFullYear() === currentDayDate.getFullYear() &&
-        photoDate.getMonth() === currentDayDate.getMonth() &&
-        photoDate.getDate() === currentDayDate.getDate()
-      );
-    });
-  }, [photos, currentCamp, currentDayDate]);
+    if (!currentCamp) return [];
+    return photos.filter(p => getPhotoDay(p) === currentDay);
+  }, [photos, currentCamp, currentDay, getPhotoDay]);
 
   // Swipe handlers for collapsed pill (mobile gesture support)
   const handleSwipeDrag = useCallback(() => {
@@ -736,6 +804,18 @@ export const AdaptiveNavPill = memo(function AdaptiveNavPill({
     setMode('content');
   }, [onTabChange]);
 
+  // Open day gallery for immersive photo viewing
+  const handleOpenDayGallery = useCallback(() => {
+    setShowContext(false);
+    setShowDayGallery(true);
+    if (!hasInteracted) setHasInteracted(true);
+  }, [hasInteracted]);
+
+  // Handle day change from gallery
+  const handleGalleryDayChange = useCallback((dayNumber: number) => {
+    onDaySelect(dayNumber);
+  }, [onDaySelect]);
+
   const handleOptionClick = useCallback((optionId: TabType) => {
     if (isDragging) return; // Don't handle click during drag
     if (optionId === 'journey') {
@@ -805,6 +885,18 @@ export const AdaptiveNavPill = memo(function AdaptiveNavPill({
           />
         )}
       </AnimatePresence>
+
+      {/* Day Gallery - fullscreen photo exploration */}
+      <DayGallery
+        isOpen={showDayGallery}
+        onClose={() => setShowDayGallery(false)}
+        trekData={trekData}
+        photos={photos}
+        getMediaUrl={getMediaUrl}
+        initialDay={currentDay}
+        onDayChange={handleGalleryDayChange}
+        onViewOnMap={onViewPhotoOnMap}
+      />
 
       {/* Navigation Pill - wrapper for centering */}
       <div
@@ -994,29 +1086,34 @@ export const AdaptiveNavPill = memo(function AdaptiveNavPill({
                   </p>
                 )}
 
-                {/* Photo strip */}
+                {/* Photo strip - tap to open day gallery */}
                 {dayPhotos.length > 0 && (
-                  <div style={{
-                    display: 'flex',
-                    gap: 8,
-                    overflowX: 'auto',
-                    marginBottom: 12,
-                    paddingBottom: 4,
-                    WebkitOverflowScrolling: 'touch',
-                  }}>
+                  <motion.div
+                    whileHover={{ scale: 1.01 }}
+                    whileTap={{ scale: 0.99 }}
+                    onClick={handleOpenDayGallery}
+                    style={{
+                      display: 'flex',
+                      gap: 8,
+                      overflowX: 'auto',
+                      paddingBottom: 4,
+                      WebkitOverflowScrolling: 'touch',
+                      cursor: 'pointer',
+                      padding: 8,
+                      margin: '-8px -8px 4px -8px',
+                      borderRadius: radius.md,
+                      background: 'rgba(255, 255, 255, 0.03)',
+                    }}
+                  >
                     {dayPhotos.slice(0, 5).map((photo, idx) => (
-                      <motion.div
+                      <div
                         key={photo.id}
-                        whileHover={{ scale: 1.05 }}
-                        whileTap={{ scale: 0.95 }}
-                        onClick={() => onViewPhotoOnMap(photo)}
                         style={{
                           flexShrink: 0,
                           width: 56,
                           height: 56,
                           borderRadius: radius.md,
                           overflow: 'hidden',
-                          cursor: 'pointer',
                           border: `1px solid ${colors.glass.borderSubtle}`,
                         }}
                       >
@@ -1029,7 +1126,7 @@ export const AdaptiveNavPill = memo(function AdaptiveNavPill({
                             objectFit: 'cover',
                           }}
                         />
-                      </motion.div>
+                      </div>
                     ))}
                     {dayPhotos.length > 5 && (
                       <div style={{
@@ -1049,7 +1146,7 @@ export const AdaptiveNavPill = memo(function AdaptiveNavPill({
                         +{dayPhotos.length - 5}
                       </div>
                     )}
-                  </div>
+                  </motion.div>
                 )}
 
                 {/* Highlights */}
@@ -1075,7 +1172,34 @@ export const AdaptiveNavPill = memo(function AdaptiveNavPill({
                 <div style={{
                   display: 'flex',
                   gap: 8,
+                  flexWrap: 'wrap',
                 }}>
+                  {dayPhotos.length > 0 && (
+                    <motion.button
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      onClick={handleOpenDayGallery}
+                      style={{
+                        flex: '1 1 100%',
+                        padding: '10px 12px',
+                        background: 'rgba(96, 165, 250, 0.15)',
+                        border: 'none',
+                        borderRadius: radius.md,
+                        cursor: 'pointer',
+                        color: colors.accent.primary,
+                        fontSize: 12,
+                        fontWeight: 600,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: 6,
+                        marginBottom: 4,
+                      }}
+                    >
+                      <PhotoIcon size={14} />
+                      View Day {currentDay} Photos ({dayPhotos.length})
+                    </motion.button>
+                  )}
                   <motion.button
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
@@ -1083,11 +1207,11 @@ export const AdaptiveNavPill = memo(function AdaptiveNavPill({
                     style={{
                       flex: 1,
                       padding: '10px 12px',
-                      background: 'rgba(96, 165, 250, 0.15)',
+                      background: 'rgba(255, 255, 255, 0.08)',
                       border: 'none',
                       borderRadius: radius.md,
                       cursor: 'pointer',
-                      color: colors.accent.primary,
+                      color: colors.text.secondary,
                       fontSize: 12,
                       fontWeight: 600,
                       display: 'flex',
