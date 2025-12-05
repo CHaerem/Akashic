@@ -910,6 +910,8 @@ export const AdaptiveNavPill = memo(function AdaptiveNavPill({
                   padding: 16,
                   width: isMobile ? 'calc(100vw - 48px)' : 340,
                   maxWidth: 380,
+                  maxHeight: isMobile ? 'calc(60vh - env(safe-area-inset-bottom))' : '50vh',
+                  overflowY: 'auto',
                 }}
               >
                 {/* Header with close button */}
@@ -979,7 +981,7 @@ export const AdaptiveNavPill = memo(function AdaptiveNavPill({
                   </button>
                 </div>
 
-                {/* Notes */}
+                {/* Notes - show full description */}
                 {currentCamp.notes && (
                   <p style={{
                     fontSize: 13,
@@ -988,9 +990,7 @@ export const AdaptiveNavPill = memo(function AdaptiveNavPill({
                     margin: 0,
                     marginBottom: 12,
                   }}>
-                    {currentCamp.notes.length > 150
-                      ? `${currentCamp.notes.slice(0, 150)}...`
-                      : currentCamp.notes}
+                    {currentCamp.notes}
                   </p>
                 )}
 
