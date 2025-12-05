@@ -314,17 +314,49 @@ function ContentCard({ activeTab, trekData, extendedStats, elevationProfile, sel
           pointerEvents: 'auto',
         }}
       >
-      {/* Header */}
+      {/* Header with camp context */}
       <div style={{
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
-        padding: '14px 16px',
+        padding: '12px 16px',
         borderBottom: `1px solid ${colors.glass.borderSubtle}`,
       }}>
-        <span style={{ fontSize: 14, fontWeight: 600, color: colors.text.primary, textTransform: 'capitalize' }}>
-          {activeTab === 'overview' ? 'Journey Info' : activeTab}
-        </span>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+          {/* Camp context - always show current location */}
+          {selectedCamp && (
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              fontSize: 11,
+            }}>
+              <span style={{
+                fontWeight: 600,
+                color: colors.accent.primary,
+                background: 'rgba(96, 165, 250, 0.15)',
+                padding: '2px 6px',
+                borderRadius: 4,
+              }}>
+                Day {selectedCamp.dayNumber}
+              </span>
+              <span style={{ color: colors.text.secondary }}>
+                {selectedCamp.name}
+              </span>
+              <span style={{
+                color: colors.text.tertiary,
+                background: 'rgba(255, 255, 255, 0.06)',
+                padding: '2px 6px',
+                borderRadius: 4,
+              }}>
+                {selectedCamp.elevation}m
+              </span>
+            </div>
+          )}
+          <span style={{ fontSize: 14, fontWeight: 600, color: colors.text.primary, textTransform: 'capitalize' }}>
+            {activeTab === 'overview' ? 'Journey Info' : activeTab}
+          </span>
+        </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           {/* Edit toggle button */}
           <Button
