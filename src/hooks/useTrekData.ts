@@ -63,11 +63,15 @@ export function useTrekData(): UseTrekDataReturn {
         };
     }, [trekData]);
 
-    // Handle explore button click
+    // Handle explore button click - start the journey at day 1
     const handleExplore = useCallback(() => {
         if (!selectedTrek) return;
+        // Select the first camp to start the journey
+        if (trekData?.camps && trekData.camps.length > 0) {
+            setSelectedCamp(trekData.camps[0]);
+        }
         setView('trek');
-    }, [selectedTrek, setView]);
+    }, [selectedTrek, trekData, setView]);
 
     // Handle back to globe view
     const handleBackToGlobe = useCallback(() => {

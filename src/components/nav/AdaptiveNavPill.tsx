@@ -669,6 +669,15 @@ export const AdaptiveNavPill = memo(function AdaptiveNavPill({
     };
   }, [isDragging, handlePointerUp]);
 
+  // Auto-show context card on initial load to welcome users to day 1
+  useEffect(() => {
+    // Small delay to let the map animation settle
+    const timer = setTimeout(() => {
+      setShowContext(true);
+    }, 800);
+    return () => clearTimeout(timer);
+  }, []); // Only run once on mount
+
   // Tap main pill area → show context card
   const handlePillTap = useCallback(() => {
     if (mode === 'collapsed') {
