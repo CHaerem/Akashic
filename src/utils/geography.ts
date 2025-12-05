@@ -78,6 +78,35 @@ export function findCoordIndex(
 }
 
 /**
+ * Find the nearest route point index to a target coordinate
+ * Unlike findCoordIndex, this always returns a valid index (never -1)
+ * @param routeCoords - Array of [lng, lat, elevation] coordinates
+ * @param target - Target coordinate [lng, lat]
+ * @returns Index of nearest coordinate
+ */
+export function findNearestCoordIndex(
+    routeCoords: [number, number, number][],
+    target: [number, number]
+): number {
+    if (routeCoords.length === 0) return 0;
+
+    let minDist = Infinity;
+    let nearestIdx = 0;
+
+    for (let i = 0; i < routeCoords.length; i++) {
+        const c = routeCoords[i];
+        // Simple squared distance (faster than Haversine for comparison)
+        const dist = (c[0] - target[0]) ** 2 + (c[1] - target[1]) ** 2;
+        if (dist < minDist) {
+            minDist = dist;
+            nearestIdx = i;
+        }
+    }
+
+    return nearestIdx;
+}
+
+/**
  * Calculate total distance along a route
  * @param coordinates - Array of [lng, lat, elevation] coordinates
  * @returns Total distance in kilometers

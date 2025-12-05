@@ -5,7 +5,7 @@
 import { useState, useRef, useEffect, useCallback, type RefObject, type MutableRefObject } from 'react';
 import mapboxgl from 'mapbox-gl';
 import { useJourneys } from '../contexts/JourneysContext';
-import { calculateBearing, findCoordIndex, getDistanceFromLatLonInKm } from '../utils/geography';
+import { calculateBearing, findNearestCoordIndex, getDistanceFromLatLonInKm } from '../utils/geography';
 import type { TrekConfig, TrekData, Camp, Photo, PointOfInterest, POICategory } from '../types/trek';
 
 // Route click information
@@ -968,14 +968,25 @@ export function useMapbox({ containerRef, onTrekSelect, onPhotoClick, onRouteCli
         if (campIndex === -1) return;
 
         const routeCoords = trekData.route.coordinates;
-        const startCoord = campIndex === 0 ? routeCoords[0] : trekData.camps[campIndex - 1].coordinates;
+        if (!routeCoords || routeCoords.length === 0) return;
+
+        // Get start and end coordinates for this day's segment
+        const startCoord = campIndex === 0
+            ? routeCoords[0]
+            : trekData.camps[campIndex - 1].coordinates;
         const endCoord = selectedCamp.coordinates;
 
-        const startIndex = findCoordIndex(routeCoords, startCoord as [number, number]);
-        const endIndex = findCoordIndex(routeCoords, endCoord as [number, number]);
+        // Use nearest point matching instead of exact matching
+        // This ensures segments work even if camp coords don't exactly match route points
+        const startIndex = findNearestCoordIndex(routeCoords, startCoord as [number, number]);
+        const endIndex = findNearestCoordIndex(routeCoords, endCoord as [number, number]);
 
-        if (startIndex !== -1 && endIndex !== -1 && endIndex >= startIndex) {
-            const segmentCoords = routeCoords.slice(startIndex, endIndex + 1);
+        // Ensure we have a valid segment (start before end)
+        const actualStart = Math.min(startIndex, endIndex);
+        const actualEnd = Math.max(startIndex, endIndex);
+
+        if (actualEnd > actualStart) {
+            const segmentCoords = routeCoords.slice(actualStart, actualEnd + 1);
             const segmentGeoJSON: GeoJSON.Feature = {
                 type: 'Feature',
                 properties: {},
@@ -1068,7 +1079,8 @@ export function useMapbox({ containerRef, onTrekSelect, onPhotoClick, onRouteCli
                 if (campIndex !== -1) {
                     const routeCoords = trekData.route.coordinates;
                     const currentCoord = selectedCamp.coordinates;
-                    const endIndex = findCoordIndex(routeCoords, currentCoord as [number, number]);
+                    // Use nearest point matching for reliable bearing calculation
+                    const endIndex = findNearestCoordIndex(routeCoords, currentCoord as [number, number]);
 
                     if (endIndex > 5) {
                         const lookBackIndex = endIndex - 5;
