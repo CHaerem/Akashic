@@ -3,8 +3,8 @@
  * Allows family members to collaboratively add photos to journeys
  */
 
-import { useState, useEffect, useCallback, useRef } from 'react';
-import type { TrekData, Photo } from '../../types/trek';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import type { TrekData, Photo, Camp } from '../../types/trek';
 import type { UploadResult } from '../../lib/media';
 import { useMedia } from '../../hooks/useMedia';
 import { fetchPhotos, createPhoto, deletePhoto, getJourneyIdBySlug, updatePhoto } from '../../lib/journeys';
@@ -13,6 +13,8 @@ import { PhotoLightbox } from '../common/PhotoLightbox';
 import { PhotoEditModal } from './PhotoEditModal';
 import { SkeletonPhotoGrid } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
+
+type DayFilter = 'all' | number; // 'all' or day number
 
 interface PhotosTabProps {
     trekData: TrekData;
@@ -30,8 +32,78 @@ export function PhotosTab({ trekData, isMobile, editMode = false, onViewPhotoOnM
     const [editingPhoto, setEditingPhoto] = useState<Photo | null>(null);
     const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
     const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+    const [dayFilter, setDayFilter] = useState<DayFilter>('all');
     const dragTimeoutRef = useRef<number | null>(null);
     const { getMediaUrl, loading: tokenLoading } = useMedia();
+
+    // Build a map from waypoint ID to day number
+    const waypointToDayMap = useMemo(() => {
+        const map = new Map<string, number>();
+        trekData.camps.forEach((camp: Camp) => {
+            map.set(camp.id, camp.dayNumber);
+        });
+        return map;
+    }, [trekData.camps]);
+
+    // Get the day number for a photo (from waypoint or date)
+    const getPhotoDay = useCallback((photo: Photo): number | null => {
+        // First check waypoint_id
+        if (photo.waypoint_id) {
+            const day = waypointToDayMap.get(photo.waypoint_id);
+            if (day !== undefined) return day;
+        }
+
+        // Fall back to date matching if journey has a start date
+        if (photo.taken_at && trekData.dateStarted) {
+            const photoDate = new Date(photo.taken_at);
+            const startDate = new Date(trekData.dateStarted);
+            const diffTime = photoDate.getTime() - startDate.getTime();
+            const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+            // Day 1 is day 0 diff, so add 1
+            const dayNum = diffDays + 1;
+            // Only return if within valid day range
+            if (dayNum >= 1 && dayNum <= trekData.camps.length) {
+                return dayNum;
+            }
+        }
+
+        return null;
+    }, [waypointToDayMap, trekData.dateStarted, trekData.camps.length]);
+
+    // Group photos by day
+    const photosByDay = useMemo(() => {
+        const groups: Record<number | 'unassigned', Photo[]> = { unassigned: [] };
+
+        trekData.camps.forEach((camp: Camp) => {
+            groups[camp.dayNumber] = [];
+        });
+
+        photos.forEach(photo => {
+            const day = getPhotoDay(photo);
+            if (day !== null && groups[day]) {
+                groups[day].push(photo);
+            } else {
+                groups.unassigned.push(photo);
+            }
+        });
+
+        return groups;
+    }, [photos, getPhotoDay, trekData.camps]);
+
+    // Filter photos based on selected day
+    const filteredPhotos = useMemo(() => {
+        if (dayFilter === 'all') return photos;
+        return photosByDay[dayFilter] || [];
+    }, [photos, photosByDay, dayFilter]);
+
+    // Get counts for each day
+    const dayCounts = useMemo(() => {
+        const counts: Record<string, number> = { all: photos.length };
+        Object.entries(photosByDay).forEach(([key, dayPhotos]) => {
+            counts[key] = dayPhotos.length;
+        });
+        return counts;
+    }, [photos.length, photosByDay]);
 
     // Get the database ID for this journey (needed for creating photos)
     useEffect(() => {
@@ -209,14 +281,75 @@ export function PhotosTab({ trekData, isMobile, editMode = false, onViewPhotoOnM
                 </div>
             )}
 
+            {/* Day filter tabs */}
+            {photos.length > 0 && trekData.camps.length > 1 && (
+                <div className="mb-4">
+                    <div className="flex gap-1.5 overflow-x-auto pb-2 scrollbar-hide">
+                        {/* All photos tab */}
+                        <button
+                            onClick={() => setDayFilter('all')}
+                            className={cn(
+                                "flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-medium transition-all",
+                                dayFilter === 'all'
+                                    ? "bg-blue-500/20 text-blue-300 border border-blue-500/30"
+                                    : "bg-white/5 text-white/60 border border-white/10 hover:bg-white/10"
+                            )}
+                        >
+                            All ({dayCounts.all})
+                        </button>
+
+                        {/* Day tabs */}
+                        {trekData.camps.map((camp: Camp) => {
+                            const count = dayCounts[camp.dayNumber] || 0;
+                            return (
+                                <button
+                                    key={camp.dayNumber}
+                                    onClick={() => setDayFilter(camp.dayNumber)}
+                                    className={cn(
+                                        "flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-medium transition-all whitespace-nowrap",
+                                        dayFilter === camp.dayNumber
+                                            ? "bg-blue-500/20 text-blue-300 border border-blue-500/30"
+                                            : count > 0
+                                                ? "bg-white/5 text-white/60 border border-white/10 hover:bg-white/10"
+                                                : "bg-white/[0.02] text-white/30 border border-white/5"
+                                    )}
+                                >
+                                    Day {camp.dayNumber} {count > 0 && `(${count})`}
+                                </button>
+                            );
+                        })}
+
+                        {/* Unassigned tab - only show if there are unassigned photos */}
+                        {dayCounts.unassigned > 0 && (
+                            <button
+                                onClick={() => setDayFilter('unassigned' as unknown as number)}
+                                className={cn(
+                                    "flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-medium transition-all",
+                                    dayFilter === ('unassigned' as unknown as number)
+                                        ? "bg-amber-500/20 text-amber-300 border border-amber-500/30"
+                                        : "bg-white/5 text-white/50 border border-white/10 hover:bg-white/10"
+                                )}
+                            >
+                                Unassigned ({dayCounts.unassigned})
+                            </button>
+                        )}
+                    </div>
+                </div>
+            )}
+
             {/* Photo grid */}
-            {photos.length > 0 && (
+            {filteredPhotos.length > 0 && (
                 <div>
                     <div className="flex justify-between items-center mb-3">
                         <h3 className="text-white/90 light:text-slate-900 text-sm font-medium m-0 uppercase tracking-[0.1em]">
-                            Journey Photos ({photos.length})
+                            {dayFilter === 'all'
+                                ? `Journey Photos (${photos.length})`
+                                : dayFilter === ('unassigned' as unknown as number)
+                                    ? `Unassigned Photos (${filteredPhotos.length})`
+                                    : `Day ${dayFilter} Photos (${filteredPhotos.length})`
+                            }
                         </h3>
-                        {editMode && photos.length > 1 && (
+                        {editMode && filteredPhotos.length > 1 && (
                             <span className="text-[11px] text-white/40 light:text-slate-400">
                                 Drag to reorder
                             </span>
@@ -227,7 +360,7 @@ export function PhotosTab({ trekData, isMobile, editMode = false, onViewPhotoOnM
                         // Responsive grid with minimum item width
                         "grid-cols-2 sm:grid-cols-3 lg:grid-cols-4"
                     )}>
-                        {photos.map((photo, index) => (
+                        {filteredPhotos.map((photo, index) => (
                             <div
                                 key={photo.id}
                                 onClick={() => handlePhotoClick(index)}
@@ -297,7 +430,22 @@ export function PhotosTab({ trekData, isMobile, editMode = false, onViewPhotoOnM
                 </div>
             )}
 
-            {/* Empty state */}
+            {/* Empty state for filtered day */}
+            {photos.length > 0 && filteredPhotos.length === 0 && dayFilter !== 'all' && (
+                <div className="text-center py-10 text-white/40 light:text-slate-400">
+                    <p className="m-0 mb-2">
+                        {dayFilter === ('unassigned' as unknown as number)
+                            ? 'No unassigned photos'
+                            : `No photos for Day ${dayFilter}`
+                        }
+                    </p>
+                    <p className="m-0 text-xs">
+                        Photos will appear here when assigned to this day
+                    </p>
+                </div>
+            )}
+
+            {/* Empty state - no photos at all */}
             {photos.length === 0 && !loading && (
                 <div className="text-center py-10 text-white/40 light:text-slate-400">
                     <p className="m-0 mb-2">No photos yet</p>
@@ -307,9 +455,9 @@ export function PhotosTab({ trekData, isMobile, editMode = false, onViewPhotoOnM
                 </div>
             )}
 
-            {/* Lightbox */}
+            {/* Lightbox - uses filtered photos for navigation within selected day */}
             <PhotoLightbox
-                photos={photos}
+                photos={filteredPhotos}
                 initialIndex={lightboxIndex ?? 0}
                 isOpen={lightboxIndex !== null}
                 onClose={closeLightbox}
