@@ -3,7 +3,7 @@
  * Allows family members to collaboratively add photos to journeys
  */
 
-import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo, memo } from 'react';
 import type { TrekData, Photo, Camp } from '../../types/trek';
 import type { UploadResult } from '../../lib/media';
 import { useMedia } from '../../hooks/useMedia';
@@ -16,6 +16,105 @@ import { SkeletonPhotoGrid } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 
 type DayFilter = 'all' | number; // 'all' or day number
+
+// Memoized photo grid item to prevent re-renders when selection/drag state changes
+interface PhotoGridItemProps {
+    photo: Photo;
+    index: number;
+    editMode: boolean;
+    isDragOver: boolean;
+    isDragged: boolean;
+    getMediaUrl: (path: string) => string;
+    onPhotoClick: (index: number) => void;
+    onDragStart: (index: number) => void;
+    onDragOver: (e: React.DragEvent, index: number) => void;
+    onDragLeave: () => void;
+    onDrop: (index: number) => void;
+    onDragEnd: () => void;
+    onEditPhoto: (photo: Photo) => void;
+}
+
+const PhotoGridItem = memo(function PhotoGridItem({
+    photo,
+    index,
+    editMode,
+    isDragOver,
+    isDragged,
+    getMediaUrl,
+    onPhotoClick,
+    onDragStart,
+    onDragOver,
+    onDragLeave,
+    onDrop,
+    onDragEnd,
+    onEditPhoto,
+}: PhotoGridItemProps) {
+    return (
+        <div
+            onClick={() => onPhotoClick(index)}
+            draggable={editMode}
+            onDragStart={() => editMode && onDragStart(index)}
+            onDragOver={(e) => editMode && onDragOver(e, index)}
+            onDragLeave={() => editMode && onDragLeave()}
+            onDrop={() => editMode && onDrop(index)}
+            onDragEnd={() => editMode && onDragEnd()}
+            className={cn(
+                "aspect-square rounded-lg overflow-hidden relative bg-white/5 light:bg-black/5",
+                "transition-all duration-150",
+                editMode ? "cursor-grab" : "cursor-pointer",
+                photo.is_hero && "ring-2 ring-amber-400",
+                isDragOver && "ring-2 ring-blue-500 scale-[1.02]",
+                isDragged && "opacity-50"
+            )}
+        >
+            <img
+                src={getMediaUrl(photo.thumbnail_url || photo.url)}
+                alt={photo.caption || 'Journey photo'}
+                className="w-full h-full object-cover"
+                loading="lazy"
+            />
+
+            {/* Hero badge */}
+            {photo.is_hero && (
+                <div className="absolute top-1.5 left-1.5 bg-amber-400 text-black text-[9px] font-semibold px-1.5 py-0.5 rounded uppercase tracking-wide">
+                    Hero
+                </div>
+            )}
+
+            {/* Edit button in edit mode - 44px touch target */}
+            {editMode && (
+                <button
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        onEditPhoto(photo);
+                    }}
+                    className="absolute top-1 right-1 min-w-[44px] min-h-[44px] bg-black/60 backdrop-blur-sm border border-white/20 rounded-xl flex items-center justify-center text-white/95 text-xs font-medium cursor-pointer hover:bg-black/80 transition-colors"
+                >
+                    Edit
+                </button>
+            )}
+
+            {/* Location indicator */}
+            {photo.coordinates && (
+                <div className={cn(
+                    "absolute right-1.5 bg-black/50 rounded-full w-6 h-6 flex items-center justify-center",
+                    photo.caption ? "bottom-8" : "bottom-1.5"
+                )}>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
+                        <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/>
+                        <circle cx="12" cy="10" r="3"/>
+                    </svg>
+                </div>
+            )}
+
+            {photo.caption && (
+                <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent px-2 pt-5 pb-2 text-[11px] text-white/90">
+                    {photo.caption}
+                </div>
+            )}
+        </div>
+    );
+});
 
 interface PhotosTabProps {
     trekData: TrekData;
@@ -312,70 +411,22 @@ export function PhotosTab({ trekData, isMobile, editMode = false, onViewPhotoOnM
                         "grid-cols-2 sm:grid-cols-3 lg:grid-cols-4"
                     )}>
                         {filteredPhotos.map((photo, index) => (
-                            <div
+                            <PhotoGridItem
                                 key={photo.id}
-                                onClick={() => handlePhotoClick(index)}
-                                draggable={editMode}
-                                onDragStart={() => editMode && handleDragStart(index)}
-                                onDragOver={(e) => editMode && handleDragOver(e, index)}
-                                onDragLeave={() => editMode && handleDragLeave()}
-                                onDrop={() => editMode && handleDrop(index)}
-                                onDragEnd={() => editMode && handleDragEnd()}
-                                className={cn(
-                                    "aspect-square rounded-lg overflow-hidden relative bg-white/5 light:bg-black/5",
-                                    "transition-all duration-150",
-                                    editMode ? "cursor-grab" : "cursor-pointer",
-                                    photo.is_hero && "ring-2 ring-amber-400",
-                                    dragOverIndex === index && "ring-2 ring-blue-500 scale-[1.02]",
-                                    draggedIndex === index && "opacity-50"
-                                )}
-                            >
-                                <img
-                                    src={getMediaUrl(photo.thumbnail_url || photo.url)}
-                                    alt={photo.caption || 'Journey photo'}
-                                    className="w-full h-full object-cover"
-                                    loading="lazy"
-                                />
-
-                                {/* Hero badge */}
-                                {photo.is_hero && (
-                                    <div className="absolute top-1.5 left-1.5 bg-amber-400 text-black text-[9px] font-semibold px-1.5 py-0.5 rounded uppercase tracking-wide">
-                                        Hero
-                                    </div>
-                                )}
-
-                                {/* Edit button in edit mode - 44px touch target */}
-                                {editMode && (
-                                    <button
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            handleEditPhoto(photo);
-                                        }}
-                                        className="absolute top-1 right-1 min-w-[44px] min-h-[44px] bg-black/60 backdrop-blur-sm border border-white/20 rounded-xl flex items-center justify-center text-white/95 text-xs font-medium cursor-pointer hover:bg-black/80 transition-colors"
-                                    >
-                                        Edit
-                                    </button>
-                                )}
-
-                                {/* Location indicator */}
-                                {photo.coordinates && (
-                                    <div className={cn(
-                                        "absolute right-1.5 bg-black/50 rounded-full w-6 h-6 flex items-center justify-center",
-                                        photo.caption ? "bottom-8" : "bottom-1.5"
-                                    )}>
-                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
-                                            <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/>
-                                            <circle cx="12" cy="10" r="3"/>
-                                        </svg>
-                                    </div>
-                                )}
-
-                                {photo.caption && (
-                                    <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent px-2 pt-5 pb-2 text-[11px] text-white/90">
-                                        {photo.caption}
-                                    </div>
-                                )}
-                            </div>
+                                photo={photo}
+                                index={index}
+                                editMode={editMode}
+                                isDragOver={dragOverIndex === index}
+                                isDragged={draggedIndex === index}
+                                getMediaUrl={getMediaUrl}
+                                onPhotoClick={handlePhotoClick}
+                                onDragStart={handleDragStart}
+                                onDragOver={handleDragOver}
+                                onDragLeave={handleDragLeave}
+                                onDrop={handleDrop}
+                                onDragEnd={handleDragEnd}
+                                onEditPhoto={handleEditPhoto}
+                            />
                         ))}
                     </div>
                 </div>
