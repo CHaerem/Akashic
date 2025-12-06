@@ -523,6 +523,14 @@ export async function getJourneyForEdit(slug: string): Promise<DbJourney | null>
 // Export DbJourney type for components
 export type { DbJourney, DbWaypoint };
 
+// Export internal helpers for testing
+export const _internal = {
+    findClosestRoutePointIndex,
+    calculateElevationGainBetweenIndices,
+    toTrekConfig,
+    toTrekData,
+};
+
 /**
  * Editable waypoint fields
  */
