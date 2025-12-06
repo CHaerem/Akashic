@@ -7,13 +7,13 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import type { TrekData, Photo, Camp } from '../../types/trek';
 import type { UploadResult } from '../../lib/media';
 import { useMedia } from '../../hooks/useMedia';
+import { usePhotoDay } from '../../hooks/usePhotoDay';
 import { fetchPhotos, createPhoto, deletePhoto, getJourneyIdBySlug, updatePhoto } from '../../lib/journeys';
 import { PhotoUpload } from './PhotoUpload';
 import { PhotoLightbox } from '../common/PhotoLightbox';
 import { PhotoEditModal } from './PhotoEditModal';
 import { SkeletonPhotoGrid } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
-import { getDistanceFromLatLonInKm, findNearestCoordIndex } from '../../utils/geography';
 
 type DayFilter = 'all' | number; // 'all' or day number
 
@@ -37,114 +37,8 @@ export function PhotosTab({ trekData, isMobile, editMode = false, onViewPhotoOnM
     const dragTimeoutRef = useRef<number | null>(null);
     const { getMediaUrl, loading: tokenLoading } = useMedia();
 
-    // Build a map from waypoint ID to day number
-    const waypointToDayMap = useMemo(() => {
-        const map = new Map<string, number>();
-        trekData.camps.forEach((camp: Camp) => {
-            map.set(camp.id, camp.dayNumber);
-        });
-        return map;
-    }, [trekData.camps]);
-
-    // Get the day number for a photo (from waypoint, date, or location)
-    const getPhotoDay = useCallback((photo: Photo): number | null => {
-        // First check waypoint_id
-        if (photo.waypoint_id) {
-            const day = waypointToDayMap.get(photo.waypoint_id);
-            if (day !== undefined) return day;
-        }
-
-        // Fall back to date matching if journey has a start date
-        if (photo.taken_at && trekData.dateStarted) {
-            const photoDate = new Date(photo.taken_at);
-            const startDate = new Date(trekData.dateStarted);
-            const diffTime = photoDate.getTime() - startDate.getTime();
-            const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-            // Day 1 is day 0 diff, so add 1
-            const dayNum = diffDays + 1;
-            // Only return if within valid day range
-            if (dayNum >= 1 && dayNum <= trekData.camps.length) {
-                return dayNum;
-            }
-        }
-
-        // Fall back to location-based estimation using route segments
-        // Find which segment of the route the photo is on (more accurate than nearest camp)
-        if (photo.coordinates && trekData.route?.coordinates && trekData.camps.length > 0) {
-            const routeCoords = trekData.route.coordinates;
-            const [photoLng, photoLat] = photo.coordinates;
-
-            // Find nearest point on the route
-            const nearestRouteIdx = findNearestCoordIndex(routeCoords, [photoLng, photoLat]);
-
-            // Check distance to ensure photo is actually on/near the route (within 2km)
-            const nearestPoint = routeCoords[nearestRouteIdx];
-            const distToRoute = getDistanceFromLatLonInKm(photoLat, photoLng, nearestPoint[1], nearestPoint[0]);
-
-            if (distToRoute < 2) {
-                // Sort camps by routePointIndex to find which segment the photo is in
-                const sortedCamps = [...trekData.camps]
-                    .filter(c => c.routePointIndex != null)
-                    .sort((a, b) => (a.routePointIndex || 0) - (b.routePointIndex || 0));
-
-                // Find which day segment contains this route index
-                // Day N ends at camp N's routePointIndex
-                for (const camp of sortedCamps) {
-                    if (nearestRouteIdx <= (camp.routePointIndex || 0)) {
-                        return camp.dayNumber;
-                    }
-                }
-
-                // If past all camps, assign to last day
-                if (sortedCamps.length > 0) {
-                    return sortedCamps[sortedCamps.length - 1].dayNumber;
-                }
-            }
-        }
-
-        // Final fallback: find nearest camp (less accurate but works without route data)
-        if (photo.coordinates && trekData.camps.length > 0) {
-            const [photoLng, photoLat] = photo.coordinates;
-            let nearestDay: number | null = null;
-            let minDistance = Infinity;
-
-            for (const camp of trekData.camps) {
-                const [campLng, campLat] = camp.coordinates;
-                const distance = getDistanceFromLatLonInKm(photoLat, photoLng, campLat, campLng);
-                if (distance < minDistance) {
-                    minDistance = distance;
-                    nearestDay = camp.dayNumber;
-                }
-            }
-
-            // Only assign if reasonably close (within 5km of a camp)
-            if (nearestDay !== null && minDistance < 5) {
-                return nearestDay;
-            }
-        }
-
-        return null;
-    }, [waypointToDayMap, trekData.dateStarted, trekData.camps.length, trekData.camps, trekData.route?.coordinates]);
-
-    // Group photos by day
-    const photosByDay = useMemo(() => {
-        const groups: Record<number | 'unassigned', Photo[]> = { unassigned: [] };
-
-        trekData.camps.forEach((camp: Camp) => {
-            groups[camp.dayNumber] = [];
-        });
-
-        photos.forEach(photo => {
-            const day = getPhotoDay(photo);
-            if (day !== null && groups[day]) {
-                groups[day].push(photo);
-            } else {
-                groups.unassigned.push(photo);
-            }
-        });
-
-        return groups;
-    }, [photos, getPhotoDay, trekData.camps]);
+    // Use shared photo-day matching hook
+    const { photosByDay } = usePhotoDay(trekData, photos);
 
     // Filter photos based on selected day
     const filteredPhotos = useMemo(() => {

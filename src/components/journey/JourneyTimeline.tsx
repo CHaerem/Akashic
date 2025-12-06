@@ -14,30 +14,8 @@ import { DayChapter } from './DayChapter';
 import { SegmentTransition } from './SegmentTransition';
 import { PhotoLightbox } from '../common/PhotoLightbox';
 import { calculateAllSegments } from '../../utils/routeUtils';
+import { getDateForDay, isPhotoFromDay } from '../../utils/dates';
 import { colors } from '../../styles/liquidGlass';
-
-/**
- * Get the actual date for a specific day number based on journey start date
- */
-function getDateForDay(dateStarted: string | undefined, dayNumber: number): Date | null {
-    if (!dateStarted) return null;
-    const start = new Date(dateStarted);
-    start.setDate(start.getDate() + (dayNumber - 1));
-    return start;
-}
-
-/**
- * Check if a photo was taken on a specific date
- */
-function isPhotoFromDay(photo: Photo, targetDate: Date): boolean {
-    if (!photo.taken_at) return false;
-    const photoDate = new Date(photo.taken_at);
-    return (
-        photoDate.getFullYear() === targetDate.getFullYear() &&
-        photoDate.getMonth() === targetDate.getMonth() &&
-        photoDate.getDate() === targetDate.getDate()
-    );
-}
 
 interface JourneyTimelineProps {
     trekData: TrekData;

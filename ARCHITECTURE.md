@@ -315,7 +315,9 @@ The main navigation uses **AdaptiveNavPill** - a floating glass pill with Viapla
 
 ```
 src/components/nav/
-└── AdaptiveNavPill.tsx     # Floating nav with magnification effect
+├── AdaptiveNavPill.tsx     # Main nav pill with magnification effect
+├── ContentCard.tsx         # Floating card for tab content
+└── ContextCard.tsx         # Day info context card
 ```
 
 **States:**
@@ -332,10 +334,42 @@ Content cards render these tab components:
 
 | Component | Purpose |
 |-----------|---------|
-| `StatsTab` | Interactive elevation profile, journey stats |
+| `StatsTab` | Journey stats, uses extracted sub-components |
 | `JourneyTab` | Day-by-day breakdown with segments |
 | `OverviewTab` | Trek description and key stats |
 | `PhotosTab` | Photo gallery with upload |
+
+**Extracted Trek Components** (`src/components/trek/`):
+
+| Component | Purpose |
+|-----------|---------|
+| `InteractiveElevationProfile` | SVG elevation chart with zoom/pan/touch |
+| `HistoricalSiteCard` | Expandable historical site info |
+| `DayPhotos` | Photo grid for a single day |
+| `SegmentInfo` | Hiking segment details between camps |
+
+### Shared Hooks
+
+| Hook | Location | Purpose |
+|------|----------|---------|
+| `usePhotoDay` | `src/hooks/usePhotoDay.ts` | Photo-day matching with 4-tier strategy |
+| `useMedia` | `src/hooks/useMedia.ts` | Authenticated media URL generation |
+
+### Utilities
+
+| File | Purpose |
+|------|---------|
+| `src/utils/dates.ts` | Date formatting and photo-day matching |
+| `src/utils/formatting.ts` | Distance, elevation, duration formatting |
+| `src/utils/geography.ts` | Haversine distance, bearing calculations |
+| `src/utils/routeUtils.ts` | Route segments, difficulty, hiking time |
+
+### Icons Library
+
+Reusable icons in `src/components/icons/index.tsx`:
+- CalendarIcon, InfoIcon, PhotoIcon, StatsIcon
+- CloseIcon, ChevronIcon, PencilIcon, MapPinIcon
+- ExpandIcon, TrashIcon, DownloadIcon
 
 ### Component Library (shadcn/ui)
 

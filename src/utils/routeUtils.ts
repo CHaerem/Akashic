@@ -3,37 +3,28 @@
  */
 
 import type { Camp, RouteSegment, PointOfInterest } from '../types/trek';
+import { getDistanceFromLatLonInKm } from './geography';
+// Re-export formatting functions for backward compatibility
+export { formatDistance, formatElevation } from './formatting';
 
 export type RouteCoordinate = [number, number, number]; // [lng, lat, elevation]
 export type Coordinate = [number, number]; // [lng, lat]
 
 /**
  * Calculate distance between two coordinates using Haversine formula
+ * Wrapper around getDistanceFromLatLonInKm that accepts coordinate arrays
+ * @param coord1 Coordinate as [lng, lat] or [lng, lat, elevation]
+ * @param coord2 Coordinate as [lng, lat] or [lng, lat, elevation]
  * @returns Distance in kilometers
  */
 export function haversineDistance(
     coord1: Coordinate | RouteCoordinate,
     coord2: Coordinate | RouteCoordinate
 ): number {
-    const R = 6371; // Earth's radius in km
+    // Note: coordinates are [lng, lat], but getDistanceFromLatLonInKm expects (lat, lon)
     const [lng1, lat1] = coord1;
     const [lng2, lat2] = coord2;
-
-    const dLat = toRadians(lat2 - lat1);
-    const dLng = toRadians(lng2 - lng1);
-
-    const a =
-        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-        Math.cos(toRadians(lat1)) * Math.cos(toRadians(lat2)) *
-        Math.sin(dLng / 2) * Math.sin(dLng / 2);
-
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-
-    return R * c;
-}
-
-function toRadians(degrees: number): number {
-    return degrees * (Math.PI / 180);
+    return getDistanceFromLatLonInKm(lat1, lng1, lat2, lng2);
 }
 
 /**
@@ -604,24 +595,6 @@ export function getDifficultyColor(difficulty: 'easy' | 'moderate' | 'challengin
         case 'challenging': return 'rgba(251, 146, 60, 0.8)'; // Orange
         case 'difficult': return 'rgba(239, 68, 68, 0.8)'; // Red
     }
-}
-
-/**
- * Format distance for display
- */
-export function formatDistance(distanceKm: number): string {
-    if (distanceKm < 1) {
-        return `${Math.round(distanceKm * 1000)}m`;
-    }
-    return `${distanceKm.toFixed(1)} km`;
-}
-
-/**
- * Format elevation for display
- */
-export function formatElevation(meters: number, showSign = false): string {
-    const prefix = showSign && meters > 0 ? '+' : '';
-    return `${prefix}${Math.round(meters)}m`;
 }
 
 /**

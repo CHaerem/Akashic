@@ -4,148 +4,12 @@ import { WaypointEditModal } from './WaypointEditModal';
 import { PhotoAssignModal } from './PhotoAssignModal';
 import { RouteEditor } from './RouteEditor';
 import { PhotoLightbox } from '../common/PhotoLightbox';
+import { DayPhotos } from './DayPhotos';
+import { SegmentInfo } from './SegmentInfo';
 import { Button } from '../ui/button';
 import { cn } from '@/lib/utils';
-import { calculateAllSegments, getDifficultyColor } from '../../utils/routeUtils';
-
-/**
- * Get the actual date for a specific day number based on journey start date
- */
-function getDateForDay(dateStarted: string | undefined, dayNumber: number): Date | null {
-    if (!dateStarted) return null;
-    const start = new Date(dateStarted);
-    start.setDate(start.getDate() + (dayNumber - 1));
-    return start;
-}
-
-/**
- * Format a date as "Oct 5" style
- */
-function formatDate(date: Date): string {
-    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-}
-
-/**
- * Check if a photo was taken on a specific date (comparing just the date, not time)
- */
-function isPhotoFromDay(photo: Photo, targetDate: Date): boolean {
-    if (!photo.taken_at) return false;
-    const photoDate = new Date(photo.taken_at);
-    return (
-        photoDate.getFullYear() === targetDate.getFullYear() &&
-        photoDate.getMonth() === targetDate.getMonth() &&
-        photoDate.getDate() === targetDate.getDate()
-    );
-}
-
-interface DayPhotosProps {
-    photos: Photo[];
-    getMediaUrl: (path: string) => string;
-    isMobile: boolean;
-    onPhotoClick: (index: number) => void;
-}
-
-const DayPhotos = memo(function DayPhotos({ photos, getMediaUrl, isMobile, onPhotoClick }: DayPhotosProps) {
-    if (photos.length === 0) {
-        return null;
-    }
-
-    const maxVisible = isMobile ? 6 : 8;
-
-    return (
-        <div className={cn(
-            "grid gap-1.5",
-            isMobile ? "grid-cols-3" : "grid-cols-4"
-        )}>
-            {photos.slice(0, maxVisible).map((photo, index) => (
-                <div
-                    key={photo.id}
-                    onClick={(e) => {
-                        e.stopPropagation();
-                        onPhotoClick(index);
-                    }}
-                    className="aspect-square rounded-lg overflow-hidden bg-white/5 light:bg-black/5 cursor-pointer"
-                >
-                    <img
-                        src={getMediaUrl(photo.thumbnail_url || photo.url)}
-                        alt={photo.caption || 'Journey photo'}
-                        className="w-full h-full object-cover"
-                        loading="lazy"
-                    />
-                </div>
-            ))}
-            {photos.length > maxVisible && (
-                <div
-                    onClick={(e) => {
-                        e.stopPropagation();
-                        onPhotoClick(maxVisible);
-                    }}
-                    className="aspect-square rounded-lg bg-white/5 light:bg-black/5 flex items-center justify-center text-white/40 light:text-slate-400 text-xs cursor-pointer"
-                >
-                    +{photos.length - maxVisible}
-                </div>
-            )}
-        </div>
-    );
-});
-
-/**
- * Segment info component showing details between two camps
- */
-interface SegmentInfoProps {
-    segment: RouteSegment;
-    isMobile?: boolean;
-}
-
-const SegmentInfo = memo(function SegmentInfo({ segment, isMobile = false }: SegmentInfoProps) {
-    const difficultyColor = getDifficultyColor(segment.difficulty);
-
-    return (
-        <div className={cn(
-            "py-3 border-y border-white/8 light:border-black/5",
-            isMobile ? "-mx-4 px-4" : "-mx-6 px-6"
-        )}
-            style={{ background: 'linear-gradient(90deg, rgba(255,255,255,0.03) 0%, transparent 50%, rgba(255,255,255,0.03) 100%)' }}
-        >
-            <div className="flex items-center justify-between gap-3">
-                {/* Distance & Time */}
-                <div className="flex items-center gap-3">
-                    <div className="flex items-center gap-1 text-white/70 light:text-slate-600 text-xs">
-                        <span className="opacity-60">↓</span>
-                        <span className="font-medium">{segment.distance} km</span>
-                    </div>
-                    <div className="w-px h-3 bg-white/10 light:bg-black/10" />
-                    <div className="text-white/50 light:text-slate-500 text-[11px]">
-                        {segment.estimatedTime}
-                    </div>
-                </div>
-
-                {/* Elevation changes */}
-                <div className="flex items-center gap-2">
-                    {segment.elevationGain > 0 && (
-                        <span className="text-[11px] text-green-400 font-medium">
-                            +{segment.elevationGain}m
-                        </span>
-                    )}
-                    {segment.elevationLoss > 0 && (
-                        <span className="text-[11px] text-red-400 font-medium">
-                            -{segment.elevationLoss}m
-                        </span>
-                    )}
-                    <div
-                        className="px-1.5 py-0.5 rounded text-[9px] font-semibold uppercase tracking-wide"
-                        style={{
-                            background: difficultyColor.replace('0.8', '0.15'),
-                            color: difficultyColor
-                        }}
-                    >
-                        {segment.difficulty}
-                    </div>
-                </div>
-            </div>
-        </div>
-    );
-});
+import { calculateAllSegments } from '../../utils/routeUtils';
+import { getDateForDay, isPhotoFromDay, formatDateShort } from '../../utils/dates';
 
 interface CampItemProps {
     camp: Camp;
@@ -213,7 +77,7 @@ const CampItem = memo(function CampItem({
     }, [photos, assignedPhotos]);
 
     const dayLabel = dayDate
-        ? `Day ${camp.dayNumber} · ${formatDate(dayDate)}`
+        ? `Day ${camp.dayNumber} · ${formatDateShort(dayDate)}`
         : `Day ${camp.dayNumber}`;
 
     return (
