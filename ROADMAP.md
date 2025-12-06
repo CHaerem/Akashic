@@ -277,10 +277,10 @@ Quality-of-life improvements and additional features.
 
 #### UX Improvements
 
-- [ ] Offline support (PWA)
+- [x] Offline support (PWA) - VitePWA with service worker, installable app
+- [x] Loading skeletons - Skeleton component with 5 variants (default, glass, card, photo, text)
+- [x] Error boundaries - ErrorBoundary component wrapping App
 - [ ] Mobile gesture improvements
-- [ ] Loading skeletons
-- [ ] Error boundaries
 
 ---
 
@@ -365,7 +365,7 @@ A platform where anyone can create and share their travel journeys.
 | Phase 1.4 (Photo Display)             | ✅ Complete      | Grid, lightbox, day-based, map markers                         |
 | Phase 2 (Journey UI)                  | ✅ Complete      | Journey editing, Route Editor A+B+C (intelligent drawing) done |
 | **Phase 2.5 (Immersive Exploration)** | ✅ Core Complete | Elevation profile, photo markers, view-on-map done             |
-| Phase 3 (Polish)                      | 📋 Planned       | After immersive exploration                                    |
+| Phase 3 (Polish)                      | ✅ Mostly Done   | PWA, skeletons, error boundaries done. GPX import remaining    |
 | **Phase 4 (Multi-user Foundation)**   | ✅ Complete      | Role-based access, member management UI                        |
 
 ---
@@ -384,6 +384,8 @@ A platform where anyone can create and share their travel journeys.
 | 2024-11 | Collaborative over admin-only                        | Family members can all contribute photos                                                   |
 | 2024-11 | Free tier limits enforced server-side                | Worker: 20MB max, Supabase triggers: 20 journeys, 100 photos/journey, 30 waypoints/journey |
 | 2024-11 | Multi-user via journey_members table                 | Role-based (owner/editor/viewer), RLS helper function, migrated R2 paths to UUID           |
+| 2024-12 | Codebase refactor: extract shared hooks & components | usePhotoDay hook, icons library, InteractiveElevationProfile, ContentCard, ContextCard     |
+| 2024-12 | Client-side thumbnail generation                     | Canvas API resize to 400px, 80% JPEG quality, uploaded alongside original                  |
 
 ---
 
