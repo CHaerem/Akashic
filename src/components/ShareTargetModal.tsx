@@ -103,13 +103,14 @@ export function ShareTargetModal({ isOpen, onClose, onUploadComplete }: ShareTar
                 const photo = photos[i];
                 setUploadProgress({ current: i + 1, total: photos.length });
 
-                // Upload to R2
+                // Upload to R2 (includes thumbnail generation)
                 const result: UploadResult = await uploadPhoto(journeyDbId, photo.sharedFile.file);
 
-                // Create photo record in database with metadata
+                // Create photo record in database with metadata and thumbnail
                 await createPhoto({
                     journey_id: journeyDbId,
                     url: result.path,
+                    thumbnail_url: result.thumbnailPath,
                     coordinates: photo.metadata.coordinates,
                     taken_at: photo.metadata.takenAt?.toISOString(),
                 });

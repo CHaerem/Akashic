@@ -4,6 +4,10 @@
 
 import { supabase } from './supabase';
 
+// Thumbnail settings
+const THUMBNAIL_MAX_SIZE = 400; // Max width/height in pixels
+const THUMBNAIL_QUALITY = 0.8; // JPEG quality (0-1)
+
 const MEDIA_BASE_URL = import.meta.env.VITE_MEDIA_URL || 'https://akashic-media.chris-haerem.workers.dev';
 
 /**
@@ -60,26 +64,92 @@ export interface UploadResult {
     path: string;
     size: number;
     contentType: string;
+    // Thumbnail path (generated client-side)
+    thumbnailPath?: string;
     // Extracted EXIF metadata (optional)
     coordinates?: [number, number];
     takenAt?: Date;
 }
 
 /**
- * Upload a photo to R2 storage
- * @param journeyId - The journey UUID to upload to
- * @param file - The file to upload
- * @returns Upload result with photo ID and path
+ * Create a thumbnail from an image file using Canvas API
+ * @param file - Original image file
+ * @param maxSize - Maximum width/height for thumbnail
+ * @returns Blob of the resized image as JPEG
  */
-export async function uploadPhoto(journeyId: string, file: File): Promise<UploadResult> {
-    const token = await getAccessToken();
+export async function createThumbnail(file: File, maxSize = THUMBNAIL_MAX_SIZE): Promise<Blob> {
+    return new Promise((resolve, reject) => {
+        const img = new Image();
+        const url = URL.createObjectURL(file);
 
-    if (!token) {
-        throw new Error('Authentication required');
-    }
+        img.onload = () => {
+            URL.revokeObjectURL(url);
 
+            // Calculate new dimensions maintaining aspect ratio
+            let width = img.width;
+            let height = img.height;
+
+            if (width > height) {
+                if (width > maxSize) {
+                    height = Math.round((height * maxSize) / width);
+                    width = maxSize;
+                }
+            } else {
+                if (height > maxSize) {
+                    width = Math.round((width * maxSize) / height);
+                    height = maxSize;
+                }
+            }
+
+            // Create canvas and draw resized image
+            const canvas = document.createElement('canvas');
+            canvas.width = width;
+            canvas.height = height;
+
+            const ctx = canvas.getContext('2d');
+            if (!ctx) {
+                reject(new Error('Failed to get canvas context'));
+                return;
+            }
+
+            // Use high-quality image smoothing
+            ctx.imageSmoothingEnabled = true;
+            ctx.imageSmoothingQuality = 'high';
+            ctx.drawImage(img, 0, 0, width, height);
+
+            // Convert to blob
+            canvas.toBlob(
+                (blob) => {
+                    if (blob) {
+                        resolve(blob);
+                    } else {
+                        reject(new Error('Failed to create thumbnail blob'));
+                    }
+                },
+                'image/jpeg',
+                THUMBNAIL_QUALITY
+            );
+        };
+
+        img.onerror = () => {
+            URL.revokeObjectURL(url);
+            reject(new Error('Failed to load image'));
+        };
+
+        img.src = url;
+    });
+}
+
+/**
+ * Upload a file to R2 storage (internal helper)
+ */
+async function uploadFile(journeyId: string, file: File | Blob, token: string, filename?: string): Promise<UploadResult> {
     const formData = new FormData();
-    formData.append('file', file);
+    if (file instanceof File) {
+        formData.append('file', file);
+    } else {
+        formData.append('file', file, filename || 'thumbnail.jpg');
+    }
 
     const response = await fetch(`${MEDIA_BASE_URL}/upload/journeys/${journeyId}/photos`, {
         method: 'POST',
@@ -95,4 +165,48 @@ export async function uploadPhoto(journeyId: string, file: File): Promise<Upload
     }
 
     return response.json();
+}
+
+/**
+ * Upload a photo to R2 storage with automatic thumbnail generation
+ * @param journeyId - The journey UUID to upload to
+ * @param file - The file to upload
+ * @param generateThumbnail - Whether to generate and upload a thumbnail (default: true)
+ * @returns Upload result with photo ID, path, and optional thumbnail path
+ */
+export async function uploadPhoto(
+    journeyId: string,
+    file: File,
+    generateThumbnail = true
+): Promise<UploadResult & { thumbnailPath?: string }> {
+    const token = await getAccessToken();
+
+    if (!token) {
+        throw new Error('Authentication required');
+    }
+
+    // Upload original photo
+    const result = await uploadFile(journeyId, file, token);
+
+    // Generate and upload thumbnail if requested
+    if (generateThumbnail) {
+        try {
+            const thumbnailBlob = await createThumbnail(file);
+            const thumbnailResult = await uploadFile(
+                journeyId,
+                thumbnailBlob,
+                token,
+                `${result.photoId}_thumb.jpg`
+            );
+            return {
+                ...result,
+                thumbnailPath: thumbnailResult.path,
+            };
+        } catch (err) {
+            console.warn('Failed to generate thumbnail, continuing without:', err);
+            // Continue without thumbnail if generation fails
+        }
+    }
+
+    return result;
 }

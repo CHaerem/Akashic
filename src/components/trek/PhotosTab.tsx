@@ -88,10 +88,11 @@ export function PhotosTab({ trekData, isMobile, editMode = false, onViewPhotoOnM
         if (!journeyDbId) return;
 
         try {
-            // Create photo record in database with extracted metadata
+            // Create photo record in database with extracted metadata and thumbnail
             const photo = await createPhoto({
                 journey_id: journeyDbId,
                 url: result.path,
+                thumbnail_url: result.thumbnailPath,
                 coordinates: result.coordinates,
                 taken_at: result.takenAt?.toISOString(),
             });
