@@ -49,6 +49,10 @@ const PhotoGridItem = memo(function PhotoGridItem({
     onDragEnd,
     onEditPhoto,
 }: PhotoGridItemProps) {
+    const photoLabel = photo.caption
+        ? `Photo ${index + 1}: ${photo.caption}${photo.is_hero ? ' (hero image)' : ''}`
+        : `Photo ${index + 1}${photo.is_hero ? ' (hero image)' : ''}`;
+
     return (
         <div
             onClick={() => onPhotoClick(index)}
@@ -58,6 +62,15 @@ const PhotoGridItem = memo(function PhotoGridItem({
             onDragLeave={() => editMode && onDragLeave()}
             onDrop={() => editMode && onDrop(index)}
             onDragEnd={() => editMode && onDragEnd()}
+            role="button"
+            tabIndex={0}
+            aria-label={editMode ? `${photoLabel}. Drag to reorder.` : photoLabel}
+            onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    onPhotoClick(index);
+                }
+            }}
             className={cn(
                 "aspect-square rounded-lg overflow-hidden relative bg-white/5 light:bg-black/5",
                 "transition-all duration-150",

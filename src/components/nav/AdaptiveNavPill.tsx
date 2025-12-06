@@ -97,6 +97,8 @@ function DockItem({ mouseX, icon, label, isActive, isHovered, onClick, onHover, 
       ref={localRef}
       onClick={onClick}
       onPointerEnter={onHover}
+      aria-label={`${label} tab${isActive ? ' (selected)' : ''}`}
+      aria-pressed={isActive}
       style={{
         scale: scaleSpring,
         display: 'flex',
@@ -163,6 +165,8 @@ function DayItem({ mouseX, day, isActive, isHovered, onClick, onHover, setRef }:
       ref={localRef}
       onClick={onClick}
       onPointerEnter={onHover}
+      aria-label={`Day ${day}${isActive ? ' (selected)' : ''}`}
+      aria-pressed={isActive}
       style={{
         scale: scaleSpring,
         display: 'flex',
@@ -696,6 +700,8 @@ export const AdaptiveNavPill = memo(function AdaptiveNavPill({
                 }}
                 whileHover={currentDay > 1 ? { scale: 1.15, backgroundColor: 'rgba(255, 255, 255, 0.1)' } : {}}
                 whileTap={currentDay > 1 ? { scale: 0.9 } : {}}
+                aria-label="Previous day"
+                aria-disabled={currentDay <= 1}
                 style={{
                   display: 'flex',
                   alignItems: 'center',
@@ -762,6 +768,8 @@ export const AdaptiveNavPill = memo(function AdaptiveNavPill({
                 }}
                 whileHover={currentDay < totalDays ? { scale: 1.15, backgroundColor: 'rgba(255, 255, 255, 0.1)' } : {}}
                 whileTap={currentDay < totalDays ? { scale: 0.9 } : {}}
+                aria-label="Next day"
+                aria-disabled={currentDay >= totalDays}
                 style={{
                   display: 'flex',
                   alignItems: 'center',
@@ -794,6 +802,8 @@ export const AdaptiveNavPill = memo(function AdaptiveNavPill({
                 onClick={handleExpandTap}
                 whileHover={{ scale: 1.05, backgroundColor: 'rgba(255, 255, 255, 0.1)' }}
                 whileTap={{ scale: 0.95 }}
+                aria-label="Open navigation menu"
+                aria-expanded={mode !== 'collapsed'}
                 style={{
                   display: 'flex',
                   alignItems: 'center',
@@ -894,11 +904,14 @@ export const AdaptiveNavPill = memo(function AdaptiveNavPill({
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
+              role="tablist"
+              aria-label="Day selector"
               style={{ display: 'flex', alignItems: 'flex-end', gap: 2, paddingBottom: 4 }}
             >
               <motion.button
                 onClick={handleBackFromDays}
                 whileTap={{ scale: 0.9 }}
+                aria-label="Back to navigation menu"
                 style={{
                   display: 'flex',
                   alignItems: 'center',
