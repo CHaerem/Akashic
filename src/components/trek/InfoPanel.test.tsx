@@ -1,4 +1,5 @@
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { describe, it, expect, vi } from 'vitest';
 import { InfoPanel } from './InfoPanel';
 import { TrekData } from '../../types/trek';
@@ -57,7 +58,8 @@ describe('InfoPanel', () => {
         expect(screen.getByText('Test Description')).toBeInTheDocument();
     });
 
-    it('calls setActiveTab when tab clicked', () => {
+    it('calls setActiveTab when tab clicked', async () => {
+        const user = userEvent.setup();
         const handleSetActiveTab = vi.fn();
         render(
             <InfoPanel
@@ -74,7 +76,9 @@ describe('InfoPanel', () => {
                 onPanelStateChange={() => {}}
             />
         );
-        fireEvent.click(screen.getByText('journey'));
+        // Find the Journey tab button and click it
+        const journeyTab = screen.getByRole('tab', { name: /journey/i });
+        await user.click(journeyTab);
         expect(handleSetActiveTab).toHaveBeenCalledWith('journey');
     });
 });

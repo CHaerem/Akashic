@@ -1,9 +1,86 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import { useTrekData } from './useTrekData';
-import type { TrekConfig, Camp } from '../types/trek';
+import type { TrekConfig, Camp, TrekData } from '../types/trek';
+
+// Mock data
+const mockTrekDataMap: Record<string, TrekData> = {
+    'kilimanjaro': {
+        id: 'kilimanjaro',
+        name: 'Kilimanjaro',
+        country: 'Tanzania',
+        description: 'Test description',
+        dateStarted: '2024-10-01',
+        camps: [
+            {
+                id: 'camp1',
+                name: 'Base Camp',
+                dayNumber: 1,
+                elevation: 2700,
+                coordinates: [37.35, -3.06],
+                elevationGainFromPrevious: 500,
+                notes: 'Test camp'
+            },
+            {
+                id: 'camp2',
+                name: 'High Camp',
+                dayNumber: 2,
+                elevation: 3500,
+                coordinates: [37.36, -3.07],
+                elevationGainFromPrevious: 800,
+                notes: 'Test camp 2'
+            }
+        ],
+        stats: {
+            duration: 8,
+            totalDistance: 70,
+            totalElevationGain: 3800,
+            highestPoint: { name: 'Uhuru Peak', elevation: 5895 }
+        },
+        route: {
+            type: 'LineString',
+            coordinates: [
+                [37.0, -3.0, 1800],
+                [37.1, -3.1, 2500],
+                [37.2, -3.2, 3500],
+                [37.3, -3.3, 4500],
+                [37.35, -3.35, 5895]
+            ]
+        }
+    },
+    'mount-kenya': {
+        id: 'mount-kenya',
+        name: 'Mount Kenya',
+        country: 'Kenya',
+        description: 'Test description',
+        dateStarted: '2024-11-01',
+        camps: [],
+        stats: {
+            duration: 5,
+            totalDistance: 40,
+            totalElevationGain: 2500,
+            highestPoint: { name: 'Batian Peak', elevation: 5199 }
+        },
+        route: { type: 'LineString', coordinates: [] }
+    }
+};
+
+// Mock the JourneysContext
+vi.mock('../contexts/JourneysContext', () => ({
+    useJourneys: () => ({
+        treks: [],
+        trekDataMap: mockTrekDataMap,
+        loading: false,
+        error: null,
+        refetch: vi.fn()
+    })
+}));
 
 describe('useTrekData hook', () => {
+    beforeEach(() => {
+        vi.clearAllMocks();
+    });
+
     describe('initial state', () => {
         it('starts with globe view', () => {
             const { result } = renderHook(() => useTrekData());
