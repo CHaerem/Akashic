@@ -179,6 +179,14 @@ export function useMapbox({ containerRef, onTrekSelect, onPhotoClick, onRouteCli
             mapRef.current = map;
 
             map.on('style.load', () => {
+                // Add glyphs source for text rendering (satellite style doesn't include this)
+                const style = map.getStyle();
+                if (style && !style.glyphs) {
+                    style.glyphs = 'mapbox://fonts/mapbox/{fontstack}/{range}.pbf';
+                    map.setStyle(style);
+                    return; // Style will reload, this handler will fire again
+                }
+
                 // Set atmosphere fog - transparent space so CSS starfield shows through
                 map.setFog({
                     'range': [1, 12],
@@ -918,7 +926,7 @@ export function useMapbox({ containerRef, onTrekSelect, onPhotoClick, onRouteCli
     // Fly to globe view
     const flyToGlobe = useCallback((selectedTrek: TrekConfig | null = null) => {
         const map = mapRef.current;
-        if (!map || !mapReady) return;
+        if (!map || !mapReady || !map.isStyleLoaded()) return;
 
         // Mark that we're in globe view mode and flying
         isGlobeViewRef.current = true;
@@ -1037,7 +1045,7 @@ export function useMapbox({ containerRef, onTrekSelect, onPhotoClick, onRouteCli
     // Fly to trek view
     const flyToTrek = useCallback((selectedTrek: TrekConfig, selectedCamp: Camp | null = null) => {
         const map = mapRef.current;
-        if (!map || !mapReady || !selectedTrek) return;
+        if (!map || !mapReady || !map.isStyleLoaded() || !selectedTrek) return;
 
         // Mark that we're NOT in globe view mode (we're viewing a trek)
         isGlobeViewRef.current = false;
