@@ -1110,43 +1110,64 @@ export function useMapbox({ containerRef, onTrekSelect, onPhotoClick, onRouteCli
                 // Calculate camera settings
                 let bearing = trekConfig.preferredBearing;
                 const pitch = selectedCamp.pitch || 55;
-
-            if (selectedCamp.bearing !== undefined) {
-                bearing = selectedCamp.bearing;
-            } else {
-                // Smart bearing: look along path of arrival
+                const routeCoords = trekData.route.coordinates;
                 const campIndex = trekData.camps.findIndex(c => c.id === selectedCamp.id);
-                if (campIndex !== -1) {
-                    const routeCoords = trekData.route.coordinates;
-                    const currentCoord = selectedCamp.coordinates;
-                    // Use nearest point matching for reliable bearing calculation
-                    const endIndex = findNearestCoordIndex(routeCoords, currentCoord as [number, number]);
 
-                    if (endIndex > 5) {
+                // Calculate segment midpoint for camera center
+                // This focuses on the day's trek route rather than the destination
+                let centerCoord: [number, number] = selectedCamp.coordinates as [number, number];
+
+                if (campIndex !== -1 && routeCoords && routeCoords.length > 0) {
+                    // Get segment start and end coordinates
+                    const startCoord = campIndex === 0
+                        ? routeCoords[0]
+                        : trekData.camps[campIndex - 1].coordinates;
+                    const endCoord = selectedCamp.coordinates;
+
+                    const startIndex = findNearestCoordIndex(routeCoords, startCoord as [number, number]);
+                    const endIndex = findNearestCoordIndex(routeCoords, endCoord as [number, number]);
+
+                    const actualStart = Math.min(startIndex, endIndex);
+                    const actualEnd = Math.max(startIndex, endIndex);
+
+                    if (actualEnd > actualStart) {
+                        // Find the midpoint of the segment
+                        const midIndex = Math.floor((actualStart + actualEnd) / 2);
+                        const midCoord = routeCoords[midIndex];
+                        centerCoord = [midCoord[0], midCoord[1]];
+                    }
+
+                    // Smart bearing: look along path of arrival
+                    if (selectedCamp.bearing !== undefined) {
+                        bearing = selectedCamp.bearing;
+                    } else if (endIndex > 5) {
                         const lookBackIndex = endIndex - 5;
                         const prevCoord = routeCoords[lookBackIndex];
+                        const currentCoord = selectedCamp.coordinates;
                         bearing = calculateBearing(prevCoord[1], prevCoord[0], currentCoord[1], currentCoord[0]);
                     } else if (campIndex > 0) {
                         const prevCampCoord = trekData.camps[campIndex - 1].coordinates;
+                        const currentCoord = selectedCamp.coordinates;
                         bearing = calculateBearing(prevCampCoord[1], prevCampCoord[0], currentCoord[1], currentCoord[0]);
                     }
+                } else if (selectedCamp.bearing !== undefined) {
+                    bearing = selectedCamp.bearing;
                 }
-            }
 
-            const isMobileCamp = window.matchMedia('(max-width: 768px)').matches;
-            map.flyTo({
-                center: selectedCamp.coordinates as [number, number],
-                zoom: isMobileCamp ? 14.5 : 15,
-                pitch: pitch,
-                bearing: bearing,
-                duration: 2200,
-                essential: true,
-                curve: 1.3,
-                easing: (t) => 1 - Math.pow(1 - t, 3)
-            });
+                const isMobileCamp = window.matchMedia('(max-width: 768px)').matches;
+                map.flyTo({
+                    center: centerCoord,
+                    zoom: isMobileCamp ? 14.5 : 15,
+                    pitch: pitch,
+                    bearing: bearing,
+                    duration: 2200,
+                    essential: true,
+                    curve: 1.3,
+                    easing: (t) => 1 - Math.pow(1 - t, 3)
+                });
 
-            // Highlight segment
-            highlightSegment(trekData, selectedCamp);
+                // Highlight segment
+                highlightSegment(trekData, selectedCamp);
         } else {
             // Fit bounds to whole route
             // Optimized bounds calculation - only sample every Nth point for large routes
