@@ -191,9 +191,8 @@ export default function AkashicApp() {
                 }}
             >
                 <span style={{
-                    ...typography.label,
+                    ...typography.brand,
                     fontSize: isMobile ? 12 : 13,
-                    letterSpacing: '0.25em',
                     color: view === 'trek' ? colors.text.secondary : colors.text.primary,
                     transition: `color ${transitions.smooth}`,
                 }}>

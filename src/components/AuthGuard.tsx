@@ -3,6 +3,7 @@ import { supabase, isAuthEnabled } from '../lib/supabase';
 import type { User } from '@supabase/supabase-js';
 import { Button } from './ui/button';
 import { Card } from './ui/card';
+import { typography, colors } from '../styles/liquidGlass';
 
 interface AuthGuardProps {
     children: ReactNode;
@@ -75,7 +76,12 @@ export function AuthGuard({ children }: AuthGuardProps) {
     return (
         <div className="fixed inset-0 bg-[var(--lg-bg-base)] flex flex-col items-center justify-center p-6">
             <Card variant="elevated" className="px-10 py-12 flex flex-col items-center">
-                <h1 className="text-sm font-medium tracking-[0.3em] text-white/70 light:text-slate-600 mb-10">
+                <h1 style={{
+                    ...typography.brand,
+                    fontSize: 14,
+                    color: colors.text.secondary,
+                    marginBottom: 40,
+                }}>
                     Akashic
                 </h1>
 

@@ -1,6 +1,7 @@
 import { Suspense, lazy } from 'react';
 import { ErrorBoundary } from './components/common/ErrorBoundary';
 import { JourneysProvider } from './contexts/JourneysContext';
+import { typography, colors } from './styles/liquidGlass';
 
 const AkashicApp = lazy(() => import('./components/AkashicApp'));
 
@@ -8,7 +9,7 @@ const LoadingFallback = () => (
     <div style={{
         position: 'fixed',
         inset: 0,
-        background: '#0a0a0f',
+        background: colors.background.base,
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
@@ -25,13 +26,7 @@ const LoadingFallback = () => (
             animation: 'pulse 2s ease-in-out infinite',
         }} />
         {/* Brand text */}
-        <div style={{
-            color: 'rgba(255,255,255,0.4)',
-            fontSize: 11,
-            letterSpacing: '0.3em',
-            textTransform: 'uppercase',
-            fontFamily: 'system-ui, -apple-system, sans-serif',
-        }}>
+        <div style={typography.brand}>
             Akashic
         </div>
         <style>{`

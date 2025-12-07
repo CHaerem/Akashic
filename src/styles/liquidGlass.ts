@@ -411,6 +411,16 @@ export const tabBar = {
 // ============================================================================
 
 export const typography = {
+  // Brand text - for "Akashic" title
+  brand: {
+    fontFamily: "'Roboto', -apple-system, BlinkMacSystemFont, sans-serif",
+    fontWeight: 500,
+    fontSize: 11,
+    letterSpacing: '0.25em',
+    textTransform: 'uppercase' as const,
+    color: colors.text.tertiary,
+  } as CSSProperties,
+
   // Display text - for large headings
   display: {
     fontFamily: "'Roboto', -apple-system, BlinkMacSystemFont, sans-serif",
