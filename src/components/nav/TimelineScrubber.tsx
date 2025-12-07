@@ -240,7 +240,7 @@ export const TimelineScrubber = memo(function TimelineScrubber({
                                         }}
                                     >
                                         <img
-                                            src={getMediaUrl(photo.url)}
+                                            src={getMediaUrl(photo.thumbnail_url || photo.url)}
                                             alt=""
                                             style={{
                                                 width: '100%',

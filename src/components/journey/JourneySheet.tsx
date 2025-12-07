@@ -260,7 +260,7 @@ export const JourneySheet = memo(function JourneySheet({
                                         }}
                                     >
                                         <img
-                                            src={getMediaUrl(photo.url)}
+                                            src={getMediaUrl(photo.thumbnail_url || photo.url)}
                                             alt={photo.caption || `Photo ${idx + 1}`}
                                             style={{
                                                 width: '100%',
