@@ -366,8 +366,15 @@ function GlobeHeader({ trek, onPrevJourney, onNextJourney, totalJourneys, isMobi
             drag="x"
             dragConstraints={{ left: 0, right: 0 }}
             dragElastic={0.2}
+            dragDirectionLock
             onDragEnd={handleDragEnd}
-            style={{ display: 'flex', alignItems: 'center', width: '100%', cursor: 'grab' }}
+            style={{
+                display: 'flex',
+                alignItems: 'center',
+                width: '100%',
+                cursor: 'grab',
+                touchAction: 'pan-y', // Allow vertical scroll, capture horizontal
+            }}
         >
             {/* Previous journey */}
             <motion.button
@@ -549,8 +556,16 @@ function DayNavigationHeader({
             drag="x"
             dragConstraints={{ left: 0, right: 0 }}
             dragElastic={0.2}
+            dragDirectionLock
             onDragEnd={handleDragEnd}
-            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', cursor: 'grab' }}
+            style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                width: '100%',
+                cursor: 'grab',
+                touchAction: 'pan-y', // Allow vertical scroll, capture horizontal
+            }}
         >
             {/* Previous day */}
             <motion.button
