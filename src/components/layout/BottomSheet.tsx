@@ -109,8 +109,8 @@ export function BottomSheet({
     const currentDay = selectedCamp?.dayNumber ?? 0;
     const currentCampName = selectedCamp?.name ?? 'Overview';
 
-    const goToPrevDay = useCallback((e: React.MouseEvent) => {
-        e.stopPropagation();
+    const goToPrevDay = useCallback((e?: React.MouseEvent) => {
+        e?.stopPropagation();
         if (currentDay > 1) {
             setSwipeDirection('right');
             onDaySelect(currentDay - 1);
@@ -118,8 +118,8 @@ export function BottomSheet({
         }
     }, [currentDay, onDaySelect]);
 
-    const goToNextDay = useCallback((e: React.MouseEvent) => {
-        e.stopPropagation();
+    const goToNextDay = useCallback((e?: React.MouseEvent) => {
+        e?.stopPropagation();
         if (currentDay < totalDays) {
             setSwipeDirection('left');
             onDaySelect(currentDay + 1);
@@ -520,8 +520,8 @@ interface DayNavigationHeaderProps {
     currentCampName: string;
     totalDays: number;
     swipeDirection: 'left' | 'right' | null;
-    onPrevDay: (e: React.MouseEvent) => void;
-    onNextDay: (e: React.MouseEvent) => void;
+    onPrevDay: (e?: React.MouseEvent) => void;
+    onNextDay: (e?: React.MouseEvent) => void;
     onDayTap: () => void;
     isMobile: boolean;
 }
@@ -543,11 +543,11 @@ function DayNavigationHeader({
 
         // Swipe right = previous day
         if ((info.offset.x > threshold || info.velocity.x > velocityThreshold) && currentDay > 1) {
-            onPrevDay({} as React.MouseEvent);
+            onPrevDay();
         }
         // Swipe left = next day
         else if ((info.offset.x < -threshold || info.velocity.x < -velocityThreshold) && currentDay < totalDays) {
-            onNextDay({} as React.MouseEvent);
+            onNextDay();
         }
     };
 
