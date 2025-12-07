@@ -26,6 +26,9 @@ const POI_CATEGORY_INFO: Record<string, { icon: string; label: string; color: st
 // Check if running in E2E test mode
 const isE2ETestMode = import.meta.env.VITE_E2E_TEST_MODE === 'true';
 
+// Delay before starting globe rotation (ms) - allows user to see the globe stationary first
+const ROTATION_START_DELAY_MS = 3500;
+
 // Test helpers interface for E2E testing
 interface TestHelpers {
     selectTrek: (id: string) => boolean;
@@ -50,6 +53,7 @@ interface MapboxGlobeProps {
     photos?: Photo[];
     onPhotoClick?: (photo: Photo, index: number) => void;
     flyToPhotoRef?: React.MutableRefObject<((photo: Photo) => void) | null>;
+    recenterRef?: React.MutableRefObject<(() => void) | null>;
     onCampSelect?: (camp: Camp) => void;
     getMediaUrl?: (path: string) => string;
 }
@@ -141,10 +145,11 @@ const starfieldStyle: React.CSSProperties = {
     zIndex: 0
 };
 
-export function MapboxGlobe({ selectedTrek, selectedCamp, onSelectTrek, view, photos = [], onPhotoClick, flyToPhotoRef, onCampSelect, getMediaUrl }: MapboxGlobeProps) {
+export function MapboxGlobe({ selectedTrek, selectedCamp, onSelectTrek, view, photos = [], onPhotoClick, flyToPhotoRef, recenterRef, onCampSelect, getMediaUrl }: MapboxGlobeProps) {
     const containerRef = useRef<HTMLDivElement>(null);
     const { treks, trekDataMap, loading: journeysLoading } = useJourneys();
     const [poiInfo, setPOIInfo] = useState<PointOfInterest | null>(null);
+    const rotationTimerRef = useRef<NodeJS.Timeout | null>(null);
 
     // Get camps and POIs for the selected trek
     const camps = selectedTrek ? trekDataMap[selectedTrek.id]?.camps || [] : [];
@@ -175,7 +180,7 @@ export function MapboxGlobe({ selectedTrek, selectedCamp, onSelectTrek, view, ph
         }
     }, [onCampSelect]);
 
-    const { mapReady, error, flyToGlobe, flyToTrek, updatePhotoMarkers, updateCampMarkers, updatePOIMarkers, flyToPhoto, flyToPOI, startRotation, stopRotation } = useMapbox({
+    const { mapReady, error, flyToGlobe, flyToTrek, updatePhotoMarkers, updateCampMarkers, updatePOIMarkers, flyToPhoto, flyToPOI, startRotation, stopRotation, isRotating, getMapCenter } = useMapbox({
         containerRef,
         onTrekSelect: onSelectTrek,
         onPhotoClick: handlePhotoClick,
@@ -224,25 +229,90 @@ export function MapboxGlobe({ selectedTrek, selectedCamp, onSelectTrek, view, ph
         };
     }, [flyToPhotoRef, flyToPhoto]);
 
-    // Handle view transitions
+    // Expose recenter function to parent via ref
+    // Behavior:
+    // - Trek view + camp selected: fly to the current camp
+    // - Trek view + no camp (overview): fly to fit the full trek
+    // - Globe view + trek selected: recenter on the selected trek
+    // - Globe view + no selection: stop rotation and select first journey
+    useEffect(() => {
+        if (recenterRef) {
+            recenterRef.current = () => {
+                if (!mapReady) return;
+
+                if (view === 'trek' && selectedTrek) {
+                    // Trek view: fly to camp or full trek
+                    flyToTrek(selectedTrek, selectedCamp);
+                } else if (view === 'globe') {
+                    // Globe view
+                    if (treks.length === 0) return;
+
+                    // Always stop rotation first (in case it's running)
+                    stopRotation();
+
+                    if (selectedTrek) {
+                        // Recenter on the selected trek
+                        flyToGlobe(selectedTrek);
+                    } else {
+                        // No trek selected - select the first journey
+                        // (don't try to find "nearest" as it's meaningless during rotation)
+                        onSelectTrek(treks[0]);
+                    }
+                }
+            };
+        }
+        return () => {
+            if (recenterRef) {
+                recenterRef.current = null;
+            }
+        };
+    }, [recenterRef, mapReady, view, selectedTrek, selectedCamp, treks, flyToTrek, flyToGlobe, onSelectTrek, stopRotation]);
+
+    // Handle view transitions - camera movement
     useEffect(() => {
         if (!mapReady) return;
 
         if (view === 'trek' && selectedTrek) {
-            stopRotation();
             flyToTrek(selectedTrek, selectedCamp);
         } else if (view === 'globe') {
             flyToGlobe(selectedTrek);
-            // Start rotation only when no trek is selected (idle globe)
-            if (!selectedTrek) {
-                // Small delay to let the flyTo animation complete
-                const timer = setTimeout(() => startRotation(), 3500);
-                return () => clearTimeout(timer);
-            } else {
-                stopRotation();
-            }
         }
-    }, [view, selectedTrek, selectedCamp, mapReady, flyToGlobe, flyToTrek, startRotation, stopRotation]);
+    }, [view, selectedTrek, selectedCamp, mapReady, flyToGlobe, flyToTrek]);
+
+    // Handle globe rotation - separate effect
+    // Uses isRotating state from useMapbox to track actual rotation state
+    // This ensures rotation restarts after user interaction stops it
+    useEffect(() => {
+        if (!mapReady) return;
+
+        // Should rotate: globe view with no trek selected
+        const shouldRotate = view === 'globe' && !selectedTrek;
+
+        if (shouldRotate && !isRotating && !rotationTimerRef.current) {
+            // Schedule rotation if:
+            // 1. We should be rotating (globe view, no selection)
+            // 2. Not currently rotating (isRotating is false)
+            // 3. No timer already pending
+            rotationTimerRef.current = setTimeout(() => {
+                rotationTimerRef.current = null;
+                startRotation();
+            }, ROTATION_START_DELAY_MS);
+        } else if (!shouldRotate) {
+            // Stop rotation and clear any pending timer
+            if (rotationTimerRef.current) {
+                clearTimeout(rotationTimerRef.current);
+                rotationTimerRef.current = null;
+            }
+            stopRotation();
+        }
+
+        return () => {
+            if (rotationTimerRef.current) {
+                clearTimeout(rotationTimerRef.current);
+                rotationTimerRef.current = null;
+            }
+        };
+    }, [view, selectedTrek, mapReady, isRotating, startRotation, stopRotation]);
 
     // Update photo markers when photos or selected camp changes
     // Native Mapbox layers are GPU-accelerated - no delays needed

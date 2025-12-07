@@ -16,7 +16,7 @@ import { DayGallery } from './common/DayGallery';
 import { BottomSheet } from './layout/BottomSheet';
 import { BottomSheetContent } from './layout/BottomSheetContent';
 import { QuickActionBar, QuickActionIcons } from './layout/QuickActionBar';
-import { colors, radius, transitions, typography } from '../styles/liquidGlass';
+import { colors, typography } from '../styles/liquidGlass';
 
 // --- Main Component ---
 
@@ -28,8 +28,9 @@ export default function AkashicApp() {
     const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
     const [showShareTarget, setShowShareTarget] = useState(false);
     const flyToPhotoRef = useRef<((photo: Photo) => void) | null>(null);
+    const recenterRef = useRef<(() => void) | null>(null);
     const { getMediaUrl } = useMedia();
-    const { refetch: refetchJourneys } = useJourneys();
+    const { treks, refetch: refetchJourneys } = useJourneys();
     const stagingBranch = import.meta.env.VITE_STAGING_BRANCH;
     const deployTimeRaw = import.meta.env.VITE_DEPLOY_TIME;
 
@@ -66,6 +67,7 @@ export default function AkashicApp() {
         handleExplore,
         handleBackToGlobe,
         handleBackToSelection,
+        handleBackToOverview,
         handleCampSelect
     } = useTrekData();
 
@@ -148,6 +150,26 @@ export default function AkashicApp() {
         }
     }, [trekData, handleCampSelect]);
 
+    // Journey navigation (globe view)
+    const currentJourneyIndex = useMemo(() => {
+        if (!selectedTrek || treks.length === 0) return 0;
+        return treks.findIndex(t => t.id === selectedTrek.id);
+    }, [selectedTrek, treks]);
+
+    const handlePrevJourney = useCallback(() => {
+        if (treks.length === 0) return;
+        // Loop to last journey when at first
+        const prevIndex = currentJourneyIndex > 0 ? currentJourneyIndex - 1 : treks.length - 1;
+        selectTrek(treks[prevIndex]);
+    }, [currentJourneyIndex, treks, selectTrek]);
+
+    const handleNextJourney = useCallback(() => {
+        if (treks.length === 0) return;
+        // Loop to first journey when at last
+        const nextIndex = currentJourneyIndex < treks.length - 1 ? currentJourneyIndex + 1 : 0;
+        selectTrek(treks[nextIndex]);
+    }, [currentJourneyIndex, treks, selectTrek]);
+
     // Show bottom sheet when trek is selected (globe view) or in trek view
     const showSheet = (view === 'globe' && selectedTrek !== null) || view === 'trek';
 
@@ -162,14 +184,14 @@ export default function AkashicApp() {
             icon: QuickActionIcons.globe,
             label: 'Back to globe',
             onClick: handleBackToGlobe,
-            visible: view === 'trek',
+            visible: true,
         },
         {
             id: 'recenter',
             icon: QuickActionIcons.recenter,
             label: 'Recenter map',
             onClick: () => {
-                // TODO: Implement recenter functionality
+                recenterRef.current?.();
             },
             visible: true,
         },
@@ -187,6 +209,7 @@ export default function AkashicApp() {
                     photos={photosWithCoords}
                     onPhotoClick={handleMapPhotoClick}
                     flyToPhotoRef={flyToPhotoRef}
+                    recenterRef={recenterRef}
                     onCampSelect={handleCampSelect}
                     getMediaUrl={getMediaUrl}
                 />
@@ -195,63 +218,38 @@ export default function AkashicApp() {
             {/* Offline Status */}
             <OfflineIndicator isMobile={isMobile} />
 
-            {/* Brand Title - Top Left */}
-            <div
-                onClick={handleBackToGlobe}
-                style={{
-                    position: 'absolute',
-                    top: isMobile ? 'max(16px, env(safe-area-inset-top))' : 24,
-                    left: isMobile ? 16 : 24,
-                    zIndex: 100,
-                    cursor: 'pointer',
-                    padding: isMobile ? '10px 16px' : '8px 14px',
-                    minHeight: isMobile ? 44 : 'auto',
-                    display: 'flex',
-                    alignItems: 'center',
-                    transition: `all ${transitions.smooth}`,
-                    // Liquid Glass styling when sheet is visible
-                    ...(showSheet ? {
-                        background: `linear-gradient(
-                            135deg,
-                            rgba(255, 255, 255, 0.08) 0%,
-                            rgba(255, 255, 255, 0.04) 100%
-                        )`,
-                        backdropFilter: 'blur(12px) saturate(150%)',
-                        WebkitBackdropFilter: 'blur(12px) saturate(150%)',
-                        border: `1px solid ${colors.glass.borderSubtle}`,
-                        borderRadius: radius.lg,
-                        boxShadow: `
-                            0 4px 16px rgba(0, 0, 0, 0.15),
-                            inset 0 1px 0 rgba(255, 255, 255, 0.1)
-                        `,
-                    } : {
-                        background: 'transparent',
-                        border: '1px solid transparent',
-                        borderRadius: radius.lg,
-                    }),
-                }}
-            >
-                <span style={{
-                    ...typography.brand,
-                    fontSize: isMobile ? 12 : 13,
-                    color: showSheet ? colors.text.secondary : colors.text.primary,
-                    transition: `color ${transitions.smooth}`,
-                }}>
-                    Akashic
-                    {stagingBranch && (
-                        <span style={{
-                            fontSize: isMobile ? 8 : 9,
-                            letterSpacing: '0.1em',
-                            opacity: 0.5,
-                            marginLeft: 8,
-                            fontWeight: 400,
-                        }}>
-                            [{stagingBranch}
-                            {formattedDeployTime ? ` • ${formattedDeployTime}` : ''}]
-                        </span>
-                    )}
-                </span>
-            </div>
+            {/* Brand Title - Top Left (only in zoomed-out globe view) */}
+            {!selectedTrek && view === 'globe' && (
+                <div
+                    style={{
+                        position: 'absolute',
+                        top: isMobile ? 'max(16px, env(safe-area-inset-top))' : 24,
+                        left: isMobile ? 16 : 24,
+                        zIndex: 100,
+                        padding: isMobile ? '10px 16px' : '8px 14px',
+                    }}
+                >
+                    <span style={{
+                        ...typography.brand,
+                        fontSize: isMobile ? 12 : 13,
+                        color: colors.text.primary,
+                    }}>
+                        Akashic
+                        {stagingBranch && (
+                            <span style={{
+                                fontSize: isMobile ? 8 : 9,
+                                letterSpacing: '0.1em',
+                                opacity: 0.5,
+                                marginLeft: 8,
+                                fontWeight: 400,
+                            }}>
+                                [{stagingBranch}
+                                {formattedDeployTime ? ` • ${formattedDeployTime}` : ''}]
+                            </span>
+                        )}
+                    </span>
+                </div>
+            )}
 
             {/* Quick Action Bar - Top Right */}
             <QuickActionBar actions={quickActions} isMobile={isMobile} />
@@ -276,6 +274,10 @@ export default function AkashicApp() {
                     onDaySelect={handleDaySelect}
                     onStart={handleStart}
                     onExplore={handleExplore}
+                    onBackToOverview={handleBackToOverview}
+                    onPrevJourney={handlePrevJourney}
+                    onNextJourney={handleNextJourney}
+                    totalJourneys={treks.length}
                     isMobile={isMobile}
                 >
                     <BottomSheetContent

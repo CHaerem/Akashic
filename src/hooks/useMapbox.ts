@@ -55,6 +55,8 @@ interface UseMapboxReturn {
     flyToPOI: (poi: PointOfInterest) => void;
     startRotation: () => void;
     stopRotation: () => void;
+    isRotating: boolean;
+    getMapCenter: () => [number, number] | null;
     // Playback controls
     startPlayback: (trekData: TrekData, onCampReached?: (camp: Camp) => void) => void;
     stopPlayback: () => void;
@@ -88,7 +90,6 @@ export function useMapbox({ containerRef, onTrekSelect, onPhotoClick, onRouteCli
     const targetCenterRef = useRef<[number, number] | null>(null);
     // Default globe center coordinates (when no trek selected)
     const GLOBE_CENTER: [number, number] = [30, 15];
-    const GLOBE_ZOOM_THRESHOLD = 2.5; // Zoom level below which we consider it "globe view"
     const [mapReady, setMapReady] = useState(false);
     const [dataLayersReady, setDataLayersReady] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -97,6 +98,7 @@ export function useMapbox({ containerRef, onTrekSelect, onPhotoClick, onRouteCli
         progress: 0,
         currentCampIndex: 0
     });
+    const [isRotating, setIsRotating] = useState(false);
 
     // Store callbacks and data in refs to avoid dependency issues
     const onTrekSelectRef = useRef(onTrekSelect);
@@ -710,35 +712,10 @@ export function useMapbox({ containerRef, onTrekSelect, onPhotoClick, onRouteCli
                 return;
             }
 
-            // Normal recenter check for when already at globe zoom
-            if (!isGlobeViewRef.current || skipRecenterRef.current) return;
-
-            const currentZoom = mapRef.current.getZoom();
-            if (currentZoom > GLOBE_ZOOM_THRESHOLD) return;
-
-            const expectedCenter = getExpectedCenter();
-            const center = mapRef.current.getCenter();
-            const distanceFromCenter = Math.sqrt(
-                Math.pow(center.lng - expectedCenter[0], 2) +
-                Math.pow(center.lat - expectedCenter[1], 2)
-            );
-
-            // Recenter if we've drifted more than 5 degrees from expected center
-            if (distanceFromCenter > 5) {
-                const isMobile = window.matchMedia('(max-width: 768px)').matches;
-                const targetZoom = selectedTrekRef.current
-                    ? (isMobile ? 3 : 3.5)
-                    : (isMobile ? 1.2 : 1.5);
-
-                mapRef.current.easeTo({
-                    center: expectedCenter,
-                    zoom: targetZoom,
-                    pitch: 0,
-                    bearing: 0,
-                    duration: 1500,
-                    easing: (t) => 1 - Math.pow(1 - t, 3) // ease-out cubic
-                });
-            }
+            // Note: We intentionally do NOT auto-recenter when the user manually
+            // pans/rotates the globe. The only auto-recenter is for interrupted
+            // flyToGlobe animations (handled above with needsGlobeRecenterRef).
+            // This allows users to freely explore the globe without being snapped back.
         };
 
         map.on('dragstart', handleUserInteraction);
@@ -1211,11 +1188,20 @@ export function useMapbox({ containerRef, onTrekSelect, onPhotoClick, onRouteCli
 
     // Stop rotation - defined first so startRotation can reference it
     const stopRotation = useCallback(() => {
+        // Only update state if we're actually stopping an animation
+        const wasRotating = rotationAnimationRef.current !== null;
+
         // Cancel animation
         if (rotationAnimationRef.current) {
             cancelAnimationFrame(rotationAnimationRef.current);
             rotationAnimationRef.current = null;
         }
+
+        // Only update state if we were actually rotating (avoids unnecessary re-renders)
+        if (wasRotating) {
+            setIsRotating(false);
+        }
+
         // Remove interaction listeners
         const map = mapRef.current;
         const listener = interactionListenerRef.current;
@@ -1290,6 +1276,8 @@ export function useMapbox({ containerRef, onTrekSelect, onPhotoClick, onRouteCli
         };
 
         rotationAnimationRef.current = requestAnimationFrame(animate);
+        // Update state to indicate rotation started
+        setIsRotating(true);
     }, [stopRotation]);
 
     // Cleanup rotation on unmount
@@ -1768,6 +1756,13 @@ export function useMapbox({ containerRef, onTrekSelect, onPhotoClick, onRouteCli
         playbackAnimationRef.current = requestAnimationFrame(animate);
     }, [mapReady, stopPlayback]);
 
+    // Get current map center coordinates
+    const getMapCenter = useCallback((): [number, number] | null => {
+        if (!mapRef.current) return null;
+        const center = mapRef.current.getCenter();
+        return [center.lng, center.lat];
+    }, []);
+
     return {
         map: mapRef,
         mapReady,
@@ -1782,6 +1777,8 @@ export function useMapbox({ containerRef, onTrekSelect, onPhotoClick, onRouteCli
         flyToPOI,
         startRotation,
         stopRotation,
+        isRotating,
+        getMapCenter,
         startPlayback,
         stopPlayback,
         playbackState

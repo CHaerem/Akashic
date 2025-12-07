@@ -39,6 +39,7 @@ interface UseTrekDataReturn {
     handleExplore: () => void;
     handleBackToGlobe: () => void;
     handleBackToSelection: () => void;
+    handleBackToOverview: () => void;
     handleCampSelect: (camp: Camp) => void;
 }
 
@@ -101,6 +102,11 @@ export function useTrekData(): UseTrekDataReturn {
         setSelectedCamp(null);
     }, []);
 
+    // Handle back to overview (deselect camp but stay in trek view)
+    const handleBackToOverview = useCallback(() => {
+        setSelectedCamp(null);
+    }, []);
+
     // Handle camp selection (toggle)
     const handleCampSelect = useCallback((camp: Camp) => {
         setSelectedCamp(prev => prev?.id === camp.id ? null : camp);
@@ -143,6 +149,7 @@ export function useTrekData(): UseTrekDataReturn {
         handleExplore,
         handleBackToGlobe,
         handleBackToSelection,
+        handleBackToOverview,
         handleCampSelect
     };
 }

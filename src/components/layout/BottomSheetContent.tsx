@@ -68,7 +68,7 @@ export function BottomSheetContent({
     onOpenDayGallery,
     isMobile = false,
 }: BottomSheetContentProps) {
-    // Globe view with trek selected: Journey overview
+    // Globe view with trek selected: Journey overview (pre-explore)
     if (view === 'globe' && selectedTrek) {
         return (
             <JourneyOverviewContent
@@ -79,7 +79,18 @@ export function BottomSheetContent({
         );
     }
 
-    // Trek view: Content based on active mode
+    // Trek view with no camp selected: Full journey info
+    if (view === 'trek' && trekData && !selectedCamp) {
+        return (
+            <div style={{ padding: 16 }}>
+                <ErrorBoundary fallback={<ComponentErrorFallback message="Failed to load info" />}>
+                    <OverviewTab trekData={trekData} />
+                </ErrorBoundary>
+            </div>
+        );
+    }
+
+    // Trek view with camp selected: Content based on active mode
     if (view === 'trek' && trekData) {
         return (
             <TrekViewContent
@@ -243,12 +254,6 @@ function TrekViewContent({
                         selectedCamp={selectedCamp}
                         onCampSelect={onCampSelect}
                     />
-                </ErrorBoundary>
-            )}
-
-            {activeMode === 'info' && (
-                <ErrorBoundary fallback={<ComponentErrorFallback message="Failed to load info" />}>
-                    <OverviewTab trekData={trekData} />
                 </ErrorBoundary>
             )}
         </div>

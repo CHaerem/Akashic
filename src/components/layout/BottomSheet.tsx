@@ -17,11 +17,10 @@ export type SnapPoint = keyof typeof SNAP_POINTS;
 
 const SNAP_VALUES = [SNAP_POINTS.minimized, SNAP_POINTS.half, SNAP_POINTS.expanded];
 
-const MODE_LABELS: Record<ContentMode, string> = {
+const MODE_LABELS: Record<Exclude<ContentMode, 'info'>, string> = {
     day: 'Day',
     photos: 'Photos',
     stats: 'Stats',
-    info: 'Info',
 };
 
 interface BottomSheetProps {
@@ -41,6 +40,11 @@ interface BottomSheetProps {
     onDaySelect: (dayNumber: number) => void;
     onStart: () => void;
     onExplore: () => void;
+    onBackToOverview: () => void;
+    // Journey navigation (globe view)
+    onPrevJourney?: () => void;
+    onNextJourney?: () => void;
+    totalJourneys?: number;
     isMobile?: boolean;
 }
 
@@ -65,6 +69,11 @@ export function BottomSheet({
     onDaySelect,
     onStart,
     onExplore,
+    onBackToOverview,
+    // Journey navigation
+    onPrevJourney,
+    onNextJourney,
+    totalJourneys = 0,
     isMobile = false,
 }: BottomSheetProps) {
     const panelRef = useRef<HTMLDivElement>(null);
@@ -206,7 +215,9 @@ export function BottomSheet({
                         // Globe view: Trek info + explore button
                         <GlobeHeader
                             trek={selectedTrek}
-                            onExplore={onExplore}
+                            onPrevJourney={onPrevJourney}
+                            onNextJourney={onNextJourney}
+                            totalJourneys={totalJourneys}
                             isMobile={isMobile}
                         />
                     ) : view === 'trek' && isOverviewMode ? (
@@ -243,7 +254,7 @@ export function BottomSheet({
                             padding: '0 16px 12px',
                         }}
                     >
-                        {(['day', 'photos', 'stats', 'info'] as ContentMode[]).map((mode) => (
+                        {(['day', 'photos', 'stats'] as const).map((mode) => (
                             <motion.button
                                 key={mode}
                                 onClick={() => handleModeSelect(mode)}
@@ -268,6 +279,30 @@ export function BottomSheet({
                                 {MODE_LABELS[mode]}
                             </motion.button>
                         ))}
+                        {/* Back to Overview button */}
+                        <motion.button
+                            onClick={onBackToOverview}
+                            whileTap={{ scale: 0.95 }}
+                            style={{
+                                flex: 1,
+                                padding: isMobile ? '8px 10px' : '8px 12px',
+                                background: 'rgba(255, 255, 255, 0.06)',
+                                border: 'none',
+                                borderRadius: radius.md,
+                                cursor: 'pointer',
+                                color: colors.text.tertiary,
+                                fontSize: 13,
+                                fontWeight: 500,
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                gap: 4,
+                                transition: 'background 0.2s ease, color 0.2s ease',
+                            }}
+                        >
+                            <ChevronIcon direction="left" size={12} />
+                            Overview
+                        </motion.button>
                     </div>
                 )}
             </div>
@@ -300,14 +335,67 @@ export function BottomSheet({
 
 interface GlobeHeaderProps {
     trek: TrekConfig;
-    onExplore: () => void;
+    onPrevJourney?: () => void;
+    onNextJourney?: () => void;
+    totalJourneys: number;
     isMobile: boolean;
 }
 
-function GlobeHeader({ trek, onExplore, isMobile }: GlobeHeaderProps) {
+function GlobeHeader({ trek, onPrevJourney, onNextJourney, totalJourneys, isMobile }: GlobeHeaderProps) {
+    // Enable navigation when there are multiple journeys (loops around)
+    const canNavigate = totalJourneys > 1;
+
+    // Handle swipe gesture for mobile
+    const handleDragEnd = (_: unknown, info: { offset: { x: number }; velocity: { x: number } }) => {
+        if (!canNavigate) return;
+        const threshold = 50;
+        const velocityThreshold = 500;
+
+        // Swipe right = previous journey
+        if (info.offset.x > threshold || info.velocity.x > velocityThreshold) {
+            onPrevJourney?.();
+        }
+        // Swipe left = next journey
+        else if (info.offset.x < -threshold || info.velocity.x < -velocityThreshold) {
+            onNextJourney?.();
+        }
+    };
+
     return (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, width: '100%' }}>
-            <div style={{ flex: 1, minWidth: 0 }}>
+        <motion.div
+            drag="x"
+            dragConstraints={{ left: 0, right: 0 }}
+            dragElastic={0.2}
+            onDragEnd={handleDragEnd}
+            style={{ display: 'flex', alignItems: 'center', width: '100%', cursor: 'grab' }}
+        >
+            {/* Previous journey */}
+            <motion.button
+                onClick={onPrevJourney}
+                whileHover={canNavigate ? { scale: 1.15, backgroundColor: 'rgba(255, 255, 255, 0.1)' } : {}}
+                whileTap={canNavigate ? { scale: 0.9 } : {}}
+                aria-label="Previous journey"
+                disabled={!canNavigate}
+                style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    width: 32,
+                    height: 32,
+                    background: 'transparent',
+                    border: 'none',
+                    borderRadius: radius.md,
+                    cursor: canNavigate ? 'pointer' : 'default',
+                    color: canNavigate ? colors.text.secondary : colors.text.subtle,
+                    opacity: canNavigate ? 1 : 0.3,
+                    flexShrink: 0,
+                }}
+            >
+                <ChevronIcon direction="left" size={16} />
+            </motion.button>
+
+            {/* Trek info */}
+            <div style={{ flex: 1, minWidth: 0, padding: '0 8px', textAlign: 'center' }}>
                 <p
                     style={{
                         fontSize: 10,
@@ -333,29 +421,32 @@ function GlobeHeader({ trek, onExplore, isMobile }: GlobeHeaderProps) {
                     {trek.name}
                 </h2>
             </div>
+
+            {/* Next journey */}
             <motion.button
-                onClick={onExplore}
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
+                onClick={onNextJourney}
+                whileHover={canNavigate ? { scale: 1.15, backgroundColor: 'rgba(255, 255, 255, 0.1)' } : {}}
+                whileTap={canNavigate ? { scale: 0.9 } : {}}
+                aria-label="Next journey"
+                disabled={!canNavigate}
                 style={{
-                    padding: '8px 16px',
-                    background: 'rgba(96, 165, 250, 0.15)',
-                    border: 'none',
-                    borderRadius: radius.md,
-                    cursor: 'pointer',
-                    color: colors.accent.primary,
-                    fontSize: 13,
-                    fontWeight: 600,
                     display: 'flex',
                     alignItems: 'center',
-                    gap: 4,
+                    justifyContent: 'center',
+                    width: 32,
+                    height: 32,
+                    background: 'transparent',
+                    border: 'none',
+                    borderRadius: radius.md,
+                    cursor: canNavigate ? 'pointer' : 'default',
+                    color: canNavigate ? colors.text.secondary : colors.text.subtle,
+                    opacity: canNavigate ? 1 : 0.3,
                     flexShrink: 0,
                 }}
             >
-                Explore
-                <ChevronIcon direction="right" size={12} />
+                <ChevronIcon direction="right" size={16} />
             </motion.button>
-        </div>
+        </motion.div>
     );
 }
 
@@ -439,7 +530,7 @@ function DayNavigationHeader({
     isMobile,
 }: DayNavigationHeaderProps) {
     return (
-        <>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%' }}>
             {/* Previous day */}
             <motion.button
                 onClick={onPrevDay}
@@ -532,6 +623,6 @@ function DayNavigationHeader({
             >
                 <ChevronIcon direction="right" size={16} />
             </motion.button>
-        </>
+        </div>
     );
 }
