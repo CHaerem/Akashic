@@ -13,10 +13,9 @@ import { GlobeHint } from './home/GlobeHint';
 import { ShareTargetModal } from './ShareTargetModal';
 import { PhotoLightbox } from './common/PhotoLightbox';
 import { DayGallery } from './common/DayGallery';
-import { BottomSheet, SNAP_POINTS } from './layout/BottomSheet';
+import { BottomSheet } from './layout/BottomSheet';
 import { BottomSheetContent } from './layout/BottomSheetContent';
 import { QuickActionBar, QuickActionIcons } from './layout/QuickActionBar';
-import { NavigationPill } from './nav/NavigationPill';
 import { colors, radius, transitions, typography } from '../styles/liquidGlass';
 
 // --- Main Component ---
@@ -131,7 +130,7 @@ export default function AkashicApp() {
         }
     }, []);
 
-    // Handle day selection from NavigationPill
+    // Handle day selection from BottomSheet navigation
     const handleDaySelect = useCallback((dayNumber: number) => {
         if (trekData) {
             const camp = trekData.camps.find((c: Camp) => c.dayNumber === dayNumber);
@@ -141,14 +140,6 @@ export default function AkashicApp() {
         }
     }, [trekData, handleCampSelect]);
 
-    // Handle mode change - auto-expand sheet if minimized
-    const handleModeChange = useCallback((mode: typeof activeMode) => {
-        setActiveMode(mode);
-        if (sheetSnapPoint === 'minimized') {
-            setSheetSnapPoint('half');
-        }
-    }, [sheetSnapPoint, setActiveMode, setSheetSnapPoint]);
-
     // Handle start from overview - select day 1
     const handleStart = useCallback(() => {
         if (trekData && trekData.camps.length > 0) {
@@ -156,12 +147,6 @@ export default function AkashicApp() {
             handleCampSelect(firstCamp);
         }
     }, [trekData, handleCampSelect]);
-
-    // Calculate bottom offset for pill based on sheet snap point
-    const sheetHeight = useMemo(() => {
-        const vh = typeof window !== 'undefined' ? window.innerHeight / 100 : 8;
-        return SNAP_POINTS[sheetSnapPoint] * vh;
-    }, [sheetSnapPoint]);
 
     // Show bottom sheet when trek is selected (globe view) or in trek view
     const showSheet = (view === 'globe' && selectedTrek !== null) || view === 'trek';
@@ -274,28 +259,24 @@ export default function AkashicApp() {
             {/* Globe Hint - shown when no trek selected */}
             {!selectedTrek && view === 'globe' && <GlobeHint isMobile={isMobile} />}
 
-            {/* Navigation Pill - positioned above bottom sheet */}
-            {view === 'trek' && trekData && (
-                <NavigationPill
-                    selectedCamp={selectedCamp}
-                    totalDays={trekData.stats.duration}
-                    trekName={trekData.name}
-                    activeMode={activeMode}
-                    onModeChange={handleModeChange}
-                    onDaySelect={handleDaySelect}
-                    onStart={handleStart}
-                    bottomOffset={sheetHeight}
-                    isMobile={isMobile}
-                />
-            )}
-
-            {/* Bottom Sheet - Find My inspired draggable sheet */}
+            {/* Unified Bottom Sheet - Find My inspired with integrated navigation */}
             {showSheet && (
                 <BottomSheet
                     snapPoint={sheetSnapPoint}
                     onSnapChange={setSheetSnapPoint}
                     onDismiss={view === 'globe' ? handleBackToSelection : undefined}
                     isOpen={showSheet}
+                    // Navigation props (unified in header)
+                    view={view}
+                    selectedTrek={selectedTrek}
+                    selectedCamp={selectedCamp}
+                    totalDays={trekData?.stats.duration ?? 0}
+                    activeMode={activeMode}
+                    onModeChange={setActiveMode}
+                    onDaySelect={handleDaySelect}
+                    onStart={handleStart}
+                    onExplore={handleExplore}
+                    isMobile={isMobile}
                 >
                     <BottomSheetContent
                         view={view}
