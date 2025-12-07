@@ -78,8 +78,12 @@ export function useMapbox({ containerRef, onTrekSelect, onPhotoClick, onRouteCli
     const playbackCallbackRef = useRef<((camp: Camp) => void) | null>(null);
     // Track if we're in globe view mode (for auto-recentering)
     const isGlobeViewRef = useRef<boolean>(true);
+    // Track if we're currently flying to globe (animation in progress)
+    const isFlyingToGlobeRef = useRef<boolean>(false);
     // Track if we should skip the next recenter (to avoid conflicts with flyToGlobe)
     const skipRecenterRef = useRef<boolean>(false);
+    // Track if a flyToGlobe was interrupted and needs to be resumed
+    const needsGlobeRecenterRef = useRef<boolean>(false);
     // Expected globe center coordinates
     const GLOBE_CENTER: [number, number] = [30, 15];
     const GLOBE_ZOOM_THRESHOLD = 2.5; // Zoom level below which we consider it "globe view"
@@ -641,67 +645,97 @@ export function useMapbox({ containerRef, onTrekSelect, onPhotoClick, onRouteCli
         };
     }, [containerRef]);
 
-    // Auto-recenter globe when zooming back out to globe level
-    // This fixes the issue where zooming in, panning, and zooming out causes the globe to be off-center
+    // Auto-recenter globe when flyTo is interrupted or when zooming back out
+    // This fixes the issue where clicking "back to globe" and then manually
+    // zooming/panning leaves the globe off-center
     useEffect(() => {
         const map = mapRef.current;
         if (!map || !mapReady) return;
 
-        let isUserZooming = false;
-        let lastUserZoom = map.getZoom();
-
-        const onZoomStart = () => {
-            isUserZooming = true;
-            lastUserZoom = map.getZoom();
-        };
-
-        const onZoomEnd = () => {
-            if (!mapRef.current || !isUserZooming) return;
-
-            const currentZoom = mapRef.current.getZoom();
-            const wasZoomingOut = currentZoom < lastUserZoom;
-            isUserZooming = false;
-
-            // Only recenter if:
-            // 1. We're in globe view mode (not viewing a trek)
-            // 2. No trek is selected
-            // 3. We zoomed OUT (not in)
-            // 4. We're now at or below the globe zoom threshold
-            // 5. We're not skipping recenter (e.g., flyToGlobe is handling it)
-            if (
-                isGlobeViewRef.current &&
-                !selectedTrekRef.current &&
-                wasZoomingOut &&
-                currentZoom <= GLOBE_ZOOM_THRESHOLD &&
-                !skipRecenterRef.current
-            ) {
-                const center = mapRef.current.getCenter();
-                const distanceFromCenter = Math.sqrt(
-                    Math.pow(center.lng - GLOBE_CENTER[0], 2) +
-                    Math.pow(center.lat - GLOBE_CENTER[1], 2)
-                );
-
-                // Only recenter if we've drifted more than 5 degrees from center
-                if (distanceFromCenter > 5) {
-                    const isMobile = window.matchMedia('(max-width: 768px)').matches;
-                    mapRef.current.easeTo({
-                        center: GLOBE_CENTER,
-                        zoom: isMobile ? 1.2 : 1.5,
-                        pitch: 0,
-                        bearing: 0,
-                        duration: 1500,
-                        easing: (t) => 1 - Math.pow(1 - t, 3) // ease-out cubic
-                    });
-                }
+        // Handler for when user interrupts a flyTo animation
+        const handleUserInteraction = () => {
+            if (isFlyingToGlobeRef.current) {
+                // User interrupted flyToGlobe animation
+                isFlyingToGlobeRef.current = false;
+                skipRecenterRef.current = false;
+                // Mark that we need to complete the flyToGlobe after user stops
+                needsGlobeRecenterRef.current = true;
             }
         };
 
-        map.on('zoomstart', onZoomStart);
-        map.on('zoomend', onZoomEnd);
+        // Handler for when movement ends - check if we should recenter
+        const handleMoveEnd = () => {
+            if (!mapRef.current) return;
+
+            // If flyToGlobe was interrupted, complete it now
+            if (needsGlobeRecenterRef.current && isGlobeViewRef.current) {
+                needsGlobeRecenterRef.current = false;
+                skipRecenterRef.current = true; // Skip the next moveend check
+
+                const isMobile = window.matchMedia('(max-width: 768px)').matches;
+                const targetZoom = selectedTrekRef.current
+                    ? (isMobile ? 3 : 3.5)
+                    : (isMobile ? 1.2 : 1.5);
+
+                // Complete the flyToGlobe animation
+                mapRef.current.flyTo({
+                    center: GLOBE_CENTER,
+                    zoom: targetZoom,
+                    pitch: 0,
+                    bearing: 0,
+                    duration: 2000,
+                    essential: true,
+                    curve: 1.2,
+                    easing: (t) => 1 - Math.pow(1 - t, 3)
+                });
+
+                // Reset skip flag after animation
+                setTimeout(() => {
+                    skipRecenterRef.current = false;
+                }, 2500);
+                return;
+            }
+
+            // Normal recenter check for when already at globe zoom
+            if (!isGlobeViewRef.current || skipRecenterRef.current) return;
+
+            const currentZoom = mapRef.current.getZoom();
+            if (currentZoom > GLOBE_ZOOM_THRESHOLD) return;
+
+            const center = mapRef.current.getCenter();
+            const distanceFromCenter = Math.sqrt(
+                Math.pow(center.lng - GLOBE_CENTER[0], 2) +
+                Math.pow(center.lat - GLOBE_CENTER[1], 2)
+            );
+
+            // Recenter if we've drifted more than 5 degrees from expected center
+            if (distanceFromCenter > 5) {
+                const isMobile = window.matchMedia('(max-width: 768px)').matches;
+                const targetZoom = selectedTrekRef.current
+                    ? (isMobile ? 3 : 3.5)
+                    : (isMobile ? 1.2 : 1.5);
+
+                mapRef.current.easeTo({
+                    center: GLOBE_CENTER,
+                    zoom: targetZoom,
+                    pitch: 0,
+                    bearing: 0,
+                    duration: 1500,
+                    easing: (t) => 1 - Math.pow(1 - t, 3) // ease-out cubic
+                });
+            }
+        };
+
+        map.on('dragstart', handleUserInteraction);
+        map.on('wheel', handleUserInteraction);
+        map.on('touchstart', handleUserInteraction);
+        map.on('moveend', handleMoveEnd);
 
         return () => {
-            map.off('zoomstart', onZoomStart);
-            map.off('zoomend', onZoomEnd);
+            map.off('dragstart', handleUserInteraction);
+            map.off('wheel', handleUserInteraction);
+            map.off('touchstart', handleUserInteraction);
+            map.off('moveend', handleMoveEnd);
         };
     }, [mapReady]);
 
@@ -894,8 +928,9 @@ export function useMapbox({ containerRef, onTrekSelect, onPhotoClick, onRouteCli
         const map = mapRef.current;
         if (!map || !mapReady) return;
 
-        // Mark that we're in globe view mode
+        // Mark that we're in globe view mode and flying
         isGlobeViewRef.current = true;
+        isFlyingToGlobeRef.current = true;
         // Skip the next auto-recenter since flyToGlobe handles centering
         skipRecenterRef.current = true;
 
@@ -953,10 +988,12 @@ export function useMapbox({ containerRef, onTrekSelect, onPhotoClick, onRouteCli
             });
         }
 
-        // Reset skip flag after animation completes
+        // Reset flags after animation completes
+        const animationDuration = selectedTrek ? 2500 : 3000;
         setTimeout(() => {
+            isFlyingToGlobeRef.current = false;
             skipRecenterRef.current = false;
-        }, 3500);
+        }, animationDuration + 500);
     }, [mapReady]);
 
     // Highlight trek segment (defined before flyToTrek which uses it)
