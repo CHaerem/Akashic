@@ -926,7 +926,24 @@ export function useMapbox({ containerRef, onTrekSelect, onPhotoClick, onRouteCli
     // Fly to globe view
     const flyToGlobe = useCallback((selectedTrek: TrekConfig | null = null) => {
         const map = mapRef.current;
-        if (!map || !mapReady || !map.isStyleLoaded()) return;
+        if (!map || !mapReady) return;
+
+        // If style isn't loaded yet, wait for it and retry
+        if (!map.isStyleLoaded()) {
+            const onStyleLoad = () => {
+                map.off('style.load', onStyleLoad);
+                flyToGlobe(selectedTrek);
+            };
+            map.once('style.load', onStyleLoad);
+            // Also try after a short delay in case the style was already loading
+            setTimeout(() => {
+                if (map.isStyleLoaded()) {
+                    map.off('style.load', onStyleLoad);
+                    flyToGlobe(selectedTrek);
+                }
+            }, 100);
+            return;
+        }
 
         // Mark that we're in globe view mode and flying
         isGlobeViewRef.current = true;
@@ -1045,7 +1062,23 @@ export function useMapbox({ containerRef, onTrekSelect, onPhotoClick, onRouteCli
     // Fly to trek view
     const flyToTrek = useCallback((selectedTrek: TrekConfig, selectedCamp: Camp | null = null) => {
         const map = mapRef.current;
-        if (!map || !mapReady || !map.isStyleLoaded() || !selectedTrek) return;
+        if (!map || !mapReady || !selectedTrek) return;
+
+        // If style isn't loaded yet, wait for it and retry
+        if (!map.isStyleLoaded()) {
+            const onStyleLoad = () => {
+                map.off('style.load', onStyleLoad);
+                flyToTrek(selectedTrek, selectedCamp);
+            };
+            map.once('style.load', onStyleLoad);
+            setTimeout(() => {
+                if (map.isStyleLoaded()) {
+                    map.off('style.load', onStyleLoad);
+                    flyToTrek(selectedTrek, selectedCamp);
+                }
+            }, 100);
+            return;
+        }
 
         // Mark that we're NOT in globe view mode (we're viewing a trek)
         isGlobeViewRef.current = false;
