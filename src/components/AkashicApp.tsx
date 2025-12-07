@@ -9,11 +9,14 @@ import { hasPendingShares } from '../lib/shareTarget';
 import type { Photo, Camp } from '../types/trek';
 import { MapboxGlobe } from './MapboxGlobe';
 import { OfflineIndicator } from './OfflineIndicator';
-import { GlobeSelectionPanel } from './home/GlobeSelectionPanel';
 import { GlobeHint } from './home/GlobeHint';
 import { ShareTargetModal } from './ShareTargetModal';
 import { PhotoLightbox } from './common/PhotoLightbox';
-import { AdaptiveNavPill } from './nav/AdaptiveNavPill';
+import { DayGallery } from './common/DayGallery';
+import { BottomSheet, SNAP_POINTS } from './layout/BottomSheet';
+import { BottomSheetContent } from './layout/BottomSheetContent';
+import { QuickActionBar, QuickActionIcons } from './layout/QuickActionBar';
+import { NavigationPill } from './nav/NavigationPill';
 import { colors, radius, transitions, typography } from '../styles/liquidGlass';
 
 // --- Main Component ---
@@ -54,13 +57,21 @@ export default function AkashicApp() {
         trekData,
         extendedStats,
         elevationProfile,
+        // Sheet state (Find My redesign)
+        sheetSnapPoint,
+        activeMode,
         setActiveTab,
+        setSheetSnapPoint,
+        setActiveMode,
         selectTrek,
         handleExplore,
         handleBackToGlobe,
         handleBackToSelection,
         handleCampSelect
     } = useTrekData();
+
+    // Day gallery state
+    const [showDayGallery, setShowDayGallery] = useState(false);
 
     // Check for pending shared photos (from PWA share target)
     useEffect(() => {
@@ -120,7 +131,7 @@ export default function AkashicApp() {
         }
     }, []);
 
-    // Handle day selection from AdaptiveNavPill
+    // Handle day selection from NavigationPill
     const handleDaySelect = useCallback((dayNumber: number) => {
         if (trekData) {
             const camp = trekData.camps.find((c: Camp) => c.dayNumber === dayNumber);
@@ -130,13 +141,58 @@ export default function AkashicApp() {
         }
     }, [trekData, handleCampSelect]);
 
+    // Handle mode change - auto-expand sheet if minimized
+    const handleModeChange = useCallback((mode: typeof activeMode) => {
+        setActiveMode(mode);
+        if (sheetSnapPoint === 'minimized') {
+            setSheetSnapPoint('half');
+        }
+    }, [sheetSnapPoint, setActiveMode, setSheetSnapPoint]);
+
+    // Handle start from overview - select day 1
+    const handleStart = useCallback(() => {
+        if (trekData && trekData.camps.length > 0) {
+            const firstCamp = trekData.camps.find((c: Camp) => c.dayNumber === 1) || trekData.camps[0];
+            handleCampSelect(firstCamp);
+        }
+    }, [trekData, handleCampSelect]);
+
+    // Calculate bottom offset for pill based on sheet snap point
+    const sheetHeight = useMemo(() => {
+        const vh = typeof window !== 'undefined' ? window.innerHeight / 100 : 8;
+        return SNAP_POINTS[sheetSnapPoint] * vh;
+    }, [sheetSnapPoint]);
+
+    // Show bottom sheet when trek is selected (globe view) or in trek view
+    const showSheet = (view === 'globe' && selectedTrek !== null) || view === 'trek';
+
     // Filter photos with coordinates for map display
     // Use deferred photos to prevent map re-renders during camera animations
     const photosWithCoords = deferredPhotos.filter(p => p.coordinates && p.coordinates.length === 2);
 
+    // Quick action buttons configuration
+    const quickActions = useMemo(() => [
+        {
+            id: 'back-to-globe',
+            icon: QuickActionIcons.globe,
+            label: 'Back to globe',
+            onClick: handleBackToGlobe,
+            visible: view === 'trek',
+        },
+        {
+            id: 'recenter',
+            icon: QuickActionIcons.recenter,
+            label: 'Recenter map',
+            onClick: () => {
+                // TODO: Implement recenter functionality
+            },
+            visible: true,
+        },
+    ], [view, handleBackToGlobe]);
+
     return (
         <div style={{ position: 'fixed', inset: 0, background: colors.background.base }}>
-            {/* Mapbox Globe */}
+            {/* Mapbox Globe - Full screen hero */}
             <div style={{ position: 'absolute', inset: 0 }}>
                 <MapboxGlobe
                     selectedTrek={selectedTrek}
@@ -154,7 +210,7 @@ export default function AkashicApp() {
             {/* Offline Status */}
             <OfflineIndicator isMobile={isMobile} />
 
-            {/* Title - Liquid Glass pill style when viewing trek */}
+            {/* Brand Title - Top Left */}
             <div
                 onClick={handleBackToGlobe}
                 style={{
@@ -168,8 +224,8 @@ export default function AkashicApp() {
                     display: 'flex',
                     alignItems: 'center',
                     transition: `all ${transitions.smooth}`,
-                    // Liquid Glass styling when in trek view
-                    ...(view === 'trek' ? {
+                    // Liquid Glass styling when sheet is visible
+                    ...(showSheet ? {
                         background: `linear-gradient(
                             135deg,
                             rgba(255, 255, 255, 0.08) 0%,
@@ -193,7 +249,7 @@ export default function AkashicApp() {
                 <span style={{
                     ...typography.brand,
                     fontSize: isMobile ? 12 : 13,
-                    color: view === 'trek' ? colors.text.secondary : colors.text.primary,
+                    color: showSheet ? colors.text.secondary : colors.text.primary,
                     transition: `color ${transitions.smooth}`,
                 }}>
                     Akashic
@@ -212,35 +268,65 @@ export default function AkashicApp() {
                 </span>
             </div>
 
-            {/* Globe View UI */}
-            {selectedTrek && view === 'globe' && (
-                <GlobeSelectionPanel
-                    selectedTrek={selectedTrek}
-                    onBack={handleBackToSelection}
-                    onExplore={handleExplore}
+            {/* Quick Action Bar - Top Right */}
+            <QuickActionBar actions={quickActions} isMobile={isMobile} />
+
+            {/* Globe Hint - shown when no trek selected */}
+            {!selectedTrek && view === 'globe' && <GlobeHint isMobile={isMobile} />}
+
+            {/* Navigation Pill - positioned above bottom sheet */}
+            {view === 'trek' && trekData && (
+                <NavigationPill
+                    selectedCamp={selectedCamp}
+                    totalDays={trekData.stats.duration}
+                    trekName={trekData.name}
+                    activeMode={activeMode}
+                    onModeChange={handleModeChange}
+                    onDaySelect={handleDaySelect}
+                    onStart={handleStart}
+                    bottomOffset={sheetHeight}
                     isMobile={isMobile}
                 />
             )}
 
-            {!selectedTrek && view === 'globe' && <GlobeHint isMobile={isMobile} />}
+            {/* Bottom Sheet - Find My inspired draggable sheet */}
+            {showSheet && (
+                <BottomSheet
+                    snapPoint={sheetSnapPoint}
+                    onSnapChange={setSheetSnapPoint}
+                    onDismiss={view === 'globe' ? handleBackToSelection : undefined}
+                    isOpen={showSheet}
+                >
+                    <BottomSheetContent
+                        view={view}
+                        selectedTrek={selectedTrek}
+                        selectedCamp={selectedCamp}
+                        activeMode={activeMode}
+                        trekData={trekData}
+                        extendedStats={extendedStats}
+                        elevationProfile={elevationProfile}
+                        photos={deferredPhotos}
+                        getMediaUrl={getMediaUrl}
+                        onExplore={handleExplore}
+                        onCampSelect={handleCampSelect}
+                        onViewPhotoOnMap={handleViewOnMap}
+                        onOpenDayGallery={() => setShowDayGallery(true)}
+                        isMobile={isMobile}
+                    />
+                </BottomSheet>
+            )}
 
-            {/* Adaptive Nav Pill - original Liquid Glass design */}
-            {view === 'trek' && trekData && (
-                <AdaptiveNavPill
-                    selectedCamp={selectedCamp}
-                    totalDays={trekData.stats.duration}
-                    activeTab={activeTab}
-                    onTabChange={setActiveTab}
-                    onDaySelect={handleDaySelect}
-                    onCampSelect={handleCampSelect}
+            {/* Day Gallery - fullscreen photo exploration */}
+            {trekData && (
+                <DayGallery
+                    isOpen={showDayGallery}
+                    onClose={() => setShowDayGallery(false)}
                     trekData={trekData}
-                    extendedStats={extendedStats}
-                    elevationProfile={elevationProfile}
                     photos={deferredPhotos}
                     getMediaUrl={getMediaUrl}
-                    onViewPhotoOnMap={handleViewOnMap}
-                    onJourneyUpdate={refetchJourneys}
-                    isMobile={isMobile}
+                    initialDay={selectedCamp?.dayNumber ?? 1}
+                    onDayChange={handleDaySelect}
+                    onViewOnMap={handleViewOnMap}
                 />
             )}
 
