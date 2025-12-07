@@ -529,8 +529,29 @@ function DayNavigationHeader({
     onDayTap,
     isMobile,
 }: DayNavigationHeaderProps) {
+    // Handle swipe gesture for mobile day navigation
+    const handleDragEnd = (_: unknown, info: { offset: { x: number }; velocity: { x: number } }) => {
+        const threshold = 50;
+        const velocityThreshold = 500;
+
+        // Swipe right = previous day
+        if ((info.offset.x > threshold || info.velocity.x > velocityThreshold) && currentDay > 1) {
+            onPrevDay({} as React.MouseEvent);
+        }
+        // Swipe left = next day
+        else if ((info.offset.x < -threshold || info.velocity.x < -velocityThreshold) && currentDay < totalDays) {
+            onNextDay({} as React.MouseEvent);
+        }
+    };
+
     return (
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%' }}>
+        <motion.div
+            drag="x"
+            dragConstraints={{ left: 0, right: 0 }}
+            dragElastic={0.2}
+            onDragEnd={handleDragEnd}
+            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', cursor: 'grab' }}
+        >
             {/* Previous day */}
             <motion.button
                 onClick={onPrevDay}
@@ -623,6 +644,6 @@ function DayNavigationHeader({
             >
                 <ChevronIcon direction="right" size={16} />
             </motion.button>
-        </div>
+        </motion.div>
     );
 }
