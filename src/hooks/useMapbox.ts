@@ -1113,10 +1113,7 @@ export function useMapbox({ containerRef, onTrekSelect, onPhotoClick, onRouteCli
                 const routeCoords = trekData.route.coordinates;
                 const campIndex = trekData.camps.findIndex(c => c.id === selectedCamp.id);
 
-                // Calculate segment midpoint for camera center
-                // This focuses on the day's trek route rather than the destination
-                let centerCoord: [number, number] = selectedCamp.coordinates as [number, number];
-
+                // Fit bounds to the day's segment to show the entire route
                 if (campIndex !== -1 && routeCoords && routeCoords.length > 0) {
                     // Get segment start and end coordinates
                     const startCoord = campIndex === 0
@@ -1129,13 +1126,6 @@ export function useMapbox({ containerRef, onTrekSelect, onPhotoClick, onRouteCli
 
                     const actualStart = Math.min(startIndex, endIndex);
                     const actualEnd = Math.max(startIndex, endIndex);
-
-                    if (actualEnd > actualStart) {
-                        // Find the midpoint of the segment
-                        const midIndex = Math.floor((actualStart + actualEnd) / 2);
-                        const midCoord = routeCoords[midIndex];
-                        centerCoord = [midCoord[0], midCoord[1]];
-                    }
 
                     // Smart bearing: look along path of arrival
                     if (selectedCamp.bearing !== undefined) {
@@ -1150,13 +1140,47 @@ export function useMapbox({ containerRef, onTrekSelect, onPhotoClick, onRouteCli
                         const currentCoord = selectedCamp.coordinates;
                         bearing = calculateBearing(prevCampCoord[1], prevCampCoord[0], currentCoord[1], currentCoord[0]);
                     }
-                } else if (selectedCamp.bearing !== undefined) {
-                    bearing = selectedCamp.bearing;
+
+                    if (actualEnd > actualStart) {
+                        // Calculate bounds for the segment
+                        const segmentCoords = routeCoords.slice(actualStart, actualEnd + 1);
+                        let minLng = segmentCoords[0][0], maxLng = segmentCoords[0][0];
+                        let minLat = segmentCoords[0][1], maxLat = segmentCoords[0][1];
+
+                        for (const coord of segmentCoords) {
+                            if (coord[0] < minLng) minLng = coord[0];
+                            if (coord[0] > maxLng) maxLng = coord[0];
+                            if (coord[1] < minLat) minLat = coord[1];
+                            if (coord[1] > maxLat) maxLat = coord[1];
+                        }
+
+                        const bounds = new mapboxgl.LngLatBounds([minLng, minLat], [maxLng, maxLat]);
+                        const isMobileCamp = window.matchMedia('(max-width: 768px)').matches;
+
+                        map.fitBounds(bounds, {
+                            padding: isMobileCamp
+                                ? { top: 100, bottom: 300, left: 50, right: 50 }
+                                : { top: 120, bottom: 150, left: 120, right: 400 },
+                            pitch: pitch,
+                            bearing: bearing,
+                            duration: 2200,
+                            maxZoom: 16, // Don't zoom in too far on short segments
+                            essential: true
+                        });
+
+                        // Highlight segment
+                        highlightSegment(trekData, selectedCamp);
+                        return;
+                    }
                 }
 
+                // Fallback: fly to camp coordinates if segment calculation fails
+                if (selectedCamp.bearing !== undefined) {
+                    bearing = selectedCamp.bearing;
+                }
                 const isMobileCamp = window.matchMedia('(max-width: 768px)').matches;
                 map.flyTo({
-                    center: centerCoord,
+                    center: selectedCamp.coordinates as [number, number],
                     zoom: isMobileCamp ? 14.5 : 15,
                     pitch: pitch,
                     bearing: bearing,
