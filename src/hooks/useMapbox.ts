@@ -84,7 +84,9 @@ export function useMapbox({ containerRef, onTrekSelect, onPhotoClick, onRouteCli
     const skipRecenterRef = useRef<boolean>(false);
     // Track if a flyToGlobe was interrupted and needs to be resumed
     const needsGlobeRecenterRef = useRef<boolean>(false);
-    // Expected globe center coordinates
+    // Track the target center for current/interrupted flyToGlobe animation
+    const targetCenterRef = useRef<[number, number] | null>(null);
+    // Default globe center coordinates (when no trek selected)
     const GLOBE_CENTER: [number, number] = [30, 15];
     const GLOBE_ZOOM_THRESHOLD = 2.5; // Zoom level below which we consider it "globe view"
     const [mapReady, setMapReady] = useState(false);
@@ -667,6 +669,16 @@ export function useMapbox({ containerRef, onTrekSelect, onPhotoClick, onRouteCli
         const handleMoveEnd = () => {
             if (!mapRef.current) return;
 
+            // Determine expected center: use stored target, or derive from selected trek
+            const getExpectedCenter = (): [number, number] => {
+                if (targetCenterRef.current) return targetCenterRef.current;
+                if (selectedTrekRef.current) {
+                    const trek = treksRef.current.find(t => t.id === selectedTrekRef.current);
+                    if (trek) return [trek.lng, trek.lat];
+                }
+                return GLOBE_CENTER;
+            };
+
             // If flyToGlobe was interrupted, complete it now
             if (needsGlobeRecenterRef.current && isGlobeViewRef.current) {
                 needsGlobeRecenterRef.current = false;
@@ -677,9 +689,11 @@ export function useMapbox({ containerRef, onTrekSelect, onPhotoClick, onRouteCli
                     ? (isMobile ? 3 : 3.5)
                     : (isMobile ? 1.2 : 1.5);
 
-                // Complete the flyToGlobe animation
+                const expectedCenter = getExpectedCenter();
+
+                // Complete the flyToGlobe animation to the correct center
                 mapRef.current.flyTo({
-                    center: GLOBE_CENTER,
+                    center: expectedCenter,
                     zoom: targetZoom,
                     pitch: 0,
                     bearing: 0,
@@ -702,10 +716,11 @@ export function useMapbox({ containerRef, onTrekSelect, onPhotoClick, onRouteCli
             const currentZoom = mapRef.current.getZoom();
             if (currentZoom > GLOBE_ZOOM_THRESHOLD) return;
 
+            const expectedCenter = getExpectedCenter();
             const center = mapRef.current.getCenter();
             const distanceFromCenter = Math.sqrt(
-                Math.pow(center.lng - GLOBE_CENTER[0], 2) +
-                Math.pow(center.lat - GLOBE_CENTER[1], 2)
+                Math.pow(center.lng - expectedCenter[0], 2) +
+                Math.pow(center.lat - expectedCenter[1], 2)
             );
 
             // Recenter if we've drifted more than 5 degrees from expected center
@@ -716,7 +731,7 @@ export function useMapbox({ containerRef, onTrekSelect, onPhotoClick, onRouteCli
                     : (isMobile ? 1.2 : 1.5);
 
                 mapRef.current.easeTo({
-                    center: GLOBE_CENTER,
+                    center: expectedCenter,
                     zoom: targetZoom,
                     pitch: 0,
                     bearing: 0,
@@ -963,8 +978,10 @@ export function useMapbox({ containerRef, onTrekSelect, onPhotoClick, onRouteCli
         if (selectedTrek) {
             // When focused on a trek at globe level, use trek position
             selectedTrekRef.current = selectedTrek.id;
+            const trekCenter: [number, number] = [selectedTrek.lng, selectedTrek.lat];
+            targetCenterRef.current = trekCenter;
             map.flyTo({
-                center: [selectedTrek.lng, selectedTrek.lat],
+                center: trekCenter,
                 zoom: isMobile ? 3 : 3.5,
                 pitch: 0,
                 bearing: 0,
@@ -976,6 +993,7 @@ export function useMapbox({ containerRef, onTrekSelect, onPhotoClick, onRouteCli
         } else {
             // No trek selected - fly to default globe center
             selectedTrekRef.current = null;
+            targetCenterRef.current = GLOBE_CENTER;
             map.flyTo({
                 center: GLOBE_CENTER,
                 zoom: isMobile ? 1.2 : 1.5,
