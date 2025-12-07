@@ -1,196 +1,30 @@
+/**
+ * Adaptive Navigation Pill - Layout 3: Minimal Expandable
+ *
+ * States:
+ * 1. collapsed - Just navigation row: ← Day 3 · Shira Camp →
+ * 2. expanded - Navigation + action buttons row
+ * 3. content - Expanded + floating card visible
+ */
+
 import { memo, useState, useCallback, useRef, useEffect, useMemo } from 'react';
-import {
-  motion,
-  useMotionValue,
-  useSpring,
-  useTransform,
-  AnimatePresence,
-  type MotionValue,
-} from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { colors, radius, shadows, effects } from '../../styles/liquidGlass';
 import type { Camp, TabType, TrekData, ExtendedStats, ElevationProfile, Photo } from '../../types/trek';
 import { DayGallery } from '../common/DayGallery';
-import { usePhotoDay } from '../../hooks/usePhotoDay';
 import { ContentCard } from './ContentCard';
-import { ContextCard } from './ContextCard';
-import {
-  CalendarIcon,
-  InfoIcon,
-  PhotoIcon,
-  StatsIcon,
-  ChevronIcon,
-} from '../icons';
-
-// Magnification constants
-const MAGNIFICATION = {
-  scale: 1.5,
-  distance: 70,
-  baseSize: 48,
-};
+import { ChevronIcon, CloseIcon, PhotoIcon } from '../icons';
+import { usePhotoDay } from '../../hooks/usePhotoDay';
 
 const SPRING_CONFIG = {
+  type: 'spring' as const,
   mass: 0.1,
   stiffness: 200,
   damping: 15,
 };
 
-type NavMode = 'collapsed' | 'expanded' | 'days' | 'content';
-
-interface NavOption {
-  id: TabType;
-  icon: React.ReactNode;
-  label: string;
-}
-
-const NAV_OPTIONS: NavOption[] = [
-  { id: 'journey', icon: <CalendarIcon />, label: 'Days' },
-  { id: 'overview', icon: <InfoIcon />, label: 'Info' },
-  { id: 'photos', icon: <PhotoIcon />, label: 'Photos' },
-  { id: 'stats', icon: <StatsIcon />, label: 'Stats' },
-];
-
-// Dock item with magnification and drag-to-select
-interface DockItemProps {
-  mouseX: MotionValue<number>;
-  icon: React.ReactNode;
-  label: string;
-  isActive: boolean;
-  isHovered: boolean; // For drag-to-select highlight
-  onClick: () => void;
-  onHover: () => void;
-  isMobile: boolean;
-  setRef: (el: HTMLButtonElement | null) => void;
-}
-
-function DockItem({ mouseX, icon, label, isActive, isHovered, onClick, onHover, isMobile, setRef }: DockItemProps) {
-  const localRef = useRef<HTMLButtonElement>(null);
-
-  // Set the external ref whenever our local ref changes
-  useEffect(() => {
-    setRef(localRef.current);
-    return () => setRef(null);
-  }, [setRef]);
-
-  const distance = useTransform(mouseX, (val) => {
-    const bounds = localRef.current?.getBoundingClientRect() ?? { x: 0, width: 0 };
-    return val - bounds.x - bounds.width / 2;
-  });
-
-  const scale = useTransform(
-    distance,
-    [-MAGNIFICATION.distance, 0, MAGNIFICATION.distance],
-    [1, MAGNIFICATION.scale, 1]
-  );
-
-  const scaleSpring = useSpring(scale, SPRING_CONFIG);
-  const baseSize = isMobile ? MAGNIFICATION.baseSize : MAGNIFICATION.baseSize + 8;
-
-  // Selection bubble appears when hovered during drag OR when active
-  const showBubble = isHovered || isActive;
-  const bubbleStyle = showBubble ? {
-    background: `linear-gradient(135deg, rgba(255, 255, 255, ${isHovered ? 0.28 : 0.22}) 0%, rgba(255, 255, 255, ${isHovered ? 0.14 : 0.1}) 100%)`,
-    boxShadow: `0 4px 20px rgba(0, 0, 0, ${isHovered ? 0.35 : 0.25}), inset 0 1px 0 rgba(255, 255, 255, ${isHovered ? 0.4 : 0.3}), 0 0 0 1px rgba(255, 255, 255, ${isHovered ? 0.25 : 0.2})`,
-  } : {};
-
-  return (
-    <motion.button
-      ref={localRef}
-      onClick={onClick}
-      onPointerEnter={onHover}
-      aria-label={`${label} tab${isActive ? ' (selected)' : ''}`}
-      aria-pressed={isActive}
-      style={{
-        scale: scaleSpring,
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: 4,
-        width: baseSize,
-        height: baseSize + 16,
-        background: 'transparent',
-        border: 'none',
-        borderRadius: radius.lg,
-        cursor: 'pointer',
-        color: (isHovered || isActive) ? colors.text.primary : colors.text.secondary,
-        transformOrigin: 'bottom center',
-        touchAction: 'none',
-        ...bubbleStyle,
-      }}
-      whileTap={{ scale: 0.95 }}
-    >
-      {icon}
-      <span style={{ fontSize: isMobile ? 9 : 10, fontWeight: 500, letterSpacing: '0.02em', whiteSpace: 'nowrap' }}>
-        {label}
-      </span>
-    </motion.button>
-  );
-}
-
-// Day item with magnification and drag-to-select
-interface DayItemProps {
-  mouseX: MotionValue<number>;
-  day: number;
-  isActive: boolean;
-  isHovered: boolean;
-  onClick: () => void;
-  onHover: () => void;
-  setRef: (el: HTMLButtonElement | null) => void;
-}
-
-function DayItem({ mouseX, day, isActive, isHovered, onClick, onHover, setRef }: DayItemProps) {
-  const localRef = useRef<HTMLButtonElement>(null);
-
-  useEffect(() => {
-    setRef(localRef.current);
-    return () => setRef(null);
-  }, [setRef]);
-
-  const distance = useTransform(mouseX, (val) => {
-    const bounds = localRef.current?.getBoundingClientRect() ?? { x: 0, width: 0 };
-    return val - bounds.x - bounds.width / 2;
-  });
-
-  const scale = useTransform(distance, [-50, 0, 50], [1, 1.4, 1]);
-  const scaleSpring = useSpring(scale, SPRING_CONFIG);
-
-  const showBubble = isHovered || isActive;
-  const bubbleStyle = showBubble ? {
-    background: `linear-gradient(135deg, rgba(255, 255, 255, ${isHovered ? 0.28 : 0.22}) 0%, rgba(255, 255, 255, ${isHovered ? 0.14 : 0.1}) 100%)`,
-    boxShadow: `0 4px 16px rgba(0, 0, 0, ${isHovered ? 0.3 : 0.2}), inset 0 1px 0 rgba(255, 255, 255, ${isHovered ? 0.4 : 0.35}), 0 0 0 1px rgba(255, 255, 255, ${isHovered ? 0.25 : 0.2})`,
-  } : {};
-
-  return (
-    <motion.button
-      ref={localRef}
-      onClick={onClick}
-      onPointerEnter={onHover}
-      aria-label={`Day ${day}${isActive ? ' (selected)' : ''}`}
-      aria-pressed={isActive}
-      style={{
-        scale: scaleSpring,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        width: 36,
-        height: 36,
-        background: 'transparent',
-        border: 'none',
-        borderRadius: radius.pill,
-        cursor: 'pointer',
-        color: (isHovered || isActive) ? colors.text.primary : colors.text.secondary,
-        fontSize: (isHovered || isActive) ? 15 : 14,
-        fontWeight: (isHovered || isActive) ? 600 : 500,
-        transformOrigin: 'bottom center',
-        touchAction: 'none',
-        ...bubbleStyle,
-      }}
-      whileTap={{ scale: 0.9 }}
-    >
-      {day}
-    </motion.button>
-  );
-}
+// Content types for the floating card
+type ContentType = 'day' | 'photos' | 'stats' | 'info';
 
 interface AdaptiveNavPillProps {
   selectedCamp: Camp | null;
@@ -212,7 +46,7 @@ interface AdaptiveNavPillProps {
 export const AdaptiveNavPill = memo(function AdaptiveNavPill({
   selectedCamp,
   totalDays,
-  activeTab,
+  activeTab: _activeTab, // Used for external sync, internal state managed separately
   onTabChange,
   onDaySelect,
   onCampSelect,
@@ -225,178 +59,85 @@ export const AdaptiveNavPill = memo(function AdaptiveNavPill({
   onJourneyUpdate,
   isMobile,
 }: AdaptiveNavPillProps) {
-  const [mode, setMode] = useState<NavMode>('collapsed'); // Start collapsed - map is hero
-  const [showContent, setShowContent] = useState(false);
-  const [showContext, setShowContext] = useState(false); // Day info context card
-  const [showDayGallery, setShowDayGallery] = useState(false); // Fullscreen day photo gallery
-  const [isDragging, setIsDragging] = useState(false);
-  const [hoveredOption, setHoveredOption] = useState<string | null>(null);
-  const [hoveredDay, setHoveredDay] = useState<number | null>(null);
+  // Layout 3 states - default expanded when viewing a day
+  const [isExpanded, setIsExpanded] = useState(selectedCamp !== null);
+  const [activeContent, setActiveContent] = useState<ContentType | null>(null);
+  const [showDayGallery, setShowDayGallery] = useState(false);
   const [swipeDirection, setSwipeDirection] = useState<'left' | 'right' | null>(null);
-  const [hasInteracted, setHasInteracted] = useState(false); // Track if user has interacted
 
   const pillRef = useRef<HTMLDivElement>(null);
   const cardRef = useRef<HTMLDivElement>(null);
-  const contextRef = useRef<HTMLDivElement>(null);
-  const mouseX = useMotionValue(Infinity);
 
-  // Refs for each nav option
-  const navRefs = useRef<Map<string, HTMLButtonElement | null>>(new Map());
-  const dayRefs = useRef<Map<number, HTMLButtonElement | null>>(new Map());
+  // Overview mode when no camp is selected
+  const isOverviewMode = selectedCamp === null;
 
-  const currentDay = selectedCamp?.dayNumber ?? 1;
-  const currentCampName = selectedCamp?.name ?? 'Start';
-  const currentCamp = selectedCamp ?? trekData.camps[0];
+  // Auto-expand when entering day mode
+  useEffect(() => {
+    if (selectedCamp !== null) {
+      setIsExpanded(true);
+    }
+  }, [selectedCamp]);
+  const currentDay = selectedCamp?.dayNumber ?? 0;
+  const currentCampName = selectedCamp?.name ?? 'Overview';
 
-  // Calculate date for current day based on journey start date
+  // Map content type to tab type (day is handled separately)
+  const contentToTab: Record<Exclude<ContentType, 'day'>, TabType> = {
+    photos: 'photos',
+    stats: 'stats',
+    info: 'overview',
+  };
+
+  // Calculate date for current day
   const currentDayDate = useMemo(() => {
-    if (!trekData.dateStarted || !currentCamp) return null;
+    if (!trekData.dateStarted || !selectedCamp) return null;
     const start = new Date(trekData.dateStarted);
-    start.setDate(start.getDate() + (currentCamp.dayNumber - 1));
+    start.setDate(start.getDate() + (selectedCamp.dayNumber - 1));
     return start;
-  }, [trekData.dateStarted, currentCamp]);
-
-  // Use shared photo-day matching hook
-  const { getPhotosForDay } = usePhotoDay(trekData, photos);
+  }, [trekData.dateStarted, selectedCamp]);
 
   // Get photos for current day
+  const { getPhotosForDay } = usePhotoDay(trekData, photos);
   const dayPhotos = useMemo(() => {
-    if (!currentCamp) return [];
+    if (!selectedCamp) return [];
     return getPhotosForDay(currentDay);
-  }, [currentCamp, currentDay, getPhotosForDay]);
+  }, [selectedCamp, currentDay, getPhotosForDay]);
 
-  // Swipe handlers for collapsed pill (mobile gesture support)
-  const handleSwipeDrag = useCallback(() => {
-    if (!hasInteracted) setHasInteracted(true);
-  }, [hasInteracted]);
+  // Handle swipe for day navigation
+  const handleSwipeDragEnd = useCallback(
+    (_: unknown, info: { offset: { x: number }; velocity: { x: number } }) => {
+      const threshold = 50;
+      const velocityThreshold = 500;
 
-  const handleSwipeDragEnd = useCallback((_: any, info: { offset: { x: number }; velocity: { x: number } }) => {
-    const threshold = 50;
-    const velocityThreshold = 500;
-
-    if (info.offset.x > threshold || info.velocity.x > velocityThreshold) {
-      // Swipe right - previous day
-      if (currentDay > 1) {
-        setSwipeDirection('right');
-        onDaySelect(currentDay - 1);
-        setTimeout(() => setSwipeDirection(null), 200);
-      }
-    } else if (info.offset.x < -threshold || info.velocity.x < -velocityThreshold) {
-      // Swipe left - next day
-      if (currentDay < totalDays) {
-        setSwipeDirection('left');
-        onDaySelect(currentDay + 1);
-        setTimeout(() => setSwipeDirection(null), 200);
-      }
-    }
-  }, [currentDay, totalDays, onDaySelect]);
-
-
-  // Find which item is under the pointer position
-  const findItemUnderPointer = useCallback((clientX: number) => {
-    if (mode === 'expanded' || mode === 'content') {
-      for (const [id, ref] of navRefs.current.entries()) {
-        if (ref) {
-          const rect = ref.getBoundingClientRect();
-          if (clientX >= rect.left && clientX <= rect.right) {
-            return { type: 'nav' as const, id };
-          }
+      if (info.offset.x > threshold || info.velocity.x > velocityThreshold) {
+        if (currentDay > 1) {
+          setSwipeDirection('right');
+          onDaySelect(currentDay - 1);
+          setTimeout(() => setSwipeDirection(null), 200);
+        }
+      } else if (info.offset.x < -threshold || info.velocity.x < -velocityThreshold) {
+        if (currentDay < totalDays) {
+          setSwipeDirection('left');
+          onDaySelect(currentDay + 1);
+          setTimeout(() => setSwipeDirection(null), 200);
         }
       }
-    } else if (mode === 'days') {
-      for (const [day, ref] of dayRefs.current.entries()) {
-        if (ref) {
-          const rect = ref.getBoundingClientRect();
-          if (clientX >= rect.left && clientX <= rect.right) {
-            return { type: 'day' as const, day };
-          }
-        }
-      }
-    }
-    return null;
-  }, [mode]);
+    },
+    [currentDay, totalDays, onDaySelect]
+  );
 
-  // Pointer/touch handlers for drag-to-select
-  const handlePointerDown = useCallback((e: React.PointerEvent) => {
-    if (mode === 'collapsed') return;
-    setIsDragging(true);
-    mouseX.set(e.clientX);
-
-    const item = findItemUnderPointer(e.clientX);
-    if (item?.type === 'nav') setHoveredOption(item.id);
-    else if (item?.type === 'day') setHoveredDay(item.day);
-  }, [mode, mouseX, findItemUnderPointer]);
-
-  const handlePointerMove = useCallback((e: React.PointerEvent) => {
-    mouseX.set(e.clientX);
-
-    if (isDragging) {
-      const item = findItemUnderPointer(e.clientX);
-      if (item?.type === 'nav') {
-        setHoveredOption(item.id);
-        setHoveredDay(null);
-      } else if (item?.type === 'day') {
-        setHoveredDay(item.day);
-        setHoveredOption(null);
-      } else {
-        setHoveredOption(null);
-        setHoveredDay(null);
-      }
-    }
-  }, [isDragging, mouseX, findItemUnderPointer]);
-
-  const handlePointerUp = useCallback(() => {
-    if (isDragging) {
-      // Select the hovered item on release
-      if (hoveredOption) {
-        if (hoveredOption === 'journey') {
-          setMode('days');
-          setShowContent(false);
-        } else {
-          onTabChange(hoveredOption as TabType);
-          setShowContent(true);
-          setMode('content');
-        }
-      } else if (hoveredDay !== null) {
-        onDaySelect(hoveredDay);
-        setMode('collapsed');
-        setShowContent(false);
-      }
-    }
-    setIsDragging(false);
-    setHoveredOption(null);
-    setHoveredDay(null);
-  }, [isDragging, hoveredOption, hoveredDay, onTabChange, onDaySelect]);
-
-  const handlePointerLeave = useCallback(() => {
-    if (!isDragging) {
-      mouseX.set(Infinity);
-    }
-  }, [isDragging, mouseX]);
-
-  // Handle click outside
+  // Click outside handler
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent | TouchEvent) => {
       const target = e.target as Node;
       const isInsidePill = pillRef.current?.contains(target);
       const isInsideCard = cardRef.current?.contains(target);
-      const isInsideContext = contextRef.current?.contains(target);
 
-      if (!isInsidePill && !isInsideCard && !isInsideContext) {
-        // If content card is showing, close it and return to collapsed
-        if (showContent) {
-          setShowContent(false);
-          setMode('collapsed');
+      if (!isInsidePill && !isInsideCard) {
+        if (activeContent) {
+          setActiveContent(null);
+        } else if (isExpanded) {
+          setIsExpanded(false);
         }
-        // If context is showing, close it
-        else if (showContext) {
-          setShowContext(false);
-        }
-        // If in expanded mode or days mode, collapse
-        else if (mode === 'expanded' || mode === 'days') {
-          setMode('collapsed');
-        }
-        mouseX.set(Infinity);
       }
     };
 
@@ -407,101 +148,112 @@ export const AdaptiveNavPill = memo(function AdaptiveNavPill({
       document.removeEventListener('mousedown', handleClickOutside);
       document.removeEventListener('touchstart', handleClickOutside);
     };
-  }, [mode, showContent, showContext, mouseX]);
+  }, [isExpanded, activeContent]);
 
-  // Cancel drag on pointer up anywhere
+  // Keyboard: Escape to close
   useEffect(() => {
-    const handleGlobalPointerUp = () => {
-      if (isDragging) {
-        handlePointerUp();
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (showDayGallery) {
+          setShowDayGallery(false);
+        } else if (activeContent) {
+          setActiveContent(null);
+        } else if (isExpanded) {
+          setIsExpanded(false);
+        }
       }
     };
 
-    window.addEventListener('pointerup', handleGlobalPointerUp);
-    window.addEventListener('touchend', handleGlobalPointerUp);
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isExpanded, activeContent, showDayGallery]);
 
-    return () => {
-      window.removeEventListener('pointerup', handleGlobalPointerUp);
-      window.removeEventListener('touchend', handleGlobalPointerUp);
-    };
-  }, [isDragging, handlePointerUp]);
-
-  // Auto-show context card on initial load to welcome users to day 1
-  useEffect(() => {
-    // Small delay to let the map animation settle
-    const timer = setTimeout(() => {
-      setShowContext(true);
-    }, 800);
-    return () => clearTimeout(timer);
-  }, []); // Only run once on mount
-
-  // Tap main pill area → show context card
-  const handlePillTap = useCallback(() => {
-    if (mode === 'collapsed') {
-      setShowContext(prev => !prev);
-      if (!hasInteracted) setHasInteracted(true);
-    }
-  }, [mode, hasInteracted]);
-
-  // Tap expand icon → show full menu
-  const handleExpandTap = useCallback((e: React.MouseEvent | React.TouchEvent) => {
-    e.stopPropagation(); // Don't trigger pill tap
-    if (mode === 'collapsed') {
-      setShowContext(false);
-      setMode('expanded');
-      if (!hasInteracted) setHasInteracted(true);
-    }
-  }, [mode, hasInteracted]);
-
-  // Open content card from context card action buttons
-  const handleOpenContent = useCallback((tab: TabType) => {
-    setShowContext(false);
-    onTabChange(tab);
-    setShowContent(true);
-    setMode('content');
-  }, [onTabChange]);
-
-  // Open day gallery for immersive photo viewing
-  const handleOpenDayGallery = useCallback(() => {
-    setShowContext(false);
-    setShowDayGallery(true);
-    if (!hasInteracted) setHasInteracted(true);
-  }, [hasInteracted]);
-
-  // Handle day change from gallery
-  const handleGalleryDayChange = useCallback((dayNumber: number) => {
-    onDaySelect(dayNumber);
-  }, [onDaySelect]);
-
-  const handleOptionClick = useCallback((optionId: TabType) => {
-    if (isDragging) return; // Don't handle click during drag
-    if (optionId === 'journey') {
-      setMode('days');
-      setShowContent(false);
+  // Toggle expanded state
+  const handleToggleExpanded = useCallback(() => {
+    if (activeContent) {
+      setActiveContent(null);
     } else {
-      onTabChange(optionId);
-      setShowContent(true);
-      setMode('content');
+      setIsExpanded((prev) => !prev);
     }
-  }, [isDragging, onTabChange]);
+  }, [activeContent]);
 
-  const handleDayClick = useCallback((dayNumber: number) => {
-    if (isDragging) return;
-    onDaySelect(dayNumber);
-    setMode('collapsed');
-    setShowContent(false);
-  }, [isDragging, onDaySelect]);
+  // Open content card
+  const handleOpenContent = useCallback(
+    (content: ContentType) => {
+      setActiveContent(content);
+      setIsExpanded(true);
+      if (content !== 'day') {
+        onTabChange(contentToTab[content]);
+      }
+    },
+    [onTabChange, contentToTab]
+  );
 
-  const handleBackFromDays = useCallback(() => {
-    setMode('expanded');
+  // Center text tap: expand when collapsed, show day info when expanded
+  const handleCenterTap = useCallback(() => {
+    if (isOverviewMode) {
+      // In overview mode, toggle expanded
+      setIsExpanded((prev) => !prev);
+    } else if (!isExpanded) {
+      // In day mode but collapsed → expand to show action row
+      setIsExpanded(true);
+    } else {
+      // In day mode and expanded → show day info card
+      setActiveContent('day');
+    }
+  }, [isOverviewMode, isExpanded]);
+
+  // Open day gallery
+  const handleOpenDayGallery = useCallback(() => {
+    setActiveContent(null);
+    setShowDayGallery(true);
   }, []);
 
+  // Close content card
   const handleCloseContent = useCallback(() => {
-    setShowContent(false);
-    setMode('collapsed'); // Return to collapsed state - map is hero
+    setActiveContent(null);
   }, []);
 
-  const days = Array.from({ length: totalDays }, (_, i) => i + 1);
+  // Day navigation
+  const goToPrevDay = useCallback(
+    (e: React.MouseEvent) => {
+      e.stopPropagation();
+      if (currentDay > 1) {
+        setSwipeDirection('right');
+        onDaySelect(currentDay - 1);
+        setTimeout(() => setSwipeDirection(null), 200);
+      }
+    },
+    [currentDay, onDaySelect]
+  );
+
+  const goToNextDay = useCallback(
+    (e: React.MouseEvent) => {
+      e.stopPropagation();
+      if (currentDay < totalDays) {
+        setSwipeDirection('left');
+        onDaySelect(currentDay + 1);
+        setTimeout(() => setSwipeDirection(null), 200);
+      }
+    },
+    [currentDay, totalDays, onDaySelect]
+  );
+
+  const handleStart = useCallback(
+    (e: React.MouseEvent) => {
+      e.stopPropagation();
+      onDaySelect(1);
+    },
+    [onDaySelect]
+  );
+
+  // Gallery handlers
+  const handleGalleryDayChange = useCallback(
+    (dayNumber: number) => {
+      onDaySelect(dayNumber);
+    },
+    [onDaySelect]
+  );
 
   const glassStyle: React.CSSProperties = {
     background: `linear-gradient(135deg, rgba(255, 255, 255, 0.14) 0%, rgba(255, 255, 255, 0.07) 100%)`,
@@ -511,38 +263,8 @@ export const AdaptiveNavPill = memo(function AdaptiveNavPill({
     boxShadow: shadows.glass.elevated,
   };
 
-  // Create ref callbacks for nav items
-  const setNavRef = useCallback((id: string) => (el: HTMLButtonElement | null) => {
-    navRefs.current.set(id, el);
-  }, []);
-
-  const setDayRef = useCallback((day: number) => (el: HTMLButtonElement | null) => {
-    dayRefs.current.set(day, el);
-  }, []);
-
   return (
     <>
-      {/* Content Card */}
-      <AnimatePresence>
-        {showContent && mode === 'content' && (
-          <ContentCard
-            activeTab={activeTab}
-            trekData={trekData}
-            extendedStats={extendedStats}
-            elevationProfile={elevationProfile}
-            selectedCamp={selectedCamp}
-            photos={photos}
-            getMediaUrl={getMediaUrl}
-            onClose={handleCloseContent}
-            onCampSelect={onCampSelect}
-            onPhotoClick={onViewPhotoOnMap}
-            onJourneyUpdate={onJourneyUpdate}
-            isMobile={isMobile}
-            cardRef={cardRef}
-          />
-        )}
-      </AnimatePresence>
-
       {/* Day Gallery - fullscreen photo exploration */}
       <DayGallery
         isOpen={showDayGallery}
@@ -555,7 +277,7 @@ export const AdaptiveNavPill = memo(function AdaptiveNavPill({
         onViewOnMap={onViewPhotoOnMap}
       />
 
-      {/* Navigation Pill - wrapper for centering */}
+      {/* Navigation Pill Container */}
       <div
         style={{
           position: 'absolute',
@@ -563,391 +285,497 @@ export const AdaptiveNavPill = memo(function AdaptiveNavPill({
           left: 0,
           right: 0,
           display: 'flex',
-          justifyContent: 'center',
+          flexDirection: 'column',
+          alignItems: 'center',
           zIndex: 50,
           pointerEvents: 'none',
+          gap: 12,
         }}
       >
+        {/* Floating Content Card */}
+        <AnimatePresence>
+          {activeContent && (
+            <motion.div
+              ref={cardRef}
+              initial={{ opacity: 0, y: 20, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 10, scale: 0.98 }}
+              transition={SPRING_CONFIG}
+              style={{
+                ...glassStyle,
+                borderRadius: radius.xl,
+                width: isMobile ? 'calc(100vw - 32px)' : 380,
+                maxWidth: 420,
+                maxHeight: isMobile ? 'calc(60vh - env(safe-area-inset-bottom))' : '50vh',
+                overflow: 'hidden',
+                pointerEvents: 'auto',
+              }}
+            >
+              {/* Card Header */}
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  padding: '12px 16px',
+                  borderBottom: `1px solid ${colors.glass.borderSubtle}`,
+                }}
+              >
+                <span
+                  style={{
+                    fontSize: 14,
+                    fontWeight: 600,
+                    color: colors.text.primary,
+                  }}
+                >
+                  {activeContent === 'day'
+                    ? `Day ${currentDay}`
+                    : activeContent === 'info'
+                      ? 'Journey Info'
+                      : activeContent.charAt(0).toUpperCase() + activeContent.slice(1)}
+                </span>
+                <button
+                  onClick={handleCloseContent}
+                  aria-label="Close"
+                  style={{
+                    padding: 4,
+                    background: 'transparent',
+                    border: 'none',
+                    cursor: 'pointer',
+                    color: colors.text.tertiary,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <CloseIcon size={16} />
+                </button>
+              </div>
+
+              {/* Card Content */}
+              <div
+                style={{
+                  overflowY: 'auto',
+                  maxHeight: isMobile ? 'calc(60vh - 100px)' : 'calc(50vh - 60px)',
+                }}
+              >
+                {activeContent === 'day' ? (
+                  <DayInfoContent
+                    camp={selectedCamp}
+                    currentDayDate={currentDayDate}
+                    dayPhotos={dayPhotos}
+                    getMediaUrl={getMediaUrl}
+                    onOpenGallery={handleOpenDayGallery}
+                  />
+                ) : (
+                  <ContentCard
+                    activeTab={contentToTab[activeContent]}
+                    trekData={trekData}
+                    extendedStats={extendedStats}
+                    elevationProfile={elevationProfile}
+                    selectedCamp={selectedCamp}
+                    photos={photos}
+                    getMediaUrl={getMediaUrl}
+                    onClose={handleCloseContent}
+                    onCampSelect={onCampSelect}
+                    onPhotoClick={onViewPhotoOnMap}
+                    onJourneyUpdate={onJourneyUpdate}
+                    isMobile={isMobile}
+                    cardRef={cardRef}
+                    embedded={true}
+                  />
+                )}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* The Pill */}
         <motion.div
           ref={pillRef}
-          onPointerDown={handlePointerDown}
-          onPointerMove={handlePointerMove}
-          onPointerUp={handlePointerUp}
-          onPointerLeave={handlePointerLeave}
+          drag={!isExpanded && !isOverviewMode ? 'x' : false}
+          dragConstraints={{ left: 0, right: 0 }}
+          dragElastic={0.2}
+          onDragEnd={!isExpanded && !isOverviewMode ? handleSwipeDragEnd : undefined}
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.3, ease: 'easeOut' }}
           style={{
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            gap: 10,
-            touchAction: 'none',
-            pointerEvents: 'auto',
-          }}
-        >
-          {/* Camp Info Tooltip - shows when hovering day in days mode */}
-          <AnimatePresence>
-            {mode === 'days' && hoveredDay !== null && (() => {
-              const camp = trekData.camps.find(c => c.dayNumber === hoveredDay);
-              if (!camp) return null;
-              return (
-                <motion.div
-                  key="camp-tooltip"
-                  initial={{ opacity: 0, y: 8, scale: 0.95 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, y: 4, scale: 0.98 }}
-                  transition={{ type: 'spring', ...SPRING_CONFIG }}
-                  style={{
-                    background: `linear-gradient(135deg, rgba(255, 255, 255, 0.14) 0%, rgba(255, 255, 255, 0.07) 100%)`,
-                    backdropFilter: `${effects.blur.strong} ${effects.saturation.enhanced}`,
-                    WebkitBackdropFilter: `${effects.blur.strong} ${effects.saturation.enhanced}`,
-                    border: `1px solid ${colors.glass.border}`,
-                    boxShadow: shadows.glass.elevated,
-                    borderRadius: radius.lg,
-                    padding: '10px 14px',
-                    minWidth: 140,
-                    textAlign: 'center',
-                  }}
-                >
-                  <div style={{
-                    fontSize: 10,
-                    fontWeight: 600,
-                    color: colors.accent.primary,
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.08em',
-                    marginBottom: 4,
-                  }}>
-                    Day {camp.dayNumber}
-                  </div>
-                  <div style={{
-                    fontSize: 14,
-                    fontWeight: 600,
-                    color: colors.text.primary,
-                    marginBottom: 2,
-                  }}>
-                    {camp.name}
-                  </div>
-                  <div style={{
-                    fontSize: 12,
-                    color: colors.text.secondary,
-                  }}>
-                    {camp.elevation}m
-                  </div>
-                </motion.div>
-              );
-            })()}
-          </AnimatePresence>
-
-          {/* Context Card - shows day info when pill is tapped */}
-          <AnimatePresence>
-            {showContext && mode === 'collapsed' && currentCamp && (
-              <ContextCard
-                currentCamp={currentCamp}
-                currentDay={currentDay}
-                currentDayDate={currentDayDate}
-                dayPhotos={dayPhotos}
-                getMediaUrl={getMediaUrl}
-                onClose={() => setShowContext(false)}
-                onOpenContent={handleOpenContent}
-                onOpenDayGallery={handleOpenDayGallery}
-                isMobile={isMobile}
-                contextRef={contextRef}
-              />
-            )}
-          </AnimatePresence>
-
-        <motion.div
-          onClick={mode === 'collapsed' ? handlePillTap : undefined}
-          layout
-          drag={mode === 'collapsed' ? 'x' : false}
-          dragConstraints={{ left: 0, right: 0 }}
-          dragElastic={0.2}
-          onDrag={mode === 'collapsed' ? handleSwipeDrag : undefined}
-          onDragEnd={mode === 'collapsed' ? handleSwipeDragEnd : undefined}
-          whileTap={mode === 'collapsed' ? { scale: 0.98 } : undefined}
-          style={{
             ...glassStyle,
-            borderRadius: mode === 'collapsed' ? radius.pill : radius.xl,
-            padding: mode === 'collapsed' ? (isMobile ? '10px 18px' : '12px 22px') : '8px 12px',
-            cursor: mode === 'collapsed' ? 'pointer' : 'default',
-            minHeight: isMobile ? 48 : 52,
-            display: 'flex',
-            alignItems: 'flex-end',
-            justifyContent: 'center',
-            gap: 4,
+            borderRadius: isExpanded ? radius.xl : radius.pill,
+            padding: 0,
+            overflow: 'hidden',
+            pointerEvents: 'auto',
             userSelect: 'none',
-            touchAction: mode === 'collapsed' ? 'pan-y' : 'none',
           }}
-          transition={{ type: 'spring', ...SPRING_CONFIG }}
         >
-          {/* Collapsed State - Clickable navigation */}
-          {mode === 'collapsed' && (
-            <div style={{
+          {/* Main Navigation Row */}
+          <div
+            style={{
               display: 'flex',
               alignItems: 'center',
               gap: 4,
-            }}>
-              {/* Previous day button - always visible, clickable */}
-              <motion.button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  if (currentDay > 1) {
-                    setSwipeDirection('right');
-                    onDaySelect(currentDay - 1);
-                    setTimeout(() => setSwipeDirection(null), 200);
-                  }
-                }}
-                whileHover={currentDay > 1 ? { scale: 1.15, backgroundColor: 'rgba(255, 255, 255, 0.1)' } : {}}
-                whileTap={currentDay > 1 ? { scale: 0.9 } : {}}
-                aria-label="Previous day"
-                aria-disabled={currentDay <= 1}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  width: 32,
-                  height: 32,
-                  background: 'transparent',
-                  border: 'none',
-                  borderRadius: radius.md,
-                  cursor: currentDay > 1 ? 'pointer' : 'default',
-                  color: currentDay > 1 ? colors.text.secondary : colors.text.subtle,
-                  opacity: currentDay > 1 ? 1 : 0.3,
-                  transition: 'all 0.15s ease',
-                }}
-              >
-                <ChevronIcon direction="left" size={16} />
-              </motion.button>
+              padding: isMobile ? '10px 16px' : '12px 20px',
+              minHeight: isMobile ? 48 : 52,
+            }}
+          >
+            {isOverviewMode ? (
+              // Overview mode: trek name + start button
+              <>
+                <span
+                  style={{
+                    fontSize: 11,
+                    fontWeight: 600,
+                    color: colors.accent.primary,
+                    background: 'rgba(96, 165, 250, 0.15)',
+                    padding: '3px 8px',
+                    borderRadius: 6,
+                  }}
+                >
+                  {totalDays} days
+                </span>
+                <motion.button
+                  onClick={handleToggleExpanded}
+                  whileHover={{ backgroundColor: 'rgba(255, 255, 255, 0.08)' }}
+                  whileTap={{ scale: 0.98 }}
+                  style={{
+                    background: 'transparent',
+                    border: 'none',
+                    cursor: 'pointer',
+                    padding: '4px 8px',
+                    borderRadius: radius.md,
+                    color: colors.text.primary,
+                    fontSize: isMobile ? 14 : 15,
+                    fontWeight: 500,
+                  }}
+                >
+                  {trekData.name}
+                </motion.button>
+                <motion.button
+                  onClick={handleStart}
+                  whileHover={{ scale: 1.05, backgroundColor: 'rgba(96, 165, 250, 0.2)' }}
+                  whileTap={{ scale: 0.95 }}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 4,
+                    marginLeft: 4,
+                    padding: '6px 12px',
+                    background: 'rgba(96, 165, 250, 0.15)',
+                    border: 'none',
+                    borderRadius: radius.md,
+                    cursor: 'pointer',
+                    color: colors.accent.primary,
+                    fontSize: 12,
+                    fontWeight: 600,
+                  }}
+                >
+                  Start
+                  <ChevronIcon direction="right" size={12} />
+                </motion.button>
+              </>
+            ) : (
+              // Day mode: arrows + day info
+              <>
+                {/* Previous day */}
+                <motion.button
+                  onClick={goToPrevDay}
+                  whileHover={currentDay > 1 ? { scale: 1.15, backgroundColor: 'rgba(255, 255, 255, 0.1)' } : {}}
+                  whileTap={currentDay > 1 ? { scale: 0.9 } : {}}
+                  aria-label="Previous day"
+                  disabled={currentDay <= 1}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    width: 32,
+                    height: 32,
+                    background: 'transparent',
+                    border: 'none',
+                    borderRadius: radius.md,
+                    cursor: currentDay > 1 ? 'pointer' : 'default',
+                    color: currentDay > 1 ? colors.text.secondary : colors.text.subtle,
+                    opacity: currentDay > 1 ? 1 : 0.3,
+                  }}
+                >
+                  <ChevronIcon direction="left" size={16} />
+                </motion.button>
 
-              {/* Day content - tap to show context */}
+                {/* Center tap: expand when collapsed, show day info when expanded */}
+                <motion.button
+                  key={currentDay}
+                  onClick={handleCenterTap}
+                  initial={{ opacity: 0, x: swipeDirection === 'left' ? 20 : swipeDirection === 'right' ? -20 : 0 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  whileHover={{ backgroundColor: 'rgba(255, 255, 255, 0.08)' }}
+                  whileTap={{ scale: 0.98 }}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 10,
+                    padding: '4px 12px',
+                    background: 'transparent',
+                    border: 'none',
+                    borderRadius: radius.md,
+                    cursor: 'pointer',
+                    color: colors.text.primary,
+                  }}
+                >
+                  <span
+                    style={{
+                      fontSize: 11,
+                      fontWeight: 600,
+                      color: colors.accent.primary,
+                      background: 'rgba(96, 165, 250, 0.15)',
+                      padding: '3px 8px',
+                      borderRadius: 6,
+                    }}
+                  >
+                    Day {currentDay}
+                  </span>
+                  <span
+                    style={{
+                      fontSize: isMobile ? 14 : 15,
+                      fontWeight: 500,
+                      whiteSpace: 'nowrap',
+                      maxWidth: isMobile ? 140 : 180,
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                    }}
+                  >
+                    {currentCampName}
+                  </span>
+                </motion.button>
+
+                {/* Next day */}
+                <motion.button
+                  onClick={goToNextDay}
+                  whileHover={currentDay < totalDays ? { scale: 1.15, backgroundColor: 'rgba(255, 255, 255, 0.1)' } : {}}
+                  whileTap={currentDay < totalDays ? { scale: 0.9 } : {}}
+                  aria-label="Next day"
+                  disabled={currentDay >= totalDays}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    width: 32,
+                    height: 32,
+                    background: 'transparent',
+                    border: 'none',
+                    borderRadius: radius.md,
+                    cursor: currentDay < totalDays ? 'pointer' : 'default',
+                    color: currentDay < totalDays ? colors.text.secondary : colors.text.subtle,
+                    opacity: currentDay < totalDays ? 1 : 0.3,
+                  }}
+                >
+                  <ChevronIcon direction="right" size={16} />
+                </motion.button>
+              </>
+            )}
+          </div>
+
+          {/* Action Row (when expanded) */}
+          <AnimatePresence>
+            {isExpanded && (
               <motion.div
-                key={currentDay}
-                initial={{ opacity: 0, x: swipeDirection === 'left' ? 20 : swipeDirection === 'right' ? -20 : 0 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ duration: 0.2 }}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 10,
-                  color: colors.text.primary,
-                  padding: '4px 8px',
-                }}
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: 'auto', opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                transition={{ duration: 0.2, ease: 'easeOut' }}
+                style={{ overflow: 'hidden' }}
               >
-                <span style={{
-                  fontSize: 11,
-                  fontWeight: 600,
-                  color: colors.accent.primary,
-                  background: 'rgba(96, 165, 250, 0.15)',
-                  padding: '3px 8px',
-                  borderRadius: 6,
-                }}>
-                  {currentDay}/{totalDays}
-                </span>
-                <span style={{
-                  fontSize: isMobile ? 14 : 15,
-                  fontWeight: 500,
-                  whiteSpace: 'nowrap',
-                  maxWidth: isMobile ? 120 : 160,
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                }}>
-                  {currentCampName}
-                </span>
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 8,
+                    padding: '8px 16px 12px',
+                    borderTop: `1px solid ${colors.glass.borderSubtle}`,
+                  }}
+                >
+                  {(['photos', 'stats', 'info'] as ContentType[]).map((content) => (
+                    <motion.button
+                      key={content}
+                      onClick={() => handleOpenContent(content)}
+                      whileHover={{ scale: 1.05, backgroundColor: 'rgba(255, 255, 255, 0.12)' }}
+                      whileTap={{ scale: 0.95 }}
+                      style={{
+                        flex: 1,
+                        padding: '8px 16px',
+                        background:
+                          activeContent === content ? 'rgba(96, 165, 250, 0.15)' : 'rgba(255, 255, 255, 0.06)',
+                        border: 'none',
+                        borderRadius: radius.md,
+                        cursor: 'pointer',
+                        color: activeContent === content ? colors.accent.primary : colors.text.secondary,
+                        fontSize: 13,
+                        fontWeight: 500,
+                        textTransform: 'capitalize',
+                        transition: 'background 0.2s ease, color 0.2s ease',
+                      }}
+                    >
+                      {content}
+                    </motion.button>
+                  ))}
+                </div>
               </motion.div>
-
-              {/* Next day button - always visible, clickable */}
-              <motion.button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  if (currentDay < totalDays) {
-                    setSwipeDirection('left');
-                    onDaySelect(currentDay + 1);
-                    setTimeout(() => setSwipeDirection(null), 200);
-                  }
-                }}
-                whileHover={currentDay < totalDays ? { scale: 1.15, backgroundColor: 'rgba(255, 255, 255, 0.1)' } : {}}
-                whileTap={currentDay < totalDays ? { scale: 0.9 } : {}}
-                aria-label="Next day"
-                aria-disabled={currentDay >= totalDays}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  width: 32,
-                  height: 32,
-                  background: 'transparent',
-                  border: 'none',
-                  borderRadius: radius.md,
-                  cursor: currentDay < totalDays ? 'pointer' : 'default',
-                  color: currentDay < totalDays ? colors.text.secondary : colors.text.subtle,
-                  opacity: currentDay < totalDays ? 1 : 0.3,
-                  transition: 'all 0.15s ease',
-                }}
-              >
-                <ChevronIcon direction="right" size={16} />
-              </motion.button>
-
-              {/* Divider */}
-              <div style={{
-                width: 1,
-                height: 20,
-                background: colors.glass.borderSubtle,
-                marginLeft: 4,
-                marginRight: 4,
-              }} />
-
-              {/* More button - opens the menu */}
-              <motion.button
-                onClick={handleExpandTap}
-                whileHover={{ scale: 1.05, backgroundColor: 'rgba(255, 255, 255, 0.1)' }}
-                whileTap={{ scale: 0.95 }}
-                aria-label="Open navigation menu"
-                aria-expanded={mode !== 'collapsed'}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: 4,
-                  background: 'transparent',
-                  border: 'none',
-                  borderRadius: radius.md,
-                  cursor: 'pointer',
-                  color: colors.text.secondary,
-                  padding: '6px 10px',
-                  fontSize: 12,
-                  fontWeight: 500,
-                }}
-              >
-                <span>More</span>
-                <ChevronIcon direction="up" size={12} />
-              </motion.button>
-            </div>
-          )}
-
-          {/* Expanded State - Main menu */}
-          {(mode === 'expanded' || mode === 'content') && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              style={{
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                gap: 8,
-              }}
-            >
-              {/* Current day indicator - clickable to collapse */}
-              <motion.div
-                onClick={() => setMode('collapsed')}
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 8,
-                  padding: '6px 12px',
-                  background: 'rgba(255, 255, 255, 0.06)',
-                  borderRadius: radius.pill,
-                  cursor: 'pointer',
-                  marginBottom: 4,
-                }}
-              >
-                <span style={{
-                  fontSize: 10,
-                  fontWeight: 600,
-                  color: colors.accent.primary,
-                  background: 'rgba(96, 165, 250, 0.15)',
-                  padding: '2px 6px',
-                  borderRadius: 4,
-                }}>
-                  {currentDay}/{totalDays}
-                </span>
-                <span style={{
-                  fontSize: 13,
-                  fontWeight: 500,
-                  color: colors.text.primary,
-                  maxWidth: 150,
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap',
-                }}>
-                  {currentCampName}
-                </span>
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={colors.text.tertiary} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <polyline points="6 9 12 15 18 9"/>
-                </svg>
-              </motion.div>
-
-              {/* Nav options with magnification */}
-              <div style={{ display: 'flex', alignItems: 'flex-end', gap: 2, paddingBottom: 4 }}>
-                {NAV_OPTIONS.map((option) => (
-                  <DockItem
-                    key={option.id}
-                    mouseX={mouseX}
-                    icon={option.icon}
-                    label={option.label}
-                    isActive={option.id === activeTab && showContent}
-                    isHovered={hoveredOption === option.id}
-                    onClick={() => handleOptionClick(option.id)}
-                    onHover={() => !isDragging && setHoveredOption(option.id)}
-                    isMobile={isMobile}
-                    setRef={setNavRef(option.id)}
-                  />
-                ))}
-              </div>
-            </motion.div>
-          )}
-
-          {/* Days Selector with magnification */}
-          {mode === 'days' && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              role="tablist"
-              aria-label="Day selector"
-              style={{ display: 'flex', alignItems: 'flex-end', gap: 2, paddingBottom: 4 }}
-            >
-              <motion.button
-                onClick={handleBackFromDays}
-                whileTap={{ scale: 0.9 }}
-                aria-label="Back to navigation menu"
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  width: 36,
-                  height: 52,
-                  background: 'transparent',
-                  border: 'none',
-                  borderRadius: radius.md,
-                  cursor: 'pointer',
-                  color: colors.text.secondary,
-                  fontSize: 18,
-                  flexShrink: 0,
-                }}
-              >
-                ←
-              </motion.button>
-              {days.map((day) => (
-                <DayItem
-                  key={day}
-                  mouseX={mouseX}
-                  day={day}
-                  isActive={day === currentDay}
-                  isHovered={hoveredDay === day}
-                  onClick={() => handleDayClick(day)}
-                  onHover={() => !isDragging && setHoveredDay(day)}
-                  setRef={setDayRef(day)}
-                />
-              ))}
-            </motion.div>
-          )}
-        </motion.div>
+            )}
+          </AnimatePresence>
         </motion.div>
       </div>
     </>
   );
 });
+
+// Day info content component
+interface DayInfoContentProps {
+  camp: Camp | null;
+  currentDayDate: Date | null;
+  dayPhotos: Photo[];
+  getMediaUrl: (path: string) => string;
+  onOpenGallery: () => void;
+}
+
+function DayInfoContent({ camp, currentDayDate, dayPhotos, getMediaUrl, onOpenGallery }: DayInfoContentProps) {
+  if (!camp) {
+    return (
+      <div style={{ padding: 16, textAlign: 'center', color: colors.text.secondary }}>
+        Select a day to see details
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ padding: 16 }}>
+      {/* Header */}
+      <div style={{ marginBottom: 12 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+          {currentDayDate && (
+            <span style={{ fontSize: 12, color: colors.text.tertiary }}>
+              {currentDayDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
+            </span>
+          )}
+          <span
+            style={{
+              fontSize: 12,
+              color: colors.text.secondary,
+              background: 'rgba(255, 255, 255, 0.08)',
+              padding: '2px 8px',
+              borderRadius: 4,
+            }}
+          >
+            {camp.elevation}m
+          </span>
+        </div>
+        <h3 style={{ fontSize: 18, fontWeight: 600, color: colors.text.primary, margin: 0 }}>{camp.name}</h3>
+      </div>
+
+      {/* Notes */}
+      {camp.notes && (
+        <p style={{ fontSize: 13, lineHeight: 1.5, color: colors.text.secondary, margin: '0 0 12px 0' }}>
+          {camp.notes}
+        </p>
+      )}
+
+      {/* Photo strip */}
+      {dayPhotos.length > 0 && (
+        <motion.div
+          whileHover={{ scale: 1.01 }}
+          whileTap={{ scale: 0.99 }}
+          onClick={onOpenGallery}
+          style={{
+            display: 'flex',
+            gap: 8,
+            overflowX: 'auto',
+            cursor: 'pointer',
+            padding: 8,
+            margin: '0 -8px 12px -8px',
+            borderRadius: radius.md,
+            background: 'rgba(255, 255, 255, 0.03)',
+          }}
+        >
+          {dayPhotos.slice(0, 5).map((photo, idx) => (
+            <div
+              key={photo.id}
+              style={{
+                flexShrink: 0,
+                width: 56,
+                height: 56,
+                borderRadius: radius.md,
+                overflow: 'hidden',
+                border: `1px solid ${colors.glass.borderSubtle}`,
+              }}
+            >
+              <img
+                src={getMediaUrl(photo.url)}
+                alt={photo.caption || `Photo ${idx + 1}`}
+                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+              />
+            </div>
+          ))}
+          {dayPhotos.length > 5 && (
+            <div
+              style={{
+                flexShrink: 0,
+                width: 56,
+                height: 56,
+                borderRadius: radius.md,
+                background: 'rgba(255, 255, 255, 0.08)',
+                border: `1px solid ${colors.glass.borderSubtle}`,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: colors.text.secondary,
+                fontSize: 13,
+                fontWeight: 500,
+              }}
+            >
+              +{dayPhotos.length - 5}
+            </div>
+          )}
+        </motion.div>
+      )}
+
+      {/* Highlights */}
+      {camp.highlights && camp.highlights.length > 0 && (
+        <ul style={{ margin: '0 0 12px 0', paddingLeft: 16 }}>
+          {camp.highlights.map((highlight, idx) => (
+            <li key={idx} style={{ fontSize: 12, color: colors.text.secondary, marginBottom: 2 }}>
+              {highlight}
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {/* View gallery button */}
+      {dayPhotos.length > 0 && (
+        <motion.button
+          whileHover={{ scale: 1.02 }}
+          whileTap={{ scale: 0.98 }}
+          onClick={onOpenGallery}
+          style={{
+            width: '100%',
+            padding: '10px 12px',
+            background: 'rgba(96, 165, 250, 0.15)',
+            border: 'none',
+            borderRadius: radius.md,
+            cursor: 'pointer',
+            color: colors.accent.primary,
+            fontSize: 12,
+            fontWeight: 600,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 6,
+          }}
+        >
+          <PhotoIcon size={14} />
+          View Day {camp.dayNumber} Photos ({dayPhotos.length})
+        </motion.button>
+      )}
+    </div>
+  );
+}
 
 export default AdaptiveNavPill;

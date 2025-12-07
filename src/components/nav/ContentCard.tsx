@@ -36,6 +36,8 @@ interface ContentCardProps {
   onJourneyUpdate: () => void;
   isMobile: boolean;
   cardRef: RefObject<HTMLDivElement | null>;
+  /** When true, renders content only without wrapper/header - for embedding in other components */
+  embedded?: boolean;
 }
 
 export const ContentCard = memo(function ContentCard({
@@ -52,6 +54,7 @@ export const ContentCard = memo(function ContentCard({
   onJourneyUpdate,
   isMobile,
   cardRef,
+  embedded = false,
 }: ContentCardProps) {
   const [editMode, setEditMode] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
@@ -69,6 +72,54 @@ export const ContentCard = memo(function ContentCard({
   const maxHeight = isMobile
     ? 'calc(100vh - 160px - env(safe-area-inset-top) - env(safe-area-inset-bottom))'
     : '70vh';
+
+  // Embedded mode: render content only, no wrapper
+  if (embedded) {
+    return (
+      <div style={{ padding: 16 }}>
+        {activeTab === 'overview' && (
+          <ErrorBoundary fallback={<ComponentErrorFallback message="Failed to load overview" />}>
+            <OverviewTab trekData={trekData} />
+          </ErrorBoundary>
+        )}
+
+        {activeTab === 'stats' && (
+          <ErrorBoundary fallback={<ComponentErrorFallback message="Failed to load stats" />}>
+            <StatsTab
+              trekData={trekData}
+              extendedStats={extendedStats}
+              elevationProfile={elevationProfile}
+              isMobile={isMobile}
+              selectedCamp={selectedCamp}
+              onCampSelect={onCampSelect}
+            />
+          </ErrorBoundary>
+        )}
+
+        {activeTab === 'photos' && (
+          <ErrorBoundary fallback={<ComponentErrorFallback message="Failed to load photos" />}>
+            <PhotosTab trekData={trekData} isMobile={isMobile} editMode={editMode} onViewPhotoOnMap={onPhotoClick} />
+          </ErrorBoundary>
+        )}
+
+        {activeTab === 'journey' && (
+          <ErrorBoundary fallback={<ComponentErrorFallback message="Failed to load journey" />}>
+            <JourneyTab
+              trekData={trekData}
+              selectedCamp={selectedCamp}
+              onCampSelect={onCampSelect}
+              isMobile={isMobile}
+              photos={photos}
+              getMediaUrl={getMediaUrl}
+              onUpdate={onJourneyUpdate}
+              editMode={editMode}
+              onViewPhotoOnMap={onPhotoClick}
+            />
+          </ErrorBoundary>
+        )}
+      </div>
+    );
+  }
 
   return (
     // Wrapper for centering - handles the positioning

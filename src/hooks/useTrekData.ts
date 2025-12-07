@@ -63,15 +63,14 @@ export function useTrekData(): UseTrekDataReturn {
         };
     }, [trekData]);
 
-    // Handle explore button click - start the journey at day 1
+    // Handle explore button click - show full journey overview first
     const handleExplore = useCallback(() => {
         if (!selectedTrek) return;
-        // Select the first camp to start the journey
-        if (trekData?.camps && trekData.camps.length > 0) {
-            setSelectedCamp(trekData.camps[0]);
-        }
+        // Don't select a camp - show full journey overview
+        // User can then select a specific day from the nav pill
+        setSelectedCamp(null);
         setView('trek');
-    }, [selectedTrek, trekData, setView]);
+    }, [selectedTrek, setView]);
 
     // Handle back to globe view
     const handleBackToGlobe = useCallback(() => {
