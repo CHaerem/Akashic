@@ -190,15 +190,6 @@ export default function AkashicApp() {
             visible: true,
         },
         {
-            id: 'edit-mode',
-            icon: QuickActionIcons.edit,
-            label: editMode ? 'Exit edit mode' : 'Edit mode',
-            onClick: toggleEditMode,
-            visible: selectedTrek !== null, // Only show when trek is selected
-            active: editMode,
-            subtle: true, // Less prominent when inactive
-        },
-        {
             id: 'recenter',
             icon: QuickActionIcons.recenter,
             label: 'Recenter map',
@@ -207,7 +198,7 @@ export default function AkashicApp() {
             },
             visible: true,
         },
-    ], [view, handleBackToGlobe, editMode, toggleEditMode, selectedTrek]);
+    ], [handleBackToGlobe]);
 
     return (
         <div style={{ position: 'fixed', inset: 0, background: colors.background.base }}>
@@ -294,6 +285,9 @@ export default function AkashicApp() {
                     onPrevJourney={handlePrevJourney}
                     onNextJourney={handleNextJourney}
                     totalJourneys={treks.length}
+                    // Edit mode (moved from QuickActionBar for less prominence)
+                    editMode={editMode}
+                    onToggleEditMode={toggleEditMode}
                     isMobile={isMobile}
                 >
                     <BottomSheetContent

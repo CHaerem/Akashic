@@ -45,6 +45,9 @@ interface BottomSheetProps {
     onPrevJourney?: () => void;
     onNextJourney?: () => void;
     totalJourneys?: number;
+    // Edit mode
+    editMode?: boolean;
+    onToggleEditMode?: () => void;
     isMobile?: boolean;
 }
 
@@ -74,6 +77,9 @@ export function BottomSheet({
     onPrevJourney,
     onNextJourney,
     totalJourneys = 0,
+    // Edit mode
+    editMode = false,
+    onToggleEditMode,
     isMobile = false,
 }: BottomSheetProps) {
     const panelRef = useRef<HTMLDivElement>(null);
@@ -303,6 +309,40 @@ export function BottomSheet({
                             <ChevronIcon direction="left" size={12} />
                             Overview
                         </motion.button>
+                        {/* Edit mode toggle - subtle icon button */}
+                        {onToggleEditMode && (
+                            <motion.button
+                                onClick={onToggleEditMode}
+                                whileTap={{ scale: 0.95 }}
+                                aria-label={editMode ? 'Exit edit mode' : 'Edit mode'}
+                                aria-pressed={editMode}
+                                style={{
+                                    width: 36,
+                                    height: 36,
+                                    padding: 0,
+                                    background: editMode
+                                        ? 'rgba(96, 165, 250, 0.2)'
+                                        : 'rgba(255, 255, 255, 0.04)',
+                                    border: 'none',
+                                    borderRadius: radius.md,
+                                    cursor: 'pointer',
+                                    color: editMode
+                                        ? colors.accent.primary
+                                        : colors.text.tertiary,
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    opacity: editMode ? 1 : 0.6,
+                                    transition: 'background 0.2s ease, color 0.2s ease, opacity 0.2s ease',
+                                    flexShrink: 0,
+                                }}
+                            >
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" />
+                                    <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" />
+                                </svg>
+                            </motion.button>
+                        )}
                     </div>
                 )}
             </div>
