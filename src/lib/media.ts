@@ -73,70 +73,66 @@ export interface UploadResult {
 
 /**
  * Create a thumbnail from an image file using Canvas API
+ * Uses createImageBitmap with imageOrientation to properly handle EXIF rotation
  * @param file - Original image file
  * @param maxSize - Maximum width/height for thumbnail
  * @returns Blob of the resized image as JPEG
  */
 export async function createThumbnail(file: File, maxSize = THUMBNAIL_MAX_SIZE): Promise<Blob> {
+    // Use createImageBitmap for proper EXIF orientation handling
+    // The 'from-image' option ensures EXIF rotation is applied
+    const bitmap = await createImageBitmap(file, {
+        imageOrientation: 'from-image',
+        premultiplyAlpha: 'none',
+        colorSpaceConversion: 'default',
+    });
+
+    // Calculate new dimensions maintaining aspect ratio
+    let width = bitmap.width;
+    let height = bitmap.height;
+
+    if (width > height) {
+        if (width > maxSize) {
+            height = Math.round((height * maxSize) / width);
+            width = maxSize;
+        }
+    } else {
+        if (height > maxSize) {
+            width = Math.round((width * maxSize) / height);
+            height = maxSize;
+        }
+    }
+
+    // Create canvas and draw resized image
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) {
+        bitmap.close();
+        throw new Error('Failed to get canvas context');
+    }
+
+    // Use high-quality image smoothing
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(bitmap, 0, 0, width, height);
+    bitmap.close();
+
+    // Convert to blob
     return new Promise((resolve, reject) => {
-        const img = new Image();
-        const url = URL.createObjectURL(file);
-
-        img.onload = () => {
-            URL.revokeObjectURL(url);
-
-            // Calculate new dimensions maintaining aspect ratio
-            let width = img.width;
-            let height = img.height;
-
-            if (width > height) {
-                if (width > maxSize) {
-                    height = Math.round((height * maxSize) / width);
-                    width = maxSize;
+        canvas.toBlob(
+            (blob) => {
+                if (blob) {
+                    resolve(blob);
+                } else {
+                    reject(new Error('Failed to create thumbnail blob'));
                 }
-            } else {
-                if (height > maxSize) {
-                    width = Math.round((width * maxSize) / height);
-                    height = maxSize;
-                }
-            }
-
-            // Create canvas and draw resized image
-            const canvas = document.createElement('canvas');
-            canvas.width = width;
-            canvas.height = height;
-
-            const ctx = canvas.getContext('2d');
-            if (!ctx) {
-                reject(new Error('Failed to get canvas context'));
-                return;
-            }
-
-            // Use high-quality image smoothing
-            ctx.imageSmoothingEnabled = true;
-            ctx.imageSmoothingQuality = 'high';
-            ctx.drawImage(img, 0, 0, width, height);
-
-            // Convert to blob
-            canvas.toBlob(
-                (blob) => {
-                    if (blob) {
-                        resolve(blob);
-                    } else {
-                        reject(new Error('Failed to create thumbnail blob'));
-                    }
-                },
-                'image/jpeg',
-                THUMBNAIL_QUALITY
-            );
-        };
-
-        img.onerror = () => {
-            URL.revokeObjectURL(url);
-            reject(new Error('Failed to load image'));
-        };
-
-        img.src = url;
+            },
+            'image/jpeg',
+            THUMBNAIL_QUALITY
+        );
     });
 }
 
