@@ -60,6 +60,9 @@ export default function AkashicApp() {
         // Sheet state (Find My redesign)
         sheetSnapPoint,
         activeMode,
+        // Edit mode
+        editMode,
+        toggleEditMode,
         setActiveTab,
         setSheetSnapPoint,
         setActiveMode,
@@ -187,6 +190,14 @@ export default function AkashicApp() {
             visible: true,
         },
         {
+            id: 'edit-mode',
+            icon: QuickActionIcons.edit,
+            label: editMode ? 'Exit edit mode' : 'Edit mode',
+            onClick: toggleEditMode,
+            visible: selectedTrek !== null, // Only show when trek is selected
+            active: editMode,
+        },
+        {
             id: 'recenter',
             icon: QuickActionIcons.recenter,
             label: 'Recenter map',
@@ -195,7 +206,7 @@ export default function AkashicApp() {
             },
             visible: true,
         },
-    ], [view, handleBackToGlobe]);
+    ], [view, handleBackToGlobe, editMode, toggleEditMode, selectedTrek]);
 
     return (
         <div style={{ position: 'fixed', inset: 0, background: colors.background.base }}>
@@ -294,6 +305,8 @@ export default function AkashicApp() {
                         onCampSelect={handleCampSelect}
                         onViewPhotoOnMap={handleViewOnMap}
                         onOpenDayGallery={() => setShowDayGallery(true)}
+                        onJourneySaved={refetchJourneys}
+                        editMode={editMode}
                         isMobile={isMobile}
                     />
                 </BottomSheet>

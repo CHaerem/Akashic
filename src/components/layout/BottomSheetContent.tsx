@@ -5,7 +5,7 @@
  * Trek view: Day details, Photos, Stats, or Info based on activeMode
  */
 
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import { colors, radius } from '../../styles/liquidGlass';
 import type { TrekConfig, TrekData, Camp, ExtendedStats, ElevationProfile, Photo, ViewMode } from '../../types/trek';
@@ -16,7 +16,10 @@ import { PhotosTab } from '../trek/PhotosTab';
 import { Button } from '../ui/button';
 import { ErrorBoundary, ComponentErrorFallback } from '../common/ErrorBoundary';
 import { usePhotoDay } from '../../hooks/usePhotoDay';
-import { PhotoIcon } from '../icons';
+import { PhotoIcon, PencilIcon } from '../icons';
+import { WaypointEditModal } from '../trek/WaypointEditModal';
+import { PhotoAssignModal } from '../trek/PhotoAssignModal';
+import { JourneyEditModal } from '../trek/JourneyEditModal';
 
 interface BottomSheetContentProps {
     view: ViewMode;
@@ -32,6 +35,8 @@ interface BottomSheetContentProps {
     onCampSelect: (camp: Camp) => void;
     onViewPhotoOnMap: (photo: Photo) => void;
     onOpenDayGallery: () => void;
+    onJourneySaved?: () => void;
+    editMode?: boolean;
     isMobile?: boolean;
 }
 
@@ -66,6 +71,8 @@ export function BottomSheetContent({
     onCampSelect,
     onViewPhotoOnMap,
     onOpenDayGallery,
+    onJourneySaved,
+    editMode = false,
     isMobile = false,
 }: BottomSheetContentProps) {
     // Globe view with trek selected: Journey overview (pre-explore)
@@ -75,6 +82,8 @@ export function BottomSheetContent({
                 trek={selectedTrek}
                 onExplore={onExplore}
                 isMobile={isMobile}
+                editMode={editMode}
+                onJourneySaved={onJourneySaved || (() => {})}
             />
         );
     }
@@ -104,6 +113,7 @@ export function BottomSheetContent({
                 onCampSelect={onCampSelect}
                 onViewPhotoOnMap={onViewPhotoOnMap}
                 onOpenDayGallery={onOpenDayGallery}
+                editMode={editMode}
                 isMobile={isMobile}
             />
         );
@@ -118,9 +128,13 @@ interface JourneyOverviewContentProps {
     trek: TrekConfig;
     onExplore: () => void;
     isMobile: boolean;
+    editMode: boolean;
+    onJourneySaved: () => void;
 }
 
-function JourneyOverviewContent({ trek, onExplore, isMobile }: JourneyOverviewContentProps) {
+function JourneyOverviewContent({ trek, onExplore, isMobile, editMode, onJourneySaved }: JourneyOverviewContentProps) {
+    const [showJourneyEdit, setShowJourneyEdit] = useState(false);
+
     return (
         <div style={{ padding: 16 }}>
             {/* Country label */}
@@ -173,6 +187,46 @@ function JourneyOverviewContent({ trek, onExplore, isMobile }: JourneyOverviewCo
             >
                 Explore Journey →
             </Button>
+
+            {/* Edit button - only shown in edit mode */}
+            {editMode && (
+                <motion.button
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={() => setShowJourneyEdit(true)}
+                    style={{
+                        width: '100%',
+                        padding: '12px 16px',
+                        marginTop: 12,
+                        background: 'rgba(255, 255, 255, 0.08)',
+                        border: '1px solid rgba(255, 255, 255, 0.1)',
+                        borderRadius: radius.md,
+                        cursor: 'pointer',
+                        color: colors.text.secondary,
+                        fontSize: 13,
+                        fontWeight: 500,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: 8,
+                    }}
+                >
+                    <PencilIcon size={14} />
+                    Edit Journey Details
+                </motion.button>
+            )}
+
+            {/* Journey Edit Modal */}
+            <JourneyEditModal
+                slug={trek.id}
+                isOpen={showJourneyEdit}
+                onClose={() => setShowJourneyEdit(false)}
+                onSave={() => {
+                    setShowJourneyEdit(false);
+                    onJourneySaved();
+                }}
+                isMobile={isMobile}
+            />
         </div>
     );
 }
@@ -189,6 +243,7 @@ interface TrekViewContentProps {
     onCampSelect: (camp: Camp) => void;
     onViewPhotoOnMap: (photo: Photo) => void;
     onOpenDayGallery: () => void;
+    editMode: boolean;
     isMobile: boolean;
 }
 
@@ -203,6 +258,7 @@ function TrekViewContent({
     onCampSelect,
     onViewPhotoOnMap,
     onOpenDayGallery,
+    editMode,
     isMobile,
 }: TrekViewContentProps) {
     const { getPhotosForDay } = usePhotoDay(trekData, photos);
@@ -230,6 +286,8 @@ function TrekViewContent({
                     dayPhotos={dayPhotos}
                     getMediaUrl={getMediaUrl}
                     onOpenDayGallery={onOpenDayGallery}
+                    editMode={editMode}
+                    trekData={trekData}
                 />
             )}
 
@@ -238,7 +296,7 @@ function TrekViewContent({
                     <PhotosTab
                         trekData={trekData}
                         isMobile={isMobile}
-                        editMode={false}
+                        editMode={editMode}
                         onViewPhotoOnMap={onViewPhotoOnMap}
                     />
                 </ErrorBoundary>
@@ -267,9 +325,13 @@ interface DayContentProps {
     dayPhotos: Photo[];
     getMediaUrl: (path: string) => string;
     onOpenDayGallery: () => void;
+    editMode: boolean;
+    trekData: TrekData;
 }
 
-function DayContent({ camp, currentDayDate, dayPhotos, getMediaUrl, onOpenDayGallery }: DayContentProps) {
+function DayContent({ camp, currentDayDate, dayPhotos, getMediaUrl, onOpenDayGallery, editMode, trekData }: DayContentProps) {
+    const [showWaypointEdit, setShowWaypointEdit] = useState(false);
+    const [showPhotoAssign, setShowPhotoAssign] = useState(false);
     if (!camp) {
         return (
             <div style={{ textAlign: 'center', color: colors.text.secondary, padding: 20 }}>
@@ -435,6 +497,72 @@ function DayContent({ camp, currentDayDate, dayPhotos, getMediaUrl, onOpenDayGal
                     View Day {camp.dayNumber} Photos ({dayPhotos.length})
                 </motion.button>
             )}
+
+            {/* Edit buttons - only shown in edit mode */}
+            {editMode && (
+                <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+                    <motion.button
+                        whileHover={{ scale: 1.02 }}
+                        whileTap={{ scale: 0.98 }}
+                        onClick={() => setShowWaypointEdit(true)}
+                        style={{
+                            flex: 1,
+                            padding: '10px 12px',
+                            background: 'rgba(255, 255, 255, 0.08)',
+                            border: '1px solid rgba(255, 255, 255, 0.1)',
+                            borderRadius: radius.md,
+                            cursor: 'pointer',
+                            color: colors.text.secondary,
+                            fontSize: 12,
+                            fontWeight: 500,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: 6,
+                        }}
+                    >
+                        <PencilIcon size={14} />
+                        Edit Day
+                    </motion.button>
+                    <motion.button
+                        whileHover={{ scale: 1.02 }}
+                        whileTap={{ scale: 0.98 }}
+                        onClick={() => setShowPhotoAssign(true)}
+                        style={{
+                            flex: 1,
+                            padding: '10px 12px',
+                            background: 'rgba(255, 255, 255, 0.08)',
+                            border: '1px solid rgba(255, 255, 255, 0.1)',
+                            borderRadius: radius.md,
+                            cursor: 'pointer',
+                            color: colors.text.secondary,
+                            fontSize: 12,
+                            fontWeight: 500,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: 6,
+                        }}
+                    >
+                        <PhotoIcon size={14} />
+                        Assign Photos
+                    </motion.button>
+                </div>
+            )}
+
+            {/* Edit Modals */}
+            <WaypointEditModal
+                isOpen={showWaypointEdit}
+                onClose={() => setShowWaypointEdit(false)}
+                camp={camp}
+                trekData={trekData}
+            />
+            <PhotoAssignModal
+                isOpen={showPhotoAssign}
+                onClose={() => setShowPhotoAssign(false)}
+                camp={camp}
+                trekData={trekData}
+            />
         </>
     );
 }

@@ -8,6 +8,8 @@ interface QuickAction {
     onClick: () => void;
     /** Only show when this condition is true */
     visible?: boolean;
+    /** Show active/highlighted state */
+    active?: boolean;
 }
 
 interface QuickActionBarProps {
@@ -43,6 +45,7 @@ export function QuickActionBar({ actions, isMobile = false }: QuickActionBarProp
                     label={action.label}
                     onClick={action.onClick}
                     isMobile={isMobile}
+                    active={action.active}
                 />
             ))}
         </div>
@@ -54,9 +57,10 @@ interface QuickActionButtonProps {
     label: string;
     onClick: () => void;
     isMobile?: boolean;
+    active?: boolean;
 }
 
-function QuickActionButton({ icon, label, onClick, isMobile }: QuickActionButtonProps) {
+function QuickActionButton({ icon, label, onClick, isMobile, active }: QuickActionButtonProps) {
     const [isHovered, setIsHovered] = useState(false);
     const [isPressed, setIsPressed] = useState(false);
 
@@ -76,6 +80,11 @@ function QuickActionButton({ icon, label, onClick, isMobile }: QuickActionButton
         margin: 0,
         outline: 'none',
     };
+
+    const activeStyle: CSSProperties = active ? {
+        background: 'rgba(96, 165, 250, 0.25)',
+        borderColor: 'rgba(96, 165, 250, 0.4)',
+    } : {};
 
     const hoverStyle: CSSProperties = isHovered ? {
         ...glassButtonHover,
@@ -100,15 +109,17 @@ function QuickActionButton({ icon, label, onClick, isMobile }: QuickActionButton
             onTouchStart={() => setIsPressed(true)}
             onTouchEnd={() => setIsPressed(false)}
             aria-label={label}
+            aria-pressed={active}
             style={{
                 ...baseStyle,
+                ...activeStyle,
                 ...hoverStyle,
                 ...pressedStyle,
             }}
         >
             <span
                 style={{
-                    color: colors.text.secondary,
+                    color: active ? colors.accent.primary : colors.text.secondary,
                     fontSize: isMobile ? 20 : 18,
                     display: 'flex',
                     alignItems: 'center',
@@ -143,6 +154,12 @@ export const QuickActionIcons = {
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
             <path d="M19 12H5" />
             <path d="M12 19l-7-7 7-7" />
+        </svg>
+    ),
+    edit: (
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" />
+            <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" />
         </svg>
     ),
 };
