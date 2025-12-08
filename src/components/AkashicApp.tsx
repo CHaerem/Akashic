@@ -14,6 +14,7 @@ import { ShareTargetModal } from './ShareTargetModal';
 import { PhotoLightbox } from './common/PhotoLightbox';
 import { DayGallery } from './common/DayGallery';
 import { BottomSheet } from './layout/BottomSheet';
+import { Sidebar } from './layout/Sidebar';
 import { BottomSheetContent } from './layout/BottomSheetContent';
 import { QuickActionBar, QuickActionIcons } from './layout/QuickActionBar';
 import { colors, typography } from '../styles/liquidGlass';
@@ -264,51 +265,91 @@ export default function AkashicApp() {
             {/* Globe Hint - shown when no trek selected */}
             {!selectedTrek && view === 'globe' && <GlobeHint isMobile={isMobile} />}
 
-            {/* Unified Bottom Sheet - Find My inspired with integrated navigation */}
+            {/* Content Panel - Bottom Sheet (mobile) or Sidebar (desktop) */}
             {showSheet && (
-                <BottomSheet
-                    snapPoint={sheetSnapPoint}
-                    onSnapChange={setSheetSnapPoint}
-                    onDismiss={view === 'globe' ? handleBackToSelection : undefined}
-                    isOpen={showSheet}
-                    // Navigation props (unified in header)
-                    view={view}
-                    selectedTrek={selectedTrek}
-                    selectedCamp={selectedCamp}
-                    totalDays={trekData?.stats.duration ?? 0}
-                    activeMode={activeMode}
-                    onModeChange={setActiveMode}
-                    onDaySelect={handleDaySelect}
-                    onStart={handleStart}
-                    onExplore={handleExplore}
-                    onBackToOverview={handleBackToOverview}
-                    onPrevJourney={handlePrevJourney}
-                    onNextJourney={handleNextJourney}
-                    totalJourneys={treks.length}
-                    // Edit mode (moved from QuickActionBar for less prominence)
-                    editMode={editMode}
-                    onToggleEditMode={toggleEditMode}
-                    isMobile={isMobile}
-                >
-                    <BottomSheetContent
+                isMobile ? (
+                    // Mobile: Bottom Sheet with drag gestures
+                    <BottomSheet
+                        snapPoint={sheetSnapPoint}
+                        onSnapChange={setSheetSnapPoint}
+                        onDismiss={view === 'globe' ? handleBackToSelection : undefined}
+                        isOpen={showSheet}
                         view={view}
                         selectedTrek={selectedTrek}
                         selectedCamp={selectedCamp}
+                        totalDays={trekData?.stats.duration ?? 0}
                         activeMode={activeMode}
-                        trekData={trekData}
-                        extendedStats={extendedStats}
-                        elevationProfile={elevationProfile}
-                        photos={deferredPhotos}
-                        getMediaUrl={getMediaUrl}
+                        onModeChange={setActiveMode}
+                        onDaySelect={handleDaySelect}
+                        onStart={handleStart}
                         onExplore={handleExplore}
-                        onCampSelect={handleCampSelect}
-                        onViewPhotoOnMap={handleViewOnMap}
-                        onOpenDayGallery={() => setShowDayGallery(true)}
-                        onJourneySaved={refetchJourneys}
+                        onBackToOverview={handleBackToOverview}
+                        onPrevJourney={handlePrevJourney}
+                        onNextJourney={handleNextJourney}
+                        totalJourneys={treks.length}
                         editMode={editMode}
+                        onToggleEditMode={toggleEditMode}
                         isMobile={isMobile}
-                    />
-                </BottomSheet>
+                    >
+                        <BottomSheetContent
+                            view={view}
+                            selectedTrek={selectedTrek}
+                            selectedCamp={selectedCamp}
+                            activeMode={activeMode}
+                            trekData={trekData}
+                            extendedStats={extendedStats}
+                            elevationProfile={elevationProfile}
+                            photos={deferredPhotos}
+                            getMediaUrl={getMediaUrl}
+                            onExplore={handleExplore}
+                            onCampSelect={handleCampSelect}
+                            onViewPhotoOnMap={handleViewOnMap}
+                            onOpenDayGallery={() => setShowDayGallery(true)}
+                            onJourneySaved={refetchJourneys}
+                            editMode={editMode}
+                            isMobile={isMobile}
+                        />
+                    </BottomSheet>
+                ) : (
+                    // Desktop: Left Sidebar (Find My macOS style)
+                    <Sidebar
+                        isOpen={showSheet}
+                        view={view}
+                        selectedTrek={selectedTrek}
+                        selectedCamp={selectedCamp}
+                        totalDays={trekData?.stats.duration ?? 0}
+                        activeMode={activeMode}
+                        onModeChange={setActiveMode}
+                        onDaySelect={handleDaySelect}
+                        onStart={handleStart}
+                        onExplore={handleExplore}
+                        onBackToOverview={handleBackToOverview}
+                        onPrevJourney={handlePrevJourney}
+                        onNextJourney={handleNextJourney}
+                        totalJourneys={treks.length}
+                        editMode={editMode}
+                        onToggleEditMode={toggleEditMode}
+                    >
+                        <BottomSheetContent
+                            view={view}
+                            selectedTrek={selectedTrek}
+                            selectedCamp={selectedCamp}
+                            activeMode={activeMode}
+                            trekData={trekData}
+                            extendedStats={extendedStats}
+                            elevationProfile={elevationProfile}
+                            photos={deferredPhotos}
+                            getMediaUrl={getMediaUrl}
+                            onExplore={handleExplore}
+                            onCampSelect={handleCampSelect}
+                            onViewPhotoOnMap={handleViewOnMap}
+                            onOpenDayGallery={() => setShowDayGallery(true)}
+                            onJourneySaved={refetchJourneys}
+                            editMode={editMode}
+                            isMobile={false}
+                        />
+                    </Sidebar>
+                )
             )}
 
             {/* Day Gallery - fullscreen photo exploration */}
