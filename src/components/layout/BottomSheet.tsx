@@ -224,6 +224,8 @@ export function BottomSheet({
                             onPrevJourney={onPrevJourney}
                             onNextJourney={onNextJourney}
                             totalJourneys={totalJourneys}
+                            editMode={editMode}
+                            onToggleEditMode={onToggleEditMode}
                             isMobile={isMobile}
                         />
                     ) : view === 'trek' && isOverviewMode ? (
@@ -232,6 +234,8 @@ export function BottomSheet({
                             trekName={selectedTrek?.name ?? ''}
                             totalDays={totalDays}
                             onStart={onStart}
+                            editMode={editMode}
+                            onToggleEditMode={onToggleEditMode}
                             isMobile={isMobile}
                         />
                     ) : view === 'trek' ? (
@@ -378,10 +382,12 @@ interface GlobeHeaderProps {
     onPrevJourney?: () => void;
     onNextJourney?: () => void;
     totalJourneys: number;
+    editMode?: boolean;
+    onToggleEditMode?: () => void;
     isMobile: boolean;
 }
 
-function GlobeHeader({ trek, onPrevJourney, onNextJourney, totalJourneys, isMobile }: GlobeHeaderProps) {
+function GlobeHeader({ trek, onPrevJourney, onNextJourney, totalJourneys, editMode, onToggleEditMode, isMobile }: GlobeHeaderProps) {
     // Enable navigation when there are multiple journeys (loops around)
     const canNavigate = totalJourneys > 1;
 
@@ -493,6 +499,42 @@ function GlobeHeader({ trek, onPrevJourney, onNextJourney, totalJourneys, isMobi
             >
                 <ChevronIcon direction="right" size={16} />
             </motion.button>
+
+            {/* Edit mode toggle - subtle icon button */}
+            {onToggleEditMode && (
+                <motion.button
+                    onClick={onToggleEditMode}
+                    whileTap={{ scale: 0.95 }}
+                    aria-label={editMode ? 'Exit edit mode' : 'Edit mode'}
+                    aria-pressed={editMode}
+                    style={{
+                        width: 32,
+                        height: 32,
+                        marginLeft: 4,
+                        padding: 0,
+                        background: editMode
+                            ? 'rgba(96, 165, 250, 0.2)'
+                            : 'transparent',
+                        border: 'none',
+                        borderRadius: radius.md,
+                        cursor: 'pointer',
+                        color: editMode
+                            ? colors.accent.primary
+                            : colors.text.tertiary,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        opacity: editMode ? 1 : 0.5,
+                        transition: 'background 0.2s ease, color 0.2s ease, opacity 0.2s ease',
+                        flexShrink: 0,
+                    }}
+                >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" />
+                        <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" />
+                    </svg>
+                </motion.button>
+            )}
         </motion.div>
     );
 }
@@ -501,10 +543,12 @@ interface TrekOverviewHeaderProps {
     trekName: string;
     totalDays: number;
     onStart: () => void;
+    editMode?: boolean;
+    onToggleEditMode?: () => void;
     isMobile: boolean;
 }
 
-function TrekOverviewHeader({ trekName, totalDays, onStart, isMobile }: TrekOverviewHeaderProps) {
+function TrekOverviewHeader({ trekName, totalDays, onStart, editMode, onToggleEditMode, isMobile }: TrekOverviewHeaderProps) {
     return (
         <>
             <span
@@ -525,6 +569,7 @@ function TrekOverviewHeader({ trekName, totalDays, onStart, isMobile }: TrekOver
                     color: colors.text.primary,
                     fontSize: isMobile ? 14 : 15,
                     fontWeight: 500,
+                    flex: 1,
                 }}
             >
                 {trekName}
@@ -537,7 +582,6 @@ function TrekOverviewHeader({ trekName, totalDays, onStart, isMobile }: TrekOver
                     display: 'flex',
                     alignItems: 'center',
                     gap: 4,
-                    marginLeft: 4,
                     padding: '6px 12px',
                     background: 'rgba(96, 165, 250, 0.15)',
                     border: 'none',
@@ -551,6 +595,41 @@ function TrekOverviewHeader({ trekName, totalDays, onStart, isMobile }: TrekOver
                 Start
                 <ChevronIcon direction="right" size={12} />
             </motion.button>
+            {/* Edit mode toggle - subtle icon button */}
+            {onToggleEditMode && (
+                <motion.button
+                    onClick={onToggleEditMode}
+                    whileTap={{ scale: 0.95 }}
+                    aria-label={editMode ? 'Exit edit mode' : 'Edit mode'}
+                    aria-pressed={editMode}
+                    style={{
+                        width: 32,
+                        height: 32,
+                        marginLeft: 4,
+                        padding: 0,
+                        background: editMode
+                            ? 'rgba(96, 165, 250, 0.2)'
+                            : 'transparent',
+                        border: 'none',
+                        borderRadius: radius.md,
+                        cursor: 'pointer',
+                        color: editMode
+                            ? colors.accent.primary
+                            : colors.text.tertiary,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        opacity: editMode ? 1 : 0.5,
+                        transition: 'background 0.2s ease, color 0.2s ease, opacity 0.2s ease',
+                        flexShrink: 0,
+                    }}
+                >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" />
+                        <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" />
+                    </svg>
+                </motion.button>
+            )}
         </>
     );
 }
