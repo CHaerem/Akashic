@@ -28,6 +28,11 @@ interface UseTrekDataReturn {
     sheetSnapPoint: SheetSnapPoint;
     activeMode: ContentMode;
 
+    // Edit mode
+    editMode: boolean;
+    setEditMode: (mode: boolean) => void;
+    toggleEditMode: () => void;
+
     // Setters
     setView: (view: ViewMode) => void;
     setActiveTab: (tab: TabType) => void;
@@ -57,6 +62,10 @@ export function useTrekData(): UseTrekDataReturn {
     // Sheet state for Find My redesign
     const [sheetSnapPoint, setSheetSnapPoint] = useState<SheetSnapPoint>('half');
     const [activeMode, setActiveMode] = useState<ContentMode>('day');
+
+    // Edit mode state
+    const [editMode, setEditMode] = useState(false);
+    const toggleEditMode = useCallback(() => setEditMode(prev => !prev), []);
 
     // Use transition for view changes to prevent blocking Mapbox animations
     const [, startTransition] = useTransition();
@@ -137,6 +146,11 @@ export function useTrekData(): UseTrekDataReturn {
         // Sheet state (Find My redesign)
         sheetSnapPoint,
         activeMode,
+
+        // Edit mode
+        editMode,
+        setEditMode,
+        toggleEditMode,
 
         // Setters
         setView,
