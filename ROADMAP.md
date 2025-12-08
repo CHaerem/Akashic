@@ -386,6 +386,8 @@ A platform where anyone can create and share their travel journeys.
 | 2024-11 | Multi-user via journey_members table                 | Role-based (owner/editor/viewer), RLS helper function, migrated R2 paths to UUID           |
 | 2024-12 | Codebase refactor: extract shared hooks & components | usePhotoDay hook, icons library, InteractiveElevationProfile, ContentCard, ContextCard     |
 | 2024-12 | Client-side thumbnail generation                     | Canvas API resize to 400px, 80% JPEG quality, uploaded alongside original                  |
+| 2024-12 | Modular code structure for large files               | Split journeys.ts (960 lines) into 7 modules, extracted mapbox types/configs               |
+| 2024-12 | Test coverage for critical hooks                     | Added 40 tests for usePhotoDay, useMedia, useOnlineStatus (229 → 269 tests)                |
 
 ---
 

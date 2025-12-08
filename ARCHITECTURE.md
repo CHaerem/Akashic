@@ -374,6 +374,35 @@ Content cards render these tab components:
 |------|----------|---------|
 | `usePhotoDay` | `src/hooks/usePhotoDay.ts` | Photo-day matching with 4-tier strategy |
 | `useMedia` | `src/hooks/useMedia.ts` | Authenticated media URL generation |
+| `useOnlineStatus` | `src/hooks/useOnlineStatus.ts` | Network status, cache status, storage usage |
+| `useMapbox` | `src/hooks/mapbox/` | Mapbox GL integration (modular) |
+
+### Modular Code Structure
+
+Large files have been refactored into focused modules for maintainability:
+
+**`src/lib/journeys/`** - Supabase data layer (split from 960-line journeys.ts)
+```
+journeys/
+├── index.ts          # Barrel file with re-exports
+├── types.ts          # DbJourney, DbWaypoint interfaces
+├── transforms.ts     # toTrekConfig, toTrekData helpers
+├── journeyAPI.ts     # Journey CRUD + cache management
+├── photoAPI.ts       # Photo operations
+├── waypointAPI.ts    # Waypoint CRUD
+└── memberAPI.ts      # Member management
+```
+
+**`src/hooks/mapbox/`** - Mapbox GL hook (extracted types and configs)
+```
+mapbox/
+├── index.ts          # Barrel file with re-exports
+├── types.ts          # Hook interfaces and types
+├── layerConfigs.ts   # Mapbox layer paint configurations
+└── useMapbox.ts      # Core hook logic
+```
+
+**Backwards Compatibility**: Original files (`src/lib/journeys.ts`, `src/hooks/useMapbox.ts`) re-export from the modular structure, preserving all existing imports.
 
 ### Utilities
 
