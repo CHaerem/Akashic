@@ -284,10 +284,11 @@ function TrekViewContent({
                     camp={selectedCamp}
                     currentDayDate={currentDayDate}
                     dayPhotos={dayPhotos}
+                    allPhotos={photos}
                     getMediaUrl={getMediaUrl}
                     onOpenDayGallery={onOpenDayGallery}
                     editMode={editMode}
-                    trekData={trekData}
+                    isMobile={isMobile}
                 />
             )}
 
@@ -323,13 +324,14 @@ interface DayContentProps {
     camp: Camp | null;
     currentDayDate: Date | null;
     dayPhotos: Photo[];
+    allPhotos: Photo[];
     getMediaUrl: (path: string) => string;
     onOpenDayGallery: () => void;
     editMode: boolean;
-    trekData: TrekData;
+    isMobile: boolean;
 }
 
-function DayContent({ camp, currentDayDate, dayPhotos, getMediaUrl, onOpenDayGallery, editMode, trekData }: DayContentProps) {
+function DayContent({ camp, currentDayDate, dayPhotos, allPhotos, getMediaUrl, onOpenDayGallery, editMode, isMobile }: DayContentProps) {
     const [showWaypointEdit, setShowWaypointEdit] = useState(false);
     const [showPhotoAssign, setShowPhotoAssign] = useState(false);
     if (!camp) {
@@ -554,14 +556,20 @@ function DayContent({ camp, currentDayDate, dayPhotos, getMediaUrl, onOpenDayGal
             <WaypointEditModal
                 isOpen={showWaypointEdit}
                 onClose={() => setShowWaypointEdit(false)}
+                onSave={() => setShowWaypointEdit(false)}
                 camp={camp}
-                trekData={trekData}
+                isMobile={isMobile}
+                photos={allPhotos}
+                getMediaUrl={getMediaUrl}
             />
             <PhotoAssignModal
                 isOpen={showPhotoAssign}
                 onClose={() => setShowPhotoAssign(false)}
+                onAssign={() => setShowPhotoAssign(false)}
                 camp={camp}
-                trekData={trekData}
+                photos={allPhotos}
+                isMobile={isMobile}
+                getMediaUrl={getMediaUrl}
             />
         </>
     );
