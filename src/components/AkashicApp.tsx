@@ -9,12 +9,14 @@ import { hasPendingShares } from '../lib/shareTarget';
 import type { Photo, Camp } from '../types/trek';
 import { MapboxGlobe } from './MapboxGlobe';
 import { OfflineIndicator } from './OfflineIndicator';
-import { GlobeSelectionPanel } from './home/GlobeSelectionPanel';
 import { GlobeHint } from './home/GlobeHint';
 import { ShareTargetModal } from './ShareTargetModal';
 import { PhotoLightbox } from './common/PhotoLightbox';
-import { AdaptiveNavPill } from './nav/AdaptiveNavPill';
-import { colors, radius, transitions, typography } from '../styles/liquidGlass';
+import { DayGallery } from './common/DayGallery';
+import { BottomSheet } from './layout/BottomSheet';
+import { BottomSheetContent } from './layout/BottomSheetContent';
+import { QuickActionBar, QuickActionIcons } from './layout/QuickActionBar';
+import { colors, typography } from '../styles/liquidGlass';
 
 // --- Main Component ---
 
@@ -26,8 +28,9 @@ export default function AkashicApp() {
     const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
     const [showShareTarget, setShowShareTarget] = useState(false);
     const flyToPhotoRef = useRef<((photo: Photo) => void) | null>(null);
+    const recenterRef = useRef<(() => void) | null>(null);
     const { getMediaUrl } = useMedia();
-    const { refetch: refetchJourneys } = useJourneys();
+    const { treks, refetch: refetchJourneys } = useJourneys();
     const stagingBranch = import.meta.env.VITE_STAGING_BRANCH;
     const deployTimeRaw = import.meta.env.VITE_DEPLOY_TIME;
 
@@ -54,13 +57,22 @@ export default function AkashicApp() {
         trekData,
         extendedStats,
         elevationProfile,
+        // Sheet state (Find My redesign)
+        sheetSnapPoint,
+        activeMode,
         setActiveTab,
+        setSheetSnapPoint,
+        setActiveMode,
         selectTrek,
         handleExplore,
         handleBackToGlobe,
         handleBackToSelection,
+        handleBackToOverview,
         handleCampSelect
     } = useTrekData();
+
+    // Day gallery state
+    const [showDayGallery, setShowDayGallery] = useState(false);
 
     // Check for pending shared photos (from PWA share target)
     useEffect(() => {
@@ -120,7 +132,7 @@ export default function AkashicApp() {
         }
     }, []);
 
-    // Handle day selection from AdaptiveNavPill
+    // Handle day selection from BottomSheet navigation
     const handleDaySelect = useCallback((dayNumber: number) => {
         if (trekData) {
             const camp = trekData.camps.find((c: Camp) => c.dayNumber === dayNumber);
@@ -130,13 +142,64 @@ export default function AkashicApp() {
         }
     }, [trekData, handleCampSelect]);
 
+    // Handle start from overview - select day 1
+    const handleStart = useCallback(() => {
+        if (trekData && trekData.camps.length > 0) {
+            const firstCamp = trekData.camps.find((c: Camp) => c.dayNumber === 1) || trekData.camps[0];
+            handleCampSelect(firstCamp);
+        }
+    }, [trekData, handleCampSelect]);
+
+    // Journey navigation (globe view)
+    const currentJourneyIndex = useMemo(() => {
+        if (!selectedTrek || treks.length === 0) return 0;
+        return treks.findIndex(t => t.id === selectedTrek.id);
+    }, [selectedTrek, treks]);
+
+    const handlePrevJourney = useCallback(() => {
+        if (treks.length === 0) return;
+        // Loop to last journey when at first
+        const prevIndex = currentJourneyIndex > 0 ? currentJourneyIndex - 1 : treks.length - 1;
+        selectTrek(treks[prevIndex]);
+    }, [currentJourneyIndex, treks, selectTrek]);
+
+    const handleNextJourney = useCallback(() => {
+        if (treks.length === 0) return;
+        // Loop to first journey when at last
+        const nextIndex = currentJourneyIndex < treks.length - 1 ? currentJourneyIndex + 1 : 0;
+        selectTrek(treks[nextIndex]);
+    }, [currentJourneyIndex, treks, selectTrek]);
+
+    // Show bottom sheet when trek is selected (globe view) or in trek view
+    const showSheet = (view === 'globe' && selectedTrek !== null) || view === 'trek';
+
     // Filter photos with coordinates for map display
     // Use deferred photos to prevent map re-renders during camera animations
     const photosWithCoords = deferredPhotos.filter(p => p.coordinates && p.coordinates.length === 2);
 
+    // Quick action buttons configuration
+    const quickActions = useMemo(() => [
+        {
+            id: 'back-to-globe',
+            icon: QuickActionIcons.globe,
+            label: 'Back to globe',
+            onClick: handleBackToGlobe,
+            visible: true,
+        },
+        {
+            id: 'recenter',
+            icon: QuickActionIcons.recenter,
+            label: 'Recenter map',
+            onClick: () => {
+                recenterRef.current?.();
+            },
+            visible: true,
+        },
+    ], [view, handleBackToGlobe]);
+
     return (
         <div style={{ position: 'fixed', inset: 0, background: colors.background.base }}>
-            {/* Mapbox Globe */}
+            {/* Mapbox Globe - Full screen hero */}
             <div style={{ position: 'absolute', inset: 0 }}>
                 <MapboxGlobe
                     selectedTrek={selectedTrek}
@@ -146,6 +209,7 @@ export default function AkashicApp() {
                     photos={photosWithCoords}
                     onPhotoClick={handleMapPhotoClick}
                     flyToPhotoRef={flyToPhotoRef}
+                    recenterRef={recenterRef}
                     onCampSelect={handleCampSelect}
                     getMediaUrl={getMediaUrl}
                 />
@@ -154,93 +218,98 @@ export default function AkashicApp() {
             {/* Offline Status */}
             <OfflineIndicator isMobile={isMobile} />
 
-            {/* Title - Liquid Glass pill style when viewing trek */}
-            <div
-                onClick={handleBackToGlobe}
-                style={{
-                    position: 'absolute',
-                    top: isMobile ? 'max(16px, env(safe-area-inset-top))' : 24,
-                    left: isMobile ? 16 : 24,
-                    zIndex: 100,
-                    cursor: 'pointer',
-                    padding: isMobile ? '10px 16px' : '8px 14px',
-                    minHeight: isMobile ? 44 : 'auto',
-                    display: 'flex',
-                    alignItems: 'center',
-                    transition: `all ${transitions.smooth}`,
-                    // Liquid Glass styling when in trek view
-                    ...(view === 'trek' ? {
-                        background: `linear-gradient(
-                            135deg,
-                            rgba(255, 255, 255, 0.08) 0%,
-                            rgba(255, 255, 255, 0.04) 100%
-                        )`,
-                        backdropFilter: 'blur(12px) saturate(150%)',
-                        WebkitBackdropFilter: 'blur(12px) saturate(150%)',
-                        border: `1px solid ${colors.glass.borderSubtle}`,
-                        borderRadius: radius.lg,
-                        boxShadow: `
-                            0 4px 16px rgba(0, 0, 0, 0.15),
-                            inset 0 1px 0 rgba(255, 255, 255, 0.1)
-                        `,
-                    } : {
-                        background: 'transparent',
-                        border: '1px solid transparent',
-                        borderRadius: radius.lg,
-                    }),
-                }}
-            >
-                <span style={{
-                    ...typography.brand,
-                    fontSize: isMobile ? 12 : 13,
-                    color: view === 'trek' ? colors.text.secondary : colors.text.primary,
-                    transition: `color ${transitions.smooth}`,
-                }}>
-                    Akashic
-                    {stagingBranch && (
-                        <span style={{
-                            fontSize: isMobile ? 8 : 9,
-                            letterSpacing: '0.1em',
-                            opacity: 0.5,
-                            marginLeft: 8,
-                            fontWeight: 400,
-                        }}>
-                            [{stagingBranch}
-                            {formattedDeployTime ? ` • ${formattedDeployTime}` : ''}]
-                        </span>
-                    )}
-                </span>
-            </div>
-
-            {/* Globe View UI */}
-            {selectedTrek && view === 'globe' && (
-                <GlobeSelectionPanel
-                    selectedTrek={selectedTrek}
-                    onBack={handleBackToSelection}
-                    onExplore={handleExplore}
-                    isMobile={isMobile}
-                />
+            {/* Brand Title - Top Left (only in zoomed-out globe view) */}
+            {!selectedTrek && view === 'globe' && (
+                <div
+                    style={{
+                        position: 'absolute',
+                        top: isMobile ? 'max(16px, env(safe-area-inset-top))' : 24,
+                        left: isMobile ? 16 : 24,
+                        zIndex: 100,
+                        padding: isMobile ? '10px 16px' : '8px 14px',
+                    }}
+                >
+                    <span style={{
+                        ...typography.brand,
+                        fontSize: isMobile ? 12 : 13,
+                        color: colors.text.primary,
+                    }}>
+                        Akashic
+                        {stagingBranch && (
+                            <span style={{
+                                fontSize: isMobile ? 8 : 9,
+                                letterSpacing: '0.1em',
+                                opacity: 0.5,
+                                marginLeft: 8,
+                                fontWeight: 400,
+                            }}>
+                                [{stagingBranch}
+                                {formattedDeployTime ? ` • ${formattedDeployTime}` : ''}]
+                            </span>
+                        )}
+                    </span>
+                </div>
             )}
 
+            {/* Quick Action Bar - Top Right */}
+            <QuickActionBar actions={quickActions} isMobile={isMobile} />
+
+            {/* Globe Hint - shown when no trek selected */}
             {!selectedTrek && view === 'globe' && <GlobeHint isMobile={isMobile} />}
 
-            {/* Adaptive Nav Pill - original Liquid Glass design */}
-            {view === 'trek' && trekData && (
-                <AdaptiveNavPill
+            {/* Unified Bottom Sheet - Find My inspired with integrated navigation */}
+            {showSheet && (
+                <BottomSheet
+                    snapPoint={sheetSnapPoint}
+                    onSnapChange={setSheetSnapPoint}
+                    onDismiss={view === 'globe' ? handleBackToSelection : undefined}
+                    isOpen={showSheet}
+                    // Navigation props (unified in header)
+                    view={view}
+                    selectedTrek={selectedTrek}
                     selectedCamp={selectedCamp}
-                    totalDays={trekData.stats.duration}
-                    activeTab={activeTab}
-                    onTabChange={setActiveTab}
+                    totalDays={trekData?.stats.duration ?? 0}
+                    activeMode={activeMode}
+                    onModeChange={setActiveMode}
                     onDaySelect={handleDaySelect}
-                    onCampSelect={handleCampSelect}
+                    onStart={handleStart}
+                    onExplore={handleExplore}
+                    onBackToOverview={handleBackToOverview}
+                    onPrevJourney={handlePrevJourney}
+                    onNextJourney={handleNextJourney}
+                    totalJourneys={treks.length}
+                    isMobile={isMobile}
+                >
+                    <BottomSheetContent
+                        view={view}
+                        selectedTrek={selectedTrek}
+                        selectedCamp={selectedCamp}
+                        activeMode={activeMode}
+                        trekData={trekData}
+                        extendedStats={extendedStats}
+                        elevationProfile={elevationProfile}
+                        photos={deferredPhotos}
+                        getMediaUrl={getMediaUrl}
+                        onExplore={handleExplore}
+                        onCampSelect={handleCampSelect}
+                        onViewPhotoOnMap={handleViewOnMap}
+                        onOpenDayGallery={() => setShowDayGallery(true)}
+                        isMobile={isMobile}
+                    />
+                </BottomSheet>
+            )}
+
+            {/* Day Gallery - fullscreen photo exploration */}
+            {trekData && (
+                <DayGallery
+                    isOpen={showDayGallery}
+                    onClose={() => setShowDayGallery(false)}
                     trekData={trekData}
-                    extendedStats={extendedStats}
-                    elevationProfile={elevationProfile}
                     photos={deferredPhotos}
                     getMediaUrl={getMediaUrl}
-                    onViewPhotoOnMap={handleViewOnMap}
-                    onJourneyUpdate={refetchJourneys}
-                    isMobile={isMobile}
+                    initialDay={selectedCamp?.dayNumber ?? 1}
+                    onDayChange={handleDaySelect}
+                    onViewOnMap={handleViewOnMap}
                 />
             )}
 

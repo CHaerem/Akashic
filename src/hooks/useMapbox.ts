@@ -55,6 +55,8 @@ interface UseMapboxReturn {
     flyToPOI: (poi: PointOfInterest) => void;
     startRotation: () => void;
     stopRotation: () => void;
+    isRotating: boolean;
+    getMapCenter: () => [number, number] | null;
     // Playback controls
     startPlayback: (trekData: TrekData, onCampReached?: (camp: Camp) => void) => void;
     stopPlayback: () => void;
@@ -88,7 +90,6 @@ export function useMapbox({ containerRef, onTrekSelect, onPhotoClick, onRouteCli
     const targetCenterRef = useRef<[number, number] | null>(null);
     // Default globe center coordinates (when no trek selected)
     const GLOBE_CENTER: [number, number] = [30, 15];
-    const GLOBE_ZOOM_THRESHOLD = 2.5; // Zoom level below which we consider it "globe view"
     const [mapReady, setMapReady] = useState(false);
     const [dataLayersReady, setDataLayersReady] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -97,6 +98,7 @@ export function useMapbox({ containerRef, onTrekSelect, onPhotoClick, onRouteCli
         progress: 0,
         currentCampIndex: 0
     });
+    const [isRotating, setIsRotating] = useState(false);
 
     // Store callbacks and data in refs to avoid dependency issues
     const onTrekSelectRef = useRef(onTrekSelect);
@@ -177,6 +179,14 @@ export function useMapbox({ containerRef, onTrekSelect, onPhotoClick, onRouteCli
             mapRef.current = map;
 
             map.on('style.load', () => {
+                // Add glyphs source for text rendering (satellite style doesn't include this)
+                const style = map.getStyle();
+                if (style && !style.glyphs) {
+                    style.glyphs = 'mapbox://fonts/mapbox/{fontstack}/{range}.pbf';
+                    map.setStyle(style);
+                    return; // Style will reload, this handler will fire again
+                }
+
                 // Set atmosphere fog - transparent space so CSS starfield shows through
                 map.setFog({
                     'range': [1, 12],
@@ -710,35 +720,10 @@ export function useMapbox({ containerRef, onTrekSelect, onPhotoClick, onRouteCli
                 return;
             }
 
-            // Normal recenter check for when already at globe zoom
-            if (!isGlobeViewRef.current || skipRecenterRef.current) return;
-
-            const currentZoom = mapRef.current.getZoom();
-            if (currentZoom > GLOBE_ZOOM_THRESHOLD) return;
-
-            const expectedCenter = getExpectedCenter();
-            const center = mapRef.current.getCenter();
-            const distanceFromCenter = Math.sqrt(
-                Math.pow(center.lng - expectedCenter[0], 2) +
-                Math.pow(center.lat - expectedCenter[1], 2)
-            );
-
-            // Recenter if we've drifted more than 5 degrees from expected center
-            if (distanceFromCenter > 5) {
-                const isMobile = window.matchMedia('(max-width: 768px)').matches;
-                const targetZoom = selectedTrekRef.current
-                    ? (isMobile ? 3 : 3.5)
-                    : (isMobile ? 1.2 : 1.5);
-
-                mapRef.current.easeTo({
-                    center: expectedCenter,
-                    zoom: targetZoom,
-                    pitch: 0,
-                    bearing: 0,
-                    duration: 1500,
-                    easing: (t) => 1 - Math.pow(1 - t, 3) // ease-out cubic
-                });
-            }
+            // Note: We intentionally do NOT auto-recenter when the user manually
+            // pans/rotates the globe. The only auto-recenter is for interrupted
+            // flyToGlobe animations (handled above with needsGlobeRecenterRef).
+            // This allows users to freely explore the globe without being snapped back.
         };
 
         map.on('dragstart', handleUserInteraction);
@@ -943,6 +928,23 @@ export function useMapbox({ containerRef, onTrekSelect, onPhotoClick, onRouteCli
         const map = mapRef.current;
         if (!map || !mapReady) return;
 
+        // If style isn't loaded yet, wait for it and retry
+        if (!map.isStyleLoaded()) {
+            const onStyleLoad = () => {
+                map.off('style.load', onStyleLoad);
+                flyToGlobe(selectedTrek);
+            };
+            map.once('style.load', onStyleLoad);
+            // Also try after a short delay in case the style was already loading
+            setTimeout(() => {
+                if (map.isStyleLoaded()) {
+                    map.off('style.load', onStyleLoad);
+                    flyToGlobe(selectedTrek);
+                }
+            }, 100);
+            return;
+        }
+
         // Mark that we're in globe view mode and flying
         isGlobeViewRef.current = true;
         isFlyingToGlobeRef.current = true;
@@ -1062,6 +1064,22 @@ export function useMapbox({ containerRef, onTrekSelect, onPhotoClick, onRouteCli
         const map = mapRef.current;
         if (!map || !mapReady || !selectedTrek) return;
 
+        // If style isn't loaded yet, wait for it and retry
+        if (!map.isStyleLoaded()) {
+            const onStyleLoad = () => {
+                map.off('style.load', onStyleLoad);
+                flyToTrek(selectedTrek, selectedCamp);
+            };
+            map.once('style.load', onStyleLoad);
+            setTimeout(() => {
+                if (map.isStyleLoaded()) {
+                    map.off('style.load', onStyleLoad);
+                    flyToTrek(selectedTrek, selectedCamp);
+                }
+            }, 100);
+            return;
+        }
+
         // Mark that we're NOT in globe view mode (we're viewing a trek)
         isGlobeViewRef.current = false;
         selectedTrekRef.current = selectedTrek.id;
@@ -1125,43 +1143,88 @@ export function useMapbox({ containerRef, onTrekSelect, onPhotoClick, onRouteCli
                 // Calculate camera settings
                 let bearing = trekConfig.preferredBearing;
                 const pitch = selectedCamp.pitch || 55;
-
-            if (selectedCamp.bearing !== undefined) {
-                bearing = selectedCamp.bearing;
-            } else {
-                // Smart bearing: look along path of arrival
+                const routeCoords = trekData.route.coordinates;
                 const campIndex = trekData.camps.findIndex(c => c.id === selectedCamp.id);
-                if (campIndex !== -1) {
-                    const routeCoords = trekData.route.coordinates;
-                    const currentCoord = selectedCamp.coordinates;
-                    // Use nearest point matching for reliable bearing calculation
-                    const endIndex = findNearestCoordIndex(routeCoords, currentCoord as [number, number]);
 
-                    if (endIndex > 5) {
+                // Fit bounds to the day's segment to show the entire route
+                if (campIndex !== -1 && routeCoords && routeCoords.length > 0) {
+                    // Get segment start and end coordinates
+                    const startCoord = campIndex === 0
+                        ? routeCoords[0]
+                        : trekData.camps[campIndex - 1].coordinates;
+                    const endCoord = selectedCamp.coordinates;
+
+                    const startIndex = findNearestCoordIndex(routeCoords, startCoord as [number, number]);
+                    const endIndex = findNearestCoordIndex(routeCoords, endCoord as [number, number]);
+
+                    const actualStart = Math.min(startIndex, endIndex);
+                    const actualEnd = Math.max(startIndex, endIndex);
+
+                    // Smart bearing: look along path of arrival
+                    if (selectedCamp.bearing !== undefined) {
+                        bearing = selectedCamp.bearing;
+                    } else if (endIndex > 5) {
                         const lookBackIndex = endIndex - 5;
                         const prevCoord = routeCoords[lookBackIndex];
+                        const currentCoord = selectedCamp.coordinates;
                         bearing = calculateBearing(prevCoord[1], prevCoord[0], currentCoord[1], currentCoord[0]);
                     } else if (campIndex > 0) {
                         const prevCampCoord = trekData.camps[campIndex - 1].coordinates;
+                        const currentCoord = selectedCamp.coordinates;
                         bearing = calculateBearing(prevCampCoord[1], prevCampCoord[0], currentCoord[1], currentCoord[0]);
                     }
+
+                    if (actualEnd > actualStart) {
+                        // Calculate bounds for the segment
+                        const segmentCoords = routeCoords.slice(actualStart, actualEnd + 1);
+                        let minLng = segmentCoords[0][0], maxLng = segmentCoords[0][0];
+                        let minLat = segmentCoords[0][1], maxLat = segmentCoords[0][1];
+
+                        for (const coord of segmentCoords) {
+                            if (coord[0] < minLng) minLng = coord[0];
+                            if (coord[0] > maxLng) maxLng = coord[0];
+                            if (coord[1] < minLat) minLat = coord[1];
+                            if (coord[1] > maxLat) maxLat = coord[1];
+                        }
+
+                        const bounds = new mapboxgl.LngLatBounds([minLng, minLat], [maxLng, maxLat]);
+                        const isMobileCamp = window.matchMedia('(max-width: 768px)').matches;
+
+                        map.fitBounds(bounds, {
+                            padding: isMobileCamp
+                                ? { top: 100, bottom: 300, left: 50, right: 50 }
+                                : { top: 120, bottom: 150, left: 120, right: 400 },
+                            pitch: pitch,
+                            bearing: bearing,
+                            duration: 2200,
+                            maxZoom: 16, // Don't zoom in too far on short segments
+                            essential: true
+                        });
+
+                        // Highlight segment
+                        highlightSegment(trekData, selectedCamp);
+                        return;
+                    }
                 }
-            }
 
-            const isMobileCamp = window.matchMedia('(max-width: 768px)').matches;
-            map.flyTo({
-                center: selectedCamp.coordinates as [number, number],
-                zoom: isMobileCamp ? 14.5 : 15,
-                pitch: pitch,
-                bearing: bearing,
-                duration: 2200,
-                essential: true,
-                curve: 1.3,
-                easing: (t) => 1 - Math.pow(1 - t, 3)
-            });
+                // Fallback: fly to camp coordinates if segment calculation fails
+                if (selectedCamp.bearing !== undefined) {
+                    bearing = selectedCamp.bearing;
+                }
+                const isMobileCamp = window.matchMedia('(max-width: 768px)').matches;
+                map.flyTo({
+                    center: selectedCamp.coordinates as [number, number],
+                    zoom: isMobileCamp ? 14.5 : 15,
+                    pitch: pitch,
+                    bearing: bearing,
+                    duration: 2200,
+                    essential: true,
+                    curve: 1.3,
+                    easing: (t) => 1 - Math.pow(1 - t, 3)
+                });
 
-            // Highlight segment
-            highlightSegment(trekData, selectedCamp);
+                // Highlight segment
+                highlightSegment(trekData, selectedCamp);
         } else {
             // Fit bounds to whole route
             // Optimized bounds calculation - only sample every Nth point for large routes
@@ -1211,11 +1274,20 @@ export function useMapbox({ containerRef, onTrekSelect, onPhotoClick, onRouteCli
 
     // Stop rotation - defined first so startRotation can reference it
     const stopRotation = useCallback(() => {
+        // Only update state if we're actually stopping an animation
+        const wasRotating = rotationAnimationRef.current !== null;
+
         // Cancel animation
         if (rotationAnimationRef.current) {
             cancelAnimationFrame(rotationAnimationRef.current);
             rotationAnimationRef.current = null;
         }
+
+        // Only update state if we were actually rotating (avoids unnecessary re-renders)
+        if (wasRotating) {
+            setIsRotating(false);
+        }
+
         // Remove interaction listeners
         const map = mapRef.current;
         const listener = interactionListenerRef.current;
@@ -1290,6 +1362,8 @@ export function useMapbox({ containerRef, onTrekSelect, onPhotoClick, onRouteCli
         };
 
         rotationAnimationRef.current = requestAnimationFrame(animate);
+        // Update state to indicate rotation started
+        setIsRotating(true);
     }, [stopRotation]);
 
     // Cleanup rotation on unmount
@@ -1768,6 +1842,13 @@ export function useMapbox({ containerRef, onTrekSelect, onPhotoClick, onRouteCli
         playbackAnimationRef.current = requestAnimationFrame(animate);
     }, [mapReady, stopPlayback]);
 
+    // Get current map center coordinates
+    const getMapCenter = useCallback((): [number, number] | null => {
+        if (!mapRef.current) return null;
+        const center = mapRef.current.getCenter();
+        return [center.lng, center.lat];
+    }, []);
+
     return {
         map: mapRef,
         mapReady,
@@ -1782,6 +1863,8 @@ export function useMapbox({ containerRef, onTrekSelect, onPhotoClick, onRouteCli
         flyToPOI,
         startRotation,
         stopRotation,
+        isRotating,
+        getMapCenter,
         startPlayback,
         stopPlayback,
         playbackState

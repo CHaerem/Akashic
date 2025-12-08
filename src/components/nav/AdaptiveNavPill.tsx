@@ -708,7 +708,7 @@ function DayInfoContent({ camp, currentDayDate, dayPhotos, getMediaUrl, onOpenGa
               }}
             >
               <img
-                src={getMediaUrl(photo.url)}
+                src={getMediaUrl(photo.thumbnail_url || photo.url)}
                 alt={photo.caption || `Photo ${idx + 1}`}
                 style={{ width: '100%', height: '100%', objectFit: 'cover' }}
               />

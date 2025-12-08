@@ -7,6 +7,12 @@ import { useJourneys } from '../contexts/JourneysContext';
 import { calculateStats, generateElevationProfile } from '../utils/stats';
 import type { TrekConfig, TrekData, Camp, ExtendedStats, ElevationProfile, ViewMode, TabType } from '../types/trek';
 
+// Bottom sheet snap points
+export type SheetSnapPoint = 'minimized' | 'half' | 'expanded';
+
+// Content modes for the bottom sheet
+export type ContentMode = 'day' | 'photos' | 'stats' | 'info';
+
 interface UseTrekDataReturn {
     // State
     view: ViewMode;
@@ -18,15 +24,22 @@ interface UseTrekDataReturn {
     elevationProfile: ElevationProfile | null;
     loading: boolean;
 
+    // Sheet state (Find My redesign)
+    sheetSnapPoint: SheetSnapPoint;
+    activeMode: ContentMode;
+
     // Setters
     setView: (view: ViewMode) => void;
     setActiveTab: (tab: TabType) => void;
+    setSheetSnapPoint: (snap: SheetSnapPoint) => void;
+    setActiveMode: (mode: ContentMode) => void;
 
     // Handlers
     selectTrek: (trek: TrekConfig) => void;
     handleExplore: () => void;
     handleBackToGlobe: () => void;
     handleBackToSelection: () => void;
+    handleBackToOverview: () => void;
     handleCampSelect: (camp: Camp) => void;
 }
 
@@ -40,6 +53,10 @@ export function useTrekData(): UseTrekDataReturn {
     const [selectedTrek, setSelectedTrek] = useState<TrekConfig | null>(null);
     const [selectedCamp, setSelectedCamp] = useState<Camp | null>(null);
     const [activeTab, setActiveTab] = useState<TabType>('overview');
+
+    // Sheet state for Find My redesign
+    const [sheetSnapPoint, setSheetSnapPoint] = useState<SheetSnapPoint>('half');
+    const [activeMode, setActiveMode] = useState<ContentMode>('day');
 
     // Use transition for view changes to prevent blocking Mapbox animations
     const [, startTransition] = useTransition();
@@ -85,6 +102,11 @@ export function useTrekData(): UseTrekDataReturn {
         setSelectedCamp(null);
     }, []);
 
+    // Handle back to overview (deselect camp but stay in trek view)
+    const handleBackToOverview = useCallback(() => {
+        setSelectedCamp(null);
+    }, []);
+
     // Handle camp selection (toggle)
     const handleCampSelect = useCallback((camp: Camp) => {
         setSelectedCamp(prev => prev?.id === camp.id ? null : camp);
@@ -112,15 +134,22 @@ export function useTrekData(): UseTrekDataReturn {
         elevationProfile,
         loading,
 
+        // Sheet state (Find My redesign)
+        sheetSnapPoint,
+        activeMode,
+
         // Setters
         setView,
         setActiveTab,
+        setSheetSnapPoint,
+        setActiveMode,
 
         // Handlers
         selectTrek,
         handleExplore,
         handleBackToGlobe,
         handleBackToSelection,
+        handleBackToOverview,
         handleCampSelect
     };
 }
