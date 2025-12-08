@@ -196,6 +196,7 @@ export default function AkashicApp() {
             onClick: toggleEditMode,
             visible: selectedTrek !== null, // Only show when trek is selected
             active: editMode,
+            subtle: true, // Less prominent when inactive
         },
         {
             id: 'recenter',

@@ -10,6 +10,8 @@ interface QuickAction {
     visible?: boolean;
     /** Show active/highlighted state */
     active?: boolean;
+    /** Make button more subtle/less prominent when inactive */
+    subtle?: boolean;
 }
 
 interface QuickActionBarProps {
@@ -53,6 +55,7 @@ export function QuickActionBar({ actions, isMobile = false, hidden = false }: Qu
                     onClick={action.onClick}
                     isMobile={isMobile}
                     active={action.active}
+                    subtle={action.subtle}
                 />
             ))}
         </div>
@@ -65,13 +68,17 @@ interface QuickActionButtonProps {
     onClick: () => void;
     isMobile?: boolean;
     active?: boolean;
+    subtle?: boolean;
 }
 
-function QuickActionButton({ icon, label, onClick, isMobile, active }: QuickActionButtonProps) {
+function QuickActionButton({ icon, label, onClick, isMobile, active, subtle }: QuickActionButtonProps) {
     const [isHovered, setIsHovered] = useState(false);
     const [isPressed, setIsPressed] = useState(false);
 
     const size = isMobile ? 44 : 40;
+
+    // Subtle buttons are more transparent when inactive
+    const isSubtleInactive = subtle && !active;
 
     const baseStyle: CSSProperties = {
         ...glassButton,
@@ -86,20 +93,28 @@ function QuickActionButton({ icon, label, onClick, isMobile, active }: QuickActi
         padding: 0,
         margin: 0,
         outline: 'none',
+        // Subtle inactive state - more transparent
+        ...(isSubtleInactive && !isHovered ? {
+            background: 'rgba(255, 255, 255, 0.03)',
+            borderColor: 'rgba(255, 255, 255, 0.05)',
+            opacity: 0.6,
+        } : {}),
+        transition: `opacity ${transitions.normal}, background ${transitions.normal}, border-color ${transitions.normal}, transform ${transitions.fast}`,
     };
 
     const activeStyle: CSSProperties = active ? {
         background: 'rgba(96, 165, 250, 0.25)',
         borderColor: 'rgba(96, 165, 250, 0.4)',
+        opacity: 1,
     } : {};
 
     const hoverStyle: CSSProperties = isHovered ? {
         ...glassButtonHover,
+        opacity: 1,
     } : {};
 
     const pressedStyle: CSSProperties = isPressed ? {
         transform: 'scale(0.95)',
-        transition: `transform ${transitions.fast}`,
     } : {};
 
     return (
@@ -126,7 +141,7 @@ function QuickActionButton({ icon, label, onClick, isMobile, active }: QuickActi
         >
             <span
                 style={{
-                    color: active ? colors.accent.primary : colors.text.secondary,
+                    color: active ? colors.accent.primary : (isSubtleInactive && !isHovered ? colors.text.tertiary : colors.text.secondary),
                     fontSize: isMobile ? 20 : 18,
                     display: 'flex',
                     alignItems: 'center',
