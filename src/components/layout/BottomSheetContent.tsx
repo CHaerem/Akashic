@@ -20,6 +20,7 @@ import { PhotoIcon, PencilIcon } from '../icons';
 import { WaypointEditModal } from '../trek/WaypointEditModal';
 import { PhotoAssignModal } from '../trek/PhotoAssignModal';
 import { JourneyEditModal } from '../trek/JourneyEditModal';
+import { RouteEditor } from '../trek/RouteEditor';
 
 interface BottomSheetContentProps {
     view: ViewMode;
@@ -261,6 +262,7 @@ function TrekViewContent({
     editMode,
     isMobile,
 }: TrekViewContentProps) {
+    const [showRouteEditor, setShowRouteEditor] = useState(false);
     const { getPhotosForDay } = usePhotoDay(trekData, photos);
 
     // Calculate date for current day
@@ -279,6 +281,39 @@ function TrekViewContent({
 
     return (
         <div style={{ padding: 16 }}>
+            {/* Edit Route button - shown when edit mode is active */}
+            {editMode && (
+                <motion.button
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={() => setShowRouteEditor(true)}
+                    style={{
+                        width: '100%',
+                        padding: '12px 16px',
+                        marginBottom: 16,
+                        background: 'rgba(96, 165, 250, 0.15)',
+                        border: '1px solid rgba(96, 165, 250, 0.3)',
+                        borderRadius: radius.md,
+                        cursor: 'pointer',
+                        color: colors.accent.primary,
+                        fontSize: 14,
+                        fontWeight: 600,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: 8,
+                    }}
+                >
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M3 6l3-3 3 3"/>
+                        <path d="M6 3v18"/>
+                        <path d="M21 18l-3 3-3-3"/>
+                        <path d="M18 21V3"/>
+                    </svg>
+                    Edit Route & Camp Positions
+                </motion.button>
+            )}
+
             {activeMode === 'day' && (
                 <DayContent
                     camp={selectedCamp}
@@ -315,6 +350,15 @@ function TrekViewContent({
                     />
                 </ErrorBoundary>
             )}
+
+            {/* Route Editor Modal */}
+            <RouteEditor
+                trekData={trekData}
+                isOpen={showRouteEditor}
+                onClose={() => setShowRouteEditor(false)}
+                onSave={() => setShowRouteEditor(false)}
+                isMobile={isMobile}
+            />
         </div>
     );
 }
