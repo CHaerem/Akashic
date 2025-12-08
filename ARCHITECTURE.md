@@ -309,24 +309,44 @@ The UI uses a **Liquid Glass** design system inspired by iOS/macOS glass morphis
 | `src/components/ui/` | shadcn/ui components with glass theme |
 | `src/contexts/ThemeContext.tsx` | Dark mode (Liquid Glass is dark-only) |
 
-### Navigation
+### Navigation (Find My-Inspired UI)
 
-The main navigation uses **AdaptiveNavPill** - a floating glass pill with Viaplay-style drag-to-select:
+The UI follows Apple's "Find My" iOS app pattern: full-screen map with a draggable bottom sheet.
 
 ```
+src/components/layout/
+├── BottomSheet.tsx         # iOS-style draggable sheet with snap points
+├── BottomSheetContent.tsx  # Routes content based on view + mode
+└── QuickActionBar.tsx      # Top-right floating action buttons
+
 src/components/nav/
-├── AdaptiveNavPill.tsx     # Main nav pill with magnification effect
-├── ContentCard.tsx         # Floating card for tab content
+├── NavigationPill.tsx      # Day selector + mode switcher in sheet header
+├── AdaptiveNavPill.tsx     # Legacy pill with magnification (deprecated)
+├── ContentCard.tsx         # Floating card for tab content (deprecated)
 └── ContextCard.tsx         # Day info context card
 ```
 
-**States:**
-- **Collapsed**: Shows current day/camp
-- **Expanded**: Nav options with dock magnification
-- **Days**: Day selector with scrub-to-select
-- **Content**: Floating glass card with tab content
+**BottomSheet Features:**
+- **Three snap points**: minimized (10vh), half (45vh), expanded (88vh)
+- **Spring animations**: iOS-native feel with velocity-based snapping
+- **Scroll locking**: Content scrolls only when sheet is expanded
+- **Safe area support**: Works with notched devices
 
-**See [DESIGN-LIQUID-GLASS-NAV.md](./DESIGN-LIQUID-GLASS-NAV.md) for full documentation.**
+**QuickActionBar Actions:**
+- **Globe button**: Return to globe view
+- **Edit mode toggle**: Enable editing (waypoints, photos, journey details)
+- **Recenter**: Fly camera to current camp/trek
+
+**Content Modes:**
+- `day`: Current day details with photo strip
+- `photos`: Full photo grid with edit/assign
+- `stats`: Elevation profile and journey statistics
+- `info`: Journey overview
+
+**Edit Mode:**
+When enabled via QuickActionBar, edit buttons appear in:
+- Globe view: "Edit Journey Details" button
+- Trek day view: "Edit Day" and "Assign Photos" buttons
 
 ### Tab Components
 
