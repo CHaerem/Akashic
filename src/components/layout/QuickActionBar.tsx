@@ -15,13 +15,15 @@ interface QuickAction {
 interface QuickActionBarProps {
     actions: QuickAction[];
     isMobile?: boolean;
+    /** Hide the action bar (e.g., when bottom sheet is expanded) */
+    hidden?: boolean;
 }
 
 /**
  * Floating action buttons in top-right corner.
  * Find My-inspired quick access buttons with Liquid Glass styling.
  */
-export function QuickActionBar({ actions, isMobile = false }: QuickActionBarProps) {
+export function QuickActionBar({ actions, isMobile = false, hidden = false }: QuickActionBarProps) {
     const visibleActions = actions.filter(a => a.visible !== false);
 
     if (visibleActions.length === 0) return null;
@@ -36,6 +38,11 @@ export function QuickActionBar({ actions, isMobile = false }: QuickActionBarProp
                 display: 'flex',
                 flexDirection: 'column',
                 gap: 12,
+                // Fade out when hidden (bottom sheet expanded)
+                opacity: hidden ? 0 : 1,
+                pointerEvents: hidden ? 'none' : 'auto',
+                transform: hidden ? 'translateY(-10px)' : 'translateY(0)',
+                transition: `opacity ${transitions.normal}, transform ${transitions.normal}`,
             }}
         >
             {visibleActions.map(action => (

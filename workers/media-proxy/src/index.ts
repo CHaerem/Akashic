@@ -13,10 +13,13 @@
  * - /upload/journeys/{journey_id}/photos - Upload a photo (multipart/form-data)
  * - /mcp - MCP (Model Context Protocol) JSON-RPC endpoint
  *
+ * DELETE:
+ * - /journeys/{journey_id}/photos/{photo_id} - Delete a photo (requires editor role)
+ *
  * Access Control:
  * - Uses journey_members table for role-based access
  * - viewer: can view photos
- * - editor: can view + upload photos
+ * - editor: can view + upload + delete photos
  * - owner: full control
  */
 
@@ -392,7 +395,7 @@ export default {
         // CORS headers for frontend access
         const corsHeaders = {
             'Access-Control-Allow-Origin': '*',
-            'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+            'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS',
             'Access-Control-Allow-Headers': 'Authorization, Content-Type',
         };
 
@@ -460,7 +463,95 @@ export default {
             return handleUpload(request, env, journeyId, payload.sub);
         }
 
-        // Only allow GET requests for non-upload paths
+        // Handle DELETE requests (photo deletion)
+        if (request.method === 'DELETE') {
+            // Pattern: journeys/{journey_id}/photos/{photo_id} (UUID-based)
+            const deleteMatch = path.match(/^journeys\/([^/]+)\/photos\/([^/]+)$/);
+
+            if (!deleteMatch) {
+                return new Response(JSON.stringify({ error: 'Invalid delete path' }), {
+                    status: 400,
+                    headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+                });
+            }
+
+            const journeyId = deleteMatch[1];
+            const photoId = deleteMatch[2];
+
+            // Get and verify token
+            let token = request.headers.get('Authorization')?.replace('Bearer ', '');
+            if (!token) {
+                token = url.searchParams.get('token');
+            }
+
+            if (!token) {
+                return new Response(JSON.stringify({ error: 'Authentication required' }), {
+                    status: 401,
+                    headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+                });
+            }
+
+            const payload = await verifyJWT(token, env.SUPABASE_URL);
+            if (!payload) {
+                return new Response(JSON.stringify({ error: 'Invalid token' }), {
+                    status: 401,
+                    headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+                });
+            }
+
+            // Check if user has editor role for this journey
+            const hasAccess = await checkJourneyAccess(
+                journeyId,
+                payload.sub,
+                'editor',
+                env.SUPABASE_URL,
+                env.SUPABASE_SERVICE_KEY
+            );
+
+            if (!hasAccess) {
+                return new Response(JSON.stringify({ error: 'Forbidden: editor role required' }), {
+                    status: 403,
+                    headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+                });
+            }
+
+            // Delete both the photo and thumbnail from R2
+            const photoPath = `journeys/${journeyId}/photos/${photoId}`;
+            const thumbPath = `journeys/${journeyId}/photos/${photoId}_thumb`;
+
+            // Try to delete with common extensions
+            const extensions = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'heic', 'heif'];
+            let deleted = false;
+
+            for (const ext of extensions) {
+                try {
+                    await env.MEDIA_BUCKET.delete(`${photoPath}.${ext}`);
+                    await env.MEDIA_BUCKET.delete(`${thumbPath}.${ext}`);
+                    deleted = true;
+                } catch {
+                    // Ignore - file might not exist with this extension
+                }
+            }
+
+            // Also try without extension (in case stored that way)
+            try {
+                await env.MEDIA_BUCKET.delete(photoPath);
+                await env.MEDIA_BUCKET.delete(thumbPath);
+                deleted = true;
+            } catch {
+                // Ignore
+            }
+
+            return new Response(JSON.stringify({
+                success: true,
+                message: deleted ? 'Photo deleted' : 'No files found to delete'
+            }), {
+                status: 200,
+                headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+            });
+        }
+
+        // Only allow GET requests for non-upload/delete paths
         if (request.method !== 'GET') {
             return new Response('Method not allowed', { status: 405, headers: corsHeaders });
         }

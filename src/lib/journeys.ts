@@ -340,7 +340,7 @@ export async function createPhoto(photo: {
  */
 export async function updatePhoto(
     photoId: string,
-    updates: Partial<Pick<Photo, 'caption' | 'waypoint_id' | 'coordinates' | 'is_hero' | 'sort_order'>>
+    updates: Partial<Pick<Photo, 'caption' | 'waypoint_id' | 'coordinates' | 'is_hero' | 'sort_order' | 'rotation'>>
 ): Promise<Photo | null> {
     if (!supabase) {
         console.warn('Supabase not configured');
@@ -363,7 +363,7 @@ export async function updatePhoto(
 }
 
 /**
- * Delete a photo record
+ * Delete a photo record and its files from R2 storage
  */
 export async function deletePhoto(photoId: string): Promise<boolean> {
     if (!supabase) {
@@ -371,6 +371,29 @@ export async function deletePhoto(photoId: string): Promise<boolean> {
         return false;
     }
 
+    // First, fetch the photo to get journey_id for R2 deletion
+    const { data: photo, error: fetchError } = await supabase
+        .from('photos')
+        .select('id, journey_id')
+        .eq('id', photoId)
+        .single();
+
+    if (fetchError || !photo) {
+        console.error('Error fetching photo for deletion:', fetchError);
+        throw new Error(fetchError?.message || 'Photo not found');
+    }
+
+    // Delete files from R2 storage
+    try {
+        const { deletePhotoFiles } = await import('./media');
+        await deletePhotoFiles(photo.journey_id, photo.id);
+    } catch (r2Error) {
+        console.warn('Failed to delete R2 files (continuing with DB delete):', r2Error);
+        // Continue with DB deletion even if R2 fails
+        // The files may not exist or already be deleted
+    }
+
+    // Delete the database record
     const { error } = await supabase
         .from('photos')
         .delete()

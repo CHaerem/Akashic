@@ -329,7 +329,10 @@ export const PhotoLightbox = memo(function PhotoLightbox({
                         "transition-all duration-200",
                         imageLoaded && !isAnimating ? "opacity-100 scale-100" : "opacity-0 scale-[0.98]"
                     )}
-                    style={{ WebkitUserDrag: 'none' } as React.CSSProperties}
+                    style={{
+                        WebkitUserDrag: 'none',
+                        transform: currentPhoto.rotation ? `rotate(${currentPhoto.rotation}deg)` : undefined,
+                    } as React.CSSProperties}
                     draggable={false}
                 />
             </div>

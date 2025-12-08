@@ -262,8 +262,12 @@ export default function AkashicApp() {
                 </div>
             )}
 
-            {/* Quick Action Bar - Top Right */}
-            <QuickActionBar actions={quickActions} isMobile={isMobile} />
+            {/* Quick Action Bar - Top Right (hidden when sheet is expanded) */}
+            <QuickActionBar
+                actions={quickActions}
+                isMobile={isMobile}
+                hidden={sheetSnapPoint === 'expanded'}
+            />
 
             {/* Globe Hint - shown when no trek selected */}
             {!selectedTrek && view === 'globe' && <GlobeHint isMobile={isMobile} />}

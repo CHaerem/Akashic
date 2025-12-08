@@ -85,6 +85,7 @@ const PhotoGridItem = memo(function PhotoGridItem({
                 alt={photo.caption || 'Journey photo'}
                 className="w-full h-full object-cover"
                 loading="lazy"
+                style={photo.rotation ? { transform: `rotate(${photo.rotation}deg)` } : undefined}
             />
 
             {/* Hero badge */}
@@ -491,6 +492,10 @@ export function PhotosTab({ trekData, isMobile, editMode = false, onViewPhotoOnM
                     isOpen={true}
                     onClose={() => setEditingPhoto(null)}
                     onSave={handlePhotoUpdated}
+                    onDelete={editMode ? (photoId) => {
+                        setPhotos(prev => prev.filter(p => p.id !== photoId));
+                        setEditingPhoto(null);
+                    } : undefined}
                     getMediaUrl={getMediaUrl}
                     isMobile={isMobile}
                 />

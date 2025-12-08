@@ -6,7 +6,7 @@ import { useState, useCallback, useRef, useEffect, memo } from 'react';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import type { Photo, TrekData } from '../../types/trek';
-import { updatePhoto } from '../../lib/journeys';
+import { updatePhoto, deletePhoto } from '../../lib/journeys';
 import {
     Dialog,
     DialogContent,
@@ -33,6 +33,7 @@ interface PhotoEditModalProps {
     isOpen: boolean;
     onClose: () => void;
     onSave: (updatedPhoto: Photo) => void;
+    onDelete?: (photoId: string) => void;
     getMediaUrl: (path: string) => string;
     isMobile: boolean;
 }
@@ -43,6 +44,7 @@ export const PhotoEditModal = memo(function PhotoEditModal({
     isOpen,
     onClose,
     onSave,
+    onDelete,
     getMediaUrl,
     isMobile
 }: PhotoEditModalProps) {
@@ -51,7 +53,10 @@ export const PhotoEditModal = memo(function PhotoEditModal({
         photo.coordinates || null
     );
     const [isHero, setIsHero] = useState(photo.is_hero || false);
+    const [rotation, setRotation] = useState(photo.rotation || 0);
     const [saving, setSaving] = useState(false);
+    const [deleting, setDeleting] = useState(false);
+    const [confirmDelete, setConfirmDelete] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [showMap, setShowMap] = useState(false);
 
@@ -65,8 +70,10 @@ export const PhotoEditModal = memo(function PhotoEditModal({
             setCaption(photo.caption || '');
             setCoordinates(photo.coordinates || null);
             setIsHero(photo.is_hero || false);
+            setRotation(photo.rotation || 0);
             setError(null);
             setShowMap(false);
+            setConfirmDelete(false);
         }
     }, [isOpen, photo]);
 
@@ -159,14 +166,16 @@ export const PhotoEditModal = memo(function PhotoEditModal({
             await updatePhoto(photo.id, {
                 caption: caption || null,
                 coordinates: coordinates,
-                is_hero: isHero
+                is_hero: isHero,
+                rotation: rotation
             });
 
             const updatedPhoto: Photo = {
                 ...photo,
                 caption: caption || null,
                 coordinates,
-                is_hero: isHero
+                is_hero: isHero,
+                rotation
             };
 
             onSave(updatedPhoto);
@@ -176,7 +185,12 @@ export const PhotoEditModal = memo(function PhotoEditModal({
         } finally {
             setSaving(false);
         }
-    }, [photo, caption, coordinates, isHero, onSave, onClose]);
+    }, [photo, caption, coordinates, isHero, rotation, onSave, onClose]);
+
+    // Rotate 90 degrees clockwise
+    const handleRotate = useCallback(() => {
+        setRotation((prev) => (prev + 90) % 360);
+    }, []);
 
     const handleClearLocation = useCallback(() => {
         setCoordinates(null);
@@ -186,15 +200,56 @@ export const PhotoEditModal = memo(function PhotoEditModal({
         }
     }, []);
 
+    const handleDelete = useCallback(async () => {
+        if (!onDelete) return;
+
+        setDeleting(true);
+        setError(null);
+
+        try {
+            await deletePhoto(photo.id);
+            onDelete(photo.id);
+            onClose();
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Failed to delete photo');
+            setConfirmDelete(false);
+        } finally {
+            setDeleting(false);
+        }
+    }, [photo.id, onDelete, onClose]);
+
     const formContent = (
         <div className="flex flex-col gap-5">
-            {/* Photo preview */}
-            <div className="rounded-xl overflow-hidden bg-black/30">
+            {/* Photo preview with rotation */}
+            <div className="rounded-xl overflow-hidden bg-black/30 relative">
                 <img
                     src={getMediaUrl(photo.thumbnail_url || photo.url)}
                     alt="Photo preview"
-                    className="w-full max-h-48 object-contain"
+                    className="w-full max-h-48 object-contain transition-transform duration-300"
+                    style={{ transform: `rotate(${rotation}deg)` }}
                 />
+                {/* Rotation button overlay */}
+                <button
+                    type="button"
+                    onClick={handleRotate}
+                    className={cn(
+                        "absolute bottom-2 right-2 p-2 rounded-full",
+                        "bg-black/50 hover:bg-black/70 text-white",
+                        "transition-colors duration-200"
+                    )}
+                    title="Rotate 90°"
+                >
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M21 12a9 9 0 11-9-9c2.52 0 4.93 1 6.74 2.74L21 8" />
+                        <path d="M21 3v5h-5" />
+                    </svg>
+                </button>
+                {/* Rotation indicator */}
+                {rotation !== 0 && (
+                    <div className="absolute top-2 left-2 px-2 py-1 rounded-md bg-black/50 text-white text-xs">
+                        {rotation}°
+                    </div>
+                )}
             </div>
 
             {/* Error message */}
@@ -307,6 +362,56 @@ export const PhotoEditModal = memo(function PhotoEditModal({
                     </button>
                 </div>
             </Card>
+
+            {/* Delete photo */}
+            {onDelete && (
+                <div className="pt-2 border-t border-white/10 light:border-black/10">
+                    {!confirmDelete ? (
+                        <Button
+                            variant="danger"
+                            size="sm"
+                            onClick={() => setConfirmDelete(true)}
+                            disabled={saving || deleting}
+                            className="w-full"
+                        >
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-2">
+                                <path d="M3 6h18" />
+                                <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
+                                <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+                                <line x1="10" y1="11" x2="10" y2="17" />
+                                <line x1="14" y1="11" x2="14" y2="17" />
+                            </svg>
+                            Delete Photo
+                        </Button>
+                    ) : (
+                        <div className="space-y-3">
+                            <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-sm text-center">
+                                Are you sure? This cannot be undone.
+                            </div>
+                            <div className="flex gap-2">
+                                <Button
+                                    variant="subtle"
+                                    size="sm"
+                                    onClick={() => setConfirmDelete(false)}
+                                    disabled={deleting}
+                                    className="flex-1"
+                                >
+                                    Cancel
+                                </Button>
+                                <Button
+                                    variant="danger"
+                                    size="sm"
+                                    onClick={handleDelete}
+                                    disabled={deleting}
+                                    className="flex-1"
+                                >
+                                    {deleting ? 'Deleting...' : 'Yes, Delete'}
+                                </Button>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            )}
         </div>
     );
 

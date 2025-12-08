@@ -210,3 +210,31 @@ export async function uploadPhoto(
 
     return result;
 }
+
+/**
+ * Delete a photo and its thumbnail from R2 storage
+ * @param journeyId - The journey UUID
+ * @param photoId - The photo UUID (without extension)
+ * @returns true if successful
+ */
+export async function deletePhotoFiles(journeyId: string, photoId: string): Promise<boolean> {
+    const token = await getAccessToken();
+
+    if (!token) {
+        throw new Error('Authentication required');
+    }
+
+    const response = await fetch(`${MEDIA_BASE_URL}/journeys/${journeyId}/photos/${photoId}`, {
+        method: 'DELETE',
+        headers: {
+            'Authorization': `Bearer ${token}`,
+        },
+    });
+
+    if (!response.ok) {
+        const error = await response.json().catch(() => ({ error: 'Delete failed' }));
+        throw new Error(error.error || 'Failed to delete photo files');
+    }
+
+    return true;
+}

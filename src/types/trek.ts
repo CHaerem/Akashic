@@ -138,6 +138,8 @@ export interface Photo {
     created_at?: string;
     /** User ID of who uploaded this photo */
     uploaded_by?: string | null;
+    /** Rotation angle in degrees (0, 90, 180, 270) */
+    rotation?: number | null;
 }
 
 /** User profile for display */

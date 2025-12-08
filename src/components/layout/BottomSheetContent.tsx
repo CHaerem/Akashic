@@ -428,7 +428,12 @@ function DayContent({ camp, currentDayDate, dayPhotos, allPhotos, getMediaUrl, o
                             <img
                                 src={getMediaUrl(photo.thumbnail_url || photo.url)}
                                 alt={photo.caption || `Photo ${idx + 1}`}
-                                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                style={{
+                                    width: '100%',
+                                    height: '100%',
+                                    objectFit: 'cover',
+                                    transform: photo.rotation ? `rotate(${photo.rotation}deg)` : undefined,
+                                }}
                             />
                         </div>
                     ))}
