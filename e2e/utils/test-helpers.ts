@@ -5,14 +5,12 @@
 
 import type { Page } from '@playwright/test';
 
-const isCI = !!process.env.CI;
-
-// Timeout constants - more generous in CI
+// Timeout constants - keep tight for fast CI
 export const TIMEOUTS = {
-    mapInit: isCI ? 20000 : 15000,
-    dataLoad: isCI ? 12000 : 8000,
-    transition: isCI ? 8000 : 5000,
-    action: isCI ? 5000 : 3000,
+    mapInit: 15000,
+    dataLoad: 8000,
+    transition: 5000,
+    action: 3000,
 } as const;
 
 /**

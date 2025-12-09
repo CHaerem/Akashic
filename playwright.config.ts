@@ -6,27 +6,22 @@ export default defineConfig({
     testDir: './e2e',
     fullyParallel: true,
     forbidOnly: isCI,
-    retries: isCI ? 2 : 0,
-    workers: isCI ? 1 : undefined,
+    retries: isCI ? 1 : 0,
+    workers: isCI ? 2 : undefined,
     reporter: isCI ? [['html'], ['github']] : 'html',
 
-    // Global timeout settings - more generous for map-heavy tests
-    timeout: isCI ? 90000 : 60000, // 90s in CI, 60s locally
-
-    // Expect timeout for assertions
+    // Timeouts - keep them tight
+    timeout: 60000,
     expect: {
-        timeout: isCI ? 15000 : 10000, // 15s in CI, 10s locally
+        timeout: 10000,
     },
 
     use: {
         baseURL: 'http://localhost:5173',
         trace: 'on-first-retry',
         screenshot: 'only-on-failure',
-        video: isCI ? 'retain-on-failure' : 'off',
-
-        // Action timeouts
-        actionTimeout: 10000,
-        navigationTimeout: 30000,
+        actionTimeout: 8000,
+        navigationTimeout: 20000,
     },
 
     projects: [
@@ -48,7 +43,7 @@ export default defineConfig({
         command: 'npm run dev -- --port 5173',
         url: 'http://localhost:5173',
         reuseExistingServer: !isCI,
-        timeout: 120000,
+        timeout: 60000,
         stdout: 'ignore',
         stderr: 'pipe',
         env: {

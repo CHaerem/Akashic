@@ -1,8 +1,7 @@
 import { test, expect } from '@playwright/test';
 
-const isCI = !!process.env.CI;
-const MAP_TIMEOUT = isCI ? 20000 : 15000;
-const DATA_TIMEOUT = isCI ? 12000 : 8000;
+const MAP_TIMEOUT = 15000;
+const DATA_TIMEOUT = 8000;
 
 // Helper to wait for map to be ready
 async function waitForMapReady(page: import('@playwright/test').Page, timeout = MAP_TIMEOUT): Promise<boolean> {
