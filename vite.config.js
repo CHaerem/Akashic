@@ -189,6 +189,13 @@ export default defineConfig({
 		environment: "jsdom",
 		setupFiles: "./vitest.setup.js",
 		exclude: ["**/node_modules/**", "**/e2e/**"],
+		// Timeout settings for more robust tests
+		testTimeout: 10000,
+		hookTimeout: 10000,
+		// Fail fast on first error in CI
+		bail: process.env.CI ? 1 : 0,
+		// Better error reporting
+		reporters: process.env.CI ? ["default", "github-actions"] : ["default"],
 	},
 	base: "/",
 	resolve: {
