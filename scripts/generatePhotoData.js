@@ -58,7 +58,7 @@ function processPhotos() {
           const parser = exifParser.create(buffer);
           const resultObj = parser.parse();
           tags = resultObj.tags;
-        } catch (e) {
+        } catch {
           // Ignore EXIF errors, might be PNG or stripped
         }
 
