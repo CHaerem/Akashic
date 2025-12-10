@@ -26,7 +26,11 @@ export async function fetchPhotos(journeyId: string): Promise<Photo[]> {
         return [];
     }
 
-    return data || [];
+    // Transform GeoJSON coordinates to simple [lng, lat] arrays
+    return (data || []).map(photo => ({
+        ...photo,
+        coordinates: photo.coordinates?.coordinates ?? photo.coordinates ?? null
+    }));
 }
 
 /**
@@ -175,5 +179,9 @@ export async function getPhotosForWaypoint(waypointId: string): Promise<Photo[]>
         return [];
     }
 
-    return data || [];
+    // Transform GeoJSON coordinates to simple [lng, lat] arrays
+    return (data || []).map(photo => ({
+        ...photo,
+        coordinates: photo.coordinates?.coordinates ?? photo.coordinates ?? null
+    }));
 }
