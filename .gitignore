@@ -40,4 +40,5 @@ gpx-data/
 # Test artifacts
 test-results/
 playwright-report/
+coverage/
 viaplay*/
