@@ -23,7 +23,7 @@ async function waitForMapReady(page: Page, timeout = MAP_TIMEOUT): Promise<boole
 }
 
 // Helper to select a trek programmatically
-// Returns true if selection succeeded, waits for React to re-render
+// Returns true if selection succeeded, waits for selection panel to appear
 async function selectFirstTrek(page: Page): Promise<boolean> {
     const selected = await page.evaluate(() => {
         const treks = window.testHelpers?.getTreks();
@@ -33,12 +33,16 @@ async function selectFirstTrek(page: Page): Promise<boolean> {
         return false;
     }).catch(() => false);
 
-    if (selected) {
-        // Wait for React to re-render after programmatic state change
-        // This is necessary because selectTrek() doesn't trigger DOM events
-        await page.waitForTimeout(300);
+    if (!selected) return false;
+
+    // Wait for selection panel to appear (contains "Explore Journey" button)
+    // This is more reliable than a fixed timeout
+    try {
+        await page.waitForSelector('text="Explore Journey →"', { timeout: 5000 });
+        return true;
+    } catch {
+        return false;
     }
-    return selected;
 }
 
 test.describe('Supabase Data Loading', () => {
