@@ -1,10 +1,10 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, Page } from '@playwright/test';
 
 const MAP_TIMEOUT = 15000;
 const DATA_TIMEOUT = 8000;
 
-// Helper to wait for map to be ready
-async function waitForMapReady(page: import('@playwright/test').Page, timeout = MAP_TIMEOUT): Promise<boolean> {
+// Helper to wait for map to be ready - uses polling with exponential backoff
+async function waitForMapReady(page: Page, timeout = MAP_TIMEOUT): Promise<boolean> {
     const startTime = Date.now();
     let pollInterval = 100;
 
@@ -23,7 +23,7 @@ async function waitForMapReady(page: import('@playwright/test').Page, timeout = 
 }
 
 // Helper to select a trek programmatically
-async function selectFirstTrek(page: import('@playwright/test').Page): Promise<boolean> {
+async function selectFirstTrek(page: Page): Promise<boolean> {
     return await page.evaluate(() => {
         const treks = window.testHelpers?.getTreks();
         if (treks && treks.length > 0) {
@@ -31,6 +31,21 @@ async function selectFirstTrek(page: import('@playwright/test').Page): Promise<b
         }
         return false;
     }).catch(() => false);
+}
+
+// Helper to navigate to trek exploration view - eliminates redundant waits
+async function navigateToExploreView(page: Page): Promise<boolean> {
+    await waitForMapReady(page);
+    const selected = await selectFirstTrek(page);
+    if (!selected) return false;
+
+    const exploreButton = page.getByText('Explore Journey →');
+    await expect(exploreButton).toBeVisible();
+    await exploreButton.click();
+
+    // Wait for info panel tabs to confirm navigation completed
+    await expect(page.getByRole('button', { name: /overview/i })).toBeVisible();
+    return true;
 }
 
 test.describe('Supabase Data Loading', () => {
@@ -76,9 +91,7 @@ test.describe('Supabase Data Loading', () => {
             return;
         }
 
-        await page.waitForTimeout(300);
-
-        // Verify trek data is displayed (from Supabase)
+        // Verify trek data is displayed (from Supabase) - assertions auto-wait
         await expect(page.getByText('Summit:')).toBeVisible();
 
         // Should show elevation
@@ -87,24 +100,15 @@ test.describe('Supabase Data Loading', () => {
 
     test('waypoints/camps are loaded when exploring trek', async ({ page }) => {
         await page.waitForSelector('canvas', { timeout: MAP_TIMEOUT });
-        await waitForMapReady(page);
 
-        const selected = await selectFirstTrek(page);
-        if (!selected) {
+        const navigated = await navigateToExploreView(page);
+        if (!navigated) {
             test.skip();
             return;
         }
 
-        await page.waitForTimeout(300);
-
-        const exploreButton = page.getByText('Explore Journey →');
-        await expect(exploreButton).toBeVisible();
-        await exploreButton.click();
-        await page.waitForTimeout(500);
-
         // Go to journey tab to see waypoints
         await page.getByRole('button', { name: /journey/i }).click();
-        await page.waitForTimeout(300);
 
         // Should see camp/waypoint list with day numbers
         // This verifies waypoints were loaded from Supabase
@@ -118,24 +122,15 @@ test.describe('Supabase Data Loading', () => {
 
     test('route data is available for trek visualization', async ({ page }) => {
         await page.waitForSelector('canvas', { timeout: MAP_TIMEOUT });
-        await waitForMapReady(page);
 
-        const selected = await selectFirstTrek(page);
-        if (!selected) {
+        const navigated = await navigateToExploreView(page);
+        if (!navigated) {
             test.skip();
             return;
         }
 
-        await page.waitForTimeout(300);
-
-        const exploreButton = page.getByText('Explore Journey →');
-        await expect(exploreButton).toBeVisible();
-        await exploreButton.click();
-        await page.waitForTimeout(500);
-
         // Go to stats tab to verify elevation profile (requires route data)
         await page.getByRole('button', { name: /stats/i }).click();
-        await page.waitForTimeout(300);
 
         // Elevation profile only renders if route coordinates are available
         await expect(page.getByText('Elevation Profile')).toBeVisible();

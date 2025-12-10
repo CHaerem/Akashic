@@ -1,9 +1,9 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, Page } from '@playwright/test';
 
 const MAP_TIMEOUT = 15000;
 
-// Helper to wait for map to be ready
-async function waitForMapReady(page: import('@playwright/test').Page, timeout = MAP_TIMEOUT): Promise<boolean> {
+// Helper to wait for map to be ready - uses polling with exponential backoff
+async function waitForMapReady(page: Page, timeout = MAP_TIMEOUT): Promise<boolean> {
     const startTime = Date.now();
     let pollInterval = 100;
 
@@ -22,7 +22,7 @@ async function waitForMapReady(page: import('@playwright/test').Page, timeout = 
 }
 
 // Helper to select a trek programmatically
-async function selectFirstTrek(page: import('@playwright/test').Page): Promise<boolean> {
+async function selectFirstTrek(page: Page): Promise<boolean> {
     return await page.evaluate(() => {
         const treks = window.testHelpers?.getTreks();
         if (treks && treks.length > 0) {
@@ -30,6 +30,21 @@ async function selectFirstTrek(page: import('@playwright/test').Page): Promise<b
         }
         return false;
     }).catch(() => false);
+}
+
+// Helper to navigate to trek exploration view - eliminates redundant waits
+async function navigateToExploreView(page: Page): Promise<boolean> {
+    await waitForMapReady(page);
+    const selected = await selectFirstTrek(page);
+    if (!selected) return false;
+
+    const exploreButton = page.getByText('Explore Journey →');
+    await expect(exploreButton).toBeVisible();
+    await exploreButton.click();
+
+    // Wait for info panel tabs to confirm navigation completed
+    await expect(page.getByRole('button', { name: /overview/i })).toBeVisible();
+    return true;
 }
 
 test.describe('Akashic App', () => {
@@ -65,9 +80,7 @@ test.describe('Akashic App', () => {
                 return;
             }
 
-            await page.waitForTimeout(300);
-
-            // Trek selected, verify panel elements
+            // Trek selected, verify panel elements - assertions auto-wait
             await expect(page.getByText('Summit:')).toBeVisible();
             await expect(page.getByText('← Back')).toBeVisible();
             await expect(page.getByText('Explore Journey →')).toBeVisible();
@@ -76,19 +89,11 @@ test.describe('Akashic App', () => {
 
     test.describe('Trek Exploration', () => {
         test('clicking explore transitions to trek view with info panel', async ({ page }) => {
-            await waitForMapReady(page);
-
-            const selected = await selectFirstTrek(page);
-            if (!selected) {
+            const navigated = await navigateToExploreView(page);
+            if (!navigated) {
                 test.skip();
                 return;
             }
-
-            await page.waitForTimeout(300);
-
-            const exploreButton = page.getByText('Explore Journey →');
-            await expect(exploreButton).toBeVisible();
-            await exploreButton.click();
 
             // Should now see the info panel with tabs
             await expect(page.getByRole('button', { name: /overview/i })).toBeVisible();
@@ -99,25 +104,16 @@ test.describe('Akashic App', () => {
 
     test.describe('Info Panel Tabs', () => {
         test('tabs navigation works correctly', async ({ page }) => {
-            await waitForMapReady(page);
-
-            const selected = await selectFirstTrek(page);
-            if (!selected) {
+            const navigated = await navigateToExploreView(page);
+            if (!navigated) {
                 test.skip();
                 return;
             }
 
-            await page.waitForTimeout(300);
-
-            const exploreButton = page.getByText('Explore Journey →');
-            await expect(exploreButton).toBeVisible();
-            await exploreButton.click();
-            await page.waitForTimeout(300);
-
             // Click journey tab
             await page.getByRole('button', { name: /journey/i }).click();
 
-            // Should see camp list with day indicators
+            // Should see camp list with day indicators - assertions auto-wait
             await expect(page.getByText(/Day \d+/)).toBeVisible();
 
             // Click stats tab
@@ -136,20 +132,11 @@ test.describe('Akashic App', () => {
 
     test.describe('Navigation', () => {
         test('clicking title returns to globe view', async ({ page }) => {
-            await waitForMapReady(page);
-
-            const selected = await selectFirstTrek(page);
-            if (!selected) {
+            const navigated = await navigateToExploreView(page);
+            if (!navigated) {
                 test.skip();
                 return;
             }
-
-            await page.waitForTimeout(300);
-
-            const exploreButton = page.getByText('Explore Journey →');
-            await expect(exploreButton).toBeVisible();
-            await exploreButton.click();
-            await page.waitForTimeout(300);
 
             // Now click the title to go back
             await page.getByText('Akashic').click();
@@ -159,20 +146,11 @@ test.describe('Akashic App', () => {
         });
 
         test('back button in info panel returns to globe', async ({ page }) => {
-            await waitForMapReady(page);
-
-            const selected = await selectFirstTrek(page);
-            if (!selected) {
+            const navigated = await navigateToExploreView(page);
+            if (!navigated) {
                 test.skip();
                 return;
             }
-
-            await page.waitForTimeout(300);
-
-            const exploreButton = page.getByText('Explore Journey →');
-            await expect(exploreButton).toBeVisible();
-            await exploreButton.click();
-            await page.waitForTimeout(300);
 
             // Click globe back button
             await page.getByText('← Globe').click();
@@ -184,24 +162,17 @@ test.describe('Akashic App', () => {
 
     test.describe('Camp Selection', () => {
         test('clicking camp in journey tab expands details', async ({ page }) => {
-            await waitForMapReady(page);
-
-            const selected = await selectFirstTrek(page);
-            if (!selected) {
+            const navigated = await navigateToExploreView(page);
+            if (!navigated) {
                 test.skip();
                 return;
             }
 
-            await page.waitForTimeout(300);
-
-            const exploreButton = page.getByText('Explore Journey →');
-            await expect(exploreButton).toBeVisible();
-            await exploreButton.click();
-            await page.waitForTimeout(300);
-
             // Go to journey tab
             await page.getByRole('button', { name: /journey/i }).click();
-            await page.waitForTimeout(200);
+
+            // Wait for day indicator to appear
+            await expect(page.getByText(/Day \d+/)).toBeVisible();
 
             // Click first camp item
             const campItems = page.locator('[style*="cursor: pointer"]').filter({ hasText: /Day \d+/ });
@@ -219,20 +190,11 @@ test.describe('Akashic App', () => {
     test.describe('Responsive Layout', () => {
         test('info panel takes correct width on desktop', async ({ page }) => {
             await page.setViewportSize({ width: 1280, height: 720 });
-            await waitForMapReady(page);
-
-            const selected = await selectFirstTrek(page);
-            if (!selected) {
+            const navigated = await navigateToExploreView(page);
+            if (!navigated) {
                 test.skip();
                 return;
             }
-
-            await page.waitForTimeout(300);
-
-            const exploreButton = page.getByText('Explore Journey →');
-            await expect(exploreButton).toBeVisible();
-            await exploreButton.click();
-            await page.waitForTimeout(300);
 
             // Info panel should be 40% width
             const infoPanel = page.locator('[style*="width: 40%"]');
@@ -244,7 +206,6 @@ test.describe('Akashic App', () => {
         test('globe view matches snapshot', async ({ page }) => {
             // Wait for map to fully load
             await waitForMapReady(page);
-            await page.waitForTimeout(1000); // Extra time for visual stability
 
             // Take screenshot of initial state
             await expect(page).toHaveScreenshot('globe-view.png', {
