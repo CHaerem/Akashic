@@ -481,7 +481,7 @@ Base components in `src/components/ui/`:
    - ✅ Photo CRUD operations in `src/lib/journeys.ts`
    - ✅ PhotosTab component with drag-and-drop upload
    - ✅ Photo grid + lightbox display
-   - ⏳ EXIF metadata extraction (pending)
+   - ✅ EXIF metadata extraction (GPS, date via `bulkUploadR2.ts`)
    - ⏳ Photo map markers (pending)
 
 ### Phase 3: Multi-user Foundation ✅
@@ -638,6 +638,45 @@ Supabase provides a local emulator:
 ```bash
 npx supabase start
 ```
+
+---
+
+## Scripts
+
+Utility scripts in `scripts/` for data management and operations.
+
+### Photo Management
+
+| Script | Purpose | Usage |
+|--------|---------|-------|
+| `bulkUploadR2.ts` | Bulk upload photos to R2 with EXIF extraction | `SUPABASE_SERVICE_KEY="..." npx tsx scripts/bulkUploadR2.ts <folder> <journey-slug>` |
+| `generateThumbnails.ts` | Generate thumbnails for photos | `npx tsx scripts/generateThumbnails.ts` |
+
+**bulkUploadR2.ts features:**
+- Direct R2 upload via wrangler CLI (bypasses worker auth)
+- EXIF extraction: GPS coordinates, date taken
+- Duplicate detection (skips existing photos)
+- Supports: `.jpg`, `.jpeg`, `.png`, `.heic`, `.heif`, `.webp`
+
+**Prerequisites:** `exiftool` installed, wrangler configured with R2 access
+
+### Data Import
+
+| Script | Purpose |
+|--------|---------|
+| `importGpx.js` | Import GPX route files |
+| `combineGpx.js` | Merge multiple GPX files |
+| `migrateToSupabase.js` | One-time migration to Supabase |
+| `migrateR2Photos.js` | Migrate photos from slug to UUID paths |
+
+### Build & Assets
+
+| Script | Purpose |
+|--------|---------|
+| `build.js` | Production build helper |
+| `generateIcons.js` | Generate app icons |
+| `generateSplashScreens.js` | Generate PWA splash screens |
+| `generatePhotoData.js` | Generate photo metadata JSON |
 
 ---
 
