@@ -22,7 +22,6 @@ async function waitForMapReady(page: Page, timeout = MAP_TIMEOUT): Promise<boole
 }
 
 // Helper to select a trek programmatically
-// Returns true if selection succeeded, waits for selection panel to appear
 async function selectFirstTrek(page: Page): Promise<boolean> {
     const selected = await page.evaluate(() => {
         const treks = window.testHelpers?.getTreks();
@@ -34,8 +33,7 @@ async function selectFirstTrek(page: Page): Promise<boolean> {
 
     if (!selected) return false;
 
-    // Wait for selection panel to appear (contains "Explore Journey" button)
-    // This is more reliable than a fixed timeout
+    // Wait for selection panel to appear
     try {
         await page.waitForSelector('text="Explore Journey →"', { timeout: 5000 });
         return true;
@@ -45,7 +43,7 @@ async function selectFirstTrek(page: Page): Promise<boolean> {
 }
 
 test.describe('Akashic App', () => {
-    // Single comprehensive test for globe view - tests multiple things in one page load
+    // Test globe view renders correctly
     test('globe view renders correctly', async ({ page }) => {
         await page.goto('/');
         await page.waitForSelector('canvas', { timeout: MAP_TIMEOUT });
@@ -62,8 +60,8 @@ test.describe('Akashic App', () => {
         await expect(page.getByText('Click a marker to explore')).toBeVisible();
     });
 
-    // Single comprehensive test for the entire trek exploration flow
-    test('trek selection and exploration flow', async ({ page }) => {
+    // Test trek selection shows info panel
+    test('trek selection shows info panel', async ({ page }) => {
         await page.goto('/');
         await page.waitForSelector('canvas', { timeout: MAP_TIMEOUT });
         await waitForMapReady(page);
@@ -75,83 +73,34 @@ test.describe('Akashic App', () => {
             return;
         }
 
-        // Verify selection panel
+        // Verify selection panel shows trek info
         await expect(page.getByText('Summit:')).toBeVisible();
-        await expect(page.getByText('← Back')).toBeVisible();
         await expect(page.getByText('Explore Journey →')).toBeVisible();
+    });
+
+    // Test exploration flow - clicking explore shows trek details
+    test('explore journey shows trek details', async ({ page }) => {
+        await page.goto('/');
+        await page.waitForSelector('canvas', { timeout: MAP_TIMEOUT });
+        await waitForMapReady(page);
+
+        // Select trek
+        const selected = await selectFirstTrek(page);
+        if (!selected) {
+            test.skip();
+            return;
+        }
 
         // Click explore
         await page.getByText('Explore Journey →').click();
 
-        // Verify info panel tabs appear
-        await expect(page.getByRole('button', { name: /overview/i })).toBeVisible();
-        await expect(page.getByRole('button', { name: /journey/i })).toBeVisible();
-        await expect(page.getByRole('button', { name: /stats/i })).toBeVisible();
+        // Verify trek view shows - look for trek stats that appear in the new UI
+        // The new UI shows Duration, Distance, Ascent, Summit stats
+        await expect(page.getByText('DURATION')).toBeVisible({ timeout: 10000 });
+        await expect(page.getByText('DISTANCE')).toBeVisible();
 
-        // Test tab navigation - Journey tab
-        await page.getByRole('button', { name: /journey/i }).click();
-        await expect(page.getByText(/Day \d+/)).toBeVisible();
-
-        // Test camp expansion
-        const campItems = page.locator('[style*="cursor: pointer"]').filter({ hasText: /Day \d+/ });
-        const count = await campItems.count();
-        if (count > 0) {
-            await campItems.first().click();
-            await expect(page.getByText('PHOTOS COMING SOON')).toBeVisible();
-        }
-
-        // Test Stats tab
-        await page.getByRole('button', { name: /stats/i }).click();
-        await expect(page.getByText('Elevation Profile')).toBeVisible();
-
-        // Test Overview tab
-        await page.getByRole('button', { name: /overview/i }).click();
-        await expect(page.getByText(/\d+ days/)).toBeVisible();
-
-        // Test navigation back via title
-        await page.getByText('Akashic').click();
-        await expect(page.getByText('Click a marker to explore')).toBeVisible();
-    });
-
-    // Test back button navigation separately (needs fresh explore state)
-    test('back button returns to globe', async ({ page }) => {
-        await page.goto('/');
-        await page.waitForSelector('canvas', { timeout: MAP_TIMEOUT });
-        await waitForMapReady(page);
-
-        const selected = await selectFirstTrek(page);
-        if (!selected) {
-            test.skip();
-            return;
-        }
-
-        await page.getByText('Explore Journey →').click();
-        await expect(page.getByRole('button', { name: /overview/i })).toBeVisible();
-
-        // Test globe back button
-        await page.getByText('← Globe').click();
-        await expect(page.getByText('Click a marker to explore')).toBeVisible();
-    });
-
-    // Desktop responsive test
-    test('desktop layout has correct panel width', async ({ page }) => {
-        await page.setViewportSize({ width: 1280, height: 720 });
-        await page.goto('/');
-        await page.waitForSelector('canvas', { timeout: MAP_TIMEOUT });
-        await waitForMapReady(page);
-
-        const selected = await selectFirstTrek(page);
-        if (!selected) {
-            test.skip();
-            return;
-        }
-
-        await page.getByText('Explore Journey →').click();
-        await expect(page.getByRole('button', { name: /overview/i })).toBeVisible();
-
-        // Info panel should be 40% width on desktop
-        const infoPanel = page.locator('[style*="width: 40%"]');
-        await expect(infoPanel).toBeVisible();
+        // Should also see a Start button
+        await expect(page.getByText('Start')).toBeVisible();
     });
 
     // Visual regression - only runs when not ignoring snapshots

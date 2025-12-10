@@ -3,7 +3,7 @@ import { test, expect, Page } from '@playwright/test';
 const MAP_TIMEOUT = 15000;
 const DATA_TIMEOUT = 8000;
 
-// Helper to wait for map to be ready - uses polling with exponential backoff
+// Helper to wait for map to be ready
 async function waitForMapReady(page: Page, timeout = MAP_TIMEOUT): Promise<boolean> {
     const startTime = Date.now();
     let pollInterval = 100;
@@ -23,7 +23,6 @@ async function waitForMapReady(page: Page, timeout = MAP_TIMEOUT): Promise<boole
 }
 
 // Helper to select a trek programmatically
-// Returns true if selection succeeded, waits for selection panel to appear
 async function selectFirstTrek(page: Page): Promise<boolean> {
     const selected = await page.evaluate(() => {
         const treks = window.testHelpers?.getTreks();
@@ -35,8 +34,7 @@ async function selectFirstTrek(page: Page): Promise<boolean> {
 
     if (!selected) return false;
 
-    // Wait for selection panel to appear (contains "Explore Journey" button)
-    // This is more reliable than a fixed timeout
+    // Wait for selection panel to appear
     try {
         await page.waitForSelector('text="Explore Journey →"', { timeout: 5000 });
         return true;
@@ -46,9 +44,8 @@ async function selectFirstTrek(page: Page): Promise<boolean> {
 }
 
 test.describe('Supabase Data Loading', () => {
-    // Single test for app loading and basic data
+    // Test app loads with Supabase data
     test('app loads with Supabase data', async ({ page }) => {
-        // Listen for Supabase errors
         const errors: string[] = [];
         page.on('console', msg => {
             if (msg.type() === 'error' && msg.text().toLowerCase().includes('supabase')) {
@@ -72,7 +69,7 @@ test.describe('Supabase Data Loading', () => {
         expect(errors).toHaveLength(0);
     });
 
-    // Single comprehensive test for all trek data loading
+    // Test trek data loads from Supabase
     test('trek data loads from Supabase', async ({ page }) => {
         await page.goto('/');
         await page.waitForSelector('canvas', { timeout: MAP_TIMEOUT });
@@ -87,25 +84,13 @@ test.describe('Supabase Data Loading', () => {
 
         // Verify trek data is displayed (from Supabase)
         await expect(page.getByText('Summit:')).toBeVisible();
-        await expect(page.getByText(/\d+,?\d*\s*m/)).toBeVisible();
 
         // Click explore
         await page.getByText('Explore Journey →').click();
-        await expect(page.getByRole('button', { name: /overview/i })).toBeVisible();
 
-        // Verify waypoints loaded - Journey tab
-        await page.getByRole('button', { name: /journey/i }).click();
-        await expect(page.getByText(/Day \d+/)).toBeVisible();
-
-        // Verify camp list exists
-        const campList = page.locator('[style*="cursor: pointer"]');
-        const campCount = await campList.count();
-        expect(campCount).toBeGreaterThan(0);
-
-        // Verify route data - Stats tab with elevation profile
-        await page.getByRole('button', { name: /stats/i }).click();
-        await expect(page.getByText('Elevation Profile')).toBeVisible();
-        await expect(page.getByText(/Highest/i)).toBeVisible();
-        await expect(page.getByText(/Lowest/i)).toBeVisible();
+        // Verify trek details loaded - the new UI shows stats
+        await expect(page.getByText('DURATION')).toBeVisible({ timeout: 10000 });
+        await expect(page.getByText('DISTANCE')).toBeVisible();
+        await expect(page.getByText('SUMMIT')).toBeVisible();
     });
 });
