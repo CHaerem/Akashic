@@ -170,7 +170,9 @@ export async function updateWaypointOrder(
         return false;
     }
 
-    // Use a transaction-like approach with multiple updates
+    // Process all updates and collect any failures
+    const failures: Array<{ id: string; error: string }> = [];
+
     for (const update of updates) {
         const { error } = await supabase
             .from('waypoints')
@@ -178,9 +180,15 @@ export async function updateWaypointOrder(
             .eq('id', update.id);
 
         if (error) {
-            console.error('Error updating waypoint order:', error);
-            throw new Error(error.message);
+            console.error(`Error updating waypoint ${update.id}:`, error);
+            failures.push({ id: update.id, error: error.message });
         }
+    }
+
+    // If any failures occurred, throw with details
+    if (failures.length > 0) {
+        const failedIds = failures.map(f => f.id).join(', ');
+        throw new Error(`Failed to update ${failures.length} waypoint(s): ${failedIds}`);
     }
 
     return true;

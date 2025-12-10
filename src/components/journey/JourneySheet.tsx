@@ -6,10 +6,11 @@
  * - Map is the hero, pill is the navigator
  */
 
-import { memo, useState, useCallback, useRef } from 'react';
-import { motion, AnimatePresence, useDragControls, PanInfo } from 'framer-motion';
+import { memo, useState, useCallback, useRef, useMemo } from 'react';
+import { motion, AnimatePresence, PanInfo } from 'framer-motion';
 import { colors, effects, shadows, radius } from '../../styles/liquidGlass';
 import type { TrekData, ExtendedStats, ElevationProfile, Camp, Photo } from '../../types/trek';
+import { getDateForDay, isPhotoFromDay, formatDateShort } from '../../utils/dates';
 
 // Icons
 const ChevronLeft = ({ size = 16 }: { size?: number }) => (
@@ -68,14 +69,17 @@ export const JourneySheet = memo(function JourneySheet({
     const currentCamp = selectedCamp ?? trekData.camps[0];
     const totalDays = trekData.stats.duration;
 
+    // Calculate the date for the current camp
+    const currentCampDate = useMemo(
+        () => getDateForDay(trekData.dateStarted, currentCamp.dayNumber),
+        [trekData.dateStarted, currentCamp.dayNumber]
+    );
+
     // Get photos for current day
-    const dayPhotos = photos.filter(p => {
-        if (!p.taken_at || !currentCamp) return false;
-        const photoDate = new Date(p.taken_at).toDateString();
-        // Match photos to camp by checking if photo date matches camp date
-        const campDate = currentCamp.date ? new Date(currentCamp.date).toDateString() : null;
-        return campDate && photoDate === campDate;
-    });
+    const dayPhotos = useMemo(() => {
+        if (!currentCampDate) return [];
+        return photos.filter(p => isPhotoFromDay(p, currentCampDate));
+    }, [photos, currentCampDate]);
 
     // Navigate to previous/next day
     const goToPrevDay = useCallback(() => {
@@ -186,15 +190,12 @@ export const JourneySheet = memo(function JourneySheet({
                                 }}>
                                     Day {currentDay}
                                 </span>
-                                {currentCamp.date && (
+                                {currentCampDate && (
                                     <span style={{
                                         fontSize: 12,
                                         color: colors.text.tertiary,
                                     }}>
-                                        {new Date(currentCamp.date).toLocaleDateString('en-US', {
-                                            month: 'short',
-                                            day: 'numeric',
-                                        })}
+                                        {formatDateShort(currentCampDate)}
                                     </span>
                                 )}
                             </div>

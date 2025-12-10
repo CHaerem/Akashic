@@ -12,6 +12,7 @@ import { memo, useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { colors, effects, shadows, radius } from '../../styles/liquidGlass';
 import type { Camp, Photo } from '../../types/trek';
+import { getDateForDay, isPhotoFromDay, formatDateShort } from '../../utils/dates';
 
 interface TimelineScrubberProps {
     camps: Camp[];
@@ -21,6 +22,7 @@ interface TimelineScrubberProps {
     getMediaUrl: (path: string) => string;
     isMobile: boolean;
     inline?: boolean; // When true, removes outer glass styling for embedding
+    dateStarted?: string; // Journey start date for calculating camp dates
 }
 
 export const TimelineScrubber = memo(function TimelineScrubber({
@@ -31,6 +33,7 @@ export const TimelineScrubber = memo(function TimelineScrubber({
     getMediaUrl,
     isMobile,
     inline = false,
+    dateStarted,
 }: TimelineScrubberProps) {
     const [isDragging, setIsDragging] = useState(false);
     const [hoverCamp, setHoverCamp] = useState<Camp | null>(null);
@@ -46,16 +49,14 @@ export const TimelineScrubber = memo(function TimelineScrubber({
     const photosByDay = useMemo(() => {
         const grouped = new Map<number, Photo[]>();
         camps.forEach(camp => {
-            const campPhotos = photos.filter(p => {
-                if (!p.taken_at || !camp.date) return false;
-                const photoDate = new Date(p.taken_at).toDateString();
-                const campDate = new Date(camp.date).toDateString();
-                return photoDate === campDate;
-            });
+            const campDate = getDateForDay(dateStarted, camp.dayNumber);
+            const campPhotos = campDate
+                ? photos.filter(p => isPhotoFromDay(p, campDate))
+                : [];
             grouped.set(camp.dayNumber, campPhotos);
         });
         return grouped;
-    }, [camps, photos]);
+    }, [camps, photos, dateStarted]);
 
     // Get camp at position
     const getCampAtPosition = useCallback((clientX: number) => {
@@ -124,7 +125,7 @@ export const TimelineScrubber = memo(function TimelineScrubber({
         backdropFilter: `${effects.blur.medium} ${effects.saturation.enhanced}`,
         WebkitBackdropFilter: `${effects.blur.medium} ${effects.saturation.enhanced}`,
         border: `1px solid ${colors.glass.borderSubtle}`,
-        boxShadow: shadows.glass.subtle,
+        boxShadow: shadows.glass.card,
     };
 
     const tooltipGlassStyle: React.CSSProperties = {
@@ -137,6 +138,7 @@ export const TimelineScrubber = memo(function TimelineScrubber({
 
     const displayCamp = hoverCamp || selectedCamp;
     const displayPhotos = displayCamp ? photosByDay.get(displayCamp.dayNumber) || [] : [];
+    const displayCampDate = displayCamp ? getDateForDay(dateStarted, displayCamp.dayNumber) : null;
 
     return (
         <div
@@ -186,15 +188,12 @@ export const TimelineScrubber = memo(function TimelineScrubber({
                             }}>
                                 Day {displayCamp.dayNumber}
                             </span>
-                            {displayCamp.date && (
+                            {displayCampDate && (
                                 <span style={{
                                     fontSize: 11,
                                     color: colors.text.tertiary,
                                 }}>
-                                    {new Date(displayCamp.date).toLocaleDateString('en-US', {
-                                        month: 'short',
-                                        day: 'numeric',
-                                    })}
+                                    {formatDateShort(displayCampDate)}
                                 </span>
                             )}
                         </div>

@@ -20,56 +20,56 @@ export const MiniElevationProfile = memo(function MiniElevationProfile({
     selectedDay,
     onDaySelect,
 }: MiniElevationProfileProps) {
-    const { points, minElevation, maxElevation, totalDistance } = elevationProfile;
+    const { points, minEle, maxEle, totalDist } = elevationProfile;
 
-    // Calculate SVG dimensions
-    const width = 100; // percentage
+    // SVG dimensions
     const height = 48;
-    const padding = { top: 8, bottom: 16, left: 0, right: 0 };
-    const chartWidth = 100 - padding.left - padding.right;
-    const chartHeight = height - padding.top - padding.bottom;
+    const paddingTop = 8;
+    const paddingBottom = 16;
+    const chartWidth = 100; // percentage width
+    const chartHeight = height - paddingTop - paddingBottom;
 
     // Generate path for elevation line
     const elevationPath = useMemo(() => {
         if (points.length < 2) return '';
 
-        const elevRange = maxElevation - minElevation || 1;
-        const distRange = totalDistance || 1;
+        const elevRange = maxEle - minEle || 1;
+        const distRange = totalDist || 1;
 
         const pathPoints = points.map((p, i) => {
-            const x = padding.left + (p.distance / distRange) * chartWidth;
-            const y = padding.top + chartHeight - ((p.elevation - minElevation) / elevRange) * chartHeight;
+            const x = (p.dist / distRange) * chartWidth;
+            const y = paddingTop + chartHeight - ((p.ele - minEle) / elevRange) * chartHeight;
             return `${i === 0 ? 'M' : 'L'} ${x} ${y}`;
         });
 
         return pathPoints.join(' ');
-    }, [points, minElevation, maxElevation, totalDistance, chartWidth, chartHeight, padding]);
+    }, [points, minEle, maxEle, totalDist, chartWidth, chartHeight, paddingTop]);
 
     // Generate area fill path
     const areaPath = useMemo(() => {
         if (!elevationPath) return '';
         const lastPoint = points[points.length - 1];
-        const distRange = totalDistance || 1;
-        const lastX = padding.left + (lastPoint.distance / distRange) * chartWidth;
-        const bottomY = padding.top + chartHeight;
-        return `${elevationPath} L ${lastX} ${bottomY} L ${padding.left} ${bottomY} Z`;
-    }, [elevationPath, points, totalDistance, chartWidth, chartHeight, padding]);
+        const distRange = totalDist || 1;
+        const lastX = (lastPoint.dist / distRange) * chartWidth;
+        const bottomY = paddingTop + chartHeight;
+        return `${elevationPath} L ${lastX} ${bottomY} L 0 ${bottomY} Z`;
+    }, [elevationPath, points, totalDist, chartWidth, chartHeight, paddingTop]);
 
     // Calculate camp marker positions
     const campMarkers = useMemo(() => {
-        const elevRange = maxElevation - minElevation || 1;
-        const distRange = totalDistance || 1;
+        const elevRange = maxEle - minEle || 1;
+        const distRange = totalDist || 1;
 
         return camps.map(camp => {
             // Find the closest elevation point to this camp
             const campPoint = points.reduce((closest, p) => {
-                const campDist = Math.abs(p.distance - (camp.distanceFromStart || 0));
-                const closestDist = Math.abs(closest.distance - (camp.distanceFromStart || 0));
+                const campDist = Math.abs(p.dist - (camp.routeDistanceKm || 0));
+                const closestDist = Math.abs(closest.dist - (camp.routeDistanceKm || 0));
                 return campDist < closestDist ? p : closest;
             }, points[0]);
 
-            const x = padding.left + ((camp.distanceFromStart || campPoint.distance) / distRange) * chartWidth;
-            const y = padding.top + chartHeight - ((camp.elevation - minElevation) / elevRange) * chartHeight;
+            const x = ((camp.routeDistanceKm || campPoint.dist) / distRange) * chartWidth;
+            const y = paddingTop + chartHeight - ((camp.elevation - minEle) / elevRange) * chartHeight;
 
             return {
                 camp,
@@ -78,7 +78,7 @@ export const MiniElevationProfile = memo(function MiniElevationProfile({
                 isSelected: camp.dayNumber === selectedDay,
             };
         });
-    }, [camps, points, minElevation, maxElevation, totalDistance, selectedDay, chartWidth, chartHeight, padding]);
+    }, [camps, points, minEle, maxEle, totalDist, selectedDay, chartWidth, chartHeight, paddingTop]);
 
     return (
         <div style={{

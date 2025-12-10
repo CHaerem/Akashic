@@ -15,8 +15,7 @@ concurrency:
 jobs:
   e2e:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
-    continue-on-error: true  # Non-blocking until E2E tests are stabilized
+    timeout-minutes: 10
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -52,7 +51,7 @@ jobs:
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
           VITE_E2E_TEST_MODE: 'true'
           CI: 'true'
-        run: npx playwright test --project=chromium --ignore-snapshots --grep-invert="Performance"
+        run: npx playwright test --project=chromium --ignore-snapshots
 
       - name: Upload test results
         uses: actions/upload-artifact@v4

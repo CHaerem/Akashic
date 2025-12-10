@@ -73,11 +73,16 @@ export async function fetchJourneys(): Promise<{
     const trekDataMap: Record<string, TrekData> = {};
 
     journeys.forEach(journey => {
-        const config = toTrekConfig(journey);
-        const data = toTrekData(journey, waypointsByJourney[journey.id] || []);
+        try {
+            const config = toTrekConfig(journey);
+            const data = toTrekData(journey, waypointsByJourney[journey.id] || []);
 
-        treks.push(config);
-        trekDataMap[journey.slug] = data;
+            treks.push(config);
+            trekDataMap[journey.slug] = data;
+        } catch (err) {
+            // Log but don't crash - skip malformed journeys
+            console.error(`[JourneyAPI] Failed to transform journey ${journey.id}:`, err);
+        }
     });
 
     // Update cache

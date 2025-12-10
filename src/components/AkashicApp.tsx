@@ -18,6 +18,7 @@ import { Sidebar } from './layout/Sidebar';
 import { BottomSheetContent } from './layout/BottomSheetContent';
 import { QuickActionBar, QuickActionIcons } from './layout/QuickActionBar';
 import { colors, typography } from '../styles/liquidGlass';
+import { ErrorBoundary } from './common/ErrorBoundary';
 
 // --- Main Component ---
 
@@ -202,6 +203,7 @@ export default function AkashicApp() {
     ], [handleBackToGlobe]);
 
     return (
+        <ErrorBoundary>
         <div style={{ position: 'fixed', inset: 0, background: colors.background.base }}>
             {/* Mapbox Globe - Full screen hero */}
             <div style={{ position: 'absolute', inset: 0 }}>
@@ -383,5 +385,6 @@ export default function AkashicApp() {
                 onUploadComplete={refetchJourneys}
             />
         </div>
+        </ErrorBoundary>
     );
 }

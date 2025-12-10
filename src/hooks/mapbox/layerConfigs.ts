@@ -43,7 +43,7 @@ export const PHOTO_CLUSTER_GLOW_PAINT = {
     ],
     'circle-opacity': 0.4,
     'circle-blur': 0.6
-} as const;
+};
 
 export const PHOTO_CLUSTER_CIRCLE_PAINT = {
     'circle-color': 'rgba(219, 234, 254, 0.92)',
@@ -56,7 +56,7 @@ export const PHOTO_CLUSTER_CIRCLE_PAINT = {
     ],
     'circle-stroke-width': 1.5,
     'circle-stroke-color': 'rgba(96, 165, 250, 0.5)'
-} as const;
+};
 
 /**
  * Photo marker layer paint configurations
@@ -66,14 +66,14 @@ export const PHOTO_MARKER_GLOW_PAINT = {
     'circle-radius': ['case', ['get', 'highlighted'], 10, 6],
     'circle-opacity': ['case', ['get', 'highlighted'], 0.5, 0.3],
     'circle-blur': 0.7
-} as const;
+};
 
 export const PHOTO_MARKER_CIRCLE_PAINT = {
     'circle-color': ['case', ['get', 'highlighted'], 'rgba(219, 234, 254, 0.98)', 'rgba(241, 245, 249, 0.9)'],
     'circle-radius': ['case', ['get', 'highlighted'], 5, 3],
     'circle-stroke-width': ['case', ['get', 'highlighted'], 1.5, 0.5],
     'circle-stroke-color': ['case', ['get', 'highlighted'], 'rgba(59, 130, 246, 0.7)', 'rgba(147, 197, 253, 0.5)']
-} as const;
+};
 
 /**
  * Camp marker layer paint configurations (warm amber tint)
@@ -83,20 +83,20 @@ export const CAMP_MARKER_GLOW_PAINT = {
     'circle-radius': ['case', ['get', 'selected'], 18, 14],
     'circle-opacity': ['case', ['get', 'selected'], 0.5, 0.35],
     'circle-blur': 0.6
-} as const;
+};
 
 export const CAMP_MARKER_CIRCLE_PAINT = {
     'circle-color': ['case', ['get', 'selected'], 'rgba(254, 243, 199, 0.95)', 'rgba(254, 249, 235, 0.9)'],
     'circle-radius': ['case', ['get', 'selected'], 12, 9],
     'circle-stroke-width': ['case', ['get', 'selected'], 2, 1.5],
     'circle-stroke-color': ['case', ['get', 'selected'], 'rgba(251, 191, 36, 0.7)', 'rgba(253, 211, 106, 0.5)']
-} as const;
+};
 
 export const CAMP_MARKER_LABEL_PAINT = {
     'text-color': ['case', ['get', 'selected'], 'rgba(120, 53, 15, 0.95)', 'rgba(146, 64, 14, 0.85)'],
     'text-halo-color': 'rgba(254, 243, 199, 0.6)',
     'text-halo-width': 1
-} as const;
+};
 
 /**
  * POI marker category color mapping
@@ -166,7 +166,7 @@ export const TREK_MARKER_CIRCLE_PAINT = {
     'circle-stroke-width': 1,
     'circle-stroke-color': 'rgba(255, 255, 255, 0.35)',
     'circle-emissive-strength': 1
-} as const;
+};
 
 export const TREK_MARKER_GLOW_PAINT = {
     'circle-color': 'rgba(255, 255, 255, 0.75)',
@@ -174,7 +174,7 @@ export const TREK_MARKER_GLOW_PAINT = {
     'circle-opacity': 0.25,
     'circle-blur': 0.75,
     'circle-emissive-strength': 1
-} as const;
+};
 
 /**
  * Route line paint configurations
@@ -183,12 +183,12 @@ export const ROUTE_GLOW_PAINT = {
     'line-color': 'rgba(255,255,255,0.15)',
     'line-width': 12,
     'line-blur': 8
-} as const;
+};
 
 export const ROUTE_LINE_PAINT = {
     'line-color': 'rgba(255,255,255,0.8)',
     'line-width': 2
-} as const;
+};
 
 /**
  * Active segment (highlighted day) paint configurations
@@ -198,9 +198,9 @@ export const ACTIVE_SEGMENT_GLOW_PAINT = {
     'line-width': 15,
     'line-blur': 10,
     'line-opacity': 0.5
-} as const;
+};
 
 export const ACTIVE_SEGMENT_LINE_PAINT = {
     'line-color': '#00ffff',
     'line-width': 4
-} as const;
+};
