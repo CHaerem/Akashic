@@ -13,7 +13,6 @@
  */
 
 import fs from 'fs';
-import path from 'path';
 
 // Simple GPX parser (no dependencies)
 function parseGpx(gpxContent) {

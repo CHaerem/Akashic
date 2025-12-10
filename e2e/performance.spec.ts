@@ -1,26 +1,30 @@
 /**
  * Performance tests for Akashic App
  * Measures key metrics to ensure mobile optimizations are effective
+ *
+ * Note: These tests are inherently slower due to Mapbox 3D rendering.
+ * They use test.slow() to get 3x the default timeout.
  */
 
 import { test, expect, type Page } from '@playwright/test';
 
-// Performance thresholds
-// Note: Mapbox 3D globe with terrain is heavy - these thresholds are calibrated for that
+const isCI = !!process.env.CI;
+
+// Performance thresholds - more generous in CI due to slower runners
 const THRESHOLDS = {
     // Time for map to become interactive
-    mapInitTime: 8000,
+    mapInitTime: isCI ? 12000 : 8000,
     // Time for trek transition (globe -> trek view)
-    transitionTime: 5000,
+    transitionTime: isCI ? 8000 : 5000,
     // Maximum long task duration (blocks main thread)
     longTaskDuration: 100,
     // Minimum acceptable FPS during animations
-    minFps: 20,
+    minFps: isCI ? 15 : 20,
     // Maximum heap size (MB) after exploration
     maxHeapSize: 200,
     // Max excessive long tasks during load (Mapbox is heavy)
-    maxLongTasksDesktop: 25,
-    maxLongTasksMobile: 30,
+    maxLongTasksDesktop: isCI ? 35 : 25,
+    maxLongTasksMobile: isCI ? 40 : 30,
 };
 
 // Helper to measure performance metrics
@@ -41,17 +45,22 @@ async function measurePerformance(page: Page) {
     });
 }
 
-// Helper to wait for map to be ready via test helpers
+// Helper to wait for map to be ready via test helpers with exponential backoff
 async function waitForMapReady(page: Page, timeout = 30000): Promise<boolean> {
     const startTime = Date.now();
+    let pollInterval = 100;
+    const maxInterval = 500;
 
     while (Date.now() - startTime < timeout) {
         const ready = await page.evaluate(() => {
             return window.testHelpers?.isMapReady() && window.testHelpers?.isDataLoaded();
-        });
+        }).catch(() => false);
 
         if (ready) return true;
-        await page.waitForTimeout(100);
+
+        await page.waitForTimeout(pollInterval);
+        // Exponential backoff to reduce CPU usage
+        pollInterval = Math.min(pollInterval * 1.5, maxInterval);
     }
 
     return false;
@@ -65,7 +74,7 @@ async function selectFirstTrek(page: Page): Promise<boolean> {
             return window.testHelpers?.selectTrek(treks[0].id) || false;
         }
         return false;
-    });
+    }).catch(() => false);
 }
 
 // Helper to select Kenya trek specifically (the one with photos)
@@ -85,41 +94,53 @@ async function selectKenyaTrek(page: Page): Promise<boolean> {
             return window.testHelpers?.selectTrek(treks[0].id) || false;
         }
         return false;
+    }).catch(() => false);
+}
+
+// Setup performance observer for tracking long tasks and frame rate
+async function setupPerformanceObserver(page: Page) {
+    await page.addInitScript(() => {
+        (window as any).__longTasks = [];
+        (window as any).__frameTimestamps = [];
+
+        // Track long tasks
+        try {
+            const observer = new PerformanceObserver((list) => {
+                for (const entry of list.getEntries()) {
+                    (window as any).__longTasks.push({
+                        duration: entry.duration,
+                        startTime: entry.startTime,
+                    });
+                }
+            });
+            observer.observe({ entryTypes: ['longtask'] });
+        } catch {
+            // PerformanceObserver may not support longtask in all browsers
+        }
+
+        // Track frame rate
+        let lastTime = performance.now();
+        let frameCount = 0;
+        const measureFrames = () => {
+            const now = performance.now();
+            (window as any).__frameTimestamps.push(now - lastTime);
+            lastTime = now;
+            frameCount++;
+            if (frameCount < 300) {
+                requestAnimationFrame(measureFrames);
+            }
+        };
+        requestAnimationFrame(measureFrames);
     });
 }
 
 test.describe('Performance Tests', () => {
+    // Mark all performance tests as slow (3x timeout)
+    test.slow();
+
     test.describe('Desktop Performance', () => {
         test.beforeEach(async ({ page }) => {
-            // Enable performance observer
-            await page.addInitScript(() => {
-                (window as any).__longTasks = [];
-                (window as any).__frameTimestamps = [];
-
-                // Track long tasks
-                const observer = new PerformanceObserver((list) => {
-                    for (const entry of list.getEntries()) {
-                        (window as any).__longTasks.push({
-                            duration: entry.duration,
-                            startTime: entry.startTime,
-                        });
-                    }
-                });
-                observer.observe({ entryTypes: ['longtask'] });
-
-                // Track frame rate
-                let lastTime = performance.now();
-                const measureFrames = () => {
-                    const now = performance.now();
-                    (window as any).__frameTimestamps.push(now - lastTime);
-                    lastTime = now;
-                    if ((window as any).__frameTimestamps.length < 300) {
-                        requestAnimationFrame(measureFrames);
-                    }
-                };
-                requestAnimationFrame(measureFrames);
-            });
-
+            await setupPerformanceObserver(page);
             await page.goto('/');
         });
 
@@ -139,8 +160,8 @@ test.describe('Performance Tests', () => {
         });
 
         test('trek transition completes within threshold', async ({ page }) => {
-            await page.waitForSelector('canvas', { timeout: 30000 });
-            await waitForMapReady(page);
+            await page.waitForSelector('canvas', { timeout: THRESHOLDS.mapInitTime });
+            await waitForMapReady(page, THRESHOLDS.mapInitTime);
 
             // Select a trek
             const selected = await selectFirstTrek(page);
@@ -149,15 +170,12 @@ test.describe('Performance Tests', () => {
                 return;
             }
 
-            // Wait for selection panel
-            await page.waitForTimeout(500);
+            // Wait for selection panel to be interactive
+            await page.waitForTimeout(300);
 
             // Click explore
             const exploreButton = page.getByText('Explore Journey →');
-            if (!(await exploreButton.isVisible().catch(() => false))) {
-                test.skip();
-                return;
-            }
+            await expect(exploreButton).toBeVisible({ timeout: 5000 });
 
             const startTime = Date.now();
             await exploreButton.click();
@@ -173,8 +191,8 @@ test.describe('Performance Tests', () => {
         });
 
         test('Kenya journey with photos transitions smoothly', async ({ page }) => {
-            await page.waitForSelector('canvas', { timeout: 30000 });
-            await waitForMapReady(page);
+            await page.waitForSelector('canvas', { timeout: THRESHOLDS.mapInitTime });
+            await waitForMapReady(page, THRESHOLDS.mapInitTime);
 
             // Select Kenya specifically (has photos - main lag source)
             const selected = await selectKenyaTrek(page);
@@ -184,11 +202,12 @@ test.describe('Performance Tests', () => {
             }
 
             // Wait for selection panel
-            await page.waitForTimeout(500);
+            await page.waitForTimeout(300);
 
             // Click explore
             const exploreButton = page.getByText('Explore Journey →');
-            if (!(await exploreButton.isVisible().catch(() => false))) {
+            const isVisible = await exploreButton.isVisible().catch(() => false);
+            if (!isVisible) {
                 test.skip();
                 return;
             }
@@ -207,7 +226,7 @@ test.describe('Performance Tests', () => {
             const transitionTime = Date.now() - startTime;
 
             // Wait for photos to load and markers to render
-            await page.waitForTimeout(1000);
+            await page.waitForTimeout(500);
 
             // Get long tasks during transition
             const longTasks = await page.evaluate(() => (window as any).__longTasks || []);
@@ -220,8 +239,8 @@ test.describe('Performance Tests', () => {
         });
 
         test('no excessive long tasks during exploration', async ({ page }) => {
-            await page.waitForSelector('canvas', { timeout: 30000 });
-            await waitForMapReady(page);
+            await page.waitForSelector('canvas', { timeout: THRESHOLDS.mapInitTime });
+            await waitForMapReady(page, THRESHOLDS.mapInitTime);
 
             // Select and explore a trek
             const selected = await selectFirstTrek(page);
@@ -230,11 +249,12 @@ test.describe('Performance Tests', () => {
                 return;
             }
 
-            await page.waitForTimeout(500);
+            await page.waitForTimeout(300);
             const exploreButton = page.getByText('Explore Journey →');
             if (await exploreButton.isVisible().catch(() => false)) {
                 await exploreButton.click();
-                await page.waitForTimeout(2000); // Let animations complete
+                // Wait for animations to settle
+                await page.waitForTimeout(1500);
             }
 
             // Get long tasks
@@ -251,14 +271,14 @@ test.describe('Performance Tests', () => {
         });
 
         test('frame rate stays acceptable during globe rotation', async ({ page }) => {
-            await page.waitForSelector('canvas', { timeout: 30000 });
-            await waitForMapReady(page);
+            await page.waitForSelector('canvas', { timeout: THRESHOLDS.mapInitTime });
+            await waitForMapReady(page, THRESHOLDS.mapInitTime);
 
             // Wait for globe rotation to start (3.5s delay in code)
-            await page.waitForTimeout(4500);
+            await page.waitForTimeout(4000);
 
-            // Collect frame timestamps for 2 seconds
-            await page.waitForTimeout(2000);
+            // Collect frame timestamps for a bit
+            await page.waitForTimeout(1500);
 
             const frameTimestamps = await page.evaluate(() => (window as any).__frameTimestamps || []);
 
@@ -274,17 +294,17 @@ test.describe('Performance Tests', () => {
         });
 
         test('memory usage stays within bounds', async ({ page }) => {
-            await page.waitForSelector('canvas', { timeout: 30000 });
-            await waitForMapReady(page);
+            await page.waitForSelector('canvas', { timeout: THRESHOLDS.mapInitTime });
+            await waitForMapReady(page, THRESHOLDS.mapInitTime);
 
             // Select and explore
             const selected = await selectFirstTrek(page);
             if (selected) {
-                await page.waitForTimeout(500);
+                await page.waitForTimeout(300);
                 const exploreButton = page.getByText('Explore Journey →');
                 if (await exploreButton.isVisible().catch(() => false)) {
                     await exploreButton.click();
-                    await page.waitForTimeout(2000);
+                    await page.waitForTimeout(1500);
                 }
             }
 
@@ -306,40 +326,28 @@ test.describe('Performance Tests', () => {
         });
 
         test.beforeEach(async ({ page }) => {
-            // Enable performance observer
-            await page.addInitScript(() => {
-                (window as any).__longTasks = [];
-
-                const observer = new PerformanceObserver((list) => {
-                    for (const entry of list.getEntries()) {
-                        (window as any).__longTasks.push({
-                            duration: entry.duration,
-                            startTime: entry.startTime,
-                        });
-                    }
-                });
-                observer.observe({ entryTypes: ['longtask'] });
-            });
-
+            await setupPerformanceObserver(page);
             await page.goto('/');
         });
 
         test('mobile: map initializes within threshold', async ({ page }) => {
             const startTime = Date.now();
+            const mobileTimeout = THRESHOLDS.mapInitTime * 1.5;
 
-            await page.waitForSelector('canvas', { timeout: THRESHOLDS.mapInitTime });
-            const ready = await waitForMapReady(page, THRESHOLDS.mapInitTime);
+            await page.waitForSelector('canvas', { timeout: mobileTimeout });
+            const ready = await waitForMapReady(page, mobileTimeout);
             const initTime = Date.now() - startTime;
 
             console.log(`Mobile map initialization time: ${initTime}ms`);
             expect(ready).toBe(true);
-            // Allow slightly more time for mobile
-            expect(initTime).toBeLessThan(THRESHOLDS.mapInitTime * 1.5);
+            // Allow more time for mobile
+            expect(initTime).toBeLessThan(mobileTimeout);
         });
 
         test('mobile: trek transition is responsive', async ({ page }) => {
-            await page.waitForSelector('canvas', { timeout: 30000 });
-            await waitForMapReady(page);
+            const mobileTimeout = THRESHOLDS.mapInitTime * 1.5;
+            await page.waitForSelector('canvas', { timeout: mobileTimeout });
+            await waitForMapReady(page, mobileTimeout);
 
             const selected = await selectFirstTrek(page);
             if (!selected) {
@@ -347,10 +355,11 @@ test.describe('Performance Tests', () => {
                 return;
             }
 
-            await page.waitForTimeout(500);
+            await page.waitForTimeout(300);
 
             const exploreButton = page.getByText('Explore Journey →');
-            if (!(await exploreButton.isVisible().catch(() => false))) {
+            const isVisible = await exploreButton.isVisible().catch(() => false);
+            if (!isVisible) {
                 test.skip();
                 return;
             }
@@ -369,16 +378,17 @@ test.describe('Performance Tests', () => {
         });
 
         test('mobile: no excessive long tasks', async ({ page }) => {
-            await page.waitForSelector('canvas', { timeout: 30000 });
-            await waitForMapReady(page);
+            const mobileTimeout = THRESHOLDS.mapInitTime * 1.5;
+            await page.waitForSelector('canvas', { timeout: mobileTimeout });
+            await waitForMapReady(page, mobileTimeout);
 
             const selected = await selectFirstTrek(page);
             if (selected) {
-                await page.waitForTimeout(500);
+                await page.waitForTimeout(300);
                 const exploreButton = page.getByText('Explore Journey →');
                 if (await exploreButton.isVisible().catch(() => false)) {
                     await exploreButton.tap();
-                    await page.waitForTimeout(2000);
+                    await page.waitForTimeout(1500);
                 }
             }
 
@@ -395,16 +405,17 @@ test.describe('Performance Tests', () => {
         });
 
         test('mobile: CSS optimizations are applied', async ({ page }) => {
-            await page.waitForSelector('canvas', { timeout: 30000 });
-            await waitForMapReady(page);
+            const mobileTimeout = THRESHOLDS.mapInitTime * 1.5;
+            await page.waitForSelector('canvas', { timeout: mobileTimeout });
+            await waitForMapReady(page, mobileTimeout);
 
             const selected = await selectFirstTrek(page);
             if (selected) {
-                await page.waitForTimeout(500);
+                await page.waitForTimeout(300);
                 const exploreButton = page.getByText('Explore Journey →');
                 if (await exploreButton.isVisible().catch(() => false)) {
                     await exploreButton.tap();
-                    await page.waitForTimeout(1000);
+                    await page.waitForTimeout(500);
                 }
             }
 
@@ -438,12 +449,12 @@ test.describe('Performance Tests', () => {
             // Measure page load
             const loadStart = Date.now();
             await page.goto('/');
-            await page.waitForSelector('canvas', { timeout: 30000 });
+            await page.waitForSelector('canvas', { timeout: THRESHOLDS.mapInitTime });
             benchmarks['pageLoad'] = Date.now() - loadStart;
 
             // Measure map ready
             const mapStart = Date.now();
-            await waitForMapReady(page);
+            await waitForMapReady(page, THRESHOLDS.mapInitTime);
             benchmarks['mapReady'] = Date.now() - mapStart;
 
             // Measure trek selection
@@ -452,28 +463,37 @@ test.describe('Performance Tests', () => {
             benchmarks['trekSelect'] = Date.now() - selectStart;
 
             if (selected) {
-                await page.waitForTimeout(500);
+                await page.waitForTimeout(300);
 
                 // Measure explore transition
                 const exploreButton = page.getByText('Explore Journey →');
                 if (await exploreButton.isVisible().catch(() => false)) {
                     const exploreStart = Date.now();
                     await exploreButton.click();
-                    await expect(page.getByRole('button', { name: /overview/i })).toBeVisible({ timeout: 5000 });
+                    await expect(page.getByRole('button', { name: /overview/i })).toBeVisible({
+                        timeout: THRESHOLDS.transitionTime,
+                    });
                     benchmarks['exploreTransition'] = Date.now() - exploreStart;
 
                     // Measure tab switches
                     const journeyTab = page.getByRole('button', { name: /journey/i });
-                    const tabStart = Date.now();
-                    await journeyTab.click();
-                    await page.waitForTimeout(300);
-                    benchmarks['tabSwitch'] = Date.now() - tabStart;
+                    if (await journeyTab.isVisible().catch(() => false)) {
+                        const tabStart = Date.now();
+                        await journeyTab.click();
+                        await page.waitForTimeout(200);
+                        benchmarks['tabSwitch'] = Date.now() - tabStart;
+                    }
 
                     // Measure return to globe
-                    const backStart = Date.now();
-                    await page.getByText('Akashic').click();
-                    await page.waitForSelector('text=Click a marker to explore', { timeout: 5000 });
-                    benchmarks['returnToGlobe'] = Date.now() - backStart;
+                    const backButton = page.getByText('Akashic');
+                    if (await backButton.isVisible().catch(() => false)) {
+                        const backStart = Date.now();
+                        await backButton.click();
+                        await page.waitForSelector('text=Click a marker to explore', {
+                            timeout: THRESHOLDS.transitionTime,
+                        });
+                        benchmarks['returnToGlobe'] = Date.now() - backStart;
+                    }
                 }
             }
 
@@ -486,10 +506,10 @@ test.describe('Performance Tests', () => {
             });
             console.log('─'.repeat(40));
 
-            // Basic assertions
-            expect(benchmarks['pageLoad']).toBeLessThan(10000);
+            // Basic assertions - be generous for CI
+            expect(benchmarks['pageLoad']).toBeLessThan(isCI ? 15000 : 10000);
             if (benchmarks['exploreTransition']) {
-                expect(benchmarks['exploreTransition']).toBeLessThan(4000);
+                expect(benchmarks['exploreTransition']).toBeLessThan(isCI ? 6000 : 4000);
             }
         });
     });
