@@ -22,14 +22,22 @@ async function waitForMapReady(page: Page, timeout = MAP_TIMEOUT): Promise<boole
 }
 
 // Helper to select a trek programmatically
+// Returns true if selection succeeded, waits for React to re-render
 async function selectFirstTrek(page: Page): Promise<boolean> {
-    return await page.evaluate(() => {
+    const selected = await page.evaluate(() => {
         const treks = window.testHelpers?.getTreks();
         if (treks && treks.length > 0) {
             return window.testHelpers?.selectTrek(treks[0].id) || false;
         }
         return false;
     }).catch(() => false);
+
+    if (selected) {
+        // Wait for React to re-render after programmatic state change
+        // This is necessary because selectTrek() doesn't trigger DOM events
+        await page.waitForTimeout(300);
+    }
+    return selected;
 }
 
 test.describe('Akashic App', () => {
