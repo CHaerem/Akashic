@@ -51,7 +51,7 @@ jobs:
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
           VITE_E2E_TEST_MODE: 'true'
           CI: 'true'
-        run: npx playwright test e2e/app.spec.ts e2e/supabase-data.spec.ts --project=chromium --ignore-snapshots
+        run: npx playwright test --project=chromium --ignore-snapshots
 
       - name: Upload test results
         uses: actions/upload-artifact@v4
