@@ -103,9 +103,12 @@ export async function deletePhoto(photoId: string): Promise<boolean> {
         .eq('id', photoId)
         .single();
 
-    if (fetchError || !photo) {
+    if (fetchError) {
         console.error('Error fetching photo for deletion:', fetchError);
-        throw new Error(fetchError?.message || 'Photo not found');
+        throw new Error(`Failed to fetch photo: ${fetchError.message}`);
+    }
+    if (!photo) {
+        throw new Error('Photo not found - it may have already been deleted');
     }
 
     // Delete files from R2 storage

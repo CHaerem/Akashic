@@ -2,7 +2,7 @@
  * Custom hook for Mapbox map initialization and management
  */
 
-import { useState, useRef, useEffect, useCallback, type MutableRefObject } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import mapboxgl from 'mapbox-gl';
 import { useJourneys } from '../../contexts/JourneysContext';
 import { calculateBearing, findNearestCoordIndex, getDistanceFromLatLonInKm } from '../../utils/geography';
@@ -469,7 +469,10 @@ export function useMapbox({ containerRef, onTrekSelect, onPhotoClick, onRouteCli
 
                 if (source && clusterId !== undefined) {
                     source.getClusterExpansionZoom(clusterId, (err, zoom) => {
-                        if (err) return;
+                        if (err) {
+                            console.error('[MapInteraction] Failed to get cluster expansion zoom:', err);
+                            return;
+                        }
 
                         const geometry = e.features![0].geometry as GeoJSON.Point;
                         map.easeTo({
@@ -536,7 +539,7 @@ export function useMapbox({ containerRef, onTrekSelect, onPhotoClick, onRouteCli
             map.getCanvas().style.cursor = '';
         });
 
-        const handleTrekSelect = (e: mapboxgl.MapMouseEvent & { features?: mapboxgl.MapGeoJSONFeature[] }) => {
+        const handleTrekSelect = (e: mapboxgl.MapMouseEvent & { features?: mapboxgl.GeoJSONFeature[] }) => {
             if (e.features && e.features.length > 0) {
                 const trekProps = e.features[0].properties as TrekConfig;
                 const trek = treksRef.current.find(t => t.id === trekProps.id);
@@ -650,9 +653,8 @@ export function useMapbox({ containerRef, onTrekSelect, onPhotoClick, onRouteCli
                 id: 'trek-markers-glow',
                 type: 'circle',
                 source: 'trek-markers',
-                paint: TREK_MARKER_GLOW_PAINT,
-                beforeId: 'trek-markers-circle'
-            });
+                paint: TREK_MARKER_GLOW_PAINT
+            }, 'trek-markers-circle');
         }
 
         // Preload all trek routes
@@ -1319,6 +1321,11 @@ export function useMapbox({ containerRef, onTrekSelect, onPhotoClick, onRouteCli
             img.style.opacity = '0';
             img.style.transition = 'opacity 0.2s ease-out';
             img.onload = () => { img.style.opacity = '1'; };
+            img.onerror = () => {
+                // Show fallback styling on load failure
+                img.style.display = 'none';
+                imgContainer.style.background = 'rgba(255,255,255,0.2)';
+            };
             const photoUrl = group.representative.thumbnail_url || group.representative.url;
             img.src = getMediaUrl ? getMediaUrl(photoUrl) : photoUrl;
             imgContainer.appendChild(img);
