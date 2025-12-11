@@ -1,18 +1,93 @@
 /**
- * Photo lightbox using yet-another-react-lightbox (YARL)
+ * Photo and video lightbox using yet-another-react-lightbox (YARL)
  * - Native React component with clean API
- * - Built-in zoom plugin with pinch-to-zoom
+ * - Built-in zoom plugin with pinch-to-zoom for images
+ * - Video support with HTML5 player
  * - Handles unknown image dimensions automatically
- * - Future video support via plugin
  */
 
-import { useState, useCallback, useMemo, useEffect } from 'react';
-import Lightbox, { SlideImage } from 'yet-another-react-lightbox';
+import { useState, useCallback, useMemo } from 'react';
+import Lightbox, { Slide } from 'yet-another-react-lightbox';
 import Zoom from 'yet-another-react-lightbox/plugins/zoom';
 import Counter from 'yet-another-react-lightbox/plugins/counter';
+import Video from 'yet-another-react-lightbox/plugins/video';
 import 'yet-another-react-lightbox/styles.css';
 import 'yet-another-react-lightbox/plugins/counter.css';
 import type { Photo } from '../../types/trek';
+
+// Helper to get video MIME type from URL
+function getVideoMimeType(url: string): string {
+    const ext = url.split('.').pop()?.toLowerCase();
+    const types: Record<string, string> = {
+        'mov': 'video/quicktime',
+        'mp4': 'video/mp4',
+        'm4v': 'video/x-m4v',
+        'webm': 'video/webm',
+    };
+    return types[ext || ''] || 'video/mp4';
+}
+
+// Helper to check if a video format may have browser compatibility issues
+function isIncompatibleVideoFormat(url: string): boolean {
+    const ext = url.split('.').pop()?.toLowerCase();
+    // .mov (QuickTime) only works in Safari
+    // .m4v also has limited support
+    return ext === 'mov' || ext === 'm4v';
+}
+
+// Static YARL config objects - defined outside component to prevent recreating on each render
+// This is critical to avoid infinite loops caused by YARL detecting "new" config objects
+const LIGHTBOX_PLUGINS = [Zoom, Counter, Video];
+
+const LIGHTBOX_ZOOM_CONFIG = {
+    maxZoomPixelRatio: 4,
+    zoomInMultiplier: 2,
+    doubleTapDelay: 300,
+    doubleClickDelay: 300,
+    doubleClickMaxStops: 2,
+    keyboardMoveDistance: 50,
+    wheelZoomDistanceFactor: 100,
+    pinchZoomDistanceFactor: 100,
+    scrollToZoom: true
+};
+
+const LIGHTBOX_CAROUSEL_CONFIG = {
+    finite: true,
+    preload: 2
+};
+
+const LIGHTBOX_ANIMATION_CONFIG = {
+    fade: 200,
+    swipe: 200,
+    easing: {
+        fade: 'ease',
+        swipe: 'ease-out',
+        navigation: 'ease-in-out'
+    }
+};
+
+const LIGHTBOX_CONTROLLER_CONFIG = {
+    closeOnBackdropClick: true,
+    closeOnPullDown: true,
+    closeOnPullUp: true
+};
+
+const LIGHTBOX_STYLES = {
+    container: { backgroundColor: 'rgba(0, 0, 0, 0.95)' }
+};
+
+// Video player configuration
+// Note: crossOrigin needed for authenticated URLs from different origin (R2 Worker)
+// playsInline is critical for iOS to play inline instead of fullscreen
+// preload="metadata" helps iOS load video info without downloading entire file
+const LIGHTBOX_VIDEO_CONFIG = {
+    controls: true,
+    playsInline: true,
+    autoPlay: false,
+    muted: false,
+    crossOrigin: 'anonymous' as const,
+    preload: 'metadata' as const,
+};
 
 interface PhotoLightboxProps {
     photos: Photo[];
@@ -37,24 +112,31 @@ export function PhotoLightbox({
     onViewOnMap,
     onEdit
 }: PhotoLightboxProps) {
+    // Local state for navigation within lightbox - initialized from initialIndex
+    // NO useEffect sync - parent controls via key prop to force remount when needed
     const [currentIndex, setCurrentIndex] = useState(initialIndex);
 
-    // Sync currentIndex when lightbox opens with a new initialIndex
-    // This fixes the bug where clicking different photos on the map
-    // would show the wrong photo (state persisted from previous open)
-    useEffect(() => {
-        if (isOpen) {
-            setCurrentIndex(initialIndex);
-        }
-    }, [isOpen, initialIndex]);
+    // Convert photos to YARL slides format (supports both images and videos)
+    const slides = useMemo<Slide[]>(() =>
+        photos.map(photo => {
+            const mediaUrl = getMediaUrl(photo.url);
 
-    // Convert photos to YARL slides format
-    const slides = useMemo<SlideImage[]>(() =>
-        photos.map(photo => ({
-            src: getMediaUrl(photo.url),
-            alt: photo.caption || 'Photo',
-            // YARL handles unknown dimensions automatically
-        })),
+            // Check if this is a video
+            if (photo.media_type === 'video') {
+                return {
+                    type: 'video' as const,
+                    sources: [{ src: mediaUrl, type: getVideoMimeType(photo.url) }],
+                    poster: photo.thumbnail_url ? getMediaUrl(photo.thumbnail_url) : undefined,
+                };
+            }
+
+            // Default to image
+            return {
+                src: mediaUrl,
+                alt: photo.caption || 'Photo',
+                // YARL handles unknown dimensions automatically
+            };
+        }),
         [photos, getMediaUrl]
     );
 
@@ -88,6 +170,16 @@ export function PhotoLightbox({
             setTimeout(() => onViewOnMap(currentPhoto), 100);
         }
     }, [onViewOnMap, currentPhoto, onClose]);
+
+    // Stable handler for view changes - prevents re-renders from creating new callback references
+    const handleViewChange = useCallback(({ index }: { index: number }) => {
+        setCurrentIndex(index);
+    }, []);
+
+    // Memoize the on handlers object to prevent YARL from re-initializing
+    const onHandlers = useMemo(() => ({
+        view: handleViewChange
+    }), [handleViewChange]);
 
     // Custom toolbar buttons
     const toolbar = useMemo(() => {
@@ -150,53 +242,59 @@ export function PhotoLightbox({
         return { buttons };
     }, [editMode, onEdit, onDelete, onViewOnMap, currentPhoto, handleDelete, handleEdit, handleViewOnMap]);
 
+    // Check if current photo is an incompatible video format
+    const showCompatibilityWarning = currentPhoto?.media_type === 'video' &&
+        isIncompatibleVideoFormat(currentPhoto.url);
+
     if (!isOpen || photos.length === 0) {
         return null;
     }
 
     return (
-        <Lightbox
-            open={isOpen}
-            close={onClose}
-            slides={slides}
-            index={currentIndex}
-            on={{
-                view: ({ index }) => setCurrentIndex(index)
-            }}
-            plugins={[Zoom, Counter]}
-            zoom={{
-                maxZoomPixelRatio: 4,
-                zoomInMultiplier: 2,
-                doubleTapDelay: 300,
-                doubleClickDelay: 300,
-                doubleClickMaxStops: 2,
-                keyboardMoveDistance: 50,
-                wheelZoomDistanceFactor: 100,
-                pinchZoomDistanceFactor: 100,
-                scrollToZoom: true
-            }}
-            carousel={{
-                finite: true,
-                preload: 2
-            }}
-            animation={{
-                fade: 200,
-                swipe: 200,
-                easing: {
-                    fade: 'ease',
-                    swipe: 'ease-out',
-                    navigation: 'ease-in-out'
-                }
-            }}
-            controller={{
-                closeOnBackdropClick: true,
-                closeOnPullDown: true,
-                closeOnPullUp: true
-            }}
-            toolbar={toolbar}
-            styles={{
-                container: { backgroundColor: 'rgba(0, 0, 0, 0.95)' }
-            }}
-        />
+        <>
+            <Lightbox
+                open={isOpen}
+                close={onClose}
+                slides={slides}
+                index={currentIndex}
+                on={onHandlers}
+                plugins={LIGHTBOX_PLUGINS}
+                zoom={LIGHTBOX_ZOOM_CONFIG}
+                carousel={LIGHTBOX_CAROUSEL_CONFIG}
+                animation={LIGHTBOX_ANIMATION_CONFIG}
+                controller={LIGHTBOX_CONTROLLER_CONFIG}
+                toolbar={toolbar}
+                styles={LIGHTBOX_STYLES}
+                video={LIGHTBOX_VIDEO_CONFIG}
+            />
+            {/* Warning banner for incompatible video formats */}
+            {showCompatibilityWarning && (
+                <div
+                    style={{
+                        position: 'fixed',
+                        bottom: '80px',
+                        left: '50%',
+                        transform: 'translateX(-50%)',
+                        backgroundColor: 'rgba(234, 179, 8, 0.95)',
+                        color: '#000',
+                        padding: '12px 20px',
+                        borderRadius: '8px',
+                        zIndex: 10001,
+                        maxWidth: '90vw',
+                        textAlign: 'center',
+                        fontSize: '14px',
+                        fontWeight: 500,
+                        boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+                    }}
+                >
+                    <span style={{ marginRight: '8px' }}>⚠️</span>
+                    This video format (.mov) may not play in all browsers.
+                    <br />
+                    <span style={{ fontSize: '12px', opacity: 0.8 }}>
+                        Works best in Safari. Use Chrome/Firefox for .mp4 videos.
+                    </span>
+                </div>
+            )}
+        </>
     );
 }

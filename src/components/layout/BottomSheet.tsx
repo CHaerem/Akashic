@@ -19,7 +19,7 @@ const SNAP_VALUES = [SNAP_POINTS.minimized, SNAP_POINTS.half, SNAP_POINTS.expand
 
 const MODE_LABELS: Record<Exclude<ContentMode, 'info'>, string> = {
     day: 'Day',
-    photos: 'Photos',
+    photos: 'Media',
     stats: 'Stats',
 };
 

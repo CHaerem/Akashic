@@ -124,6 +124,9 @@ export interface ElevationProfile {
     campMarkers: CampMarker[];
 }
 
+/** Media type for photos and videos */
+export type MediaType = 'image' | 'video';
+
 export interface Photo {
     id: string;
     journey_id: string;
@@ -140,6 +143,10 @@ export interface Photo {
     uploaded_by?: string | null;
     /** Rotation angle in degrees (0, 90, 180, 270) */
     rotation?: number | null;
+    /** Media type: 'image' (default) or 'video' */
+    media_type?: MediaType;
+    /** Duration in seconds (for videos) */
+    duration?: number | null;
 }
 
 /** User profile for display */

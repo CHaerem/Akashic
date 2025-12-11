@@ -37,7 +37,7 @@ interface NavigationPillProps {
 
 const MODE_LABELS: Record<ContentMode, string> = {
     day: 'Day',
-    photos: 'Photos',
+    photos: 'Media',
     stats: 'Stats',
     info: 'Info',
 };
