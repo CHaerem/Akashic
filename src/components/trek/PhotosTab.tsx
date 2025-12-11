@@ -473,6 +473,7 @@ export function PhotosTab({ trekData, isMobile, editMode = false, onViewPhotoOnM
                                     editMode={editMode}
                                     isDragOver={dragOverIndex === index}
                                     isDragged={draggedIndex === index}
+                                    stagger={index % 2 === 1} // Zigzag: odd items offset down
                                     getMediaUrl={getMediaUrl}
                                     onPhotoClick={handlePhotoClick}
                                     onDragStart={handleDragStart}
