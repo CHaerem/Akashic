@@ -598,7 +598,9 @@ export function PhotosTab({ trekData, isMobile, editMode = false, onViewPhotoOnM
             )}
 
             {/* Lightbox - uses filtered photos for navigation within selected day */}
+            {/* Key prop forces remount when clicking different photo, ensuring correct initial index */}
             <PhotoLightbox
+                key={lightboxIndex !== null ? `lightbox-${lightboxIndex}` : 'lightbox-closed'}
                 photos={filteredPhotos}
                 initialIndex={lightboxIndex ?? 0}
                 isOpen={lightboxIndex !== null}
