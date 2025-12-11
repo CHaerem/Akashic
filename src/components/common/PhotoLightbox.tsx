@@ -6,7 +6,7 @@
  * - Future video support via plugin
  */
 
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useEffect } from 'react';
 import Lightbox, { SlideImage } from 'yet-another-react-lightbox';
 import Zoom from 'yet-another-react-lightbox/plugins/zoom';
 import Counter from 'yet-another-react-lightbox/plugins/counter';
@@ -38,6 +38,15 @@ export function PhotoLightbox({
     onEdit
 }: PhotoLightboxProps) {
     const [currentIndex, setCurrentIndex] = useState(initialIndex);
+
+    // Sync currentIndex when lightbox opens with a new initialIndex
+    // This fixes the bug where clicking different photos on the map
+    // would show the wrong photo (state persisted from previous open)
+    useEffect(() => {
+        if (isOpen) {
+            setCurrentIndex(initialIndex);
+        }
+    }, [isOpen, initialIndex]);
 
     // Convert photos to YARL slides format
     const slides = useMemo<SlideImage[]>(() =>
