@@ -543,7 +543,7 @@ export function PhotosTab({ trekData, isMobile, editMode = false, onViewPhotoOnM
                                         }}
                                     >
                                         <div className={cn(
-                                            "grid gap-4 h-full",
+                                            "grid gap-x-4 pb-4",
                                             "grid-cols-2 sm:grid-cols-3 lg:grid-cols-4"
                                         )}>
                                             {rowPhotos.map((photo, colIndex) => {
