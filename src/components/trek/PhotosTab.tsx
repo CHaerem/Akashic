@@ -65,6 +65,7 @@ interface PhotoGridItemProps {
     editMode: boolean;
     isDragOver: boolean;
     isDragged: boolean;
+    stagger?: boolean; // Offset down for zigzag effect
     getMediaUrl: (path: string) => string;
     onPhotoClick: (index: number) => void;
     onDragStart: (index: number) => void;
@@ -81,6 +82,7 @@ const PhotoGridItem = memo(function PhotoGridItem({
     editMode,
     isDragOver,
     isDragged,
+    stagger = false,
     getMediaUrl,
     onPhotoClick,
     onDragStart,
@@ -120,7 +122,8 @@ const PhotoGridItem = memo(function PhotoGridItem({
                 editMode ? "cursor-grab" : "cursor-pointer",
                 photo.is_hero && "ring-2 ring-amber-400",
                 isDragOver && "ring-2 ring-blue-500 scale-[1.02]",
-                isDragged && "opacity-50"
+                isDragged && "opacity-50",
+                stagger && "mt-4" // Zigzag offset for even columns
             )}
         >
             <img
@@ -228,14 +231,15 @@ export function PhotosTab({ trekData, isMobile, editMode = false, onViewPhotoOnM
         [filteredPhotos.length, columns]
     );
 
-    // Virtual row size: square aspect ratio + gap (12px)
+    // Virtual row size: square aspect ratio + gap (16px) + stagger offset (16px)
     // Estimate based on container width / columns
     const getRowHeight = useCallback(() => {
         const container = gridContainerRef.current;
-        if (!container) return 150; // fallback
-        const gap = 12;
+        if (!container) return 166; // fallback
+        const gap = 16; // gap-4 = 16px
+        const staggerOffset = 16; // mt-4 on odd columns
         const itemWidth = (container.offsetWidth - gap * (columns - 1)) / columns;
-        return itemWidth + gap; // square aspect ratio + gap
+        return itemWidth + gap + staggerOffset; // square + gap + stagger
     }, [columns]);
 
     // Set up virtualizer for rows
@@ -544,6 +548,8 @@ export function PhotosTab({ trekData, isMobile, editMode = false, onViewPhotoOnM
                                         )}>
                                             {rowPhotos.map((photo, colIndex) => {
                                                 const index = rowStartIndex + colIndex;
+                                                // Zigzag: odd columns get offset down
+                                                const shouldStagger = colIndex % 2 === 1;
                                                 return (
                                                     <PhotoGridItem
                                                         key={photo.id}
@@ -552,6 +558,7 @@ export function PhotosTab({ trekData, isMobile, editMode = false, onViewPhotoOnM
                                                         editMode={editMode}
                                                         isDragOver={dragOverIndex === index}
                                                         isDragged={draggedIndex === index}
+                                                        stagger={shouldStagger}
                                                         getMediaUrl={getMediaUrl}
                                                         onPhotoClick={handlePhotoClick}
                                                         onDragStart={handleDragStart}
