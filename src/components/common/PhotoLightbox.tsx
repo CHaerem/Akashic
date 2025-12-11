@@ -77,11 +77,16 @@ const LIGHTBOX_STYLES = {
 };
 
 // Video player configuration
+// Note: crossOrigin needed for authenticated URLs from different origin (R2 Worker)
+// playsInline is critical for iOS to play inline instead of fullscreen
+// preload="metadata" helps iOS load video info without downloading entire file
 const LIGHTBOX_VIDEO_CONFIG = {
     controls: true,
     playsInline: true,
     autoPlay: false,
     muted: false,
+    crossOrigin: 'anonymous' as const,
+    preload: 'metadata' as const,
 };
 
 interface PhotoLightboxProps {
