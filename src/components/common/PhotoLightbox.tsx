@@ -8,6 +8,7 @@
 
 import { useState, useCallback, useRef, useEffect, memo } from 'react';
 import { createPortal } from 'react-dom';
+import { useGesture } from '@use-gesture/react';
 import type { Photo } from '../../types/trek';
 import { cn } from '@/lib/utils';
 
@@ -37,12 +38,19 @@ export const PhotoLightbox = memo(function PhotoLightbox({
     const [currentIndex, setCurrentIndex] = useState(initialIndex);
     const [showControls, setShowControls] = useState(true);
     const [isAnimating, setIsAnimating] = useState(false);
-    const [touchStart, setTouchStart] = useState<{ x: number; y: number } | null>(null);
     const [touchDelta, setTouchDelta] = useState(0);
     const [imageLoaded, setImageLoaded] = useState(false);
     const [isEntering, setIsEntering] = useState(true);
+
+    // Zoom state
+    const [scale, setScale] = useState(1);
+    const [translate, setTranslate] = useState({ x: 0, y: 0 });
+    const lastTapRef = useRef<number>(0);
+    const isZoomed = scale > 1;
+
     const controlsTimeoutRef = useRef<number | null>(null);
     const containerRef = useRef<HTMLDivElement>(null);
+    const imageRef = useRef<HTMLImageElement>(null);
 
     // Reset index and trigger enter animation when opening
     useEffect(() => {
@@ -55,9 +63,11 @@ export const PhotoLightbox = memo(function PhotoLightbox({
         }
     }, [initialIndex, isOpen]);
 
-    // Reset loaded state when changing photos
+    // Reset loaded state and zoom when changing photos
     useEffect(() => {
         setImageLoaded(false);
+        setScale(1);
+        setTranslate({ x: 0, y: 0 });
     }, [currentIndex]);
 
     // Preload adjacent images for smooth navigation
@@ -137,39 +147,111 @@ export const PhotoLightbox = memo(function PhotoLightbox({
         }
     }, [currentIndex, isAnimating, resetControlsTimeout]);
 
-    // Touch handlers for swipe
-    const handleTouchStart = useCallback((e: React.TouchEvent) => {
-        setTouchStart({
-            x: e.touches[0].clientX,
-            y: e.touches[0].clientY
-        });
-        setTouchDelta(0);
-    }, []);
-
-    const handleTouchMove = useCallback((e: React.TouchEvent) => {
-        if (!touchStart) return;
-        const deltaX = e.touches[0].clientX - touchStart.x;
-        const deltaY = Math.abs(e.touches[0].clientY - touchStart.y);
-
-        if (deltaY < Math.abs(deltaX) * 0.5) {
-            setTouchDelta(deltaX);
+    // Double-tap to zoom handler
+    const handleDoubleTap = useCallback((clientX: number, clientY: number) => {
+        if (scale > 1) {
+            // Reset zoom
+            setScale(1);
+            setTranslate({ x: 0, y: 0 });
+        } else {
+            // Zoom to 2x centered on tap position
+            const newScale = 2;
+            const rect = imageRef.current?.getBoundingClientRect();
+            if (rect) {
+                const centerX = rect.left + rect.width / 2;
+                const centerY = rect.top + rect.height / 2;
+                setTranslate({
+                    x: (centerX - clientX) * (newScale - 1),
+                    y: (centerY - clientY) * (newScale - 1)
+                });
+            }
+            setScale(newScale);
         }
-    }, [touchStart]);
+    }, [scale]);
 
-    const handleTouchEnd = useCallback(() => {
-        if (!touchStart) return;
+    // Combined gesture handler for pinch, drag, and tap
+    const bind = useGesture(
+        {
+            onPinch: ({ offset: [s], memo }) => {
+                const newScale = Math.min(Math.max(s, 1), 4);
+                setScale(newScale);
+                // Reset translate when zooming back to 1
+                if (newScale <= 1) {
+                    setTranslate({ x: 0, y: 0 });
+                }
+                return memo;
+            },
+            onDrag: ({ movement: [mx, my], velocity: [vx], direction: [dx], cancel, first, memo = { startTranslate: translate } }) => {
+                if (first) {
+                    memo = { startTranslate: translate };
+                }
 
-        const threshold = 60;
+                if (isZoomed) {
+                    // When zoomed, pan the image
+                    setTranslate({
+                        x: memo.startTranslate.x + mx,
+                        y: memo.startTranslate.y + my
+                    });
+                } else {
+                    // When not zoomed, swipe to navigate
+                    const threshold = 50;
+                    const velocityThreshold = 0.5;
 
-        if (touchDelta < -threshold) {
-            navigateNext();
-        } else if (touchDelta > threshold) {
-            navigatePrev();
+                    // High velocity swipe
+                    if (Math.abs(vx) > velocityThreshold) {
+                        if (dx < 0 && currentIndex < photos.length - 1) {
+                            navigateNext();
+                            cancel();
+                        } else if (dx > 0 && currentIndex > 0) {
+                            navigatePrev();
+                            cancel();
+                        }
+                    }
+
+                    // Distance-based swipe feedback
+                    setTouchDelta(mx);
+                }
+                return memo;
+            },
+            onDragEnd: ({ movement: [mx] }) => {
+                if (!isZoomed) {
+                    const threshold = 50;
+                    if (mx < -threshold && currentIndex < photos.length - 1) {
+                        navigateNext();
+                    } else if (mx > threshold && currentIndex > 0) {
+                        navigatePrev();
+                    }
+                    setTouchDelta(0);
+                }
+            },
+            onTap: ({ event }) => {
+                const now = Date.now();
+                const timeSinceLastTap = now - lastTapRef.current;
+
+                if (timeSinceLastTap < 300) {
+                    // Double tap
+                    const touch = event as unknown as TouchEvent;
+                    const clientX = touch.touches?.[0]?.clientX ?? (event as unknown as MouseEvent).clientX;
+                    const clientY = touch.touches?.[0]?.clientY ?? (event as unknown as MouseEvent).clientY;
+                    handleDoubleTap(clientX, clientY);
+                    lastTapRef.current = 0;
+                } else {
+                    lastTapRef.current = now;
+                    resetControlsTimeout();
+                }
+            }
+        },
+        {
+            drag: {
+                filterTaps: true,
+                threshold: 10
+            },
+            pinch: {
+                scaleBounds: { min: 1, max: 4 },
+                rubberband: true
+            }
         }
-
-        setTouchStart(null);
-        setTouchDelta(0);
-    }, [touchStart, touchDelta, navigateNext, navigatePrev]);
+    );
 
     const handleContainerClick = useCallback((e: React.MouseEvent) => {
         if (e.target === containerRef.current) {
@@ -206,13 +288,11 @@ export const PhotoLightbox = memo(function PhotoLightbox({
         <div
             ref={containerRef}
             onClick={handleContainerClick}
-            onTouchStart={handleTouchStart}
-            onTouchMove={handleTouchMove}
-            onTouchEnd={handleTouchEnd}
             className={cn(
                 "fixed inset-0 bg-black z-[9999] flex items-center justify-center cursor-pointer",
-                "touch-pan-y transition-opacity duration-200",
-                isEntering ? "opacity-0" : "opacity-100"
+                "transition-opacity duration-200",
+                isEntering ? "opacity-0" : "opacity-100",
+                isZoomed ? "touch-none" : "touch-pan-y"
             )}
         >
             {/* Top bar */}
@@ -318,12 +398,15 @@ export const PhotoLightbox = memo(function PhotoLightbox({
                 </button>
             )}
 
-            {/* Photo container with swipe animation */}
+            {/* Photo container with swipe and zoom animation */}
             <div
-                className="flex items-center justify-center cursor-default pointer-events-none"
+                {...bind()}
+                className="flex items-center justify-center cursor-default touch-none"
                 style={{
-                    transform: `translateX(${touchDelta * 0.4}px)`,
-                    transition: touchDelta === 0 ? 'transform 0.25s cubic-bezier(0.25, 0.1, 0.25, 1)' : 'none'
+                    transform: isZoomed
+                        ? `translate(${translate.x}px, ${translate.y}px) scale(${scale})`
+                        : `translateX(${touchDelta * 0.6}px)`,
+                    transition: touchDelta === 0 && !isZoomed ? 'transform 0.2s cubic-bezier(0.25, 0.1, 0.25, 1)' : 'none'
                 }}
             >
                 {/* Loading indicator */}
@@ -334,19 +417,18 @@ export const PhotoLightbox = memo(function PhotoLightbox({
                 )}
 
                 <img
+                    ref={imageRef}
                     key={currentPhoto.url}
                     src={getMediaUrl(currentPhoto.url)}
                     alt={currentPhoto.caption || 'Photo'}
                     onLoad={handleImageLoad}
-                    onClick={(e) => {
-                        e.stopPropagation();
-                        resetControlsTimeout();
-                    }}
                     className={cn(
-                        "max-w-[calc(100vw-160px)] max-h-[calc(100vh-180px)] object-contain",
-                        "select-none rounded-sm pointer-events-auto cursor-default",
-                        "transition-all duration-200",
-                        imageLoaded && !isAnimating ? "opacity-100 scale-100" : "opacity-0 scale-[0.98]"
+                        // Responsive sizing: bigger on mobile, more padding on desktop
+                        "max-w-[calc(100vw-32px)] max-h-[calc(100vh-100px)]",
+                        "md:max-w-[calc(100vw-120px)] md:max-h-[calc(100vh-140px)]",
+                        "object-contain select-none rounded-sm cursor-default",
+                        "transition-opacity duration-200",
+                        imageLoaded && !isAnimating ? "opacity-100" : "opacity-0"
                     )}
                     style={{
                         WebkitUserDrag: 'none',
