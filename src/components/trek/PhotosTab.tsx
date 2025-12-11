@@ -90,7 +90,7 @@ const PhotoGridItem = memo(function PhotoGridItem({
             }}
             className={cn(
                 "aspect-square rounded-lg overflow-hidden relative bg-white/5 light:bg-black/5 group",
-                "transition-all duration-150",
+                "transition-all duration-150 m-2", // m-2 for iOS Safari gap compatibility
                 editMode ? "cursor-grab" : "cursor-pointer",
                 photo.is_hero && "ring-2 ring-amber-400",
                 isDragOver && "ring-2 ring-blue-500 scale-[1.02]",
@@ -455,14 +455,15 @@ export function PhotosTab({ trekData, isMobile, editMode = false, onViewPhotoOnM
                         )}
                     </div>
 
-                    {/* Simple grid - gap-4 creates 16px gaps both horizontally and vertically */}
+                    {/* Simple grid with padding-based spacing for iOS Safari compatibility */}
                     <div
                         ref={scrollContainerRef}
                         className="max-h-[70vh] overflow-y-auto overflow-x-hidden scrollbar-thin"
                     >
                         <div className={cn(
-                            "grid gap-4",
-                            "grid-cols-2 sm:grid-cols-3 lg:grid-cols-4"
+                            "grid",
+                            "grid-cols-2 sm:grid-cols-3 lg:grid-cols-4",
+                            "-m-2" // Negative margin to offset item padding
                         )}>
                             {filteredPhotos.map((photo, index) => (
                                 <PhotoGridItem
