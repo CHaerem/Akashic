@@ -68,6 +68,14 @@ const LIGHTBOX_STYLES = {
     container: { backgroundColor: 'rgba(0, 0, 0, 0.95)' }
 };
 
+// Video player configuration
+const LIGHTBOX_VIDEO_CONFIG = {
+    controls: true,
+    playsInline: true,
+    autoPlay: false,
+    muted: false,
+};
+
 interface PhotoLightboxProps {
     photos: Photo[];
     initialIndex: number;
@@ -239,6 +247,7 @@ export function PhotoLightbox({
             controller={LIGHTBOX_CONTROLLER_CONFIG}
             toolbar={toolbar}
             styles={LIGHTBOX_STYLES}
+            video={LIGHTBOX_VIDEO_CONFIG}
         />
     );
 }
