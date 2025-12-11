@@ -23,6 +23,10 @@ vi.mock('yet-another-react-lightbox/plugins/counter', () => ({
     default: {}
 }));
 
+vi.mock('yet-another-react-lightbox/plugins/video', () => ({
+    default: {}
+}));
+
 vi.mock('yet-another-react-lightbox/styles.css', () => ({}));
 vi.mock('yet-another-react-lightbox/plugins/counter.css', () => ({}));
 
@@ -210,5 +214,168 @@ describe('PhotoLightbox', () => {
             />
         );
         expect(screen.queryByTestId('yarl-lightbox')).not.toBeInTheDocument();
+    });
+
+    describe('video support', () => {
+        const mockVideos: Photo[] = [
+            {
+                id: 'video-1',
+                journey_id: 'journey-1',
+                url: 'videos/video1.mov',
+                thumbnail_url: 'videos/video1_thumb.jpg',
+                caption: 'Summit Video',
+                media_type: 'video',
+                duration: 30,
+                sort_order: 0
+            },
+            {
+                id: 'photo-1',
+                journey_id: 'journey-1',
+                url: 'photos/photo1.jpg',
+                caption: 'Photo 1',
+                media_type: 'image',
+                sort_order: 1
+            },
+            {
+                id: 'video-2',
+                journey_id: 'journey-1',
+                url: 'videos/video2.mp4',
+                media_type: 'video',
+                sort_order: 2
+            }
+        ];
+
+        it('generates video slides with correct format', async () => {
+            const Lightbox = (await import('yet-another-react-lightbox')).default as Mock;
+
+            render(
+                <PhotoLightbox
+                    photos={mockVideos}
+                    initialIndex={0}
+                    isOpen={true}
+                    onClose={() => {}}
+                    getMediaUrl={mockGetMediaUrl}
+                />
+            );
+
+            expect(Lightbox).toHaveBeenCalled();
+            const lastCall = Lightbox.mock.calls[Lightbox.mock.calls.length - 1][0];
+
+            // First slide should be a video
+            expect(lastCall.slides[0]).toEqual({
+                type: 'video',
+                sources: [{ src: 'https://media.example.com/videos/video1.mov', type: 'video/quicktime' }],
+                poster: 'https://media.example.com/videos/video1_thumb.jpg'
+            });
+
+            // Second slide should be an image
+            expect(lastCall.slides[1]).toEqual({
+                src: 'https://media.example.com/photos/photo1.jpg',
+                alt: 'Photo 1'
+            });
+
+            // Third slide should be a video without poster (no thumbnail)
+            expect(lastCall.slides[2]).toEqual({
+                type: 'video',
+                sources: [{ src: 'https://media.example.com/videos/video2.mp4', type: 'video/mp4' }],
+                poster: undefined
+            });
+        });
+
+        it('detects correct MIME type for .mov files', async () => {
+            const Lightbox = (await import('yet-another-react-lightbox')).default as Mock;
+            const movVideo: Photo[] = [{
+                id: 'video-1',
+                journey_id: 'journey-1',
+                url: 'videos/test.mov',
+                media_type: 'video',
+                sort_order: 0
+            }];
+
+            render(
+                <PhotoLightbox
+                    photos={movVideo}
+                    initialIndex={0}
+                    isOpen={true}
+                    onClose={() => {}}
+                    getMediaUrl={mockGetMediaUrl}
+                />
+            );
+
+            const lastCall = Lightbox.mock.calls[Lightbox.mock.calls.length - 1][0];
+            expect(lastCall.slides[0].sources[0].type).toBe('video/quicktime');
+        });
+
+        it('detects correct MIME type for .mp4 files', async () => {
+            const Lightbox = (await import('yet-another-react-lightbox')).default as Mock;
+            const mp4Video: Photo[] = [{
+                id: 'video-1',
+                journey_id: 'journey-1',
+                url: 'videos/test.mp4',
+                media_type: 'video',
+                sort_order: 0
+            }];
+
+            render(
+                <PhotoLightbox
+                    photos={mp4Video}
+                    initialIndex={0}
+                    isOpen={true}
+                    onClose={() => {}}
+                    getMediaUrl={mockGetMediaUrl}
+                />
+            );
+
+            const lastCall = Lightbox.mock.calls[Lightbox.mock.calls.length - 1][0];
+            expect(lastCall.slides[0].sources[0].type).toBe('video/mp4');
+        });
+
+        it('detects correct MIME type for .webm files', async () => {
+            const Lightbox = (await import('yet-another-react-lightbox')).default as Mock;
+            const webmVideo: Photo[] = [{
+                id: 'video-1',
+                journey_id: 'journey-1',
+                url: 'videos/test.webm',
+                media_type: 'video',
+                sort_order: 0
+            }];
+
+            render(
+                <PhotoLightbox
+                    photos={webmVideo}
+                    initialIndex={0}
+                    isOpen={true}
+                    onClose={() => {}}
+                    getMediaUrl={mockGetMediaUrl}
+                />
+            );
+
+            const lastCall = Lightbox.mock.calls[Lightbox.mock.calls.length - 1][0];
+            expect(lastCall.slides[0].sources[0].type).toBe('video/webm');
+        });
+
+        it('defaults to video/mp4 for unknown extensions', async () => {
+            const Lightbox = (await import('yet-another-react-lightbox')).default as Mock;
+            const unknownVideo: Photo[] = [{
+                id: 'video-1',
+                journey_id: 'journey-1',
+                url: 'videos/test.unknown',
+                media_type: 'video',
+                sort_order: 0
+            }];
+
+            render(
+                <PhotoLightbox
+                    photos={unknownVideo}
+                    initialIndex={0}
+                    isOpen={true}
+                    onClose={() => {}}
+                    getMediaUrl={mockGetMediaUrl}
+                />
+            );
+
+            const lastCall = Lightbox.mock.calls[Lightbox.mock.calls.length - 1][0];
+            expect(lastCall.slides[0].sources[0].type).toBe('video/mp4');
+        });
     });
 });

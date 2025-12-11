@@ -256,4 +256,59 @@ describe('PhotosTab', () => {
             expect(screen.getByText('Drag to reorder')).toBeInTheDocument();
         });
     });
+
+    describe('video support', () => {
+        const mockMediaWithVideos: Photo[] = [
+            {
+                id: 'photo-1',
+                journey_id: 'journey-1',
+                waypoint_id: 'wp-1',
+                url: 'photos/photo1.jpg',
+                caption: 'Photo 1',
+                media_type: 'image',
+                sort_order: 0,
+            },
+            {
+                id: 'video-1',
+                journey_id: 'journey-1',
+                waypoint_id: 'wp-1',
+                url: 'videos/video1.mov',
+                thumbnail_url: 'videos/video1_thumb.jpg',
+                caption: 'Summit Video',
+                media_type: 'video',
+                duration: 30,
+                sort_order: 1,
+            },
+        ];
+
+        beforeEach(() => {
+            mockFetchPhotos.mockResolvedValue(mockMediaWithVideos);
+        });
+
+        it('renders videos with correct aria-label', async () => {
+            render(<PhotosTab trekData={mockTrekData} isMobile={false} />);
+
+            await waitFor(() => {
+                // Photo should have "Photo N" label
+                const photoButton = screen.getByRole('button', { name: /Photo 1: Photo 1/ });
+                expect(photoButton).toBeInTheDocument();
+
+                // Video should have "Video N" label
+                const videoButton = screen.getByRole('button', { name: /Video 2: Summit Video/ });
+                expect(videoButton).toBeInTheDocument();
+            });
+        });
+
+        it('shows play icon overlay for videos in grid', async () => {
+            render(<PhotosTab trekData={mockTrekData} isMobile={false} />);
+
+            await waitFor(() => {
+                expect(screen.getByText(/Journey Photos/)).toBeInTheDocument();
+            });
+
+            // Check for play icon (SVG with play path) - should exist for video
+            const playIcons = document.querySelectorAll('svg path[d="M8 5v14l11-7z"]');
+            expect(playIcons.length).toBeGreaterThan(0);
+        });
+    });
 });

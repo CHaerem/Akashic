@@ -268,4 +268,139 @@ describe('DayPhotos', () => {
 
         expect(screen.getByAltText('Journey photo')).toBeInTheDocument();
     });
+
+    describe('video support', () => {
+        it('shows play icon overlay for videos', () => {
+            const photos: Photo[] = [{
+                id: 'video-1',
+                journey_id: 'journey-1',
+                url: 'videos/video1.mov',
+                thumbnail_url: 'videos/video1_thumb.jpg',
+                media_type: 'video',
+                duration: 30,
+                sort_order: 0,
+            }];
+
+            render(
+                <DayPhotos
+                    photos={photos}
+                    getMediaUrl={mockGetMediaUrl}
+                    isMobile={false}
+                    onPhotoClick={() => {}}
+                />
+            );
+
+            // Check for play icon (SVG with play path)
+            const playIcon = document.querySelector('svg path[d="M8 5v14l11-7z"]');
+            expect(playIcon).toBeInTheDocument();
+        });
+
+        it('does not show play icon for images', () => {
+            const photos: Photo[] = [{
+                id: 'photo-1',
+                journey_id: 'journey-1',
+                url: 'photos/photo1.jpg',
+                media_type: 'image',
+                sort_order: 0,
+            }];
+
+            render(
+                <DayPhotos
+                    photos={photos}
+                    getMediaUrl={mockGetMediaUrl}
+                    isMobile={false}
+                    onPhotoClick={() => {}}
+                />
+            );
+
+            // Should not have play icon
+            const playIcon = document.querySelector('svg path[d="M8 5v14l11-7z"]');
+            expect(playIcon).not.toBeInTheDocument();
+        });
+
+        it('uses "Journey video" as default alt text for videos', () => {
+            const photos: Photo[] = [{
+                id: 'video-1',
+                journey_id: 'journey-1',
+                url: 'videos/video1.mov',
+                media_type: 'video',
+                sort_order: 0,
+            }];
+
+            render(
+                <DayPhotos
+                    photos={photos}
+                    getMediaUrl={mockGetMediaUrl}
+                    isMobile={false}
+                    onPhotoClick={() => {}}
+                />
+            );
+
+            expect(screen.getByAltText('Journey video')).toBeInTheDocument();
+        });
+
+        it('uses caption as alt text for videos when available', () => {
+            const photos: Photo[] = [{
+                id: 'video-1',
+                journey_id: 'journey-1',
+                url: 'videos/video1.mov',
+                caption: 'Summit video',
+                media_type: 'video',
+                sort_order: 0,
+            }];
+
+            render(
+                <DayPhotos
+                    photos={photos}
+                    getMediaUrl={mockGetMediaUrl}
+                    isMobile={false}
+                    onPhotoClick={() => {}}
+                />
+            );
+
+            expect(screen.getByAltText('Summit video')).toBeInTheDocument();
+        });
+
+        it('renders mixed photos and videos correctly', () => {
+            const photos: Photo[] = [
+                {
+                    id: 'photo-1',
+                    journey_id: 'journey-1',
+                    url: 'photos/photo1.jpg',
+                    media_type: 'image',
+                    sort_order: 0,
+                },
+                {
+                    id: 'video-1',
+                    journey_id: 'journey-1',
+                    url: 'videos/video1.mov',
+                    media_type: 'video',
+                    sort_order: 1,
+                },
+                {
+                    id: 'photo-2',
+                    journey_id: 'journey-1',
+                    url: 'photos/photo2.jpg',
+                    sort_order: 2, // No media_type defaults to image
+                },
+            ];
+
+            render(
+                <DayPhotos
+                    photos={photos}
+                    getMediaUrl={mockGetMediaUrl}
+                    isMobile={false}
+                    onPhotoClick={() => {}}
+                />
+            );
+
+            // Should have 3 images
+            const images = screen.getAllByRole('img');
+            expect(images).toHaveLength(3);
+
+            // Should have exactly 1 play icon (for the video)
+            const playIcons = document.querySelectorAll('svg path[d="M8 5v14l11-7z"]');
+            expect(playIcons).toHaveLength(1);
+        });
+    });
 });
