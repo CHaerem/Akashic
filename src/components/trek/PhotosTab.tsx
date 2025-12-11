@@ -1,6 +1,6 @@
 /**
- * Photos tab for viewing and uploading journey photos
- * Allows family members to collaboratively add photos to journeys
+ * Media tab for viewing and uploading journey photos and videos
+ * Allows family members to collaboratively add media to journeys
  */
 
 import { useState, useEffect, useCallback, useRef, useMemo, memo } from 'react';
@@ -494,10 +494,10 @@ export function PhotosTab({ trekData, isMobile, editMode = false, onViewPhotoOnM
                     <div className="flex justify-between items-center mb-3">
                         <h3 className="text-white/90 light:text-slate-900 text-sm font-medium m-0 uppercase tracking-[0.1em]">
                             {dayFilter === 'all'
-                                ? `Journey Photos (${photos.length})`
+                                ? `Journey Media (${photos.length})`
                                 : dayFilter === ('unassigned' as unknown as number)
-                                    ? `Unassigned Photos (${filteredPhotos.length})`
-                                    : `Day ${dayFilter} Photos (${filteredPhotos.length})`
+                                    ? `Unassigned Media (${filteredPhotos.length})`
+                                    : `Day ${dayFilter} Media (${filteredPhotos.length})`
                             }
                         </h3>
                         {editMode && filteredPhotos.length > 1 && (
@@ -539,7 +539,7 @@ export function PhotosTab({ trekData, isMobile, editMode = false, onViewPhotoOnM
                                         }}
                                     >
                                         <div className={cn(
-                                            "grid gap-3 h-full",
+                                            "grid gap-4 h-full",
                                             "grid-cols-2 sm:grid-cols-3 lg:grid-cols-4"
                                         )}>
                                             {rowPhotos.map((photo, colIndex) => {

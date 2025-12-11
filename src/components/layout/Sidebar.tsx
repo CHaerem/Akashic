@@ -7,7 +7,7 @@ import { ChevronIcon } from '../icons';
 
 const MODE_LABELS: Record<Exclude<ContentMode, 'info'>, string> = {
     day: 'Day',
-    photos: 'Photos',
+    photos: 'Media',
     stats: 'Stats',
 };
 

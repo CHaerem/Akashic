@@ -168,7 +168,7 @@ describe('PhotosTab', () => {
         render(<PhotosTab trekData={mockTrekData} isMobile={false} />);
 
         await waitFor(() => {
-            expect(screen.getByText(/Journey Photos \(3\)/)).toBeInTheDocument();
+            expect(screen.getByText(/Journey Media \(3\)/)).toBeInTheDocument();
         });
     });
 
@@ -215,7 +215,7 @@ describe('PhotosTab', () => {
 
         // Wait for photos to load
         await waitFor(() => {
-            expect(screen.getByText(/Journey Photos/)).toBeInTheDocument();
+            expect(screen.getByText(/Journey Media/)).toBeInTheDocument();
         });
 
         // Find and click a photo
@@ -303,7 +303,7 @@ describe('PhotosTab', () => {
             render(<PhotosTab trekData={mockTrekData} isMobile={false} />);
 
             await waitFor(() => {
-                expect(screen.getByText(/Journey Photos/)).toBeInTheDocument();
+                expect(screen.getByText(/Journey Media/)).toBeInTheDocument();
             });
 
             // Check for play icon (SVG with play path) - should exist for video
