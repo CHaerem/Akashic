@@ -321,8 +321,6 @@ src/components/layout/
 
 src/components/nav/
 ├── NavigationPill.tsx      # Day selector + mode switcher in sheet header
-├── AdaptiveNavPill.tsx     # Legacy pill with magnification (deprecated)
-├── ContentCard.tsx         # Floating card for tab content (deprecated)
 └── ContextCard.tsx         # Day info context card
 ```
 

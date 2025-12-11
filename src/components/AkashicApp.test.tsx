@@ -102,10 +102,6 @@ vi.mock('./home/GlobeHint', () => ({
     GlobeHint: () => null
 }));
 
-vi.mock('./nav/AdaptiveNavPill', () => ({
-    AdaptiveNavPill: () => null
-}));
-
 vi.mock('./OfflineIndicator', () => ({
     OfflineIndicator: () => null
 }));
