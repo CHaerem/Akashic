@@ -116,6 +116,31 @@ function isVideoFile(filePath: string): boolean {
 }
 
 /**
+ * Check if file needs conversion (non-mp4 video)
+ */
+function needsConversion(filePath: string): boolean {
+  const ext = path.extname(filePath).toLowerCase();
+  return ['.mov', '.m4v', '.webm'].includes(ext);
+}
+
+/**
+ * Convert video to mp4 for cross-browser compatibility
+ * Uses H.264 codec which works in all browsers
+ */
+function convertToMp4(inputPath: string, outputPath: string): boolean {
+  try {
+    // H.264 with AAC audio, compatible with all browsers
+    // -movflags +faststart: Optimize for web streaming
+    const cmd = `ffmpeg -y -i "${inputPath}" -c:v libx264 -c:a aac -preset fast -crf 23 -movflags +faststart "${outputPath}"`;
+    execSync(cmd, { stdio: 'pipe' });
+    return true;
+  } catch (error) {
+    console.error(`  Failed to convert video: ${error}`);
+    return false;
+  }
+}
+
+/**
  * Generate a UUID
  */
 function uuid(): string {
@@ -316,15 +341,41 @@ async function main() {
     const duration = isVideo ? getVideoDuration(filePath) : null;
 
     const photoId = uuid();
-    const ext = path.extname(file).toLowerCase() === '.jpeg' ? '.jpg' : path.extname(file).toLowerCase();
+
+    // Determine final extension (convert non-mp4 videos to mp4)
+    let ext = path.extname(file).toLowerCase();
+    if (ext === '.jpeg') ext = '.jpg';
+    const shouldConvert = isVideo && needsConversion(filePath);
+    if (shouldConvert) ext = '.mp4'; // Will be converted to mp4
+
     const r2Path = `journeys/${journeyId}/photos/${photoId}${ext}`;
     const thumbR2Path = `journeys/${journeyId}/photos/${photoId}_thumb.jpg`;
 
     const mediaIcon = isVideo ? '🎬' : '📷';
-    process.stdout.write(`\r  [${i + 1}/${files.length}] ${mediaIcon} Uploading ${file.substring(0, 38).padEnd(38)}...`);
+    const convertLabel = shouldConvert ? ' (→mp4)' : '';
+    process.stdout.write(`\r  [${i + 1}/${files.length}] ${mediaIcon} Uploading ${file.substring(0, 32).padEnd(32)}${convertLabel}...`);
 
-    // Upload original to R2
-    const success = uploadToR2(filePath, r2Path);
+    // For videos that need conversion, convert first then upload
+    let uploadPath = filePath;
+    let tempMp4Path: string | null = null;
+
+    if (shouldConvert) {
+      tempMp4Path = path.join(TEMP_DIR, `${photoId}.mp4`);
+      if (!convertToMp4(filePath, tempMp4Path)) {
+        console.log(`\n  ⚠️  Video conversion failed for ${file}`);
+        failed++;
+        continue;
+      }
+      uploadPath = tempMp4Path;
+    }
+
+    // Upload original (or converted) to R2
+    const success = uploadToR2(uploadPath, r2Path);
+
+    // Clean up converted file if it was temporary
+    if (tempMp4Path && fs.existsSync(tempMp4Path)) {
+      try { fs.unlinkSync(tempMp4Path); } catch { /* ignore */ }
+    }
 
     if (success) {
       // Create and upload thumbnail
