@@ -181,7 +181,11 @@ export default function AkashicApp() {
 
     // Filter photos with coordinates for map display
     // Use deferred photos to prevent map re-renders during camera animations
-    const photosWithCoords = deferredPhotos.filter(p => p.coordinates && p.coordinates.length === 2);
+    // Memoized to prevent new array reference on every render (fixes React error #185)
+    const photosWithCoords = useMemo(
+        () => deferredPhotos.filter(p => p.coordinates && p.coordinates.length === 2),
+        [deferredPhotos]
+    );
 
     // Quick action buttons configuration
     const quickActions = useMemo(() => [
