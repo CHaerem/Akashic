@@ -29,6 +29,7 @@ export interface Env {
     MEDIA_BUCKET: R2Bucket;
     SUPABASE_URL: string;
     SUPABASE_SERVICE_KEY: string;  // Service role key to bypass RLS for permission checks
+    ALLOWED_ORIGINS?: string;  // Comma-separated list of allowed origins for CORS
 }
 
 interface JWTPayload {
@@ -66,6 +67,76 @@ interface JWKS {
 // Cache for JWKS to avoid fetching on every request
 let jwksCache: { keys: CryptoKey[]; fetchedAt: number } | null = null;
 const JWKS_CACHE_TTL = 3600000; // 1 hour
+
+// Default allowed origins for CORS (development and common Netlify patterns)
+const DEFAULT_ALLOWED_ORIGINS = [
+    'http://localhost:5173',
+    'http://localhost:3000',
+    'https://localhost:5173',
+    'https://localhost:3000',
+];
+
+/**
+ * Check if an origin is allowed for CORS
+ * Supports exact matches and wildcard patterns like *.netlify.app
+ */
+function isOriginAllowed(origin: string, allowedOrigins: string[]): boolean {
+    for (const allowed of allowedOrigins) {
+        if (allowed === origin) {
+            return true;
+        }
+        // Support wildcard subdomains (e.g., *.netlify.app)
+        if (allowed.startsWith('*.')) {
+            const domain = allowed.slice(2);
+            const originUrl = new URL(origin);
+            if (originUrl.hostname.endsWith(domain) || originUrl.hostname === domain.slice(1)) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+/**
+ * Get CORS headers for a request
+ * Returns origin-specific headers if allowed, or rejects with no CORS headers
+ */
+function getCorsHeaders(request: Request, env: Env): Record<string, string> {
+    const origin = request.headers.get('Origin');
+
+    // Parse allowed origins from env (comma-separated) or use defaults
+    const allowedOrigins = env.ALLOWED_ORIGINS
+        ? env.ALLOWED_ORIGINS.split(',').map(o => o.trim())
+        : DEFAULT_ALLOWED_ORIGINS;
+
+    // If no origin header (same-origin request), allow with default headers
+    if (!origin) {
+        return {
+            'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS',
+            'Access-Control-Allow-Headers': 'Authorization, Content-Type',
+            'Referrer-Policy': 'no-referrer',
+        };
+    }
+
+    // Check if origin is allowed
+    if (isOriginAllowed(origin, allowedOrigins)) {
+        return {
+            'Access-Control-Allow-Origin': origin,
+            'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS',
+            'Access-Control-Allow-Headers': 'Authorization, Content-Type',
+            'Access-Control-Allow-Credentials': 'true',
+            'Referrer-Policy': 'no-referrer',
+            'Vary': 'Origin',
+        };
+    }
+
+    // Origin not allowed - return headers without Access-Control-Allow-Origin
+    // This will cause the browser to block the request
+    return {
+        'Referrer-Policy': 'no-referrer',
+        'Vary': 'Origin',
+    };
+}
 
 // Base64url decode
 function base64UrlDecode(str: string): Uint8Array {
@@ -311,13 +382,9 @@ async function handleUpload(
     request: Request,
     env: Env,
     journeyId: string,
-    userId: string
+    userId: string,
+    corsHeaders: Record<string, string>
 ): Promise<Response> {
-    const corsHeaders = {
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-        'Access-Control-Allow-Headers': 'Authorization, Content-Type',
-    };
 
     try {
         const contentType = request.headers.get('Content-Type') || '';
@@ -414,12 +481,8 @@ export default {
         const url = new URL(request.url);
         const path = url.pathname.slice(1); // Remove leading slash
 
-        // CORS headers for frontend access
-        const corsHeaders = {
-            'Access-Control-Allow-Origin': '*',
-            'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS',
-            'Access-Control-Allow-Headers': 'Authorization, Content-Type',
-        };
+        // Get origin-validated CORS headers
+        const corsHeaders = getCorsHeaders(request, env);
 
         // Handle CORS preflight
         if (request.method === 'OPTIONS') {
@@ -482,7 +545,7 @@ export default {
                 });
             }
 
-            return handleUpload(request, env, journeyId, payload.sub);
+            return handleUpload(request, env, journeyId, payload.sub, corsHeaders);
         }
 
         // Handle DELETE requests (photo deletion)

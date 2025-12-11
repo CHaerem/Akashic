@@ -9,6 +9,9 @@ bucket_name = "akashic-media"
 
 [vars]
 SUPABASE_URL = "https://pbqvnxeldpgvcrdbxcvr.supabase.co"
+# CORS: Comma-separated list of allowed origins (supports wildcards like *.netlify.app)
+# Default allows localhost:5173 and localhost:3000 for development
+ALLOWED_ORIGINS = "http://localhost:5173,http://localhost:3000,https://akashic.no,https://staging.akashic.pages.dev,*.akashic.pages.dev"
 
 # Secrets (set via `wrangler secret put <NAME>` in this directory):
 # - SUPABASE_SERVICE_KEY: Service role key for querying journey_members (bypasses RLS)
