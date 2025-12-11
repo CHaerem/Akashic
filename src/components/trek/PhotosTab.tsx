@@ -90,12 +90,12 @@ const PhotoGridItem = memo(function PhotoGridItem({
             }}
             className={cn(
                 "aspect-square rounded-lg overflow-hidden relative bg-white/5 light:bg-black/5 group",
-                "transition-all duration-150 m-2", // m-2 for iOS Safari gap compatibility
+                "transition-all duration-150 mx-2 mb-2", // margin for iOS Safari gap compatibility
+                stagger ? "mt-8" : "mt-2", // Zigzag: alternating columns offset
                 editMode ? "cursor-grab" : "cursor-pointer",
                 photo.is_hero && "ring-2 ring-amber-400",
                 isDragOver && "ring-2 ring-blue-500 scale-[1.02]",
-                isDragged && "opacity-50",
-                stagger && "mt-4" // Zigzag offset for even columns
+                isDragged && "opacity-50"
             )}
         >
             <img
