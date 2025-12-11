@@ -27,6 +27,47 @@ function getVideoMimeType(url: string): string {
     return types[ext || ''] || 'video/mp4';
 }
 
+// Static YARL config objects - defined outside component to prevent recreating on each render
+// This is critical to avoid infinite loops caused by YARL detecting "new" config objects
+const LIGHTBOX_PLUGINS = [Zoom, Counter, Video];
+
+const LIGHTBOX_ZOOM_CONFIG = {
+    maxZoomPixelRatio: 4,
+    zoomInMultiplier: 2,
+    doubleTapDelay: 300,
+    doubleClickDelay: 300,
+    doubleClickMaxStops: 2,
+    keyboardMoveDistance: 50,
+    wheelZoomDistanceFactor: 100,
+    pinchZoomDistanceFactor: 100,
+    scrollToZoom: true
+};
+
+const LIGHTBOX_CAROUSEL_CONFIG = {
+    finite: true,
+    preload: 2
+};
+
+const LIGHTBOX_ANIMATION_CONFIG = {
+    fade: 200,
+    swipe: 200,
+    easing: {
+        fade: 'ease',
+        swipe: 'ease-out',
+        navigation: 'ease-in-out'
+    }
+};
+
+const LIGHTBOX_CONTROLLER_CONFIG = {
+    closeOnBackdropClick: true,
+    closeOnPullDown: true,
+    closeOnPullUp: true
+};
+
+const LIGHTBOX_STYLES = {
+    container: { backgroundColor: 'rgba(0, 0, 0, 0.95)' }
+};
+
 interface PhotoLightboxProps {
     photos: Photo[];
     initialIndex: number;
@@ -116,6 +157,16 @@ export function PhotoLightbox({
         }
     }, [onViewOnMap, currentPhoto, onClose]);
 
+    // Stable handler for view changes - prevents re-renders from creating new callback references
+    const handleViewChange = useCallback(({ index }: { index: number }) => {
+        setCurrentIndex(index);
+    }, []);
+
+    // Memoize the on handlers object to prevent YARL from re-initializing
+    const onHandlers = useMemo(() => ({
+        view: handleViewChange
+    }), [handleViewChange]);
+
     // Custom toolbar buttons
     const toolbar = useMemo(() => {
         const buttons: React.ReactNode[] = [];
@@ -187,43 +238,14 @@ export function PhotoLightbox({
             close={onClose}
             slides={slides}
             index={currentIndex}
-            on={{
-                view: ({ index }) => setCurrentIndex(index)
-            }}
-            plugins={[Zoom, Counter, Video]}
-            zoom={{
-                maxZoomPixelRatio: 4,
-                zoomInMultiplier: 2,
-                doubleTapDelay: 300,
-                doubleClickDelay: 300,
-                doubleClickMaxStops: 2,
-                keyboardMoveDistance: 50,
-                wheelZoomDistanceFactor: 100,
-                pinchZoomDistanceFactor: 100,
-                scrollToZoom: true
-            }}
-            carousel={{
-                finite: true,
-                preload: 2
-            }}
-            animation={{
-                fade: 200,
-                swipe: 200,
-                easing: {
-                    fade: 'ease',
-                    swipe: 'ease-out',
-                    navigation: 'ease-in-out'
-                }
-            }}
-            controller={{
-                closeOnBackdropClick: true,
-                closeOnPullDown: true,
-                closeOnPullUp: true
-            }}
+            on={onHandlers}
+            plugins={LIGHTBOX_PLUGINS}
+            zoom={LIGHTBOX_ZOOM_CONFIG}
+            carousel={LIGHTBOX_CAROUSEL_CONFIG}
+            animation={LIGHTBOX_ANIMATION_CONFIG}
+            controller={LIGHTBOX_CONTROLLER_CONFIG}
             toolbar={toolbar}
-            styles={{
-                container: { backgroundColor: 'rgba(0, 0, 0, 0.95)' }
-            }}
+            styles={LIGHTBOX_STYLES}
         />
     );
 }

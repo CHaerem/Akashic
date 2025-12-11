@@ -130,6 +130,11 @@ export default function AkashicApp() {
         setLightboxIndex(index);
     }, []);
 
+    // Close lightbox - stable callback to prevent re-renders
+    const handleCloseLightbox = useCallback(() => {
+        setLightboxIndex(null);
+    }, []);
+
     // Handle "View on Map" from lightbox - close lightbox and fly to photo
     const handleViewOnMap = useCallback((photo: Photo) => {
         setLightboxIndex(null); // Close lightbox
@@ -378,7 +383,7 @@ export default function AkashicApp() {
                 photos={photosWithCoords}
                 initialIndex={lightboxIndex ?? 0}
                 isOpen={lightboxIndex !== null}
-                onClose={() => setLightboxIndex(null)}
+                onClose={handleCloseLightbox}
                 getMediaUrl={getMediaUrl}
                 onViewOnMap={handleViewOnMap}
             />
