@@ -1,14 +1,17 @@
 /**
- * Immersive photo lightbox using PhotoSwipe - the industry standard for iOS-native gestures
- * - Native pinch-to-zoom, pan, swipe navigation
- * - Smooth 60fps animations
- * - Battle-tested on iOS for 10+ years
+ * Photo lightbox using yet-another-react-lightbox (YARL)
+ * - Native React component with clean API
+ * - Built-in zoom plugin with pinch-to-zoom
+ * - Handles unknown image dimensions automatically
+ * - Future video support via plugin
  */
 
-import { useEffect, useRef, useCallback, memo } from 'react';
-import PhotoSwipeLightbox from 'photoswipe/lightbox';
-import PhotoSwipe from 'photoswipe';
-import 'photoswipe/style.css';
+import { useState, useCallback, useMemo } from 'react';
+import Lightbox, { SlideImage } from 'yet-another-react-lightbox';
+import Zoom from 'yet-another-react-lightbox/plugins/zoom';
+import Counter from 'yet-another-react-lightbox/plugins/counter';
+import 'yet-another-react-lightbox/styles.css';
+import 'yet-another-react-lightbox/plugins/counter.css';
 import type { Photo } from '../../types/trek';
 
 interface PhotoLightboxProps {
@@ -23,7 +26,7 @@ interface PhotoLightboxProps {
     onEdit?: (photo: Photo) => void;
 }
 
-export const PhotoLightbox = memo(function PhotoLightbox({
+export function PhotoLightbox({
     photos,
     initialIndex,
     isOpen,
@@ -34,222 +37,157 @@ export const PhotoLightbox = memo(function PhotoLightbox({
     onViewOnMap,
     onEdit
 }: PhotoLightboxProps) {
-    const lightboxRef = useRef<PhotoSwipeLightbox | null>(null);
-    const pswpRef = useRef<PhotoSwipe | null>(null);
-    const currentIndexRef = useRef(initialIndex);
+    const [currentIndex, setCurrentIndex] = useState(initialIndex);
 
-    // Get current photo for custom buttons
-    const getCurrentPhoto = useCallback(() => {
-        return photos[currentIndexRef.current];
-    }, [photos]);
-
-    // Handle delete action
-    const handleDelete = useCallback(() => {
-        const photo = getCurrentPhoto();
-        if (onDelete && photo) {
-            if (confirm('Delete this photo?')) {
-                onDelete(photo);
-                // Close if last photo, otherwise PhotoSwipe handles it
-                if (photos.length === 1) {
-                    pswpRef.current?.close();
-                }
-            }
-        }
-    }, [getCurrentPhoto, onDelete, photos.length]);
-
-    // Handle edit action
-    const handleEdit = useCallback(() => {
-        const photo = getCurrentPhoto();
-        if (onEdit && photo) {
-            pswpRef.current?.close();
-            setTimeout(() => onEdit(photo), 100);
-        }
-    }, [getCurrentPhoto, onEdit]);
-
-    // Handle view on map action
-    const handleViewOnMap = useCallback(() => {
-        const photo = getCurrentPhoto();
-        if (onViewOnMap && photo?.coordinates) {
-            pswpRef.current?.close();
-            setTimeout(() => onViewOnMap(photo), 100);
-        }
-    }, [getCurrentPhoto, onViewOnMap]);
-
-    useEffect(() => {
-        if (!isOpen || photos.length === 0) {
-            // Clean up if closed
-            if (lightboxRef.current) {
-                lightboxRef.current.destroy();
-                lightboxRef.current = null;
-            }
-            return;
-        }
-
-        // Prepare data source - dimensions will be detected dynamically
-        const dataSource = photos.map(photo => ({
+    // Convert photos to YARL slides format
+    const slides = useMemo<SlideImage[]>(() =>
+        photos.map(photo => ({
             src: getMediaUrl(photo.url),
-            msrc: photo.thumbnail_url ? getMediaUrl(photo.thumbnail_url) : undefined,
             alt: photo.caption || 'Photo',
-            photo // Store reference for our custom actions
-        }));
+            // YARL handles unknown dimensions automatically
+        })),
+        [photos, getMediaUrl]
+    );
 
-        const lightbox = new PhotoSwipeLightbox({
-            dataSource,
-            pswpModule: PhotoSwipe,
+    // Get current photo for actions
+    const currentPhoto = photos[currentIndex];
 
-            // iOS-native feeling options
-            spacing: 0.1,
-            allowPanToNext: true,
-            loop: false,
-            pinchToClose: true,
-            closeOnVerticalDrag: true,
-
-            // Zoom settings
-            initialZoomLevel: 'fit',
-            secondaryZoomLevel: 2,
-            maxZoomLevel: 4,
-
-            // Animation settings for smooth feel
-            showHideAnimationType: 'fade',
-            zoomAnimationDuration: 300,
-
-            // Hide default UI elements we'll replace
-            imageClickAction: 'zoom',
-            tapAction: 'toggle-controls',
-            doubleTapAction: 'zoom',
-
-            // Preload for smooth navigation
-            preload: [1, 2],
-
-            // Padding for safe areas
-            paddingFn: () => ({
-                top: 60,
-                bottom: 60,
-                left: 0,
-                right: 0
-            })
-        });
-
-        // Handle unknown image dimensions - PhotoSwipe v5 recommended approach
-        lightbox.addFilter('itemData', (itemData, index) => {
-            // Use viewport-based placeholder dimensions for proper initial layout
-            const viewportWidth = window.innerWidth;
-            const viewportHeight = window.innerHeight;
-            if (!itemData.width) {
-                itemData.width = viewportWidth;
-            }
-            if (!itemData.height) {
-                itemData.height = viewportHeight;
-            }
-            return itemData;
-        });
-
-        // Update to actual dimensions once image loads
-        lightbox.on('contentLoadImage', ({ content, isLazy }) => {
-            const img = content.element as HTMLImageElement;
-            if (img && img.complete && img.naturalWidth) {
-                // Image already loaded (cached)
-                content.width = img.naturalWidth;
-                content.height = img.naturalHeight;
-            } else if (img) {
-                // Wait for image to load
-                img.addEventListener('load', () => {
-                    content.width = img.naturalWidth;
-                    content.height = img.naturalHeight;
-                    content.state = 'loaded';
-                    lightbox.pswp?.updateSize(true);
-                }, { once: true });
-            }
-        });
-
-        // Track current index
-        lightbox.on('change', () => {
-            if (pswpRef.current) {
-                currentIndexRef.current = pswpRef.current.currIndex;
-            }
-        });
-
-        // Handle close
-        lightbox.on('close', () => {
-            onClose();
-        });
-
-        // Add custom UI when PhotoSwipe opens
-        lightbox.on('uiRegister', function() {
-            // Counter element
-            lightbox.pswp?.ui?.registerElement({
-                name: 'custom-counter',
-                order: 5,
-                isButton: false,
-                appendTo: 'bar',
-                html: `<span class="pswp__counter"></span>`,
-                onInit: (el, pswp) => {
-                    const updateCounter = () => {
-                        el.innerHTML = `${pswp.currIndex + 1} / ${pswp.getNumItems()}`;
-                    };
-                    pswp.on('change', updateCounter);
-                    updateCounter();
+    // Handle delete
+    const handleDelete = useCallback(() => {
+        if (onDelete && currentPhoto) {
+            if (confirm('Delete this photo?')) {
+                onDelete(currentPhoto);
+                if (photos.length === 1) {
+                    onClose();
                 }
-            });
-
-            // Edit button (when in edit mode)
-            if (editMode && onEdit) {
-                lightbox.pswp?.ui?.registerElement({
-                    name: 'edit-button',
-                    order: 7,
-                    isButton: true,
-                    appendTo: 'bar',
-                    html: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>',
-                    onClick: () => handleEdit()
-                });
             }
+        }
+    }, [onDelete, currentPhoto, photos.length, onClose]);
 
-            // Delete button (when in edit mode)
-            if (editMode && onDelete) {
-                lightbox.pswp?.ui?.registerElement({
-                    name: 'delete-button',
-                    order: 8,
-                    isButton: true,
-                    appendTo: 'bar',
-                    html: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2"><path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6h14z"/></svg>',
-                    onClick: () => handleDelete()
-                });
-            }
+    // Handle edit
+    const handleEdit = useCallback(() => {
+        if (onEdit && currentPhoto) {
+            onClose();
+            setTimeout(() => onEdit(currentPhoto), 100);
+        }
+    }, [onEdit, currentPhoto, onClose]);
 
-            // View on map button
-            if (onViewOnMap) {
-                lightbox.pswp?.ui?.registerElement({
-                    name: 'map-button',
-                    order: 6,
-                    isButton: true,
-                    appendTo: 'bar',
-                    html: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>',
-                    onClick: () => handleViewOnMap()
-                });
-            }
-        });
+    // Handle view on map
+    const handleViewOnMap = useCallback(() => {
+        if (onViewOnMap && currentPhoto?.coordinates) {
+            onClose();
+            setTimeout(() => onViewOnMap(currentPhoto), 100);
+        }
+    }, [onViewOnMap, currentPhoto, onClose]);
 
-        // Store reference and init
-        lightboxRef.current = lightbox;
-        lightbox.init();
+    // Custom toolbar buttons
+    const toolbar = useMemo(() => {
+        const buttons: React.ReactNode[] = [];
 
-        // Open at specified index
-        lightbox.loadAndOpen(initialIndex);
+        // View on map button
+        if (onViewOnMap && currentPhoto?.coordinates) {
+            buttons.push(
+                <button
+                    key="map"
+                    type="button"
+                    className="yarl__button"
+                    onClick={handleViewOnMap}
+                    aria-label="View on map"
+                >
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/>
+                        <circle cx="12" cy="10" r="3"/>
+                    </svg>
+                </button>
+            );
+        }
 
-        // Store pswp instance when available
-        lightbox.on('openingAnimationEnd', () => {
-            pswpRef.current = lightbox.pswp || null;
-        });
+        // Edit button (edit mode only)
+        if (editMode && onEdit) {
+            buttons.push(
+                <button
+                    key="edit"
+                    type="button"
+                    className="yarl__button"
+                    onClick={handleEdit}
+                    aria-label="Edit photo"
+                >
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/>
+                        <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                    </svg>
+                </button>
+            );
+        }
 
-        return () => {
-            if (lightboxRef.current) {
-                lightboxRef.current.destroy();
-                lightboxRef.current = null;
-            }
-            pswpRef.current = null;
-        };
-    }, [isOpen, photos, initialIndex, getMediaUrl, onClose, editMode, onDelete, onEdit, onViewOnMap, handleDelete, handleEdit, handleViewOnMap]);
+        // Delete button (edit mode only)
+        if (editMode && onDelete) {
+            buttons.push(
+                <button
+                    key="delete"
+                    type="button"
+                    className="yarl__button"
+                    onClick={handleDelete}
+                    aria-label="Delete photo"
+                    style={{ color: '#ef4444' }}
+                >
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6h14z"/>
+                    </svg>
+                </button>
+            );
+        }
 
-    // PhotoSwipe renders into its own container, we don't return anything
-    return null;
-});
+        return { buttons };
+    }, [editMode, onEdit, onDelete, onViewOnMap, currentPhoto, handleDelete, handleEdit, handleViewOnMap]);
+
+    if (!isOpen || photos.length === 0) {
+        return null;
+    }
+
+    return (
+        <Lightbox
+            open={isOpen}
+            close={onClose}
+            slides={slides}
+            index={currentIndex}
+            on={{
+                view: ({ index }) => setCurrentIndex(index)
+            }}
+            plugins={[Zoom, Counter]}
+            zoom={{
+                maxZoomPixelRatio: 4,
+                zoomInMultiplier: 2,
+                doubleTapDelay: 300,
+                doubleClickDelay: 300,
+                doubleClickMaxStops: 2,
+                keyboardMoveDistance: 50,
+                wheelZoomDistanceFactor: 100,
+                pinchZoomDistanceFactor: 100,
+                scrollToZoom: true
+            }}
+            carousel={{
+                finite: true,
+                preload: 2
+            }}
+            animation={{
+                fade: 200,
+                swipe: 200,
+                easing: {
+                    fade: 'ease',
+                    swipe: 'ease-out',
+                    navigation: 'ease-in-out'
+                }
+            }}
+            controller={{
+                closeOnBackdropClick: true,
+                closeOnPullDown: true,
+                closeOnPullUp: true
+            }}
+            toolbar={toolbar}
+            styles={{
+                container: { backgroundColor: 'rgba(0, 0, 0, 0.95)' }
+            }}
+        />
+    );
+}
