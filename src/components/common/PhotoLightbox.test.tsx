@@ -151,7 +151,9 @@ describe('PhotoLightbox', () => {
         });
     });
 
-    it('updates index when initialIndex changes while open', async () => {
+    it('does NOT update index when initialIndex changes while already open (prevents infinite loop)', async () => {
+        // This behavior is intentional - updating index while open caused infinite loops
+        // when YARL fires on.view callbacks. The index only syncs on open transition.
         const { rerender } = render(
             <PhotoLightbox
                 photos={mockPhotos}
@@ -164,7 +166,7 @@ describe('PhotoLightbox', () => {
 
         expect(screen.getByTestId('yarl-lightbox')).toHaveAttribute('data-index', '0');
 
-        // Change initialIndex while still open
+        // Change initialIndex while still open - should NOT update
         rerender(
             <PhotoLightbox
                 photos={mockPhotos}
@@ -175,9 +177,8 @@ describe('PhotoLightbox', () => {
             />
         );
 
-        await waitFor(() => {
-            expect(screen.getByTestId('yarl-lightbox')).toHaveAttribute('data-index', '1');
-        });
+        // Index should remain at 0 since lightbox was already open
+        expect(screen.getByTestId('yarl-lightbox')).toHaveAttribute('data-index', '0');
     });
 
     it('generates correct media URLs for slides', async () => {

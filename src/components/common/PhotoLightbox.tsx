@@ -6,7 +6,7 @@
  * - Handles unknown image dimensions automatically
  */
 
-import { useState, useCallback, useMemo, useEffect } from 'react';
+import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import Lightbox, { Slide } from 'yet-another-react-lightbox';
 import Zoom from 'yet-another-react-lightbox/plugins/zoom';
 import Counter from 'yet-another-react-lightbox/plugins/counter';
@@ -92,14 +92,17 @@ export function PhotoLightbox({
     onEdit
 }: PhotoLightboxProps) {
     const [currentIndex, setCurrentIndex] = useState(initialIndex);
+    const wasOpenRef = useRef(false);
 
-    // Sync currentIndex when lightbox opens with a new initialIndex
-    // This fixes the bug where clicking different photos on the map
-    // would show the wrong photo (state persisted from previous open)
+    // Sync currentIndex ONLY when lightbox opens (transitions from closed to open)
+    // This prevents infinite loops from YARL firing on.view when index prop changes
+    // We intentionally DON'T sync when initialIndex changes while already open
     useEffect(() => {
-        if (isOpen) {
+        if (isOpen && !wasOpenRef.current) {
+            // Lightbox just opened - sync to the requested photo
             setCurrentIndex(initialIndex);
         }
+        wasOpenRef.current = isOpen;
     }, [isOpen, initialIndex]);
 
     // Convert photos to YARL slides format (supports both images and videos)
