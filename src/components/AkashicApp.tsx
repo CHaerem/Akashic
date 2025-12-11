@@ -42,13 +42,14 @@ export default function AkashicApp() {
         const parsed = new Date(deployTimeRaw);
         if (Number.isNaN(parsed.getTime())) return null;
 
-        return `${parsed.toLocaleString('en-US', {
-            timeZone: 'UTC',
+        // Display in user's local timezone
+        return parsed.toLocaleString('en-US', {
             month: 'short',
             day: '2-digit',
             hour: '2-digit',
-            minute: '2-digit'
-        })} UTC`;
+            minute: '2-digit',
+            hour12: false
+        });
     }, [deployTimeRaw]);
 
     const {
