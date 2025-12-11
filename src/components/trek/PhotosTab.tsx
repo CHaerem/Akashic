@@ -231,15 +231,15 @@ export function PhotosTab({ trekData, isMobile, editMode = false, onViewPhotoOnM
         [filteredPhotos.length, columns]
     );
 
-    // Virtual row size: square aspect ratio + gap (16px) + stagger offset (16px)
+    // Virtual row size: square aspect ratio + row gap
     // Estimate based on container width / columns
     const getRowHeight = useCallback(() => {
         const container = gridContainerRef.current;
         if (!container) return 166; // fallback
-        const gap = 16; // gap-4 = 16px
-        const staggerOffset = 16; // mt-4 on odd columns
-        const itemWidth = (container.offsetWidth - gap * (columns - 1)) / columns;
-        return itemWidth + gap + staggerOffset; // square + gap + stagger
+        const horizontalGap = 16; // gap-x-4 = 16px
+        const rowGap = 16; // pb-4 = 16px
+        const itemWidth = (container.offsetWidth - horizontalGap * (columns - 1)) / columns;
+        return itemWidth + rowGap; // square photo + gap to next row
     }, [columns]);
 
     // Set up virtualizer for rows
@@ -548,8 +548,6 @@ export function PhotosTab({ trekData, isMobile, editMode = false, onViewPhotoOnM
                                         )}>
                                             {rowPhotos.map((photo, colIndex) => {
                                                 const index = rowStartIndex + colIndex;
-                                                // Zigzag: odd columns get offset down
-                                                const shouldStagger = colIndex % 2 === 1;
                                                 return (
                                                     <PhotoGridItem
                                                         key={photo.id}
@@ -558,7 +556,6 @@ export function PhotosTab({ trekData, isMobile, editMode = false, onViewPhotoOnM
                                                         editMode={editMode}
                                                         isDragOver={dragOverIndex === index}
                                                         isDragged={draggedIndex === index}
-                                                        stagger={shouldStagger}
                                                         getMediaUrl={getMediaUrl}
                                                         onPhotoClick={handlePhotoClick}
                                                         onDragStart={handleDragStart}
