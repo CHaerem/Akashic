@@ -379,7 +379,9 @@ export default function AkashicApp() {
             )}
 
             {/* Photo Lightbox - triggered from map photo markers */}
+            {/* Key forces remount when opening with different index - prevents stale state */}
             <PhotoLightbox
+                key={lightboxIndex !== null ? `lightbox-${lightboxIndex}` : 'lightbox-closed'}
                 photos={photosWithCoords}
                 initialIndex={lightboxIndex ?? 0}
                 isOpen={lightboxIndex !== null}

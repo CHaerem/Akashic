@@ -6,7 +6,7 @@
  * - Handles unknown image dimensions automatically
  */
 
-import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import Lightbox, { Slide } from 'yet-another-react-lightbox';
 import Zoom from 'yet-another-react-lightbox/plugins/zoom';
 import Counter from 'yet-another-react-lightbox/plugins/counter';
@@ -91,19 +91,9 @@ export function PhotoLightbox({
     onViewOnMap,
     onEdit
 }: PhotoLightboxProps) {
+    // Local state for navigation within lightbox - initialized from initialIndex
+    // NO useEffect sync - parent controls via key prop to force remount when needed
     const [currentIndex, setCurrentIndex] = useState(initialIndex);
-    const wasOpenRef = useRef(false);
-
-    // Sync currentIndex ONLY when lightbox opens (transitions from closed to open)
-    // This prevents infinite loops from YARL firing on.view when index prop changes
-    // We intentionally DON'T sync when initialIndex changes while already open
-    useEffect(() => {
-        if (isOpen && !wasOpenRef.current) {
-            // Lightbox just opened - sync to the requested photo
-            setCurrentIndex(initialIndex);
-        }
-        wasOpenRef.current = isOpen;
-    }, [isOpen, initialIndex]);
 
     // Convert photos to YARL slides format (supports both images and videos)
     const slides = useMemo<Slide[]>(() =>
