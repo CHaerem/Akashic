@@ -130,29 +130,35 @@ export const PhotoLightbox = memo(function PhotoLightbox({
             })
         });
 
-        // Dynamically detect image dimensions
-        lightbox.addFilter('itemData', (itemData) => {
-            // If dimensions not set, we'll detect them on load
-            if (!itemData.width || !itemData.height) {
-                itemData.width = 1;
-                itemData.height = 1;
+        // Handle unknown image dimensions - PhotoSwipe v5 recommended approach
+        lightbox.addFilter('itemData', (itemData, index) => {
+            // Use viewport-based placeholder dimensions for proper initial layout
+            const viewportWidth = window.innerWidth;
+            const viewportHeight = window.innerHeight;
+            if (!itemData.width) {
+                itemData.width = viewportWidth;
+            }
+            if (!itemData.height) {
+                itemData.height = viewportHeight;
             }
             return itemData;
         });
 
-        // Update dimensions when image loads
-        lightbox.on('contentLoad', (e) => {
-            const { content } = e;
-            if (content.type === 'image') {
-                const img = content.element as HTMLImageElement;
-                if (img) {
-                    img.onload = () => {
-                        content.width = img.naturalWidth;
-                        content.height = img.naturalHeight;
-                        content.state = 'loaded';
-                        lightbox.pswp?.updateSize(true);
-                    };
-                }
+        // Update to actual dimensions once image loads
+        lightbox.on('contentLoadImage', ({ content, isLazy }) => {
+            const img = content.element as HTMLImageElement;
+            if (img && img.complete && img.naturalWidth) {
+                // Image already loaded (cached)
+                content.width = img.naturalWidth;
+                content.height = img.naturalHeight;
+            } else if (img) {
+                // Wait for image to load
+                img.addEventListener('load', () => {
+                    content.width = img.naturalWidth;
+                    content.height = img.naturalHeight;
+                    content.state = 'loaded';
+                    lightbox.pswp?.updateSize(true);
+                }, { once: true });
             }
         });
 
