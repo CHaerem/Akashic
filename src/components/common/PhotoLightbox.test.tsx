@@ -383,5 +383,86 @@ describe('PhotoLightbox', () => {
             const lastCall = Lightbox.mock.calls[Lightbox.mock.calls.length - 1][0];
             expect(lastCall.slides[0].sources[0].type).toBe('video/mp4');
         });
+
+        it('shows compatibility warning for .mov videos', () => {
+            const movVideo: Photo[] = [{
+                id: 'video-1',
+                journey_id: 'journey-1',
+                url: 'videos/test.mov',
+                media_type: 'video',
+                sort_order: 0
+            }];
+
+            render(
+                <PhotoLightbox
+                    photos={movVideo}
+                    initialIndex={0}
+                    isOpen={true}
+                    onClose={() => {}}
+                    getMediaUrl={mockGetMediaUrl}
+                />
+            );
+
+            expect(screen.getByText(/This video format \(\.mov\) may not play in all browsers/)).toBeInTheDocument();
+            expect(screen.getByText(/Works best in Safari/)).toBeInTheDocument();
+        });
+
+        it('shows compatibility warning for .m4v videos', () => {
+            const m4vVideo: Photo[] = [{
+                id: 'video-1',
+                journey_id: 'journey-1',
+                url: 'videos/test.m4v',
+                media_type: 'video',
+                sort_order: 0
+            }];
+
+            render(
+                <PhotoLightbox
+                    photos={m4vVideo}
+                    initialIndex={0}
+                    isOpen={true}
+                    onClose={() => {}}
+                    getMediaUrl={mockGetMediaUrl}
+                />
+            );
+
+            expect(screen.getByText(/This video format \(\.mov\) may not play in all browsers/)).toBeInTheDocument();
+        });
+
+        it('does NOT show compatibility warning for .mp4 videos', () => {
+            const mp4Video: Photo[] = [{
+                id: 'video-1',
+                journey_id: 'journey-1',
+                url: 'videos/test.mp4',
+                media_type: 'video',
+                sort_order: 0
+            }];
+
+            render(
+                <PhotoLightbox
+                    photos={mp4Video}
+                    initialIndex={0}
+                    isOpen={true}
+                    onClose={() => {}}
+                    getMediaUrl={mockGetMediaUrl}
+                />
+            );
+
+            expect(screen.queryByText(/may not play in all browsers/)).not.toBeInTheDocument();
+        });
+
+        it('does NOT show compatibility warning for images', () => {
+            render(
+                <PhotoLightbox
+                    photos={mockPhotos}
+                    initialIndex={0}
+                    isOpen={true}
+                    onClose={() => {}}
+                    getMediaUrl={mockGetMediaUrl}
+                />
+            );
+
+            expect(screen.queryByText(/may not play in all browsers/)).not.toBeInTheDocument();
+        });
     });
 });

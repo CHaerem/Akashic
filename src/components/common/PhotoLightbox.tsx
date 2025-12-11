@@ -27,6 +27,14 @@ function getVideoMimeType(url: string): string {
     return types[ext || ''] || 'video/mp4';
 }
 
+// Helper to check if a video format may have browser compatibility issues
+function isIncompatibleVideoFormat(url: string): boolean {
+    const ext = url.split('.').pop()?.toLowerCase();
+    // .mov (QuickTime) only works in Safari
+    // .m4v also has limited support
+    return ext === 'mov' || ext === 'm4v';
+}
+
 // Static YARL config objects - defined outside component to prevent recreating on each render
 // This is critical to avoid infinite loops caused by YARL detecting "new" config objects
 const LIGHTBOX_PLUGINS = [Zoom, Counter, Video];
@@ -229,25 +237,59 @@ export function PhotoLightbox({
         return { buttons };
     }, [editMode, onEdit, onDelete, onViewOnMap, currentPhoto, handleDelete, handleEdit, handleViewOnMap]);
 
+    // Check if current photo is an incompatible video format
+    const showCompatibilityWarning = currentPhoto?.media_type === 'video' &&
+        isIncompatibleVideoFormat(currentPhoto.url);
+
     if (!isOpen || photos.length === 0) {
         return null;
     }
 
     return (
-        <Lightbox
-            open={isOpen}
-            close={onClose}
-            slides={slides}
-            index={currentIndex}
-            on={onHandlers}
-            plugins={LIGHTBOX_PLUGINS}
-            zoom={LIGHTBOX_ZOOM_CONFIG}
-            carousel={LIGHTBOX_CAROUSEL_CONFIG}
-            animation={LIGHTBOX_ANIMATION_CONFIG}
-            controller={LIGHTBOX_CONTROLLER_CONFIG}
-            toolbar={toolbar}
-            styles={LIGHTBOX_STYLES}
-            video={LIGHTBOX_VIDEO_CONFIG}
-        />
+        <>
+            <Lightbox
+                open={isOpen}
+                close={onClose}
+                slides={slides}
+                index={currentIndex}
+                on={onHandlers}
+                plugins={LIGHTBOX_PLUGINS}
+                zoom={LIGHTBOX_ZOOM_CONFIG}
+                carousel={LIGHTBOX_CAROUSEL_CONFIG}
+                animation={LIGHTBOX_ANIMATION_CONFIG}
+                controller={LIGHTBOX_CONTROLLER_CONFIG}
+                toolbar={toolbar}
+                styles={LIGHTBOX_STYLES}
+                video={LIGHTBOX_VIDEO_CONFIG}
+            />
+            {/* Warning banner for incompatible video formats */}
+            {showCompatibilityWarning && (
+                <div
+                    style={{
+                        position: 'fixed',
+                        bottom: '80px',
+                        left: '50%',
+                        transform: 'translateX(-50%)',
+                        backgroundColor: 'rgba(234, 179, 8, 0.95)',
+                        color: '#000',
+                        padding: '12px 20px',
+                        borderRadius: '8px',
+                        zIndex: 10001,
+                        maxWidth: '90vw',
+                        textAlign: 'center',
+                        fontSize: '14px',
+                        fontWeight: 500,
+                        boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+                    }}
+                >
+                    <span style={{ marginRight: '8px' }}>⚠️</span>
+                    This video format (.mov) may not play in all browsers.
+                    <br />
+                    <span style={{ fontSize: '12px', opacity: 0.8 }}>
+                        Works best in Safari. Use Chrome/Firefox for .mp4 videos.
+                    </span>
+                </div>
+            )}
+        </>
     );
 }

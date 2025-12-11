@@ -2,6 +2,18 @@
  * Photo upload component with drag-and-drop support and preview
  * Allows family members to collaboratively add photos to journeys
  * Enhanced for mobile with larger touch targets and metadata preview
+ *
+ * NOTE: Browser upload currently only accepts IMAGE files (not videos).
+ * This is intentional for the MVP because:
+ * - iPhone records video in .mov format (QuickTime)
+ * - .mov only works in Safari, not Chrome/Firefox
+ * - Converting to .mp4 in-browser requires ffmpeg.wasm (~25MB)
+ *
+ * For video uploads, use the bulk upload script which auto-converts:
+ *   SUPABASE_SERVICE_KEY="..." npx tsx scripts/bulkUploadR2.ts <folder> <journey-slug>
+ *
+ * Future enhancement: Add client-side transcoding with ffmpeg.wasm or
+ * server-side transcoding via Cloudflare Worker.
  */
 
 import { useState, useCallback, useRef, useEffect } from 'react';

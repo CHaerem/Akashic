@@ -317,45 +317,67 @@ Role-based access control allowing journey owners to invite collaborators.
 
 ---
 
-## Future: Video Support
+## Video Support ✅
 
-### Goal
+### Status: Complete
 
-Add video playback support for journey videos (`.mov`, `.mp4`, `.m4v`).
+Video playback is fully implemented with cross-browser support.
 
-### Tasks
+### Completed Features
 
-#### Upload & Storage
+#### Upload & Storage ✅
 
-- [ ] Add video extensions to supported formats (`.mov`, `.mp4`, `.m4v`)
-- [ ] Store videos in same R2 bucket (journeys/{uuid}/videos/)
-- [ ] Add `media_type` field to photos table (`image` | `video`)
-- [ ] Worker content-type handling for video streaming
+- [x] Videos stored in R2 bucket alongside photos (journeys/{uuid}/photos/)
+- [x] `media_type` field in photos table (`image` | `video`)
+- [x] `duration` field for video length (seconds)
+- [x] Worker content-type handling for video streaming
 
-#### Thumbnail Generation
+#### Thumbnail Generation ✅
 
-- [ ] Use `ffmpeg` to extract poster frame from video
-- [ ] Option: first frame, middle frame, or auto-detect interesting frame
-- [ ] Generate thumbnail on upload (server-side via bulk script)
+- [x] Extract poster frame using ffmpeg (at 10% or 1 second)
+- [x] Generate thumbnail on bulk upload (server-side)
+- [x] Video thumbnails stored as `{photoId}_thumb.jpg`
 
-#### Playback UI
+#### Playback UI ✅
 
-- [ ] Play icon overlay on video thumbnails in grid
-- [ ] HTML5 `<video>` player in lightbox (replaces `<img>` for videos)
-- [ ] Poster frame attribute from generated thumbnail
-- [ ] Play/pause, volume, fullscreen controls
-- [ ] R2 range request support (seeking/scrubbing)
+- [x] Play icon overlay on video thumbnails in grid
+- [x] HTML5 video player in lightbox via YARL Video plugin
+- [x] Poster frame from generated thumbnail
+- [x] Native browser controls (play/pause, volume, fullscreen)
+- [x] Warning banner for incompatible video formats (.mov)
 
-#### Future Enhancements
+### Video Upload Workflow
 
-- [ ] Video compression/transcoding for web-optimized playback
-- [ ] Preview on hover (muted autoplay)
-- [ ] Video-specific metadata (duration, resolution)
+**Browser Upload**: Currently images only. Videos require format conversion that would add significant client-side weight (ffmpeg.wasm ~25MB).
 
-### Current Video Inventory
+**Bulk Upload Script** (recommended for videos):
+```bash
+SUPABASE_SERVICE_KEY="..." npx tsx scripts/bulkUploadR2.ts <folder> <journey-slug>
+```
+- Auto-converts `.mov`, `.m4v`, `.webm` to `.mp4` (H.264)
+- Generates thumbnails from video frames
+- Extracts EXIF metadata (GPS, dates)
 
-- Inca Trail: 5 `.mov` files
-- Kilimanjaro: 84 `.mov` files
+**Migration Script** (for existing .mov files):
+```bash
+SUPABASE_SERVICE_KEY="..." npx tsx scripts/migrateMovToMp4.ts [--dry-run]
+```
+
+### Browser Compatibility
+
+| Format | Safari | Chrome | Firefox | Edge |
+|--------|--------|--------|---------|------|
+| .mp4 (H.264) | ✅ | ✅ | ✅ | ✅ |
+| .mov (QuickTime) | ✅ | ❌ | ❌ | ❌ |
+| .webm | ❌ | ✅ | ✅ | ✅ |
+
+**Note**: All videos should be .mp4 for universal support. The app shows a warning banner when viewing .mov files in non-Safari browsers.
+
+### Video Inventory (migrated to .mp4)
+
+- Inca Trail: 7 videos
+- Kilimanjaro: 84 videos
+- Mount Kenya: 5 videos
 
 ---
 
@@ -409,6 +431,7 @@ A platform where anyone can create and share their travel journeys.
 | **Phase 2.5 (Immersive Exploration)** | ✅ Core Complete | Elevation profile, photo markers, view-on-map done             |
 | Phase 3 (Polish)                      | ✅ Mostly Done   | PWA, skeletons, error boundaries done. GPX import remaining    |
 | **Phase 4 (Multi-user Foundation)**   | ✅ Complete      | Role-based access, member management UI                        |
+| **Video Support**                     | ✅ Complete      | .mp4 playback, bulk upload converts .mov, warning for Safari-only formats |
 
 ---
 
@@ -430,6 +453,8 @@ A platform where anyone can create and share their travel journeys.
 | 2024-12 | Client-side thumbnail generation                     | Canvas API resize to 400px, 80% JPEG quality, uploaded alongside original                  |
 | 2024-12 | Modular code structure for large files               | Split journeys.ts (960 lines) into 7 modules, extracted mapbox types/configs               |
 | 2024-12 | Test coverage for critical hooks                     | Added 40 tests for usePhotoDay, useMedia, useOnlineStatus (229 → 269 tests)                |
+| 2024-12 | Video format: .mp4 only for browser upload           | iPhone .mov requires ffmpeg.wasm (~25MB) for conversion. Bulk script handles videos        |
+| 2024-12 | Show warning for incompatible video formats          | .mov only works in Safari; show banner in lightbox with friendly explanation               |
 
 ---
 
