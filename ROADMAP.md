@@ -317,6 +317,48 @@ Role-based access control allowing journey owners to invite collaborators.
 
 ---
 
+## Future: Video Support
+
+### Goal
+
+Add video playback support for journey videos (`.mov`, `.mp4`, `.m4v`).
+
+### Tasks
+
+#### Upload & Storage
+
+- [ ] Add video extensions to supported formats (`.mov`, `.mp4`, `.m4v`)
+- [ ] Store videos in same R2 bucket (journeys/{uuid}/videos/)
+- [ ] Add `media_type` field to photos table (`image` | `video`)
+- [ ] Worker content-type handling for video streaming
+
+#### Thumbnail Generation
+
+- [ ] Use `ffmpeg` to extract poster frame from video
+- [ ] Option: first frame, middle frame, or auto-detect interesting frame
+- [ ] Generate thumbnail on upload (server-side via bulk script)
+
+#### Playback UI
+
+- [ ] Play icon overlay on video thumbnails in grid
+- [ ] HTML5 `<video>` player in lightbox (replaces `<img>` for videos)
+- [ ] Poster frame attribute from generated thumbnail
+- [ ] Play/pause, volume, fullscreen controls
+- [ ] R2 range request support (seeking/scrubbing)
+
+#### Future Enhancements
+
+- [ ] Video compression/transcoding for web-optimized playback
+- [ ] Preview on hover (muted autoplay)
+- [ ] Video-specific metadata (duration, resolution)
+
+### Current Video Inventory
+
+- Inca Trail: 5 `.mov` files
+- Kilimanjaro: 84 `.mov` files
+
+---
+
 ## Future: Extended Multi-User Platform
 
 ### Vision

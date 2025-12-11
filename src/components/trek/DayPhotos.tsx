@@ -45,6 +45,7 @@ export const DayPhotos = memo(function DayPhotos({
                         alt={photo.caption || 'Journey photo'}
                         className="w-full h-full object-cover"
                         loading="lazy"
+                        decoding="async"
                         style={photo.rotation ? { transform: `rotate(${photo.rotation}deg)` } : undefined}
                     />
                 </div>

@@ -55,6 +55,7 @@ export const PhotoStrip = memo(function PhotoStrip({
                         src={getMediaUrl(photo.thumbnail_url || photo.url)}
                         alt={photo.caption || 'Photo'}
                         loading="lazy"
+                        decoding="async"
                         style={{
                             width: '100%',
                             height: '100%',

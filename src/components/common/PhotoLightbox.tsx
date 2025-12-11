@@ -60,6 +60,25 @@ export const PhotoLightbox = memo(function PhotoLightbox({
         setImageLoaded(false);
     }, [currentIndex]);
 
+    // Preload adjacent images for smooth navigation
+    useEffect(() => {
+        if (!isOpen) return;
+
+        const preloadImage = (url: string) => {
+            const img = new Image();
+            img.src = url;
+        };
+
+        // Preload next image
+        if (currentIndex < photos.length - 1) {
+            preloadImage(getMediaUrl(photos[currentIndex + 1].url));
+        }
+        // Preload previous image
+        if (currentIndex > 0) {
+            preloadImage(getMediaUrl(photos[currentIndex - 1].url));
+        }
+    }, [currentIndex, photos, isOpen, getMediaUrl]);
+
     // Auto-hide controls after 5 seconds of inactivity
     const resetControlsTimeout = useCallback(() => {
         if (controlsTimeoutRef.current) {

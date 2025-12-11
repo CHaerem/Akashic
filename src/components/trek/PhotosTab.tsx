@@ -4,6 +4,7 @@
  */
 
 import { useState, useEffect, useCallback, useRef, useMemo, memo } from 'react';
+import { useVirtualizer } from '@tanstack/react-virtual';
 import type { TrekData, Photo, Camp } from '../../types/trek';
 import type { UploadResult } from '../../lib/media';
 import { useMedia } from '../../hooks/useMedia';
@@ -16,6 +17,33 @@ import { SkeletonPhotoGrid } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 
 type DayFilter = 'all' | number; // 'all' or day number
+
+// Hook to track responsive column count
+function useColumnCount(containerRef: React.RefObject<HTMLDivElement | null>) {
+    const [columns, setColumns] = useState(2);
+
+    useEffect(() => {
+        const container = containerRef.current;
+        if (!container) return;
+
+        const updateColumns = () => {
+            const width = container.offsetWidth;
+            // Match Tailwind breakpoints: grid-cols-2 sm:grid-cols-3 lg:grid-cols-4
+            if (width >= 1024) setColumns(4);       // lg
+            else if (width >= 640) setColumns(3);  // sm
+            else setColumns(2);                     // default
+        };
+
+        updateColumns();
+
+        const resizeObserver = new ResizeObserver(updateColumns);
+        resizeObserver.observe(container);
+
+        return () => resizeObserver.disconnect();
+    }, [containerRef]);
+
+    return columns;
+}
 
 // Memoized photo grid item to prevent re-renders when selection/drag state changes
 interface PhotoGridItemProps {
@@ -85,6 +113,8 @@ const PhotoGridItem = memo(function PhotoGridItem({
                 alt={photo.caption || 'Journey photo'}
                 className="w-full h-full object-cover"
                 loading="lazy"
+                decoding="async"
+                fetchPriority={photo.is_hero ? 'high' : undefined}
                 style={photo.rotation ? { transform: `rotate(${photo.rotation}deg)` } : undefined}
             />
 
@@ -152,7 +182,12 @@ export function PhotosTab({ trekData, isMobile, editMode = false, onViewPhotoOnM
     const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
     const [dayFilter, setDayFilter] = useState<DayFilter>('all');
     const dragTimeoutRef = useRef<number | null>(null);
+    const gridContainerRef = useRef<HTMLDivElement>(null);
+    const scrollContainerRef = useRef<HTMLDivElement>(null);
     const { getMediaUrl, loading: tokenLoading } = useMedia();
+
+    // Track responsive column count for virtualization
+    const columns = useColumnCount(gridContainerRef);
 
     // Use shared photo-day matching hook
     const { photosByDay } = usePhotoDay(trekData, photos);
@@ -162,6 +197,30 @@ export function PhotosTab({ trekData, isMobile, editMode = false, onViewPhotoOnM
         if (dayFilter === 'all') return photos;
         return photosByDay[dayFilter] || [];
     }, [photos, photosByDay, dayFilter]);
+
+    // Calculate rows for virtualization
+    const rowCount = useMemo(() =>
+        Math.ceil(filteredPhotos.length / columns),
+        [filteredPhotos.length, columns]
+    );
+
+    // Virtual row size: square aspect ratio + gap (12px)
+    // Estimate based on container width / columns
+    const getRowHeight = useCallback(() => {
+        const container = gridContainerRef.current;
+        if (!container) return 150; // fallback
+        const gap = 12;
+        const itemWidth = (container.offsetWidth - gap * (columns - 1)) / columns;
+        return itemWidth + gap; // square aspect ratio + gap
+    }, [columns]);
+
+    // Set up virtualizer for rows
+    const rowVirtualizer = useVirtualizer({
+        count: rowCount,
+        getScrollElement: () => scrollContainerRef.current,
+        estimateSize: getRowHeight,
+        overscan: 2, // Render 2 extra rows above/below viewport
+    });
 
     // Get counts for each day
     const dayCounts = useMemo(() => {
@@ -405,9 +464,9 @@ export function PhotosTab({ trekData, isMobile, editMode = false, onViewPhotoOnM
                 </div>
             )}
 
-            {/* Photo grid */}
+            {/* Photo grid - virtualized for performance */}
             {filteredPhotos.length > 0 && (
-                <div>
+                <div ref={gridContainerRef}>
                     <div className="flex justify-between items-center mb-3">
                         <h3 className="text-white/90 light:text-slate-900 text-sm font-medium m-0 uppercase tracking-[0.1em]">
                             {dayFilter === 'all'
@@ -423,29 +482,68 @@ export function PhotosTab({ trekData, isMobile, editMode = false, onViewPhotoOnM
                             </span>
                         )}
                     </div>
-                    <div className={cn(
-                        "grid gap-3",
-                        // Responsive grid with minimum item width
-                        "grid-cols-2 sm:grid-cols-3 lg:grid-cols-4"
-                    )}>
-                        {filteredPhotos.map((photo, index) => (
-                            <PhotoGridItem
-                                key={photo.id}
-                                photo={photo}
-                                index={index}
-                                editMode={editMode}
-                                isDragOver={dragOverIndex === index}
-                                isDragged={draggedIndex === index}
-                                getMediaUrl={getMediaUrl}
-                                onPhotoClick={handlePhotoClick}
-                                onDragStart={handleDragStart}
-                                onDragOver={handleDragOver}
-                                onDragLeave={handleDragLeave}
-                                onDrop={handleDrop}
-                                onDragEnd={handleDragEnd}
-                                onEditPhoto={handleEditPhoto}
-                            />
-                        ))}
+
+                    {/* Virtualized grid - only renders visible rows */}
+                    <div
+                        ref={scrollContainerRef}
+                        className="max-h-[70vh] overflow-y-auto overflow-x-hidden scrollbar-thin"
+                    >
+                        <div
+                            style={{
+                                height: `${rowVirtualizer.getTotalSize()}px`,
+                                width: '100%',
+                                position: 'relative',
+                            }}
+                        >
+                            {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+                                const rowStartIndex = virtualRow.index * columns;
+                                const rowPhotos = filteredPhotos.slice(
+                                    rowStartIndex,
+                                    rowStartIndex + columns
+                                );
+
+                                return (
+                                    <div
+                                        key={virtualRow.key}
+                                        style={{
+                                            position: 'absolute',
+                                            top: 0,
+                                            left: 0,
+                                            width: '100%',
+                                            height: `${virtualRow.size}px`,
+                                            transform: `translateY(${virtualRow.start}px)`,
+                                        }}
+                                    >
+                                        <div className={cn(
+                                            "grid gap-3 h-full",
+                                            "grid-cols-2 sm:grid-cols-3 lg:grid-cols-4"
+                                        )}>
+                                            {rowPhotos.map((photo, colIndex) => {
+                                                const index = rowStartIndex + colIndex;
+                                                return (
+                                                    <PhotoGridItem
+                                                        key={photo.id}
+                                                        photo={photo}
+                                                        index={index}
+                                                        editMode={editMode}
+                                                        isDragOver={dragOverIndex === index}
+                                                        isDragged={draggedIndex === index}
+                                                        getMediaUrl={getMediaUrl}
+                                                        onPhotoClick={handlePhotoClick}
+                                                        onDragStart={handleDragStart}
+                                                        onDragOver={handleDragOver}
+                                                        onDragLeave={handleDragLeave}
+                                                        onDrop={handleDrop}
+                                                        onDragEnd={handleDragEnd}
+                                                        onEditPhoto={handleEditPhoto}
+                                                    />
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
                     </div>
                 </div>
             )}

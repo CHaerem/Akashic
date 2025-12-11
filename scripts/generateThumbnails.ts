@@ -11,7 +11,7 @@ import { mkdirSync, writeFileSync, readFileSync, rmSync, existsSync } from 'fs';
 import { join } from 'path';
 
 // Configuration
-const SUPABASE_URL = process.env.VITE_SUPABASE_URL || 'https://pbqvnxeldpgvcrdbnxcvr.supabase.co';
+const SUPABASE_URL = process.env.VITE_SUPABASE_URL || 'https://pbqvnxeldpgvcrdbxcvr.supabase.co';
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
 const R2_BUCKET = 'akashic-media';
 const THUMBNAIL_MAX_SIZE = 400;
@@ -39,7 +39,7 @@ if (!existsSync(TEMP_DIR)) {
 }
 
 /**
- * Download file from R2 using wrangler
+ * Download file from R2 using wrangler (--remote for actual R2, not local)
  */
 function downloadFromR2(path: string, localPath: string): boolean {
     try {
@@ -54,7 +54,7 @@ function downloadFromR2(path: string, localPath: string): boolean {
 }
 
 /**
- * Upload file to R2 using wrangler
+ * Upload file to R2 using wrangler (--remote for actual R2, not local)
  */
 function uploadToR2(localPath: string, r2Path: string): boolean {
     try {
