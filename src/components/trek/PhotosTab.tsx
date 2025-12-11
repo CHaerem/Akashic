@@ -45,6 +45,19 @@ function useColumnCount(containerRef: React.RefObject<HTMLDivElement | null>) {
     return columns;
 }
 
+// Play icon SVG component for video thumbnails
+function PlayIcon({ className }: { className?: string }) {
+    return (
+        <svg
+            className={className}
+            viewBox="0 0 24 24"
+            fill="currentColor"
+        >
+            <path d="M8 5v14l11-7z" />
+        </svg>
+    );
+}
+
 // Memoized photo grid item to prevent re-renders when selection/drag state changes
 interface PhotoGridItemProps {
     photo: Photo;
@@ -77,9 +90,11 @@ const PhotoGridItem = memo(function PhotoGridItem({
     onDragEnd,
     onEditPhoto,
 }: PhotoGridItemProps) {
-    const photoLabel = photo.caption
-        ? `Photo ${index + 1}: ${photo.caption}${photo.is_hero ? ' (hero image)' : ''}`
-        : `Photo ${index + 1}${photo.is_hero ? ' (hero image)' : ''}`;
+    const isVideo = photo.media_type === 'video';
+    const mediaLabel = isVideo ? 'Video' : 'Photo';
+    const label = photo.caption
+        ? `${mediaLabel} ${index + 1}: ${photo.caption}${photo.is_hero ? ' (hero image)' : ''}`
+        : `${mediaLabel} ${index + 1}${photo.is_hero ? ' (hero image)' : ''}`;
 
     return (
         <div
@@ -92,7 +107,7 @@ const PhotoGridItem = memo(function PhotoGridItem({
             onDragEnd={() => editMode && onDragEnd()}
             role="button"
             tabIndex={0}
-            aria-label={editMode ? `${photoLabel}. Drag to reorder.` : photoLabel}
+            aria-label={editMode ? `${label}. Drag to reorder.` : label}
             onKeyDown={(e) => {
                 if (e.key === 'Enter' || e.key === ' ') {
                     e.preventDefault();
@@ -100,7 +115,7 @@ const PhotoGridItem = memo(function PhotoGridItem({
                 }
             }}
             className={cn(
-                "aspect-square rounded-lg overflow-hidden relative bg-white/5 light:bg-black/5",
+                "aspect-square rounded-lg overflow-hidden relative bg-white/5 light:bg-black/5 group",
                 "transition-all duration-150",
                 editMode ? "cursor-grab" : "cursor-pointer",
                 photo.is_hero && "ring-2 ring-amber-400",
@@ -110,13 +125,22 @@ const PhotoGridItem = memo(function PhotoGridItem({
         >
             <img
                 src={getMediaUrl(photo.thumbnail_url || photo.url)}
-                alt={photo.caption || 'Journey photo'}
+                alt={photo.caption || (isVideo ? 'Journey video' : 'Journey photo')}
                 className="w-full h-full object-cover"
                 loading="lazy"
                 decoding="async"
                 fetchPriority={photo.is_hero ? 'high' : undefined}
                 style={photo.rotation ? { transform: `rotate(${photo.rotation}deg)` } : undefined}
             />
+
+            {/* Video play icon overlay */}
+            {isVideo && (
+                <div className="absolute inset-0 flex items-center justify-center bg-black/20 group-hover:bg-black/30 transition-colors">
+                    <div className="w-12 h-12 rounded-full bg-black/60 flex items-center justify-center">
+                        <PlayIcon className="w-6 h-6 text-white ml-0.5" />
+                    </div>
+                </div>
+            )}
 
             {/* Hero badge */}
             {photo.is_hero && (
@@ -132,7 +156,7 @@ const PhotoGridItem = memo(function PhotoGridItem({
                         e.stopPropagation();
                         onEditPhoto(photo);
                     }}
-                    className="absolute top-1.5 right-1.5 w-7 h-7 bg-black/40 backdrop-blur-sm rounded-full flex items-center justify-center text-white/80 cursor-pointer hover:bg-black/60 hover:text-white transition-colors"
+                    className="absolute top-1.5 right-1.5 w-7 h-7 bg-black/40 backdrop-blur-sm rounded-full flex items-center justify-center text-white/80 cursor-pointer hover:bg-black/60 hover:text-white transition-colors z-10"
                     aria-label="Edit photo"
                 >
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -143,7 +167,7 @@ const PhotoGridItem = memo(function PhotoGridItem({
             )}
 
             {/* Location indicator */}
-            {photo.coordinates && (
+            {photo.coordinates && !isVideo && (
                 <div className={cn(
                     "absolute right-1.5 bg-black/50 rounded-full w-6 h-6 flex items-center justify-center",
                     photo.caption ? "bottom-8" : "bottom-1.5"
@@ -156,7 +180,7 @@ const PhotoGridItem = memo(function PhotoGridItem({
             )}
 
             {photo.caption && (
-                <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent px-2 pt-5 pb-2 text-[11px] text-white/90">
+                <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent px-2 pt-5 pb-2 text-[11px] text-white/90 z-10">
                     {photo.caption}
                 </div>
             )}

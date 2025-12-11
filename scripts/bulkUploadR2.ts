@@ -44,8 +44,10 @@ function saveTrackingFile(journeyId: string, files: string[]): void {
   fs.writeFileSync(TRACKING_FILE, JSON.stringify(current, null, 2));
 }
 
-// Supported image extensions
+// Supported media extensions
 const IMAGE_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.heic', '.heif', '.webp'];
+const VIDEO_EXTENSIONS = ['.mov', '.mp4', '.m4v', '.webm'];
+const MEDIA_EXTENSIONS = [...IMAGE_EXTENSIONS, ...VIDEO_EXTENSIONS];
 
 // Initialize Supabase client
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
@@ -89,14 +91,28 @@ function uploadToR2(localPath: string, r2Path: string): boolean {
 function getContentType(filePath: string): string {
   const ext = path.extname(filePath).toLowerCase();
   const types: Record<string, string> = {
+    // Images
     '.jpg': 'image/jpeg',
     '.jpeg': 'image/jpeg',
     '.png': 'image/png',
     '.heic': 'image/heic',
     '.heif': 'image/heif',
     '.webp': 'image/webp',
+    // Videos
+    '.mov': 'video/quicktime',
+    '.mp4': 'video/mp4',
+    '.m4v': 'video/x-m4v',
+    '.webm': 'video/webm',
   };
-  return types[ext] || 'image/jpeg';
+  return types[ext] || 'application/octet-stream';
+}
+
+/**
+ * Check if file is a video
+ */
+function isVideoFile(filePath: string): boolean {
+  const ext = path.extname(filePath).toLowerCase();
+  return VIDEO_EXTENSIONS.includes(ext);
 }
 
 /**
@@ -111,9 +127,9 @@ function uuid(): string {
 }
 
 /**
- * Create a thumbnail using sharp
+ * Create a thumbnail using sharp (for images)
  */
-async function createThumbnail(inputPath: string, outputPath: string): Promise<boolean> {
+async function createImageThumbnail(inputPath: string, outputPath: string): Promise<boolean> {
   try {
     const sharp = (await import('sharp')).default;
     await sharp(inputPath)
@@ -126,6 +142,59 @@ async function createThumbnail(inputPath: string, outputPath: string): Promise<b
     return true;
   } catch {
     return false;
+  }
+}
+
+/**
+ * Create a thumbnail from video using ffmpeg (extracts frame at 1 second or 10%)
+ */
+function createVideoThumbnail(inputPath: string, outputPath: string): boolean {
+  try {
+    // First get video duration to pick a good frame
+    const durationCmd = `ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "${inputPath}"`;
+    let duration = 1;
+    try {
+      const durationStr = execSync(durationCmd, { stdio: ['pipe', 'pipe', 'pipe'], encoding: 'utf-8' }).trim();
+      duration = parseFloat(durationStr) || 1;
+    } catch {
+      // Default to 1 second if we can't get duration
+    }
+
+    // Extract frame at 10% of video or 1 second, whichever is smaller
+    const seekTime = Math.min(duration * 0.1, 1);
+
+    // ffmpeg command to extract a frame and resize
+    const cmd = `ffmpeg -y -ss ${seekTime} -i "${inputPath}" -vframes 1 -vf "scale=${THUMBNAIL_MAX_SIZE}:${THUMBNAIL_MAX_SIZE}:force_original_aspect_ratio=decrease" -q:v 2 "${outputPath}"`;
+    execSync(cmd, { stdio: 'pipe' });
+    return true;
+  } catch (error) {
+    console.error(`  Failed to create video thumbnail: ${error}`);
+    return false;
+  }
+}
+
+/**
+ * Get video duration in seconds using ffprobe
+ */
+function getVideoDuration(filePath: string): number | null {
+  try {
+    const cmd = `ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "${filePath}"`;
+    const durationStr = execSync(cmd, { stdio: ['pipe', 'pipe', 'pipe'], encoding: 'utf-8' }).trim();
+    const duration = parseFloat(durationStr);
+    return isNaN(duration) ? null : Math.round(duration);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Create thumbnail (routes to image or video handler)
+ */
+async function createThumbnail(inputPath: string, outputPath: string): Promise<boolean> {
+  if (isVideoFile(inputPath)) {
+    return createVideoThumbnail(inputPath, outputPath);
+  } else {
+    return createImageThumbnail(inputPath, outputPath);
   }
 }
 
@@ -198,12 +267,16 @@ async function main() {
   }
   console.log(`   Found journey ID: ${journeyId}`);
 
-  // Get list of photos
+  // Get list of media files (photos and videos)
   const files = fs.readdirSync(resolvedPath)
-    .filter(f => IMAGE_EXTENSIONS.includes(path.extname(f).toLowerCase()))
+    .filter(f => MEDIA_EXTENSIONS.includes(path.extname(f).toLowerCase()))
     .sort();
 
-  console.log(`\n📸 Found ${files.length} photos to upload`);
+  const imageCount = files.filter(f => IMAGE_EXTENSIONS.includes(path.extname(f).toLowerCase())).length;
+  const videoCount = files.filter(f => VIDEO_EXTENSIONS.includes(path.extname(f).toLowerCase())).length;
+
+  console.log(`\n📸 Found ${files.length} media files to upload`);
+  console.log(`   Images: ${imageCount}, Videos: ${videoCount}`);
   console.log(`   Destination: R2 bucket "${R2_BUCKET}"`);
   console.log('');
 
@@ -232,15 +305,23 @@ async function main() {
       continue;
     }
 
-    // Extract EXIF for metadata
+    // Determine if this is a video
+    const isVideo = isVideoFile(filePath);
+    const mediaType = isVideo ? 'video' : 'image';
+
+    // Extract EXIF for metadata (works for images, some metadata for videos)
     const exif = extractExif(filePath);
+
+    // Get video duration if applicable
+    const duration = isVideo ? getVideoDuration(filePath) : null;
 
     const photoId = uuid();
     const ext = path.extname(file).toLowerCase() === '.jpeg' ? '.jpg' : path.extname(file).toLowerCase();
     const r2Path = `journeys/${journeyId}/photos/${photoId}${ext}`;
     const thumbR2Path = `journeys/${journeyId}/photos/${photoId}_thumb.jpg`;
 
-    process.stdout.write(`\r  [${i + 1}/${files.length}] Uploading ${file.substring(0, 40).padEnd(40)}...`);
+    const mediaIcon = isVideo ? '🎬' : '📷';
+    process.stdout.write(`\r  [${i + 1}/${files.length}] ${mediaIcon} Uploading ${file.substring(0, 38).padEnd(38)}...`);
 
     // Upload original to R2
     const success = uploadToR2(filePath, r2Path);
@@ -276,6 +357,8 @@ async function main() {
         coordinates: exif.coordinates ? { type: 'Point', coordinates: exif.coordinates } : null,
         taken_at: exif.takenAt,
         sort_order: i,
+        media_type: mediaType,
+        duration: duration,
       });
 
       if (dbError) {

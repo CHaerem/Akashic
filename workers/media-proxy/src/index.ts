@@ -247,12 +247,21 @@ async function checkJourneyAccess(
 function getContentType(path: string): string {
     const ext = path.split('.').pop()?.toLowerCase();
     const types: Record<string, string> = {
+        // Images
         'jpg': 'image/jpeg',
         'jpeg': 'image/jpeg',
         'png': 'image/png',
         'gif': 'image/gif',
         'webp': 'image/webp',
         'svg': 'image/svg+xml',
+        'heic': 'image/heic',
+        'heif': 'image/heif',
+        // Videos
+        'mov': 'video/quicktime',
+        'mp4': 'video/mp4',
+        'm4v': 'video/x-m4v',
+        'webm': 'video/webm',
+        // Other
         'gpx': 'application/gpx+xml',
     };
     return types[ext || ''] || 'application/octet-stream';
@@ -261,12 +270,18 @@ function getContentType(path: string): string {
 // Get file extension from content type
 function getExtensionFromContentType(contentType: string): string | null {
     const types: Record<string, string> = {
+        // Images
         'image/jpeg': 'jpg',
         'image/png': 'png',
         'image/gif': 'gif',
         'image/webp': 'webp',
         'image/heic': 'heic',
         'image/heif': 'heif',
+        // Videos
+        'video/quicktime': 'mov',
+        'video/mp4': 'mp4',
+        'video/x-m4v': 'm4v',
+        'video/webm': 'webm',
     };
     return types[contentType] || null;
 }
@@ -276,15 +291,19 @@ function generatePhotoId(): string {
     return crypto.randomUUID();
 }
 
-// Allowed image types for upload (including HEIC/HEIF from iOS)
+// Allowed media types for upload (images and videos)
 const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/heic', 'image/heif'];
-const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20MB
+const ALLOWED_VIDEO_TYPES = ['video/quicktime', 'video/mp4', 'video/x-m4v', 'video/webm'];
+const ALLOWED_MEDIA_TYPES = [...ALLOWED_IMAGE_TYPES, ...ALLOWED_VIDEO_TYPES];
+const MAX_IMAGE_SIZE = 20 * 1024 * 1024; // 20MB for images
+const MAX_VIDEO_SIZE = 500 * 1024 * 1024; // 500MB for videos
 
 interface UploadResult {
     photoId: string;
     path: string;
     size: number;
     contentType: string;
+    mediaType: 'image' | 'video';
 }
 
 // Handle photo upload
@@ -317,32 +336,34 @@ async function handleUpload(
                 });
             }
             file = fileField;
-        } else if (ALLOWED_IMAGE_TYPES.includes(contentType)) {
+        } else if (ALLOWED_MEDIA_TYPES.includes(contentType)) {
             // Handle direct binary upload
             const blob = await request.blob();
             const ext = getExtensionFromContentType(contentType);
             file = new File([blob], `upload.${ext}`, { type: contentType });
         } else {
-            return new Response(JSON.stringify({ error: 'Invalid content type. Use multipart/form-data or send image directly.' }), {
+            return new Response(JSON.stringify({ error: 'Invalid content type. Use multipart/form-data or send media directly.' }), {
                 status: 400,
                 headers: { ...corsHeaders, 'Content-Type': 'application/json' }
             });
         }
 
         // Validate file type
-        if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
+        if (!ALLOWED_MEDIA_TYPES.includes(file.type)) {
             return new Response(JSON.stringify({
-                error: `Invalid file type: ${file.type}. Allowed: ${ALLOWED_IMAGE_TYPES.join(', ')}`
+                error: `Invalid file type: ${file.type}. Allowed: ${ALLOWED_MEDIA_TYPES.join(', ')}`
             }), {
                 status: 400,
                 headers: { ...corsHeaders, 'Content-Type': 'application/json' }
             });
         }
 
-        // Validate file size
-        if (file.size > MAX_FILE_SIZE) {
+        // Validate file size (different limits for images vs videos)
+        const isVideo = ALLOWED_VIDEO_TYPES.includes(file.type);
+        const maxSize = isVideo ? MAX_VIDEO_SIZE : MAX_IMAGE_SIZE;
+        if (file.size > maxSize) {
             return new Response(JSON.stringify({
-                error: `File too large: ${(file.size / 1024 / 1024).toFixed(2)}MB. Max: ${MAX_FILE_SIZE / 1024 / 1024}MB`
+                error: `File too large: ${(file.size / 1024 / 1024).toFixed(2)}MB. Max for ${isVideo ? 'videos' : 'images'}: ${maxSize / 1024 / 1024}MB`
             }), {
                 status: 400,
                 headers: { ...corsHeaders, 'Content-Type': 'application/json' }
@@ -372,6 +393,7 @@ async function handleUpload(
             path,
             size: file.size,
             contentType: file.type,
+            mediaType: isVideo ? 'video' : 'image',
         };
 
         return new Response(JSON.stringify(result), {
@@ -519,8 +541,8 @@ export default {
             const photoPath = `journeys/${journeyId}/photos/${photoId}`;
             const thumbPath = `journeys/${journeyId}/photos/${photoId}_thumb`;
 
-            // Try to delete with common extensions
-            const extensions = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'heic', 'heif'];
+            // Try to delete with common extensions (images and videos)
+            const extensions = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'heic', 'heif', 'mov', 'mp4', 'm4v', 'webm'];
             let deleted = false;
 
             for (const ext of extensions) {
@@ -613,20 +635,82 @@ export default {
             return new Response('Unauthorized', { status: 401, headers: corsHeaders });
         }
 
-        // Fetch from R2
+        // Check for range request (needed for video seeking)
+        const rangeHeader = request.headers.get('Range');
+        const contentType = getContentType(path);
+        const isVideoRequest = contentType.startsWith('video/');
+
+        if (rangeHeader && isVideoRequest) {
+            // Handle range request for video streaming
+            const object = await env.MEDIA_BUCKET.get(path);
+            if (!object) {
+                return new Response('Not found', { status: 404, headers: corsHeaders });
+            }
+
+            const fileSize = object.size;
+            const rangeMatch = rangeHeader.match(/bytes=(\d+)-(\d*)/);
+
+            if (!rangeMatch) {
+                return new Response('Invalid range', { status: 416, headers: corsHeaders });
+            }
+
+            const start = parseInt(rangeMatch[1], 10);
+            const end = rangeMatch[2] ? parseInt(rangeMatch[2], 10) : fileSize - 1;
+
+            // Validate range
+            if (start >= fileSize || end >= fileSize || start > end) {
+                return new Response('Range not satisfiable', {
+                    status: 416,
+                    headers: {
+                        ...corsHeaders,
+                        'Content-Range': `bytes */${fileSize}`,
+                    }
+                });
+            }
+
+            // Fetch the specific range
+            const rangedObject = await env.MEDIA_BUCKET.get(path, {
+                range: { offset: start, length: end - start + 1 }
+            });
+
+            if (!rangedObject) {
+                return new Response('Not found', { status: 404, headers: corsHeaders });
+            }
+
+            return new Response(rangedObject.body, {
+                status: 206,
+                headers: {
+                    ...corsHeaders,
+                    'Content-Type': contentType,
+                    'Content-Range': `bytes ${start}-${end}/${fileSize}`,
+                    'Content-Length': String(end - start + 1),
+                    'Accept-Ranges': 'bytes',
+                    'Cache-Control': 'private, max-age=3600',
+                    'ETag': object.etag,
+                }
+            });
+        }
+
+        // Fetch from R2 (full file)
         const object = await env.MEDIA_BUCKET.get(path);
 
         if (!object) {
             return new Response('Not found', { status: 404, headers: corsHeaders });
         }
 
-        return new Response(object.body, {
-            headers: {
-                ...corsHeaders,
-                'Content-Type': getContentType(path),
-                'Cache-Control': 'private, max-age=3600',
-                'ETag': object.etag,
-            }
-        });
+        // For videos, include Accept-Ranges header to indicate range support
+        const responseHeaders: Record<string, string> = {
+            ...corsHeaders,
+            'Content-Type': contentType,
+            'Cache-Control': 'private, max-age=3600',
+            'ETag': object.etag,
+        };
+
+        if (isVideoRequest) {
+            responseHeaders['Accept-Ranges'] = 'bytes';
+            responseHeaders['Content-Length'] = String(object.size);
+        }
+
+        return new Response(object.body, { headers: responseHeaders });
     }
 };

@@ -1,18 +1,31 @@
 /**
- * Photo lightbox using yet-another-react-lightbox (YARL)
+ * Photo and video lightbox using yet-another-react-lightbox (YARL)
  * - Native React component with clean API
- * - Built-in zoom plugin with pinch-to-zoom
+ * - Built-in zoom plugin with pinch-to-zoom for images
+ * - Video support with HTML5 player
  * - Handles unknown image dimensions automatically
- * - Future video support via plugin
  */
 
 import { useState, useCallback, useMemo, useEffect } from 'react';
-import Lightbox, { SlideImage } from 'yet-another-react-lightbox';
+import Lightbox, { Slide } from 'yet-another-react-lightbox';
 import Zoom from 'yet-another-react-lightbox/plugins/zoom';
 import Counter from 'yet-another-react-lightbox/plugins/counter';
+import Video from 'yet-another-react-lightbox/plugins/video';
 import 'yet-another-react-lightbox/styles.css';
 import 'yet-another-react-lightbox/plugins/counter.css';
 import type { Photo } from '../../types/trek';
+
+// Helper to get video MIME type from URL
+function getVideoMimeType(url: string): string {
+    const ext = url.split('.').pop()?.toLowerCase();
+    const types: Record<string, string> = {
+        'mov': 'video/quicktime',
+        'mp4': 'video/mp4',
+        'm4v': 'video/x-m4v',
+        'webm': 'video/webm',
+    };
+    return types[ext || ''] || 'video/mp4';
+}
 
 interface PhotoLightboxProps {
     photos: Photo[];
@@ -48,13 +61,27 @@ export function PhotoLightbox({
         }
     }, [isOpen, initialIndex]);
 
-    // Convert photos to YARL slides format
-    const slides = useMemo<SlideImage[]>(() =>
-        photos.map(photo => ({
-            src: getMediaUrl(photo.url),
-            alt: photo.caption || 'Photo',
-            // YARL handles unknown dimensions automatically
-        })),
+    // Convert photos to YARL slides format (supports both images and videos)
+    const slides = useMemo<Slide[]>(() =>
+        photos.map(photo => {
+            const mediaUrl = getMediaUrl(photo.url);
+
+            // Check if this is a video
+            if (photo.media_type === 'video') {
+                return {
+                    type: 'video' as const,
+                    sources: [{ src: mediaUrl, type: getVideoMimeType(photo.url) }],
+                    poster: photo.thumbnail_url ? getMediaUrl(photo.thumbnail_url) : undefined,
+                };
+            }
+
+            // Default to image
+            return {
+                src: mediaUrl,
+                alt: photo.caption || 'Photo',
+                // YARL handles unknown dimensions automatically
+            };
+        }),
         [photos, getMediaUrl]
     );
 
@@ -163,7 +190,7 @@ export function PhotoLightbox({
             on={{
                 view: ({ index }) => setCurrentIndex(index)
             }}
-            plugins={[Zoom, Counter]}
+            plugins={[Zoom, Counter, Video]}
             zoom={{
                 maxZoomPixelRatio: 4,
                 zoomInMultiplier: 2,
