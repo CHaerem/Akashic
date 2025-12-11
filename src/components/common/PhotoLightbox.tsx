@@ -85,13 +85,10 @@ export const PhotoLightbox = memo(function PhotoLightbox({
             return;
         }
 
-        // Prepare data source with dimensions
-        // PhotoSwipe needs width/height - we'll use placeholder and let it figure out from loaded images
+        // Prepare data source - dimensions will be detected dynamically
         const dataSource = photos.map(photo => ({
             src: getMediaUrl(photo.url),
             msrc: photo.thumbnail_url ? getMediaUrl(photo.thumbnail_url) : undefined,
-            width: 1920, // Default, PhotoSwipe will adjust
-            height: 1440,
             alt: photo.caption || 'Photo',
             photo // Store reference for our custom actions
         }));
@@ -131,6 +128,32 @@ export const PhotoLightbox = memo(function PhotoLightbox({
                 left: 0,
                 right: 0
             })
+        });
+
+        // Dynamically detect image dimensions
+        lightbox.addFilter('itemData', (itemData) => {
+            // If dimensions not set, we'll detect them on load
+            if (!itemData.width || !itemData.height) {
+                itemData.width = 1;
+                itemData.height = 1;
+            }
+            return itemData;
+        });
+
+        // Update dimensions when image loads
+        lightbox.on('contentLoad', (e) => {
+            const { content } = e;
+            if (content.type === 'image') {
+                const img = content.element as HTMLImageElement;
+                if (img) {
+                    img.onload = () => {
+                        content.width = img.naturalWidth;
+                        content.height = img.naturalHeight;
+                        content.state = 'loaded';
+                        lightbox.pswp?.updateSize(true);
+                    };
+                }
+            }
         });
 
         // Track current index
