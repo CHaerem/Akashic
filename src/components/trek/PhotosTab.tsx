@@ -37,7 +37,6 @@ interface PhotoGridItemProps {
     editMode: boolean;
     isDragOver: boolean;
     isDragged: boolean;
-    stagger?: boolean; // Offset down for zigzag effect
     getMediaUrl: (path: string) => string;
     onPhotoClick: (index: number) => void;
     onDragStart: (index: number) => void;
@@ -54,7 +53,6 @@ const PhotoGridItem = memo(function PhotoGridItem({
     editMode,
     isDragOver,
     isDragged,
-    stagger = false,
     getMediaUrl,
     onPhotoClick,
     onDragStart,
@@ -90,8 +88,7 @@ const PhotoGridItem = memo(function PhotoGridItem({
             }}
             className={cn(
                 "aspect-square rounded-lg overflow-hidden relative bg-white/5 light:bg-black/5 group",
-                "transition-all duration-150 mx-2 mb-2", // margin for iOS Safari gap compatibility
-                stagger ? "mt-16" : "mt-2", // Zigzag: alternating columns offset (56px difference)
+                "transition-all duration-150 m-2", // margin for iOS Safari gap compatibility
                 editMode ? "cursor-grab" : "cursor-pointer",
                 photo.is_hero && "ring-2 ring-amber-400",
                 isDragOver && "ring-2 ring-blue-500 scale-[1.02]",
@@ -473,7 +470,6 @@ export function PhotosTab({ trekData, isMobile, editMode = false, onViewPhotoOnM
                                     editMode={editMode}
                                     isDragOver={dragOverIndex === index}
                                     isDragged={draggedIndex === index}
-                                    stagger={index % 2 === 1} // Zigzag: odd items offset down
                                     getMediaUrl={getMediaUrl}
                                     onPhotoClick={handlePhotoClick}
                                     onDragStart={handleDragStart}
