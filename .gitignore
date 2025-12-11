@@ -42,3 +42,4 @@ test-results/
 playwright-report/
 coverage/
 viaplay*/
+scripts/.upload-tracking.json

@@ -16,11 +16,33 @@ import { createClient } from '@supabase/supabase-js';
 import { execSync } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
+import * as os from 'os';
 
 // Configuration
 const SUPABASE_URL = 'https://pbqvnxeldpgvcrdbxcvr.supabase.co';
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY!;
 const R2_BUCKET = 'akashic-media';
+const THUMBNAIL_MAX_SIZE = 400;
+const THUMBNAIL_QUALITY = 80;
+const TEMP_DIR = path.join(os.tmpdir(), 'akashic-bulk-upload');
+const TRACKING_FILE = path.join(path.dirname(new URL(import.meta.url).pathname), '.upload-tracking.json');
+
+// Load/save tracking file for uploaded filenames
+function loadTrackingFile(): Record<string, string[]> {
+  try {
+    if (fs.existsSync(TRACKING_FILE)) {
+      return JSON.parse(fs.readFileSync(TRACKING_FILE, 'utf-8'));
+    }
+  } catch { /* ignore */ }
+  return {};
+}
+
+function saveTrackingFile(journeyId: string, files: string[]): void {
+  // Re-read file before saving to avoid race conditions with parallel uploads
+  const current = loadTrackingFile();
+  current[journeyId] = files;
+  fs.writeFileSync(TRACKING_FILE, JSON.stringify(current, null, 2));
+}
 
 // Supported image extensions
 const IMAGE_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.heic', '.heif', '.webp'];
@@ -51,8 +73,8 @@ async function getJourneyId(slug: string): Promise<string | null> {
  */
 function uploadToR2(localPath: string, r2Path: string): boolean {
   try {
-    // Use wrangler r2 object put
-    const cmd = `npx wrangler r2 object put "${R2_BUCKET}/${r2Path}" --file="${localPath}" --content-type="${getContentType(localPath)}"`;
+    // Use wrangler r2 object put with --remote to upload to actual R2 (not local)
+    const cmd = `npx wrangler r2 object put "${R2_BUCKET}/${r2Path}" --file="${localPath}" --content-type="${getContentType(localPath)}" --remote`;
     execSync(cmd, { stdio: 'pipe', cwd: '/Users/christopherhaerem/Privat/Akashic' });
     return true;
   } catch (error) {
@@ -86,6 +108,25 @@ function uuid(): string {
     const v = c === 'x' ? r : (r & 0x3) | 0x8;
     return v.toString(16);
   });
+}
+
+/**
+ * Create a thumbnail using sharp
+ */
+async function createThumbnail(inputPath: string, outputPath: string): Promise<boolean> {
+  try {
+    const sharp = (await import('sharp')).default;
+    await sharp(inputPath)
+      .resize(THUMBNAIL_MAX_SIZE, THUMBNAIL_MAX_SIZE, {
+        fit: 'inside',
+        withoutEnlargement: true,
+      })
+      .jpeg({ quality: THUMBNAIL_QUALITY })
+      .toFile(outputPath);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -166,14 +207,15 @@ async function main() {
   console.log(`   Destination: R2 bucket "${R2_BUCKET}"`);
   console.log('');
 
-  // Check for existing photos to avoid duplicates
-  const { data: existingPhotos } = await supabase
-    .from('photos')
-    .select('url')
-    .eq('journey_id', journeyId);
+  // Load tracking file to check which files have already been uploaded
+  const tracking = loadTrackingFile();
+  const uploadedFiles = new Set(tracking[journeyId] || []);
+  console.log(`   Already uploaded (tracked): ${uploadedFiles.size}`);
 
-  const existingUrls = new Set((existingPhotos || []).map(p => p.url));
-  console.log(`   Existing photos in DB: ${existingUrls.size}`);
+  // Create temp directory for thumbnails
+  if (!fs.existsSync(TEMP_DIR)) {
+    fs.mkdirSync(TEMP_DIR, { recursive: true });
+  }
 
   // Upload photos
   let uploaded = 0;
@@ -183,30 +225,54 @@ async function main() {
   for (let i = 0; i < files.length; i++) {
     const file = files[i];
     const filePath = path.join(resolvedPath, file);
-    const photoId = uuid();
-    const ext = path.extname(file).toLowerCase() === '.jpeg' ? '.jpg' : path.extname(file).toLowerCase();
-    const r2Path = `journeys/${journeyId}/photos/${photoId}${ext}`;
 
-    // Check if already uploaded
-    if (existingUrls.has(r2Path)) {
+    // Check if already uploaded (by filename)
+    if (uploadedFiles.has(file)) {
       skipped++;
       continue;
     }
 
-    process.stdout.write(`\r  [${i + 1}/${files.length}] Uploading ${file.substring(0, 40).padEnd(40)}...`);
-
-    // Extract EXIF
+    // Extract EXIF for metadata
     const exif = extractExif(filePath);
 
-    // Upload to R2
+    const photoId = uuid();
+    const ext = path.extname(file).toLowerCase() === '.jpeg' ? '.jpg' : path.extname(file).toLowerCase();
+    const r2Path = `journeys/${journeyId}/photos/${photoId}${ext}`;
+    const thumbR2Path = `journeys/${journeyId}/photos/${photoId}_thumb.jpg`;
+
+    process.stdout.write(`\r  [${i + 1}/${files.length}] Uploading ${file.substring(0, 40).padEnd(40)}...`);
+
+    // Upload original to R2
     const success = uploadToR2(filePath, r2Path);
 
     if (success) {
+      // Create and upload thumbnail
+      let thumbnailUrl: string | null = null;
+      const thumbLocalPath = path.join(TEMP_DIR, `${photoId}_thumb.jpg`);
+
+      try {
+        const thumbCreated = await createThumbnail(filePath, thumbLocalPath);
+        if (thumbCreated) {
+          const thumbUploaded = uploadToR2(thumbLocalPath, thumbR2Path);
+          if (thumbUploaded) {
+            thumbnailUrl = thumbR2Path;
+          }
+        }
+      } catch {
+        // Continue without thumbnail if creation fails
+      } finally {
+        // Clean up temp file
+        try {
+          if (fs.existsSync(thumbLocalPath)) fs.unlinkSync(thumbLocalPath);
+        } catch { /* ignore */ }
+      }
+
       // Insert DB record
       const { error: dbError } = await supabase.from('photos').insert({
         id: photoId,
         journey_id: journeyId,
         url: r2Path,
+        thumbnail_url: thumbnailUrl,
         coordinates: exif.coordinates ? { type: 'Point', coordinates: exif.coordinates } : null,
         taken_at: exif.takenAt,
         sort_order: i,
@@ -217,11 +283,19 @@ async function main() {
         failed++;
       } else {
         uploaded++;
+        // Track uploaded file to prevent re-uploads on subsequent runs
+        uploadedFiles.add(file);
+        saveTrackingFile(journeyId, Array.from(uploadedFiles));
       }
     } else {
       failed++;
     }
   }
+
+  // Clean up temp directory
+  try {
+    fs.rmSync(TEMP_DIR, { recursive: true });
+  } catch { /* ignore */ }
 
   console.log(`\n\n✅ Upload complete!`);
   console.log(`   Uploaded: ${uploaded}`);
