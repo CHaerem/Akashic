@@ -4,7 +4,7 @@
  */
 
 import { useState, useEffect, useCallback, useRef, useMemo, memo } from 'react';
-import type { TrekData, Photo, Camp } from '../../types/trek';
+import type { TrekData, Photo, Camp, MediaType } from '../../types/trek';
 import type { UploadResult } from '../../lib/media';
 import { useMedia } from '../../hooks/useMedia';
 import { usePhotoDay } from '../../hooks/usePhotoDay';
@@ -15,7 +15,10 @@ import { PhotoEditModal } from './PhotoEditModal';
 import { SkeletonPhotoGrid } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 
-type DayFilter = 'all' | number; // 'all' or day number
+type DayFilter = 'all' | 'unassigned' | number; // 'all', 'unassigned' or day number
+type MediaTypeFilter = 'all' | MediaType;
+type LocationFilter = 'any' | 'geotagged';
+type SortOrder = 'journey' | 'newest';
 
 // Play icon SVG component for video thumbnails
 function PlayIcon({ className }: { className?: string }) {
@@ -177,6 +180,10 @@ export function PhotosTab({ trekData, isMobile, editMode = false, onViewPhotoOnM
     const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
     const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
     const [dayFilter, setDayFilter] = useState<DayFilter>('all');
+    const [mediaTypeFilter, setMediaTypeFilter] = useState<MediaTypeFilter>('all');
+    const [locationFilter, setLocationFilter] = useState<LocationFilter>('any');
+    const [sortOrder, setSortOrder] = useState<SortOrder>('journey');
+    const [searchQuery, setSearchQuery] = useState('');
     const dragTimeoutRef = useRef<number | null>(null);
     const gridContainerRef = useRef<HTMLDivElement>(null);
     const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -185,15 +192,70 @@ export function PhotosTab({ trekData, isMobile, editMode = false, onViewPhotoOnM
     // Use shared photo-day matching hook
     const { photosByDay } = usePhotoDay(trekData, photos);
 
-    // Filter photos based on selected day
-    const filteredPhotos = useMemo(() => {
+    const dayScopedPhotos = useMemo(() => {
         if (dayFilter === 'all') return photos;
+        if (dayFilter === 'unassigned') return photosByDay.unassigned || [];
         return photosByDay[dayFilter] || [];
-    }, [photos, photosByDay, dayFilter]);
+    }, [dayFilter, photos, photosByDay]);
+
+    const sortPhotos = useCallback((list: Photo[]): Photo[] => {
+        const withIndex = list.map((photo, index) => ({ photo, index }));
+
+        if (sortOrder === 'journey') {
+            return withIndex
+                .sort((a, b) => {
+                    const orderA = a.photo.sort_order ?? a.index;
+                    const orderB = b.photo.sort_order ?? b.index;
+                    return orderA - orderB;
+                })
+                .map(item => item.photo);
+        }
+
+        const getTimestamp = (photo: Photo) => {
+            const dateStr = photo.taken_at || photo.created_at;
+            return dateStr ? new Date(dateStr).getTime() : 0;
+        };
+
+        return withIndex
+            .sort((a, b) => {
+                const timeDiff = getTimestamp(b.photo) - getTimestamp(a.photo);
+                if (timeDiff !== 0) return timeDiff;
+                const orderA = a.photo.sort_order ?? a.index;
+                const orderB = b.photo.sort_order ?? b.index;
+                return orderA - orderB;
+            })
+            .map(item => item.photo);
+    }, [sortOrder]);
+
+    // Filter photos based on selected day and other filters
+    const filteredPhotos = useMemo(() => {
+        const query = searchQuery.trim().toLowerCase();
+
+        const filtered = dayScopedPhotos.filter(photo => {
+            const matchesType = mediaTypeFilter === 'all'
+                ? true
+                : (photo.media_type || 'image') === mediaTypeFilter;
+
+            const matchesLocation = locationFilter === 'any'
+                ? true
+                : Boolean(photo.coordinates && photo.coordinates.length === 2);
+
+            const matchesSearch = query.length === 0
+                ? true
+                : (photo.caption || '').toLowerCase().includes(query);
+
+            return matchesType && matchesLocation && matchesSearch;
+        });
+
+        return sortPhotos(filtered);
+    }, [dayScopedPhotos, locationFilter, mediaTypeFilter, searchQuery, sortPhotos]);
 
     // Get counts for each day
     const dayCounts = useMemo(() => {
-        const counts: Record<string, number> = { all: photos.length };
+        const counts: Record<string, number> = {
+            all: photos.length,
+            unassigned: photosByDay.unassigned?.length || 0,
+        };
         Object.entries(photosByDay).forEach(([key, dayPhotos]) => {
             counts[key] = dayPhotos.length;
         });
@@ -342,6 +404,11 @@ export function PhotosTab({ trekData, isMobile, editMode = false, onViewPhotoOnM
         setDragOverIndex(null);
     }, []);
 
+    const baseCount = dayScopedPhotos.length;
+    const countLabel = filteredPhotos.length === baseCount
+        ? `${filteredPhotos.length}`
+        : `${filteredPhotos.length} of ${baseCount}`;
+
     if (loading || tokenLoading) {
         return (
             <div className="space-y-4">
@@ -377,58 +444,180 @@ export function PhotosTab({ trekData, isMobile, editMode = false, onViewPhotoOnM
                 </div>
             )}
 
-            {/* Day filter tabs */}
-            {photos.length > 0 && trekData.camps.length > 1 && (
-                <div className="mb-4">
-                    <div className="flex gap-1.5 overflow-x-auto pb-2 scrollbar-hide">
-                        {/* All photos tab */}
-                        <button
-                            onClick={() => setDayFilter('all')}
-                            className={cn(
-                                "flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-medium transition-all",
-                                dayFilter === 'all'
-                                    ? "bg-blue-500/20 text-blue-300 border border-blue-500/30"
-                                    : "bg-white/5 text-white/60 border border-white/10 hover:bg-white/10"
-                            )}
-                        >
-                            All ({dayCounts.all})
-                        </button>
-
-                        {/* Day tabs */}
-                        {trekData.camps.map((camp: Camp) => {
-                            const count = dayCounts[camp.dayNumber] || 0;
-                            return (
-                                <button
-                                    key={camp.dayNumber}
-                                    onClick={() => setDayFilter(camp.dayNumber)}
-                                    className={cn(
-                                        "flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-medium transition-all whitespace-nowrap",
-                                        dayFilter === camp.dayNumber
-                                            ? "bg-blue-500/20 text-blue-300 border border-blue-500/30"
-                                            : count > 0
-                                                ? "bg-white/5 text-white/60 border border-white/10 hover:bg-white/10"
-                                                : "bg-white/[0.02] text-white/30 border border-white/5"
-                                    )}
-                                >
-                                    Day {camp.dayNumber} {count > 0 && `(${count})`}
-                                </button>
-                            );
-                        })}
-
-                        {/* Unassigned tab - only show if there are unassigned photos */}
-                        {dayCounts.unassigned > 0 && (
+            {/* Day filter tabs and media filters */}
+            {photos.length > 0 && (
+                <div className="mb-4 space-y-3">
+                    {trekData.camps.length > 1 && (
+                        <div className="flex gap-1.5 overflow-x-auto pb-2 scrollbar-hide">
+                            {/* All photos tab */}
                             <button
-                                onClick={() => setDayFilter('unassigned' as unknown as number)}
+                                onClick={() => setDayFilter('all')}
                                 className={cn(
                                     "flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-medium transition-all",
-                                    dayFilter === ('unassigned' as unknown as number)
-                                        ? "bg-amber-500/20 text-amber-300 border border-amber-500/30"
-                                        : "bg-white/5 text-white/50 border border-white/10 hover:bg-white/10"
+                                    dayFilter === 'all'
+                                        ? "bg-blue-500/20 text-blue-300 border border-blue-500/30"
+                                        : "bg-white/5 text-white/60 border border-white/10 hover:bg-white/10"
                                 )}
                             >
-                                Unassigned ({dayCounts.unassigned})
+                                All ({dayCounts.all})
                             </button>
-                        )}
+
+                            {/* Day tabs */}
+                            {trekData.camps.map((camp: Camp) => {
+                                const count = dayCounts[camp.dayNumber] || 0;
+                                return (
+                                    <button
+                                        key={camp.dayNumber}
+                                        onClick={() => setDayFilter(camp.dayNumber)}
+                                        className={cn(
+                                            "flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-medium transition-all whitespace-nowrap",
+                                            dayFilter === camp.dayNumber
+                                                ? "bg-blue-500/20 text-blue-300 border border-blue-500/30"
+                                                : count > 0
+                                                    ? "bg-white/5 text-white/60 border border-white/10 hover:bg-white/10"
+                                                    : "bg-white/[0.02] text-white/30 border border-white/5"
+                                        )}
+                                    >
+                                        Day {camp.dayNumber} {count > 0 && `(${count})`}
+                                    </button>
+                                );
+                            })}
+
+                            {/* Unassigned tab - only show if there are unassigned photos */}
+                            {dayCounts.unassigned > 0 && (
+                                <button
+                                    onClick={() => setDayFilter('unassigned')}
+                                    className={cn(
+                                        "flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-medium transition-all",
+                                        dayFilter === 'unassigned'
+                                            ? "bg-amber-500/20 text-amber-300 border border-amber-500/30"
+                                            : "bg-white/5 text-white/50 border border-white/10 hover:bg-white/10"
+                                    )}
+                                >
+                                    Unassigned ({dayCounts.unassigned})
+                                </button>
+                            )}
+                        </div>
+                    )}
+
+                    <div className="flex flex-wrap items-center gap-2 rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 light:border-slate-200 light:bg-white">
+                        <div className="flex items-center gap-1 text-[11px] uppercase tracking-[0.08em] text-white/60 light:text-slate-500">
+                            Media
+                        </div>
+                        <div className="flex gap-1.5">
+                            <button
+                                type="button"
+                                onClick={() => setMediaTypeFilter('all')}
+                                className={cn(
+                                    "px-2.5 py-1 rounded-full text-xs font-medium transition-all",
+                                    mediaTypeFilter === 'all'
+                                        ? "bg-blue-500/15 text-blue-200 border border-blue-500/30"
+                                        : "bg-white/5 text-white/60 border border-white/10 hover:bg-white/10 light:text-slate-600 light:bg-slate-50 light:border-slate-200"
+                                )}
+                            >
+                                All media
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setMediaTypeFilter('image')}
+                                className={cn(
+                                    "px-2.5 py-1 rounded-full text-xs font-medium transition-all",
+                                    mediaTypeFilter === 'image'
+                                        ? "bg-blue-500/15 text-blue-200 border border-blue-500/30"
+                                        : "bg-white/5 text-white/60 border border-white/10 hover:bg-white/10 light:text-slate-600 light:bg-slate-50 light:border-slate-200"
+                                )}
+                            >
+                                Photos
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setMediaTypeFilter('video')}
+                                className={cn(
+                                    "px-2.5 py-1 rounded-full text-xs font-medium transition-all",
+                                    mediaTypeFilter === 'video'
+                                        ? "bg-blue-500/15 text-blue-200 border border-blue-500/30"
+                                        : "bg-white/5 text-white/60 border border-white/10 hover:bg-white/10 light:text-slate-600 light:bg-slate-50 light:border-slate-200"
+                                )}
+                            >
+                                Videos
+                            </button>
+                        </div>
+
+                        <div className="h-6 w-px bg-white/10 light:bg-slate-200" />
+
+                        <div className="flex items-center gap-1 text-[11px] uppercase tracking-[0.08em] text-white/60 light:text-slate-500">
+                            Location
+                        </div>
+                        <div className="flex gap-1.5">
+                            <button
+                                type="button"
+                                onClick={() => setLocationFilter('any')}
+                                className={cn(
+                                    "px-2.5 py-1 rounded-full text-xs font-medium transition-all",
+                                    locationFilter === 'any'
+                                        ? "bg-emerald-500/15 text-emerald-200 border border-emerald-500/30"
+                                        : "bg-white/5 text-white/60 border border-white/10 hover:bg-white/10 light:text-slate-600 light:bg-slate-50 light:border-slate-200"
+                                )}
+                            >
+                                All
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setLocationFilter('geotagged')}
+                                className={cn(
+                                    "px-2.5 py-1 rounded-full text-xs font-medium transition-all",
+                                    locationFilter === 'geotagged'
+                                        ? "bg-emerald-500/15 text-emerald-200 border border-emerald-500/30"
+                                        : "bg-white/5 text-white/60 border border-white/10 hover:bg-white/10 light:text-slate-600 light:bg-slate-50 light:border-slate-200"
+                                )}
+                            >
+                                Map-ready
+                            </button>
+                        </div>
+
+                        <div className="h-6 w-px bg-white/10 light:bg-slate-200" />
+
+                        <div className="flex items-center gap-1 text-[11px] uppercase tracking-[0.08em] text-white/60 light:text-slate-500">
+                            Sort
+                        </div>
+                        <div className="flex gap-1.5">
+                            <button
+                                type="button"
+                                onClick={() => setSortOrder('journey')}
+                                className={cn(
+                                    "px-2.5 py-1 rounded-full text-xs font-medium transition-all",
+                                    sortOrder === 'journey'
+                                        ? "bg-purple-500/15 text-purple-200 border border-purple-500/30"
+                                        : "bg-white/5 text-white/60 border border-white/10 hover:bg-white/10 light:text-slate-600 light:bg-slate-50 light:border-slate-200"
+                                )}
+                            >
+                                Journey order
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setSortOrder('newest')}
+                                className={cn(
+                                    "px-2.5 py-1 rounded-full text-xs font-medium transition-all",
+                                    sortOrder === 'newest'
+                                        ? "bg-purple-500/15 text-purple-200 border border-purple-500/30"
+                                        : "bg-white/5 text-white/60 border border-white/10 hover:bg-white/10 light:text-slate-600 light:bg-slate-50 light:border-slate-200"
+                                )}
+                            >
+                                Newest first
+                            </button>
+                        </div>
+
+                        <div className="ml-auto flex-1 min-w-[200px]">
+                            <label className="sr-only" htmlFor="media-search">Search media</label>
+                            <input
+                                id="media-search"
+                                type="search"
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                                placeholder="Search captions"
+                                className="w-full rounded-md border border-white/10 bg-black/20 px-3 py-1.5 text-sm text-white placeholder:text-white/40 focus:outline-none focus:ring-2 focus:ring-blue-400/50 light:bg-white light:text-slate-900 light:placeholder:text-slate-400 light:border-slate-200"
+                            />
+                        </div>
                     </div>
                 </div>
             )}
@@ -437,14 +626,25 @@ export function PhotosTab({ trekData, isMobile, editMode = false, onViewPhotoOnM
             {filteredPhotos.length > 0 && (
                 <div ref={gridContainerRef}>
                     <div className="flex justify-between items-center mb-3">
-                        <h3 className="text-white/90 light:text-slate-900 text-sm font-medium m-0 uppercase tracking-[0.1em]">
-                            {dayFilter === 'all'
-                                ? `Journey Media (${photos.length})`
-                                : dayFilter === ('unassigned' as unknown as number)
-                                    ? `Unassigned Media (${filteredPhotos.length})`
-                                    : `Day ${dayFilter} Media (${filteredPhotos.length})`
-                            }
-                        </h3>
+                        <div>
+                            <h3 className="text-white/90 light:text-slate-900 text-sm font-medium m-0 uppercase tracking-[0.1em]">
+                                {dayFilter === 'all'
+                                    ? `Journey Media (${countLabel})`
+                                    : dayFilter === 'unassigned'
+                                        ? `Unassigned Media (${countLabel})`
+                                        : `Day ${dayFilter} Media (${countLabel})`
+                                }
+                            </h3>
+                            {(mediaTypeFilter !== 'all' || locationFilter !== 'any' || searchQuery.trim().length > 0 || sortOrder === 'newest') && (
+                                <p className="m-0 mt-1 text-[11px] text-white/50 light:text-slate-500">
+                                    {mediaTypeFilter !== 'all' && `${mediaTypeFilter === 'image' ? 'Photos' : 'Videos'} • `}
+                                    {locationFilter === 'geotagged' && 'Map-ready only • '}
+                                    {sortOrder === 'newest' && 'Newest first • '}
+                                    {searchQuery.trim().length > 0 && `Search: “${searchQuery.trim()}” • `}
+                                    {`Showing ${countLabel}`}
+                                </p>
+                            )}
+                        </div>
                         {editMode && filteredPhotos.length > 1 && (
                             <span className="text-[11px] text-white/40 light:text-slate-400">
                                 Drag to reorder
@@ -489,7 +689,7 @@ export function PhotosTab({ trekData, isMobile, editMode = false, onViewPhotoOnM
             {photos.length > 0 && filteredPhotos.length === 0 && dayFilter !== 'all' && (
                 <div className="text-center py-10 text-white/40 light:text-slate-400">
                     <p className="m-0 mb-2">
-                        {dayFilter === ('unassigned' as unknown as number)
+                        {dayFilter === 'unassigned'
                             ? 'No unassigned photos'
                             : `No photos for Day ${dayFilter}`
                         }
