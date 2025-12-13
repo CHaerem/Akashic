@@ -3,6 +3,7 @@
  */
 
 import { useRef, useEffect, useCallback, useState } from 'react';
+import type mapboxgl from 'mapbox-gl';
 import { useMapbox } from '../hooks/useMapbox';
 import { useJourneys } from '../contexts/JourneysContext';
 import { MapErrorFallback } from './common/ErrorBoundary';
@@ -56,6 +57,8 @@ interface MapboxGlobeProps {
     recenterRef?: React.MutableRefObject<(() => void) | null>;
     onCampSelect?: (camp: Camp) => void;
     getMediaUrl?: (path: string) => string;
+    onViewportChange?: (bounds: mapboxgl.LngLatBoundsLike) => void;
+    onViewportVisiblePhotoIdsChange?: (photoIds: string[]) => void;
 }
 
 // Generate realistic starfield - seeded positions for consistency
@@ -145,7 +148,7 @@ const starfieldStyle: React.CSSProperties = {
     zIndex: 0
 };
 
-export function MapboxGlobe({ selectedTrek, selectedCamp, onSelectTrek, view, photos = [], onPhotoClick, flyToPhotoRef, recenterRef, onCampSelect, getMediaUrl }: MapboxGlobeProps) {
+export function MapboxGlobe({ selectedTrek, selectedCamp, onSelectTrek, view, photos = [], onPhotoClick, flyToPhotoRef, recenterRef, onCampSelect, getMediaUrl, onViewportChange, onViewportVisiblePhotoIdsChange }: MapboxGlobeProps) {
     const containerRef = useRef<HTMLDivElement>(null);
     const { treks, trekDataMap, loading: journeysLoading } = useJourneys();
     const [poiInfo, setPOIInfo] = useState<PointOfInterest | null>(null);
@@ -180,7 +183,7 @@ export function MapboxGlobe({ selectedTrek, selectedCamp, onSelectTrek, view, ph
         }
     }, [onCampSelect]);
 
-    const { mapReady, error, flyToGlobe, flyToTrek, updatePhotoMarkers, updateCampMarkers, updatePOIMarkers, flyToPhoto, flyToPOI, startRotation, stopRotation, isRotating, getMapCenter } = useMapbox({
+    const { map, mapReady, error, flyToGlobe, flyToTrek, updatePhotoMarkers, updateCampMarkers, updatePOIMarkers, flyToPhoto, flyToPOI, startRotation, stopRotation, isRotating, getMapCenter } = useMapbox({
         containerRef,
         onTrekSelect: onSelectTrek,
         onPhotoClick: handlePhotoClick,
@@ -188,6 +191,49 @@ export function MapboxGlobe({ selectedTrek, selectedCamp, onSelectTrek, view, ph
         onCampClick: handleCampClick,
         getMediaUrl
     });
+
+    useEffect(() => {
+        if (!mapReady || !map.current) return;
+        if (!onViewportChange && !onViewportVisiblePhotoIdsChange) return;
+
+        const mapInstance = map.current;
+        const marginPx = 24;
+
+        const emitViewportInfo = () => {
+            if (onViewportChange) {
+                const bounds = mapInstance.getBounds().toArray();
+                onViewportChange(bounds);
+            }
+
+            if (onViewportVisiblePhotoIdsChange) {
+                const { clientWidth, clientHeight } = mapInstance.getContainer();
+
+                const visiblePhotoIds = photos
+                    .filter((photo) => {
+                        if (!photo.coordinates || photo.coordinates.length !== 2) return false;
+                        const point = mapInstance.project(photo.coordinates as [number, number]);
+                        return Number.isFinite(point.x)
+                            && Number.isFinite(point.y)
+                            && point.x >= -marginPx
+                            && point.x <= clientWidth + marginPx
+                            && point.y >= -marginPx
+                            && point.y <= clientHeight + marginPx;
+                    })
+                    .map(photo => photo.id);
+
+                onViewportVisiblePhotoIdsChange(visiblePhotoIds);
+            }
+        };
+
+        emitViewportInfo();
+        mapInstance.on('moveend', emitViewportInfo);
+        mapInstance.on('resize', emitViewportInfo);
+
+        return () => {
+            mapInstance.off('moveend', emitViewportInfo);
+            mapInstance.off('resize', emitViewportInfo);
+        };
+    }, [map, mapReady, onViewportChange, onViewportVisiblePhotoIdsChange, photos]);
 
     // Expose test helpers for E2E testing
     useEffect(() => {

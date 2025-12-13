@@ -18,6 +18,7 @@ vi.mock('../../hooks/usePhotoDay', () => ({
         photosByDay: {
             1: photos.filter(p => p.waypoint_id === 'wp-1'),
             2: photos.filter(p => p.waypoint_id === 'wp-2'),
+            unassigned: photos.filter(p => !p.waypoint_id),
         },
         getPhotosForDay: (day: number) => photos.filter(p =>
             (day === 1 && p.waypoint_id === 'wp-1') ||
@@ -156,12 +157,14 @@ describe('PhotosTab', () => {
         mockFetchPhotos.mockResolvedValue(mockPhotos);
     });
 
-    it('shows loading skeleton initially', () => {
+    it('shows loading skeleton initially', async () => {
         mockFetchPhotos.mockImplementation(() => new Promise(() => {})); // Never resolves
 
         render(<PhotosTab trekData={mockTrekData} isMobile={false} />);
 
-        expect(screen.getByTestId('skeleton')).toBeInTheDocument();
+        await waitFor(() => {
+            expect(screen.getByTestId('skeleton')).toBeInTheDocument();
+        });
     });
 
     it('renders photo count in header', async () => {
@@ -257,6 +260,53 @@ describe('PhotosTab', () => {
         });
     });
 
+    it('filters media to the current map viewport when enabled', async () => {
+        const user = userEvent.setup();
+
+        render(
+            <PhotosTab
+                trekData={mockTrekData}
+                isMobile={false}
+                mapViewportBounds={[[0.9, 0.9], [1.2, 1.2]]}
+            />
+        );
+
+        await waitFor(() => {
+            expect(screen.getByText(/Journey Media/)).toBeInTheDocument();
+        });
+
+        await user.click(screen.getByRole('button', { name: /Follow map view/ }));
+
+        await waitFor(() => {
+            expect(screen.getAllByRole('button', { name: /Photo \d/ })).toHaveLength(2);
+            expect(screen.queryByRole('button', { name: /Photo 3/ })).not.toBeInTheDocument();
+        });
+    });
+
+    it('prefers explicit map-visible photo IDs when provided', async () => {
+        const user = userEvent.setup();
+
+        render(
+            <PhotosTab
+                trekData={mockTrekData}
+                isMobile={false}
+                mapViewportBounds={[[0, 0], [10, 10]]}
+                mapViewportPhotoIds={['photo-1', 'photo-2']}
+            />
+        );
+
+        await waitFor(() => {
+            expect(screen.getByText(/Journey Media/)).toBeInTheDocument();
+        });
+
+        await user.click(screen.getByRole('button', { name: /Follow map view/ }));
+
+        await waitFor(() => {
+            expect(screen.getAllByRole('button', { name: /Photo \d/ })).toHaveLength(2);
+            expect(screen.queryByRole('button', { name: /Photo 3/ })).not.toBeInTheDocument();
+        });
+    });
+
     describe('video support', () => {
         const mockMediaWithVideos: Photo[] = [
             {
@@ -309,6 +359,40 @@ describe('PhotosTab', () => {
             // Check for play icon (SVG with play path) - should exist for video
             const playIcons = document.querySelectorAll('svg path[d="M8 5v14l11-7z"]');
             expect(playIcons.length).toBeGreaterThan(0);
+        });
+
+        it('filters media by type', async () => {
+            const user = userEvent.setup();
+
+            render(<PhotosTab trekData={mockTrekData} isMobile={false} />);
+
+            await waitFor(() => {
+                expect(screen.getByText(/Journey Media/)).toBeInTheDocument();
+            });
+
+            await user.click(screen.getByRole('button', { name: 'Videos' }));
+
+            await waitFor(() => {
+                expect(screen.queryByRole('button', { name: /Photo 1/ })).not.toBeInTheDocument();
+                expect(screen.getByRole('button', { name: /Video 1: Summit Video/ })).toBeInTheDocument();
+            });
+        });
+
+        it('filters by caption search', async () => {
+            const user = userEvent.setup();
+
+            render(<PhotosTab trekData={mockTrekData} isMobile={false} />);
+
+            await waitFor(() => {
+                expect(screen.getByText(/Journey Media/)).toBeInTheDocument();
+            });
+
+            await user.type(screen.getByRole('searchbox', { name: /search media/i }), 'Summit');
+
+            await waitFor(() => {
+                expect(screen.queryByRole('button', { name: /Photo 1/ })).not.toBeInTheDocument();
+                expect(screen.getByRole('button', { name: /Video 1: Summit Video/ })).toBeInTheDocument();
+            });
         });
     });
 });

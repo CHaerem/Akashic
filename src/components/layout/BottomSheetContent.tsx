@@ -9,6 +9,7 @@ import { useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import { colors, radius } from '../../styles/liquidGlass';
 import type { TrekConfig, TrekData, Camp, ExtendedStats, ElevationProfile, Photo, ViewMode } from '../../types/trek';
+import type mapboxgl from 'mapbox-gl';
 import type { ContentMode } from '../../hooks/useTrekData';
 import { StatsTab } from '../trek/StatsTab';
 import { OverviewTab } from '../trek/OverviewTab';
@@ -39,6 +40,8 @@ interface BottomSheetContentProps {
     onJourneySaved?: () => void;
     editMode?: boolean;
     isMobile?: boolean;
+    mapViewportBounds?: mapboxgl.LngLatBoundsLike | null;
+    mapViewportPhotoIds?: string[] | null;
 }
 
 // Mountain peak icon
@@ -75,6 +78,8 @@ export function BottomSheetContent({
     onJourneySaved,
     editMode = false,
     isMobile = false,
+    mapViewportBounds,
+    mapViewportPhotoIds,
 }: BottomSheetContentProps) {
     // Globe view with trek selected: Journey overview (pre-explore)
     if (view === 'globe' && selectedTrek) {
@@ -103,21 +108,23 @@ export function BottomSheetContent({
     // Trek view with camp selected: Content based on active mode
     if (view === 'trek' && trekData) {
         return (
-            <TrekViewContent
-                activeMode={activeMode}
-                trekData={trekData}
-                selectedCamp={selectedCamp}
-                extendedStats={extendedStats}
-                elevationProfile={elevationProfile}
-                photos={photos}
-                getMediaUrl={getMediaUrl}
-                onCampSelect={onCampSelect}
-                onViewPhotoOnMap={onViewPhotoOnMap}
-                onOpenDayGallery={onOpenDayGallery}
-                editMode={editMode}
-                isMobile={isMobile}
-            />
-        );
+                <TrekViewContent
+                    activeMode={activeMode}
+                    trekData={trekData}
+                    selectedCamp={selectedCamp}
+                    extendedStats={extendedStats}
+                    elevationProfile={elevationProfile}
+                    photos={photos}
+                    getMediaUrl={getMediaUrl}
+                    onCampSelect={onCampSelect}
+                    onViewPhotoOnMap={onViewPhotoOnMap}
+                    onOpenDayGallery={onOpenDayGallery}
+                    editMode={editMode}
+                    isMobile={isMobile}
+                    mapViewportBounds={mapViewportBounds}
+                    mapViewportPhotoIds={mapViewportPhotoIds}
+                />
+            );
     }
 
     // No content to show
@@ -246,6 +253,8 @@ interface TrekViewContentProps {
     onOpenDayGallery: () => void;
     editMode: boolean;
     isMobile: boolean;
+    mapViewportBounds?: mapboxgl.LngLatBoundsLike | null;
+    mapViewportPhotoIds?: string[] | null;
 }
 
 function TrekViewContent({
@@ -261,6 +270,8 @@ function TrekViewContent({
     onOpenDayGallery,
     editMode,
     isMobile,
+    mapViewportBounds,
+    mapViewportPhotoIds,
 }: TrekViewContentProps) {
     const [showRouteEditor, setShowRouteEditor] = useState(false);
     const { getPhotosForDay } = usePhotoDay(trekData, photos);
@@ -334,6 +345,8 @@ function TrekViewContent({
                         isMobile={isMobile}
                         editMode={editMode}
                         onViewPhotoOnMap={onViewPhotoOnMap}
+                        mapViewportBounds={mapViewportBounds}
+                        mapViewportPhotoIds={mapViewportPhotoIds}
                     />
                 </ErrorBoundary>
             )}
