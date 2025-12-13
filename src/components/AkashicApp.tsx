@@ -7,6 +7,7 @@ import { useJourneys } from '../contexts/JourneysContext';
 import { fetchPhotos, getJourneyIdBySlug } from '../lib/journeys';
 import { hasPendingShares } from '../lib/shareTarget';
 import type { Photo, Camp } from '../types/trek';
+import type mapboxgl from 'mapbox-gl';
 import { MapboxGlobe } from './MapboxGlobe';
 import { OfflineIndicator } from './OfflineIndicator';
 import { GlobeHint } from './home/GlobeHint';
@@ -25,6 +26,7 @@ import { ErrorBoundary } from './common/ErrorBoundary';
 export default function AkashicApp() {
     const isMobile = useIsMobile();
     const [photos, setPhotos] = useState<Photo[]>([]);
+    const [mapViewportBounds, setMapViewportBounds] = useState<mapboxgl.LngLatBoundsLike | null>(null);
     // Defer photo updates to prevent re-renders during camera animations
     const deferredPhotos = useDeferredValue(photos);
     const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
@@ -216,20 +218,21 @@ export default function AkashicApp() {
         <ErrorBoundary>
         <div style={{ position: 'fixed', inset: 0, background: colors.background.base }}>
             {/* Mapbox Globe - Full screen hero */}
-            <div style={{ position: 'absolute', inset: 0 }}>
-                <MapboxGlobe
-                    selectedTrek={selectedTrek}
-                    selectedCamp={selectedCamp}
-                    onSelectTrek={selectTrek}
-                    view={view}
-                    photos={photosWithCoords}
-                    onPhotoClick={handleMapPhotoClick}
-                    flyToPhotoRef={flyToPhotoRef}
-                    recenterRef={recenterRef}
-                    onCampSelect={handleCampSelect}
-                    getMediaUrl={getMediaUrl}
-                />
-            </div>
+                    <div style={{ position: 'absolute', inset: 0 }}>
+                        <MapboxGlobe
+                            selectedTrek={selectedTrek}
+                            selectedCamp={selectedCamp}
+                            onSelectTrek={selectTrek}
+                            view={view}
+                            photos={photosWithCoords}
+                            onPhotoClick={handleMapPhotoClick}
+                            flyToPhotoRef={flyToPhotoRef}
+                            recenterRef={recenterRef}
+                            onCampSelect={handleCampSelect}
+                            getMediaUrl={getMediaUrl}
+                            onViewportChange={setMapViewportBounds}
+                        />
+                    </div>
 
             {/* Offline Status */}
             <OfflineIndicator isMobile={isMobile} />
@@ -320,6 +323,7 @@ export default function AkashicApp() {
                             onJourneySaved={refetchJourneys}
                             editMode={editMode}
                             isMobile={isMobile}
+                            mapViewportBounds={mapViewportBounds}
                         />
                     </BottomSheet>
                 ) : (
@@ -359,6 +363,7 @@ export default function AkashicApp() {
                             onJourneySaved={refetchJourneys}
                             editMode={editMode}
                             isMobile={false}
+                            mapViewportBounds={mapViewportBounds}
                         />
                     </Sidebar>
                 )

@@ -4,6 +4,7 @@
  */
 
 import { useState, useEffect, useCallback, useRef, useMemo, memo } from 'react';
+import type mapboxgl from 'mapbox-gl';
 import type { TrekData, Photo, Camp, MediaType } from '../../types/trek';
 import type { UploadResult } from '../../lib/media';
 import { useMedia } from '../../hooks/useMedia';
@@ -18,7 +19,8 @@ import { cn } from '@/lib/utils';
 type DayFilter = 'all' | 'unassigned' | number; // 'all', 'unassigned' or day number
 type MediaTypeFilter = 'all' | MediaType;
 type LocationFilter = 'any' | 'geotagged';
-type SortOrder = 'journey' | 'newest';
+type SortOrder = 'journey' | 'captured';
+type MapBounds = mapboxgl.LngLatBoundsLike | null;
 
 // Play icon SVG component for video thumbnails
 function PlayIcon({ className }: { className?: string }) {
@@ -168,9 +170,10 @@ interface PhotosTabProps {
     isMobile: boolean;
     editMode?: boolean;
     onViewPhotoOnMap?: (photo: Photo) => void;
+    mapViewportBounds?: MapBounds;
 }
 
-export function PhotosTab({ trekData, isMobile, editMode = false, onViewPhotoOnMap }: PhotosTabProps) {
+export function PhotosTab({ trekData, isMobile, editMode = false, onViewPhotoOnMap, mapViewportBounds = null }: PhotosTabProps) {
     const [photos, setPhotos] = useState<Photo[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -184,6 +187,7 @@ export function PhotosTab({ trekData, isMobile, editMode = false, onViewPhotoOnM
     const [locationFilter, setLocationFilter] = useState<LocationFilter>('any');
     const [sortOrder, setSortOrder] = useState<SortOrder>('journey');
     const [searchQuery, setSearchQuery] = useState('');
+    const [mapScopeEnabled, setMapScopeEnabled] = useState(false);
     const dragTimeoutRef = useRef<number | null>(null);
     const gridContainerRef = useRef<HTMLDivElement>(null);
     const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -218,7 +222,7 @@ export function PhotosTab({ trekData, isMobile, editMode = false, onViewPhotoOnM
 
         return withIndex
             .sort((a, b) => {
-                const timeDiff = getTimestamp(b.photo) - getTimestamp(a.photo);
+                const timeDiff = getTimestamp(a.photo) - getTimestamp(b.photo);
                 if (timeDiff !== 0) return timeDiff;
                 const orderA = a.photo.sort_order ?? a.index;
                 const orderB = b.photo.sort_order ?? b.index;
@@ -226,6 +230,23 @@ export function PhotosTab({ trekData, isMobile, editMode = false, onViewPhotoOnM
             })
             .map(item => item.photo);
     }, [sortOrder]);
+
+    const isWithinBounds = useCallback((coords: number[] | null | undefined, bounds: MapBounds) => {
+        if (!coords || coords.length !== 2 || !bounds) return false;
+
+        if (Array.isArray(bounds)) {
+            const [[west, south], [east, north]] = bounds;
+            return coords[0] >= west && coords[0] <= east && coords[1] >= south && coords[1] <= north;
+        }
+
+        if (typeof (bounds as mapboxgl.LngLatBounds).getNorthEast === 'function') {
+            const ne = (bounds as mapboxgl.LngLatBounds).getNorthEast();
+            const sw = (bounds as mapboxgl.LngLatBounds).getSouthWest();
+            return coords[0] >= sw.lng && coords[0] <= ne.lng && coords[1] >= sw.lat && coords[1] <= ne.lat;
+        }
+
+        return false;
+    }, []);
 
     // Filter photos based on selected day and other filters
     const filteredPhotos = useMemo(() => {
@@ -244,11 +265,21 @@ export function PhotosTab({ trekData, isMobile, editMode = false, onViewPhotoOnM
                 ? true
                 : (photo.caption || '').toLowerCase().includes(query);
 
-            return matchesType && matchesLocation && matchesSearch;
+            const matchesMap = !mapScopeEnabled || !mapViewportBounds
+                ? true
+                : isWithinBounds(photo.coordinates, mapViewportBounds);
+
+            return matchesType && matchesLocation && matchesSearch && matchesMap;
         });
 
         return sortPhotos(filtered);
-    }, [dayScopedPhotos, locationFilter, mediaTypeFilter, searchQuery, sortPhotos]);
+    }, [dayScopedPhotos, isWithinBounds, locationFilter, mapScopeEnabled, mapViewportBounds, mediaTypeFilter, searchQuery, sortPhotos]);
+
+    useEffect(() => {
+        if (!mapViewportBounds) {
+            setMapScopeEnabled(false);
+        }
+    }, [mapViewportBounds]);
 
     // Get counts for each day
     const dayCounts = useMemo(() => {
@@ -409,6 +440,12 @@ export function PhotosTab({ trekData, isMobile, editMode = false, onViewPhotoOnM
         ? `${filteredPhotos.length}`
         : `${filteredPhotos.length} of ${baseCount}`;
 
+    const hasActiveFilters = mediaTypeFilter !== 'all'
+        || locationFilter !== 'any'
+        || searchQuery.trim().length > 0
+        || sortOrder === 'captured'
+        || mapScopeEnabled;
+
     if (loading || tokenLoading) {
         return (
             <div className="space-y-4">
@@ -446,17 +483,16 @@ export function PhotosTab({ trekData, isMobile, editMode = false, onViewPhotoOnM
 
             {/* Day filter tabs and media filters */}
             {photos.length > 0 && (
-                <div className="mb-4 space-y-3">
+                <div className="mb-5 space-y-3">
                     {trekData.camps.length > 1 && (
                         <div className="flex gap-1.5 overflow-x-auto pb-2 scrollbar-hide">
                             {/* All photos tab */}
                             <button
                                 onClick={() => setDayFilter('all')}
                                 className={cn(
-                                    "flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-medium transition-all",
-                                    dayFilter === 'all'
-                                        ? "bg-blue-500/20 text-blue-300 border border-blue-500/30"
-                                        : "bg-white/5 text-white/60 border border-white/10 hover:bg-white/10"
+                                    "flex-shrink-0 px-3 py-1.5 rounded-full text-[11px] font-semibold transition-all",
+                                    "border border-white/10 bg-white/[0.03] text-white/70 light:border-black/10 light:bg-black/[0.02] light:text-slate-700",
+                                    dayFilter === 'all' && "border-white/30 text-white/90 shadow-[0_12px_40px_-18px_rgba(59,130,246,0.8)] light:border-black/30"
                                 )}
                             >
                                 All ({dayCounts.all})
@@ -465,20 +501,19 @@ export function PhotosTab({ trekData, isMobile, editMode = false, onViewPhotoOnM
                             {/* Day tabs */}
                             {trekData.camps.map((camp: Camp) => {
                                 const count = dayCounts[camp.dayNumber] || 0;
+                                const hasMedia = count > 0;
                                 return (
                                     <button
                                         key={camp.dayNumber}
                                         onClick={() => setDayFilter(camp.dayNumber)}
                                         className={cn(
-                                            "flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-medium transition-all whitespace-nowrap",
-                                            dayFilter === camp.dayNumber
-                                                ? "bg-blue-500/20 text-blue-300 border border-blue-500/30"
-                                                : count > 0
-                                                    ? "bg-white/5 text-white/60 border border-white/10 hover:bg-white/10"
-                                                    : "bg-white/[0.02] text-white/30 border border-white/5"
+                                            "flex-shrink-0 px-3 py-1.5 rounded-full text-[11px] font-semibold transition-all whitespace-nowrap",
+                                            "border border-white/10 bg-white/[0.02] text-white/60 light:border-black/10 light:bg-black/[0.02] light:text-slate-600",
+                                            dayFilter === camp.dayNumber && "border-white/30 text-white/90 shadow-[0_12px_40px_-18px_rgba(59,130,246,0.8)] light:border-black/30",
+                                            !hasMedia && "opacity-40"
                                         )}
                                     >
-                                        Day {camp.dayNumber} {count > 0 && `(${count})`}
+                                        Day {camp.dayNumber} {hasMedia && `(${count})`}
                                     </button>
                                 );
                             })}
@@ -488,10 +523,9 @@ export function PhotosTab({ trekData, isMobile, editMode = false, onViewPhotoOnM
                                 <button
                                     onClick={() => setDayFilter('unassigned')}
                                     className={cn(
-                                        "flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-medium transition-all",
-                                        dayFilter === 'unassigned'
-                                            ? "bg-amber-500/20 text-amber-300 border border-amber-500/30"
-                                            : "bg-white/5 text-white/50 border border-white/10 hover:bg-white/10"
+                                        "flex-shrink-0 px-3 py-1.5 rounded-full text-[11px] font-semibold transition-all",
+                                        "border border-white/10 bg-amber-400/5 text-amber-200 light:border-amber-500/30 light:text-amber-700",
+                                        dayFilter === 'unassigned' && "border-amber-300/60 text-amber-50 shadow-[0_10px_30px_-18px_rgba(251,191,36,0.9)]"
                                     )}
                                 >
                                     Unassigned ({dayCounts.unassigned})
@@ -500,19 +534,20 @@ export function PhotosTab({ trekData, isMobile, editMode = false, onViewPhotoOnM
                         </div>
                     )}
 
-                    <div className="flex flex-wrap items-center gap-2 rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 light:border-slate-200 light:bg-white">
-                        <div className="flex items-center gap-1 text-[11px] uppercase tracking-[0.08em] text-white/60 light:text-slate-500">
-                            Media
+                    <div className="flex flex-wrap items-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-3 light:border-black/10 light:bg-black/[0.02]">
+                        <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-white/60 light:text-slate-600">
+                            <span className="h-1.5 w-1.5 rounded-full bg-white/40 shadow-[0_0_0_4px_rgba(255,255,255,0.04)]" />
+                            Filters
                         </div>
+
                         <div className="flex gap-1.5">
                             <button
                                 type="button"
                                 onClick={() => setMediaTypeFilter('all')}
                                 className={cn(
                                     "px-2.5 py-1 rounded-full text-xs font-medium transition-all",
-                                    mediaTypeFilter === 'all'
-                                        ? "bg-blue-500/15 text-blue-200 border border-blue-500/30"
-                                        : "bg-white/5 text-white/60 border border-white/10 hover:bg-white/10 light:text-slate-600 light:bg-slate-50 light:border-slate-200"
+                                    "border border-white/10 bg-white/[0.02] text-white/65 light:border-black/10 light:text-slate-600",
+                                    mediaTypeFilter === 'all' && "border-white/30 bg-white/10 text-white/90 shadow-[0_10px_30px_-18px_rgba(59,130,246,0.8)]"
                                 )}
                             >
                                 All media
@@ -522,9 +557,8 @@ export function PhotosTab({ trekData, isMobile, editMode = false, onViewPhotoOnM
                                 onClick={() => setMediaTypeFilter('image')}
                                 className={cn(
                                     "px-2.5 py-1 rounded-full text-xs font-medium transition-all",
-                                    mediaTypeFilter === 'image'
-                                        ? "bg-blue-500/15 text-blue-200 border border-blue-500/30"
-                                        : "bg-white/5 text-white/60 border border-white/10 hover:bg-white/10 light:text-slate-600 light:bg-slate-50 light:border-slate-200"
+                                    "border border-white/10 bg-white/[0.02] text-white/65 light:border-black/10 light:text-slate-600",
+                                    mediaTypeFilter === 'image' && "border-white/30 bg-white/10 text-white/90 shadow-[0_10px_30px_-18px_rgba(59,130,246,0.8)]"
                                 )}
                             >
                                 Photos
@@ -534,18 +568,17 @@ export function PhotosTab({ trekData, isMobile, editMode = false, onViewPhotoOnM
                                 onClick={() => setMediaTypeFilter('video')}
                                 className={cn(
                                     "px-2.5 py-1 rounded-full text-xs font-medium transition-all",
-                                    mediaTypeFilter === 'video'
-                                        ? "bg-blue-500/15 text-blue-200 border border-blue-500/30"
-                                        : "bg-white/5 text-white/60 border border-white/10 hover:bg-white/10 light:text-slate-600 light:bg-slate-50 light:border-slate-200"
+                                    "border border-white/10 bg-white/[0.02] text-white/65 light:border-black/10 light:text-slate-600",
+                                    mediaTypeFilter === 'video' && "border-white/30 bg-white/10 text-white/90 shadow-[0_10px_30px_-18px_rgba(59,130,246,0.8)]"
                                 )}
                             >
                                 Videos
                             </button>
                         </div>
 
-                        <div className="h-6 w-px bg-white/10 light:bg-slate-200" />
+                        <div className="h-6 w-px bg-white/10 light:bg-black/10" />
 
-                        <div className="flex items-center gap-1 text-[11px] uppercase tracking-[0.08em] text-white/60 light:text-slate-500">
+                        <div className="flex items-center gap-1 text-[11px] uppercase tracking-[0.08em] text-white/50 light:text-slate-600">
                             Location
                         </div>
                         <div className="flex gap-1.5">
@@ -554,9 +587,8 @@ export function PhotosTab({ trekData, isMobile, editMode = false, onViewPhotoOnM
                                 onClick={() => setLocationFilter('any')}
                                 className={cn(
                                     "px-2.5 py-1 rounded-full text-xs font-medium transition-all",
-                                    locationFilter === 'any'
-                                        ? "bg-emerald-500/15 text-emerald-200 border border-emerald-500/30"
-                                        : "bg-white/5 text-white/60 border border-white/10 hover:bg-white/10 light:text-slate-600 light:bg-slate-50 light:border-slate-200"
+                                    "border border-white/10 bg-white/[0.02] text-white/65 light:border-black/10 light:text-slate-600",
+                                    locationFilter === 'any' && "border-white/30 bg-white/10 text-white/90 shadow-[0_10px_30px_-18px_rgba(52,211,153,0.7)]"
                                 )}
                             >
                                 All
@@ -566,19 +598,40 @@ export function PhotosTab({ trekData, isMobile, editMode = false, onViewPhotoOnM
                                 onClick={() => setLocationFilter('geotagged')}
                                 className={cn(
                                     "px-2.5 py-1 rounded-full text-xs font-medium transition-all",
-                                    locationFilter === 'geotagged'
-                                        ? "bg-emerald-500/15 text-emerald-200 border border-emerald-500/30"
-                                        : "bg-white/5 text-white/60 border border-white/10 hover:bg-white/10 light:text-slate-600 light:bg-slate-50 light:border-slate-200"
+                                    "border border-white/10 bg-white/[0.02] text-white/65 light:border-black/10 light:text-slate-600",
+                                    locationFilter === 'geotagged' && "border-white/30 bg-white/10 text-white/90 shadow-[0_10px_30px_-18px_rgba(52,211,153,0.7)]"
                                 )}
                             >
                                 Map-ready
                             </button>
                         </div>
 
-                        <div className="h-6 w-px bg-white/10 light:bg-slate-200" />
+                        {mapViewportBounds && (
+                            <>
+                                <div className="h-6 w-px bg-white/10 light:bg-black/10" />
+                                <div className="flex items-center gap-1 text-[11px] uppercase tracking-[0.08em] text-white/50 light:text-slate-600">
+                                    Map
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => setMapScopeEnabled(prev => !prev)}
+                                    aria-pressed={mapScopeEnabled}
+                                    className={cn(
+                                        "px-2.5 py-1 rounded-full text-xs font-medium transition-all flex items-center gap-1",
+                                        "border border-white/10 bg-white/[0.02] text-white/65 light:border-black/10 light:text-slate-600",
+                                        mapScopeEnabled && "border-white/30 bg-white/10 text-white/90 shadow-[0_10px_30px_-18px_rgba(96,165,250,0.8)]"
+                                    )}
+                                >
+                                    <span className="inline-flex h-2 w-2 rounded-full bg-blue-300/70" aria-hidden />
+                                    Follow map view
+                                </button>
+                            </>
+                        )}
 
-                        <div className="flex items-center gap-1 text-[11px] uppercase tracking-[0.08em] text-white/60 light:text-slate-500">
-                            Sort
+                        <div className="h-6 w-px bg-white/10 light:bg-black/10" />
+
+                        <div className="flex items-center gap-1 text-[11px] uppercase tracking-[0.08em] text-white/50 light:text-slate-600">
+                            Order
                         </div>
                         <div className="flex gap-1.5">
                             <button
@@ -586,37 +639,38 @@ export function PhotosTab({ trekData, isMobile, editMode = false, onViewPhotoOnM
                                 onClick={() => setSortOrder('journey')}
                                 className={cn(
                                     "px-2.5 py-1 rounded-full text-xs font-medium transition-all",
-                                    sortOrder === 'journey'
-                                        ? "bg-purple-500/15 text-purple-200 border border-purple-500/30"
-                                        : "bg-white/5 text-white/60 border border-white/10 hover:bg-white/10 light:text-slate-600 light:bg-slate-50 light:border-slate-200"
+                                    "border border-white/10 bg-white/[0.02] text-white/65 light:border-black/10 light:text-slate-600",
+                                    sortOrder === 'journey' && "border-white/30 bg-white/10 text-white/90 shadow-[0_10px_30px_-18px_rgba(167,139,250,0.8)]"
                                 )}
                             >
-                                Journey order
+                                Curated
                             </button>
                             <button
                                 type="button"
-                                onClick={() => setSortOrder('newest')}
+                                onClick={() => setSortOrder('captured')}
                                 className={cn(
                                     "px-2.5 py-1 rounded-full text-xs font-medium transition-all",
-                                    sortOrder === 'newest'
-                                        ? "bg-purple-500/15 text-purple-200 border border-purple-500/30"
-                                        : "bg-white/5 text-white/60 border border-white/10 hover:bg-white/10 light:text-slate-600 light:bg-slate-50 light:border-slate-200"
+                                    "border border-white/10 bg-white/[0.02] text-white/65 light:border-black/10 light:text-slate-600",
+                                    sortOrder === 'captured' && "border-white/30 bg-white/10 text-white/90 shadow-[0_10px_30px_-18px_rgba(167,139,250,0.8)]"
                                 )}
                             >
-                                Newest first
+                                Captured timeline
                             </button>
                         </div>
 
                         <div className="ml-auto flex-1 min-w-[200px]">
                             <label className="sr-only" htmlFor="media-search">Search media</label>
-                            <input
-                                id="media-search"
-                                type="search"
-                                value={searchQuery}
-                                onChange={(e) => setSearchQuery(e.target.value)}
-                                placeholder="Search captions"
-                                className="w-full rounded-md border border-white/10 bg-black/20 px-3 py-1.5 text-sm text-white placeholder:text-white/40 focus:outline-none focus:ring-2 focus:ring-blue-400/50 light:bg-white light:text-slate-900 light:placeholder:text-slate-400 light:border-slate-200"
-                            />
+                            <div className="relative">
+                                <input
+                                    id="media-search"
+                                    type="search"
+                                    value={searchQuery}
+                                    onChange={(e) => setSearchQuery(e.target.value)}
+                                    placeholder="Search captions"
+                                    className="w-full rounded-lg border border-white/10 bg-white/[0.05] px-3 py-2 text-sm text-white placeholder:text-white/40 focus:outline-none focus:ring-2 focus:ring-white/30 light:bg-white light:text-slate-900 light:placeholder:text-slate-400 light:border-black/10"
+                                />
+                                <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[11px] uppercase tracking-[0.08em] text-white/30 light:text-slate-400">Find</span>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -635,11 +689,12 @@ export function PhotosTab({ trekData, isMobile, editMode = false, onViewPhotoOnM
                                         : `Day ${dayFilter} Media (${countLabel})`
                                 }
                             </h3>
-                            {(mediaTypeFilter !== 'all' || locationFilter !== 'any' || searchQuery.trim().length > 0 || sortOrder === 'newest') && (
+                            {hasActiveFilters && (
                                 <p className="m-0 mt-1 text-[11px] text-white/50 light:text-slate-500">
+                                    {mapScopeEnabled && 'In current map view • '}
                                     {mediaTypeFilter !== 'all' && `${mediaTypeFilter === 'image' ? 'Photos' : 'Videos'} • `}
                                     {locationFilter === 'geotagged' && 'Map-ready only • '}
-                                    {sortOrder === 'newest' && 'Newest first • '}
+                                    {sortOrder === 'captured' && 'Captured timeline • '}
                                     {searchQuery.trim().length > 0 && `Search: “${searchQuery.trim()}” • `}
                                     {`Showing ${countLabel}`}
                                 </p>
@@ -685,17 +740,24 @@ export function PhotosTab({ trekData, isMobile, editMode = false, onViewPhotoOnM
                 </div>
             )}
 
-            {/* Empty state for filtered day */}
-            {photos.length > 0 && filteredPhotos.length === 0 && dayFilter !== 'all' && (
+            {/* Empty state for filtered views */}
+            {photos.length > 0 && filteredPhotos.length === 0 && (
                 <div className="text-center py-10 text-white/40 light:text-slate-400">
                     <p className="m-0 mb-2">
-                        {dayFilter === 'unassigned'
-                            ? 'No unassigned photos'
-                            : `No photos for Day ${dayFilter}`
+                        {mapScopeEnabled && mapViewportBounds
+                            ? 'No media in this map view yet'
+                            : dayFilter === 'unassigned'
+                                ? 'No unassigned media'
+                                : dayFilter !== 'all'
+                                    ? `No media for Day ${dayFilter}`
+                                    : 'Nothing matches these filters'
                         }
                     </p>
                     <p className="m-0 text-xs">
-                        Photos will appear here when assigned to this day
+                        {mapScopeEnabled && mapViewportBounds
+                            ? 'Pan or zoom the map to explore nearby uploads.'
+                            : 'Adjust the filters or add new uploads to fill this space.'
+                        }
                     </p>
                 </div>
             )}

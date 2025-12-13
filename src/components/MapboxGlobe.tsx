@@ -3,6 +3,7 @@
  */
 
 import { useRef, useEffect, useCallback, useState } from 'react';
+import type mapboxgl from 'mapbox-gl';
 import { useMapbox } from '../hooks/useMapbox';
 import { useJourneys } from '../contexts/JourneysContext';
 import { MapErrorFallback } from './common/ErrorBoundary';
@@ -56,6 +57,7 @@ interface MapboxGlobeProps {
     recenterRef?: React.MutableRefObject<(() => void) | null>;
     onCampSelect?: (camp: Camp) => void;
     getMediaUrl?: (path: string) => string;
+    onViewportChange?: (bounds: mapboxgl.LngLatBoundsLike) => void;
 }
 
 // Generate realistic starfield - seeded positions for consistency
@@ -145,7 +147,7 @@ const starfieldStyle: React.CSSProperties = {
     zIndex: 0
 };
 
-export function MapboxGlobe({ selectedTrek, selectedCamp, onSelectTrek, view, photos = [], onPhotoClick, flyToPhotoRef, recenterRef, onCampSelect, getMediaUrl }: MapboxGlobeProps) {
+export function MapboxGlobe({ selectedTrek, selectedCamp, onSelectTrek, view, photos = [], onPhotoClick, flyToPhotoRef, recenterRef, onCampSelect, getMediaUrl, onViewportChange }: MapboxGlobeProps) {
     const containerRef = useRef<HTMLDivElement>(null);
     const { treks, trekDataMap, loading: journeysLoading } = useJourneys();
     const [poiInfo, setPOIInfo] = useState<PointOfInterest | null>(null);
@@ -180,7 +182,7 @@ export function MapboxGlobe({ selectedTrek, selectedCamp, onSelectTrek, view, ph
         }
     }, [onCampSelect]);
 
-    const { mapReady, error, flyToGlobe, flyToTrek, updatePhotoMarkers, updateCampMarkers, updatePOIMarkers, flyToPhoto, flyToPOI, startRotation, stopRotation, isRotating, getMapCenter } = useMapbox({
+    const { map, mapReady, error, flyToGlobe, flyToTrek, updatePhotoMarkers, updateCampMarkers, updatePOIMarkers, flyToPhoto, flyToPOI, startRotation, stopRotation, isRotating, getMapCenter } = useMapbox({
         containerRef,
         onTrekSelect: onSelectTrek,
         onPhotoClick: handlePhotoClick,
@@ -188,6 +190,23 @@ export function MapboxGlobe({ selectedTrek, selectedCamp, onSelectTrek, view, ph
         onCampClick: handleCampClick,
         getMediaUrl
     });
+
+    useEffect(() => {
+        if (!mapReady || !map.current || !onViewportChange) return;
+
+        const mapInstance = map.current;
+        const emitBounds = () => {
+            const bounds = mapInstance.getBounds().toArray();
+            onViewportChange(bounds);
+        };
+
+        emitBounds();
+        mapInstance.on('moveend', emitBounds);
+
+        return () => {
+            mapInstance.off('moveend', emitBounds);
+        };
+    }, [map, mapReady, onViewportChange]);
 
     // Expose test helpers for E2E testing
     useEffect(() => {

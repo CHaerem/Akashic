@@ -260,6 +260,29 @@ describe('PhotosTab', () => {
         });
     });
 
+    it('filters media to the current map viewport when enabled', async () => {
+        const user = userEvent.setup();
+
+        render(
+            <PhotosTab
+                trekData={mockTrekData}
+                isMobile={false}
+                mapViewportBounds={[[0.9, 0.9], [1.2, 1.2]]}
+            />
+        );
+
+        await waitFor(() => {
+            expect(screen.getByText(/Journey Media/)).toBeInTheDocument();
+        });
+
+        await user.click(screen.getByRole('button', { name: /Follow map view/ }));
+
+        await waitFor(() => {
+            expect(screen.getAllByRole('button', { name: /Photo \d/ })).toHaveLength(2);
+            expect(screen.queryByRole('button', { name: /Photo 3/ })).not.toBeInTheDocument();
+        });
+    });
+
     describe('video support', () => {
         const mockMediaWithVideos: Photo[] = [
             {

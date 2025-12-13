@@ -9,6 +9,7 @@ import { useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import { colors, radius } from '../../styles/liquidGlass';
 import type { TrekConfig, TrekData, Camp, ExtendedStats, ElevationProfile, Photo, ViewMode } from '../../types/trek';
+import type mapboxgl from 'mapbox-gl';
 import type { ContentMode } from '../../hooks/useTrekData';
 import { StatsTab } from '../trek/StatsTab';
 import { OverviewTab } from '../trek/OverviewTab';
@@ -39,6 +40,7 @@ interface BottomSheetContentProps {
     onJourneySaved?: () => void;
     editMode?: boolean;
     isMobile?: boolean;
+    mapViewportBounds?: mapboxgl.LngLatBoundsLike | null;
 }
 
 // Mountain peak icon
@@ -75,6 +77,7 @@ export function BottomSheetContent({
     onJourneySaved,
     editMode = false,
     isMobile = false,
+    mapViewportBounds,
 }: BottomSheetContentProps) {
     // Globe view with trek selected: Journey overview (pre-explore)
     if (view === 'globe' && selectedTrek) {
@@ -334,6 +337,7 @@ function TrekViewContent({
                         isMobile={isMobile}
                         editMode={editMode}
                         onViewPhotoOnMap={onViewPhotoOnMap}
+                        mapViewportBounds={mapViewportBounds}
                     />
                 </ErrorBoundary>
             )}
