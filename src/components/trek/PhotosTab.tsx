@@ -474,13 +474,30 @@ export function PhotosTab({ trekData, isMobile, editMode = false, onViewPhotoOnM
         ? `${filteredPhotos.length}`
         : `${filteredPhotos.length} of ${baseCount}`;
 
+    const trimmedSearchQuery = searchQuery.trim();
+
     const hasActiveFilters = mediaTypeFilter !== 'all'
         || locationFilter !== 'any'
-        || searchQuery.trim().length > 0
+        || trimmedSearchQuery.length > 0
         || sortOrder === 'captured'
         || mapScopeEnabled;
 
     const hasNonDefaultView = dayFilter !== 'all' || hasActiveFilters;
+
+    const filterSummary = useMemo(() => {
+        const parts: string[] = [
+            mapScopeEnabled ? 'In current map view' : '',
+            mediaTypeFilter !== 'all' ? (mediaTypeFilter === 'image' ? 'Photos' : 'Videos') : '',
+            locationFilter === 'geotagged' ? 'Map-ready only' : '',
+            sortOrder === 'captured' ? 'Captured timeline' : '',
+            trimmedSearchQuery.length > 0 ? `Search: “${trimmedSearchQuery}”` : '',
+        ].filter(Boolean);
+
+        if (parts.length === 0) return null;
+
+        parts.push(`Showing ${countLabel}`);
+        return parts.join(' • ');
+    }, [countLabel, locationFilter, mapScopeEnabled, mediaTypeFilter, sortOrder, trimmedSearchQuery]);
 
     const resetView = useCallback(() => {
         setDayFilter('all');
@@ -761,14 +778,9 @@ export function PhotosTab({ trekData, isMobile, editMode = false, onViewPhotoOnM
                                     : `Day ${dayFilter} Media (${countLabel})`
                             }
                         </h3>
-                        {(hasNonDefaultView || filteredPhotos.length === 0) && (
+                        {filterSummary && (
                             <p className="m-0 mt-1 text-[11px] text-white/50 light:text-slate-500">
-                                {mapScopeEnabled && 'In current map view • '}
-                                {mediaTypeFilter !== 'all' && `${mediaTypeFilter === 'image' ? 'Photos' : 'Videos'} • `}
-                                {locationFilter === 'geotagged' && 'Map-ready only • '}
-                                {sortOrder === 'captured' && 'Captured timeline • '}
-                                {searchQuery.trim().length > 0 && `Search: “${searchQuery.trim()}” • `}
-                                {`Showing ${countLabel}`}
+                                {filterSummary}
                             </p>
                         )}
                     </div>
