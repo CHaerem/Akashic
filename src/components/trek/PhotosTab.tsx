@@ -499,6 +499,47 @@ export function PhotosTab({ trekData, isMobile, editMode = false, onViewPhotoOnM
         return parts.join(' • ');
     }, [countLabel, locationFilter, mapScopeEnabled, mediaTypeFilter, sortOrder, trimmedSearchQuery]);
 
+    const dayTabClasses = useMemo(() => {
+        const base = "flex-shrink-0 px-3 py-1.5 rounded-full text-[11px] font-semibold transition-all";
+        const allBase = "border border-white/10 bg-white/[0.03] text-white/70 light:border-black/10 light:bg-black/[0.02] light:text-slate-700";
+        const dayBase = "border border-white/10 bg-white/[0.02] text-white/60 light:border-black/10 light:bg-black/[0.02] light:text-slate-600";
+        const activeBlue = "border-white/30 text-white/90 shadow-[0_12px_40px_-18px_rgba(59,130,246,0.8)] light:border-black/30";
+        const unassignedBase = "border border-white/10 bg-amber-400/5 text-amber-200 light:border-amber-500/30 light:text-amber-700";
+        const activeAmber = "border-amber-300/60 text-amber-50 shadow-[0_10px_30px_-18px_rgba(251,191,36,0.9)]";
+
+        return {
+            base,
+            all: (active: boolean) => cn(base, allBase, active && activeBlue),
+            day: (active: boolean, hasMedia: boolean) => cn(
+                base,
+                "whitespace-nowrap",
+                dayBase,
+                active && activeBlue,
+                !hasMedia && "opacity-40"
+            ),
+            unassigned: (active: boolean, hasAny: boolean) => cn(
+                base,
+                unassignedBase,
+                active && activeAmber,
+                !hasAny && "opacity-40"
+            ),
+        };
+    }, []);
+
+    const filterPillClasses = useMemo(() => {
+        const base = "px-2.5 py-1 rounded-full text-xs font-medium transition-all";
+        const inactive = "border border-white/10 bg-white/[0.02] text-white/65 light:border-black/10 light:text-slate-600";
+        const activeBase = "border-white/30 bg-white/10 text-white/90";
+
+        const activeWithShadow = (shadow: string) => cn(activeBase, shadow);
+
+        return {
+            base,
+            inactive,
+            activeWithShadow,
+        };
+    }, []);
+
     const resetView = useCallback(() => {
         setDayFilter('all');
         setMediaTypeFilter('all');
@@ -539,11 +580,7 @@ export function PhotosTab({ trekData, isMobile, editMode = false, onViewPhotoOnM
                         {/* All photos tab */}
                         <button
                             onClick={() => setDayFilter('all')}
-                            className={cn(
-                                "flex-shrink-0 px-3 py-1.5 rounded-full text-[11px] font-semibold transition-all",
-                                "border border-white/10 bg-white/[0.03] text-white/70 light:border-black/10 light:bg-black/[0.02] light:text-slate-700",
-                                dayFilter === 'all' && "border-white/30 text-white/90 shadow-[0_12px_40px_-18px_rgba(59,130,246,0.8)] light:border-black/30"
-                            )}
+                            className={dayTabClasses.all(dayFilter === 'all')}
                         >
                             All ({dayCounts.all})
                         </button>
@@ -556,12 +593,7 @@ export function PhotosTab({ trekData, isMobile, editMode = false, onViewPhotoOnM
                                 <button
                                     key={camp.dayNumber}
                                     onClick={() => setDayFilter(camp.dayNumber)}
-                                    className={cn(
-                                        "flex-shrink-0 px-3 py-1.5 rounded-full text-[11px] font-semibold transition-all whitespace-nowrap",
-                                        "border border-white/10 bg-white/[0.02] text-white/60 light:border-black/10 light:bg-black/[0.02] light:text-slate-600",
-                                        dayFilter === camp.dayNumber && "border-white/30 text-white/90 shadow-[0_12px_40px_-18px_rgba(59,130,246,0.8)] light:border-black/30",
-                                        !hasMedia && "opacity-40"
-                                    )}
+                                    className={dayTabClasses.day(dayFilter === camp.dayNumber, hasMedia)}
                                 >
                                     Day {camp.dayNumber} {hasMedia && `(${count})`}
                                 </button>
@@ -572,12 +604,7 @@ export function PhotosTab({ trekData, isMobile, editMode = false, onViewPhotoOnM
                         {(dayCounts.unassigned > 0 || dayFilter === 'unassigned') && (
                             <button
                                 onClick={() => setDayFilter('unassigned')}
-                                className={cn(
-                                    "flex-shrink-0 px-3 py-1.5 rounded-full text-[11px] font-semibold transition-all",
-                                    "border border-white/10 bg-amber-400/5 text-amber-200 light:border-amber-500/30 light:text-amber-700",
-                                    dayFilter === 'unassigned' && "border-amber-300/60 text-amber-50 shadow-[0_10px_30px_-18px_rgba(251,191,36,0.9)]",
-                                    dayCounts.unassigned === 0 && "opacity-40"
-                                )}
+                                className={dayTabClasses.unassigned(dayFilter === 'unassigned', dayCounts.unassigned > 0)}
                             >
                                 Unassigned ({dayCounts.unassigned})
                             </button>
@@ -609,67 +636,67 @@ export function PhotosTab({ trekData, isMobile, editMode = false, onViewPhotoOnM
                             <button
                                 type="button"
                                 onClick={() => setMediaTypeFilter('all')}
-                            className={cn(
-                                "px-2.5 py-1 rounded-full text-xs font-medium transition-all",
-                                "border border-white/10 bg-white/[0.02] text-white/65 light:border-black/10 light:text-slate-600",
-                                mediaTypeFilter === 'all' && "border-white/30 bg-white/10 text-white/90 shadow-[0_10px_30px_-18px_rgba(59,130,246,0.8)]"
-                            )}
-                        >
-                            All media
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => setMediaTypeFilter('image')}
-                            className={cn(
-                                "px-2.5 py-1 rounded-full text-xs font-medium transition-all",
-                                "border border-white/10 bg-white/[0.02] text-white/65 light:border-black/10 light:text-slate-600",
-                                mediaTypeFilter === 'image' && "border-white/30 bg-white/10 text-white/90 shadow-[0_10px_30px_-18px_rgba(59,130,246,0.8)]"
-                            )}
-                        >
-                            Photos
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => setMediaTypeFilter('video')}
-                            className={cn(
-                                "px-2.5 py-1 rounded-full text-xs font-medium transition-all",
-                                "border border-white/10 bg-white/[0.02] text-white/65 light:border-black/10 light:text-slate-600",
-                                mediaTypeFilter === 'video' && "border-white/30 bg-white/10 text-white/90 shadow-[0_10px_30px_-18px_rgba(59,130,246,0.8)]"
-                            )}
-                        >
-                            Videos
-                        </button>
-                    </div>
+                                className={cn(
+                                    filterPillClasses.base,
+                                    filterPillClasses.inactive,
+                                    mediaTypeFilter === 'all' && filterPillClasses.activeWithShadow("shadow-[0_10px_30px_-18px_rgba(59,130,246,0.8)]")
+                                )}
+                            >
+                                All media
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setMediaTypeFilter('image')}
+                                className={cn(
+                                    filterPillClasses.base,
+                                    filterPillClasses.inactive,
+                                    mediaTypeFilter === 'image' && filterPillClasses.activeWithShadow("shadow-[0_10px_30px_-18px_rgba(59,130,246,0.8)]")
+                                )}
+                            >
+                                Photos
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setMediaTypeFilter('video')}
+                                className={cn(
+                                    filterPillClasses.base,
+                                    filterPillClasses.inactive,
+                                    mediaTypeFilter === 'video' && filterPillClasses.activeWithShadow("shadow-[0_10px_30px_-18px_rgba(59,130,246,0.8)]")
+                                )}
+                            >
+                                Videos
+                            </button>
+                        </div>
 
                     <div className="h-6 w-px bg-white/10 light:bg-black/10" />
 
                     <div className="flex items-center gap-1 text-[11px] uppercase tracking-[0.08em] text-white/50 light:text-slate-600">
                         Location
                     </div>
-                    <div className="flex gap-1.5">
-                        <button
-                            type="button"
-                            onClick={() => setLocationFilter('any')}
-                            className={cn(
-                                "px-2.5 py-1 rounded-full text-xs font-medium transition-all",
-                                "border border-white/10 bg-white/[0.02] text-white/65 light:border-black/10 light:text-slate-600",
-                                locationFilter === 'any' && "border-white/30 bg-white/10 text-white/90 shadow-[0_10px_30px_-18px_rgba(52,211,153,0.7)]"
-                            )}
-                        >
-                            All
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => setLocationFilter('geotagged')}
-                            className={cn(
-                                "px-2.5 py-1 rounded-full text-xs font-medium transition-all",
-                                "border border-white/10 bg-white/[0.02] text-white/65 light:border-black/10 light:text-slate-600",
-                                locationFilter === 'geotagged' && "border-white/30 bg-white/10 text-white/90 shadow-[0_10px_30px_-18px_rgba(52,211,153,0.7)]"
-                            )}
-                        >
-                            Map-ready
-                        </button>
-                    </div>
+                        <div className="flex gap-1.5">
+                            <button
+                                type="button"
+                                onClick={() => setLocationFilter('any')}
+                                className={cn(
+                                    filterPillClasses.base,
+                                    filterPillClasses.inactive,
+                                    locationFilter === 'any' && filterPillClasses.activeWithShadow("shadow-[0_10px_30px_-18px_rgba(52,211,153,0.7)]")
+                                )}
+                            >
+                                All
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setLocationFilter('geotagged')}
+                                className={cn(
+                                    filterPillClasses.base,
+                                    filterPillClasses.inactive,
+                                    locationFilter === 'geotagged' && filterPillClasses.activeWithShadow("shadow-[0_10px_30px_-18px_rgba(52,211,153,0.7)]")
+                                )}
+                            >
+                                Map-ready
+                            </button>
+                        </div>
 
                     <div className="h-6 w-px bg-white/10 light:bg-black/10" />
 
@@ -710,9 +737,9 @@ export function PhotosTab({ trekData, isMobile, editMode = false, onViewPhotoOnM
                             type="button"
                             onClick={() => setSortOrder('journey')}
                             className={cn(
-                                "px-2.5 py-1 rounded-full text-xs font-medium transition-all",
-                                "border border-white/10 bg-white/[0.02] text-white/65 light:border-black/10 light:text-slate-600",
-                                sortOrder === 'journey' && "border-white/30 bg-white/10 text-white/90 shadow-[0_10px_30px_-18px_rgba(167,139,250,0.8)]"
+                                filterPillClasses.base,
+                                filterPillClasses.inactive,
+                                sortOrder === 'journey' && filterPillClasses.activeWithShadow("shadow-[0_10px_30px_-18px_rgba(167,139,250,0.8)]")
                             )}
                         >
                             Curated
@@ -721,9 +748,9 @@ export function PhotosTab({ trekData, isMobile, editMode = false, onViewPhotoOnM
                             type="button"
                             onClick={() => setSortOrder('captured')}
                             className={cn(
-                                "px-2.5 py-1 rounded-full text-xs font-medium transition-all",
-                                "border border-white/10 bg-white/[0.02] text-white/65 light:border-black/10 light:text-slate-600",
-                                sortOrder === 'captured' && "border-white/30 bg-white/10 text-white/90 shadow-[0_10px_30px_-18px_rgba(167,139,250,0.8)]"
+                                filterPillClasses.base,
+                                filterPillClasses.inactive,
+                                sortOrder === 'captured' && filterPillClasses.activeWithShadow("shadow-[0_10px_30px_-18px_rgba(167,139,250,0.8)]")
                             )}
                         >
                             Captured timeline
