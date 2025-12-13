@@ -16,7 +16,7 @@ import { PhotoEditModal } from './PhotoEditModal';
 import { SkeletonPhotoGrid } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 
-type DayFilter = 'all' | 'unassigned' | number; // 'all', 'unassigned' or day number
+type DayFilter = 'all' | 'unassigned' | number; // 'all', 'unassigned', or a day number
 type MediaTypeFilter = 'all' | MediaType;
 type LocationFilter = 'any' | 'geotagged';
 type SortOrder = 'journey' | 'captured';
