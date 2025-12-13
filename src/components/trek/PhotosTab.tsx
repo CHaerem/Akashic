@@ -309,15 +309,6 @@ export function PhotosTab({ trekData, isMobile, editMode = false, onViewPhotoOnM
         return sortPhotos(filtered);
     }, [dayScopedPhotos, isWithinBounds, locationFilter, mapScopeEnabled, mapViewportBounds, mapViewportPhotoIdSet, mediaTypeFilter, searchQuery, sortPhotos]);
 
-    // Track whether the map is open to avoid disabling map scope on temporary bounds changes
-    const [isMapOpen, setIsMapOpen] = useState(true);
-
-    useEffect(() => {
-        if (!isMapOpen) {
-            setMapScopeEnabled(false);
-        }
-    }, [isMapOpen]);
-
     // Get counts for each day
     const dayCounts = useMemo(() => {
         const counts: Record<string, number> = {
