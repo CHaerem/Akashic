@@ -44,6 +44,7 @@ export function useMapbox({ containerRef, onTrekSelect, onPhotoClick, onRouteCli
     const poisRef = useRef<PointOfInterest[]>([]);
     const campsRef = useRef<Camp[]>([]);
     const photoMarkersRef = useRef<Map<string, mapboxgl.Marker>>(new Map());
+    const campMarkersRef = useRef<Map<string, mapboxgl.Marker>>(new Map());
     const selectedTrekRef = useRef<string | null>(null);
     const playbackAnimationRef = useRef<number | null>(null);
     const playbackCallbackRef = useRef<((camp: Camp) => void) | null>(null);
@@ -421,6 +422,12 @@ export function useMapbox({ containerRef, onTrekSelect, onPhotoClick, onRouteCli
                 marker.remove();
             }
             photoMarkersRef.current.clear();
+
+            // Clean up HTML camp markers
+            for (const marker of campMarkersRef.current.values()) {
+                marker.remove();
+            }
+            campMarkersRef.current.clear();
 
             if (mapRef.current) {
                 mapRef.current.remove();
@@ -1379,39 +1386,78 @@ export function useMapbox({ containerRef, onTrekSelect, onPhotoClick, onRouteCli
         };
     }, [mapReady, updateThumbnailMarkers]);
 
-    // Update camp markers on the map
+    // Update camp markers on the map (HTML DOM markers with Liquid Glass styling)
     const updateCampMarkers = useCallback((camps: Camp[], selectedCampId: string | null = null) => {
         const map = mapRef.current;
         if (!map || !mapReady) return;
 
         campsRef.current = camps;
 
-        const features: GeoJSON.Feature[] = camps.map(camp => ({
-            type: 'Feature',
-            properties: {
-                id: camp.id,
-                name: camp.name,
-                dayNumber: camp.dayNumber.toString(),
-                elevation: camp.elevation,
-                selected: camp.id === selectedCampId
-            },
-            geometry: {
-                type: 'Point',
-                coordinates: camp.coordinates as [number, number]
-            }
-        }));
+        // Hide native Mapbox layers - we use HTML markers instead
+        map.setLayoutProperty('camp-markers-circle', 'visibility', 'none');
+        map.setLayoutProperty('camp-markers-glow', 'visibility', 'none');
+        map.setLayoutProperty('camp-markers-label', 'visibility', 'none');
 
+        // Clear the GeoJSON source
         const source = map.getSource('camp-markers') as mapboxgl.GeoJSONSource;
         if (source) {
-            source.setData({
-                type: 'FeatureCollection',
-                features
+            source.setData({ type: 'FeatureCollection', features: [] });
+        }
+
+        // Track which camps we've processed
+        const processedIds = new Set<string>();
+
+        // Create/update HTML markers for each camp
+        for (const camp of camps) {
+            processedIds.add(camp.id);
+            const isSelected = camp.id === selectedCampId;
+
+            // Check if marker already exists
+            const existingMarker = campMarkersRef.current.get(camp.id);
+            if (existingMarker) {
+                // Update position and selection state
+                existingMarker.setLngLat(camp.coordinates as [number, number]);
+                const el = existingMarker.getElement();
+                if (isSelected) {
+                    el.classList.add('camp-marker-selected');
+                } else {
+                    el.classList.remove('camp-marker-selected');
+                }
+                continue;
+            }
+
+            // Create new marker element
+            const el = document.createElement('div');
+            el.className = 'camp-marker' + (isSelected ? ' camp-marker-selected' : '');
+
+            // Day number badge
+            const badge = document.createElement('span');
+            badge.className = 'camp-marker-badge';
+            badge.textContent = camp.dayNumber.toString();
+            el.appendChild(badge);
+
+            // Create Mapbox marker
+            const marker = new mapboxgl.Marker({ element: el, anchor: 'center' })
+                .setLngLat(camp.coordinates as [number, number])
+                .addTo(map);
+
+            // Click handler
+            el.addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (onCampClickRef.current) {
+                    onCampClickRef.current(camp);
+                }
             });
 
-            const visibility = features.length > 0 ? 'visible' : 'none';
-            map.setLayoutProperty('camp-markers-circle', 'visibility', visibility);
-            map.setLayoutProperty('camp-markers-glow', 'visibility', visibility);
-            map.setLayoutProperty('camp-markers-label', 'visibility', visibility);
+            campMarkersRef.current.set(camp.id, marker);
+        }
+
+        // Remove markers for camps no longer in the list
+        for (const [id, marker] of campMarkersRef.current.entries()) {
+            if (!processedIds.has(id)) {
+                marker.remove();
+                campMarkersRef.current.delete(id);
+            }
         }
     }, [mapReady]);
 

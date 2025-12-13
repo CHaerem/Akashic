@@ -81,6 +81,10 @@ export const RouteEditor = memo(function RouteEditor({
     const mapRef = useRef<mapboxgl.Map | null>(null);
     const markersRef = useRef<Map<string, mapboxgl.Marker>>(new Map());
     const routeMarkersRef = useRef<Map<number, mapboxgl.Marker>>(new Map());
+    // Ref to hold the latest handleCampDragged (avoids stale closure in marker event handlers)
+    const handleCampDraggedRef = useRef<(campId: string, newCoords: [number, number]) => void>(() => {});
+    // Ref to track selectedCampId for click handlers (avoids stale closure)
+    const selectedCampIdRef = useRef<string | null>(null);
 
     // Editor mode state
     const [mode, setMode] = useState<EditorMode>('camps');
@@ -281,14 +285,35 @@ export const RouteEditor = memo(function RouteEditor({
     // Initialize camps and route from trekData
     useEffect(() => {
         if (isOpen) {
-            // Initialize camps
+            // Initialize route coordinates first (needed for camp distance calculation)
+            const route = trekData.route?.coordinates as RouteCoordinate[] | undefined;
+            if (route) {
+                setRouteCoordinates([...route]);
+            }
+
+            // Initialize camps with calculated routeDistanceKm for consistent sorting
             if (trekData.camps) {
-                setCamps(trekData.camps.map(c => ({ ...c })));
+                const initializedCamps = trekData.camps.map(c => {
+                    // If routeDistanceKm is already set and valid, use it
+                    if (c.routeDistanceKm != null && route) {
+                        return { ...c };
+                    }
+                    // Otherwise, calculate it from route
+                    if (route) {
+                        const nearest = findNearestPointOnRoute(c.coordinates, route);
+                        if (nearest) {
+                            return {
+                                ...c,
+                                routeDistanceKm: nearest.routeDistance,
+                                routePointIndex: nearest.index
+                            };
+                        }
+                    }
+                    return { ...c };
+                });
+                setCamps(initializedCamps);
             }
-            // Initialize route coordinates
-            if (trekData.route?.coordinates) {
-                setRouteCoordinates([...trekData.route.coordinates] as RouteCoordinate[]);
-            }
+
             setHasChanges(false);
             setRouteHasChanges(false);
             setError(null);
@@ -490,16 +515,16 @@ export const RouteEditor = memo(function RouteEditor({
                     .setLngLat(camp.coordinates)
                     .addTo(map);
 
-                // Handle drag end
+                // Handle drag end (use ref to always call latest handler)
                 marker.on('dragend', () => {
                     const lngLat = marker!.getLngLat();
-                    handleCampDragged(camp.id, [lngLat.lng, lngLat.lat]);
+                    handleCampDraggedRef.current(camp.id, [lngLat.lng, lngLat.lat]);
                 });
 
-                // Handle click
+                // Handle click (use ref to access latest selectedCampId)
                 el.addEventListener('click', (e) => {
                     e.stopPropagation();
-                    setSelectedCampId(camp.id === selectedCampId ? null : camp.id);
+                    setSelectedCampId(camp.id === selectedCampIdRef.current ? null : camp.id);
                 });
 
                 existingMarkers.set(camp.id, marker);
@@ -1431,6 +1456,16 @@ export const RouteEditor = memo(function RouteEditor({
 
         setHasChanges(true);
     }, [trekData.route, pushToHistory]);
+
+    // Keep ref updated with latest handler (avoids stale closure in marker event handlers)
+    useEffect(() => {
+        handleCampDraggedRef.current = handleCampDragged;
+    }, [handleCampDragged]);
+
+    // Keep selectedCampId ref updated (for click handlers)
+    useEffect(() => {
+        selectedCampIdRef.current = selectedCampId;
+    }, [selectedCampId]);
 
     // Handle click on route to add new camp
     const handleRouteClick = useCallback((coords: [number, number]) => {

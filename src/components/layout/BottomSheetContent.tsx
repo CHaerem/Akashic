@@ -119,6 +119,7 @@ export function BottomSheetContent({
                     onCampSelect={onCampSelect}
                     onViewPhotoOnMap={onViewPhotoOnMap}
                     onOpenDayGallery={onOpenDayGallery}
+                    onJourneySaved={onJourneySaved || (() => {})}
                     editMode={editMode}
                     isMobile={isMobile}
                     mapViewportBounds={mapViewportBounds}
@@ -251,6 +252,7 @@ interface TrekViewContentProps {
     onCampSelect: (camp: Camp) => void;
     onViewPhotoOnMap: (photo: Photo) => void;
     onOpenDayGallery: () => void;
+    onJourneySaved: () => void;
     editMode: boolean;
     isMobile: boolean;
     mapViewportBounds?: mapboxgl.LngLatBoundsLike | null;
@@ -268,6 +270,7 @@ function TrekViewContent({
     onCampSelect,
     onViewPhotoOnMap,
     onOpenDayGallery,
+    onJourneySaved,
     editMode,
     isMobile,
     mapViewportBounds,
@@ -369,7 +372,10 @@ function TrekViewContent({
                 trekData={trekData}
                 isOpen={showRouteEditor}
                 onClose={() => setShowRouteEditor(false)}
-                onSave={() => setShowRouteEditor(false)}
+                onSave={() => {
+                    setShowRouteEditor(false);
+                    onJourneySaved();
+                }}
                 isMobile={isMobile}
             />
         </div>
