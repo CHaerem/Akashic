@@ -58,6 +58,7 @@ interface MapboxGlobeProps {
     onCampSelect?: (camp: Camp) => void;
     getMediaUrl?: (path: string) => string;
     onViewportChange?: (bounds: mapboxgl.LngLatBoundsLike) => void;
+    onViewportVisiblePhotoIdsChange?: (photoIds: string[]) => void;
 }
 
 // Generate realistic starfield - seeded positions for consistency
@@ -147,7 +148,7 @@ const starfieldStyle: React.CSSProperties = {
     zIndex: 0
 };
 
-export function MapboxGlobe({ selectedTrek, selectedCamp, onSelectTrek, view, photos = [], onPhotoClick, flyToPhotoRef, recenterRef, onCampSelect, getMediaUrl, onViewportChange }: MapboxGlobeProps) {
+export function MapboxGlobe({ selectedTrek, selectedCamp, onSelectTrek, view, photos = [], onPhotoClick, flyToPhotoRef, recenterRef, onCampSelect, getMediaUrl, onViewportChange, onViewportVisiblePhotoIdsChange }: MapboxGlobeProps) {
     const containerRef = useRef<HTMLDivElement>(null);
     const { treks, trekDataMap, loading: journeysLoading } = useJourneys();
     const [poiInfo, setPOIInfo] = useState<PointOfInterest | null>(null);
@@ -192,21 +193,47 @@ export function MapboxGlobe({ selectedTrek, selectedCamp, onSelectTrek, view, ph
     });
 
     useEffect(() => {
-        if (!mapReady || !map.current || !onViewportChange) return;
+        if (!mapReady || !map.current) return;
+        if (!onViewportChange && !onViewportVisiblePhotoIdsChange) return;
 
         const mapInstance = map.current;
-        const emitBounds = () => {
-            const bounds = mapInstance.getBounds().toArray();
-            onViewportChange(bounds);
+        const marginPx = 24;
+
+        const emitViewportInfo = () => {
+            if (onViewportChange) {
+                const bounds = mapInstance.getBounds().toArray();
+                onViewportChange(bounds);
+            }
+
+            if (onViewportVisiblePhotoIdsChange) {
+                const { clientWidth, clientHeight } = mapInstance.getContainer();
+
+                const visiblePhotoIds = photos
+                    .filter((photo) => {
+                        if (!photo.coordinates || photo.coordinates.length !== 2) return false;
+                        const point = mapInstance.project(photo.coordinates as [number, number]);
+                        return Number.isFinite(point.x)
+                            && Number.isFinite(point.y)
+                            && point.x >= -marginPx
+                            && point.x <= clientWidth + marginPx
+                            && point.y >= -marginPx
+                            && point.y <= clientHeight + marginPx;
+                    })
+                    .map(photo => photo.id);
+
+                onViewportVisiblePhotoIdsChange(visiblePhotoIds);
+            }
         };
 
-        emitBounds();
-        mapInstance.on('moveend', emitBounds);
+        emitViewportInfo();
+        mapInstance.on('moveend', emitViewportInfo);
+        mapInstance.on('resize', emitViewportInfo);
 
         return () => {
-            mapInstance.off('moveend', emitBounds);
+            mapInstance.off('moveend', emitViewportInfo);
+            mapInstance.off('resize', emitViewportInfo);
         };
-    }, [map, mapReady, onViewportChange]);
+    }, [map, mapReady, onViewportChange, onViewportVisiblePhotoIdsChange, photos]);
 
     // Expose test helpers for E2E testing
     useEffect(() => {

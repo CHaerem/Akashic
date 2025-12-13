@@ -27,6 +27,7 @@ export default function AkashicApp() {
     const isMobile = useIsMobile();
     const [photos, setPhotos] = useState<Photo[]>([]);
     const [mapViewportBounds, setMapViewportBounds] = useState<mapboxgl.LngLatBoundsLike | null>(null);
+    const [mapViewportPhotoIds, setMapViewportPhotoIds] = useState<string[] | null>(null);
     // Defer photo updates to prevent re-renders during camera animations
     const deferredPhotos = useDeferredValue(photos);
     const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
@@ -231,6 +232,7 @@ export default function AkashicApp() {
                             onCampSelect={handleCampSelect}
                             getMediaUrl={getMediaUrl}
                             onViewportChange={setMapViewportBounds}
+                            onViewportVisiblePhotoIdsChange={setMapViewportPhotoIds}
                         />
                     </div>
 
@@ -324,6 +326,7 @@ export default function AkashicApp() {
                             editMode={editMode}
                             isMobile={isMobile}
                             mapViewportBounds={mapViewportBounds}
+                            mapViewportPhotoIds={mapViewportPhotoIds}
                         />
                     </BottomSheet>
                 ) : (
@@ -344,7 +347,7 @@ export default function AkashicApp() {
                         onNextJourney={handleNextJourney}
                         totalJourneys={treks.length}
                         editMode={editMode}
-                        onToggleEditMode={toggleEditMode}
+                            onToggleEditMode={toggleEditMode}
                     >
                         <BottomSheetContent
                             view={view}
@@ -364,6 +367,7 @@ export default function AkashicApp() {
                             editMode={editMode}
                             isMobile={false}
                             mapViewportBounds={mapViewportBounds}
+                            mapViewportPhotoIds={mapViewportPhotoIds}
                         />
                     </Sidebar>
                 )

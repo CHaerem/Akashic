@@ -22,6 +22,19 @@ type LocationFilter = 'any' | 'geotagged';
 type SortOrder = 'journey' | 'captured';
 type MapBounds = mapboxgl.LngLatBoundsLike | null;
 
+function toLngLatTuple(value: unknown): [number, number] | null {
+    if (!value) return null;
+    if (Array.isArray(value) && value.length >= 2 && typeof value[0] === 'number' && typeof value[1] === 'number') {
+        return [value[0], value[1]];
+    }
+    if (typeof value === 'object' && value !== null && 'lng' in value && 'lat' in value) {
+        const lng = (value as { lng: unknown }).lng;
+        const lat = (value as { lat: unknown }).lat;
+        if (typeof lng === 'number' && typeof lat === 'number') return [lng, lat];
+    }
+    return null;
+}
+
 // Play icon SVG component for video thumbnails
 function PlayIcon({ className }: { className?: string }) {
     return (
@@ -171,9 +184,10 @@ interface PhotosTabProps {
     editMode?: boolean;
     onViewPhotoOnMap?: (photo: Photo) => void;
     mapViewportBounds?: MapBounds;
+    mapViewportPhotoIds?: string[] | null;
 }
 
-export function PhotosTab({ trekData, isMobile, editMode = false, onViewPhotoOnMap, mapViewportBounds = null }: PhotosTabProps) {
+export function PhotosTab({ trekData, isMobile, editMode = false, onViewPhotoOnMap, mapViewportBounds = null, mapViewportPhotoIds = null }: PhotosTabProps) {
     const [photos, setPhotos] = useState<Photo[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -192,6 +206,11 @@ export function PhotosTab({ trekData, isMobile, editMode = false, onViewPhotoOnM
     const gridContainerRef = useRef<HTMLDivElement>(null);
     const scrollContainerRef = useRef<HTMLDivElement>(null);
     const { getMediaUrl, loading: tokenLoading } = useMedia();
+
+    const mapViewportPhotoIdSet = useMemo(() => {
+        if (!mapViewportPhotoIds) return null;
+        return new Set(mapViewportPhotoIds);
+    }, [mapViewportPhotoIds]);
 
     // Use shared photo-day matching hook
     const { photosByDay } = usePhotoDay(trekData, photos);
@@ -234,15 +253,28 @@ export function PhotosTab({ trekData, isMobile, editMode = false, onViewPhotoOnM
     const isWithinBounds = useCallback((coords: number[] | null | undefined, bounds: MapBounds) => {
         if (!coords || coords.length !== 2 || !bounds) return false;
 
-        if (Array.isArray(bounds)) {
-            const [[west, south], [east, north]] = bounds;
-            return coords[0] >= west && coords[0] <= east && coords[1] >= south && coords[1] <= north;
+        const [lng, lat] = coords;
+        const isLngInRange = (west: number, east: number) => {
+            if (west <= east) return lng >= west && lng <= east;
+            // Crossing antimeridian
+            return lng >= west || lng <= east;
+        };
+
+        if (Array.isArray(bounds) && bounds.length === 2) {
+            const sw = toLngLatTuple(bounds[0]);
+            const ne = toLngLatTuple(bounds[1]);
+            if (!sw || !ne) return false;
+
+            const [west, south] = sw;
+            const [east, north] = ne;
+            return isLngInRange(west, east) && lat >= south && lat <= north;
         }
 
-        if (typeof (bounds as mapboxgl.LngLatBounds).getNorthEast === 'function') {
-            const ne = (bounds as mapboxgl.LngLatBounds).getNorthEast();
-            const sw = (bounds as mapboxgl.LngLatBounds).getSouthWest();
-            return coords[0] >= sw.lng && coords[0] <= ne.lng && coords[1] >= sw.lat && coords[1] <= ne.lat;
+        const boundsObj = bounds as mapboxgl.LngLatBounds;
+        if (typeof boundsObj.getWest === 'function') {
+            return isLngInRange(boundsObj.getWest(), boundsObj.getEast())
+                && lat >= boundsObj.getSouth()
+                && lat <= boundsObj.getNorth();
         }
 
         return false;
@@ -267,13 +299,15 @@ export function PhotosTab({ trekData, isMobile, editMode = false, onViewPhotoOnM
 
             const matchesMap = !mapScopeEnabled || !mapViewportBounds
                 ? true
-                : isWithinBounds(photo.coordinates, mapViewportBounds);
+                : mapViewportPhotoIdSet
+                    ? mapViewportPhotoIdSet.has(photo.id)
+                    : isWithinBounds(photo.coordinates, mapViewportBounds);
 
             return matchesType && matchesLocation && matchesSearch && matchesMap;
         });
 
         return sortPhotos(filtered);
-    }, [dayScopedPhotos, isWithinBounds, locationFilter, mapScopeEnabled, mapViewportBounds, mediaTypeFilter, searchQuery, sortPhotos]);
+    }, [dayScopedPhotos, isWithinBounds, locationFilter, mapScopeEnabled, mapViewportBounds, mapViewportPhotoIdSet, mediaTypeFilter, searchQuery, sortPhotos]);
 
     useEffect(() => {
         if (!mapViewportBounds) {
@@ -446,22 +480,19 @@ export function PhotosTab({ trekData, isMobile, editMode = false, onViewPhotoOnM
         || sortOrder === 'captured'
         || mapScopeEnabled;
 
-    const canShowFilters = !loading && !tokenLoading;
-    const hasPhotos = photos.length > 0;
+    const hasNonDefaultView = dayFilter !== 'all' || hasActiveFilters;
 
-    if (loading || tokenLoading) {
-        return (
-            <div className="space-y-4">
-                <div className="flex items-center gap-2">
-                    <div className="h-4 w-32 bg-white/10 rounded animate-pulse" />
-                </div>
-                <SkeletonPhotoGrid count={6} columns={3} />
-            </div>
-        );
-    }
+    const resetView = useCallback(() => {
+        setDayFilter('all');
+        setMediaTypeFilter('all');
+        setLocationFilter('any');
+        setSortOrder('journey');
+        setSearchQuery('');
+        setMapScopeEnabled(false);
+    }, []);
 
-    return (
-        <div>
+    const topControls = (
+        <>
             {/* Error message */}
             {error && (
                 <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3 mb-4 text-red-300 text-[13px]">
@@ -485,262 +516,301 @@ export function PhotosTab({ trekData, isMobile, editMode = false, onViewPhotoOnM
             )}
 
             {/* Day filter tabs and media filters */}
-            {canShowFilters && (
-                <div className="mb-5 space-y-3">
-                    {trekData.camps.length > 1 && (
-                        <div className="flex gap-1.5 overflow-x-auto pb-2 scrollbar-hide">
-                            {/* All photos tab */}
-                            <button
-                                onClick={() => setDayFilter('all')}
-                                className={cn(
-                                    "flex-shrink-0 px-3 py-1.5 rounded-full text-[11px] font-semibold transition-all",
-                                    "border border-white/10 bg-white/[0.03] text-white/70 light:border-black/10 light:bg-black/[0.02] light:text-slate-700",
-                                    dayFilter === 'all' && "border-white/30 text-white/90 shadow-[0_12px_40px_-18px_rgba(59,130,246,0.8)] light:border-black/30"
-                                )}
-                            >
-                                All ({dayCounts.all})
-                            </button>
+            <div className="mb-5 space-y-3">
+                {(trekData.camps.length > 0 || dayCounts.unassigned > 0 || dayFilter === 'unassigned') && (
+                    <div className="flex gap-1.5 overflow-x-auto pb-2 scrollbar-hide">
+                        {/* All photos tab */}
+                        <button
+                            onClick={() => setDayFilter('all')}
+                            className={cn(
+                                "flex-shrink-0 px-3 py-1.5 rounded-full text-[11px] font-semibold transition-all",
+                                "border border-white/10 bg-white/[0.03] text-white/70 light:border-black/10 light:bg-black/[0.02] light:text-slate-700",
+                                dayFilter === 'all' && "border-white/30 text-white/90 shadow-[0_12px_40px_-18px_rgba(59,130,246,0.8)] light:border-black/30"
+                            )}
+                        >
+                            All ({dayCounts.all})
+                        </button>
 
-                            {/* Day tabs */}
-                            {trekData.camps.map((camp: Camp) => {
-                                const count = dayCounts[camp.dayNumber] || 0;
-                                const hasMedia = count > 0;
-                                return (
-                                    <button
-                                        key={camp.dayNumber}
-                                        onClick={() => setDayFilter(camp.dayNumber)}
-                                        className={cn(
-                                            "flex-shrink-0 px-3 py-1.5 rounded-full text-[11px] font-semibold transition-all whitespace-nowrap",
-                                            "border border-white/10 bg-white/[0.02] text-white/60 light:border-black/10 light:bg-black/[0.02] light:text-slate-600",
-                                            dayFilter === camp.dayNumber && "border-white/30 text-white/90 shadow-[0_12px_40px_-18px_rgba(59,130,246,0.8)] light:border-black/30",
-                                            !hasMedia && "opacity-40"
-                                        )}
-                                    >
-                                        Day {camp.dayNumber} {hasMedia && `(${count})`}
-                                    </button>
-                                );
-                            })}
-
-                            {/* Unassigned tab - only show if there are unassigned photos */}
-                            {dayCounts.unassigned > 0 && (
+                        {/* Day tabs */}
+                        {trekData.camps.map((camp: Camp) => {
+                            const count = dayCounts[camp.dayNumber] || 0;
+                            const hasMedia = count > 0;
+                            return (
                                 <button
-                                    onClick={() => setDayFilter('unassigned')}
+                                    key={camp.dayNumber}
+                                    onClick={() => setDayFilter(camp.dayNumber)}
                                     className={cn(
-                                        "flex-shrink-0 px-3 py-1.5 rounded-full text-[11px] font-semibold transition-all",
-                                        "border border-white/10 bg-amber-400/5 text-amber-200 light:border-amber-500/30 light:text-amber-700",
-                                        dayFilter === 'unassigned' && "border-amber-300/60 text-amber-50 shadow-[0_10px_30px_-18px_rgba(251,191,36,0.9)]"
+                                        "flex-shrink-0 px-3 py-1.5 rounded-full text-[11px] font-semibold transition-all whitespace-nowrap",
+                                        "border border-white/10 bg-white/[0.02] text-white/60 light:border-black/10 light:bg-black/[0.02] light:text-slate-600",
+                                        dayFilter === camp.dayNumber && "border-white/30 text-white/90 shadow-[0_12px_40px_-18px_rgba(59,130,246,0.8)] light:border-black/30",
+                                        !hasMedia && "opacity-40"
                                     )}
                                 >
-                                    Unassigned ({dayCounts.unassigned})
+                                    Day {camp.dayNumber} {hasMedia && `(${count})`}
                                 </button>
-                            )}
-                        </div>
-                    )}
+                            );
+                        })}
+
+                        {/* Unassigned tab - keep visible if selected */}
+                        {(dayCounts.unassigned > 0 || dayFilter === 'unassigned') && (
+                            <button
+                                onClick={() => setDayFilter('unassigned')}
+                                className={cn(
+                                    "flex-shrink-0 px-3 py-1.5 rounded-full text-[11px] font-semibold transition-all",
+                                    "border border-white/10 bg-amber-400/5 text-amber-200 light:border-amber-500/30 light:text-amber-700",
+                                    dayFilter === 'unassigned' && "border-amber-300/60 text-amber-50 shadow-[0_10px_30px_-18px_rgba(251,191,36,0.9)]",
+                                    dayCounts.unassigned === 0 && "opacity-40"
+                                )}
+                            >
+                                Unassigned ({dayCounts.unassigned})
+                            </button>
+                        )}
+                    </div>
+                )}
 
                     <div className="flex flex-wrap items-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-3 light:border-black/10 light:bg-black/[0.02]">
                         <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-white/60 light:text-slate-600">
                             <span className="h-1.5 w-1.5 rounded-full bg-white/40 shadow-[0_0_0_4px_rgba(255,255,255,0.04)]" />
                             Filters
                         </div>
+                        {hasNonDefaultView && (
+                            <button
+                                type="button"
+                                onClick={resetView}
+                                className={cn(
+                                    "px-2.5 py-1 rounded-full text-[11px] font-semibold uppercase tracking-[0.08em] transition-all",
+                                    "border border-white/10 bg-white/[0.02] text-white/55 hover:text-white/85 hover:border-white/20 hover:bg-white/[0.04]",
+                                    "light:border-black/10 light:text-slate-600 light:hover:text-slate-900 light:hover:border-black/20"
+                                )}
+                                aria-label="Reset filters"
+                            >
+                                Reset
+                            </button>
+                        )}
 
                         <div className="flex gap-1.5">
                             <button
                                 type="button"
                                 onClick={() => setMediaTypeFilter('all')}
-                                className={cn(
-                                    "px-2.5 py-1 rounded-full text-xs font-medium transition-all",
-                                    "border border-white/10 bg-white/[0.02] text-white/65 light:border-black/10 light:text-slate-600",
-                                    mediaTypeFilter === 'all' && "border-white/30 bg-white/10 text-white/90 shadow-[0_10px_30px_-18px_rgba(59,130,246,0.8)]"
-                                )}
-                            >
-                                All media
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => setMediaTypeFilter('image')}
-                                className={cn(
-                                    "px-2.5 py-1 rounded-full text-xs font-medium transition-all",
-                                    "border border-white/10 bg-white/[0.02] text-white/65 light:border-black/10 light:text-slate-600",
-                                    mediaTypeFilter === 'image' && "border-white/30 bg-white/10 text-white/90 shadow-[0_10px_30px_-18px_rgba(59,130,246,0.8)]"
-                                )}
-                            >
-                                Photos
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => setMediaTypeFilter('video')}
-                                className={cn(
-                                    "px-2.5 py-1 rounded-full text-xs font-medium transition-all",
-                                    "border border-white/10 bg-white/[0.02] text-white/65 light:border-black/10 light:text-slate-600",
-                                    mediaTypeFilter === 'video' && "border-white/30 bg-white/10 text-white/90 shadow-[0_10px_30px_-18px_rgba(59,130,246,0.8)]"
-                                )}
-                            >
-                                Videos
-                            </button>
-                        </div>
-
-                        <div className="h-6 w-px bg-white/10 light:bg-black/10" />
-
-                        <div className="flex items-center gap-1 text-[11px] uppercase tracking-[0.08em] text-white/50 light:text-slate-600">
-                            Location
-                        </div>
-                        <div className="flex gap-1.5">
-                            <button
-                                type="button"
-                                onClick={() => setLocationFilter('any')}
-                                className={cn(
-                                    "px-2.5 py-1 rounded-full text-xs font-medium transition-all",
-                                    "border border-white/10 bg-white/[0.02] text-white/65 light:border-black/10 light:text-slate-600",
-                                    locationFilter === 'any' && "border-white/30 bg-white/10 text-white/90 shadow-[0_10px_30px_-18px_rgba(52,211,153,0.7)]"
-                                )}
-                            >
-                                All
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => setLocationFilter('geotagged')}
-                                className={cn(
-                                    "px-2.5 py-1 rounded-full text-xs font-medium transition-all",
-                                    "border border-white/10 bg-white/[0.02] text-white/65 light:border-black/10 light:text-slate-600",
-                                    locationFilter === 'geotagged' && "border-white/30 bg-white/10 text-white/90 shadow-[0_10px_30px_-18px_rgba(52,211,153,0.7)]"
-                                )}
-                            >
-                                Map-ready
-                            </button>
-                        </div>
-
-                        <div className="h-6 w-px bg-white/10 light:bg-black/10" />
-
-                        <div className="flex items-center gap-1 text-[11px] uppercase tracking-[0.08em] text-white/50 light:text-slate-600">
-                            Map
-                        </div>
+                            className={cn(
+                                "px-2.5 py-1 rounded-full text-xs font-medium transition-all",
+                                "border border-white/10 bg-white/[0.02] text-white/65 light:border-black/10 light:text-slate-600",
+                                mediaTypeFilter === 'all' && "border-white/30 bg-white/10 text-white/90 shadow-[0_10px_30px_-18px_rgba(59,130,246,0.8)]"
+                            )}
+                        >
+                            All media
+                        </button>
                         <button
                             type="button"
-                            disabled={!mapViewportBounds}
-                            onClick={() => mapViewportBounds && setMapScopeEnabled(prev => !prev)}
-                            aria-pressed={mapScopeEnabled}
+                            onClick={() => setMediaTypeFilter('image')}
                             className={cn(
-                                "px-2.5 py-1 rounded-full text-xs font-medium transition-all flex items-center gap-1",
+                                "px-2.5 py-1 rounded-full text-xs font-medium transition-all",
                                 "border border-white/10 bg-white/[0.02] text-white/65 light:border-black/10 light:text-slate-600",
-                                mapScopeEnabled && "border-white/30 bg-white/10 text-white/90 shadow-[0_10px_30px_-18px_rgba(96,165,250,0.8)]",
-                                !mapViewportBounds && "opacity-40 cursor-not-allowed"
+                                mediaTypeFilter === 'image' && "border-white/30 bg-white/10 text-white/90 shadow-[0_10px_30px_-18px_rgba(59,130,246,0.8)]"
                             )}
                         >
-                            <span className="inline-flex h-2 w-2 rounded-full bg-blue-300/70" aria-hidden />
-                            {mapViewportBounds ? 'Follow map view' : 'Open map to enable'}
+                            Photos
                         </button>
+                        <button
+                            type="button"
+                            onClick={() => setMediaTypeFilter('video')}
+                            className={cn(
+                                "px-2.5 py-1 rounded-full text-xs font-medium transition-all",
+                                "border border-white/10 bg-white/[0.02] text-white/65 light:border-black/10 light:text-slate-600",
+                                mediaTypeFilter === 'video' && "border-white/30 bg-white/10 text-white/90 shadow-[0_10px_30px_-18px_rgba(59,130,246,0.8)]"
+                            )}
+                        >
+                            Videos
+                        </button>
+                    </div>
 
-                        <div className="h-6 w-px bg-white/10 light:bg-black/10" />
+                    <div className="h-6 w-px bg-white/10 light:bg-black/10" />
 
-                        <div className="flex items-center gap-1 text-[11px] uppercase tracking-[0.08em] text-white/50 light:text-slate-600">
-                            Order
-                        </div>
-                        <div className="flex gap-1.5">
-                            <button
-                                type="button"
-                                onClick={() => setSortOrder('journey')}
-                                className={cn(
-                                    "px-2.5 py-1 rounded-full text-xs font-medium transition-all",
-                                    "border border-white/10 bg-white/[0.02] text-white/65 light:border-black/10 light:text-slate-600",
-                                    sortOrder === 'journey' && "border-white/30 bg-white/10 text-white/90 shadow-[0_10px_30px_-18px_rgba(167,139,250,0.8)]"
-                                )}
-                            >
-                                Curated
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => setSortOrder('captured')}
-                                className={cn(
-                                    "px-2.5 py-1 rounded-full text-xs font-medium transition-all",
-                                    "border border-white/10 bg-white/[0.02] text-white/65 light:border-black/10 light:text-slate-600",
-                                    sortOrder === 'captured' && "border-white/30 bg-white/10 text-white/90 shadow-[0_10px_30px_-18px_rgba(167,139,250,0.8)]"
-                                )}
-                            >
-                                Captured timeline
-                            </button>
-                        </div>
+                    <div className="flex items-center gap-1 text-[11px] uppercase tracking-[0.08em] text-white/50 light:text-slate-600">
+                        Location
+                    </div>
+                    <div className="flex gap-1.5">
+                        <button
+                            type="button"
+                            onClick={() => setLocationFilter('any')}
+                            className={cn(
+                                "px-2.5 py-1 rounded-full text-xs font-medium transition-all",
+                                "border border-white/10 bg-white/[0.02] text-white/65 light:border-black/10 light:text-slate-600",
+                                locationFilter === 'any' && "border-white/30 bg-white/10 text-white/90 shadow-[0_10px_30px_-18px_rgba(52,211,153,0.7)]"
+                            )}
+                        >
+                            All
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setLocationFilter('geotagged')}
+                            className={cn(
+                                "px-2.5 py-1 rounded-full text-xs font-medium transition-all",
+                                "border border-white/10 bg-white/[0.02] text-white/65 light:border-black/10 light:text-slate-600",
+                                locationFilter === 'geotagged' && "border-white/30 bg-white/10 text-white/90 shadow-[0_10px_30px_-18px_rgba(52,211,153,0.7)]"
+                            )}
+                        >
+                            Map-ready
+                        </button>
+                    </div>
 
-                        <div className="ml-auto flex-1 min-w-[200px]">
-                            <label className="sr-only" htmlFor="media-search">Search media</label>
-                            <div className="relative">
-                                <input
-                                    id="media-search"
-                                    type="search"
-                                    value={searchQuery}
-                                    onChange={(e) => setSearchQuery(e.target.value)}
-                                    placeholder="Search captions"
-                                    className="w-full rounded-lg border border-white/10 bg-white/[0.05] px-3 py-2 text-sm text-white placeholder:text-white/40 focus:outline-none focus:ring-2 focus:ring-white/30 light:bg-white light:text-slate-900 light:placeholder:text-slate-400 light:border-black/10"
-                                />
-                                <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[11px] uppercase tracking-[0.08em] text-white/30 light:text-slate-400">Find</span>
-                            </div>
+                    <div className="h-6 w-px bg-white/10 light:bg-black/10" />
+
+                    <div className="flex items-center gap-1 text-[11px] uppercase tracking-[0.08em] text-white/50 light:text-slate-600">
+                        Map
+                    </div>
+                    <button
+                        type="button"
+                        disabled={!mapViewportBounds}
+                        onClick={() => mapViewportBounds && setMapScopeEnabled(prev => !prev)}
+                        aria-pressed={mapScopeEnabled}
+                        title={!mapViewportBounds ? 'Open the map to enable map filtering' : undefined}
+                        className={cn(
+                            "px-2.5 py-1 rounded-full text-xs font-medium transition-all flex items-center gap-1",
+                            "border border-white/10 bg-white/[0.02] text-white/65 light:border-black/10 light:text-slate-600",
+                            mapScopeEnabled && "border-white/30 bg-white/10 text-white/90 shadow-[0_10px_30px_-18px_rgba(96,165,250,0.8)]",
+                            !mapViewportBounds && "opacity-40 cursor-not-allowed"
+                        )}
+                    >
+                        <span
+                            className={cn(
+                                "inline-flex h-2 w-2 rounded-full",
+                                mapScopeEnabled ? "bg-blue-300/70" : "bg-white/25",
+                                !mapViewportBounds && "bg-white/15"
+                            )}
+                            aria-hidden
+                        />
+                        {mapViewportBounds ? 'Follow map view' : 'Open map to enable'}
+                    </button>
+
+                    <div className="h-6 w-px bg-white/10 light:bg-black/10" />
+
+                    <div className="flex items-center gap-1 text-[11px] uppercase tracking-[0.08em] text-white/50 light:text-slate-600">
+                        Order
+                    </div>
+                    <div className="flex gap-1.5">
+                        <button
+                            type="button"
+                            onClick={() => setSortOrder('journey')}
+                            className={cn(
+                                "px-2.5 py-1 rounded-full text-xs font-medium transition-all",
+                                "border border-white/10 bg-white/[0.02] text-white/65 light:border-black/10 light:text-slate-600",
+                                sortOrder === 'journey' && "border-white/30 bg-white/10 text-white/90 shadow-[0_10px_30px_-18px_rgba(167,139,250,0.8)]"
+                            )}
+                        >
+                            Curated
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setSortOrder('captured')}
+                            className={cn(
+                                "px-2.5 py-1 rounded-full text-xs font-medium transition-all",
+                                "border border-white/10 bg-white/[0.02] text-white/65 light:border-black/10 light:text-slate-600",
+                                sortOrder === 'captured' && "border-white/30 bg-white/10 text-white/90 shadow-[0_10px_30px_-18px_rgba(167,139,250,0.8)]"
+                            )}
+                        >
+                            Captured timeline
+                        </button>
+                    </div>
+
+                    <div className="ml-auto flex-1 min-w-[200px]">
+                        <label className="sr-only" htmlFor="media-search">Search media</label>
+                        <div className="relative">
+                            <input
+                                id="media-search"
+                                type="search"
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                                placeholder="Search captions"
+                                className="w-full rounded-lg border border-white/10 bg-white/[0.05] px-3 py-2 text-sm text-white placeholder:text-white/40 focus:outline-none focus:ring-2 focus:ring-white/30 light:bg-white light:text-slate-900 light:placeholder:text-slate-400 light:border-black/10"
+                            />
+                            <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[11px] uppercase tracking-[0.08em] text-white/30 light:text-slate-400">Find</span>
                         </div>
                     </div>
                 </div>
-            )}
+            </div>
+        </>
+    );
 
-            {(hasPhotos || hasActiveFilters) && (
-                <div ref={gridContainerRef}>
-                    <div className="flex justify-between items-center mb-3">
-                        <div>
-                            <h3 className="text-white/90 light:text-slate-900 text-sm font-medium m-0 uppercase tracking-[0.1em]">
-                                {dayFilter === 'all'
-                                    ? `Journey Media (${countLabel})`
-                                    : dayFilter === 'unassigned'
-                                        ? `Unassigned Media (${countLabel})`
-                                        : `Day ${dayFilter} Media (${countLabel})`
-                                }
-                            </h3>
-                            {(hasActiveFilters || filteredPhotos.length === 0) && (
-                                <p className="m-0 mt-1 text-[11px] text-white/50 light:text-slate-500">
-                                    {mapScopeEnabled && 'In current map view • '}
-                                    {mediaTypeFilter !== 'all' && `${mediaTypeFilter === 'image' ? 'Photos' : 'Videos'} • `}
-                                    {locationFilter === 'geotagged' && 'Map-ready only • '}
-                                    {sortOrder === 'captured' && 'Captured timeline • '}
-                                    {searchQuery.trim().length > 0 && `Search: “${searchQuery.trim()}” • `}
-                                    {`Showing ${countLabel}`}
-                                </p>
-                            )}
-                        </div>
-                        {editMode && filteredPhotos.length > 1 && (
-                            <span className="text-[11px] text-white/40 light:text-slate-400">
-                                Drag to reorder
-                            </span>
+    if (loading || tokenLoading) {
+        return (
+            <div>
+                {topControls}
+                <div className="space-y-4">
+                    <div className="flex items-center gap-2">
+                        <div className="h-4 w-32 bg-white/10 rounded animate-pulse" />
+                    </div>
+                    <SkeletonPhotoGrid count={6} columns={3} />
+                </div>
+            </div>
+        );
+    }
+
+    return (
+        <div>
+            {topControls}
+
+            <div ref={gridContainerRef}>
+                <div className="flex justify-between items-center mb-3">
+                    <div>
+                        <h3 className="text-white/90 light:text-slate-900 text-sm font-medium m-0 uppercase tracking-[0.1em]">
+                            {dayFilter === 'all'
+                                ? `Journey Media (${countLabel})`
+                                : dayFilter === 'unassigned'
+                                    ? `Unassigned Media (${countLabel})`
+                                    : `Day ${dayFilter} Media (${countLabel})`
+                            }
+                        </h3>
+                        {(hasNonDefaultView || filteredPhotos.length === 0) && (
+                            <p className="m-0 mt-1 text-[11px] text-white/50 light:text-slate-500">
+                                {mapScopeEnabled && 'In current map view • '}
+                                {mediaTypeFilter !== 'all' && `${mediaTypeFilter === 'image' ? 'Photos' : 'Videos'} • `}
+                                {locationFilter === 'geotagged' && 'Map-ready only • '}
+                                {sortOrder === 'captured' && 'Captured timeline • '}
+                                {searchQuery.trim().length > 0 && `Search: “${searchQuery.trim()}” • `}
+                                {`Showing ${countLabel}`}
+                            </p>
                         )}
                     </div>
-
-                    {filteredPhotos.length > 0 && (
-                        <div
-                            ref={scrollContainerRef}
-                            className="max-h-[70vh] overflow-y-auto overflow-x-hidden scrollbar-thin"
-                        >
-                            <div className={cn(
-                                "grid",
-                                "grid-cols-2 sm:grid-cols-3 lg:grid-cols-4",
-                                "-m-2" // Negative margin to offset item padding
-                            )}>
-                                {filteredPhotos.map((photo, index) => (
-                                    <PhotoGridItem
-                                        key={photo.id}
-                                        photo={photo}
-                                        index={index}
-                                        editMode={editMode}
-                                        isDragOver={dragOverIndex === index}
-                                        isDragged={draggedIndex === index}
-                                        getMediaUrl={getMediaUrl}
-                                        onPhotoClick={handlePhotoClick}
-                                        onDragStart={handleDragStart}
-                                        onDragOver={handleDragOver}
-                                        onDragLeave={handleDragLeave}
-                                        onDrop={handleDrop}
-                                        onDragEnd={handleDragEnd}
-                                        onEditPhoto={handleEditPhoto}
-                                    />
-                                ))}
-                            </div>
-                        </div>
+                    {editMode && filteredPhotos.length > 1 && (
+                        <span className="text-[11px] text-white/40 light:text-slate-400">
+                            Drag to reorder
+                        </span>
                     )}
                 </div>
-            )}
+
+                {filteredPhotos.length > 0 && (
+                    <div
+                        ref={scrollContainerRef}
+                        className="max-h-[70vh] overflow-y-auto overflow-x-hidden scrollbar-thin"
+                    >
+                        <div className={cn(
+                            "grid",
+                            "grid-cols-2 sm:grid-cols-3 lg:grid-cols-4",
+                            "-m-2" // Negative margin to offset item padding
+                        )}>
+                            {filteredPhotos.map((photo, index) => (
+                                <PhotoGridItem
+                                    key={photo.id}
+                                    photo={photo}
+                                    index={index}
+                                    editMode={editMode}
+                                    isDragOver={dragOverIndex === index}
+                                    isDragged={draggedIndex === index}
+                                    getMediaUrl={getMediaUrl}
+                                    onPhotoClick={handlePhotoClick}
+                                    onDragStart={handleDragStart}
+                                    onDragOver={handleDragOver}
+                                    onDragLeave={handleDragLeave}
+                                    onDrop={handleDrop}
+                                    onDragEnd={handleDragEnd}
+                                    onEditPhoto={handleEditPhoto}
+                                />
+                            ))}
+                        </div>
+                    </div>
+                )}
+            </div>
 
             {/* Empty state for filtered views */}
             {photos.length > 0 && filteredPhotos.length === 0 && (
@@ -761,6 +831,19 @@ export function PhotosTab({ trekData, isMobile, editMode = false, onViewPhotoOnM
                             : 'Adjust the filters or add new uploads to fill this space.'
                         }
                     </p>
+                    {hasNonDefaultView && (
+                        <button
+                            type="button"
+                            onClick={resetView}
+                            className={cn(
+                                "mt-4 inline-flex items-center rounded-lg px-3 py-2 text-xs font-medium transition-all",
+                                "border border-white/10 bg-white/[0.03] text-white/70 hover:bg-white/[0.06] hover:text-white/90",
+                                "light:border-black/10 light:bg-black/[0.02] light:text-slate-700 light:hover:bg-black/[0.05] light:hover:text-slate-900"
+                            )}
+                        >
+                            Clear filters
+                        </button>
+                    )}
                 </div>
             )}
 

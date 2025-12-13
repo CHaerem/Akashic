@@ -41,6 +41,7 @@ interface BottomSheetContentProps {
     editMode?: boolean;
     isMobile?: boolean;
     mapViewportBounds?: mapboxgl.LngLatBoundsLike | null;
+    mapViewportPhotoIds?: string[] | null;
 }
 
 // Mountain peak icon
@@ -78,6 +79,7 @@ export function BottomSheetContent({
     editMode = false,
     isMobile = false,
     mapViewportBounds,
+    mapViewportPhotoIds,
 }: BottomSheetContentProps) {
     // Globe view with trek selected: Journey overview (pre-explore)
     if (view === 'globe' && selectedTrek) {
@@ -120,6 +122,7 @@ export function BottomSheetContent({
                     editMode={editMode}
                     isMobile={isMobile}
                     mapViewportBounds={mapViewportBounds}
+                    mapViewportPhotoIds={mapViewportPhotoIds}
                 />
             );
     }
@@ -251,6 +254,7 @@ interface TrekViewContentProps {
     editMode: boolean;
     isMobile: boolean;
     mapViewportBounds?: mapboxgl.LngLatBoundsLike | null;
+    mapViewportPhotoIds?: string[] | null;
 }
 
 function TrekViewContent({
@@ -267,6 +271,7 @@ function TrekViewContent({
     editMode,
     isMobile,
     mapViewportBounds,
+    mapViewportPhotoIds,
 }: TrekViewContentProps) {
     const [showRouteEditor, setShowRouteEditor] = useState(false);
     const { getPhotosForDay } = usePhotoDay(trekData, photos);
@@ -341,6 +346,7 @@ function TrekViewContent({
                         editMode={editMode}
                         onViewPhotoOnMap={onViewPhotoOnMap}
                         mapViewportBounds={mapViewportBounds}
+                        mapViewportPhotoIds={mapViewportPhotoIds}
                     />
                 </ErrorBoundary>
             )}

@@ -283,6 +283,30 @@ describe('PhotosTab', () => {
         });
     });
 
+    it('prefers explicit map-visible photo IDs when provided', async () => {
+        const user = userEvent.setup();
+
+        render(
+            <PhotosTab
+                trekData={mockTrekData}
+                isMobile={false}
+                mapViewportBounds={[[0, 0], [10, 10]]}
+                mapViewportPhotoIds={['photo-1', 'photo-2']}
+            />
+        );
+
+        await waitFor(() => {
+            expect(screen.getByText(/Journey Media/)).toBeInTheDocument();
+        });
+
+        await user.click(screen.getByRole('button', { name: /Follow map view/ }));
+
+        await waitFor(() => {
+            expect(screen.getAllByRole('button', { name: /Photo \d/ })).toHaveLength(2);
+            expect(screen.queryByRole('button', { name: /Photo 3/ })).not.toBeInTheDocument();
+        });
+    });
+
     describe('video support', () => {
         const mockMediaWithVideos: Photo[] = [
             {
