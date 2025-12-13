@@ -106,21 +106,22 @@ export function BottomSheetContent({
     // Trek view with camp selected: Content based on active mode
     if (view === 'trek' && trekData) {
         return (
-            <TrekViewContent
-                activeMode={activeMode}
-                trekData={trekData}
-                selectedCamp={selectedCamp}
-                extendedStats={extendedStats}
-                elevationProfile={elevationProfile}
-                photos={photos}
-                getMediaUrl={getMediaUrl}
-                onCampSelect={onCampSelect}
-                onViewPhotoOnMap={onViewPhotoOnMap}
-                onOpenDayGallery={onOpenDayGallery}
-                editMode={editMode}
-                isMobile={isMobile}
-            />
-        );
+                <TrekViewContent
+                    activeMode={activeMode}
+                    trekData={trekData}
+                    selectedCamp={selectedCamp}
+                    extendedStats={extendedStats}
+                    elevationProfile={elevationProfile}
+                    photos={photos}
+                    getMediaUrl={getMediaUrl}
+                    onCampSelect={onCampSelect}
+                    onViewPhotoOnMap={onViewPhotoOnMap}
+                    onOpenDayGallery={onOpenDayGallery}
+                    editMode={editMode}
+                    isMobile={isMobile}
+                    mapViewportBounds={mapViewportBounds}
+                />
+            );
     }
 
     // No content to show
@@ -249,6 +250,7 @@ interface TrekViewContentProps {
     onOpenDayGallery: () => void;
     editMode: boolean;
     isMobile: boolean;
+    mapViewportBounds?: mapboxgl.LngLatBoundsLike | null;
 }
 
 function TrekViewContent({
@@ -264,6 +266,7 @@ function TrekViewContent({
     onOpenDayGallery,
     editMode,
     isMobile,
+    mapViewportBounds,
 }: TrekViewContentProps) {
     const [showRouteEditor, setShowRouteEditor] = useState(false);
     const { getPhotosForDay } = usePhotoDay(trekData, photos);
