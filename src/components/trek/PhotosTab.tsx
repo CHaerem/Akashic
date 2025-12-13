@@ -446,6 +446,9 @@ export function PhotosTab({ trekData, isMobile, editMode = false, onViewPhotoOnM
         || sortOrder === 'captured'
         || mapScopeEnabled;
 
+    const canShowFilters = !loading && !tokenLoading;
+    const hasPhotos = photos.length > 0;
+
     if (loading || tokenLoading) {
         return (
             <div className="space-y-4">
@@ -482,7 +485,7 @@ export function PhotosTab({ trekData, isMobile, editMode = false, onViewPhotoOnM
             )}
 
             {/* Day filter tabs and media filters */}
-            {photos.length > 0 && (
+            {canShowFilters && (
                 <div className="mb-5 space-y-3">
                     {trekData.camps.length > 1 && (
                         <div className="flex gap-1.5 overflow-x-auto pb-2 scrollbar-hide">
@@ -606,27 +609,26 @@ export function PhotosTab({ trekData, isMobile, editMode = false, onViewPhotoOnM
                             </button>
                         </div>
 
-                        {mapViewportBounds && (
-                            <>
-                                <div className="h-6 w-px bg-white/10 light:bg-black/10" />
-                                <div className="flex items-center gap-1 text-[11px] uppercase tracking-[0.08em] text-white/50 light:text-slate-600">
-                                    Map
-                                </div>
-                                <button
-                                    type="button"
-                                    onClick={() => setMapScopeEnabled(prev => !prev)}
-                                    aria-pressed={mapScopeEnabled}
-                                    className={cn(
-                                        "px-2.5 py-1 rounded-full text-xs font-medium transition-all flex items-center gap-1",
-                                        "border border-white/10 bg-white/[0.02] text-white/65 light:border-black/10 light:text-slate-600",
-                                        mapScopeEnabled && "border-white/30 bg-white/10 text-white/90 shadow-[0_10px_30px_-18px_rgba(96,165,250,0.8)]"
-                                    )}
-                                >
-                                    <span className="inline-flex h-2 w-2 rounded-full bg-blue-300/70" aria-hidden />
-                                    Follow map view
-                                </button>
-                            </>
-                        )}
+                        <div className="h-6 w-px bg-white/10 light:bg-black/10" />
+
+                        <div className="flex items-center gap-1 text-[11px] uppercase tracking-[0.08em] text-white/50 light:text-slate-600">
+                            Map
+                        </div>
+                        <button
+                            type="button"
+                            disabled={!mapViewportBounds}
+                            onClick={() => mapViewportBounds && setMapScopeEnabled(prev => !prev)}
+                            aria-pressed={mapScopeEnabled}
+                            className={cn(
+                                "px-2.5 py-1 rounded-full text-xs font-medium transition-all flex items-center gap-1",
+                                "border border-white/10 bg-white/[0.02] text-white/65 light:border-black/10 light:text-slate-600",
+                                mapScopeEnabled && "border-white/30 bg-white/10 text-white/90 shadow-[0_10px_30px_-18px_rgba(96,165,250,0.8)]",
+                                !mapViewportBounds && "opacity-40 cursor-not-allowed"
+                            )}
+                        >
+                            <span className="inline-flex h-2 w-2 rounded-full bg-blue-300/70" aria-hidden />
+                            {mapViewportBounds ? 'Follow map view' : 'Open map to enable'}
+                        </button>
 
                         <div className="h-6 w-px bg-white/10 light:bg-black/10" />
 
@@ -676,8 +678,7 @@ export function PhotosTab({ trekData, isMobile, editMode = false, onViewPhotoOnM
                 </div>
             )}
 
-            {/* Photo grid - simple CSS grid with proper gaps */}
-            {filteredPhotos.length > 0 && (
+            {(hasPhotos || hasActiveFilters) && (
                 <div ref={gridContainerRef}>
                     <div className="flex justify-between items-center mb-3">
                         <div>
@@ -689,7 +690,7 @@ export function PhotosTab({ trekData, isMobile, editMode = false, onViewPhotoOnM
                                         : `Day ${dayFilter} Media (${countLabel})`
                                 }
                             </h3>
-                            {hasActiveFilters && (
+                            {(hasActiveFilters || filteredPhotos.length === 0) && (
                                 <p className="m-0 mt-1 text-[11px] text-white/50 light:text-slate-500">
                                     {mapScopeEnabled && 'In current map view • '}
                                     {mediaTypeFilter !== 'all' && `${mediaTypeFilter === 'image' ? 'Photos' : 'Videos'} • `}
@@ -707,36 +708,37 @@ export function PhotosTab({ trekData, isMobile, editMode = false, onViewPhotoOnM
                         )}
                     </div>
 
-                    {/* Simple grid with padding-based spacing for iOS Safari compatibility */}
-                    <div
-                        ref={scrollContainerRef}
-                        className="max-h-[70vh] overflow-y-auto overflow-x-hidden scrollbar-thin"
-                    >
-                        <div className={cn(
-                            "grid",
-                            "grid-cols-2 sm:grid-cols-3 lg:grid-cols-4",
-                            "-m-2" // Negative margin to offset item padding
-                        )}>
-                            {filteredPhotos.map((photo, index) => (
-                                <PhotoGridItem
-                                    key={photo.id}
-                                    photo={photo}
-                                    index={index}
-                                    editMode={editMode}
-                                    isDragOver={dragOverIndex === index}
-                                    isDragged={draggedIndex === index}
-                                    getMediaUrl={getMediaUrl}
-                                    onPhotoClick={handlePhotoClick}
-                                    onDragStart={handleDragStart}
-                                    onDragOver={handleDragOver}
-                                    onDragLeave={handleDragLeave}
-                                    onDrop={handleDrop}
-                                    onDragEnd={handleDragEnd}
-                                    onEditPhoto={handleEditPhoto}
-                                />
-                            ))}
+                    {filteredPhotos.length > 0 && (
+                        <div
+                            ref={scrollContainerRef}
+                            className="max-h-[70vh] overflow-y-auto overflow-x-hidden scrollbar-thin"
+                        >
+                            <div className={cn(
+                                "grid",
+                                "grid-cols-2 sm:grid-cols-3 lg:grid-cols-4",
+                                "-m-2" // Negative margin to offset item padding
+                            )}>
+                                {filteredPhotos.map((photo, index) => (
+                                    <PhotoGridItem
+                                        key={photo.id}
+                                        photo={photo}
+                                        index={index}
+                                        editMode={editMode}
+                                        isDragOver={dragOverIndex === index}
+                                        isDragged={draggedIndex === index}
+                                        getMediaUrl={getMediaUrl}
+                                        onPhotoClick={handlePhotoClick}
+                                        onDragStart={handleDragStart}
+                                        onDragOver={handleDragOver}
+                                        onDragLeave={handleDragLeave}
+                                        onDrop={handleDrop}
+                                        onDragEnd={handleDragEnd}
+                                        onEditPhoto={handleEditPhoto}
+                                    />
+                                ))}
+                            </div>
                         </div>
-                    </div>
+                    )}
                 </div>
             )}
 
