@@ -1606,13 +1606,12 @@ export function useMapbox({ containerRef, onTrekSelect, onPhotoClick, onRouteCli
             const nextCoord = routeCoords[nextIdx];
             const bearing = calculateBearing(coord[1], coord[0], nextCoord[1], nextCoord[0]);
 
-            map.easeTo({
+            // Use jumpTo for instant updates - no animation queue buildup
+            map.jumpTo({
                 center: [coord[0], coord[1]],
                 zoom: 14,
                 pitch: 60,
-                bearing: bearing,
-                duration: 50,
-                easing: (t) => t
+                bearing: bearing
             });
 
             // Track progress in ref (no re-render)
