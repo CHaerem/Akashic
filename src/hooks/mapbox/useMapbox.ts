@@ -46,6 +46,7 @@ export function useMapbox({ containerRef, onTrekSelect, onPhotoClick, onRouteCli
     const photoMarkersRef = useRef<Map<string, mapboxgl.Marker>>(new Map());
     const campMarkersRef = useRef<Map<string, mapboxgl.Marker>>(new Map());
     const selectedTrekRef = useRef<string | null>(null);
+    const pendingHighlightCampIdRef = useRef<string | null>(null); // Track pending highlight to prevent stale updates on rapid day switching
     const playbackAnimationRef = useRef<number | null>(null);
     const playbackCallbackRef = useRef<((camp: Camp) => void) | null>(null);
     // Track if we're in globe view mode (for auto-recentering)
@@ -933,6 +934,9 @@ export function useMapbox({ containerRef, onTrekSelect, onPhotoClick, onRouteCli
 
         isGlobeViewRef.current = false;
         selectedTrekRef.current = selectedTrek.id;
+        // Track which camp we're highlighting to prevent stale updates on rapid day switching
+        const currentCampId = selectedCamp?.id ?? null;
+        pendingHighlightCampIdRef.current = currentCampId;
 
         const trekData = trekDataMapRef.current[selectedTrek.id];
         const trekConfig = treksRef.current.find(t => t.id === selectedTrek.id);
@@ -1027,7 +1031,10 @@ export function useMapbox({ containerRef, onTrekSelect, onPhotoClick, onRouteCli
                             essential: true
                         });
 
-                        highlightSegment(trekData, selectedCamp);
+                        // Only highlight if this is still the current selection (prevents stale updates on rapid switching)
+                        if (pendingHighlightCampIdRef.current === currentCampId) {
+                            highlightSegment(trekData, selectedCamp);
+                        }
                         return;
                     }
                 }
@@ -1047,7 +1054,10 @@ export function useMapbox({ containerRef, onTrekSelect, onPhotoClick, onRouteCli
                     easing: (t) => 1 - Math.pow(1 - t, 3)
                 });
 
-                highlightSegment(trekData, selectedCamp);
+                // Only highlight if this is still the current selection (prevents stale updates on rapid switching)
+                if (pendingHighlightCampIdRef.current === currentCampId) {
+                    highlightSegment(trekData, selectedCamp);
+                }
             } else {
                 const coordinates = trekData.route.coordinates;
                 const sampleRate = coordinates.length > 500 ? Math.ceil(coordinates.length / 100) : 1;

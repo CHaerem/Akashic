@@ -243,6 +243,7 @@ export function BottomSheet({
                             swipeDirection={swipeDirection}
                             onPrevDay={goToPrevDay}
                             onNextDay={goToNextDay}
+                            onDaySelect={onDaySelect}
                             onDayTap={handleDayTap}
                             isMobile={isMobile}
                         />
@@ -562,6 +563,7 @@ interface DayNavigationHeaderProps {
     swipeDirection: 'left' | 'right' | null;
     onPrevDay: (e?: React.MouseEvent) => void;
     onNextDay: (e?: React.MouseEvent) => void;
+    onDaySelect: (dayNumber: number) => void;
     onDayTap: () => void;
     isMobile: boolean;
 }
@@ -573,6 +575,7 @@ function DayNavigationHeader({
     swipeDirection,
     onPrevDay,
     onNextDay,
+    onDaySelect,
     onDayTap,
     isMobile,
 }: DayNavigationHeaderProps) {
@@ -592,6 +595,7 @@ function DayNavigationHeader({
     };
 
     return (
+        <>
         <motion.div
             drag="x"
             dragConstraints={{ left: 0, right: 0 }}
@@ -660,7 +664,7 @@ function DayNavigationHeader({
                         borderRadius: 6,
                     }}
                 >
-                    Day {currentDay}
+                    {currentDay}/{totalDays}
                 </span>
                 <span
                     style={{
@@ -700,5 +704,40 @@ function DayNavigationHeader({
                 <ChevronIcon direction="right" size={16} />
             </motion.button>
         </motion.div>
+
+        {/* Day indicator dots - tappable for direct navigation */}
+        {totalDays <= 10 && (
+            <div
+                style={{
+                    display: 'flex',
+                    gap: 4,
+                    justifyContent: 'center',
+                    paddingTop: 8,
+                }}
+            >
+                {Array.from({ length: totalDays }, (_, i) => i + 1).map((day) => (
+                    <motion.button
+                        key={day}
+                        onClick={() => onDaySelect(day)}
+                        whileHover={{ scale: 1.3 }}
+                        whileTap={{ scale: 0.9 }}
+                        style={{
+                            width: day === currentDay ? 10 : 6,
+                            height: day === currentDay ? 10 : 6,
+                            borderRadius: '50%',
+                            background: day === currentDay
+                                ? colors.accent.primary
+                                : 'rgba(255, 255, 255, 0.4)',
+                            border: 'none',
+                            padding: 0,
+                            cursor: 'pointer',
+                            transition: 'all 0.2s ease',
+                        }}
+                        aria-label={`Go to day ${day}`}
+                    />
+                ))}
+            </div>
+        )}
+        </>
     );
 }

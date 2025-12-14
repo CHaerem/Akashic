@@ -38,6 +38,14 @@ const CameraIcon = ({ size = 16 }: { size?: number }) => (
     </svg>
 );
 
+const GlobeIcon = ({ size = 16 }: { size?: number }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="12" cy="12" r="10"/>
+        <path d="M2 12h20"/>
+        <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+    </svg>
+);
+
 interface JourneySheetProps {
     trekData: TrekData;
     extendedStats: ExtendedStats | null;
@@ -49,6 +57,7 @@ interface JourneySheetProps {
     onDayChange: (dayNumber: number) => void;
     onPhotoClick: (photo: Photo) => void;
     onJourneyUpdate: () => void;
+    onOverview?: () => void;
     isMobile: boolean;
 }
 
@@ -59,6 +68,7 @@ export const JourneySheet = memo(function JourneySheet({
     selectedCamp,
     onDayChange,
     onPhotoClick,
+    onOverview,
     isMobile,
 }: JourneySheetProps) {
     const [showCard, setShowCard] = useState(false);
@@ -355,6 +365,31 @@ export const JourneySheet = memo(function JourneySheet({
                     <ChevronLeft size={18} />
                 </motion.button>
 
+                {/* Overview button */}
+                {onOverview && (
+                    <motion.button
+                        onClick={(e) => { e.stopPropagation(); onOverview(); }}
+                        whileHover={{ scale: 1.1, backgroundColor: 'rgba(255, 255, 255, 0.1)' }}
+                        whileTap={{ scale: 0.9 }}
+                        style={{
+                            width: 32,
+                            height: 32,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            background: 'transparent',
+                            border: 'none',
+                            borderRadius: radius.md,
+                            cursor: 'pointer',
+                            color: colors.text.secondary,
+                        }}
+                        aria-label="Overview"
+                        title="View full trek"
+                    >
+                        <GlobeIcon size={16} />
+                    </motion.button>
+                )}
+
                 {/* Day info */}
                 <motion.div
                     key={currentDay}
@@ -364,34 +399,30 @@ export const JourneySheet = memo(function JourneySheet({
                     style={{
                         display: 'flex',
                         alignItems: 'center',
-                        gap: 10,
+                        gap: 8,
                         padding: '0 8px',
-                        minWidth: 160,
+                        minWidth: isMobile ? 140 : 170,
                         justifyContent: 'center',
                     }}
                 >
                     <span style={{
-                        fontSize: 12,
+                        fontSize: 11,
                         fontWeight: 600,
                         color: colors.accent.primary,
-                        textTransform: 'uppercase',
-                        letterSpacing: '0.05em',
+                        background: 'rgba(96, 165, 250, 0.15)',
+                        padding: '3px 8px',
+                        borderRadius: 6,
                     }}>
-                        Day {currentDay}
+                        {currentDay}/{totalDays}
                     </span>
                     <span style={{
-                        width: 1,
-                        height: 14,
-                        background: colors.glass.borderSubtle,
-                    }} />
-                    <span style={{
-                        fontSize: 14,
+                        fontSize: isMobile ? 13 : 14,
                         fontWeight: 500,
                         color: colors.text.primary,
                         whiteSpace: 'nowrap',
                         overflow: 'hidden',
                         textOverflow: 'ellipsis',
-                        maxWidth: 120,
+                        maxWidth: isMobile ? 100 : 130,
                     }}>
                         {currentCamp?.name ?? 'Start'}
                     </span>
@@ -421,24 +452,35 @@ export const JourneySheet = memo(function JourneySheet({
                 </motion.button>
             </motion.div>
 
-            {/* Day indicator dots */}
+            {/* Day indicator dots - tappable for direct navigation */}
             <div style={{
                 display: 'flex',
-                gap: 6,
-                pointerEvents: 'none',
+                gap: 4,
+                pointerEvents: 'auto',
+                padding: '8px 12px',
+                background: 'rgba(0, 0, 0, 0.2)',
+                borderRadius: radius.pill,
+                backdropFilter: 'blur(8px)',
             }}>
                 {Array.from({ length: totalDays }, (_, i) => i + 1).map((day) => (
-                    <div
+                    <motion.button
                         key={day}
+                        onClick={() => onDayChange(day)}
+                        whileHover={{ scale: 1.3 }}
+                        whileTap={{ scale: 0.9 }}
                         style={{
-                            width: day === currentDay ? 8 : 5,
-                            height: day === currentDay ? 8 : 5,
+                            width: day === currentDay ? 10 : 6,
+                            height: day === currentDay ? 10 : 6,
                             borderRadius: '50%',
                             background: day === currentDay
-                                ? colors.text.primary
-                                : 'rgba(255, 255, 255, 0.3)',
+                                ? colors.accent.primary
+                                : 'rgba(255, 255, 255, 0.4)',
+                            border: 'none',
+                            padding: 0,
+                            cursor: 'pointer',
                             transition: 'all 0.2s ease',
                         }}
+                        aria-label={`Go to day ${day}`}
                     />
                 ))}
             </div>
