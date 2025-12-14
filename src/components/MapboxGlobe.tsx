@@ -2,7 +2,7 @@
  * Mapbox Globe component with 3D terrain visualization
  */
 
-import { useRef, useEffect, useCallback, useState } from 'react';
+import { useRef, useEffect, useCallback, useState, useMemo } from 'react';
 import type mapboxgl from 'mapbox-gl';
 import { useMapbox } from '../hooks/useMapbox';
 import { useJourneys } from '../contexts/JourneysContext';
@@ -338,9 +338,22 @@ export function MapboxGlobe({ selectedTrek, selectedCamp, onSelectTrek, view, ph
         };
     }, [playbackRef, startPlayback, stopPlayback]);
 
-    // Notify parent of playback state changes
+    // Notify parent of playback state changes - only for meaningful changes
+    // We track isPlaying and currentCampIndex, NOT progress (which updates every ~50ms)
+    const prevPlaybackRef = useRef<{ isPlaying: boolean; currentCampIndex: number }>({
+        isPlaying: false,
+        currentCampIndex: 0
+    });
+
     useEffect(() => {
-        if (onPlaybackStateChange) {
+        if (!onPlaybackStateChange) return;
+
+        const prev = prevPlaybackRef.current;
+        const { isPlaying, currentCampIndex } = playbackState;
+
+        // Only notify on meaningful changes (not progress updates)
+        if (prev.isPlaying !== isPlaying || prev.currentCampIndex !== currentCampIndex) {
+            prevPlaybackRef.current = { isPlaying, currentCampIndex };
             onPlaybackStateChange(playbackState);
         }
     }, [playbackState, onPlaybackStateChange]);
