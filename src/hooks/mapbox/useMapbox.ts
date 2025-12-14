@@ -1557,51 +1557,23 @@ export function useMapbox({ containerRef, onTrekSelect, onPhotoClick, onRouteCli
         });
     }, []);
 
-    // Start playback - animate through the journey
+    // Start playback - smooth camp-to-camp tour using native Mapbox flyTo
+    // This creates a cinematic "tour" experience, flying smoothly between camps
     const startPlayback = useCallback((trekData: TrekData, onCampReached?: (camp: Camp) => void) => {
         const map = mapRef.current;
-        if (!map || !mapReady || !trekData.route?.coordinates) return;
+        if (!map || !mapReady) return;
 
         stopPlayback();
 
         const camps = trekData.camps;
-        const routeCoords = trekData.route.coordinates;
-        const totalPoints = routeCoords.length;
+        if (camps.length === 0) return;
 
         playbackCallbackRef.current = onCampReached || null;
+        const totalCamps = camps.length;
 
-        // Pre-calculate camp positions on route
-        const campIndices: number[] = camps.map(camp => {
-            let minDist = Infinity;
-            let nearestIdx = 0;
-            for (let i = 0; i < routeCoords.length; i++) {
-                const c = routeCoords[i];
-                const d = getDistanceFromLatLonInKm(camp.coordinates[1], camp.coordinates[0], c[1], c[0]);
-                if (d < minDist) {
-                    minDist = d;
-                    nearestIdx = i;
-                }
-            }
-            return nearestIdx;
-        }).sort((a, b) => a - b);
-
-        // Sample route points for smoother playback (every Nth point)
-        const sampleRate = Math.max(1, Math.floor(totalPoints / 200)); // ~200 keyframes max
-        const sampledCoords: Array<{ coord: number[]; index: number }> = [];
-        for (let i = 0; i < totalPoints; i += sampleRate) {
-            sampledCoords.push({ coord: routeCoords[i], index: i });
-        }
-        // Always include last point
-        if (sampledCoords[sampledCoords.length - 1].index !== totalPoints - 1) {
-            sampledCoords.push({ coord: routeCoords[totalPoints - 1], index: totalPoints - 1 });
-        }
-
-        let frameIndex = 0;
-        let lastCampIndex = -1;
-
-        // Timing: 150ms per frame, smooth easing between keyframes
-        const FRAME_INTERVAL = 150;
-        const totalFrames = sampledCoords.length;
+        // Timing configuration
+        const FLY_DURATION = 3500; // 3.5 seconds flight between camps
+        const PAUSE_DURATION = 1200; // 1.2 second pause at each camp
 
         playbackProgressRef.current = 0;
         setPlaybackState({
@@ -1610,72 +1582,70 @@ export function useMapbox({ containerRef, onTrekSelect, onPhotoClick, onRouteCli
             currentCampIndex: 0
         });
 
-        // Initial camera position
-        const firstCoord = sampledCoords[0].coord;
-        map.easeTo({
-            center: [firstCoord[0], firstCoord[1]],
-            zoom: 14,
-            pitch: 60,
-            duration: 1000
-        });
+        // Recursive function to fly through camps
+        const flyToCamp = (campIndex: number) => {
+            if (campIndex >= totalCamps) {
+                // Tour complete
+                playbackProgressRef.current = 100;
+                setPlaybackState({
+                    isPlaying: false,
+                    progress: 100,
+                    currentCampIndex: totalCamps - 1
+                });
+                playbackAnimationRef.current = null;
+                return;
+            }
 
-        // Start playback after initial positioning
-        const startPlaybackTimer = setTimeout(() => {
-            const intervalId = setInterval(() => {
-                frameIndex++;
+            const camp = camps[campIndex];
+            const nextCamp = camps[Math.min(campIndex + 1, totalCamps - 1)];
 
-                if (frameIndex >= totalFrames) {
-                    clearInterval(intervalId);
-                    playbackProgressRef.current = 100;
-                    setPlaybackState({
-                        isPlaying: false,
-                        progress: 100,
-                        currentCampIndex: camps.length - 1
-                    });
-                    playbackAnimationRef.current = null;
-                    return;
+            // Calculate bearing towards next camp
+            const bearing = campIndex < totalCamps - 1
+                ? calculateBearing(
+                    camp.coordinates[1], camp.coordinates[0],
+                    nextCamp.coordinates[1], nextCamp.coordinates[0]
+                  )
+                : map.getBearing();
+
+            // Smooth cinematic flight to camp
+            map.flyTo({
+                center: camp.coordinates as [number, number],
+                zoom: 15,
+                pitch: 60,
+                bearing: bearing,
+                duration: campIndex === 0 ? 2000 : FLY_DURATION, // Faster initial positioning
+                essential: true
+            });
+
+            // After flight completes, update state and schedule next
+            const flightDuration = campIndex === 0 ? 2000 : FLY_DURATION;
+            const reachTimeout = setTimeout(() => {
+                // Notify that we reached this camp
+                if (playbackCallbackRef.current) {
+                    playbackCallbackRef.current(camp);
                 }
 
-                const { coord, index: routeIndex } = sampledCoords[frameIndex];
-                const progress = frameIndex / (totalFrames - 1);
-
-                // Calculate bearing to next point
-                const nextFrame = Math.min(frameIndex + 1, totalFrames - 1);
-                const nextCoord = sampledCoords[nextFrame].coord;
-                const bearing = calculateBearing(coord[1], coord[0], nextCoord[1], nextCoord[0]);
-
-                // Smooth camera movement - duration matches interval
-                map.easeTo({
-                    center: [coord[0], coord[1]],
-                    bearing: bearing,
-                    duration: FRAME_INTERVAL,
-                    easing: (t) => t // Linear for consistent speed
+                const progress = ((campIndex + 1) / totalCamps) * 100;
+                playbackProgressRef.current = progress;
+                setPlaybackState({
+                    isPlaying: true,
+                    progress,
+                    currentCampIndex: campIndex
                 });
 
-                // Track progress
-                playbackProgressRef.current = progress * 100;
+                // Pause at camp, then continue
+                const pauseTimeout = setTimeout(() => {
+                    flyToCamp(campIndex + 1);
+                }, PAUSE_DURATION);
 
-                // Check if we reached a camp
-                const campReached = campIndices.findIndex(idx => routeIndex >= idx);
-                if (campReached > lastCampIndex && campReached < camps.length) {
-                    lastCampIndex = campReached;
-                    if (playbackCallbackRef.current) {
-                        playbackCallbackRef.current(camps[campReached]);
-                    }
-                    setPlaybackState({
-                        isPlaying: true,
-                        progress: progress * 100,
-                        currentCampIndex: lastCampIndex
-                    });
-                }
-            }, FRAME_INTERVAL);
+                playbackAnimationRef.current = pauseTimeout as unknown as number;
+            }, flightDuration);
 
-            // Store interval ID for cleanup (using a number as the ref value)
-            playbackAnimationRef.current = intervalId as unknown as number;
-        }, 1000);
+            playbackAnimationRef.current = reachTimeout as unknown as number;
+        };
 
-        // Store timeout for cleanup
-        playbackAnimationRef.current = startPlaybackTimer as unknown as number;
+        // Start the tour
+        flyToCamp(0);
     }, [mapReady, stopPlayback]);
 
     // Get current map center coordinates
