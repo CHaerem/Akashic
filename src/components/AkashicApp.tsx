@@ -6,8 +6,9 @@ import { useMedia } from '../hooks/useMedia';
 import { useJourneys } from '../contexts/JourneysContext';
 import { fetchPhotos, getJourneyIdBySlug } from '../lib/journeys';
 import { hasPendingShares } from '../lib/shareTarget';
-import type { Photo, Camp } from '../types/trek';
+import type { Photo, Camp, TrekData } from '../types/trek';
 import type mapboxgl from 'mapbox-gl';
+import type { PlaybackState } from '../hooks/mapbox/types';
 import { MapboxGlobe } from './MapboxGlobe';
 import { OfflineIndicator } from './OfflineIndicator';
 import { GlobeHint } from './home/GlobeHint';
@@ -34,6 +35,15 @@ export default function AkashicApp() {
     const [showShareTarget, setShowShareTarget] = useState(false);
     const flyToPhotoRef = useRef<((photo: Photo) => void) | null>(null);
     const recenterRef = useRef<(() => void) | null>(null);
+    const playbackRef = useRef<{
+        start: (trekData: TrekData, onCampReached?: (camp: Camp) => void) => void;
+        stop: () => void;
+    } | null>(null);
+    const [playbackState, setPlaybackState] = useState<PlaybackState>({
+        isPlaying: false,
+        progress: 0,
+        currentCampIndex: 0
+    });
     const { getMediaUrl } = useMedia();
     const { treks, refetch: refetchJourneys } = useJourneys();
     const stagingBranch = import.meta.env.VITE_STAGING_BRANCH;
@@ -184,6 +194,18 @@ export default function AkashicApp() {
         selectTrek(treks[nextIndex]);
     }, [currentJourneyIndex, treks, selectTrek]);
 
+    // Toggle playback - start or stop the journey animation
+    const togglePlayback = useCallback(() => {
+        if (playbackState.isPlaying) {
+            playbackRef.current?.stop();
+        } else if (trekData) {
+            playbackRef.current?.start(trekData, (camp) => {
+                // Update selected camp as playback progresses
+                handleCampSelect(camp);
+            });
+        }
+    }, [playbackState.isPlaying, trekData, handleCampSelect]);
+
     // Show bottom sheet when trek is selected (globe view) or in trek view
     const showSheet = (view === 'globe' && selectedTrek !== null) || view === 'trek';
 
@@ -213,7 +235,15 @@ export default function AkashicApp() {
             },
             visible: true,
         },
-    ], [handleBackToGlobe]);
+        {
+            id: 'play-journey',
+            icon: playbackState.isPlaying ? QuickActionIcons.pause : QuickActionIcons.play,
+            label: playbackState.isPlaying ? 'Stop playback' : 'Play journey',
+            onClick: togglePlayback,
+            visible: view === 'trek' && trekData !== null,
+            active: playbackState.isPlaying,
+        },
+    ], [handleBackToGlobe, playbackState.isPlaying, togglePlayback, view, trekData]);
 
     return (
         <ErrorBoundary>
@@ -233,6 +263,8 @@ export default function AkashicApp() {
                             getMediaUrl={getMediaUrl}
                             onViewportChange={setMapViewportBounds}
                             onViewportVisiblePhotoIdsChange={setMapViewportPhotoIds}
+                            playbackRef={playbackRef}
+                            onPlaybackStateChange={setPlaybackState}
                         />
                     </div>
 

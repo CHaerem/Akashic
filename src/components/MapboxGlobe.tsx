@@ -46,6 +46,9 @@ declare global {
     }
 }
 
+import type { PlaybackState } from '../hooks/mapbox/types';
+import type { TrekData } from '../types/trek';
+
 interface MapboxGlobeProps {
     selectedTrek: TrekConfig | null;
     selectedCamp: Camp | null;
@@ -59,6 +62,12 @@ interface MapboxGlobeProps {
     getMediaUrl?: (path: string) => string;
     onViewportChange?: (bounds: mapboxgl.LngLatBoundsLike) => void;
     onViewportVisiblePhotoIdsChange?: (photoIds: string[]) => void;
+    // Playback controls
+    playbackRef?: React.MutableRefObject<{
+        start: (trekData: TrekData, onCampReached?: (camp: Camp) => void) => void;
+        stop: () => void;
+    } | null>;
+    onPlaybackStateChange?: (state: PlaybackState) => void;
 }
 
 // Generate realistic starfield - seeded positions for consistency
@@ -148,7 +157,7 @@ const starfieldStyle: React.CSSProperties = {
     zIndex: 0
 };
 
-export function MapboxGlobe({ selectedTrek, selectedCamp, onSelectTrek, view, photos = [], onPhotoClick, flyToPhotoRef, recenterRef, onCampSelect, getMediaUrl, onViewportChange, onViewportVisiblePhotoIdsChange }: MapboxGlobeProps) {
+export function MapboxGlobe({ selectedTrek, selectedCamp, onSelectTrek, view, photos = [], onPhotoClick, flyToPhotoRef, recenterRef, onCampSelect, getMediaUrl, onViewportChange, onViewportVisiblePhotoIdsChange, playbackRef, onPlaybackStateChange }: MapboxGlobeProps) {
     const containerRef = useRef<HTMLDivElement>(null);
     const { treks, trekDataMap, loading: journeysLoading } = useJourneys();
     const [poiInfo, setPOIInfo] = useState<PointOfInterest | null>(null);
@@ -183,7 +192,7 @@ export function MapboxGlobe({ selectedTrek, selectedCamp, onSelectTrek, view, ph
         }
     }, [onCampSelect]);
 
-    const { map, mapReady, error, flyToGlobe, flyToTrek, updatePhotoMarkers, updateCampMarkers, updatePOIMarkers, flyToPhoto, flyToPOI, startRotation, stopRotation, isRotating, getMapCenter } = useMapbox({
+    const { map, mapReady, error, flyToGlobe, flyToTrek, updatePhotoMarkers, updateCampMarkers, updatePOIMarkers, flyToPhoto, flyToPOI, startRotation, stopRotation, isRotating, getMapCenter, startPlayback, stopPlayback, playbackState } = useMapbox({
         containerRef,
         onTrekSelect: onSelectTrek,
         onPhotoClick: handlePhotoClick,
@@ -313,6 +322,28 @@ export function MapboxGlobe({ selectedTrek, selectedCamp, onSelectTrek, view, ph
             }
         };
     }, [recenterRef, mapReady, view, selectedTrek, selectedCamp, treks, flyToTrek, flyToGlobe, onSelectTrek, stopRotation]);
+
+    // Expose playback controls to parent via ref
+    useEffect(() => {
+        if (playbackRef) {
+            playbackRef.current = {
+                start: startPlayback,
+                stop: stopPlayback
+            };
+        }
+        return () => {
+            if (playbackRef) {
+                playbackRef.current = null;
+            }
+        };
+    }, [playbackRef, startPlayback, stopPlayback]);
+
+    // Notify parent of playback state changes
+    useEffect(() => {
+        if (onPlaybackStateChange) {
+            onPlaybackStateChange(playbackState);
+        }
+    }, [playbackState, onPlaybackStateChange]);
 
     // Handle view transitions - camera movement
     useEffect(() => {
