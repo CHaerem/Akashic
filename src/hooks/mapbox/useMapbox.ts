@@ -62,6 +62,8 @@ export function useMapbox({ containerRef, onTrekSelect, onPhotoClick, onRouteCli
     const [mapReady, setMapReady] = useState(false);
     const [dataLayersReady, setDataLayersReady] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    // Playback state - use ref for progress to avoid re-renders on every frame
+    const playbackProgressRef = useRef(0);
     const [playbackState, setPlaybackState] = useState<PlaybackState>({
         isPlaying: false,
         progress: 0,
@@ -1586,6 +1588,7 @@ export function useMapbox({ containerRef, onTrekSelect, onPhotoClick, onRouteCli
         const daysCount = trekData.stats.duration || camps.length || 1;
         const duration = Math.max(daysCount * 3000, 5000);
 
+        playbackProgressRef.current = 0;
         setPlaybackState({
             isPlaying: true,
             progress: 0,
@@ -1612,23 +1615,28 @@ export function useMapbox({ containerRef, onTrekSelect, onPhotoClick, onRouteCli
                 easing: (t) => t
             });
 
+            // Track progress in ref (no re-render)
+            playbackProgressRef.current = progress * 100;
+
+            // Only update state when camp changes (avoids re-render every frame)
             const campReached = campIndices.findIndex(idx => currentIndex >= idx);
             if (campReached > lastCampIndex && campReached < camps.length) {
                 lastCampIndex = campReached;
                 if (playbackCallbackRef.current) {
                     playbackCallbackRef.current(camps[campReached]);
                 }
+                // Update state only when camp changes
+                setPlaybackState({
+                    isPlaying: true,
+                    progress: progress * 100,
+                    currentCampIndex: lastCampIndex
+                });
             }
-
-            setPlaybackState({
-                isPlaying: true,
-                progress: progress * 100,
-                currentCampIndex: lastCampIndex >= 0 ? lastCampIndex : 0
-            });
 
             if (progress < 1) {
                 playbackAnimationRef.current = requestAnimationFrame(animate);
             } else {
+                playbackProgressRef.current = 100;
                 setPlaybackState({
                     isPlaying: false,
                     progress: 100,
