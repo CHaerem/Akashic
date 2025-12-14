@@ -1,4 +1,4 @@
-import { useCallback, useState, useEffect, useMemo, useRef, useDeferredValue } from 'react';
+import { useCallback, useState, useEffect, useMemo, useRef, useDeferredValue, useReducer } from 'react';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import { useTrekData } from '../hooks/useTrekData';
 import { useIsMobile } from '../hooks/useMediaQuery';
@@ -34,6 +34,17 @@ export default function AkashicApp() {
     const [showShareTarget, setShowShareTarget] = useState(false);
     const flyToPhotoRef = useRef<((photo: Photo) => void) | null>(null);
     const recenterRef = useRef<(() => void) | null>(null);
+    const playbackRef = useRef<{
+        startPlayback: () => void;
+        stopPlayback: () => void;
+        isPlaying: boolean;
+        progress: number;
+        currentCampIndex: number;
+    } | null>(null);
+    // Force re-render when playback state changes
+    const [, forceUpdate] = useReducer(x => x + 1, 0);
+    // Show photo markers - default true for overview, false when day selected
+    const [showPhotoMarkers, setShowPhotoMarkers] = useState(true);
     const { getMediaUrl } = useMedia();
     const { treks, refetch: refetchJourneys } = useJourneys();
     const stagingBranch = import.meta.env.VITE_STAGING_BRANCH;
@@ -82,6 +93,38 @@ export default function AkashicApp() {
 
     // Day gallery state
     const [showDayGallery, setShowDayGallery] = useState(false);
+
+    // Auto-hide photo markers when a day is selected for better camp visibility
+    // Allow manual override via toggle
+    useEffect(() => {
+        if (view === 'trek') {
+            // Show photos in overview, hide when day selected (for cleaner camp view)
+            setShowPhotoMarkers(selectedCamp === null);
+        }
+    }, [view, selectedCamp]);
+
+    // Playback handlers
+    const handlePlayPause = useCallback(() => {
+        if (!playbackRef.current) return;
+        if (playbackRef.current.isPlaying) {
+            playbackRef.current.stopPlayback();
+        } else {
+            playbackRef.current.startPlayback();
+        }
+        // Force update to reflect playback state changes
+        setTimeout(forceUpdate, 50);
+    }, [forceUpdate]);
+
+    const handleTogglePhotos = useCallback(() => {
+        setShowPhotoMarkers(prev => !prev);
+    }, []);
+
+    // Poll playback state for UI updates during animation
+    useEffect(() => {
+        if (!playbackRef.current?.isPlaying) return;
+        const interval = setInterval(forceUpdate, 100);
+        return () => clearInterval(interval);
+    }, [playbackRef.current?.isPlaying, forceUpdate]);
 
     // Check for pending shared photos (from PWA share target)
     useEffect(() => {
@@ -233,6 +276,8 @@ export default function AkashicApp() {
                             getMediaUrl={getMediaUrl}
                             onViewportChange={setMapViewportBounds}
                             onViewportVisiblePhotoIdsChange={setMapViewportPhotoIds}
+                            showPhotoMarkers={showPhotoMarkers}
+                            playbackRef={playbackRef}
                         />
                     </div>
 
@@ -307,6 +352,12 @@ export default function AkashicApp() {
                         editMode={editMode}
                         onToggleEditMode={toggleEditMode}
                         isMobile={isMobile}
+                        isPlaying={playbackRef.current?.isPlaying ?? false}
+                        playbackProgress={playbackRef.current?.progress ?? 0}
+                        currentPlaybackDayIndex={playbackRef.current?.currentCampIndex ?? 0}
+                        onPlayPause={handlePlayPause}
+                        showPhotos={showPhotoMarkers}
+                        onTogglePhotos={handleTogglePhotos}
                     >
                         <BottomSheetContent
                             view={view}
@@ -347,7 +398,13 @@ export default function AkashicApp() {
                         onNextJourney={handleNextJourney}
                         totalJourneys={treks.length}
                         editMode={editMode}
-                            onToggleEditMode={toggleEditMode}
+                        onToggleEditMode={toggleEditMode}
+                        isPlaying={playbackRef.current?.isPlaying ?? false}
+                        playbackProgress={playbackRef.current?.progress ?? 0}
+                        currentPlaybackDayIndex={playbackRef.current?.currentCampIndex ?? 0}
+                        onPlayPause={handlePlayPause}
+                        showPhotos={showPhotoMarkers}
+                        onTogglePhotos={handleTogglePhotos}
                     >
                         <BottomSheetContent
                             view={view}

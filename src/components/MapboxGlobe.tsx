@@ -59,6 +59,16 @@ interface MapboxGlobeProps {
     getMediaUrl?: (path: string) => string;
     onViewportChange?: (bounds: mapboxgl.LngLatBoundsLike) => void;
     onViewportVisiblePhotoIdsChange?: (photoIds: string[]) => void;
+    /** Show photo markers on map (default: true in overview, false when day selected) */
+    showPhotoMarkers?: boolean;
+    /** Playback controls ref */
+    playbackRef?: React.MutableRefObject<{
+        startPlayback: () => void;
+        stopPlayback: () => void;
+        isPlaying: boolean;
+        progress: number;
+        currentCampIndex: number;
+    } | null>;
 }
 
 // Generate realistic starfield - seeded positions for consistency
@@ -148,7 +158,7 @@ const starfieldStyle: React.CSSProperties = {
     zIndex: 0
 };
 
-export function MapboxGlobe({ selectedTrek, selectedCamp, onSelectTrek, view, photos = [], onPhotoClick, flyToPhotoRef, recenterRef, onCampSelect, getMediaUrl, onViewportChange, onViewportVisiblePhotoIdsChange }: MapboxGlobeProps) {
+export function MapboxGlobe({ selectedTrek, selectedCamp, onSelectTrek, view, photos = [], onPhotoClick, flyToPhotoRef, recenterRef, onCampSelect, getMediaUrl, onViewportChange, onViewportVisiblePhotoIdsChange, showPhotoMarkers = true, playbackRef }: MapboxGlobeProps) {
     const containerRef = useRef<HTMLDivElement>(null);
     const { treks, trekDataMap, loading: journeysLoading } = useJourneys();
     const [poiInfo, setPOIInfo] = useState<PointOfInterest | null>(null);
@@ -183,7 +193,7 @@ export function MapboxGlobe({ selectedTrek, selectedCamp, onSelectTrek, view, ph
         }
     }, [onCampSelect]);
 
-    const { map, mapReady, error, flyToGlobe, flyToTrek, updatePhotoMarkers, updateCampMarkers, updatePOIMarkers, flyToPhoto, flyToPOI, startRotation, stopRotation, isRotating, getMapCenter } = useMapbox({
+    const { map, mapReady, error, flyToGlobe, flyToTrek, updatePhotoMarkers, updateCampMarkers, updatePOIMarkers, flyToPhoto, flyToPOI, startRotation, stopRotation, isRotating, getMapCenter, startPlayback, stopPlayback, playbackState } = useMapbox({
         containerRef,
         onTrekSelect: onSelectTrek,
         onPhotoClick: handlePhotoClick,
@@ -360,12 +370,17 @@ export function MapboxGlobe({ selectedTrek, selectedCamp, onSelectTrek, view, ph
         };
     }, [view, selectedTrek, mapReady, isRotating, startRotation, stopRotation]);
 
-    // Update photo markers when photos or selected camp changes
-    // Native Mapbox layers are GPU-accelerated - no delays needed
+    // Update photo markers when photos, camp, or visibility changes
+    // Hide photos when a day is selected to improve camp visibility
     useEffect(() => {
         if (!mapReady || view !== 'trek') return;
-        updatePhotoMarkers(photos, selectedCamp?.id || null);
-    }, [mapReady, view, photos, selectedCamp, updatePhotoMarkers]);
+        // Only show photo markers when explicitly enabled
+        if (showPhotoMarkers) {
+            updatePhotoMarkers(photos, selectedCamp?.id || null);
+        } else {
+            updatePhotoMarkers([], null);
+        }
+    }, [mapReady, view, photos, selectedCamp, showPhotoMarkers, updatePhotoMarkers]);
 
     // Hide photo markers when leaving trek view
     useEffect(() => {
@@ -374,6 +389,31 @@ export function MapboxGlobe({ selectedTrek, selectedCamp, onSelectTrek, view, ph
             updatePhotoMarkers([], null);
         }
     }, [mapReady, view, updatePhotoMarkers]);
+
+    // Expose playback controls via ref
+    useEffect(() => {
+        if (!playbackRef) return;
+
+        const trekData = selectedTrek ? trekDataMap[selectedTrek.id] : null;
+
+        playbackRef.current = {
+            startPlayback: () => {
+                if (trekData && onCampSelect) {
+                    startPlayback(trekData, onCampSelect);
+                }
+            },
+            stopPlayback,
+            isPlaying: playbackState.isPlaying,
+            progress: playbackState.progress,
+            currentCampIndex: playbackState.currentCampIndex
+        };
+
+        return () => {
+            if (playbackRef) {
+                playbackRef.current = null;
+            }
+        };
+    }, [playbackRef, selectedTrek, trekDataMap, onCampSelect, startPlayback, stopPlayback, playbackState]);
 
     // Update camp markers when trek or camp selection changes
     useEffect(() => {

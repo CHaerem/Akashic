@@ -4,6 +4,7 @@ import { colors, radius, transitions, effects } from '../../styles/liquidGlass';
 import type { Camp, TrekConfig } from '../../types/trek';
 import type { ContentMode } from '../../hooks/useTrekData';
 import { ChevronIcon } from '../icons';
+import { PlaybackControls } from '../nav/PlaybackControls';
 
 const MODE_LABELS: Record<Exclude<ContentMode, 'info'>, string> = {
     day: 'Day',
@@ -36,6 +37,13 @@ interface SidebarProps {
     // Edit mode
     editMode?: boolean;
     onToggleEditMode?: () => void;
+    // Playback controls
+    isPlaying?: boolean;
+    playbackProgress?: number;
+    currentPlaybackDayIndex?: number;
+    onPlayPause?: () => void;
+    showPhotos?: boolean;
+    onTogglePhotos?: () => void;
 }
 
 /**
@@ -63,6 +71,13 @@ export function Sidebar({
     // Edit mode
     editMode = false,
     onToggleEditMode,
+    // Playback controls
+    isPlaying = false,
+    playbackProgress = 0,
+    currentPlaybackDayIndex = 0,
+    onPlayPause,
+    showPhotos = true,
+    onTogglePhotos,
 }: SidebarProps) {
     const contentRef = useRef<HTMLDivElement>(null);
     const [swipeDirection, setSwipeDirection] = useState<'left' | 'right' | null>(null);
@@ -215,6 +230,12 @@ export function Sidebar({
                                 trekName={selectedTrek?.name ?? ''}
                                 totalDays={totalDays}
                                 onStart={onStart}
+                                isPlaying={isPlaying}
+                                playbackProgress={playbackProgress}
+                                currentPlaybackDayIndex={currentPlaybackDayIndex}
+                                onPlayPause={onPlayPause}
+                                showPhotos={showPhotos}
+                                onTogglePhotos={onTogglePhotos}
                             />
                         ) : view === 'trek' ? (
                             <DayNavigation
@@ -346,59 +367,93 @@ interface TrekOverviewNavigationProps {
     trekName: string;
     totalDays: number;
     onStart: () => void;
+    // Playback
+    isPlaying: boolean;
+    playbackProgress: number;
+    currentPlaybackDayIndex: number;
+    onPlayPause?: () => void;
+    showPhotos: boolean;
+    onTogglePhotos?: () => void;
 }
 
-function TrekOverviewNavigation({ trekName, totalDays, onStart }: TrekOverviewNavigationProps) {
+function TrekOverviewNavigation({
+    trekName,
+    totalDays,
+    onStart,
+    isPlaying,
+    playbackProgress,
+    currentPlaybackDayIndex,
+    onPlayPause,
+    showPhotos,
+    onTogglePhotos,
+}: TrekOverviewNavigationProps) {
     return (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%' }}>
-            <span
-                style={{
-                    fontSize: 11,
-                    fontWeight: 600,
-                    color: colors.accent.primary,
-                    background: 'rgba(96, 165, 250, 0.15)',
-                    padding: '4px 10px',
-                    borderRadius: 6,
-                    flexShrink: 0,
-                }}
-            >
-                {totalDays} days
-            </span>
-            <span
-                style={{
-                    color: colors.text.primary,
-                    fontSize: 15,
-                    fontWeight: 500,
-                    flex: 1,
-                    whiteSpace: 'nowrap',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                }}
-            >
-                {trekName}
-            </span>
-            <motion.button
-                onClick={onStart}
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 4,
-                    padding: '8px 14px',
-                    background: 'rgba(96, 165, 250, 0.15)',
-                    border: 'none',
-                    borderRadius: radius.md,
-                    cursor: 'pointer',
-                    color: colors.accent.primary,
-                    fontSize: 13,
-                    fontWeight: 600,
-                    flexShrink: 0,
-                }}
-            >
-                Start
-                <ChevronIcon direction="right" size={12} />
-            </motion.button>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12, width: '100%' }}>
+            {/* Title row */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span
+                    style={{
+                        fontSize: 11,
+                        fontWeight: 600,
+                        color: colors.accent.primary,
+                        background: 'rgba(96, 165, 250, 0.15)',
+                        padding: '4px 10px',
+                        borderRadius: 6,
+                        flexShrink: 0,
+                    }}
+                >
+                    {totalDays} days
+                </span>
+                <span
+                    style={{
+                        color: colors.text.primary,
+                        fontSize: 15,
+                        fontWeight: 500,
+                        flex: 1,
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                    }}
+                >
+                    {trekName}
+                </span>
+                <motion.button
+                    onClick={onStart}
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 4,
+                        padding: '8px 14px',
+                        background: 'rgba(96, 165, 250, 0.15)',
+                        border: 'none',
+                        borderRadius: radius.md,
+                        cursor: 'pointer',
+                        color: colors.accent.primary,
+                        fontSize: 13,
+                        fontWeight: 600,
+                        flexShrink: 0,
+                    }}
+                >
+                    Start
+                    <ChevronIcon direction="right" size={12} />
+                </motion.button>
+            </div>
+
+            {/* Playback controls */}
+            {onPlayPause && onTogglePhotos && (
+                <PlaybackControls
+                    isPlaying={isPlaying}
+                    progress={playbackProgress}
+                    onPlayPause={onPlayPause}
+                    showPhotos={showPhotos}
+                    onTogglePhotos={onTogglePhotos}
+                    isMobile={false}
+                    totalDays={totalDays}
+                    currentDayIndex={currentPlaybackDayIndex}
+                />
+            )}
         </div>
     );
 }
