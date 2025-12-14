@@ -96,7 +96,7 @@ function QuickActionButton({ icon, label, onClick, isMobile, active, subtle }: Q
         // Subtle inactive state - more transparent
         ...(isSubtleInactive && !isHovered ? {
             background: 'rgba(255, 255, 255, 0.03)',
-            borderColor: 'rgba(255, 255, 255, 0.05)',
+            border: '1px solid rgba(255, 255, 255, 0.05)',
             opacity: 0.6,
         } : {}),
         transition: `opacity ${transitions.normal}, background ${transitions.normal}, border-color ${transitions.normal}, transform ${transitions.fast}`,
@@ -104,7 +104,7 @@ function QuickActionButton({ icon, label, onClick, isMobile, active, subtle }: Q
 
     const activeStyle: CSSProperties = active ? {
         background: 'rgba(96, 165, 250, 0.25)',
-        borderColor: 'rgba(96, 165, 250, 0.4)',
+        border: '1px solid rgba(96, 165, 250, 0.4)',
         opacity: 1,
     } : {};
 
