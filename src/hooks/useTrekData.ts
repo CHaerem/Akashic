@@ -9,15 +9,17 @@ import type { TrekConfig, TrekData, Camp, ExtendedStats, ElevationProfile, ViewM
 
 /**
  * Parse URL parameters for deep linking
- * Supports: ?journey=kilimanjaro&day=3&view=trek
+ * Supports: ?journey=kilimanjaro&day=3
+ *
+ * When ?journey= is provided, automatically skips to trek view (no Start button)
+ * When ?day= is also provided, selects that specific day
  */
-function parseUrlParams(): { journeySlug?: string; day?: number; autoExplore?: boolean } {
+function parseUrlParams(): { journeySlug?: string; day?: number } {
     const params = new URLSearchParams(window.location.search);
     const journeySlug = params.get('journey') || undefined;
     const dayParam = params.get('day');
     const day = dayParam ? parseInt(dayParam, 10) : undefined;
-    const autoExplore = params.get('view') === 'trek' || params.has('day');
-    return { journeySlug, day: Number.isNaN(day) ? undefined : day, autoExplore };
+    return { journeySlug, day: Number.isNaN(day) ? undefined : day };
 }
 
 // Bottom sheet snap points
@@ -86,11 +88,12 @@ export function useTrekData(): UseTrekDataReturn {
     // Track if URL params have been processed
     const urlParamsProcessed = useRef(false);
 
-    // Auto-select journey from URL parameters (e.g., ?journey=kilimanjaro&day=3&view=trek)
+    // Auto-select journey from URL parameters (e.g., ?journey=kilimanjaro&day=3)
+    // When ?journey= is provided, automatically skip to trek view (no Start button)
     useEffect(() => {
         if (urlParamsProcessed.current || loading || treks.length === 0) return;
 
-        const { journeySlug, day, autoExplore } = parseUrlParams();
+        const { journeySlug, day } = parseUrlParams();
         if (!journeySlug) return;
 
         // Find trek by slug (case-insensitive partial match)
@@ -103,20 +106,18 @@ export function useTrekData(): UseTrekDataReturn {
             urlParamsProcessed.current = true;
             setSelectedTrek(trek);
 
-            // If autoExplore or day specified, go to trek view
-            if (autoExplore) {
-                startTransition(() => {
-                    setViewState('trek');
-                });
+            // Always go directly to trek view (skip "Start" button)
+            startTransition(() => {
+                setViewState('trek');
+            });
 
-                // Select specific day if provided
-                if (day !== undefined) {
-                    const trekData = trekDataMap[trek.id];
-                    if (trekData) {
-                        const camp = trekData.camps.find(c => c.dayNumber === day);
-                        if (camp) {
-                            setSelectedCamp(camp);
-                        }
+            // Select specific day if provided
+            if (day !== undefined) {
+                const trekData = trekDataMap[trek.id];
+                if (trekData) {
+                    const camp = trekData.camps.find(c => c.dayNumber === day);
+                    if (camp) {
+                        setSelectedCamp(camp);
                     }
                 }
             }
