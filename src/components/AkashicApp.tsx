@@ -201,10 +201,9 @@ export default function AkashicApp() {
         {
             id: 'back-to-globe',
             icon: QuickActionIcons.globe,
-            label: 'Back to World',
+            label: 'Back to globe',
             onClick: handleBackToGlobe,
             visible: true,
-            showLabel: true, // Show text label for clarity
         },
         {
             id: 'recenter',
