@@ -5,6 +5,7 @@ import { colors, radius, transitions } from '../../styles/liquidGlass';
 import type { Camp, TrekConfig } from '../../types/trek';
 import type { ContentMode } from '../../hooks/useTrekData';
 import { ChevronIcon } from '../icons';
+import { getCountryFlag } from '../../utils/countryFlags';
 
 // Snap points as vh percentages
 export const SNAP_POINTS = {
@@ -453,6 +454,7 @@ function GlobeHeader({ trek, onPrevJourney, onNextJourney, totalJourneys, isMobi
                         margin: 0,
                     }}
                 >
+                    <span style={{ marginRight: 6 }}>{getCountryFlag(trek.country)}</span>
                     {trek.country}
                 </p>
                 <h2
