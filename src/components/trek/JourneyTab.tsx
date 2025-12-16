@@ -106,19 +106,40 @@ const CampItem = memo(function CampItem({
                     {camp.elevation}m
                 </span>
             </div>
-            <div className="flex justify-between items-center">
+            <div className="flex justify-between items-center gap-3">
                 <p className={cn(
-                    "text-base m-0",
+                    "text-base m-0 flex-1",
                     isSelected
                         ? "text-white/95 light:text-slate-900 mb-3"
                         : "text-white/70 light:text-slate-600"
                 )}>
                     {camp.name}
                 </p>
+                {/* Photo preview thumbnail - shows first photo as teaser */}
                 {!isSelected && allPhotos.length > 0 && (
-                    <span className="bg-white/10 light:bg-black/5 px-2 py-0.5 rounded-full text-[10px] text-white/50 light:text-slate-500">
-                        {allPhotos.length} photo{allPhotos.length !== 1 ? 's' : ''}
-                    </span>
+                    <div className="flex items-center gap-2 shrink-0">
+                        <div
+                            className="relative w-10 h-10 rounded-lg overflow-hidden bg-white/10 light:bg-black/5"
+                            style={{
+                                boxShadow: '0 2px 8px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.1)',
+                            }}
+                        >
+                            <img
+                                src={getMediaUrl(allPhotos[0].storage_path + '?w=80&h=80&fit=cover')}
+                                alt=""
+                                className="w-full h-full object-cover"
+                                loading="lazy"
+                            />
+                            {allPhotos.length > 1 && (
+                                <span
+                                    className="absolute bottom-0.5 right-0.5 bg-black/70 text-white text-[9px] px-1 py-0.5 rounded"
+                                    style={{ backdropFilter: 'blur(4px)' }}
+                                >
+                                    +{allPhotos.length - 1}
+                                </span>
+                            )}
+                        </div>
+                    </div>
                 )}
             </div>
 

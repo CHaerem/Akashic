@@ -12,6 +12,8 @@ interface QuickAction {
     active?: boolean;
     /** Make button more subtle/less prominent when inactive */
     subtle?: boolean;
+    /** Show text label alongside icon (pill style) */
+    showLabel?: boolean;
 }
 
 interface QuickActionBarProps {
@@ -56,6 +58,7 @@ export function QuickActionBar({ actions, isMobile = false, hidden = false }: Qu
                     isMobile={isMobile}
                     active={action.active}
                     subtle={action.subtle}
+                    showLabel={action.showLabel}
                 />
             ))}
         </div>
@@ -69,9 +72,10 @@ interface QuickActionButtonProps {
     isMobile?: boolean;
     active?: boolean;
     subtle?: boolean;
+    showLabel?: boolean;
 }
 
-function QuickActionButton({ icon, label, onClick, isMobile, active, subtle }: QuickActionButtonProps) {
+function QuickActionButton({ icon, label, onClick, isMobile, active, subtle, showLabel }: QuickActionButtonProps) {
     const [isHovered, setIsHovered] = useState(false);
     const [isPressed, setIsPressed] = useState(false);
 
@@ -80,17 +84,21 @@ function QuickActionButton({ icon, label, onClick, isMobile, active, subtle }: Q
     // Subtle buttons are more transparent when inactive
     const isSubtleInactive = subtle && !active;
 
+    // Pill style when showing label
+    const isPill = showLabel;
+
     const baseStyle: CSSProperties = {
         ...glassButton,
-        width: size,
+        width: isPill ? 'auto' : size,
         height: size,
-        borderRadius: radius.lg,
+        borderRadius: isPill ? radius.full : radius.lg,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
+        gap: isPill ? 6 : 0,
         cursor: 'pointer',
         // Reset button styles
-        padding: 0,
+        padding: isPill ? (isMobile ? '0 14px' : '0 12px') : 0,
         margin: 0,
         outline: 'none',
         // Subtle inactive state - more transparent
@@ -117,6 +125,8 @@ function QuickActionButton({ icon, label, onClick, isMobile, active, subtle }: Q
         transform: 'scale(0.95)',
     } : {};
 
+    const textColor = active ? colors.accent.primary : (isSubtleInactive && !isHovered ? colors.text.tertiary : colors.text.secondary);
+
     return (
         <button
             type="button"
@@ -141,8 +151,8 @@ function QuickActionButton({ icon, label, onClick, isMobile, active, subtle }: Q
         >
             <span
                 style={{
-                    color: active ? colors.accent.primary : (isSubtleInactive && !isHovered ? colors.text.tertiary : colors.text.secondary),
-                    fontSize: isMobile ? 20 : 18,
+                    color: textColor,
+                    fontSize: isMobile ? 18 : 16,
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
@@ -150,6 +160,19 @@ function QuickActionButton({ icon, label, onClick, isMobile, active, subtle }: Q
             >
                 {icon}
             </span>
+            {showLabel && (
+                <span
+                    style={{
+                        color: textColor,
+                        fontSize: isMobile ? 13 : 12,
+                        fontWeight: 500,
+                        letterSpacing: '0.01em',
+                        whiteSpace: 'nowrap',
+                    }}
+                >
+                    {label}
+                </span>
+            )}
         </button>
     );
 }
