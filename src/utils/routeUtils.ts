@@ -512,17 +512,6 @@ export function calculateDifficulty(
     return 'difficult';
 }
 
-/**
- * Get descriptive difficulty label with icon
- */
-export function getDifficultyLabel(difficulty: 'easy' | 'moderate' | 'challenging' | 'difficult'): string {
-    switch (difficulty) {
-        case 'easy': return 'Easy';
-        case 'moderate': return 'Moderate';
-        case 'challenging': return 'Challenging';
-        case 'difficult': return 'Difficult';
-    }
-}
 
 /**
  * Calculate complete segment information between two camps
@@ -585,17 +574,6 @@ export function calculateAllSegments(
     return segments;
 }
 
-/**
- * Get gradient color for difficulty visualization
- */
-export function getDifficultyColor(difficulty: 'easy' | 'moderate' | 'challenging' | 'difficult'): string {
-    switch (difficulty) {
-        case 'easy': return 'rgba(34, 197, 94, 0.8)';      // Green
-        case 'moderate': return 'rgba(234, 179, 8, 0.8)';  // Yellow
-        case 'challenging': return 'rgba(251, 146, 60, 0.8)'; // Orange
-        case 'difficult': return 'rgba(239, 68, 68, 0.8)'; // Red
-    }
-}
 
 /**
  * Get nearby POIs for a given position on the route

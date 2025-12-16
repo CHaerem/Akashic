@@ -3,6 +3,7 @@ import type { TrekConfig } from '../../types/trek';
 import { Button } from '../ui/button';
 import { Card } from '../ui/card';
 import { cn } from '@/lib/utils';
+import { getCountryFlag } from '../../utils/countryFlags';
 
 interface GlobeSelectionPanelProps {
     selectedTrek: TrekConfig;
@@ -102,10 +103,11 @@ export function GlobeSelectionPanel({ selectedTrek, onBack, onExplore, isMobile 
             <motion.p
                 variants={itemVariants}
                 className={cn(
-                    "tracking-[0.2em] uppercase text-white/40",
+                    "tracking-[0.2em] uppercase text-white/40 flex items-center gap-1.5",
                     isMobile ? "text-[11px] mb-2.5" : "text-[10px] mb-3.5"
                 )}
             >
+                <span className="text-base">{getCountryFlag(selectedTrek.country)}</span>
                 {selectedTrek.country}
             </motion.p>
 

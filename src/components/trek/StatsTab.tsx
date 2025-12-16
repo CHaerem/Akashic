@@ -9,14 +9,6 @@ import { Skeleton } from '../ui/skeleton';
 import { InteractiveElevationProfile } from './InteractiveElevationProfile';
 import { HistoricalSiteCard } from './HistoricalSiteCard';
 
-// Difficulty color mapping
-const DIFFICULTY_COLORS: Record<string, string> = {
-    'Easy': '#22c55e',
-    'Moderate': '#eab308',
-    'Hard': '#f97316',
-    'Extreme': '#ef4444'
-};
-
 // Simple stat card for grids
 function StatItem({
     label,
@@ -114,11 +106,7 @@ export const StatsTab = memo(function StatsTab({
                             <StatItem label="Total Distance" value={`${trekData.stats.totalDistance} km`} />
                             <StatItem label="Duration" value={`${trekData.stats.duration} days`} />
                             <StatItem label="Est. Hiking Time" value={extendedStats.estimatedTotalTime} color="#8b5cf6" />
-                            <StatItem
-                                label="Difficulty"
-                                value={extendedStats.difficulty}
-                                color={DIFFICULTY_COLORS[extendedStats.difficulty]}
-                            />
+                            <StatItem label="Avg. Daily Distance" value={`${extendedStats.avgDailyDistance} km`} />
                         </div>
                     </div>
 

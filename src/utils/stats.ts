@@ -85,41 +85,6 @@ function estimateHikingTimeMinutes(distanceKm: number, elevGain: number, elevLos
 }
 
 /**
- * Calculate difficulty rating based on distance, elevation, and gradient
- */
-function calculateDifficultyRating(
-    totalDistance: number,
-    totalGain: number,
-    totalLoss: number,
-    avgDailyDist: number,
-    maxDayGain: number
-): string {
-    // Calculate effort score based on multiple factors
-    let score = 0;
-
-    // Daily distance factor
-    if (avgDailyDist > 20) score += 3;
-    else if (avgDailyDist > 15) score += 2;
-    else if (avgDailyDist > 10) score += 1;
-
-    // Max daily gain factor
-    if (maxDayGain > 1500) score += 3;
-    else if (maxDayGain > 1000) score += 2;
-    else if (maxDayGain > 600) score += 1;
-
-    // Total elevation factor
-    const totalElev = totalGain + totalLoss;
-    if (totalElev > 8000) score += 2;
-    else if (totalElev > 5000) score += 1;
-
-    // Map to difficulty rating
-    if (score >= 6) return 'Extreme';
-    if (score >= 4) return 'Hard';
-    if (score >= 2) return 'Moderate';
-    return 'Easy';
-}
-
-/**
  * Calculate extended statistics for a trek
  */
 export function calculateStats(trekData: TrekData): ExtendedStats {
@@ -206,22 +171,12 @@ export function calculateStats(trekData: TrekData): ExtendedStats {
     const startElevation = coords.length > 0 ? Math.round(coords[0][2]) : 0;
     const endElevation = coords.length > 0 ? Math.round(coords[coords.length - 1][2]) : 0;
 
-    // Calculate difficulty
-    const difficulty = calculateDifficultyRating(
-        distance,
-        totalGain,
-        totalLoss,
-        parseFloat(avgDailyDistance),
-        maxDailyGain
-    );
-
     return {
         avgDailyDistance,
         maxDailyGain,
         maxDailyLoss,
         totalElevationGain: totalGain,
         totalElevationLoss: totalLoss,
-        difficulty,
         startElevation,
         endElevation,
         avgAltitude,
