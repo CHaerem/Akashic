@@ -2,10 +2,23 @@
  * Custom hook for managing trek state and data
  */
 
-import { useState, useCallback, useMemo, useTransition } from 'react';
+import { useState, useCallback, useMemo, useTransition, useEffect, useRef } from 'react';
 import { useJourneys } from '../contexts/JourneysContext';
 import { calculateStats, generateElevationProfile } from '../utils/stats';
 import type { TrekConfig, TrekData, Camp, ExtendedStats, ElevationProfile, ViewMode, TabType } from '../types/trek';
+
+/**
+ * Parse URL parameters for deep linking
+ * Supports: ?journey=kilimanjaro&day=3&view=trek
+ */
+function parseUrlParams(): { journeySlug?: string; day?: number; autoExplore?: boolean } {
+    const params = new URLSearchParams(window.location.search);
+    const journeySlug = params.get('journey') || undefined;
+    const dayParam = params.get('day');
+    const day = dayParam ? parseInt(dayParam, 10) : undefined;
+    const autoExplore = params.get('view') === 'trek' || params.has('day');
+    return { journeySlug, day: Number.isNaN(day) ? undefined : day, autoExplore };
+}
 
 // Bottom sheet snap points
 export type SheetSnapPoint = 'minimized' | 'half' | 'expanded';
@@ -52,7 +65,7 @@ interface UseTrekDataReturn {
  * Manage trek selection state and computed data
  */
 export function useTrekData(): UseTrekDataReturn {
-    const { trekDataMap, loading } = useJourneys();
+    const { treks, trekDataMap, loading } = useJourneys();
 
     const [view, setViewState] = useState<ViewMode>('globe');
     const [selectedTrek, setSelectedTrek] = useState<TrekConfig | null>(null);
@@ -69,6 +82,46 @@ export function useTrekData(): UseTrekDataReturn {
 
     // Use transition for view changes to prevent blocking Mapbox animations
     const [, startTransition] = useTransition();
+
+    // Track if URL params have been processed
+    const urlParamsProcessed = useRef(false);
+
+    // Auto-select journey from URL parameters (e.g., ?journey=kilimanjaro&day=3&view=trek)
+    useEffect(() => {
+        if (urlParamsProcessed.current || loading || treks.length === 0) return;
+
+        const { journeySlug, day, autoExplore } = parseUrlParams();
+        if (!journeySlug) return;
+
+        // Find trek by slug (case-insensitive partial match)
+        const trek = treks.find(t =>
+            t.id.toLowerCase().includes(journeySlug.toLowerCase()) ||
+            t.name.toLowerCase().includes(journeySlug.toLowerCase())
+        );
+
+        if (trek) {
+            urlParamsProcessed.current = true;
+            setSelectedTrek(trek);
+
+            // If autoExplore or day specified, go to trek view
+            if (autoExplore) {
+                startTransition(() => {
+                    setViewState('trek');
+                });
+
+                // Select specific day if provided
+                if (day !== undefined) {
+                    const trekData = trekDataMap[trek.id];
+                    if (trekData) {
+                        const camp = trekData.camps.find(c => c.dayNumber === day);
+                        if (camp) {
+                            setSelectedCamp(camp);
+                        }
+                    }
+                }
+            }
+        }
+    }, [loading, treks, trekDataMap, startTransition]);
 
     // Wrap setView in startTransition for smooth camera animations
     const setView = useCallback((newView: ViewMode) => {

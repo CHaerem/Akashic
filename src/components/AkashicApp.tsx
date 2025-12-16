@@ -18,6 +18,7 @@ import { BottomSheet } from './layout/BottomSheet';
 import { Sidebar } from './layout/Sidebar';
 import { BottomSheetContent } from './layout/BottomSheetContent';
 import { QuickActionBar, QuickActionIcons } from './layout/QuickActionBar';
+import { TestModeOverlay } from './debug/TestModeOverlay';
 import { colors, typography } from '../styles/liquidGlass';
 import { ErrorBoundary } from './common/ErrorBoundary';
 
@@ -281,6 +282,15 @@ export default function AkashicApp() {
 
             {/* Globe Hint - shown when no trek selected */}
             {!selectedTrek && view === 'globe' && <GlobeHint isMobile={isMobile} />}
+
+            {/* Test Mode Overlay - shows current state for visual testing */}
+            <TestModeOverlay
+                view={view}
+                selectedJourney={selectedTrek?.name ?? null}
+                selectedDay={selectedCamp?.dayNumber ?? null}
+                totalDays={trekData?.stats.duration ?? 0}
+                activeMode={activeMode}
+            />
 
             {/* Content Panel - Bottom Sheet (mobile) or Sidebar (desktop) */}
             {showSheet && (
