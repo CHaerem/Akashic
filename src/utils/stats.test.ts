@@ -43,13 +43,6 @@ describe('stats utilities', () => {
             expect(stats.startElevation).toBe(1800);
         });
 
-        it('includes difficulty rating', () => {
-            const stats = calculateStats(mockTrekData);
-            // With avgDailyDist=10 (0 pts), maxDayGain=1200 (2 pts), totalElev=0 (0 pts)
-            // Score = 2 → Moderate
-            expect(stats.difficulty).toBe('Moderate');
-        });
-
         it('handles trek with no elevation gain', () => {
             const flatTrek: TrekData = {
                 ...mockTrekData,

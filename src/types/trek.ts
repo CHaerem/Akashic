@@ -82,7 +82,6 @@ export interface ExtendedStats {
     maxDailyLoss: number;
     totalElevationGain: number;
     totalElevationLoss: number;
-    difficulty: string;
     startElevation: number;
     endElevation: number;
     avgAltitude: number;

@@ -18,6 +18,7 @@ import { Button } from '../ui/button';
 import { ErrorBoundary, ComponentErrorFallback } from '../common/ErrorBoundary';
 import { usePhotoDay } from '../../hooks/usePhotoDay';
 import { PhotoIcon, PencilIcon } from '../icons';
+import { getCountryFlag } from '../../utils/countryFlags';
 import { WaypointEditModal } from '../trek/WaypointEditModal';
 import { PhotoAssignModal } from '../trek/PhotoAssignModal';
 import { JourneyEditModal } from '../trek/JourneyEditModal';
@@ -156,6 +157,7 @@ function JourneyOverviewContent({ trek, onExplore, isMobile, editMode, onJourney
                     marginBottom: 8,
                 }}
             >
+                <span style={{ marginRight: 6 }}>{getCountryFlag(trek.country)}</span>
                 {trek.country}
             </p>
 

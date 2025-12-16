@@ -1,11 +1,10 @@
 /**
  * Segment info component showing hiking details between two camps
- * Displays distance, time, elevation changes, and difficulty
+ * Displays distance, time, and elevation changes
  */
 
 import { memo } from 'react';
 import type { RouteSegment } from '../../types/trek';
-import { getDifficultyColor } from '../../utils/routeUtils';
 import { cn } from '@/lib/utils';
 
 interface SegmentInfoProps {
@@ -17,8 +16,6 @@ export const SegmentInfo = memo(function SegmentInfo({
     segment,
     isMobile = false
 }: SegmentInfoProps) {
-    const difficultyColor = getDifficultyColor(segment.difficulty);
-
     return (
         <div className={cn(
             "py-3 border-y border-white/8 light:border-black/5",
@@ -51,15 +48,6 @@ export const SegmentInfo = memo(function SegmentInfo({
                             -{segment.elevationLoss}m
                         </span>
                     )}
-                    <div
-                        className="px-1.5 py-0.5 rounded text-[9px] font-semibold uppercase tracking-wide"
-                        style={{
-                            background: difficultyColor.replace('0.8', '0.15'),
-                            color: difficultyColor
-                        }}
-                    >
-                        {segment.difficulty}
-                    </div>
                 </div>
             </div>
         </div>

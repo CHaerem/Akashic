@@ -9,6 +9,7 @@ import { StatsTab } from './StatsTab';
 import { PhotosTab } from './PhotosTab';
 import { JourneyEditModal } from './JourneyEditModal';
 import { cn } from '@/lib/utils';
+import { getCountryFlag } from '../../utils/countryFlags';
 
 export type PanelState = 'minimized' | 'normal' | 'expanded';
 
@@ -185,7 +186,8 @@ export const InfoPanel = memo(function InfoPanel({
 
                 <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
-                        <p className="text-[10px] tracking-[0.2em] uppercase text-white/35 light:text-slate-400 m-0">
+                        <p className="text-[10px] tracking-[0.2em] uppercase text-white/35 light:text-slate-400 m-0 flex items-center gap-1.5">
+                            <span className="text-sm">{getCountryFlag(trekData.country)}</span>
                             {trekData.country}
                         </p>
                         {/* Desktop edit toggle */}

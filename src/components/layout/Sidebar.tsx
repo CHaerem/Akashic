@@ -4,6 +4,7 @@ import { colors, radius, transitions, effects } from '../../styles/liquidGlass';
 import type { Camp, TrekConfig } from '../../types/trek';
 import type { ContentMode } from '../../hooks/useTrekData';
 import { ChevronIcon } from '../icons';
+import { getCountryFlag } from '../../utils/countryFlags';
 
 const MODE_LABELS: Record<Exclude<ContentMode, 'info'>, string> = {
     day: 'Day',
@@ -315,6 +316,7 @@ function GlobeNavigation({ trek, onPrevJourney, onNextJourney, totalJourneys }: 
                         margin: 0,
                     }}
                 >
+                    <span style={{ marginRight: 6 }}>{getCountryFlag(trek.country)}</span>
                     {trek.country}
                 </p>
                 <h2
