@@ -385,6 +385,20 @@ function TrekViewContent({
 }
 
 // Day details content
+/**
+ * Get weather emoji based on WMO weather code
+ */
+function getWeatherEmoji(code: number): string {
+    if (code === 0) return '☀️'; // Clear sky
+    if (code <= 3) return '⛅'; // Partly cloudy
+    if (code <= 49) return '🌫️'; // Fog
+    if (code <= 59) return '🌧️'; // Drizzle
+    if (code <= 69) return '🌧️'; // Rain
+    if (code <= 79) return '🌨️'; // Snow
+    if (code <= 99) return '⛈️'; // Thunderstorm
+    return '🌤️';
+}
+
 interface DayContentProps {
     camp: Camp | null;
     currentDayDate: Date | null;
@@ -422,6 +436,20 @@ function DayContent({ camp, currentDayDate, dayPhotos, allPhotos, getMediaUrl, o
                                 month: 'short',
                                 day: 'numeric'
                             })}
+                        </span>
+                    )}
+                    {camp.weather && (
+                        <span
+                            style={{
+                                fontSize: 12,
+                                color: colors.text.secondary,
+                                background: 'rgba(255, 255, 255, 0.08)',
+                                padding: '2px 8px',
+                                borderRadius: 4,
+                            }}
+                            title={`${camp.weather.temperatureMin}°–${camp.weather.temperatureMax}°C`}
+                        >
+                            {getWeatherEmoji(camp.weather.weatherCode)} {Math.round(camp.weather.temperatureMax)}°C
                         </span>
                     )}
                     <span
