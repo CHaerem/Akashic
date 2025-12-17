@@ -241,6 +241,7 @@ describe('journeys utilities', () => {
                     sort_order: 0,
                     route_distance_km: 0,
                     route_point_index: 0,
+                    weather: null,
                 },
                 {
                     id: 'wp-2',
@@ -255,6 +256,7 @@ describe('journeys utilities', () => {
                     sort_order: 1,
                     route_distance_km: 10,
                     route_point_index: 2,
+                    weather: null,
                 },
             ];
 
@@ -307,6 +309,7 @@ describe('journeys utilities', () => {
                     sort_order: 0,
                     route_distance_km: null,
                     route_point_index: null,
+                    weather: null,
                 },
             ];
 
@@ -331,6 +334,7 @@ describe('journeys utilities', () => {
                     sort_order: 1,
                     route_distance_km: null,
                     route_point_index: null,
+                    weather: null,
                 },
                 {
                     id: 'wp-1',
@@ -345,6 +349,7 @@ describe('journeys utilities', () => {
                     sort_order: 0,
                     route_distance_km: null,
                     route_point_index: null,
+                    weather: null,
                 },
             ];
 
@@ -382,6 +387,7 @@ describe('journeys utilities', () => {
                     sort_order: 0,
                     route_distance_km: null,
                     route_point_index: null, // Not set, should find closest
+                    weather: null,
                 },
             ];
 
@@ -407,6 +413,7 @@ describe('journeys utilities', () => {
                     sort_order: 0,
                     route_distance_km: null,
                     route_point_index: 100, // Way beyond route length (5 points)
+                    weather: null,
                 },
             ];
 

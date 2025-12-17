@@ -1,5 +1,5 @@
 import { memo, useCallback, useMemo, useState } from 'react';
-import type { TrekData, Camp, Photo, RouteSegment, WeatherData } from '../../types/trek';
+import type { TrekData, Camp, Photo, RouteSegment } from '../../types/trek';
 import { WaypointEditModal } from './WaypointEditModal';
 import { PhotoAssignModal } from './PhotoAssignModal';
 import { RouteEditor } from './RouteEditor';
