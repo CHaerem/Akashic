@@ -9,6 +9,20 @@ export interface Coordinates {
     2: number;
 }
 
+/** Historical weather data for a day */
+export interface WeatherData {
+    /** Maximum temperature (°C) */
+    temperatureMax: number;
+    /** Minimum temperature (°C) */
+    temperatureMin: number;
+    /** Total precipitation (mm) */
+    precipitationSum: number;
+    /** Maximum wind speed (km/h) */
+    windSpeedMax: number;
+    /** WMO weather code (0-99) */
+    weatherCode: number;
+}
+
 export interface Camp {
     id: string;
     name: string;
@@ -24,6 +38,8 @@ export interface Camp {
     routeDistanceKm?: number | null;
     /** Index in route coordinates array - if set via RouteEditor */
     routePointIndex?: number | null;
+    /** Historical weather data for the day */
+    weather?: WeatherData | null;
 }
 
 export interface Route {

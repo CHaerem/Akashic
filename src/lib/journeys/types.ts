@@ -26,6 +26,22 @@ export interface DbJourney {
     is_public: boolean;
 }
 
+/** Historical weather data from Open-Meteo API */
+export interface WeatherData {
+    /** Maximum temperature (°C) */
+    temperature_max: number;
+    /** Minimum temperature (°C) */
+    temperature_min: number;
+    /** Total precipitation (mm) */
+    precipitation_sum: number;
+    /** Maximum wind speed (km/h) */
+    wind_speed_max: number;
+    /** WMO weather code (0-99) */
+    weather_code: number;
+    /** When the data was fetched */
+    fetched_at: string;
+}
+
 export interface DbWaypoint {
     id: string;
     journey_id: string;
@@ -41,4 +57,6 @@ export interface DbWaypoint {
     route_distance_km: number | null;
     /** Index in route coordinates array */
     route_point_index: number | null;
+    /** Historical weather data for the day */
+    weather: WeatherData | null;
 }

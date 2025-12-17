@@ -1,5 +1,5 @@
 import { memo, useCallback, useMemo, useState } from 'react';
-import type { TrekData, Camp, Photo, RouteSegment } from '../../types/trek';
+import type { TrekData, Camp, Photo, RouteSegment, WeatherData } from '../../types/trek';
 import { WaypointEditModal } from './WaypointEditModal';
 import { PhotoAssignModal } from './PhotoAssignModal';
 import { RouteEditor } from './RouteEditor';
@@ -10,6 +10,21 @@ import { Button } from '../ui/button';
 import { cn } from '@/lib/utils';
 import { calculateAllSegments } from '../../utils/routeUtils';
 import { getDateForDay, isPhotoFromDay, formatDateShort } from '../../utils/dates';
+
+/**
+ * Get weather emoji based on WMO weather code
+ * https://open-meteo.com/en/docs#weathervariables
+ */
+function getWeatherEmoji(code: number): string {
+    if (code === 0) return '☀️'; // Clear sky
+    if (code <= 3) return '⛅'; // Partly cloudy
+    if (code <= 49) return '🌫️'; // Fog
+    if (code <= 59) return '🌧️'; // Drizzle
+    if (code <= 69) return '🌧️'; // Rain
+    if (code <= 79) return '🌨️'; // Snow
+    if (code <= 99) return '⛈️'; // Thunderstorm
+    return '🌤️';
+}
 
 interface CampItemProps {
     camp: Camp;
@@ -102,9 +117,14 @@ const CampItem = memo(function CampItem({
                 )}>
                     {dayLabel}
                 </span>
-                <span className="text-white/40 light:text-slate-400 text-xs">
-                    {camp.elevation}m
-                </span>
+                <div className="flex items-center gap-2 text-white/40 light:text-slate-400 text-xs">
+                    {camp.weather && (
+                        <span title={`${camp.weather.temperatureMin}°–${camp.weather.temperatureMax}°C`}>
+                            {getWeatherEmoji(camp.weather.weatherCode)} {Math.round(camp.weather.temperatureMax)}°
+                        </span>
+                    )}
+                    <span>{camp.elevation}m</span>
+                </div>
             </div>
             <div className="flex justify-between items-center gap-3">
                 <p className={cn(
@@ -145,6 +165,19 @@ const CampItem = memo(function CampItem({
 
             {isSelected && (
                 <div className="mt-3 animate-in fade-in slide-in-from-top-2 duration-400">
+                    {/* Weather details when expanded */}
+                    {camp.weather && (
+                        <div className="flex items-center gap-4 mb-3 text-xs text-white/50 light:text-slate-500">
+                            <span>{getWeatherEmoji(camp.weather.weatherCode)} {camp.weather.temperatureMin}° – {camp.weather.temperatureMax}°C</span>
+                            {camp.weather.precipitationSum > 0 && (
+                                <span>💧 {camp.weather.precipitationSum}mm</span>
+                            )}
+                            {camp.weather.windSpeedMax > 20 && (
+                                <span>💨 {Math.round(camp.weather.windSpeedMax)}km/h</span>
+                            )}
+                        </div>
+                    )}
+
                     {/* Action buttons - only show in edit mode */}
                     {editMode && (
                         <div className="flex gap-2 mb-4">

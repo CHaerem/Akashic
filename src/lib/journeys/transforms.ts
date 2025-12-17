@@ -115,6 +115,13 @@ export function toTrekData(journey: DbJourney, waypoints: DbWaypoint[]): TrekDat
             highlights: w.highlights || [],
             routeDistanceKm: w.route_distance_km,
             routePointIndex: w.route_point_index,
+            weather: w.weather ? {
+                temperatureMax: w.weather.temperature_max,
+                temperatureMin: w.weather.temperature_min,
+                precipitationSum: w.weather.precipitation_sum,
+                windSpeedMax: w.weather.wind_speed_max,
+                weatherCode: w.weather.weather_code,
+            } : null,
         };
     });
 
