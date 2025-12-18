@@ -24,7 +24,7 @@ import type { TrekData, Camp, Route } from '../../types/trek';
 import { Button } from '../ui/button';
 import { cn } from '@/lib/utils';
 // TODO: Migrate remaining inline styles to Tailwind - keeping liquidGlass import for now
-import { colors, radius, transitions, effects, shadows, glassFloating, glassPanel, typography } from '../../styles/liquidGlass';
+import { colors, radius, transitions, effects, shadows, glassFloating, glassPanel, typography, gradients } from '../../styles/liquidGlass';
 import { findNearestPointOnRoute, haversineDistance, type RouteCoordinate, type Coordinate } from '../../utils/routeUtils';
 import { processDrawnSegment as processWithMapMatching, snapRouteToTrails } from '../../lib/mapMatching';
 import { updateWaypoint, createWaypoint, deleteWaypoint, getJourneyIdBySlug, updateJourneyRoute } from '../../lib/journeys';
@@ -116,7 +116,7 @@ interface EditableCamp extends Camp {
     routePointIndex?: number | null;
 }
 
-// Swipeable camp item for mobile - reveals actions on swipe
+// Swipeable camp item for mobile - reveals actions on swipe (Liquid Glass design)
 interface SwipeableCampItemProps {
     camp: EditableCamp;
     index: number;
@@ -140,8 +140,8 @@ const SwipeableCampItem = memo(function SwipeableCampItem({
     const startSwipeX = useRef(0);
     const itemRef = useRef<HTMLDivElement>(null);
 
-    const ACTION_WIDTH = 140; // Width of action buttons area
-    const SWIPE_THRESHOLD = 50; // Minimum swipe to trigger action reveal
+    const ACTION_WIDTH = 132; // Width of action buttons area
+    const SWIPE_THRESHOLD = 40; // Minimum swipe to trigger action reveal
 
     const handleTouchStart = useCallback((e: React.TouchEvent) => {
         startX.current = e.touches[0].clientX;
@@ -208,95 +208,176 @@ const SwipeableCampItem = memo(function SwipeableCampItem({
     return (
         <div
             ref={itemRef}
-            className="relative overflow-hidden mb-1.5"
-            style={{ borderRadius: radius.md }}
+            data-testid={`swipeable-camp-${index}`}
+            style={{
+                position: 'relative',
+                overflow: 'hidden',
+                marginBottom: 8,
+                borderRadius: radius.lg,
+            }}
         >
-            {/* Action buttons (revealed on swipe) */}
+            {/* Action buttons (revealed on swipe) - Liquid Glass styling */}
             <div
-                className="absolute right-0 top-0 bottom-0 flex items-stretch"
-                style={{ width: ACTION_WIDTH }}
+                style={{
+                    position: 'absolute',
+                    right: 0,
+                    top: 0,
+                    bottom: 0,
+                    width: ACTION_WIDTH,
+                    display: 'flex',
+                    alignItems: 'stretch',
+                    gap: 1,
+                }}
             >
                 <button
                     onClick={handleZoomTo}
-                    className="flex-1 flex items-center justify-center bg-blue-500/80 text-white active:bg-blue-600"
-                    style={{ minWidth: 70 }}
+                    data-testid={`camp-zoom-${index}`}
+                    style={{
+                        flex: 1,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: 4,
+                        background: `linear-gradient(135deg, ${colors.accent.primary}40 0%, ${colors.accent.primary}20 100%)`,
+                        backdropFilter: effects.blur.subtle,
+                        WebkitBackdropFilter: effects.blur.subtle,
+                        border: 'none',
+                        color: colors.accent.primary,
+                        cursor: 'pointer',
+                        transition: `all ${transitions.fast}`,
+                    }}
                 >
-                    <span className="text-xs font-medium">Zoom</span>
+                    <span style={{ fontSize: 18 }}>⌖</span>
+                    <span style={{ fontSize: 10, fontWeight: 500, letterSpacing: '0.05em' }}>ZOOM</span>
                 </button>
                 <button
                     onClick={handleDelete}
-                    className="flex-1 flex items-center justify-center bg-red-500/80 text-white active:bg-red-600"
-                    style={{ minWidth: 70 }}
+                    data-testid={`camp-delete-${index}`}
+                    style={{
+                        flex: 1,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: 4,
+                        background: `linear-gradient(135deg, ${colors.accent.error}40 0%, ${colors.accent.error}20 100%)`,
+                        backdropFilter: effects.blur.subtle,
+                        WebkitBackdropFilter: effects.blur.subtle,
+                        border: 'none',
+                        color: colors.accent.error,
+                        cursor: 'pointer',
+                        transition: `all ${transitions.fast}`,
+                    }}
                 >
-                    <span className="text-xs font-medium">Delete</span>
+                    <span style={{ fontSize: 18 }}>✕</span>
+                    <span style={{ fontSize: 10, fontWeight: 500, letterSpacing: '0.05em' }}>DELETE</span>
                 </button>
             </div>
 
-            {/* Main item content (slides on swipe) */}
+            {/* Main item content (slides on swipe) - Liquid Glass card */}
             <motion.div
                 animate={{ x: swipeX }}
-                transition={isDragging ? { duration: 0 } : { type: 'spring', stiffness: 500, damping: 30 }}
+                transition={isDragging ? { duration: 0 } : { type: 'spring', stiffness: 400, damping: 35 }}
                 onTouchStart={handleTouchStart}
                 onTouchMove={handleTouchMove}
                 onTouchEnd={handleTouchEnd}
                 onClick={handleItemClick}
-                className={cn(
-                    "relative flex items-center gap-3 p-3 cursor-pointer",
-                    "transition-colors duration-200",
-                    isSelected ? "bg-white/10" : "bg-white/4",
-                    camp.isDirty && "border border-amber-400/40"
-                )}
+                data-testid={`camp-item-${index}`}
                 style={{
-                    borderRadius: radius.md,
+                    position: 'relative',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 12,
+                    padding: '14px 16px',
+                    cursor: 'pointer',
                     touchAction: 'pan-y',
+                    borderRadius: radius.lg,
+                    background: isSelected
+                        ? gradients.glass.button
+                        : gradients.glass.subtle,
+                    border: camp.isDirty
+                        ? `1px solid ${colors.accent.warning}60`
+                        : `1px solid ${isSelected ? colors.glass.border : colors.glass.borderSubtle}`,
+                    boxShadow: isSelected
+                        ? shadows.glass.button
+                        : `0 2px 8px rgba(0, 0, 0, 0.15), inset 0 1px 0 ${colors.glass.highlight}20`,
+                    transition: `background ${transitions.normal}, border ${transitions.normal}, box-shadow ${transitions.normal}`,
                 }}
             >
-                {/* Drag handle indicator */}
-                <div className="flex flex-col gap-0.5 opacity-30 mr-1">
-                    <div className="w-4 h-0.5 bg-white/50 rounded-full" />
-                    <div className="w-4 h-0.5 bg-white/50 rounded-full" />
-                    <div className="w-4 h-0.5 bg-white/50 rounded-full" />
-                </div>
-
-                {/* Camp number */}
+                {/* Camp number badge */}
                 <div
-                    className={cn(
-                        "w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0",
-                        camp.isDirty
-                            ? "bg-gradient-to-br from-amber-400 to-amber-500 text-white"
+                    style={{
+                        width: 36,
+                        height: 36,
+                        borderRadius: radius.pill,
+                        background: camp.isDirty
+                            ? `linear-gradient(135deg, ${colors.accent.warning} 0%, #f59e0b 100%)`
                             : isSelected
-                                ? "bg-gradient-to-br from-blue-400 to-blue-500 text-white"
-                                : "bg-white/10 text-white/70"
-                    )}
+                                ? `linear-gradient(135deg, ${colors.accent.primary} 0%, #3b82f6 100%)`
+                                : colors.glass.medium,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontSize: 14,
+                        fontWeight: 600,
+                        color: (camp.isDirty || isSelected) ? '#fff' : colors.text.secondary,
+                        flexShrink: 0,
+                        boxShadow: (camp.isDirty || isSelected)
+                            ? '0 2px 8px rgba(0, 0, 0, 0.3)'
+                            : 'none',
+                    }}
                 >
                     {index + 1}
                 </div>
 
                 {/* Camp info */}
-                <div className="flex-1 min-w-0">
-                    <div className="text-white/95 font-medium text-sm truncate">
+                <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{
+                        ...typography.heading,
+                        fontSize: 14,
+                        color: colors.text.primary,
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                    }}>
                         {camp.name}
                     </div>
-                    <div className="text-white/50 text-xs mt-0.5">
+                    <div style={{
+                        ...typography.caption,
+                        fontSize: 12,
+                        color: colors.text.tertiary,
+                        marginTop: 2,
+                    }}>
                         {camp.elevation}m
                         {camp.routeDistanceKm != null && (
-                            <> • {camp.routeDistanceKm.toFixed(1)} km</>
+                            <span style={{ color: colors.text.subtle }}> • {camp.routeDistanceKm.toFixed(1)} km</span>
                         )}
                     </div>
                 </div>
 
                 {/* Modified indicator */}
                 {camp.isDirty && (
-                    <div className="w-2 h-2 rounded-full bg-amber-400 flex-shrink-0" />
+                    <div style={{
+                        width: 8,
+                        height: 8,
+                        borderRadius: radius.pill,
+                        background: colors.accent.warning,
+                        boxShadow: `0 0 8px ${colors.accent.warning}80`,
+                        flexShrink: 0,
+                    }} />
                 )}
 
                 {/* Swipe hint chevron */}
-                <div className={cn(
-                    "text-white/30 transition-transform duration-200",
-                    swipeX < 0 && "rotate-180"
-                )}>
+                <motion.div
+                    animate={{ rotate: swipeX < -10 ? 180 : 0, opacity: swipeX < -10 ? 0 : 0.4 }}
+                    style={{
+                        color: colors.text.subtle,
+                        fontSize: 16,
+                    }}
+                >
                     ‹
-                </div>
+                </motion.div>
             </motion.div>
         </div>
     );
