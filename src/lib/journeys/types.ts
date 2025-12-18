@@ -42,6 +42,46 @@ export interface WeatherData {
     fetched_at: string;
 }
 
+/** Fun fact stored in database (JSONB) */
+export interface DbFunFact {
+    id: string;
+    content: string;
+    category: string;
+    source?: string;
+    learn_more_url?: string;
+    icon?: string;
+}
+
+/** Point of interest stored in database (JSONB) */
+export interface DbPointOfInterest {
+    id: string;
+    name: string;
+    category: string;
+    coordinates: [number, number];
+    elevation?: number;
+    description?: string;
+    route_distance_km?: number;
+    tips?: string[];
+    time_from_previous?: string;
+    icon?: string;
+}
+
+/** Historical site stored in database (JSONB) */
+export interface DbHistoricalSite {
+    id: string;
+    name: string;
+    coordinates: [number, number];
+    elevation?: number;
+    route_distance_km?: number;
+    summary: string;
+    description?: string;
+    period?: string;
+    significance?: 'major' | 'minor' | 'notable';
+    image_urls?: string[];
+    links?: { label: string; url: string }[];
+    tags?: string[];
+}
+
 export interface DbWaypoint {
     id: string;
     journey_id: string;
@@ -59,4 +99,10 @@ export interface DbWaypoint {
     route_point_index: number | null;
     /** Historical weather data for the day */
     weather: WeatherData | null;
+    /** Fun facts for this day (JSONB) */
+    fun_facts: DbFunFact[] | null;
+    /** Points of interest for this day (JSONB) */
+    points_of_interest: DbPointOfInterest[] | null;
+    /** Historical sites for this day (JSONB) */
+    historical_sites: DbHistoricalSite[] | null;
 }

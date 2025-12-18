@@ -6,12 +6,16 @@
  * - Day header (day number, date, camp name, elevation)
  * - Photo strip (horizontal scroll)
  * - Description and highlights
+ * - Fun facts for the day
+ * - Points of interest and historical sites
  */
 
 import { memo, useMemo } from 'react';
 import type { Camp, Photo } from '../../types/trek';
 import { colors, radius } from '../../styles/liquidGlass';
 import { PhotoStrip } from './PhotoStrip';
+import { FunFactCard } from './FunFactCard';
+import { DayDiscoveries } from './DayDiscoveries';
 
 interface DayChapterProps {
     camp: Camp;
@@ -220,7 +224,7 @@ export const DayChapter = memo(function DayChapter({
                 {camp.highlights && camp.highlights.length > 0 && (
                     <ul style={{
                         margin: 0,
-                        marginBottom: stripPhotos.length > 0 ? 12 : 0,
+                        marginBottom: 12,
                         paddingLeft: 18,
                     }}>
                         {camp.highlights.map((highlight, idx) => (
@@ -238,21 +242,61 @@ export const DayChapter = memo(function DayChapter({
                     </ul>
                 )}
 
+                {/* Fun Facts */}
+                {camp.funFacts && camp.funFacts.length > 0 && (
+                    <div style={{ marginBottom: 12 }}>
+                        <div
+                            style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 6,
+                                marginBottom: 10,
+                            }}
+                        >
+                            <span style={{ fontSize: 14 }}>💡</span>
+                            <span
+                                style={{
+                                    fontSize: 11,
+                                    fontWeight: 600,
+                                    textTransform: 'uppercase',
+                                    letterSpacing: '0.08em',
+                                    color: colors.text.tertiary,
+                                }}
+                            >
+                                Did you know?
+                            </span>
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                            {camp.funFacts.map((fact) => (
+                                <FunFactCard key={fact.id} fact={fact} compact />
+                            ))}
+                        </div>
+                    </div>
+                )}
+
+                {/* Points of Interest & Historical Sites */}
+                <DayDiscoveries
+                    pointsOfInterest={camp.pointsOfInterest}
+                    historicalSites={camp.historicalSites}
+                />
+
                 {/* Photo strip */}
                 {stripPhotos.length > 0 && (
-                    <PhotoStrip
-                        photos={stripPhotos}
-                        getMediaUrl={getMediaUrl}
-                        onPhotoClick={(photo, idx) => {
-                            // Adjust index to account for hero photo
-                            const actualIndex = heroPhoto ? idx + 1 : idx;
-                            onPhotoClick(photo, actualIndex);
-                        }}
-                    />
+                    <div style={{ marginTop: 12 }}>
+                        <PhotoStrip
+                            photos={stripPhotos}
+                            getMediaUrl={getMediaUrl}
+                            onPhotoClick={(photo, idx) => {
+                                // Adjust index to account for hero photo
+                                const actualIndex = heroPhoto ? idx + 1 : idx;
+                                onPhotoClick(photo, actualIndex);
+                            }}
+                        />
+                    </div>
                 )}
 
                 {/* No photos state */}
-                {photos.length === 0 && (
+                {photos.length === 0 && !camp.funFacts?.length && !camp.pointsOfInterest?.length && !camp.historicalSites?.length && (
                     <div style={{
                         padding: '20px 0',
                         textAlign: 'center',
