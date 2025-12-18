@@ -47,6 +47,7 @@ export function useMapbox({ containerRef, onTrekSelect, onPhotoClick, onRouteCli
     const campMarkersRef = useRef<Map<string, mapboxgl.Marker>>(new Map());
     const selectedTrekRef = useRef<string | null>(null);
     const pendingHighlightCampIdRef = useRef<string | null>(null); // Track pending highlight to prevent stale updates on rapid day switching
+    const mapUpdateTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null); // Track the 1800ms scheduleMapUpdates timer to prevent stacking
     const playbackAnimationRef = useRef<number | null>(null);
     const playbackCallbackRef = useRef<((camp: Camp) => void) | null>(null);
     // Track if we're in globe view mode (for auto-recentering)
@@ -959,12 +960,17 @@ export function useMapbox({ containerRef, onTrekSelect, onPhotoClick, onRouteCli
             });
         };
 
+        // Clear any pending map update timer to prevent stacking on rapid day switching
+        if (mapUpdateTimerRef.current) {
+            clearTimeout(mapUpdateTimerRef.current);
+        }
+
         if ('requestIdleCallback' in window) {
-            setTimeout(() => {
+            mapUpdateTimerRef.current = setTimeout(() => {
                 (window as typeof window & { requestIdleCallback: (cb: () => void) => void }).requestIdleCallback(scheduleMapUpdates);
             }, 1800);
         } else {
-            setTimeout(scheduleMapUpdates, 1800);
+            mapUpdateTimerRef.current = setTimeout(scheduleMapUpdates, 1800);
         }
 
         if (isMobileForTerrain) {
@@ -1303,15 +1309,22 @@ export function useMapbox({ containerRef, onTrekSelect, onPhotoClick, onRouteCli
 
             const existingGroup = photoGroupsRef.current.get(stableKey);
 
-            if (existingGroup) {
-                existingGroup.marker.setLngLat(group.center);
-                existingGroup.photos = group.photos;
-                continue;
-            }
-
             const isHighlighted = selectedCampId
                 ? group.photos.some(p => p.waypoint_id === selectedCampId)
                 : false;
+
+            if (existingGroup) {
+                existingGroup.marker.setLngLat(group.center);
+                existingGroup.photos = group.photos;
+                // Update highlight state for existing markers (fixes stale state on rapid day switching)
+                const el = existingGroup.marker.getElement();
+                if (isHighlighted) {
+                    el.classList.add('photo-marker-highlighted');
+                } else {
+                    el.classList.remove('photo-marker-highlighted');
+                }
+                continue;
+            }
 
             const el = document.createElement('div');
             el.className = 'photo-thumbnail-marker photo-stack' + (isHighlighted ? ' photo-marker-highlighted' : '');
