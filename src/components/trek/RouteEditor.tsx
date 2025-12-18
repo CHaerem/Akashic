@@ -116,6 +116,192 @@ interface EditableCamp extends Camp {
     routePointIndex?: number | null;
 }
 
+// Swipeable camp item for mobile - reveals actions on swipe
+interface SwipeableCampItemProps {
+    camp: EditableCamp;
+    index: number;
+    isSelected: boolean;
+    onSelect: () => void;
+    onDelete: () => void;
+    onZoomTo: () => void;
+}
+
+const SwipeableCampItem = memo(function SwipeableCampItem({
+    camp,
+    index,
+    isSelected,
+    onSelect,
+    onDelete,
+    onZoomTo
+}: SwipeableCampItemProps) {
+    const [swipeX, setSwipeX] = useState(0);
+    const [isDragging, setIsDragging] = useState(false);
+    const startX = useRef(0);
+    const startSwipeX = useRef(0);
+    const itemRef = useRef<HTMLDivElement>(null);
+
+    const ACTION_WIDTH = 140; // Width of action buttons area
+    const SWIPE_THRESHOLD = 50; // Minimum swipe to trigger action reveal
+
+    const handleTouchStart = useCallback((e: React.TouchEvent) => {
+        startX.current = e.touches[0].clientX;
+        startSwipeX.current = swipeX;
+        setIsDragging(true);
+    }, [swipeX]);
+
+    const handleTouchMove = useCallback((e: React.TouchEvent) => {
+        if (!isDragging) return;
+        const currentX = e.touches[0].clientX;
+        const deltaX = currentX - startX.current;
+        const newSwipeX = Math.max(-ACTION_WIDTH, Math.min(0, startSwipeX.current + deltaX));
+        setSwipeX(newSwipeX);
+    }, [isDragging]);
+
+    const handleTouchEnd = useCallback(() => {
+        setIsDragging(false);
+        // Snap to open or closed
+        if (swipeX < -SWIPE_THRESHOLD) {
+            setSwipeX(-ACTION_WIDTH);
+        } else {
+            setSwipeX(0);
+        }
+    }, [swipeX]);
+
+    const handleDelete = useCallback((e: React.MouseEvent | React.TouchEvent) => {
+        e.stopPropagation();
+        setSwipeX(0);
+        onDelete();
+    }, [onDelete]);
+
+    const handleZoomTo = useCallback((e: React.MouseEvent | React.TouchEvent) => {
+        e.stopPropagation();
+        setSwipeX(0);
+        onZoomTo();
+    }, [onZoomTo]);
+
+    const handleItemClick = useCallback(() => {
+        if (swipeX < -SWIPE_THRESHOLD / 2) {
+            // If swiped, close instead of selecting
+            setSwipeX(0);
+        } else {
+            onSelect();
+        }
+    }, [swipeX, onSelect]);
+
+    // Close swipe when clicking elsewhere
+    useEffect(() => {
+        if (swipeX !== 0) {
+            const handleClickOutside = (e: MouseEvent | TouchEvent) => {
+                if (itemRef.current && !itemRef.current.contains(e.target as Node)) {
+                    setSwipeX(0);
+                }
+            };
+            document.addEventListener('touchstart', handleClickOutside);
+            document.addEventListener('mousedown', handleClickOutside);
+            return () => {
+                document.removeEventListener('touchstart', handleClickOutside);
+                document.removeEventListener('mousedown', handleClickOutside);
+            };
+        }
+    }, [swipeX]);
+
+    return (
+        <div
+            ref={itemRef}
+            className="relative overflow-hidden mb-1.5"
+            style={{ borderRadius: radius.md }}
+        >
+            {/* Action buttons (revealed on swipe) */}
+            <div
+                className="absolute right-0 top-0 bottom-0 flex items-stretch"
+                style={{ width: ACTION_WIDTH }}
+            >
+                <button
+                    onClick={handleZoomTo}
+                    className="flex-1 flex items-center justify-center bg-blue-500/80 text-white active:bg-blue-600"
+                    style={{ minWidth: 70 }}
+                >
+                    <span className="text-xs font-medium">Zoom</span>
+                </button>
+                <button
+                    onClick={handleDelete}
+                    className="flex-1 flex items-center justify-center bg-red-500/80 text-white active:bg-red-600"
+                    style={{ minWidth: 70 }}
+                >
+                    <span className="text-xs font-medium">Delete</span>
+                </button>
+            </div>
+
+            {/* Main item content (slides on swipe) */}
+            <motion.div
+                animate={{ x: swipeX }}
+                transition={isDragging ? { duration: 0 } : { type: 'spring', stiffness: 500, damping: 30 }}
+                onTouchStart={handleTouchStart}
+                onTouchMove={handleTouchMove}
+                onTouchEnd={handleTouchEnd}
+                onClick={handleItemClick}
+                className={cn(
+                    "relative flex items-center gap-3 p-3 cursor-pointer",
+                    "transition-colors duration-200",
+                    isSelected ? "bg-white/10" : "bg-white/4",
+                    camp.isDirty && "border border-amber-400/40"
+                )}
+                style={{
+                    borderRadius: radius.md,
+                    touchAction: 'pan-y',
+                }}
+            >
+                {/* Drag handle indicator */}
+                <div className="flex flex-col gap-0.5 opacity-30 mr-1">
+                    <div className="w-4 h-0.5 bg-white/50 rounded-full" />
+                    <div className="w-4 h-0.5 bg-white/50 rounded-full" />
+                    <div className="w-4 h-0.5 bg-white/50 rounded-full" />
+                </div>
+
+                {/* Camp number */}
+                <div
+                    className={cn(
+                        "w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0",
+                        camp.isDirty
+                            ? "bg-gradient-to-br from-amber-400 to-amber-500 text-white"
+                            : isSelected
+                                ? "bg-gradient-to-br from-blue-400 to-blue-500 text-white"
+                                : "bg-white/10 text-white/70"
+                    )}
+                >
+                    {index + 1}
+                </div>
+
+                {/* Camp info */}
+                <div className="flex-1 min-w-0">
+                    <div className="text-white/95 font-medium text-sm truncate">
+                        {camp.name}
+                    </div>
+                    <div className="text-white/50 text-xs mt-0.5">
+                        {camp.elevation}m
+                        {camp.routeDistanceKm != null && (
+                            <> • {camp.routeDistanceKm.toFixed(1)} km</>
+                        )}
+                    </div>
+                </div>
+
+                {/* Modified indicator */}
+                {camp.isDirty && (
+                    <div className="w-2 h-2 rounded-full bg-amber-400 flex-shrink-0" />
+                )}
+
+                {/* Swipe hint chevron */}
+                <div className={cn(
+                    "text-white/30 transition-transform duration-200",
+                    swipeX < 0 && "rotate-180"
+                )}>
+                    ‹
+                </div>
+            </motion.div>
+        </div>
+    );
+});
+
 export const RouteEditor = memo(function RouteEditor({
     trekData,
     isOpen,
@@ -1651,6 +1837,18 @@ export const RouteEditor = memo(function RouteEditor({
         setHasChanges(true);
     }, [selectedCampId, pushToHistory]);
 
+    // Delete a specific camp by ID (for swipe-to-delete gesture)
+    const deleteCampById = useCallback((campId: string) => {
+        // Save state before making changes
+        pushToHistory();
+
+        setCamps(prev => prev.filter(c => c.id !== campId));
+        if (selectedCampId === campId) {
+            setSelectedCampId(null);
+        }
+        setHasChanges(true);
+    }, [selectedCampId, pushToHistory]);
+
     // Fly to selected camp
     const flyToCamp = useCallback((camp: EditableCamp) => {
         const map = mapRef.current;
@@ -2269,91 +2467,31 @@ export const RouteEditor = memo(function RouteEditor({
                         Camps ({camps.length})
                     </div>
 
-                    {/* Camp list */}
+                    {/* Camp list with swipe gestures */}
                     <div
                         data-testid="camp-list"
-                        style={{
-                            flex: 1,
-                            overflowY: 'auto',
-                            padding: 8
-                        }}
-                        className="glass-scrollbar"
+                        className="flex-1 overflow-y-auto p-2 glass-scrollbar"
                     >
+                        {/* Swipe hint */}
+                        {camps.length > 0 && (
+                            <div className="text-center text-white/30 text-[10px] mb-2 px-2">
+                                ← Swipe camp to reveal actions
+                            </div>
+                        )}
                         {sortCamps(camps).map((camp, index) => (
-                                <div
-                                    key={camp.id}
-                                    data-testid={`camp-item-${index + 1}`}
-                                    data-camp-id={camp.id}
-                                    data-camp-name={camp.name}
-                                    data-position={index + 1}
-                                    data-modified={camp.isDirty ? 'true' : 'false'}
-                                    onClick={() => {
-                                        setSelectedCampId(camp.id);
-                                        flyToCamp(camp);
-                                    }}
-                                    style={{
-                                        padding: '12px 14px',
-                                        marginBottom: 6,
-                                        background: camp.id === selectedCampId
-                                            ? colors.glass.medium
-                                            : 'transparent',
-                                        borderRadius: radius.md,
-                                        cursor: 'pointer',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        gap: 12,
-                                        border: camp.isDirty
-                                            ? '1px solid rgba(251, 191, 36, 0.4)'
-                                            : `1px solid transparent`,
-                                        transition: `all ${transitions.normal}`
-                                    }}
-                                >
-                                    <div
-                                        data-testid={`camp-number-${index + 1}`}
-                                        style={{
-                                            width: 32,
-                                            height: 32,
-                                            borderRadius: '50%',
-                                            background: camp.isDirty
-                                                ? 'linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%)'
-                                                : camp.id === selectedCampId
-                                                    ? 'linear-gradient(135deg, #60a5fa 0%, #3b82f6 100%)'
-                                                    : colors.glass.medium,
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            justifyContent: 'center',
-                                            fontSize: 13,
-                                            fontWeight: 700,
-                                            color: (camp.isDirty || camp.id === selectedCampId) ? '#fff' : colors.text.secondary,
-                                            flexShrink: 0
-                                        }}
-                                    >
-                                        {index + 1}
-                                    </div>
-                                    <div style={{ flex: 1, minWidth: 0 }}>
-                                        <div style={{
-                                            fontSize: 14,
-                                            fontWeight: 500,
-                                            color: colors.text.primary,
-                                            whiteSpace: 'nowrap',
-                                            overflow: 'hidden',
-                                            textOverflow: 'ellipsis'
-                                        }}>
-                                            {camp.name}
-                                        </div>
-                                        <div style={{
-                                            fontSize: 12,
-                                            color: colors.text.tertiary,
-                                            marginTop: 2
-                                        }}>
-                                            {camp.elevation}m
-                                            {camp.routeDistanceKm != null && (
-                                                <> • {camp.routeDistanceKm.toFixed(1)} km</>
-                                            )}
-                                        </div>
-                                    </div>
-                                </div>
-                            ))}
+                            <SwipeableCampItem
+                                key={camp.id}
+                                camp={camp}
+                                index={index}
+                                isSelected={camp.id === selectedCampId}
+                                onSelect={() => {
+                                    setSelectedCampId(camp.id);
+                                    flyToCamp(camp);
+                                }}
+                                onDelete={() => deleteCampById(camp.id)}
+                                onZoomTo={() => flyToCamp(camp)}
+                            />
+                        ))}
                     </div>
 
                     {/* Has changes indicator */}
