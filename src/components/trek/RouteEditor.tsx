@@ -19,6 +19,7 @@ import { useState, useRef, useEffect, useCallback, memo, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
+import { motion, AnimatePresence } from 'framer-motion';
 import type { TrekData, Camp, Route } from '../../types/trek';
 import { Button } from '../ui/button';
 import { cn } from '@/lib/utils';
@@ -28,30 +29,75 @@ import { findNearestPointOnRoute, haversineDistance, type RouteCoordinate, type 
 import { processDrawnSegment as processWithMapMatching, snapRouteToTrails } from '../../lib/mapMatching';
 import { updateWaypoint, createWaypoint, deleteWaypoint, getJourneyIdBySlug, updateJourneyRoute } from '../../lib/journeys';
 
+// Mobile panel snap points (vh percentages)
+const MOBILE_SNAP_POINTS = {
+    minimized: 12,   // Just grabber + mini header
+    compact: 28,     // Camp/route info visible
+    half: 50,        // Half screen
+    expanded: 85,    // Full content
+} as const;
+
+type MobileSnapPoint = keyof typeof MOBILE_SNAP_POINTS;
+
 type EditorMode = 'camps' | 'route';
 type RouteSubMode = 'edit' | 'draw' | 'select';
 
-// Reusable mode toggle button
+// Reusable mode toggle button with mobile-optimized sizing
 const ModeToggleButton = memo(function ModeToggleButton({
     label,
     isActive,
-    onClick
+    onClick,
+    compact = false
 }: {
     label: string;
     isActive: boolean;
     onClick: () => void;
+    compact?: boolean;
 }) {
     return (
         <button
             onClick={onClick}
             className={cn(
-                "px-4 py-2.5 rounded-lg text-[11px] font-medium tracking-[0.08em] uppercase cursor-pointer transition-all duration-200 border",
+                "rounded-lg font-medium tracking-[0.08em] uppercase cursor-pointer transition-all duration-200 border min-h-[44px]",
+                compact ? "px-3 py-2 text-[10px]" : "px-4 py-2.5 text-[11px]",
                 isActive
                     ? "bg-white/12 border-white/15 text-white/95 shadow-[0_4px_16px_rgba(0,0,0,0.2),inset_0_1px_0_rgba(255,255,255,0.15)]"
-                    : "bg-transparent border-transparent text-white/50 hover:text-white/70 hover:bg-white/6 hover:border-white/10"
+                    : "bg-transparent border-transparent text-white/50 hover:text-white/70 hover:bg-white/6 hover:border-white/10 active:bg-white/10"
             )}
         >
             {label}
+        </button>
+    );
+});
+
+// Icon button component for mobile
+const IconButton = memo(function IconButton({
+    icon,
+    onClick,
+    disabled = false,
+    title,
+    variant = 'subtle'
+}: {
+    icon: React.ReactNode;
+    onClick: () => void;
+    disabled?: boolean;
+    title?: string;
+    variant?: 'subtle' | 'primary' | 'danger';
+}) {
+    return (
+        <button
+            onClick={onClick}
+            disabled={disabled}
+            title={title}
+            className={cn(
+                "w-11 h-11 rounded-xl flex items-center justify-center transition-all duration-200",
+                "disabled:opacity-40 disabled:pointer-events-none",
+                variant === 'subtle' && "bg-white/6 border border-white/10 text-white/70 hover:bg-white/12 hover:text-white active:scale-95",
+                variant === 'primary' && "bg-blue-500/20 border border-blue-400/40 text-blue-300 hover:bg-blue-500/30 active:scale-95",
+                variant === 'danger' && "bg-red-500/20 border border-red-400/30 text-red-300 hover:bg-red-500/30 active:scale-95"
+            )}
+        >
+            {icon}
         </button>
     );
 });
@@ -121,6 +167,12 @@ export const RouteEditor = memo(function RouteEditor({
     const [error, setError] = useState<string | null>(null);
     const [hasChanges, setHasChanges] = useState(false);
     const [mapLoaded, setMapLoaded] = useState(false);
+
+    // Mobile panel state
+    const [mobileSnapPoint, setMobileSnapPoint] = useState<MobileSnapPoint>('compact');
+    const mobilePanelRef = useRef<HTMLDivElement>(null);
+    const dragStartY = useRef<number>(0);
+    const dragStartHeight = useRef<number>(0);
 
     // Undo/redo history state
     interface HistoryState {
@@ -1530,6 +1582,63 @@ export const RouteEditor = memo(function RouteEditor({
         };
     }, [mode, handleRouteClick, handleRouteLineClick]);
 
+    // Mobile panel drag handlers
+    const handleMobilePanelDragStart = useCallback((e: React.TouchEvent | React.MouseEvent) => {
+        if (!isMobile) return;
+        const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
+        dragStartY.current = clientY;
+        const vh = window.innerHeight / 100;
+        dragStartHeight.current = MOBILE_SNAP_POINTS[mobileSnapPoint] * vh;
+    }, [isMobile, mobileSnapPoint]);
+
+    const handleMobilePanelDragMove = useCallback((e: React.TouchEvent | React.MouseEvent) => {
+        if (!isMobile || !mobilePanelRef.current) return;
+        e.preventDefault();
+        const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
+        const deltaY = dragStartY.current - clientY;
+        const newHeight = Math.max(
+            (MOBILE_SNAP_POINTS.minimized / 100) * window.innerHeight,
+            Math.min(
+                (MOBILE_SNAP_POINTS.expanded / 100) * window.innerHeight,
+                dragStartHeight.current + deltaY
+            )
+        );
+        mobilePanelRef.current.style.height = `${newHeight}px`;
+        mobilePanelRef.current.style.transition = 'none';
+    }, [isMobile]);
+
+    const handleMobilePanelDragEnd = useCallback(() => {
+        if (!isMobile || !mobilePanelRef.current) return;
+        const currentHeight = mobilePanelRef.current.offsetHeight;
+        const vh = window.innerHeight / 100;
+
+        // Find nearest snap point
+        const snapValues = Object.entries(MOBILE_SNAP_POINTS);
+        let nearestSnap: MobileSnapPoint = 'compact';
+        let minDistance = Infinity;
+
+        for (const [key, value] of snapValues) {
+            const snapHeight = value * vh;
+            const distance = Math.abs(currentHeight - snapHeight);
+            if (distance < minDistance) {
+                minDistance = distance;
+                nearestSnap = key as MobileSnapPoint;
+            }
+        }
+
+        setMobileSnapPoint(nearestSnap);
+        mobilePanelRef.current.style.transition = `height ${transitions.glass}`;
+        mobilePanelRef.current.style.height = `${MOBILE_SNAP_POINTS[nearestSnap] * vh}px`;
+    }, [isMobile]);
+
+    // Update mobile panel height when snap point changes
+    useEffect(() => {
+        if (!isMobile || !mobilePanelRef.current) return;
+        const vh = window.innerHeight / 100;
+        mobilePanelRef.current.style.transition = `height ${transitions.glass}`;
+        mobilePanelRef.current.style.height = `${MOBILE_SNAP_POINTS[mobileSnapPoint] * vh}px`;
+    }, [isMobile, mobileSnapPoint]);
+
     // Delete selected camp
     const handleDeleteCamp = useCallback(() => {
         if (!selectedCampId) return;
@@ -1649,68 +1758,153 @@ export const RouteEditor = memo(function RouteEditor({
                 }}
             />
 
-            {/* Header - using glassPanel preset */}
-            <div style={{
-                position: 'absolute',
-                top: 0,
-                left: 0,
-                right: isMobile ? 0 : 320,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                padding: isMobile ? '12px 16px' : '16px 24px',
-                ...glassPanel,
-                borderTop: 'none',
-                borderLeft: 'none',
-                borderRight: 'none',
-                borderRadius: 0,
-                flexWrap: 'wrap',
-                gap: 12,
-                zIndex: 10
-            }}>
-                <div style={{ flex: '1 1 auto', minWidth: 150 }}>
-                    <p style={{
-                        ...typography.label,
-                        fontSize: 10,
-                        letterSpacing: '0.2em',
-                        color: colors.text.subtle,
-                        margin: '0 0 4px 0'
-                    }}>
-                        ROUTE EDITOR
-                    </p>
-                    <h1 style={{
-                        ...typography.display,
-                        margin: 0,
-                        fontSize: isMobile ? 18 : 22,
-                        fontWeight: 500
-                    }}>
-                        {trekData.name}
-                    </h1>
-                </div>
+            {/* MOBILE HEADER - Compact top bar with essential controls */}
+            {isMobile && (
+                <div
+                    style={{
+                        position: 'absolute',
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        paddingTop: 'max(12px, env(safe-area-inset-top))',
+                        paddingBottom: 12,
+                        paddingLeft: 'max(12px, env(safe-area-inset-left))',
+                        paddingRight: 'max(12px, env(safe-area-inset-right))',
+                        ...glassPanel,
+                        borderTop: 'none',
+                        borderLeft: 'none',
+                        borderRight: 'none',
+                        borderRadius: 0,
+                        zIndex: 10
+                    }}
+                >
+                    {/* Top row: Title + Mode toggle */}
+                    <div className="flex items-center justify-between gap-3 mb-3">
+                        <div className="flex-1 min-w-0">
+                            <p style={{
+                                ...typography.label,
+                                fontSize: 9,
+                                letterSpacing: '0.2em',
+                                color: colors.text.subtle,
+                                margin: '0 0 2px 0'
+                            }}>
+                                ROUTE EDITOR
+                            </p>
+                            <h1 className="text-white/95 text-base font-medium truncate">
+                                {trekData.name}
+                            </h1>
+                        </div>
 
-                {/* Mode toggle - using ModeToggleButton component */}
+                        {/* Undo/Redo icons */}
+                        <div className="flex gap-1.5">
+                            <IconButton
+                                icon={<span className="text-lg">↶</span>}
+                                onClick={handleUndo}
+                                disabled={undoStack.length === 0 || saving}
+                                title="Undo"
+                            />
+                            <IconButton
+                                icon={<span className="text-lg">↷</span>}
+                                onClick={handleRedo}
+                                disabled={redoStack.length === 0 || saving}
+                                title="Redo"
+                            />
+                        </div>
+                    </div>
+
+                    {/* Bottom row: Mode toggles */}
+                    <div className="flex items-center gap-2">
+                        {/* Main mode toggle */}
+                        <div className="flex gap-1 p-1 bg-white/4 rounded-xl border border-white/8">
+                            <ModeToggleButton
+                                label="Camps"
+                                isActive={mode === 'camps'}
+                                onClick={() => setMode('camps')}
+                                compact
+                            />
+                            <ModeToggleButton
+                                label="Route"
+                                isActive={mode === 'route'}
+                                onClick={() => setMode('route')}
+                                compact
+                            />
+                        </div>
+
+                        {/* Route sub-mode toggle */}
+                        <AnimatePresence>
+                            {mode === 'route' && (
+                                <motion.div
+                                    initial={{ opacity: 0, scale: 0.9, width: 0 }}
+                                    animate={{ opacity: 1, scale: 1, width: 'auto' }}
+                                    exit={{ opacity: 0, scale: 0.9, width: 0 }}
+                                    className="flex gap-1 p-1 bg-white/4 rounded-xl border border-white/8 overflow-hidden"
+                                >
+                                    <ModeToggleButton
+                                        label="Edit"
+                                        isActive={routeSubMode === 'edit'}
+                                        onClick={() => setRouteSubMode('edit')}
+                                        compact
+                                    />
+                                    <ModeToggleButton
+                                        label="Select"
+                                        isActive={routeSubMode === 'select'}
+                                        onClick={() => setRouteSubMode('select')}
+                                        compact
+                                    />
+                                    <ModeToggleButton
+                                        label="Draw"
+                                        isActive={routeSubMode === 'draw'}
+                                        onClick={() => setRouteSubMode('draw')}
+                                        compact
+                                    />
+                                </motion.div>
+                            )}
+                        </AnimatePresence>
+                    </div>
+                </div>
+            )}
+
+            {/* DESKTOP HEADER - Full controls */}
+            {!isMobile && (
                 <div style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    right: 320,
                     display: 'flex',
-                    gap: 4,
-                    padding: 4,
-                    background: colors.glass.subtle,
-                    borderRadius: radius.xl,
-                    border: `1px solid ${colors.glass.borderSubtle}`
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '16px 24px',
+                    ...glassPanel,
+                    borderTop: 'none',
+                    borderLeft: 'none',
+                    borderRight: 'none',
+                    borderRadius: 0,
+                    flexWrap: 'wrap',
+                    gap: 12,
+                    zIndex: 10
                 }}>
-                    <ModeToggleButton
-                        label="Camps"
-                        isActive={mode === 'camps'}
-                        onClick={() => setMode('camps')}
-                    />
-                    <ModeToggleButton
-                        label="Route"
-                        isActive={mode === 'route'}
-                        onClick={() => setMode('route')}
-                    />
-                </div>
+                    <div style={{ flex: '1 1 auto', minWidth: 150 }}>
+                        <p style={{
+                            ...typography.label,
+                            fontSize: 10,
+                            letterSpacing: '0.2em',
+                            color: colors.text.subtle,
+                            margin: '0 0 4px 0'
+                        }}>
+                            ROUTE EDITOR
+                        </p>
+                        <h1 style={{
+                            ...typography.display,
+                            margin: 0,
+                            fontSize: 22,
+                            fontWeight: 500
+                        }}>
+                            {trekData.name}
+                        </h1>
+                    </div>
 
-                {/* Route sub-mode toggle (only visible in Route mode) */}
-                {mode === 'route' && (
+                    {/* Mode toggle - using ModeToggleButton component */}
                     <div style={{
                         display: 'flex',
                         gap: 4,
@@ -1720,92 +1914,127 @@ export const RouteEditor = memo(function RouteEditor({
                         border: `1px solid ${colors.glass.borderSubtle}`
                     }}>
                         <ModeToggleButton
-                            label="Edit"
-                            isActive={routeSubMode === 'edit'}
-                            onClick={() => setRouteSubMode('edit')}
+                            label="Camps"
+                            isActive={mode === 'camps'}
+                            onClick={() => setMode('camps')}
                         />
                         <ModeToggleButton
-                            label="Select"
-                            isActive={routeSubMode === 'select'}
-                            onClick={() => setRouteSubMode('select')}
-                        />
-                        <ModeToggleButton
-                            label="Draw"
-                            isActive={routeSubMode === 'draw'}
-                            onClick={() => setRouteSubMode('draw')}
+                            label="Route"
+                            isActive={mode === 'route'}
+                            onClick={() => setMode('route')}
                         />
                     </div>
-                )}
 
-                {/* Undo/Redo buttons */}
-                <div className="flex gap-2">
-                    <Button
-                        variant="subtle"
-                        size="sm"
-                        onClick={handleUndo}
-                        disabled={undoStack.length === 0 || saving}
-                        title="Undo (⌘Z)"
-                    >
-                        ↶ Undo
-                    </Button>
-                    <Button
-                        variant="subtle"
-                        size="sm"
-                        onClick={handleRedo}
-                        disabled={redoStack.length === 0 || saving}
-                        title="Redo (⌘⇧Z)"
-                    >
-                        ↷ Redo
-                    </Button>
-                </div>
+                    {/* Route sub-mode toggle (only visible in Route mode) */}
+                    {mode === 'route' && (
+                        <div style={{
+                            display: 'flex',
+                            gap: 4,
+                            padding: 4,
+                            background: colors.glass.subtle,
+                            borderRadius: radius.xl,
+                            border: `1px solid ${colors.glass.borderSubtle}`
+                        }}>
+                            <ModeToggleButton
+                                label="Edit"
+                                isActive={routeSubMode === 'edit'}
+                                onClick={() => setRouteSubMode('edit')}
+                            />
+                            <ModeToggleButton
+                                label="Select"
+                                isActive={routeSubMode === 'select'}
+                                onClick={() => setRouteSubMode('select')}
+                            />
+                            <ModeToggleButton
+                                label="Draw"
+                                isActive={routeSubMode === 'draw'}
+                                onClick={() => setRouteSubMode('draw')}
+                            />
+                        </div>
+                    )}
 
-                <div className="flex gap-3">
-                    <Button variant="subtle" size="md" onClick={onClose} disabled={saving}>
-                        Cancel
-                    </Button>
-                    <Button
-                        variant="primary"
-                        size="md"
-                        onClick={handleSave}
-                        disabled={saving || (!hasChanges && !routeHasChanges)}
-                    >
-                        {saving ? 'Saving...' : 'Save Changes'}
-                    </Button>
+                    {/* Undo/Redo buttons */}
+                    <div className="flex gap-2">
+                        <Button
+                            variant="subtle"
+                            size="sm"
+                            onClick={handleUndo}
+                            disabled={undoStack.length === 0 || saving}
+                            title="Undo (⌘Z)"
+                        >
+                            ↶ Undo
+                        </Button>
+                        <Button
+                            variant="subtle"
+                            size="sm"
+                            onClick={handleRedo}
+                            disabled={redoStack.length === 0 || saving}
+                            title="Redo (⌘⇧Z)"
+                        >
+                            ↷ Redo
+                        </Button>
+                    </div>
+
+                    <div className="flex gap-3">
+                        <Button variant="subtle" size="md" onClick={onClose} disabled={saving}>
+                            Cancel
+                        </Button>
+                        <Button
+                            variant="primary"
+                            size="md"
+                            onClick={handleSave}
+                            disabled={saving || (!hasChanges && !routeHasChanges)}
+                        >
+                            {saving ? 'Saving...' : 'Save Changes'}
+                        </Button>
+                    </div>
                 </div>
-            </div>
+            )}
 
             {/* Instructions overlay - floating over map */}
             <div style={{
                 position: 'absolute',
-                top: isMobile ? 80 : 100,
-                left: isMobile ? 8 : 16,
+                top: isMobile ? 'calc(env(safe-area-inset-top) + 120px)' : 100,
+                left: isMobile ? 'max(8px, env(safe-area-inset-left))' : 16,
                 ...glassFloating,
                 borderRadius: radius.lg,
-                padding: isMobile ? '10px 14px' : '12px 16px',
-                maxWidth: isMobile ? 'calc(100% - 80px)' : 280,
-                fontSize: isMobile ? 12 : 13,
+                padding: isMobile ? '8px 12px' : '12px 16px',
+                maxWidth: isMobile ? 'calc(100% - 24px)' : 280,
+                fontSize: isMobile ? 11 : 13,
                 color: colors.text.primary,
-                lineHeight: 1.5,
+                lineHeight: 1.4,
                 zIndex: 5
             }}>
                 {mode === 'camps' ? (
-                    <>
-                        <strong>Drag</strong> markers to reposition camps<br />
-                        <strong>Click</strong> on route to add new camp
-                    </>
+                    isMobile ? (
+                        <><strong>Drag</strong> markers • <strong>Tap</strong> route to add</>
+                    ) : (
+                        <>
+                            <strong>Drag</strong> markers to reposition camps<br />
+                            <strong>Click</strong> on route to add new camp
+                        </>
+                    )
                 ) : routeSubMode === 'edit' ? (
-                    <>
-                        <strong>Drag</strong> route points to adjust path<br />
-                        <strong>Click</strong> on route to add new point
-                    </>
+                    isMobile ? (
+                        <><strong>Drag</strong> points • <strong>Tap</strong> route to add</>
+                    ) : (
+                        <>
+                            <strong>Drag</strong> route points to adjust path<br />
+                            <strong>Click</strong> on route to add new point
+                        </>
+                    )
                 ) : routeSubMode === 'select' ? (
                     isSelecting ? (
                         <span style={{ color: '#60a5fa' }}>
-                            <strong>Selecting...</strong> Release to select points
+                            <strong>Selecting...</strong> Release to select
                         </span>
                     ) : drawFeedback ? (
                         <span style={{ color: '#34d399' }}>
                             {drawFeedback}
+                        </span>
+                    ) : isMobile ? (
+                        <span style={{ color: '#60a5fa' }}>
+                            <strong>Drag</strong> to select area
                         </span>
                     ) : (
                         <>
@@ -1824,6 +2053,10 @@ export const RouteEditor = memo(function RouteEditor({
                 ) : drawFeedback ? (
                     <span style={{ color: '#34d399' }}>
                         {drawFeedback}
+                    </span>
+                ) : isMobile ? (
+                    <span style={{ color: '#34d399' }}>
+                        <strong>Draw</strong> to add route • Two fingers to pan
                     </span>
                 ) : (
                     <>
@@ -1876,26 +2109,78 @@ export const RouteEditor = memo(function RouteEditor({
                 </div>
             )}
 
-            {/* Sidebar - using glassPanel preset */}
-            <div style={{
-                position: 'absolute',
-                top: isMobile ? 'auto' : 0,
-                right: 0,
-                bottom: 0,
-                left: isMobile ? 0 : 'auto',
-                width: isMobile ? '100%' : 320,
-                height: isMobile ? '40vh' : '100%',
-                ...glassPanel,
-                borderLeft: isMobile ? 'none' : `1px solid ${colors.glass.border}`,
-                borderTop: isMobile ? `1px solid ${colors.glass.border}` : 'none',
-                borderBottom: 'none',
-                borderRight: 'none',
-                borderRadius: isMobile ? `${radius.xxl}px ${radius.xxl}px 0 0` : 0,
-                display: 'flex',
-                flexDirection: 'column',
-                overflow: 'hidden',
-                zIndex: 10
-            }}>
+            {/* MOBILE BOTTOM PANEL - iOS-style draggable sheet */}
+            {isMobile && (
+                <div
+                    ref={mobilePanelRef}
+                    style={{
+                        position: 'absolute',
+                        bottom: 0,
+                        left: 0,
+                        right: 0,
+                        height: `${MOBILE_SNAP_POINTS.compact}vh`,
+                        ...glassPanel,
+                        borderTop: `1px solid ${colors.glass.border}`,
+                        borderBottom: 'none',
+                        borderLeft: 'none',
+                        borderRight: 'none',
+                        borderRadius: `${radius.xxl}px ${radius.xxl}px 0 0`,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        overflow: 'hidden',
+                        zIndex: 10,
+                        paddingBottom: 'env(safe-area-inset-bottom, 0px)',
+                    }}
+                >
+                    {/* Drag handle area */}
+                    <div
+                        onTouchStart={handleMobilePanelDragStart}
+                        onTouchMove={handleMobilePanelDragMove}
+                        onTouchEnd={handleMobilePanelDragEnd}
+                        onMouseDown={handleMobilePanelDragStart}
+                        onMouseMove={handleMobilePanelDragMove}
+                        onMouseUp={handleMobilePanelDragEnd}
+                        style={{
+                            cursor: 'grab',
+                            touchAction: 'none',
+                            userSelect: 'none',
+                            WebkitUserSelect: 'none',
+                            flexShrink: 0,
+                        }}
+                    >
+                        {/* Grabber pill */}
+                        <div
+                            style={{
+                                width: 36,
+                                height: 5,
+                                borderRadius: radius.pill,
+                                background: colors.glass.light,
+                                margin: '10px auto 6px',
+                                opacity: 0.5,
+                            }}
+                        />
+
+                        {/* Mini header showing current mode info */}
+                        <div className="flex items-center justify-between px-4 pb-2">
+                            <div className="text-white/90 font-medium text-sm">
+                                {mode === 'camps' ? (
+                                    selectedCamp ? selectedCamp.name : `${camps.length} Camps`
+                                ) : (
+                                    selectedRoutePoints.size > 0
+                                        ? `${selectedRoutePoints.size} Points Selected`
+                                        : `${routeCoordinates.length} Route Points`
+                                )}
+                            </div>
+                            {(hasChanges || routeHasChanges) && (
+                                <span className="text-[10px] text-amber-400 bg-amber-400/15 px-2 py-0.5 rounded-full border border-amber-400/30">
+                                    Unsaved
+                                </span>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Panel content */}
+                    <div className="flex-1 overflow-hidden flex flex-col">
                     {mode === 'camps' ? (
                         <>
                     {/* Selected camp actions */}
@@ -2369,7 +2654,357 @@ export const RouteEditor = memo(function RouteEditor({
                             )}
                         </>
                     )}
+                    </div>
                 </div>
+            )}
+
+            {/* DESKTOP SIDEBAR */}
+            {!isMobile && (
+                <div style={{
+                    position: 'absolute',
+                    top: 0,
+                    right: 0,
+                    bottom: 0,
+                    width: 320,
+                    ...glassPanel,
+                    borderLeft: `1px solid ${colors.glass.border}`,
+                    borderTop: 'none',
+                    borderBottom: 'none',
+                    borderRight: 'none',
+                    borderRadius: 0,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    overflow: 'hidden',
+                    zIndex: 10
+                }}>
+                    {mode === 'camps' ? (
+                        <>
+                            {/* Selected camp actions */}
+                            {selectedCamp && (
+                                <div style={{
+                                    padding: 16,
+                                    borderBottom: `1px solid ${colors.glass.borderSubtle}`,
+                                    background: `linear-gradient(180deg, ${colors.glass.light} 0%, ${colors.glass.subtle} 100%)`,
+                                    boxShadow: shadows.inset.subtle
+                                }}>
+                                    <div style={{
+                                        display: 'flex',
+                                        justifyContent: 'space-between',
+                                        alignItems: 'flex-start',
+                                        marginBottom: 12
+                                    }}>
+                                        <div>
+                                            <div style={{
+                                                fontSize: 16,
+                                                fontWeight: 600,
+                                                color: colors.text.primary
+                                            }}>
+                                                {selectedCamp.name}
+                                            </div>
+                                            <div style={{
+                                                fontSize: 13,
+                                                color: colors.text.secondary,
+                                                marginTop: 4
+                                            }}>
+                                                Day {selectedCamp.dayNumber} • {selectedCamp.elevation}m
+                                            </div>
+                                            {selectedCamp.routeDistanceKm != null && (
+                                                <div style={{
+                                                    fontSize: 12,
+                                                    color: colors.text.tertiary,
+                                                    marginTop: 2
+                                                }}>
+                                                    {selectedCamp.routeDistanceKm.toFixed(1)} km from start
+                                                </div>
+                                            )}
+                                        </div>
+                                        {selectedCamp.isDirty && (
+                                            <span style={{
+                                                fontSize: 11,
+                                                color: colors.accent.warning,
+                                                background: `linear-gradient(135deg, rgba(251, 191, 36, 0.25) 0%, rgba(245, 158, 11, 0.15) 100%)`,
+                                                padding: '4px 10px',
+                                                borderRadius: radius.sm,
+                                                fontWeight: 500,
+                                                border: '1px solid rgba(251, 191, 36, 0.3)',
+                                                backdropFilter: effects.blur.subtle
+                                            }}>
+                                                Modified
+                                            </span>
+                                        )}
+                                    </div>
+                                    <div className="flex gap-2">
+                                        <Button
+                                            variant="subtle"
+                                            size="sm"
+                                            onClick={() => flyToCamp(selectedCamp)}
+                                            className="flex-1"
+                                        >
+                                            Zoom To
+                                        </Button>
+                                        <Button
+                                            variant="danger"
+                                            size="sm"
+                                            onClick={handleDeleteCamp}
+                                        >
+                                            Delete
+                                        </Button>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Camp list header */}
+                            <div style={{
+                                padding: '12px 16px',
+                                ...typography.label,
+                                fontSize: 11,
+                                color: colors.text.tertiary,
+                                borderBottom: `1px solid ${colors.glass.borderSubtle}`,
+                                background: `linear-gradient(180deg, rgba(255, 255, 255, 0.03) 0%, transparent 100%)`
+                            }}>
+                                Camps ({camps.length})
+                            </div>
+
+                            {/* Camp list */}
+                            <div
+                                data-testid="camp-list-desktop"
+                                style={{
+                                    flex: 1,
+                                    overflowY: 'auto',
+                                    padding: 8
+                                }}
+                                className="glass-scrollbar"
+                            >
+                                {sortCamps(camps).map((camp, index) => (
+                                    <div
+                                        key={camp.id}
+                                        onClick={() => {
+                                            setSelectedCampId(camp.id);
+                                            flyToCamp(camp);
+                                        }}
+                                        style={{
+                                            padding: '12px 14px',
+                                            marginBottom: 6,
+                                            background: camp.id === selectedCampId
+                                                ? colors.glass.medium
+                                                : 'transparent',
+                                            borderRadius: radius.md,
+                                            cursor: 'pointer',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: 12,
+                                            border: camp.isDirty
+                                                ? '1px solid rgba(251, 191, 36, 0.4)'
+                                                : `1px solid transparent`,
+                                            transition: `all ${transitions.normal}`
+                                        }}
+                                    >
+                                        <div
+                                            style={{
+                                                width: 32,
+                                                height: 32,
+                                                borderRadius: '50%',
+                                                background: camp.isDirty
+                                                    ? 'linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%)'
+                                                    : camp.id === selectedCampId
+                                                        ? 'linear-gradient(135deg, #60a5fa 0%, #3b82f6 100%)'
+                                                        : colors.glass.medium,
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                fontSize: 13,
+                                                fontWeight: 700,
+                                                color: (camp.isDirty || camp.id === selectedCampId) ? '#fff' : colors.text.secondary,
+                                                flexShrink: 0
+                                            }}
+                                        >
+                                            {index + 1}
+                                        </div>
+                                        <div style={{ flex: 1, minWidth: 0 }}>
+                                            <div style={{
+                                                fontSize: 14,
+                                                fontWeight: 500,
+                                                color: colors.text.primary,
+                                                whiteSpace: 'nowrap',
+                                                overflow: 'hidden',
+                                                textOverflow: 'ellipsis'
+                                            }}>
+                                                {camp.name}
+                                            </div>
+                                            <div style={{
+                                                fontSize: 12,
+                                                color: colors.text.tertiary,
+                                                marginTop: 2
+                                            }}>
+                                                {camp.elevation}m
+                                                {camp.routeDistanceKm != null && (
+                                                    <> • {camp.routeDistanceKm.toFixed(1)} km</>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+
+                            {/* Has changes indicator */}
+                            {hasChanges && (
+                                <div style={{
+                                    padding: '12px 16px',
+                                    background: `linear-gradient(180deg, rgba(251, 191, 36, 0.15) 0%, rgba(251, 191, 36, 0.08) 100%)`,
+                                    borderTop: `1px solid rgba(251, 191, 36, 0.3)`,
+                                    fontSize: 13,
+                                    color: colors.accent.warning,
+                                    textAlign: 'center',
+                                    fontWeight: 500
+                                }}>
+                                    You have unsaved changes
+                                </div>
+                            )}
+                        </>
+                    ) : (
+                        <>
+                            {/* Route editing mode sidebar - Desktop version */}
+                            {selectedRoutePoints.size > 0 && (
+                                <div style={{
+                                    padding: 16,
+                                    borderBottom: `1px solid ${colors.glass.borderSubtle}`,
+                                    background: `linear-gradient(180deg, ${colors.glass.light} 0%, ${colors.glass.subtle} 100%)`,
+                                    boxShadow: shadows.inset.subtle
+                                }}>
+                                    <div style={{
+                                        fontSize: 16,
+                                        fontWeight: 600,
+                                        color: colors.text.primary,
+                                        marginBottom: 12
+                                    }}>
+                                        {selectedRoutePoints.size === 1
+                                            ? `Route Point #${Array.from(selectedRoutePoints)[0] + 1}`
+                                            : `${selectedRoutePoints.size} Points Selected`
+                                        }
+                                    </div>
+                                    <div className="flex gap-2 flex-wrap">
+                                        <Button variant="subtle" size="sm" onClick={handleClearSelection}>
+                                            Clear
+                                        </Button>
+                                        {selectedRoutePoints.size >= 2 && (
+                                            <Button
+                                                variant="subtle"
+                                                size="sm"
+                                                onClick={handleSnapSelectedToTrail}
+                                                disabled={isSnapping}
+                                            >
+                                                {isSnapping ? `Snapping ${Math.round(snapProgress * 100)}%` : 'Snap'}
+                                            </Button>
+                                        )}
+                                        <Button variant="danger" size="sm" onClick={handleDeleteRoutePoints}>
+                                            Delete
+                                        </Button>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Route info header */}
+                            <div style={{
+                                padding: '12px 16px',
+                                ...typography.label,
+                                fontSize: 11,
+                                color: colors.text.tertiary,
+                                borderBottom: `1px solid ${colors.glass.borderSubtle}`
+                            }}>
+                                Route Points ({routeCoordinates.length})
+                            </div>
+
+                            {/* Route stats */}
+                            <div style={{ padding: 16, borderBottom: `1px solid ${colors.glass.borderSubtle}` }}>
+                                <div style={{ fontSize: 13, color: colors.text.secondary, marginBottom: 12 }}>
+                                    Visible markers: {visibleRoutePointIndices.length}
+                                </div>
+                                <Button
+                                    variant="subtle"
+                                    size="sm"
+                                    onClick={handleSnapToTrail}
+                                    disabled={isSnapping || routeCoordinates.length < 2}
+                                    className="w-full"
+                                >
+                                    {isSnapping ? `Snapping... ${Math.round(snapProgress * 100)}%` : 'Snap Route to Trails'}
+                                </Button>
+                            </div>
+
+                            {/* Selection tools */}
+                            <div style={{ padding: 16 }}>
+                                <div className="flex gap-2 mb-3">
+                                    <Button variant="subtle" size="sm" onClick={handleSelectAllVisible} className="flex-1">
+                                        Select Visible
+                                    </Button>
+                                    {selectedRoutePoints.size > 0 && (
+                                        <Button variant="subtle" size="sm" onClick={handleClearSelection}>
+                                            Clear
+                                        </Button>
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* Route changes indicator */}
+                            {routeHasChanges && (
+                                <div style={{
+                                    padding: '12px 16px',
+                                    background: `linear-gradient(180deg, rgba(251, 191, 36, 0.15) 0%, rgba(251, 191, 36, 0.08) 100%)`,
+                                    borderTop: `1px solid rgba(251, 191, 36, 0.3)`,
+                                    fontSize: 13,
+                                    color: colors.accent.warning,
+                                    textAlign: 'center',
+                                    fontWeight: 500,
+                                    marginTop: 'auto'
+                                }}>
+                                    Route has unsaved changes
+                                </div>
+                            )}
+                        </>
+                    )}
+                </div>
+            )}
+
+            {/* MOBILE ACTION BAR - Fixed bottom bar with Save/Cancel */}
+            {isMobile && (
+                <div
+                    style={{
+                        position: 'fixed',
+                        bottom: 0,
+                        left: 0,
+                        right: 0,
+                        paddingTop: 12,
+                        paddingBottom: 'calc(12px + env(safe-area-inset-bottom, 0px))',
+                        paddingLeft: 'max(16px, env(safe-area-inset-left))',
+                        paddingRight: 'max(16px, env(safe-area-inset-right))',
+                        background: `linear-gradient(180deg, rgba(10, 10, 15, 0.95) 0%, rgba(10, 10, 15, 0.98) 100%)`,
+                        backdropFilter: 'blur(20px)',
+                        WebkitBackdropFilter: 'blur(20px)',
+                        borderTop: `1px solid ${colors.glass.border}`,
+                        display: 'flex',
+                        gap: 12,
+                        zIndex: 20,
+                    }}
+                >
+                    <Button
+                        variant="subtle"
+                        size="md"
+                        onClick={onClose}
+                        disabled={saving}
+                        className="flex-1"
+                    >
+                        Cancel
+                    </Button>
+                    <Button
+                        variant="primary"
+                        size="md"
+                        onClick={handleSave}
+                        disabled={saving || (!hasChanges && !routeHasChanges)}
+                        className="flex-1"
+                    >
+                        {saving ? 'Saving...' : 'Save'}
+                    </Button>
+                </div>
+            )}
         </div>,
         document.body
     );
