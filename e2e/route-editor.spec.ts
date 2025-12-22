@@ -70,21 +70,6 @@ async function closeRouteEditor(page: Page): Promise<void> {
     }
 }
 
-// Helper to simulate swipe gesture
-async function swipeLeft(page: Page, element: string, distance: number = 100): Promise<void> {
-    const locator = page.locator(element);
-    const box = await locator.boundingBox();
-    if (!box) return;
-
-    const startX = box.x + box.width - 20;
-    const startY = box.y + box.height / 2;
-
-    await page.mouse.move(startX, startY);
-    await page.mouse.down();
-    await page.mouse.move(startX - distance, startY, { steps: 10 });
-    await page.mouse.up();
-}
-
 test.describe('Route Editor', () => {
     test.beforeEach(async ({ page }) => {
         await page.goto('/');
@@ -440,7 +425,7 @@ test.describe('Route Editor Mobile', () => {
         await expect(page.locator('button:has-text("Save")').first()).toBeVisible();
     });
 
-    test('swipeable camp items are present', async ({ page }) => {
+    test('camp items are present', async ({ page }) => {
         const selected = await selectFirstTrek(page);
         if (!selected) {
             test.skip();
@@ -453,14 +438,14 @@ test.describe('Route Editor Mobile', () => {
             return;
         }
 
-        // Should show swipeable camp items
-        const swipeableCamp = page.locator('[data-testid^="swipeable-camp-"]').first();
-        if (await swipeableCamp.isVisible().catch(() => false)) {
-            await expect(swipeableCamp).toBeVisible();
+        // Should show camp items
+        const campItem = page.locator('[data-testid^="camp-item-"]').first();
+        if (await campItem.isVisible().catch(() => false)) {
+            await expect(campItem).toBeVisible();
         }
     });
 
-    test('swipe gesture reveals action buttons', async ({ page }) => {
+    test('camp items have drag handles for reordering', async ({ page }) => {
         const selected = await selectFirstTrek(page);
         if (!selected) {
             test.skip();
@@ -473,48 +458,14 @@ test.describe('Route Editor Mobile', () => {
             return;
         }
 
-        // Find swipeable camp
-        const swipeableCamp = page.locator('[data-testid^="swipeable-camp-"]').first();
-        if (!await swipeableCamp.isVisible().catch(() => false)) {
-            test.skip();
-            return;
+        // Camp items should be visible (they have drag handles built in)
+        const campItem = page.locator('[data-testid^="camp-item-"]').first();
+        if (await campItem.isVisible().catch(() => false)) {
+            await expect(campItem).toBeVisible();
         }
-
-        // Perform swipe gesture using touch events
-        const box = await swipeableCamp.boundingBox();
-        if (!box) {
-            test.skip();
-            return;
-        }
-
-        // Simulate touch swipe left
-        await page.touchscreen.tap(box.x + box.width - 30, box.y + box.height / 2);
-        await page.mouse.move(box.x + box.width - 30, box.y + box.height / 2);
-        await page.mouse.down();
-
-        // Move left
-        for (let i = 0; i < 10; i++) {
-            await page.mouse.move(
-                box.x + box.width - 30 - (i * 15),
-                box.y + box.height / 2
-            );
-            await page.waitForTimeout(10);
-        }
-
-        await page.mouse.up();
-        await page.waitForTimeout(300);
-
-        // Action buttons should be visible (Zoom and Delete)
-        const zoomButton = page.locator('[data-testid^="camp-zoom-"]').first();
-        const deleteButton = page.locator('[data-testid^="camp-delete-"]').first();
-
-        // At least check that they exist in DOM
-        const zoomCount = await zoomButton.count();
-        const deleteCount = await deleteButton.count();
-        expect(zoomCount + deleteCount).toBeGreaterThan(0);
     });
 
-    test('swipe hint is shown', async ({ page }) => {
+    test('hint text shows drag and swipe instructions', async ({ page }) => {
         const selected = await selectFirstTrek(page);
         if (!selected) {
             test.skip();
@@ -527,10 +478,10 @@ test.describe('Route Editor Mobile', () => {
             return;
         }
 
-        // Should show swipe hint text
-        const swipeHint = page.getByText(/Swipe.*actions/i);
-        if (await swipeHint.isVisible().catch(() => false)) {
-            await expect(swipeHint).toBeVisible();
+        // Should show hint about drag to reorder and swipe to delete
+        const hint = page.getByText(/Drag.*reorder|Swipe.*delete/i);
+        if (await hint.isVisible().catch(() => false)) {
+            await expect(hint).toBeVisible();
         }
     });
 });

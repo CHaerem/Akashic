@@ -19,12 +19,12 @@ import { useState, useRef, useEffect, useCallback, memo, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, Reorder, useDragControls } from 'framer-motion';
 import type { TrekData, Camp, Route } from '../../types/trek';
 import { Button } from '../ui/button';
 import { cn } from '@/lib/utils';
 // TODO: Migrate remaining inline styles to Tailwind - keeping liquidGlass import for now
-import { colors, radius, transitions, effects, shadows, glassFloating, glassPanel, typography, gradients } from '../../styles/liquidGlass';
+import { colors, radius, transitions, effects, shadows, glassFloating, glassPanel, typography } from '../../styles/liquidGlass';
 import { findNearestPointOnRoute, haversineDistance, type RouteCoordinate, type Coordinate } from '../../utils/routeUtils';
 import { processDrawnSegment as processWithMapMatching, snapRouteToTrails } from '../../lib/mapMatching';
 import { updateWaypoint, createWaypoint, deleteWaypoint, getJourneyIdBySlug, updateJourneyRoute } from '../../lib/journeys';
@@ -116,32 +116,31 @@ interface EditableCamp extends Camp {
     routePointIndex?: number | null;
 }
 
-// Swipeable camp item for mobile - reveals actions on swipe (Liquid Glass design)
-interface SwipeableCampItemProps {
+// Mobile camp item - swipe to delete, drag to reorder
+interface MobileCampItemProps {
     camp: EditableCamp;
     index: number;
     isSelected: boolean;
     onSelect: () => void;
-    onDelete: () => void;
-    onZoomTo: () => void;
+    onRequestDelete: () => void;
 }
 
-const SwipeableCampItem = memo(function SwipeableCampItem({
+const MobileCampItem = memo(function MobileCampItem({
     camp,
     index,
     isSelected,
     onSelect,
-    onDelete,
-    onZoomTo
-}: SwipeableCampItemProps) {
+    onRequestDelete,
+}: MobileCampItemProps) {
+    const dragControls = useDragControls();
     const [swipeX, setSwipeX] = useState(0);
     const [isDragging, setIsDragging] = useState(false);
     const startX = useRef(0);
     const startSwipeX = useRef(0);
     const itemRef = useRef<HTMLDivElement>(null);
 
-    const ACTION_WIDTH = 132; // Width of action buttons area
-    const SWIPE_THRESHOLD = 40; // Minimum swipe to trigger action reveal
+    const DELETE_BUTTON_WIDTH = 72;
+    const SWIPE_THRESHOLD = 30;
 
     const handleTouchStart = useCallback((e: React.TouchEvent) => {
         startX.current = e.touches[0].clientX;
@@ -153,15 +152,14 @@ const SwipeableCampItem = memo(function SwipeableCampItem({
         if (!isDragging) return;
         const currentX = e.touches[0].clientX;
         const deltaX = currentX - startX.current;
-        const newSwipeX = Math.max(-ACTION_WIDTH, Math.min(0, startSwipeX.current + deltaX));
+        const newSwipeX = Math.max(-DELETE_BUTTON_WIDTH, Math.min(0, startSwipeX.current + deltaX));
         setSwipeX(newSwipeX);
     }, [isDragging]);
 
     const handleTouchEnd = useCallback(() => {
         setIsDragging(false);
-        // Snap to open or closed
         if (swipeX < -SWIPE_THRESHOLD) {
-            setSwipeX(-ACTION_WIDTH);
+            setSwipeX(-DELETE_BUTTON_WIDTH);
         } else {
             setSwipeX(0);
         }
@@ -170,18 +168,11 @@ const SwipeableCampItem = memo(function SwipeableCampItem({
     const handleDelete = useCallback((e: React.MouseEvent | React.TouchEvent) => {
         e.stopPropagation();
         setSwipeX(0);
-        onDelete();
-    }, [onDelete]);
-
-    const handleZoomTo = useCallback((e: React.MouseEvent | React.TouchEvent) => {
-        e.stopPropagation();
-        setSwipeX(0);
-        onZoomTo();
-    }, [onZoomTo]);
+        onRequestDelete();
+    }, [onRequestDelete]);
 
     const handleItemClick = useCallback(() => {
         if (swipeX < -SWIPE_THRESHOLD / 2) {
-            // If swiped, close instead of selecting
             setSwipeX(0);
         } else {
             onSelect();
@@ -205,181 +196,265 @@ const SwipeableCampItem = memo(function SwipeableCampItem({
         }
     }, [swipeX]);
 
-    return (
-        <div
-            ref={itemRef}
-            data-testid={`swipeable-camp-${index}`}
-            style={{
-                position: 'relative',
-                overflow: 'hidden',
-                marginBottom: 8,
-                borderRadius: radius.lg,
-            }}
-        >
-            {/* Action buttons (revealed on swipe) - Liquid Glass styling */}
-            <div
-                style={{
-                    position: 'absolute',
-                    right: 0,
-                    top: 0,
-                    bottom: 0,
-                    width: ACTION_WIDTH,
-                    display: 'flex',
-                    alignItems: 'stretch',
-                    gap: 1,
-                }}
-            >
-                <button
-                    onClick={handleZoomTo}
-                    data-testid={`camp-zoom-${index}`}
-                    style={{
-                        flex: 1,
-                        display: 'flex',
-                        flexDirection: 'column',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: 4,
-                        background: `linear-gradient(135deg, ${colors.accent.primary}40 0%, ${colors.accent.primary}20 100%)`,
-                        backdropFilter: effects.blur.subtle,
-                        WebkitBackdropFilter: effects.blur.subtle,
-                        border: 'none',
-                        color: colors.accent.primary,
-                        cursor: 'pointer',
-                        transition: `all ${transitions.fast}`,
-                    }}
-                >
-                    <span style={{ fontSize: 18 }}>⌖</span>
-                    <span style={{ fontSize: 10, fontWeight: 500, letterSpacing: '0.05em' }}>ZOOM</span>
-                </button>
-                <button
-                    onClick={handleDelete}
-                    data-testid={`camp-delete-${index}`}
-                    style={{
-                        flex: 1,
-                        display: 'flex',
-                        flexDirection: 'column',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: 4,
-                        background: `linear-gradient(135deg, ${colors.accent.error}40 0%, ${colors.accent.error}20 100%)`,
-                        backdropFilter: effects.blur.subtle,
-                        WebkitBackdropFilter: effects.blur.subtle,
-                        border: 'none',
-                        color: colors.accent.error,
-                        cursor: 'pointer',
-                        transition: `all ${transitions.fast}`,
-                    }}
-                >
-                    <span style={{ fontSize: 18 }}>✕</span>
-                    <span style={{ fontSize: 10, fontWeight: 500, letterSpacing: '0.05em' }}>DELETE</span>
-                </button>
-            </div>
+    // Calculate delete button opacity based on swipe progress (fade in as you swipe)
+    const deleteOpacity = Math.min(1, Math.abs(swipeX) / (DELETE_BUTTON_WIDTH * 0.6));
 
-            {/* Main item content (slides on swipe) - Liquid Glass card */}
-            <motion.div
-                animate={{ x: swipeX }}
-                transition={isDragging ? { duration: 0 } : { type: 'spring', stiffness: 400, damping: 35 }}
-                onTouchStart={handleTouchStart}
-                onTouchMove={handleTouchMove}
-                onTouchEnd={handleTouchEnd}
-                onClick={handleItemClick}
+    return (
+        <Reorder.Item
+            value={camp}
+            dragListener={false}
+            dragControls={dragControls}
+            style={{ marginBottom: 8 }}
+        >
+            <div
+                ref={itemRef}
                 data-testid={`camp-item-${index}`}
                 style={{
                     position: 'relative',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 12,
-                    padding: '14px 16px',
-                    cursor: 'pointer',
-                    touchAction: 'pan-y',
+                    overflow: 'hidden',
                     borderRadius: radius.lg,
-                    background: isSelected
-                        ? gradients.glass.button
-                        : gradients.glass.subtle,
-                    border: camp.isDirty
-                        ? `1px solid ${colors.accent.warning}60`
-                        : `1px solid ${isSelected ? colors.glass.border : colors.glass.borderSubtle}`,
-                    boxShadow: isSelected
-                        ? shadows.glass.button
-                        : `0 2px 8px rgba(0, 0, 0, 0.15), inset 0 1px 0 ${colors.glass.highlight}20`,
-                    transition: `background ${transitions.normal}, border ${transitions.normal}, box-shadow ${transitions.normal}`,
                 }}
             >
-                {/* Camp number badge */}
-                <div
+                {/* Delete button - fades in on swipe, Liquid Glass styling */}
+                <motion.div
+                    animate={{ opacity: deleteOpacity }}
+                    transition={{ duration: 0 }}
                     style={{
-                        width: 36,
-                        height: 36,
-                        borderRadius: radius.pill,
-                        background: camp.isDirty
-                            ? `linear-gradient(135deg, ${colors.accent.warning} 0%, #f59e0b 100%)`
-                            : isSelected
-                                ? `linear-gradient(135deg, ${colors.accent.primary} 0%, #3b82f6 100%)`
-                                : colors.glass.medium,
+                        position: 'absolute',
+                        right: 0,
+                        top: 0,
+                        bottom: 0,
+                        width: DELETE_BUTTON_WIDTH,
+                        display: 'flex',
+                        alignItems: 'stretch',
+                        pointerEvents: swipeX < -SWIPE_THRESHOLD ? 'auto' : 'none',
+                    }}
+                >
+                    <button
+                        onClick={handleDelete}
+                        data-testid={`camp-delete-${index}`}
+                        style={{
+                            flex: 1,
+                            display: 'flex',
+                            flexDirection: 'column',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: 4,
+                            // Liquid Glass red - translucent with blur
+                            background: `linear-gradient(135deg, rgba(248, 113, 113, 0.9) 0%, rgba(220, 38, 38, 0.85) 100%)`,
+                            backdropFilter: effects.blur.medium,
+                            WebkitBackdropFilter: effects.blur.medium,
+                            border: 'none',
+                            borderLeft: `1px solid rgba(255, 255, 255, 0.1)`,
+                            color: '#fff',
+                            cursor: 'pointer',
+                            transition: `all ${transitions.fast}`,
+                            borderTopRightRadius: radius.lg,
+                            borderBottomRightRadius: radius.lg,
+                            boxShadow: 'inset 0 1px 0 rgba(255, 255, 255, 0.2)',
+                        }}
+                    >
+                        <span style={{ fontSize: 18 }}>✕</span>
+                        <span style={{ fontSize: 9, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase' }}>Delete</span>
+                    </button>
+                </motion.div>
+
+                {/* Main content - Liquid Glass card */}
+                <motion.div
+                    animate={{ x: swipeX }}
+                    transition={isDragging ? { duration: 0 } : { type: 'spring', stiffness: 400, damping: 35 }}
+                    onTouchStart={handleTouchStart}
+                    onTouchMove={handleTouchMove}
+                    onTouchEnd={handleTouchEnd}
+                    onClick={handleItemClick}
+                    style={{
+                        position: 'relative',
                         display: 'flex',
                         alignItems: 'center',
-                        justifyContent: 'center',
-                        fontSize: 14,
-                        fontWeight: 600,
-                        color: (camp.isDirty || isSelected) ? '#fff' : colors.text.secondary,
-                        flexShrink: 0,
-                        boxShadow: (camp.isDirty || isSelected)
-                            ? '0 2px 8px rgba(0, 0, 0, 0.3)'
-                            : 'none',
+                        gap: 10,
+                        padding: '12px 14px',
+                        cursor: 'pointer',
+                        touchAction: 'pan-y',
+                        borderRadius: radius.lg,
+                        // Proper Liquid Glass - translucent with backdrop blur
+                        background: isSelected
+                            ? `linear-gradient(135deg, rgba(255, 255, 255, 0.14) 0%, rgba(255, 255, 255, 0.08) 100%)`
+                            : `linear-gradient(135deg, rgba(255, 255, 255, 0.10) 0%, rgba(255, 255, 255, 0.05) 100%)`,
+                        backdropFilter: `${effects.blur.strong} ${effects.saturation.enhanced}`,
+                        WebkitBackdropFilter: `${effects.blur.strong} ${effects.saturation.enhanced}`,
+                        border: camp.isDirty
+                            ? `1px solid ${colors.accent.warning}60`
+                            : `1px solid ${isSelected ? colors.glass.border : colors.glass.borderSubtle}`,
+                        boxShadow: isSelected
+                            ? shadows.glass.button
+                            : `0 4px 16px rgba(0, 0, 0, 0.2), inset 0 1px 0 ${colors.glass.highlight}`,
                     }}
                 >
-                    {index + 1}
-                </div>
-
-                {/* Camp info */}
-                <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{
-                        ...typography.heading,
-                        fontSize: 14,
-                        color: colors.text.primary,
-                        whiteSpace: 'nowrap',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                    }}>
-                        {camp.name}
+                    {/* Drag handle - subtle glass lines */}
+                    <div
+                        onPointerDown={(e) => dragControls.start(e)}
+                        style={{
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: 3,
+                            padding: '6px 6px',
+                            cursor: 'grab',
+                            touchAction: 'none',
+                            borderRadius: radius.sm,
+                            background: 'rgba(255, 255, 255, 0.03)',
+                        }}
+                    >
+                        <div style={{ width: 14, height: 2, background: 'rgba(255, 255, 255, 0.25)', borderRadius: 1 }} />
+                        <div style={{ width: 14, height: 2, background: 'rgba(255, 255, 255, 0.25)', borderRadius: 1 }} />
+                        <div style={{ width: 14, height: 2, background: 'rgba(255, 255, 255, 0.25)', borderRadius: 1 }} />
                     </div>
-                    <div style={{
-                        ...typography.caption,
-                        fontSize: 12,
-                        color: colors.text.tertiary,
-                        marginTop: 2,
-                    }}>
-                        {camp.elevation}m
-                        {camp.routeDistanceKm != null && (
-                            <span style={{ color: colors.text.subtle }}> • {camp.routeDistanceKm.toFixed(1)} km</span>
-                        )}
+
+                    {/* Camp number badge - glass style */}
+                    <div
+                        style={{
+                            width: 32,
+                            height: 32,
+                            borderRadius: radius.pill,
+                            background: camp.isDirty
+                                ? `linear-gradient(135deg, ${colors.accent.warning} 0%, #f59e0b 100%)`
+                                : isSelected
+                                    ? `linear-gradient(135deg, ${colors.accent.primary} 0%, #3b82f6 100%)`
+                                    : `linear-gradient(135deg, rgba(255, 255, 255, 0.12) 0%, rgba(255, 255, 255, 0.06) 100%)`,
+                            backdropFilter: (!camp.isDirty && !isSelected) ? effects.blur.subtle : undefined,
+                            WebkitBackdropFilter: (!camp.isDirty && !isSelected) ? effects.blur.subtle : undefined,
+                            border: (!camp.isDirty && !isSelected) ? `1px solid ${colors.glass.borderSubtle}` : 'none',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            fontSize: 13,
+                            fontWeight: 600,
+                            color: (camp.isDirty || isSelected) ? '#fff' : colors.text.secondary,
+                            flexShrink: 0,
+                            boxShadow: (camp.isDirty || isSelected)
+                                ? '0 2px 8px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.2)'
+                                : 'inset 0 1px 0 rgba(255, 255, 255, 0.1)',
+                        }}
+                    >
+                        {index + 1}
                     </div>
-                </div>
 
-                {/* Modified indicator */}
-                {camp.isDirty && (
-                    <div style={{
-                        width: 8,
-                        height: 8,
-                        borderRadius: radius.pill,
-                        background: colors.accent.warning,
-                        boxShadow: `0 0 8px ${colors.accent.warning}80`,
-                        flexShrink: 0,
-                    }} />
-                )}
+                    {/* Camp info */}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{
+                            ...typography.heading,
+                            fontSize: 14,
+                            color: colors.text.primary,
+                            whiteSpace: 'nowrap',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                        }}>
+                            {camp.name}
+                        </div>
+                        <div style={{
+                            ...typography.caption,
+                            fontSize: 11,
+                            color: colors.text.tertiary,
+                            marginTop: 1,
+                        }}>
+                            {camp.elevation}m
+                            {camp.routeDistanceKm != null && (
+                                <span style={{ color: colors.text.subtle }}> • {camp.routeDistanceKm.toFixed(1)} km</span>
+                            )}
+                        </div>
+                    </div>
 
-                {/* Swipe hint chevron */}
-                <motion.div
-                    animate={{ rotate: swipeX < -10 ? 180 : 0, opacity: swipeX < -10 ? 0 : 0.4 }}
-                    style={{
-                        color: colors.text.subtle,
-                        fontSize: 16,
-                    }}
-                >
-                    ‹
+                    {/* Modified indicator - subtle glow */}
+                    {camp.isDirty && (
+                        <div style={{
+                            width: 6,
+                            height: 6,
+                            borderRadius: radius.pill,
+                            background: colors.accent.warning,
+                            boxShadow: `0 0 8px ${colors.accent.warning}`,
+                            flexShrink: 0,
+                        }} />
+                    )}
+
+                    {/* Swipe hint chevron */}
+                    <motion.div
+                        animate={{ opacity: swipeX < -10 ? 0 : 0.4 }}
+                        style={{ color: colors.text.subtle, fontSize: 14 }}
+                    >
+                        ‹
+                    </motion.div>
                 </motion.div>
+            </div>
+        </Reorder.Item>
+    );
+});
+
+// Delete confirmation dialog
+interface DeleteConfirmDialogProps {
+    isOpen: boolean;
+    campName: string;
+    onConfirm: () => void;
+    onCancel: () => void;
+}
+
+const DeleteConfirmDialog = memo(function DeleteConfirmDialog({
+    isOpen,
+    campName,
+    onConfirm,
+    onCancel
+}: DeleteConfirmDialogProps) {
+    if (!isOpen) return null;
+
+    return createPortal(
+        <div
+            style={{
+                position: 'fixed',
+                inset: 0,
+                zIndex: 100,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                background: 'rgba(0, 0, 0, 0.6)',
+                backdropFilter: effects.blur.medium,
+                WebkitBackdropFilter: effects.blur.medium,
+            }}
+            onClick={onCancel}
+        >
+            <motion.div
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.9 }}
+                onClick={(e) => e.stopPropagation()}
+                style={{
+                    ...glassPanel,
+                    padding: 24,
+                    borderRadius: radius.xl,
+                    maxWidth: 320,
+                    margin: 16,
+                    textAlign: 'center',
+                }}
+            >
+                <div style={{ fontSize: 18, fontWeight: 600, color: colors.text.primary, marginBottom: 8 }}>
+                    Delete Camp?
+                </div>
+                <div style={{ fontSize: 14, color: colors.text.secondary, marginBottom: 24 }}>
+                    Are you sure you want to delete "{campName}"? This action cannot be undone.
+                </div>
+                <div style={{ display: 'flex', gap: 12 }}>
+                    <Button variant="subtle" onClick={onCancel} className="flex-1">
+                        Cancel
+                    </Button>
+                    <Button
+                        variant="primary"
+                        onClick={onConfirm}
+                        className="flex-1"
+                        style={{ background: colors.accent.error }}
+                    >
+                        Delete
+                    </Button>
+                </div>
             </motion.div>
-        </div>
+        </div>,
+        document.body
     );
 });
 
@@ -405,6 +480,7 @@ export const RouteEditor = memo(function RouteEditor({
     // Camp editing state
     const [camps, setCamps] = useState<EditableCamp[]>([]);
     const [selectedCampId, setSelectedCampId] = useState<string | null>(null);
+    const [deleteConfirmCamp, setDeleteConfirmCamp] = useState<EditableCamp | null>(null);
 
     // Route editing state
     const [routeCoordinates, setRouteCoordinates] = useState<RouteCoordinate[]>([]);
@@ -933,7 +1009,7 @@ export const RouteEditor = memo(function RouteEditor({
     }
 
     // Update route point marker styling - smaller than camp markers
-    function updateRoutePointMarkerStyle(el: HTMLElement, index: number, isSelected: boolean) {
+    function updateRoutePointMarkerStyle(el: HTMLElement, _index: number, isSelected: boolean) {
         const size = isSelected ? 16 : 10;
         el.style.width = `${size}px`;
         el.style.height = `${size}px`;
@@ -2037,7 +2113,7 @@ export const RouteEditor = memo(function RouteEditor({
                 }}
             />
 
-            {/* MOBILE HEADER - Compact top bar with essential controls */}
+            {/* MOBILE HEADER - Compact top bar with Cancel/Save and controls */}
             {isMobile && (
                 <div
                     style={{
@@ -2057,88 +2133,135 @@ export const RouteEditor = memo(function RouteEditor({
                         zIndex: 10
                     }}
                 >
-                    {/* Top row: Title + Mode toggle */}
-                    <div className="flex items-center justify-between gap-3 mb-3">
-                        <div className="flex-1 min-w-0">
+                    {/* Top row: Cancel | Title | Save - iOS modal style */}
+                    <div className="flex items-center justify-between gap-2 mb-3">
+                        {/* Cancel button */}
+                        <button
+                            onClick={onClose}
+                            disabled={saving}
+                            style={{
+                                padding: '6px 12px',
+                                fontSize: 15,
+                                fontWeight: 500,
+                                color: saving ? colors.text.subtle : colors.text.secondary,
+                                background: 'transparent',
+                                border: 'none',
+                                cursor: saving ? 'not-allowed' : 'pointer',
+                                opacity: saving ? 0.5 : 1,
+                                transition: `opacity ${transitions.fast}`,
+                                minWidth: 70,
+                                textAlign: 'left',
+                            }}
+                        >
+                            Cancel
+                        </button>
+
+                        {/* Center title */}
+                        <div className="flex-1 min-w-0 text-center">
                             <p style={{
                                 ...typography.label,
                                 fontSize: 9,
                                 letterSpacing: '0.2em',
                                 color: colors.text.subtle,
-                                margin: '0 0 2px 0'
+                                margin: '0 0 1px 0'
                             }}>
                                 ROUTE EDITOR
                             </p>
-                            <h1 className="text-white/95 text-base font-medium truncate">
+                            <h1 className="text-white/95 text-sm font-medium truncate">
                                 {trekData.name}
                             </h1>
                         </div>
 
+                        {/* Save button */}
+                        <button
+                            onClick={handleSave}
+                            disabled={saving || (!hasChanges && !routeHasChanges)}
+                            style={{
+                                padding: '6px 12px',
+                                fontSize: 15,
+                                fontWeight: 600,
+                                color: (saving || (!hasChanges && !routeHasChanges))
+                                    ? colors.text.subtle
+                                    : colors.accent.primary,
+                                background: 'transparent',
+                                border: 'none',
+                                cursor: (saving || (!hasChanges && !routeHasChanges)) ? 'not-allowed' : 'pointer',
+                                opacity: (saving || (!hasChanges && !routeHasChanges)) ? 0.5 : 1,
+                                transition: `opacity ${transitions.fast}`,
+                                minWidth: 70,
+                                textAlign: 'right',
+                            }}
+                        >
+                            {saving ? 'Saving...' : 'Save'}
+                        </button>
+                    </div>
+
+                    {/* Second row: Mode toggles + Undo/Redo */}
+                    <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                            {/* Main mode toggle */}
+                            <div className="flex gap-1 p-1 bg-white/4 rounded-xl border border-white/8">
+                                <ModeToggleButton
+                                    label="Camps"
+                                    isActive={mode === 'camps'}
+                                    onClick={() => setMode('camps')}
+                                    compact
+                                />
+                                <ModeToggleButton
+                                    label="Route"
+                                    isActive={mode === 'route'}
+                                    onClick={() => setMode('route')}
+                                    compact
+                                />
+                            </div>
+
+                            {/* Route sub-mode toggle */}
+                            <AnimatePresence>
+                                {mode === 'route' && (
+                                    <motion.div
+                                        initial={{ opacity: 0, scale: 0.9, width: 0 }}
+                                        animate={{ opacity: 1, scale: 1, width: 'auto' }}
+                                        exit={{ opacity: 0, scale: 0.9, width: 0 }}
+                                        className="flex gap-1 p-1 bg-white/4 rounded-xl border border-white/8 overflow-hidden"
+                                    >
+                                        <ModeToggleButton
+                                            label="Edit"
+                                            isActive={routeSubMode === 'edit'}
+                                            onClick={() => setRouteSubMode('edit')}
+                                            compact
+                                        />
+                                        <ModeToggleButton
+                                            label="Select"
+                                            isActive={routeSubMode === 'select'}
+                                            onClick={() => setRouteSubMode('select')}
+                                            compact
+                                        />
+                                        <ModeToggleButton
+                                            label="Draw"
+                                            isActive={routeSubMode === 'draw'}
+                                            onClick={() => setRouteSubMode('draw')}
+                                            compact
+                                        />
+                                    </motion.div>
+                                )}
+                            </AnimatePresence>
+                        </div>
+
                         {/* Undo/Redo icons */}
-                        <div className="flex gap-1.5">
+                        <div className="flex gap-1">
                             <IconButton
-                                icon={<span className="text-lg">↶</span>}
+                                icon={<span className="text-base">↶</span>}
                                 onClick={handleUndo}
                                 disabled={undoStack.length === 0 || saving}
                                 title="Undo"
                             />
                             <IconButton
-                                icon={<span className="text-lg">↷</span>}
+                                icon={<span className="text-base">↷</span>}
                                 onClick={handleRedo}
                                 disabled={redoStack.length === 0 || saving}
                                 title="Redo"
                             />
                         </div>
-                    </div>
-
-                    {/* Bottom row: Mode toggles */}
-                    <div className="flex items-center gap-2">
-                        {/* Main mode toggle */}
-                        <div className="flex gap-1 p-1 bg-white/4 rounded-xl border border-white/8">
-                            <ModeToggleButton
-                                label="Camps"
-                                isActive={mode === 'camps'}
-                                onClick={() => setMode('camps')}
-                                compact
-                            />
-                            <ModeToggleButton
-                                label="Route"
-                                isActive={mode === 'route'}
-                                onClick={() => setMode('route')}
-                                compact
-                            />
-                        </div>
-
-                        {/* Route sub-mode toggle */}
-                        <AnimatePresence>
-                            {mode === 'route' && (
-                                <motion.div
-                                    initial={{ opacity: 0, scale: 0.9, width: 0 }}
-                                    animate={{ opacity: 1, scale: 1, width: 'auto' }}
-                                    exit={{ opacity: 0, scale: 0.9, width: 0 }}
-                                    className="flex gap-1 p-1 bg-white/4 rounded-xl border border-white/8 overflow-hidden"
-                                >
-                                    <ModeToggleButton
-                                        label="Edit"
-                                        isActive={routeSubMode === 'edit'}
-                                        onClick={() => setRouteSubMode('edit')}
-                                        compact
-                                    />
-                                    <ModeToggleButton
-                                        label="Select"
-                                        isActive={routeSubMode === 'select'}
-                                        onClick={() => setRouteSubMode('select')}
-                                        compact
-                                    />
-                                    <ModeToggleButton
-                                        label="Draw"
-                                        isActive={routeSubMode === 'draw'}
-                                        onClick={() => setRouteSubMode('draw')}
-                                        compact
-                                    />
-                                </motion.div>
-                            )}
-                        </AnimatePresence>
                     </div>
                 </div>
             )}
@@ -2548,31 +2671,47 @@ export const RouteEditor = memo(function RouteEditor({
                         Camps ({camps.length})
                     </div>
 
-                    {/* Camp list with swipe gestures */}
+                    {/* Camp list with drag to reorder */}
                     <div
                         data-testid="camp-list"
                         className="flex-1 overflow-y-auto p-2 glass-scrollbar"
                     >
-                        {/* Swipe hint */}
+                        {/* Hint */}
                         {camps.length > 0 && (
                             <div className="text-center text-white/30 text-[10px] mb-2 px-2">
-                                ← Swipe camp to reveal actions
+                                Drag to reorder • Swipe left to delete
                             </div>
                         )}
-                        {sortCamps(camps).map((camp, index) => (
-                            <SwipeableCampItem
-                                key={camp.id}
-                                camp={camp}
-                                index={index}
-                                isSelected={camp.id === selectedCampId}
-                                onSelect={() => {
-                                    setSelectedCampId(camp.id);
-                                    flyToCamp(camp);
-                                }}
-                                onDelete={() => deleteCampById(camp.id)}
-                                onZoomTo={() => flyToCamp(camp)}
-                            />
-                        ))}
+                        <Reorder.Group
+                            axis="y"
+                            values={sortCamps(camps)}
+                            onReorder={(reorderedCamps) => {
+                                // Update routeDistanceKm to preserve new order
+                                const updatedCamps = reorderedCamps.map((camp, idx) => ({
+                                    ...camp,
+                                    routeDistanceKm: idx, // Use index as distance to maintain order
+                                    isDirty: true,
+                                }));
+                                setCamps(updatedCamps);
+                            }}
+                            style={{ listStyle: 'none', padding: 0, margin: 0 }}
+                        >
+                            {sortCamps(camps).map((camp, index) => (
+                                <MobileCampItem
+                                    key={camp.id}
+                                    camp={camp}
+                                    index={index}
+                                    isSelected={camp.id === selectedCampId}
+                                    onSelect={() => {
+                                        setSelectedCampId(camp.id);
+                                        flyToCamp(camp);
+                                    }}
+                                    onRequestDelete={() => {
+                                        setDeleteConfirmCamp(camp);
+                                    }}
+                                />
+                            ))}
+                        </Reorder.Group>
                     </div>
 
                     {/* Has changes indicator */}
@@ -3183,47 +3322,19 @@ export const RouteEditor = memo(function RouteEditor({
                 </div>
             )}
 
-            {/* MOBILE ACTION BAR - Fixed bottom bar with Save/Cancel */}
-            {isMobile && (
-                <div
-                    style={{
-                        position: 'fixed',
-                        bottom: 0,
-                        left: 0,
-                        right: 0,
-                        paddingTop: 12,
-                        paddingBottom: 'calc(12px + env(safe-area-inset-bottom, 0px))',
-                        paddingLeft: 'max(16px, env(safe-area-inset-left))',
-                        paddingRight: 'max(16px, env(safe-area-inset-right))',
-                        background: `linear-gradient(180deg, rgba(10, 10, 15, 0.95) 0%, rgba(10, 10, 15, 0.98) 100%)`,
-                        backdropFilter: 'blur(20px)',
-                        WebkitBackdropFilter: 'blur(20px)',
-                        borderTop: `1px solid ${colors.glass.border}`,
-                        display: 'flex',
-                        gap: 12,
-                        zIndex: 20,
-                    }}
-                >
-                    <Button
-                        variant="subtle"
-                        size="md"
-                        onClick={onClose}
-                        disabled={saving}
-                        className="flex-1"
-                    >
-                        Cancel
-                    </Button>
-                    <Button
-                        variant="primary"
-                        size="md"
-                        onClick={handleSave}
-                        disabled={saving || (!hasChanges && !routeHasChanges)}
-                        className="flex-1"
-                    >
-                        {saving ? 'Saving...' : 'Save'}
-                    </Button>
-                </div>
-            )}
+
+            {/* Delete confirmation dialog */}
+            <DeleteConfirmDialog
+                isOpen={deleteConfirmCamp !== null}
+                campName={deleteConfirmCamp?.name ?? ''}
+                onConfirm={() => {
+                    if (deleteConfirmCamp) {
+                        deleteCampById(deleteConfirmCamp.id);
+                    }
+                    setDeleteConfirmCamp(null);
+                }}
+                onCancel={() => setDeleteConfirmCamp(null)}
+            />
         </div>,
         document.body
     );
