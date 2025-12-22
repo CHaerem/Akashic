@@ -458,6 +458,182 @@ const DeleteConfirmDialog = memo(function DeleteConfirmDialog({
     );
 });
 
+// Desktop camp item - hover to reveal delete, drag to reorder
+interface DesktopCampItemProps {
+    camp: EditableCamp;
+    index: number;
+    isSelected: boolean;
+    onSelect: () => void;
+    onRequestDelete: () => void;
+}
+
+const DesktopCampItem = memo(function DesktopCampItem({
+    camp,
+    index,
+    isSelected,
+    onSelect,
+    onRequestDelete,
+}: DesktopCampItemProps) {
+    const dragControls = useDragControls();
+    const [isHovered, setIsHovered] = useState(false);
+
+    const handleDelete = useCallback((e: React.MouseEvent) => {
+        e.stopPropagation();
+        onRequestDelete();
+    }, [onRequestDelete]);
+
+    return (
+        <Reorder.Item
+            value={camp}
+            dragListener={false}
+            dragControls={dragControls}
+            style={{ marginBottom: 6 }}
+        >
+            <div
+                data-testid={`camp-item-desktop-${index}`}
+                onClick={onSelect}
+                onMouseEnter={() => setIsHovered(true)}
+                onMouseLeave={() => setIsHovered(false)}
+                style={{
+                    position: 'relative',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 10,
+                    padding: '10px 12px',
+                    cursor: 'pointer',
+                    borderRadius: radius.lg,
+                    // Liquid Glass styling
+                    background: isSelected
+                        ? `linear-gradient(135deg, rgba(255, 255, 255, 0.14) 0%, rgba(255, 255, 255, 0.08) 100%)`
+                        : isHovered
+                            ? `linear-gradient(135deg, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0.04) 100%)`
+                            : 'transparent',
+                    backdropFilter: (isSelected || isHovered) ? effects.blur.subtle : undefined,
+                    WebkitBackdropFilter: (isSelected || isHovered) ? effects.blur.subtle : undefined,
+                    border: camp.isDirty
+                        ? `1px solid ${colors.accent.warning}50`
+                        : `1px solid ${isSelected ? colors.glass.borderSubtle : 'transparent'}`,
+                    boxShadow: isSelected
+                        ? `0 2px 8px rgba(0, 0, 0, 0.15), inset 0 1px 0 ${colors.glass.highlight}20`
+                        : 'none',
+                    transition: `all ${transitions.fast}`,
+                }}
+            >
+                {/* Drag handle */}
+                <div
+                    onPointerDown={(e) => dragControls.start(e)}
+                    style={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: 2,
+                        padding: '4px 2px',
+                        cursor: 'grab',
+                        opacity: isHovered || isSelected ? 0.6 : 0.3,
+                        transition: `opacity ${transitions.fast}`,
+                    }}
+                >
+                    <div style={{ width: 12, height: 2, background: 'rgba(255, 255, 255, 0.4)', borderRadius: 1 }} />
+                    <div style={{ width: 12, height: 2, background: 'rgba(255, 255, 255, 0.4)', borderRadius: 1 }} />
+                    <div style={{ width: 12, height: 2, background: 'rgba(255, 255, 255, 0.4)', borderRadius: 1 }} />
+                </div>
+
+                {/* Camp number badge */}
+                <div
+                    style={{
+                        width: 28,
+                        height: 28,
+                        borderRadius: radius.pill,
+                        background: camp.isDirty
+                            ? `linear-gradient(135deg, ${colors.accent.warning} 0%, #f59e0b 100%)`
+                            : isSelected
+                                ? `linear-gradient(135deg, ${colors.accent.primary} 0%, #3b82f6 100%)`
+                                : `linear-gradient(135deg, rgba(255, 255, 255, 0.10) 0%, rgba(255, 255, 255, 0.05) 100%)`,
+                        backdropFilter: (!camp.isDirty && !isSelected) ? effects.blur.subtle : undefined,
+                        WebkitBackdropFilter: (!camp.isDirty && !isSelected) ? effects.blur.subtle : undefined,
+                        border: (!camp.isDirty && !isSelected) ? `1px solid ${colors.glass.borderSubtle}` : 'none',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontSize: 12,
+                        fontWeight: 600,
+                        color: (camp.isDirty || isSelected) ? '#fff' : colors.text.secondary,
+                        flexShrink: 0,
+                    }}
+                >
+                    {index + 1}
+                </div>
+
+                {/* Camp info */}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{
+                        ...typography.heading,
+                        fontSize: 13,
+                        color: colors.text.primary,
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                    }}>
+                        {camp.name}
+                    </div>
+                    <div style={{
+                        ...typography.caption,
+                        fontSize: 11,
+                        color: colors.text.tertiary,
+                        marginTop: 1,
+                    }}>
+                        {camp.elevation}m
+                        {camp.routeDistanceKm != null && (
+                            <span style={{ color: colors.text.subtle }}> • {camp.routeDistanceKm.toFixed(1)} km</span>
+                        )}
+                    </div>
+                </div>
+
+                {/* Modified indicator */}
+                {camp.isDirty && !isHovered && (
+                    <div style={{
+                        width: 6,
+                        height: 6,
+                        borderRadius: radius.pill,
+                        background: colors.accent.warning,
+                        boxShadow: `0 0 6px ${colors.accent.warning}`,
+                        flexShrink: 0,
+                    }} />
+                )}
+
+                {/* Delete button - visible on hover */}
+                <AnimatePresence>
+                    {isHovered && (
+                        <motion.button
+                            initial={{ opacity: 0, scale: 0.8 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            exit={{ opacity: 0, scale: 0.8 }}
+                            transition={{ duration: 0.15 }}
+                            onClick={handleDelete}
+                            data-testid={`camp-delete-desktop-${index}`}
+                            style={{
+                                width: 24,
+                                height: 24,
+                                borderRadius: radius.sm,
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                background: `linear-gradient(135deg, ${colors.accent.error}40 0%, ${colors.accent.error}20 100%)`,
+                                border: `1px solid ${colors.accent.error}50`,
+                                color: colors.accent.error,
+                                cursor: 'pointer',
+                                flexShrink: 0,
+                            }}
+                            title="Delete camp"
+                        >
+                            <span style={{ fontSize: 12 }}>✕</span>
+                        </motion.button>
+                    )}
+                </AnimatePresence>
+            </div>
+        </Reorder.Item>
+    );
+});
+
 export const RouteEditor = memo(function RouteEditor({
     trekData,
     isOpen,
@@ -3123,7 +3299,7 @@ export const RouteEditor = memo(function RouteEditor({
                                 Camps ({camps.length})
                             </div>
 
-                            {/* Camp list */}
+                            {/* Camp list with drag to reorder */}
                             <div
                                 data-testid="camp-list-desktop"
                                 style={{
@@ -3133,75 +3309,47 @@ export const RouteEditor = memo(function RouteEditor({
                                 }}
                                 className="glass-scrollbar"
                             >
-                                {sortCamps(camps).map((camp, index) => (
-                                    <div
-                                        key={camp.id}
-                                        onClick={() => {
-                                            setSelectedCampId(camp.id);
-                                            flyToCamp(camp);
-                                        }}
-                                        style={{
-                                            padding: '12px 14px',
-                                            marginBottom: 6,
-                                            background: camp.id === selectedCampId
-                                                ? colors.glass.medium
-                                                : 'transparent',
-                                            borderRadius: radius.md,
-                                            cursor: 'pointer',
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            gap: 12,
-                                            border: camp.isDirty
-                                                ? '1px solid rgba(251, 191, 36, 0.4)'
-                                                : `1px solid transparent`,
-                                            transition: `all ${transitions.normal}`
-                                        }}
-                                    >
-                                        <div
-                                            style={{
-                                                width: 32,
-                                                height: 32,
-                                                borderRadius: '50%',
-                                                background: camp.isDirty
-                                                    ? 'linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%)'
-                                                    : camp.id === selectedCampId
-                                                        ? 'linear-gradient(135deg, #60a5fa 0%, #3b82f6 100%)'
-                                                        : colors.glass.medium,
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                justifyContent: 'center',
-                                                fontSize: 13,
-                                                fontWeight: 700,
-                                                color: (camp.isDirty || camp.id === selectedCampId) ? '#fff' : colors.text.secondary,
-                                                flexShrink: 0
-                                            }}
-                                        >
-                                            {index + 1}
-                                        </div>
-                                        <div style={{ flex: 1, minWidth: 0 }}>
-                                            <div style={{
-                                                fontSize: 14,
-                                                fontWeight: 500,
-                                                color: colors.text.primary,
-                                                whiteSpace: 'nowrap',
-                                                overflow: 'hidden',
-                                                textOverflow: 'ellipsis'
-                                            }}>
-                                                {camp.name}
-                                            </div>
-                                            <div style={{
-                                                fontSize: 12,
-                                                color: colors.text.tertiary,
-                                                marginTop: 2
-                                            }}>
-                                                {camp.elevation}m
-                                                {camp.routeDistanceKm != null && (
-                                                    <> • {camp.routeDistanceKm.toFixed(1)} km</>
-                                                )}
-                                            </div>
-                                        </div>
+                                {/* Hint */}
+                                {camps.length > 0 && (
+                                    <div style={{
+                                        textAlign: 'center',
+                                        fontSize: 10,
+                                        color: colors.text.subtle,
+                                        marginBottom: 8,
+                                        padding: '0 8px',
+                                    }}>
+                                        Drag to reorder • Hover to delete
                                     </div>
-                                ))}
+                                )}
+                                <Reorder.Group
+                                    axis="y"
+                                    values={sortCamps(camps)}
+                                    onReorder={(reorderedCamps) => {
+                                        const updatedCamps = reorderedCamps.map((camp, idx) => ({
+                                            ...camp,
+                                            routeDistanceKm: idx,
+                                            isDirty: true,
+                                        }));
+                                        setCamps(updatedCamps);
+                                    }}
+                                    style={{ listStyle: 'none', padding: 0, margin: 0 }}
+                                >
+                                    {sortCamps(camps).map((camp, index) => (
+                                        <DesktopCampItem
+                                            key={camp.id}
+                                            camp={camp}
+                                            index={index}
+                                            isSelected={camp.id === selectedCampId}
+                                            onSelect={() => {
+                                                setSelectedCampId(camp.id);
+                                                flyToCamp(camp);
+                                            }}
+                                            onRequestDelete={() => {
+                                                setDeleteConfirmCamp(camp);
+                                            }}
+                                        />
+                                    ))}
+                                </Reorder.Group>
                             </div>
 
                             {/* Has changes indicator */}
