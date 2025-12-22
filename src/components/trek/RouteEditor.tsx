@@ -2869,6 +2869,7 @@ export const RouteEditor = memo(function RouteEditor({
                                     isDirty: true,
                                 }));
                                 setCamps(updatedCamps);
+                                setHasChanges(true);
                             }}
                             style={{ listStyle: 'none', padding: 0, margin: 0 }}
                         >
@@ -3331,6 +3332,7 @@ export const RouteEditor = memo(function RouteEditor({
                                             isDirty: true,
                                         }));
                                         setCamps(updatedCamps);
+                                        setHasChanges(true);
                                     }}
                                     style={{ listStyle: 'none', padding: 0, margin: 0 }}
                                 >
