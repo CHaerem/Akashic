@@ -1052,6 +1052,9 @@ export const RouteEditor = memo(function RouteEditor({
         });
     }, []);
 
+    // Memoized sorted camps for Reorder.Group (stable reference that updates when camps change)
+    const sortedCamps = useMemo(() => sortCamps(camps), [camps, sortCamps]);
+
     // Update markers when camps change
     useEffect(() => {
         const map = mapRef.current;
@@ -2860,7 +2863,7 @@ export const RouteEditor = memo(function RouteEditor({
                         )}
                         <Reorder.Group
                             axis="y"
-                            values={sortCamps(camps)}
+                            values={sortedCamps}
                             onReorder={(reorderedCamps) => {
                                 // Update routeDistanceKm to preserve new order
                                 const updatedCamps = reorderedCamps.map((camp, idx) => ({
@@ -2873,7 +2876,7 @@ export const RouteEditor = memo(function RouteEditor({
                             }}
                             style={{ listStyle: 'none', padding: 0, margin: 0 }}
                         >
-                            {sortCamps(camps).map((camp, index) => (
+                            {sortedCamps.map((camp, index) => (
                                 <MobileCampItem
                                     key={camp.id}
                                     camp={camp}
@@ -3324,7 +3327,7 @@ export const RouteEditor = memo(function RouteEditor({
                                 )}
                                 <Reorder.Group
                                     axis="y"
-                                    values={sortCamps(camps)}
+                                    values={sortedCamps}
                                     onReorder={(reorderedCamps) => {
                                         const updatedCamps = reorderedCamps.map((camp, idx) => ({
                                             ...camp,
@@ -3336,7 +3339,7 @@ export const RouteEditor = memo(function RouteEditor({
                                     }}
                                     style={{ listStyle: 'none', padding: 0, margin: 0 }}
                                 >
-                                    {sortCamps(camps).map((camp, index) => (
+                                    {sortedCamps.map((camp, index) => (
                                         <DesktopCampItem
                                             key={camp.id}
                                             camp={camp}
