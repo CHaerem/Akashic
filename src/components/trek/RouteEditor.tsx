@@ -19,7 +19,7 @@ import { useState, useRef, useEffect, useCallback, memo, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
-import { motion, AnimatePresence, Reorder, useDragControls } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import type { TrekData, Camp, Route } from '../../types/trek';
 import { Button } from '../ui/button';
 import { cn } from '@/lib/utils';
@@ -132,7 +132,6 @@ const MobileCampItem = memo(function MobileCampItem({
     onSelect,
     onRequestDelete,
 }: MobileCampItemProps) {
-    const dragControls = useDragControls();
     const [swipeX, setSwipeX] = useState(0);
     const [isDragging, setIsDragging] = useState(false);
     const startX = useRef(0);
@@ -200,10 +199,11 @@ const MobileCampItem = memo(function MobileCampItem({
     const deleteOpacity = Math.min(1, Math.abs(swipeX) / (DELETE_BUTTON_WIDTH * 0.6));
 
     return (
-        <Reorder.Item
-            value={camp}
-            dragListener={false}
-            dragControls={dragControls}
+        <motion.div
+            layout
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
             style={{ marginBottom: 8 }}
         >
             <div
@@ -290,25 +290,6 @@ const MobileCampItem = memo(function MobileCampItem({
                             : `0 4px 16px rgba(0, 0, 0, 0.2), inset 0 1px 0 ${colors.glass.highlight}`,
                     }}
                 >
-                    {/* Drag handle - subtle glass lines */}
-                    <div
-                        onPointerDown={(e) => dragControls.start(e)}
-                        style={{
-                            display: 'flex',
-                            flexDirection: 'column',
-                            gap: 3,
-                            padding: '6px 6px',
-                            cursor: 'grab',
-                            touchAction: 'none',
-                            borderRadius: radius.sm,
-                            background: 'rgba(255, 255, 255, 0.03)',
-                        }}
-                    >
-                        <div style={{ width: 14, height: 2, background: 'rgba(255, 255, 255, 0.25)', borderRadius: 1 }} />
-                        <div style={{ width: 14, height: 2, background: 'rgba(255, 255, 255, 0.25)', borderRadius: 1 }} />
-                        <div style={{ width: 14, height: 2, background: 'rgba(255, 255, 255, 0.25)', borderRadius: 1 }} />
-                    </div>
-
                     {/* Camp number badge - glass style */}
                     <div
                         style={{
@@ -384,7 +365,7 @@ const MobileCampItem = memo(function MobileCampItem({
                     </motion.div>
                 </motion.div>
             </div>
-        </Reorder.Item>
+        </motion.div>
     );
 });
 
@@ -474,7 +455,6 @@ const DesktopCampItem = memo(function DesktopCampItem({
     onSelect,
     onRequestDelete,
 }: DesktopCampItemProps) {
-    const dragControls = useDragControls();
     const [isHovered, setIsHovered] = useState(false);
 
     const handleDelete = useCallback((e: React.MouseEvent) => {
@@ -483,10 +463,11 @@ const DesktopCampItem = memo(function DesktopCampItem({
     }, [onRequestDelete]);
 
     return (
-        <Reorder.Item
-            value={camp}
-            dragListener={false}
-            dragControls={dragControls}
+        <motion.div
+            layout
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
             style={{ marginBottom: 6 }}
         >
             <div
@@ -519,24 +500,6 @@ const DesktopCampItem = memo(function DesktopCampItem({
                     transition: `all ${transitions.fast}`,
                 }}
             >
-                {/* Drag handle */}
-                <div
-                    onPointerDown={(e) => dragControls.start(e)}
-                    style={{
-                        display: 'flex',
-                        flexDirection: 'column',
-                        gap: 2,
-                        padding: '4px 2px',
-                        cursor: 'grab',
-                        opacity: isHovered || isSelected ? 0.6 : 0.3,
-                        transition: `opacity ${transitions.fast}`,
-                    }}
-                >
-                    <div style={{ width: 12, height: 2, background: 'rgba(255, 255, 255, 0.4)', borderRadius: 1 }} />
-                    <div style={{ width: 12, height: 2, background: 'rgba(255, 255, 255, 0.4)', borderRadius: 1 }} />
-                    <div style={{ width: 12, height: 2, background: 'rgba(255, 255, 255, 0.4)', borderRadius: 1 }} />
-                </div>
-
                 {/* Camp number badge */}
                 <div
                     style={{
@@ -630,7 +593,7 @@ const DesktopCampItem = memo(function DesktopCampItem({
                     )}
                 </AnimatePresence>
             </div>
-        </Reorder.Item>
+        </motion.div>
     );
 });
 
@@ -1052,7 +1015,7 @@ export const RouteEditor = memo(function RouteEditor({
         });
     }, []);
 
-    // Memoized sorted camps for Reorder.Group (stable reference that updates when camps change)
+    // Memoized sorted camps (stable reference that updates when camps change)
     const sortedCamps = useMemo(() => sortCamps(camps), [camps, sortCamps]);
 
     // Update markers when camps change
@@ -2858,24 +2821,10 @@ export const RouteEditor = memo(function RouteEditor({
                         {/* Hint */}
                         {camps.length > 0 && (
                             <div className="text-center text-white/30 text-[10px] mb-2 px-2">
-                                Drag to reorder • Swipe left to delete
+                                Swipe left to delete
                             </div>
                         )}
-                        <Reorder.Group
-                            axis="y"
-                            values={sortedCamps}
-                            onReorder={(reorderedCamps) => {
-                                // Update routeDistanceKm to preserve new order
-                                const updatedCamps = reorderedCamps.map((camp, idx) => ({
-                                    ...camp,
-                                    routeDistanceKm: idx, // Use index as distance to maintain order
-                                    isDirty: true,
-                                }));
-                                setCamps(updatedCamps);
-                                setHasChanges(true);
-                            }}
-                            style={{ listStyle: 'none', padding: 0, margin: 0 }}
-                        >
+                        <AnimatePresence mode="popLayout">
                             {sortedCamps.map((camp, index) => (
                                 <MobileCampItem
                                     key={camp.id}
@@ -2891,7 +2840,7 @@ export const RouteEditor = memo(function RouteEditor({
                                     }}
                                 />
                             ))}
-                        </Reorder.Group>
+                        </AnimatePresence>
                     </div>
 
                     {/* Has changes indicator */}
@@ -3322,23 +3271,10 @@ export const RouteEditor = memo(function RouteEditor({
                                         marginBottom: 8,
                                         padding: '0 8px',
                                     }}>
-                                        Drag to reorder • Hover to delete
+                                        Hover to delete
                                     </div>
                                 )}
-                                <Reorder.Group
-                                    axis="y"
-                                    values={sortedCamps}
-                                    onReorder={(reorderedCamps) => {
-                                        const updatedCamps = reorderedCamps.map((camp, idx) => ({
-                                            ...camp,
-                                            routeDistanceKm: idx,
-                                            isDirty: true,
-                                        }));
-                                        setCamps(updatedCamps);
-                                        setHasChanges(true);
-                                    }}
-                                    style={{ listStyle: 'none', padding: 0, margin: 0 }}
-                                >
+                                <AnimatePresence mode="popLayout">
                                     {sortedCamps.map((camp, index) => (
                                         <DesktopCampItem
                                             key={camp.id}
@@ -3354,7 +3290,7 @@ export const RouteEditor = memo(function RouteEditor({
                                             }}
                                         />
                                     ))}
-                                </Reorder.Group>
+                                </AnimatePresence>
                             </div>
 
                             {/* Has changes indicator */}
