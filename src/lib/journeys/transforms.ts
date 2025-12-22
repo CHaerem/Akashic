@@ -159,11 +159,6 @@ export function toTrekData(journey: DbJourney, waypoints: DbWaypoint[]): TrekDat
 
         const dayNumber = w.day_number || i + 1;
 
-        // Debug: Log fun facts data
-        if (w.fun_facts && w.fun_facts.length > 0) {
-            console.log(`[transforms] Camp "${w.name}" has ${w.fun_facts.length} fun facts`);
-        }
-
         return {
             id: w.id,
             name: w.name,

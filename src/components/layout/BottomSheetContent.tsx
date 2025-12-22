@@ -23,6 +23,8 @@ import { WaypointEditModal } from '../trek/WaypointEditModal';
 import { PhotoAssignModal } from '../trek/PhotoAssignModal';
 import { JourneyEditModal } from '../trek/JourneyEditModal';
 import { RouteEditor } from '../trek/RouteEditor';
+import { FunFactCard } from '../journey/FunFactCard';
+import { DayDiscoveries } from '../journey/DayDiscoveries';
 
 interface BottomSheetContentProps {
     view: ViewMode;
@@ -570,6 +572,44 @@ function DayContent({ camp, currentDayDate, dayPhotos, allPhotos, getMediaUrl, o
                     ))}
                 </ul>
             )}
+
+            {/* Fun Facts */}
+            {camp.funFacts && camp.funFacts.length > 0 && (
+                <div style={{ marginBottom: 16 }}>
+                    <div
+                        style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 6,
+                            marginBottom: 10,
+                        }}
+                    >
+                        <span style={{ fontSize: 14 }}>💡</span>
+                        <span
+                            style={{
+                                fontSize: 11,
+                                fontWeight: 600,
+                                textTransform: 'uppercase',
+                                letterSpacing: '0.08em',
+                                color: colors.text.tertiary,
+                            }}
+                        >
+                            Did you know?
+                        </span>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                        {camp.funFacts.map((fact) => (
+                            <FunFactCard key={fact.id} fact={fact} compact />
+                        ))}
+                    </div>
+                </div>
+            )}
+
+            {/* Points of Interest & Historical Sites */}
+            <DayDiscoveries
+                pointsOfInterest={camp.pointsOfInterest}
+                historicalSites={camp.historicalSites}
+            />
 
             {/* View gallery button */}
             {dayPhotos.length > 0 && (
