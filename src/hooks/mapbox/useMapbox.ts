@@ -1438,13 +1438,18 @@ export function useMapbox({ containerRef, onTrekSelect, onPhotoClick, onRouteCli
             // Check if marker already exists
             const existingMarker = campMarkersRef.current.get(camp.id);
             if (existingMarker) {
-                // Update position and selection state
+                // Update position, selection state, and day number
                 existingMarker.setLngLat(camp.coordinates as [number, number]);
                 const el = existingMarker.getElement();
                 if (isSelected) {
                     el.classList.add('camp-marker-selected');
                 } else {
                     el.classList.remove('camp-marker-selected');
+                }
+                // Update day number badge (may have changed after reordering)
+                const badge = el.querySelector('.camp-marker-badge');
+                if (badge) {
+                    badge.textContent = camp.dayNumber.toString();
                 }
                 continue;
             }
