@@ -40,6 +40,12 @@ export interface Camp {
     routePointIndex?: number | null;
     /** Historical weather data for the day */
     weather?: WeatherData | null;
+    /** Fun facts for this day */
+    funFacts?: FunFact[];
+    /** Points of interest encountered on this day */
+    pointsOfInterest?: PointOfInterest[];
+    /** Historical sites encountered on this day */
+    historicalSites?: HistoricalSite[];
 }
 
 export interface Route {
@@ -279,6 +285,41 @@ export interface HistoricalSite {
     links?: { label: string; url: string }[];
     /** Tags for categorization */
     tags?: string[];
+    /** Associated day number (for day-specific display) */
+    dayNumber?: number;
+}
+
+/**
+ * Fun fact category for categorizing trivia
+ */
+export type FunFactCategory =
+    | 'geology'       // Mountain formation, rock types, terrain
+    | 'wildlife'      // Animals, birds, insects
+    | 'flora'         // Plants, trees, vegetation zones
+    | 'history'       // Historical events, explorers
+    | 'culture'       // Local traditions, indigenous peoples
+    | 'climate'       // Weather patterns, seasons
+    | 'adventure'     // Climbing records, expeditions
+    | 'science'       // Scientific research, discoveries
+    | 'geography'     // Location facts, borders, regions
+    | 'survival';     // Altitude tips, trekking advice
+
+/**
+ * Fun fact for journey days
+ * Interesting trivia and educational content
+ */
+export interface FunFact {
+    id: string;
+    /** The fact content */
+    content: string;
+    /** Category of the fact */
+    category: FunFactCategory;
+    /** Optional source/reference */
+    source?: string;
+    /** Optional link for more info */
+    learnMoreUrl?: string;
+    /** Icon to display (optional, uses category default) */
+    icon?: string;
 }
 
 export type ViewMode = 'globe' | 'trek';

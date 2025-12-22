@@ -3,8 +3,8 @@
  * Converts database records to app types
  */
 
-import type { TrekConfig, TrekData, Camp } from '../../types/trek';
-import type { DbJourney, DbWaypoint } from './types';
+import type { TrekConfig, TrekData, Camp, FunFact, PointOfInterest, HistoricalSite, FunFactCategory, POICategory } from '../../types/trek';
+import type { DbJourney, DbWaypoint, DbFunFact, DbPointOfInterest, DbHistoricalSite } from './types';
 
 /**
  * Transform database journey to TrekConfig (for globe markers)
@@ -72,6 +72,59 @@ export function calculateElevationGainBetweenIndices(
 }
 
 /**
+ * Transform database fun fact to app type
+ */
+function toFunFact(dbFact: DbFunFact): FunFact {
+    return {
+        id: dbFact.id,
+        content: dbFact.content,
+        category: dbFact.category as FunFactCategory,
+        source: dbFact.source,
+        learnMoreUrl: dbFact.learn_more_url,
+        icon: dbFact.icon,
+    };
+}
+
+/**
+ * Transform database point of interest to app type
+ */
+function toPointOfInterest(dbPoi: DbPointOfInterest): PointOfInterest {
+    return {
+        id: dbPoi.id,
+        name: dbPoi.name,
+        category: dbPoi.category as POICategory,
+        coordinates: dbPoi.coordinates,
+        elevation: dbPoi.elevation,
+        description: dbPoi.description,
+        routeDistanceKm: dbPoi.route_distance_km,
+        tips: dbPoi.tips,
+        timeFromPrevious: dbPoi.time_from_previous,
+        icon: dbPoi.icon,
+    };
+}
+
+/**
+ * Transform database historical site to app type
+ */
+function toHistoricalSite(dbSite: DbHistoricalSite, dayNumber?: number): HistoricalSite {
+    return {
+        id: dbSite.id,
+        name: dbSite.name,
+        coordinates: dbSite.coordinates,
+        elevation: dbSite.elevation,
+        routeDistanceKm: dbSite.route_distance_km,
+        summary: dbSite.summary,
+        description: dbSite.description,
+        period: dbSite.period,
+        significance: dbSite.significance,
+        imageUrls: dbSite.image_urls,
+        links: dbSite.links,
+        tags: dbSite.tags,
+        dayNumber,
+    };
+}
+
+/**
  * Transform database journey + waypoints to TrekData
  */
 export function toTrekData(journey: DbJourney, waypoints: DbWaypoint[]): TrekData {
@@ -104,10 +157,12 @@ export function toTrekData(journey: DbJourney, waypoints: DbWaypoint[]): TrekDat
             );
         }
 
+        const dayNumber = w.day_number || i + 1;
+
         return {
             id: w.id,
             name: w.name,
-            dayNumber: w.day_number || i + 1,
+            dayNumber,
             elevation: w.elevation || 0,
             coordinates: w.coordinates,
             elevationGainFromPrevious,
@@ -122,6 +177,9 @@ export function toTrekData(journey: DbJourney, waypoints: DbWaypoint[]): TrekDat
                 windSpeedMax: w.weather.wind_speed_max,
                 weatherCode: w.weather.weather_code,
             } : null,
+            funFacts: w.fun_facts?.map(toFunFact) || [],
+            pointsOfInterest: w.points_of_interest?.map(toPointOfInterest) || [],
+            historicalSites: w.historical_sites?.map(s => toHistoricalSite(s, dayNumber)) || [],
         };
     });
 
