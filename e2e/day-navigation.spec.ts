@@ -145,6 +145,72 @@ async function getCurrentDay(page: Page): Promise<number | null> {
     }).catch(() => null);
 }
 
+// Helper to wait for map animations to complete
+async function waitForMapAnimations(page: Page, timeout = 5000): Promise<boolean> {
+    const startTime = Date.now();
+    let pollInterval = 100;
+
+    while (Date.now() - startTime < timeout) {
+        const state = await page.evaluate(() => {
+            return window.testHelpers?.getMapState() || { hasPendingAnimations: true };
+        }).catch(() => ({ hasPendingAnimations: true }));
+
+        if (!state.hasPendingAnimations) {
+            console.log('[waitForMapAnimations] Animations complete');
+            return true;
+        }
+
+        await page.waitForTimeout(pollInterval);
+        pollInterval = Math.min(pollInterval * 1.2, 300);
+    }
+
+    console.log('[waitForMapAnimations] Timeout waiting for animations');
+    return false;
+}
+
+/**
+ * Calculate distance between two coordinates in km (Haversine formula)
+ */
+function calculateDistance(coord1: [number, number], coord2: [number, number]): number {
+    const R = 6371; // Earth's radius in km
+    const [lng1, lat1] = coord1;
+    const [lng2, lat2] = coord2;
+
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLng = (lng2 - lng1) * Math.PI / 180;
+
+    const a = Math.sin(dLat / 2) ** 2 +
+        Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+        Math.sin(dLng / 2) ** 2;
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+    return R * c;
+}
+
+/**
+ * Verify camera is positioned near the expected camp
+ * Allows for some tolerance since camera might be slightly offset for better view
+ */
+async function verifyCameraPosition(
+    page: Page,
+    expectedCampCoords: [number, number],
+    toleranceKm = 50
+): Promise<{ success: boolean; distance?: number; cameraCenter?: [number, number] }> {
+    const mapState = await page.evaluate(() => window.testHelpers?.getMapState());
+
+    if (!mapState?.cameraCenter) {
+        return { success: false };
+    }
+
+    const distance = calculateDistance(mapState.cameraCenter, expectedCampCoords);
+
+    return {
+        success: distance <= toleranceKm,
+        distance,
+        cameraCenter: mapState.cameraCenter
+    };
+}
+
 test.describe('Day Navigation', () => {
     test('rapid day switching goes to final selection', async ({ page }) => {
         await page.goto('/');
@@ -157,17 +223,40 @@ test.describe('Day Navigation', () => {
             return;
         }
 
+        // Get camps to find expected coordinates for day 3
+        const camps = await page.evaluate(() => window.testHelpers?.getCamps() || []);
+        const day3Camp = camps.find(c => c.dayNumber === 3);
+        expect(day3Camp).toBeDefined();
+
+        // Get full camp data with coordinates
+        const day3CampData = await page.evaluate((campId) => {
+            const trekData = window.testHelpers?.getTrekData('kilimanjaro');
+            return trekData?.camps.find((c: any) => c.id === campId);
+        }, day3Camp?.id);
+        expect(day3CampData?.coordinates).toBeDefined();
+
         // Rapidly switch through days 1, 2, 3
         await selectDay(page, 1);
         await selectDay(page, 2);
         await selectDay(page, 3);
 
         // Wait for animations to complete
-        await page.waitForTimeout(2500);
+        const animationsComplete = await waitForMapAnimations(page);
+        expect(animationsComplete).toBe(true);
 
-        // Should be on day 3
+        // Verify selected day matches
         const currentDay = await getCurrentDay(page);
         expect(currentDay).toBe(3);
+
+        // Verify camera is positioned near Day 3 camp (visual state verification)
+        const cameraCheck = await verifyCameraPosition(page, day3CampData.coordinates);
+        console.log('[Test] Camera position check:', {
+            expected: day3CampData.coordinates,
+            actual: cameraCheck.cameraCenter,
+            distance: cameraCheck.distance ? `${cameraCheck.distance.toFixed(2)} km` : 'unknown',
+            success: cameraCheck.success
+        });
+        expect(cameraCheck.success).toBe(true);
     });
 
     test('very rapid day switching (5 days quickly)', async ({ page }) => {
@@ -268,6 +357,112 @@ test.describe('Day Navigation', () => {
         // Should be on Safari day
         const currentDay = await getCurrentDay(page);
         expect(currentDay).toBe(5);
+    });
+
+    test('switching from established day with two rapid switches', async ({ page }) => {
+        await page.goto('/');
+        await page.waitForSelector('canvas', { timeout: MAP_TIMEOUT });
+        await waitForMapReady(page);
+
+        const navigated = await navigateToTrekView(page);
+        if (!navigated) {
+            test.skip();
+            return;
+        }
+
+        // Get camp coordinates
+        const camps = await page.evaluate(() => window.testHelpers?.getCamps() || []);
+        const day4Camp = camps.find(c => c.dayNumber === 4);
+        expect(day4Camp).toBeDefined();
+
+        const day4CampData = await page.evaluate((campId) => {
+            const selectedTrek = window.testHelpers?.getSelectedTrek();
+            const trekData = selectedTrek ? window.testHelpers?.getTrekData(selectedTrek) : null;
+            return trekData?.camps.find((c: any) => c.id === campId);
+        }, day4Camp?.id);
+        expect(day4CampData?.coordinates).toBeDefined();
+
+        // IMPORTANT: First go to Day 2 and WAIT for it to complete
+        await selectDay(page, 2);
+        await waitForMapAnimations(page);
+        await page.waitForTimeout(500); // Ensure we're fully settled on Day 2
+
+        console.log('[Test] Established on Day 2, now rapidly switching Day 2 → 3 → 4');
+
+        // Now rapidly switch TWO times while already at Day 2
+        await selectDay(page, 3);
+        await selectDay(page, 4);
+
+        // Wait for animations to complete
+        const animationsComplete = await waitForMapAnimations(page);
+        expect(animationsComplete).toBe(true);
+
+        // Verify we ended up on Day 4
+        const currentDay = await getCurrentDay(page);
+        expect(currentDay).toBe(4);
+
+        // CRITICAL: Verify camera actually moved to Day 4, not stuck at Day 2
+        const cameraCheck = await verifyCameraPosition(page, day4CampData.coordinates, 50);
+        console.log('[Test] Camera position check (from established day):', {
+            expected: day4CampData.coordinates,
+            actual: cameraCheck.cameraCenter,
+            distance: cameraCheck.distance ? `${cameraCheck.distance.toFixed(2)} km` : 'unknown',
+            success: cameraCheck.success
+        });
+        expect(cameraCheck.success).toBe(true);
+    });
+
+    test('rapid switching FROM Safari day back works', async ({ page }) => {
+        await page.goto('/');
+        await page.waitForSelector('canvas', { timeout: MAP_TIMEOUT });
+        await waitForMapReady(page);
+
+        const navigated = await navigateToTrekView(page);
+        if (!navigated) {
+            test.skip();
+            return;
+        }
+
+        // Get camp coordinates for verification - we'll end on Day 1
+        const camps = await page.evaluate(() => window.testHelpers?.getCamps() || []);
+        const day1Camp = camps.find(c => c.dayNumber === 1);
+        expect(day1Camp).toBeDefined();
+
+        const day1CampData = await page.evaluate((campId) => {
+            const selectedTrek = window.testHelpers?.getSelectedTrek();
+            const trekData = selectedTrek ? window.testHelpers?.getTrekData(selectedTrek) : null;
+            return trekData?.camps.find((c: any) => c.id === campId);
+        }, day1Camp?.id);
+        expect(day1CampData?.coordinates).toBeDefined();
+
+        // Go to Safari day first (off-route)
+        await selectDay(page, 5);
+        await page.waitForTimeout(100); // Minimal wait
+
+        // VERY rapidly switch back: Safari (day 5) → Day 4 → Day 3 → Day 2 → Day 1
+        await selectDay(page, 4);
+        await selectDay(page, 3);
+        await selectDay(page, 2);
+        await selectDay(page, 1);
+
+        // Wait for animations to complete
+        const animationsComplete = await waitForMapAnimations(page);
+        expect(animationsComplete).toBe(true);
+
+        // Verify we ended up on Day 1
+        const currentDay = await getCurrentDay(page);
+        expect(currentDay).toBe(1);
+
+        // CRITICAL: Verify camera actually moved from Safari to Day 1
+        // If stuck at Safari, this will fail
+        const cameraCheck = await verifyCameraPosition(page, day1CampData.coordinates, 50);
+        console.log('[Test] Camera position check (from Safari):', {
+            expected: day1CampData.coordinates,
+            actual: cameraCheck.cameraCenter,
+            distance: cameraCheck.distance ? `${cameraCheck.distance.toFixed(2)} km` : 'unknown',
+            success: cameraCheck.success
+        });
+        expect(cameraCheck.success).toBe(true);
     });
 
     test('triple rapid switch pattern', async ({ page }) => {

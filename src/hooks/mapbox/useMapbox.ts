@@ -954,88 +954,37 @@ export function useMapbox({ containerRef, onTrekSelect, onPhotoClick, onRouteCli
     // Fly to trek view
     const flyToTrek = useCallback((selectedTrek: TrekConfig, selectedCamp: Camp | null = null) => {
         const map = mapRef.current;
-        console.log('[flyToTrek] Called with:', {
-            trek: selectedTrek?.id,
-            camp: selectedCamp?.name,
-            campDay: selectedCamp?.dayNumber,
-            campId: selectedCamp?.id,
-            mapReady,
-            hasMap: !!map
-        });
         if (!map || !mapReady || !selectedTrek) {
-            console.log('[flyToTrek] Early return - map/ready/trek missing');
             return;
         }
 
-        if (!map.isStyleLoaded()) {
-            console.log('[flyToTrek] Style not loaded, waiting...');
-
-            // Capture the camp ID to check if selection changed before style loads
-            const capturedCampId = selectedCamp?.id ?? null;
-
-            // Remove any stale style load handler from rapid day switching
-            if (styleLoadHandlerRef.current) {
-                map.off('style.load', styleLoadHandlerRef.current);
-                styleLoadHandlerRef.current = null;
-            }
-
-            // Clear any pending setTimeout fallback from rapid day switching
-            if (styleLoadTimeoutRef.current) {
-                clearTimeout(styleLoadTimeoutRef.current);
-                styleLoadTimeoutRef.current = null;
-            }
-
-            const onStyleLoad = () => {
-                map.off('style.load', onStyleLoad);
-                styleLoadHandlerRef.current = null;
-                // Clear the setTimeout fallback since style loaded via event
-                if (styleLoadTimeoutRef.current) {
-                    clearTimeout(styleLoadTimeoutRef.current);
-                    styleLoadTimeoutRef.current = null;
-                }
-                // Only proceed if the user hasn't switched to a different day
-                if (pendingHighlightCampIdRef.current === capturedCampId) {
-                    flyToTrek(selectedTrek, selectedCamp);
-                } else {
-                    console.log('[flyToTrek onStyleLoad] Skipping stale call - camp changed');
-                }
-            };
-            styleLoadHandlerRef.current = onStyleLoad;
-            map.once('style.load', onStyleLoad);
-
-            // Fallback: check if style loaded after 100ms
-            styleLoadTimeoutRef.current = setTimeout(() => {
-                styleLoadTimeoutRef.current = null;
-                if (map.isStyleLoaded()) {
-                    if (styleLoadHandlerRef.current) {
-                        map.off('style.load', styleLoadHandlerRef.current);
-                        styleLoadHandlerRef.current = null;
-                    }
-                    // Only proceed if the user hasn't switched to a different day
-                    if (pendingHighlightCampIdRef.current === capturedCampId) {
-                        flyToTrek(selectedTrek, selectedCamp);
-                    } else {
-                        console.log('[flyToTrek setTimeout] Skipping stale call - camp changed');
-                    }
-                }
-            }, 100);
-            return;
-        }
+        // SIMPLIFIED APPROACH: Once mapReady is true, style is loaded and we can proceed immediately
+        // The isStyleLoaded() check returns false during animations, causing unnecessary waiting
+        // We only need to wait for style.load during initial map setup (before mapReady)
 
         isGlobeViewRef.current = false;
         selectedTrekRef.current = selectedTrek.id;
-        // Track which camp we're highlighting to prevent stale updates on rapid day switching
+
+        // Track which camp we're highlighting to prevent stale updates
         const currentCampId = selectedCamp?.id ?? null;
         pendingHighlightCampIdRef.current = currentCampId;
-        console.log('[flyToTrek] Set pendingHighlightCampIdRef to:', currentCampId);
 
-        // Cancel any pending camera animations from rapid day switching
+        // Cancel ALL pending operations from previous day switches
         map.stop();
 
-        // Cancel any pending RAF camera animation
         if (cameraAnimationFrameRef.current !== null) {
             cancelAnimationFrame(cameraAnimationFrameRef.current);
             cameraAnimationFrameRef.current = null;
+        }
+
+        if (styleLoadHandlerRef.current) {
+            map.off('style.load', styleLoadHandlerRef.current);
+            styleLoadHandlerRef.current = null;
+        }
+
+        if (styleLoadTimeoutRef.current) {
+            clearTimeout(styleLoadTimeoutRef.current);
+            styleLoadTimeoutRef.current = null;
         }
 
         // Clear old route highlighting before starting new animation
@@ -1080,25 +1029,11 @@ export function useMapbox({ containerRef, onTrekSelect, onPhotoClick, onRouteCli
         }
 
         cameraAnimationFrameRef.current = requestAnimationFrame(() => {
-            cameraAnimationFrameRef.current = null; // Clear after executing
+            cameraAnimationFrameRef.current = null;
 
-            if (!mapRef.current) {
-                console.log('[flyToTrek RAF] No map ref');
+            if (!mapRef.current || pendingHighlightCampIdRef.current !== currentCampId) {
                 return;
             }
-
-            // Check if this is still the current selection (prevents multiple animations on rapid switching)
-            console.log('[flyToTrek RAF] Checking pending camp:', {
-                pending: pendingHighlightCampIdRef.current,
-                current: currentCampId,
-                match: pendingHighlightCampIdRef.current === currentCampId
-            });
-            if (pendingHighlightCampIdRef.current !== currentCampId) {
-                console.log('[flyToTrek RAF] Early return - camp ID mismatch');
-                return;
-            }
-
-            console.log('[flyToTrek RAF] Starting camera animation for camp:', selectedCamp?.name);
             if (selectedCamp) {
                 let bearing = trekConfig.preferredBearing;
                 const pitch = selectedCamp.pitch || 55;
@@ -1139,21 +1074,9 @@ export function useMapbox({ containerRef, onTrekSelect, onPhotoClick, onRouteCli
                         bearing = calculateBearing(prevCampCoord[1], prevCampCoord[0], currentCoord[1], currentCoord[0]);
                     }
 
-                    console.log('[flyToTrek RAF] Route segment check:', {
-                        campIndex,
-                        startIndex,
-                        endIndex,
-                        actualStart,
-                        actualEnd,
-                        distanceToRoute,
-                        isOffRoute: distanceToRoute > 10,
-                        hasValidSegment: actualEnd > actualStart
-                    });
-
                     // Only use route segment navigation if camp is on-route (< 10km from route)
                     // Off-route camps (like Safari) should use simple flyTo instead
                     if (actualEnd > actualStart && distanceToRoute <= 10) {
-                        console.log('[flyToTrek RAF] Using fitBounds for route segment');
                         const segmentCoords = routeCoords.slice(actualStart, actualEnd + 1);
                         let minLng = segmentCoords[0][0], maxLng = segmentCoords[0][0];
                         let minLat = segmentCoords[0][1], maxLat = segmentCoords[0][1];
@@ -1179,22 +1102,13 @@ export function useMapbox({ containerRef, onTrekSelect, onPhotoClick, onRouteCli
                             essential: true
                         });
 
-                        // Double-check selection hasn't changed during camera animation setup
                         if (pendingHighlightCampIdRef.current === currentCampId) {
                             highlightSegment(trekData, selectedCamp);
-                        } else {
-                            console.log('[flyToTrek RAF] Skipping highlight - selection changed during animation setup');
                         }
                         return;
-                    } else {
-                        const reason = distanceToRoute > 10
-                            ? `camp is off-route (${distanceToRoute.toFixed(1)}km from route)`
-                            : 'no valid segment';
-                        console.log(`[flyToTrek RAF] ${reason}, falling through to simple flyTo`);
                     }
                 }
 
-                console.log('[flyToTrek RAF] Using simple flyTo to camp coordinates:', selectedCamp.coordinates);
                 if (selectedCamp.bearing !== undefined) {
                     bearing = selectedCamp.bearing;
                 }
@@ -1210,11 +1124,8 @@ export function useMapbox({ containerRef, onTrekSelect, onPhotoClick, onRouteCli
                     easing: (t) => 1 - Math.pow(1 - t, 3)
                 });
 
-                // Double-check selection hasn't changed during camera animation setup
                 if (pendingHighlightCampIdRef.current === currentCampId) {
                     highlightSegment(trekData, selectedCamp);
-                } else {
-                    console.log('[flyToTrek RAF] Skipping highlight - selection changed during animation setup');
                 }
             } else {
                 const coordinates = trekData.route.coordinates;
@@ -1853,6 +1764,28 @@ export function useMapbox({ containerRef, onTrekSelect, onPhotoClick, onRouteCli
         return [center.lng, center.lat];
     }, []);
 
+    // E2E test helper to inspect map internal state
+    const getMapStateForTesting = useCallback(() => {
+        if (!mapRef.current) {
+            return {
+                cameraCenter: null,
+                cameraZoom: null,
+                cameraBearing: null,
+                pendingHighlightCampId: null,
+                hasPendingAnimations: false
+            };
+        }
+
+        const center = mapRef.current.getCenter();
+        return {
+            cameraCenter: [center.lng, center.lat] as [number, number],
+            cameraZoom: mapRef.current.getZoom(),
+            cameraBearing: mapRef.current.getBearing(),
+            pendingHighlightCampId: pendingHighlightCampIdRef.current,
+            hasPendingAnimations: cameraAnimationFrameRef.current !== null || styleLoadTimeoutRef.current !== null
+        };
+    }, []);
+
     return {
         map: mapRef,
         mapReady,
@@ -1871,6 +1804,7 @@ export function useMapbox({ containerRef, onTrekSelect, onPhotoClick, onRouteCli
         getMapCenter,
         startPlayback,
         stopPlayback,
-        playbackState
+        playbackState,
+        getMapStateForTesting
     };
 }

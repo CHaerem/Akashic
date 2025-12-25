@@ -42,6 +42,14 @@ interface TestHelpers {
     getTrekData: (id: string) => any; // Debug: get full trek data
     isMapReady: () => boolean;
     isDataLoaded: () => boolean;
+    // Map state inspection for visual verification
+    getMapState: () => {
+        cameraCenter: [number, number] | null;
+        cameraZoom: number | null;
+        cameraBearing: number | null;
+        pendingHighlightCampId: string | null;
+        hasPendingAnimations: boolean;
+    };
 }
 
 // Declare global window extension for test helpers
@@ -190,7 +198,7 @@ export function MapboxGlobe({ selectedTrek, selectedCamp, onSelectTrek, view, ph
         }
     }, [onCampSelect]);
 
-    const { map, mapReady, error, flyToGlobe, flyToTrek, updatePhotoMarkers, updateCampMarkers, updatePOIMarkers, flyToPhoto, flyToPOI, startRotation, stopRotation, isRotating, getMapCenter } = useMapbox({
+    const { map, mapReady, error, flyToGlobe, flyToTrek, updatePhotoMarkers, updateCampMarkers, updatePOIMarkers, flyToPhoto, flyToPOI, startRotation, stopRotation, isRotating, getMapCenter, getMapStateForTesting } = useMapbox({
         containerRef,
         onTrekSelect: onSelectTrek,
         onPhotoClick: handlePhotoClick,
@@ -290,12 +298,14 @@ export function MapboxGlobe({ selectedTrek, selectedCamp, onSelectTrek, view, ph
                         id: c.id,
                         name: c.name,
                         dayNumber: c.dayNumber,
-                        elevation: c.elevation
+                        elevation: c.elevation,
+                        coordinates: c.coordinates
                     })) || []
                 };
             },
             isMapReady: () => mapReady,
-            isDataLoaded: () => !journeysLoading && treks.length > 0
+            isDataLoaded: () => !journeysLoading && treks.length > 0,
+            getMapState: () => getMapStateForTesting()
         };
 
         // Register on window
@@ -304,7 +314,7 @@ export function MapboxGlobe({ selectedTrek, selectedCamp, onSelectTrek, view, ph
         return () => {
             delete window.testHelpers;
         };
-    }, [mapReady, treks, selectedTrek, selectedCamp, trekDataMap, onSelectTrek, onCampSelect, journeysLoading]);
+    }, [mapReady, treks, selectedTrek, selectedCamp, trekDataMap, onSelectTrek, onCampSelect, journeysLoading, getMapStateForTesting]);
 
     // Expose flyToPhoto to parent via ref
     useEffect(() => {
