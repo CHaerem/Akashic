@@ -343,7 +343,7 @@ function TrekViewContent({
                     onOpenDayGallery={onOpenDayGallery}
                     editMode={editMode}
                     isMobile={isMobile}
-                    journeyId={trekData.id}
+                    journeyId={trekData.uuid}
                 />
             )}
 

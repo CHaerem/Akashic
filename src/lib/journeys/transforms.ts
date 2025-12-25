@@ -268,6 +268,7 @@ export function toTrekData(journey: DbJourney, waypoints: DbWaypoint[]): TrekDat
 
     return {
         id: journey.slug,
+        uuid: journey.id,
         name: journey.name,
         country: journey.country || '',
         description: journey.description || '',

@@ -71,6 +71,8 @@ export interface TrekStats {
 
 export interface TrekData {
     id: string;
+    /** Database UUID for journey (used for database queries) */
+    uuid: string;
     name: string;
     country: string;
     description: string;
