@@ -193,10 +193,18 @@ CREATE POLICY "Journey access" ON journeys
 CREATE POLICY "Journey modify" ON journeys
   FOR ALL USING (user_has_journey_access(id, 'editor'));
 
--- Waypoints/Photos: inherit from journey membership
-CREATE POLICY "Waypoint access" ON waypoints FOR SELECT USING (user_has_journey_access(journey_id));
+-- Waypoints/Photos: inherit from journey membership OR public journey
+CREATE POLICY "Waypoint access" ON waypoints
+  FOR SELECT USING (
+    user_has_journey_access(journey_id)
+    OR EXISTS (SELECT 1 FROM journeys WHERE id = journey_id AND is_public = true)
+  );
 CREATE POLICY "Waypoint modify" ON waypoints FOR ALL USING (user_has_journey_access(journey_id, 'editor'));
-CREATE POLICY "Photo access" ON photos FOR SELECT USING (user_has_journey_access(journey_id));
+CREATE POLICY "Photo access" ON photos
+  FOR SELECT USING (
+    user_has_journey_access(journey_id)
+    OR EXISTS (SELECT 1 FROM journeys WHERE id = journey_id AND is_public = true)
+  );
 CREATE POLICY "Photo modify" ON photos FOR ALL USING (user_has_journey_access(journey_id, 'editor'));
 
 -- Members: owners can manage, members can view
@@ -569,6 +577,67 @@ The following secrets must be configured in your GitHub repository for CI/CD:
 2. Navigate to Settings → Secrets and variables → Actions
 3. Click "New repository secret"
 4. Add each secret with its name and value
+
+---
+
+## Testing
+
+### E2E Testing (Playwright)
+
+End-to-end tests verify critical user flows and UI interactions. Tests run in E2E test mode (`VITE_E2E_TEST_MODE=true`) which disables authentication for automated testing.
+
+**Test Files:**
+- `e2e/app.spec.ts` - Core app flows (globe view, trek selection, navigation)
+- `e2e/day-navigation.spec.ts` - Day switching, rapid navigation scenarios
+
+**Test Helpers** (`src/components/MapboxGlobe.tsx`):
+
+Exposed on `window.testHelpers` for programmatic control:
+```typescript
+interface TestHelpers {
+  selectTrek(id: string): boolean;         // Select a trek by slug
+  getTreks(): Array<{id, name}>;           // Get all available treks
+  selectDay(dayNumber: number): boolean;   // Switch to a specific day
+  getCurrentDay(): number | null;          // Get current selected day
+  getCamps(): Array<Camp>;                 // Get camps for current trek
+  isMapReady(): boolean;                   // Check if map is initialized
+  isDataLoaded(): boolean;                 // Check if journey data loaded
+}
+```
+
+**Running Tests:**
+```bash
+# Run all E2E tests
+VITE_E2E_TEST_MODE=true npm run build
+npx playwright test
+
+# Run specific test file
+npx playwright test e2e/day-navigation.spec.ts
+
+# Run with UI
+npx playwright test --ui
+```
+
+**Browser Support:**
+- Chromium ✅
+- Mobile Chrome ✅
+- Safari (requires `npx playwright install webkit`)
+
+**Key Test Scenarios:**
+- Rapid day switching (prevents stale camera animations)
+- Forward/backward navigation through days
+- Off-route waypoint navigation (e.g., Safari day)
+- Console error detection during navigation
+
+### Known Issues
+
+**Rapid Day Switching:**
+When users quickly switch between days (e.g., Day 1 → 2 → 3), the map camera could show stale highlighting from intermediate days. This has been fixed with:
+- RAF (requestAnimationFrame) cancellation on day change
+- Style load handler cleanup to prevent stale callbacks
+- Double-checking selection before applying route highlights
+
+See `src/hooks/mapbox/useMapbox.ts:1035-1218` for implementation details.
 
 ---
 
