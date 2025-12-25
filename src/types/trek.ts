@@ -30,6 +30,10 @@ export interface Camp {
     elevation: number;
     coordinates: [number, number];
     elevationGainFromPrevious: number;
+    /** Elevation loss from previous camp (meters) */
+    elevationLossFromPrevious: number;
+    /** Distance walked this day from previous camp (km) */
+    dayDistance: number;
     notes: string;
     highlights?: string[];
     bearing?: number;

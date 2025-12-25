@@ -12,6 +12,8 @@ export {
     toTrekData,
     findClosestRoutePointIndex,
     calculateElevationGainBetweenIndices,
+    calculateElevationLossBetweenIndices,
+    calculateDistanceBetweenIndices,
 } from './transforms';
 
 // Journey CRUD + cache
@@ -64,6 +66,8 @@ export {
 export const _internal = {
     findClosestRoutePointIndex,
     calculateElevationGainBetweenIndices,
+    calculateElevationLossBetweenIndices,
+    calculateDistanceBetweenIndices,
     toTrekConfig,
     toTrekData,
 };
@@ -72,6 +76,8 @@ export const _internal = {
 import {
     findClosestRoutePointIndex,
     calculateElevationGainBetweenIndices,
+    calculateElevationLossBetweenIndices,
+    calculateDistanceBetweenIndices,
     toTrekConfig,
     toTrekData,
 } from './transforms';

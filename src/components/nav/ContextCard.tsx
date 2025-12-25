@@ -9,6 +9,15 @@ import { colors, radius, effects } from '../../styles/liquidGlass';
 import type { Camp, TabType, Photo } from '../../types/trek';
 import { CloseIcon, PhotoIcon, InfoIcon } from '../icons';
 
+// Walking icon for distance
+const WalkingIcon = () => (
+  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={colors.accent.primary} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="5" r="2"/>
+    <path d="m14 21-3-3 3-6-3-1.5V8l4 2v4"/>
+    <path d="M10 21v-8l-2-3 2.5-2"/>
+  </svg>
+);
+
 const SPRING_CONFIG = {
   mass: 0.1,
   stiffness: 200,
@@ -121,6 +130,47 @@ export const ContextCard = memo(function ContextCard({
           >
             {currentCamp.name}
           </h3>
+
+          {/* Day Stats - distance and elevation */}
+          {(currentCamp.dayDistance > 0 || currentCamp.elevationGainFromPrevious > 0 || currentCamp.elevationLossFromPrevious > 0) && (
+            <div
+              style={{
+                display: 'flex',
+                gap: 12,
+                marginTop: 8,
+                flexWrap: 'wrap',
+              }}
+            >
+              {currentCamp.dayDistance > 0 && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <WalkingIcon />
+                  <span style={{ fontSize: 12, color: colors.text.secondary }}>
+                    <span style={{ fontWeight: 600, color: colors.text.primary }}>{currentCamp.dayDistance}</span> km
+                  </span>
+                </div>
+              )}
+              {currentCamp.elevationGainFromPrevious > 0 && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="3">
+                    <path d="M12 19V5M5 12l7-7 7 7"/>
+                  </svg>
+                  <span style={{ fontSize: 12, color: colors.text.secondary }}>
+                    <span style={{ fontWeight: 600, color: '#22c55e' }}>{currentCamp.elevationGainFromPrevious}</span>m
+                  </span>
+                </div>
+              )}
+              {currentCamp.elevationLossFromPrevious > 0 && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="3">
+                    <path d="M12 5v14M5 12l7 7 7-7"/>
+                  </svg>
+                  <span style={{ fontSize: 12, color: colors.text.secondary }}>
+                    <span style={{ fontWeight: 600, color: '#ef4444' }}>{currentCamp.elevationLossFromPrevious}</span>m
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
         </div>
         <button
           onClick={onClose}

@@ -430,7 +430,7 @@ function DayContent({ camp, currentDayDate, dayPhotos, allPhotos, getMediaUrl, o
         <>
             {/* Header */}
             <div style={{ marginBottom: 16 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
                     {currentDayDate && (
                         <span style={{ fontSize: 12, color: colors.text.tertiary }}>
                             {currentDayDate.toLocaleDateString('en-US', {
@@ -476,6 +476,53 @@ function DayContent({ camp, currentDayDate, dayPhotos, allPhotos, getMediaUrl, o
                 >
                     {camp.name}
                 </h3>
+
+                {/* Day Stats - distance, elevation gain/loss */}
+                {(camp.dayDistance > 0 || camp.elevationGainFromPrevious > 0 || camp.elevationLossFromPrevious > 0) && (
+                    <div
+                        style={{
+                            display: 'flex',
+                            gap: 16,
+                            marginTop: 12,
+                            padding: '10px 12px',
+                            background: 'rgba(255, 255, 255, 0.05)',
+                            borderRadius: radius.md,
+                            border: `1px solid ${colors.glass.borderSubtle}`,
+                        }}
+                    >
+                        {camp.dayDistance > 0 && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={colors.accent.primary} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <circle cx="12" cy="12" r="10"/>
+                                    <polyline points="12 6 12 12 16 14"/>
+                                </svg>
+                                <span style={{ fontSize: 13, color: colors.text.secondary }}>
+                                    <span style={{ fontWeight: 600, color: colors.text.primary }}>{camp.dayDistance}</span> km
+                                </span>
+                            </div>
+                        )}
+                        {camp.elevationGainFromPrevious > 0 && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="2.5">
+                                    <path d="M12 19V5M5 12l7-7 7 7"/>
+                                </svg>
+                                <span style={{ fontSize: 13, color: colors.text.secondary }}>
+                                    <span style={{ fontWeight: 600, color: '#22c55e' }}>{camp.elevationGainFromPrevious}</span>m
+                                </span>
+                            </div>
+                        )}
+                        {camp.elevationLossFromPrevious > 0 && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2.5">
+                                    <path d="M12 5v14M5 12l7 7 7-7"/>
+                                </svg>
+                                <span style={{ fontSize: 13, color: colors.text.secondary }}>
+                                    <span style={{ fontWeight: 600, color: '#ef4444' }}>{camp.elevationLossFromPrevious}</span>m
+                                </span>
+                            </div>
+                        )}
+                    </div>
+                )}
             </div>
 
             {/* Notes */}

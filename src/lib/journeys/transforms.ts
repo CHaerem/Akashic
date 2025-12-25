@@ -72,6 +72,58 @@ export function calculateElevationGainBetweenIndices(
 }
 
 /**
+ * Calculate elevation loss between two route indices
+ * Only counts negative elevation changes (loss, not gain)
+ */
+export function calculateElevationLossBetweenIndices(
+    routeCoords: [number, number, number][],
+    startIndex: number,
+    endIndex: number
+): number {
+    if (startIndex >= endIndex) return 0;
+
+    let totalLoss = 0;
+    for (let i = startIndex + 1; i <= endIndex; i++) {
+        const elevDiff = routeCoords[i][2] - routeCoords[i - 1][2];
+        if (elevDiff < 0) {
+            totalLoss += Math.abs(elevDiff);
+        }
+    }
+
+    return Math.round(totalLoss);
+}
+
+/**
+ * Calculate distance along route between two indices (km)
+ * Uses Haversine formula for accurate distance
+ */
+export function calculateDistanceBetweenIndices(
+    routeCoords: [number, number, number][],
+    startIndex: number,
+    endIndex: number
+): number {
+    if (startIndex >= endIndex) return 0;
+
+    let totalDistance = 0;
+    const R = 6371; // Earth's radius in km
+
+    for (let i = startIndex + 1; i <= endIndex; i++) {
+        const [lng1, lat1] = routeCoords[i - 1];
+        const [lng2, lat2] = routeCoords[i];
+
+        const dLat = (lat2 - lat1) * Math.PI / 180;
+        const dLng = (lng2 - lng1) * Math.PI / 180;
+        const a = Math.sin(dLat / 2) ** 2 +
+            Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+            Math.sin(dLng / 2) ** 2;
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        totalDistance += R * c;
+    }
+
+    return Math.round(totalDistance * 10) / 10;
+}
+
+/**
  * Transform database fun fact to app type
  */
 function toFunFact(dbFact: DbFunFact): FunFact {
@@ -143,18 +195,47 @@ export function toTrekData(journey: DbJourney, waypoints: DbWaypoint[]): TrekDat
         return findClosestRoutePointIndex(w.coordinates, routeCoords);
     });
 
-    // Create camps with calculated elevation gains
+    // Create camps with calculated elevation gains, losses, and day distances
     const camps: Camp[] = sortedWaypoints.map((w, i) => {
         let elevationGainFromPrevious = 0;
+        let elevationLossFromPrevious = 0;
+        let dayDistance = 0;
 
-        if (i > 0 && routeCoords.length > 0) {
-            const prevIndex = campRouteIndices[i - 1];
+        if (routeCoords.length > 0) {
+            // For Day 1, calculate from route start (index 0)
+            // For subsequent days, calculate from previous camp
+            const prevIndex = i === 0 ? 0 : campRouteIndices[i - 1];
             const currIndex = campRouteIndices[i];
-            elevationGainFromPrevious = calculateElevationGainBetweenIndices(
-                routeCoords,
-                prevIndex,
-                currIndex
-            );
+
+            if (currIndex > prevIndex) {
+                elevationGainFromPrevious = calculateElevationGainBetweenIndices(
+                    routeCoords,
+                    prevIndex,
+                    currIndex
+                );
+                elevationLossFromPrevious = calculateElevationLossBetweenIndices(
+                    routeCoords,
+                    prevIndex,
+                    currIndex
+                );
+
+                // Calculate day distance - prefer routeDistanceKm if available for accuracy
+                if (i > 0) {
+                    const prevWaypoint = sortedWaypoints[i - 1];
+                    if (w.route_distance_km != null && prevWaypoint.route_distance_km != null) {
+                        dayDistance = Math.round((w.route_distance_km - prevWaypoint.route_distance_km) * 10) / 10;
+                    } else {
+                        dayDistance = calculateDistanceBetweenIndices(routeCoords, prevIndex, currIndex);
+                    }
+                } else {
+                    // Day 1: distance from route start to first camp
+                    if (w.route_distance_km != null) {
+                        dayDistance = Math.round(w.route_distance_km * 10) / 10;
+                    } else {
+                        dayDistance = calculateDistanceBetweenIndices(routeCoords, 0, currIndex);
+                    }
+                }
+            }
         }
 
         const dayNumber = w.day_number || i + 1;
@@ -166,6 +247,8 @@ export function toTrekData(journey: DbJourney, waypoints: DbWaypoint[]): TrekDat
             elevation: w.elevation || 0,
             coordinates: w.coordinates,
             elevationGainFromPrevious,
+            elevationLossFromPrevious,
+            dayDistance,
             notes: w.description || '',
             highlights: w.highlights || [],
             routeDistanceKm: w.route_distance_km,
