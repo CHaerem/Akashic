@@ -116,11 +116,34 @@ function isVideoFile(filePath: string): boolean {
 }
 
 /**
- * Check if file needs conversion (non-mp4 video)
+ * Check if video needs conversion (non-mp4 video)
  */
-function needsConversion(filePath: string): boolean {
+function needsVideoConversion(filePath: string): boolean {
   const ext = path.extname(filePath).toLowerCase();
   return ['.mov', '.m4v', '.webm'].includes(ext);
+}
+
+/**
+ * Check if image needs conversion (HEIC/HEIF to JPEG for browser compatibility)
+ */
+function needsImageConversion(filePath: string): boolean {
+  const ext = path.extname(filePath).toLowerCase();
+  return ['.heic', '.heif'].includes(ext);
+}
+
+/**
+ * Convert HEIC/HEIF to JPEG using macOS sips command (native HEIC support)
+ */
+function convertToJpeg(inputPath: string, outputPath: string): boolean {
+  try {
+    // Use macOS sips command which has native HEIC support
+    const cmd = `sips -s format jpeg -s formatOptions 85 "${inputPath}" --out "${outputPath}"`;
+    execSync(cmd, { stdio: 'pipe' });
+    return true;
+  } catch (error) {
+    console.error(`  Failed to convert image: ${error}`);
+    return false;
+  }
 }
 
 /**
@@ -260,12 +283,19 @@ function extractExif(filePath: string): { coordinates?: [number, number]; takenA
 async function main() {
   const args = process.argv.slice(2);
 
-  if (args.length < 2) {
-    console.log('Usage: SUPABASE_SERVICE_KEY="..." npx tsx scripts/bulkUploadR2.ts <folder> <journey-slug>');
+  // Parse flags
+  const photosOnly = args.includes('--photos-only');
+  const filteredArgs = args.filter(a => !a.startsWith('--'));
+
+  if (filteredArgs.length < 2) {
+    console.log('Usage: SUPABASE_SERVICE_KEY="..." npx tsx scripts/bulkUploadR2.ts <folder> <journey-slug> [--photos-only]');
+    console.log('');
+    console.log('Options:');
+    console.log('  --photos-only   Only upload images, skip videos');
     console.log('');
     console.log('Example:');
     console.log('  export SUPABASE_SERVICE_KEY="eyJ..."');
-    console.log('  npx tsx scripts/bulkUploadR2.ts ~/Desktop/akashic-photo-exports/inca-trail inca-trail');
+    console.log('  npx tsx scripts/bulkUploadR2.ts ~/Desktop/akashic-photo-exports/inca-trail inca-trail --photos-only');
     process.exit(1);
   }
 
@@ -274,7 +304,7 @@ async function main() {
     process.exit(1);
   }
 
-  const [folderPath, journeySlug] = args;
+  const [folderPath, journeySlug] = filteredArgs;
   const resolvedPath = path.resolve(folderPath.replace(/^~/, process.env.HOME || ''));
 
   // Validate folder
@@ -292,15 +322,16 @@ async function main() {
   }
   console.log(`   Found journey ID: ${journeyId}`);
 
-  // Get list of media files (photos and videos)
+  // Get list of media files (photos and videos, or photos only)
+  const allowedExtensions = photosOnly ? IMAGE_EXTENSIONS : MEDIA_EXTENSIONS;
   const files = fs.readdirSync(resolvedPath)
-    .filter(f => MEDIA_EXTENSIONS.includes(path.extname(f).toLowerCase()))
+    .filter(f => allowedExtensions.includes(path.extname(f).toLowerCase()))
     .sort();
 
   const imageCount = files.filter(f => IMAGE_EXTENSIONS.includes(path.extname(f).toLowerCase())).length;
   const videoCount = files.filter(f => VIDEO_EXTENSIONS.includes(path.extname(f).toLowerCase())).length;
 
-  console.log(`\n📸 Found ${files.length} media files to upload`);
+  console.log(`\n📸 Found ${files.length} media files to upload${photosOnly ? ' (photos only)' : ''}`);
   console.log(`   Images: ${imageCount}, Videos: ${videoCount}`);
   console.log(`   Destination: R2 bucket "${R2_BUCKET}"`);
   console.log('');
@@ -342,48 +373,54 @@ async function main() {
 
     const photoId = uuid();
 
-    // Determine final extension (convert non-mp4 videos to mp4)
+    // Determine final extension (convert HEIC to jpg, non-mp4 videos to mp4)
     let ext = path.extname(file).toLowerCase();
     if (ext === '.jpeg') ext = '.jpg';
-    const shouldConvert = isVideo && needsConversion(filePath);
-    if (shouldConvert) ext = '.mp4'; // Will be converted to mp4
+    const shouldConvertVideo = isVideo && needsVideoConversion(filePath);
+    const shouldConvertImage = !isVideo && needsImageConversion(filePath);
+    if (shouldConvertVideo) ext = '.mp4';
+    if (shouldConvertImage) ext = '.jpg';
 
     const r2Path = `journeys/${journeyId}/photos/${photoId}${ext}`;
     const thumbR2Path = `journeys/${journeyId}/photos/${photoId}_thumb.jpg`;
 
     const mediaIcon = isVideo ? '🎬' : '📷';
-    const convertLabel = shouldConvert ? ' (→mp4)' : '';
+    const convertLabel = shouldConvertVideo ? ' (→mp4)' : shouldConvertImage ? ' (→jpg)' : '';
     process.stdout.write(`\r  [${i + 1}/${files.length}] ${mediaIcon} Uploading ${file.substring(0, 32).padEnd(32)}${convertLabel}...`);
 
-    // For videos that need conversion, convert first then upload
+    // For files that need conversion, convert first then upload
     let uploadPath = filePath;
-    let tempMp4Path: string | null = null;
+    let tempConvertedPath: string | null = null;
 
-    if (shouldConvert) {
-      tempMp4Path = path.join(TEMP_DIR, `${photoId}.mp4`);
-      if (!convertToMp4(filePath, tempMp4Path)) {
+    if (shouldConvertVideo) {
+      tempConvertedPath = path.join(TEMP_DIR, `${photoId}.mp4`);
+      if (!convertToMp4(filePath, tempConvertedPath)) {
         console.log(`\n  ⚠️  Video conversion failed for ${file}`);
         failed++;
         continue;
       }
-      uploadPath = tempMp4Path;
+      uploadPath = tempConvertedPath;
+    } else if (shouldConvertImage) {
+      tempConvertedPath = path.join(TEMP_DIR, `${photoId}.jpg`);
+      if (!convertToJpeg(filePath, tempConvertedPath)) {
+        console.log(`\n  ⚠️  Image conversion failed for ${file}`);
+        failed++;
+        continue;
+      }
+      uploadPath = tempConvertedPath;
     }
 
     // Upload original (or converted) to R2
     const success = uploadToR2(uploadPath, r2Path);
 
-    // Clean up converted file if it was temporary
-    if (tempMp4Path && fs.existsSync(tempMp4Path)) {
-      try { fs.unlinkSync(tempMp4Path); } catch { /* ignore */ }
-    }
-
     if (success) {
       // Create and upload thumbnail
+      // Use uploadPath (converted file) for thumbnails so Sharp can read it
       let thumbnailUrl: string | null = null;
       const thumbLocalPath = path.join(TEMP_DIR, `${photoId}_thumb.jpg`);
 
       try {
-        const thumbCreated = await createThumbnail(filePath, thumbLocalPath);
+        const thumbCreated = await createThumbnail(uploadPath, thumbLocalPath);
         if (thumbCreated) {
           const thumbUploaded = uploadToR2(thumbLocalPath, thumbR2Path);
           if (thumbUploaded) {
@@ -393,10 +430,15 @@ async function main() {
       } catch {
         // Continue without thumbnail if creation fails
       } finally {
-        // Clean up temp file
+        // Clean up temp files
         try {
           if (fs.existsSync(thumbLocalPath)) fs.unlinkSync(thumbLocalPath);
         } catch { /* ignore */ }
+      }
+
+      // Clean up converted file if it was temporary (after thumbnail creation)
+      if (tempConvertedPath && fs.existsSync(tempConvertedPath)) {
+        try { fs.unlinkSync(tempConvertedPath); } catch { /* ignore */ }
       }
 
       // Insert DB record

@@ -22,6 +22,9 @@ type LocationFilter = 'any' | 'geotagged';
 type SortOrder = 'journey' | 'captured';
 type MapBounds = mapboxgl.LngLatBoundsLike | null;
 
+// Pagination settings
+const PHOTOS_PER_PAGE = 24; // Show 24 photos at a time (6 rows of 4)
+
 function toLngLatTuple(value: unknown): [number, number] | null {
     if (!value) return null;
     if (Array.isArray(value) && value.length >= 2 && typeof value[0] === 'number' && typeof value[1] === 'number') {
@@ -202,6 +205,7 @@ export function PhotosTab({ trekData, isMobile, editMode = false, onViewPhotoOnM
     const [sortOrder, setSortOrder] = useState<SortOrder>('journey');
     const [searchQuery, setSearchQuery] = useState('');
     const [mapScopeEnabled, setMapScopeEnabled] = useState(false);
+    const [visibleCount, setVisibleCount] = useState(PHOTOS_PER_PAGE);
     const dragTimeoutRef = useRef<number | null>(null);
     const gridContainerRef = useRef<HTMLDivElement>(null);
     const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -308,6 +312,22 @@ export function PhotosTab({ trekData, isMobile, editMode = false, onViewPhotoOnM
 
         return sortPhotos(filtered);
     }, [dayScopedPhotos, isWithinBounds, locationFilter, mapScopeEnabled, mapViewportBounds, mapViewportPhotoIdSet, mediaTypeFilter, searchQuery, sortPhotos]);
+
+    // Reset visible count when filters change
+    useEffect(() => {
+        setVisibleCount(PHOTOS_PER_PAGE);
+    }, [dayFilter, mediaTypeFilter, locationFilter, sortOrder, searchQuery, mapScopeEnabled]);
+
+    // Paginated photos for rendering (limits DOM elements for performance)
+    const visiblePhotos = useMemo(() => {
+        return filteredPhotos.slice(0, visibleCount);
+    }, [filteredPhotos, visibleCount]);
+
+    const hasMorePhotos = visibleCount < filteredPhotos.length;
+
+    const loadMorePhotos = useCallback(() => {
+        setVisibleCount(prev => Math.min(prev + PHOTOS_PER_PAGE, filteredPhotos.length));
+    }, [filteredPhotos.length]);
 
     // Get counts for each day
     const dayCounts = useMemo(() => {
@@ -822,7 +842,7 @@ export function PhotosTab({ trekData, isMobile, editMode = false, onViewPhotoOnM
                             "grid-cols-2 sm:grid-cols-3 lg:grid-cols-4",
                             "-m-2" // Negative margin to offset item padding
                         )}>
-                            {filteredPhotos.map((photo, index) => (
+                            {visiblePhotos.map((photo, index) => (
                                 <PhotoGridItem
                                     key={photo.id}
                                     photo={photo}
@@ -841,6 +861,25 @@ export function PhotosTab({ trekData, isMobile, editMode = false, onViewPhotoOnM
                                 />
                             ))}
                         </div>
+
+                        {/* Load more button */}
+                        {hasMorePhotos && (
+                            <div className="flex justify-center pt-6 pb-2">
+                                <button
+                                    type="button"
+                                    onClick={loadMorePhotos}
+                                    className={cn(
+                                        "px-6 py-2.5 rounded-full text-sm font-medium transition-all",
+                                        "border border-white/20 bg-white/[0.05] text-white/80",
+                                        "hover:bg-white/[0.10] hover:text-white hover:border-white/30",
+                                        "light:border-black/15 light:bg-black/[0.03] light:text-slate-700",
+                                        "light:hover:bg-black/[0.06] light:hover:text-slate-900"
+                                    )}
+                                >
+                                    Load more ({filteredPhotos.length - visibleCount} remaining)
+                                </button>
+                            </div>
+                        )}
                     </div>
                 )}
             </div>
