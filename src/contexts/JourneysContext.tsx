@@ -34,6 +34,16 @@ export function JourneysProvider({ children }: JourneysProviderProps) {
 
         try {
             const result = await fetchJourneys();
+            // Debug: Log Mount Kenya data
+            const kenya = result.treks.find(t => t.id === 'mount-kenya');
+            if (kenya) {
+                const kenyaData = result.trekDataMap['mount-kenya'];
+                console.log('[JourneysContext] Mount Kenya loaded:', {
+                    total_days: kenyaData?.stats.duration,
+                    camps_count: kenyaData?.camps.length,
+                    camp_days: kenyaData?.camps.map(c => `Day ${c.dayNumber}: ${c.name}`)
+                });
+            }
             setData(result);
         } catch (err) {
             console.error('Failed to load journeys:', err);

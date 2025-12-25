@@ -161,10 +161,14 @@ export default function AkashicApp() {
 
     // Handle day selection from BottomSheet navigation
     const handleDaySelect = useCallback((dayNumber: number) => {
+        console.log('[handleDaySelect] Selecting day:', dayNumber, '| Available camps:', trekData?.camps.length, '| Camp days:', trekData?.camps.map(c => c.dayNumber));
         if (trekData) {
             const camp = trekData.camps.find((c: Camp) => c.dayNumber === dayNumber);
             if (camp) {
+                console.log('[handleDaySelect] Found camp:', camp.name);
                 handleCampSelect(camp);
+            } else {
+                console.warn('[handleDaySelect] No camp found for day', dayNumber);
             }
         }
     }, [trekData, handleCampSelect]);
