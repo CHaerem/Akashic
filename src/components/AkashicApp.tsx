@@ -161,14 +161,10 @@ export default function AkashicApp() {
 
     // Handle day selection from BottomSheet navigation
     const handleDaySelect = useCallback((dayNumber: number) => {
-        console.log('[handleDaySelect] Selecting day:', dayNumber, '| Available camps:', trekData?.camps.length, '| Camp days:', trekData?.camps.map(c => c.dayNumber));
         if (trekData) {
             const camp = trekData.camps.find((c: Camp) => c.dayNumber === dayNumber);
             if (camp) {
-                console.log('[handleDaySelect] Found camp:', camp.name);
                 handleCampSelect(camp);
-            } else {
-                console.warn('[handleDaySelect] No camp found for day', dayNumber);
             }
         }
     }, [trekData, handleCampSelect]);
@@ -306,7 +302,7 @@ export default function AkashicApp() {
                 view={view}
                 selectedJourney={selectedTrek?.name ?? null}
                 selectedDay={selectedCamp?.dayNumber ?? null}
-                totalDays={trekData?.stats.duration ?? 0}
+                totalDays={trekData?.camps.length ?? 0}
                 activeMode={activeMode}
             />
 
@@ -322,7 +318,7 @@ export default function AkashicApp() {
                         view={view}
                         selectedTrek={selectedTrek}
                         selectedCamp={selectedCamp}
-                        totalDays={trekData?.stats.duration ?? 0}
+                        totalDays={trekData?.camps.length ?? 0}
                         activeMode={activeMode}
                         onModeChange={setActiveMode}
                         onDaySelect={handleDaySelect}
@@ -364,7 +360,7 @@ export default function AkashicApp() {
                         view={view}
                         selectedTrek={selectedTrek}
                         selectedCamp={selectedCamp}
-                        totalDays={trekData?.stats.duration ?? 0}
+                        totalDays={trekData?.camps.length ?? 0}
                         activeMode={activeMode}
                         onModeChange={setActiveMode}
                         onDaySelect={handleDaySelect}
