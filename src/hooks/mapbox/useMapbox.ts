@@ -874,16 +874,38 @@ export function useMapbox({ containerRef, onTrekSelect, onPhotoClick, onRouteCli
         }, animationDuration + 500);
     }, [mapReady]);
 
+    // Hide active segment
+    const hideActiveSegment = useCallback(() => {
+        const map = mapRef.current;
+        if (!map) return;
+        if (map.getLayer('active-segment-line')) {
+            map.setLayoutProperty('active-segment-line', 'visibility', 'none');
+            map.setLayoutProperty('active-segment-glow', 'visibility', 'none');
+        }
+    }, []);
+
     // Highlight trek segment
-    const highlightSegment = useCallback((trekData: TrekData, selectedCamp: Camp) => {
+    const highlightSegment = useCallback((trekData: TrekData, selectedCamp: Camp | null) => {
         const map = mapRef.current;
         if (!map || !mapReady) return;
 
+        // If no camp selected, hide the segment
+        if (!selectedCamp) {
+            hideActiveSegment();
+            return;
+        }
+
         const campIndex = trekData.camps.findIndex(c => c.id === selectedCamp.id);
-        if (campIndex === -1) return;
+        if (campIndex === -1) {
+            hideActiveSegment();
+            return;
+        }
 
         const routeCoords = trekData.route.coordinates;
-        if (!routeCoords || routeCoords.length === 0) return;
+        if (!routeCoords || routeCoords.length === 0) {
+            hideActiveSegment();
+            return;
+        }
 
         const startCoord = campIndex === 0
             ? routeCoords[0]
@@ -910,8 +932,11 @@ export function useMapbox({ containerRef, onTrekSelect, onPhotoClick, onRouteCli
                 map.setLayoutProperty('active-segment-line', 'visibility', 'visible');
                 map.setLayoutProperty('active-segment-glow', 'visibility', 'visible');
             }
+        } else {
+            // No valid segment (e.g., Day 1 camp at route start), hide it
+            hideActiveSegment();
         }
-    }, [mapReady]);
+    }, [mapReady, hideActiveSegment]);
 
     // Fly to trek view
     const flyToTrek = useCallback((selectedTrek: TrekConfig, selectedCamp: Camp | null = null) => {
@@ -980,6 +1005,11 @@ export function useMapbox({ containerRef, onTrekSelect, onPhotoClick, onRouteCli
         requestAnimationFrame(() => {
             if (!mapRef.current) return;
 
+            // Check if this is still the current selection (prevents multiple animations on rapid switching)
+            if (pendingHighlightCampIdRef.current !== currentCampId) {
+                return;
+            }
+
             if (selectedCamp) {
                 let bearing = trekConfig.preferredBearing;
                 const pitch = selectedCamp.pitch || 55;
@@ -1037,10 +1067,7 @@ export function useMapbox({ containerRef, onTrekSelect, onPhotoClick, onRouteCli
                             essential: true
                         });
 
-                        // Only highlight if this is still the current selection (prevents stale updates on rapid switching)
-                        if (pendingHighlightCampIdRef.current === currentCampId) {
-                            highlightSegment(trekData, selectedCamp);
-                        }
+                        highlightSegment(trekData, selectedCamp);
                         return;
                     }
                 }
@@ -1060,10 +1087,7 @@ export function useMapbox({ containerRef, onTrekSelect, onPhotoClick, onRouteCli
                     easing: (t) => 1 - Math.pow(1 - t, 3)
                 });
 
-                // Only highlight if this is still the current selection (prevents stale updates on rapid switching)
-                if (pendingHighlightCampIdRef.current === currentCampId) {
-                    highlightSegment(trekData, selectedCamp);
-                }
+                highlightSegment(trekData, selectedCamp);
             } else {
                 const coordinates = trekData.route.coordinates;
                 const sampleRate = coordinates.length > 500 ? Math.ceil(coordinates.length / 100) : 1;
