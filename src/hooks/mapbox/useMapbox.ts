@@ -35,7 +35,7 @@ export type { RouteClickInfo, PlaybackState };
 /**
  * Initialize Mapbox map with globe projection and terrain
  */
-export function useMapbox({ containerRef, onTrekSelect, onPhotoClick, onRouteClick, onPOIClick, onCampClick, getMediaUrl }: UseMapboxOptions): UseMapboxReturn {
+export function useMapbox({ containerRef, onTrekSelect, onPhotoClick, onRouteClick, onPOIClick, onCampClick, getMediaUrl, editMode, onPhotoLocationUpdate }: UseMapboxOptions): UseMapboxReturn {
     const { treks, trekDataMap } = useJourneys();
     const mapRef = useRef<mapboxgl.Map | null>(null);
     const rotationAnimationRef = useRef<number | null>(null);
@@ -98,6 +98,16 @@ export function useMapbox({ containerRef, onTrekSelect, onPhotoClick, onRouteCli
     useEffect(() => {
         onCampClickRef.current = onCampClick;
     }, [onCampClick]);
+
+    const onPhotoLocationUpdateRef = useRef(onPhotoLocationUpdate);
+    useEffect(() => {
+        onPhotoLocationUpdateRef.current = onPhotoLocationUpdate;
+    }, [onPhotoLocationUpdate]);
+
+    const editModeRef = useRef(editMode);
+    useEffect(() => {
+        editModeRef.current = editMode;
+    }, [editMode]);
 
     useEffect(() => {
         treksRef.current = treks;
@@ -1347,11 +1357,26 @@ export function useMapbox({ containerRef, onTrekSelect, onPhotoClick, onRouteCli
                 } else {
                     el.classList.remove('photo-marker-highlighted');
                 }
+                // Update draggable state when editMode changes
+                const shouldBeDraggable = editModeRef.current === true;
+                existingGroup.marker.setDraggable(shouldBeDraggable);
+                if (shouldBeDraggable) {
+                    el.classList.add('photo-marker-draggable');
+                } else {
+                    el.classList.remove('photo-marker-draggable');
+                }
+                // Update location source indicator
+                el.classList.remove('location-exif', 'location-estimated', 'location-manual');
+                const locationSource = group.representative.location_source;
+                if (locationSource) {
+                    el.classList.add(`location-${locationSource}`);
+                }
                 continue;
             }
 
             const el = document.createElement('div');
-            el.className = 'photo-thumbnail-marker photo-stack' + (isHighlighted ? ' photo-marker-highlighted' : '');
+            const locationSourceClass = group.representative.location_source ? ` location-${group.representative.location_source}` : '';
+            el.className = 'photo-thumbnail-marker photo-stack' + (isHighlighted ? ' photo-marker-highlighted' : '') + locationSourceClass;
 
             if (group.count >= 3) {
                 const bg2 = document.createElement('div');
@@ -1385,9 +1410,29 @@ export function useMapbox({ containerRef, onTrekSelect, onPhotoClick, onRouteCli
             imgContainer.appendChild(img);
             el.appendChild(imgContainer);
 
-            const marker = new mapboxgl.Marker({ element: el, anchor: 'center' })
+            const isDraggable = editModeRef.current === true;
+            const marker = new mapboxgl.Marker({ element: el, anchor: 'center', draggable: isDraggable })
                 .setLngLat(group.center)
                 .addTo(map);
+
+            // Add draggable class for visual feedback
+            if (isDraggable) {
+                el.classList.add('photo-marker-draggable');
+            }
+
+            // Handle drag end - update photo coordinates
+            marker.on('dragend', () => {
+                if (onPhotoLocationUpdateRef.current) {
+                    const lngLat = marker.getLngLat();
+                    // Update all photos in this group to the new location
+                    const groupData = photoGroupsRef.current.get(stableKey);
+                    if (groupData) {
+                        for (const photo of groupData.photos) {
+                            onPhotoLocationUpdateRef.current(photo.id, [lngLat.lng, lngLat.lat]);
+                        }
+                    }
+                }
+            });
 
             el.addEventListener('click', (e) => {
                 e.stopPropagation();

@@ -152,6 +152,9 @@ export interface ElevationProfile {
 /** Media type for photos and videos */
 export type MediaType = 'image' | 'video';
 
+/** Source of photo location coordinates */
+export type LocationSource = 'exif' | 'estimated' | 'manual';
+
 export interface Photo {
     id: string;
     journey_id: string;
@@ -172,6 +175,8 @@ export interface Photo {
     media_type?: MediaType;
     /** Duration in seconds (for videos) */
     duration?: number | null;
+    /** Source of coordinates: exif=from photo, estimated=from timestamp, manual=user adjusted */
+    location_source?: LocationSource | null;
 }
 
 /** User profile for display */

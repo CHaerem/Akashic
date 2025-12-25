@@ -59,6 +59,8 @@ interface MapboxGlobeProps {
     getMediaUrl?: (path: string) => string;
     onViewportChange?: (bounds: mapboxgl.LngLatBoundsLike) => void;
     onViewportVisiblePhotoIdsChange?: (photoIds: string[]) => void;
+    editMode?: boolean;
+    onPhotoLocationUpdate?: (photoId: string, coordinates: [number, number]) => void;
 }
 
 // Generate realistic starfield - seeded positions for consistency
@@ -148,7 +150,7 @@ const starfieldStyle: React.CSSProperties = {
     zIndex: 0
 };
 
-export function MapboxGlobe({ selectedTrek, selectedCamp, onSelectTrek, view, photos = [], onPhotoClick, flyToPhotoRef, recenterRef, onCampSelect, getMediaUrl, onViewportChange, onViewportVisiblePhotoIdsChange }: MapboxGlobeProps) {
+export function MapboxGlobe({ selectedTrek, selectedCamp, onSelectTrek, view, photos = [], onPhotoClick, flyToPhotoRef, recenterRef, onCampSelect, getMediaUrl, onViewportChange, onViewportVisiblePhotoIdsChange, editMode, onPhotoLocationUpdate }: MapboxGlobeProps) {
     const containerRef = useRef<HTMLDivElement>(null);
     const { treks, trekDataMap, loading: journeysLoading } = useJourneys();
     const [poiInfo, setPOIInfo] = useState<PointOfInterest | null>(null);
@@ -189,7 +191,9 @@ export function MapboxGlobe({ selectedTrek, selectedCamp, onSelectTrek, view, ph
         onPhotoClick: handlePhotoClick,
         onPOIClick: handlePOIClick,
         onCampClick: handleCampClick,
-        getMediaUrl
+        getMediaUrl,
+        editMode,
+        onPhotoLocationUpdate
     });
 
     useEffect(() => {
@@ -360,12 +364,12 @@ export function MapboxGlobe({ selectedTrek, selectedCamp, onSelectTrek, view, ph
         };
     }, [view, selectedTrek, mapReady, isRotating, startRotation, stopRotation]);
 
-    // Update photo markers when photos or selected camp changes
+    // Update photo markers when photos, selected camp, or editMode changes
     // Native Mapbox layers are GPU-accelerated - no delays needed
     useEffect(() => {
         if (!mapReady || view !== 'trek') return;
         updatePhotoMarkers(photos, selectedCamp?.id || null);
-    }, [mapReady, view, photos, selectedCamp, updatePhotoMarkers]);
+    }, [mapReady, view, photos, selectedCamp, updatePhotoMarkers, editMode]);
 
     // Hide photo markers when leaving trek view
     useEffect(() => {

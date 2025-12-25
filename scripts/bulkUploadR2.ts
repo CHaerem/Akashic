@@ -452,6 +452,8 @@ async function main() {
         sort_order: i,
         media_type: mediaType,
         duration: duration,
+        // Set location_source based on whether we got coords from EXIF
+        location_source: exif.coordinates ? 'exif' : null,
       });
 
       if (dbError) {

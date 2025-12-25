@@ -4,7 +4,7 @@ import { useTrekData } from '../hooks/useTrekData';
 import { useIsMobile } from '../hooks/useMediaQuery';
 import { useMedia } from '../hooks/useMedia';
 import { useJourneys } from '../contexts/JourneysContext';
-import { fetchPhotos, getJourneyIdBySlug } from '../lib/journeys';
+import { fetchPhotos, getJourneyIdBySlug, updatePhoto } from '../lib/journeys';
 import { hasPendingShares } from '../lib/shareTarget';
 import type { Photo, Camp } from '../types/trek';
 import type mapboxgl from 'mapbox-gl';
@@ -147,6 +147,18 @@ export default function AkashicApp() {
         }
     }, []);
 
+    // Handle photo location update from map drag
+    const handlePhotoLocationUpdate = useCallback(async (photoId: string, coordinates: [number, number]) => {
+        // Update in database with location_source = 'manual' to indicate user adjustment
+        const updated = await updatePhoto(photoId, { coordinates, location_source: 'manual' });
+        if (updated) {
+            // Update local state to reflect the change
+            setPhotos(prev => prev.map(p =>
+                p.id === photoId ? { ...p, coordinates, location_source: 'manual' } : p
+            ));
+        }
+    }, []);
+
     // Handle day selection from BottomSheet navigation
     const handleDaySelect = useCallback((dayNumber: number) => {
         if (trekData) {
@@ -234,6 +246,8 @@ export default function AkashicApp() {
                             getMediaUrl={getMediaUrl}
                             onViewportChange={setMapViewportBounds}
                             onViewportVisiblePhotoIdsChange={setMapViewportPhotoIds}
+                            editMode={editMode}
+                            onPhotoLocationUpdate={handlePhotoLocationUpdate}
                         />
                     </div>
 

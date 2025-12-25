@@ -35,6 +35,8 @@ export interface UseMapboxOptions {
     onPOIClick?: (poi: PointOfInterest) => void;
     onCampClick?: (camp: Camp) => void;
     getMediaUrl?: (path: string) => string;
+    editMode?: boolean;
+    onPhotoLocationUpdate?: (photoId: string, coordinates: [number, number]) => void;
 }
 
 /**

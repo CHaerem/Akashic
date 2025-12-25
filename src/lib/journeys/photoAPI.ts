@@ -69,7 +69,7 @@ export async function createPhoto(photo: {
  */
 export async function updatePhoto(
     photoId: string,
-    updates: Partial<Pick<Photo, 'caption' | 'waypoint_id' | 'coordinates' | 'is_hero' | 'sort_order' | 'rotation'>>
+    updates: Partial<Pick<Photo, 'caption' | 'waypoint_id' | 'coordinates' | 'is_hero' | 'sort_order' | 'rotation' | 'location_source'>>
 ): Promise<Photo | null> {
     if (!supabase) {
         console.warn('Supabase not configured');
