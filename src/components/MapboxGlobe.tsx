@@ -320,11 +320,23 @@ export function MapboxGlobe({ selectedTrek, selectedCamp, onSelectTrek, view, ph
 
     // Handle view transitions - camera movement
     useEffect(() => {
-        if (!mapReady) return;
+        console.log('[MapboxGlobe camera effect] Triggered:', {
+            view,
+            trek: selectedTrek?.id,
+            camp: selectedCamp?.name,
+            campDay: selectedCamp?.dayNumber,
+            mapReady
+        });
+        if (!mapReady) {
+            console.log('[MapboxGlobe camera effect] Map not ready');
+            return;
+        }
 
         if (view === 'trek' && selectedTrek) {
+            console.log('[MapboxGlobe camera effect] Calling flyToTrek');
             flyToTrek(selectedTrek, selectedCamp);
         } else if (view === 'globe') {
+            console.log('[MapboxGlobe camera effect] Calling flyToGlobe');
             flyToGlobe(selectedTrek);
         }
     }, [view, selectedTrek, selectedCamp, mapReady, flyToGlobe, flyToTrek]);

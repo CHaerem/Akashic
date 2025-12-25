@@ -951,9 +951,21 @@ export function useMapbox({ containerRef, onTrekSelect, onPhotoClick, onRouteCli
     // Fly to trek view
     const flyToTrek = useCallback((selectedTrek: TrekConfig, selectedCamp: Camp | null = null) => {
         const map = mapRef.current;
-        if (!map || !mapReady || !selectedTrek) return;
+        console.log('[flyToTrek] Called with:', {
+            trek: selectedTrek?.id,
+            camp: selectedCamp?.name,
+            campDay: selectedCamp?.dayNumber,
+            campId: selectedCamp?.id,
+            mapReady,
+            hasMap: !!map
+        });
+        if (!map || !mapReady || !selectedTrek) {
+            console.log('[flyToTrek] Early return - map/ready/trek missing');
+            return;
+        }
 
         if (!map.isStyleLoaded()) {
+            console.log('[flyToTrek] Style not loaded, waiting...');
             const onStyleLoad = () => {
                 map.off('style.load', onStyleLoad);
                 flyToTrek(selectedTrek, selectedCamp);
@@ -973,6 +985,7 @@ export function useMapbox({ containerRef, onTrekSelect, onPhotoClick, onRouteCli
         // Track which camp we're highlighting to prevent stale updates on rapid day switching
         const currentCampId = selectedCamp?.id ?? null;
         pendingHighlightCampIdRef.current = currentCampId;
+        console.log('[flyToTrek] Set pendingHighlightCampIdRef to:', currentCampId);
 
         const trekData = trekDataMapRef.current[selectedTrek.id];
         const trekConfig = treksRef.current.find(t => t.id === selectedTrek.id);
@@ -1013,13 +1026,23 @@ export function useMapbox({ containerRef, onTrekSelect, onPhotoClick, onRouteCli
         }
 
         requestAnimationFrame(() => {
-            if (!mapRef.current) return;
-
-            // Check if this is still the current selection (prevents multiple animations on rapid switching)
-            if (pendingHighlightCampIdRef.current !== currentCampId) {
+            if (!mapRef.current) {
+                console.log('[flyToTrek RAF] No map ref');
                 return;
             }
 
+            // Check if this is still the current selection (prevents multiple animations on rapid switching)
+            console.log('[flyToTrek RAF] Checking pending camp:', {
+                pending: pendingHighlightCampIdRef.current,
+                current: currentCampId,
+                match: pendingHighlightCampIdRef.current === currentCampId
+            });
+            if (pendingHighlightCampIdRef.current !== currentCampId) {
+                console.log('[flyToTrek RAF] Early return - camp ID mismatch');
+                return;
+            }
+
+            console.log('[flyToTrek RAF] Starting camera animation for camp:', selectedCamp?.name);
             if (selectedCamp) {
                 let bearing = trekConfig.preferredBearing;
                 const pitch = selectedCamp.pitch || 55;
