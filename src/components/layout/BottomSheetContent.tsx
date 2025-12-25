@@ -25,6 +25,7 @@ import { JourneyEditModal } from '../trek/JourneyEditModal';
 import { RouteEditor } from '../trek/RouteEditor';
 import { FunFactCard } from '../journey/FunFactCard';
 import { DayDiscoveries } from '../journey/DayDiscoveries';
+import { DayCommentsSection } from '../comments';
 
 interface BottomSheetContentProps {
     view: ViewMode;
@@ -342,6 +343,7 @@ function TrekViewContent({
                     onOpenDayGallery={onOpenDayGallery}
                     editMode={editMode}
                     isMobile={isMobile}
+                    journeyId={trekData.id}
                 />
             )}
 
@@ -410,9 +412,10 @@ interface DayContentProps {
     onOpenDayGallery: () => void;
     editMode: boolean;
     isMobile: boolean;
+    journeyId: string;
 }
 
-function DayContent({ camp, currentDayDate, dayPhotos, allPhotos, getMediaUrl, onOpenDayGallery, editMode, isMobile }: DayContentProps) {
+function DayContent({ camp, currentDayDate, dayPhotos, allPhotos, getMediaUrl, onOpenDayGallery, editMode, isMobile, journeyId }: DayContentProps) {
     const [showWaypointEdit, setShowWaypointEdit] = useState(false);
     const [showPhotoAssign, setShowPhotoAssign] = useState(false);
     if (!camp) {
@@ -657,6 +660,14 @@ function DayContent({ camp, currentDayDate, dayPhotos, allPhotos, getMediaUrl, o
                 pointsOfInterest={camp.pointsOfInterest}
                 historicalSites={camp.historicalSites}
             />
+
+            {/* Comments Section */}
+            <div style={{ marginTop: 16, marginBottom: 16 }}>
+                <DayCommentsSection
+                    camp={camp}
+                    journeyId={journeyId}
+                />
+            </div>
 
             {/* View gallery button */}
             {dayPhotos.length > 0 && (

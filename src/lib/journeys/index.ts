@@ -4,7 +4,15 @@
  */
 
 // Types
-export type { DbJourney, DbWaypoint } from './types';
+export type {
+    DbJourney,
+    DbWaypoint,
+    DbDayComment,
+    DayComment,
+    NewDayComment,
+    DayCommentUpdate,
+    CommentAuthor,
+} from './types';
 
 // Transform utilities
 export {
@@ -61,6 +69,18 @@ export {
     getUserJourneyRole,
     userHasRole,
 } from './memberAPI';
+
+// Comment operations
+export {
+    getCommentsForWaypoint,
+    getCommentsForJourney,
+    getCommentCountsForJourney,
+    createComment,
+    updateComment,
+    deleteComment,
+    canUserComment,
+    getCurrentUserId,
+} from './commentAPI';
 
 // Legacy _internal export for backwards compatibility with existing tests
 export const _internal = {

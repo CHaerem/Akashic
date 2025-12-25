@@ -106,3 +106,52 @@ export interface DbWaypoint {
     /** Historical sites for this day (JSONB) */
     historical_sites: DbHistoricalSite[] | null;
 }
+
+// ============================================
+// Day Comments Types
+// ============================================
+
+/**
+ * Day comment stored in database
+ */
+export interface DbDayComment {
+    id: string;
+    waypoint_id: string;
+    journey_id: string;
+    user_id: string;
+    content: string;
+    created_at: string;
+    updated_at: string;
+}
+
+/**
+ * Author info for display
+ */
+export interface CommentAuthor {
+    id: string;
+    display_name: string | null;
+    avatar_url: string | null;
+}
+
+/**
+ * Day comment with author profile info (for display)
+ */
+export interface DayComment extends DbDayComment {
+    author: CommentAuthor;
+}
+
+/**
+ * Input for creating a new comment
+ */
+export interface NewDayComment {
+    waypoint_id: string;
+    journey_id: string;
+    content: string;
+}
+
+/**
+ * Input for updating a comment
+ */
+export interface DayCommentUpdate {
+    content: string;
+}
