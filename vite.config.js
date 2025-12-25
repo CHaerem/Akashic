@@ -69,10 +69,10 @@ export default defineConfig({
 						urlPattern: /^https:\/\/.*\.supabase\.co\/rest\/v1\//,
 						handler: "NetworkFirst",
 						options: {
-							cacheName: "supabase-api",
+							cacheName: "supabase-api-v2", // v2: reduced cache time to 5min
 							expiration: {
 								maxEntries: 50,
-								maxAgeSeconds: 60 * 60 * 24, // 24 hours
+								maxAgeSeconds: 60 * 5, // 5 minutes - short cache for data that can change
 							},
 							networkTimeoutSeconds: 10,
 							cacheableResponse: {
