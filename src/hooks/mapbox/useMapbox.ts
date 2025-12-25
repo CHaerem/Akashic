@@ -1074,7 +1074,17 @@ export function useMapbox({ containerRef, onTrekSelect, onPhotoClick, onRouteCli
                         bearing = calculateBearing(prevCampCoord[1], prevCampCoord[0], currentCoord[1], currentCoord[0]);
                     }
 
+                    console.log('[flyToTrek RAF] Route segment check:', {
+                        campIndex,
+                        startIndex,
+                        endIndex,
+                        actualStart,
+                        actualEnd,
+                        hasValidSegment: actualEnd > actualStart
+                    });
+
                     if (actualEnd > actualStart) {
+                        console.log('[flyToTrek RAF] Using fitBounds for route segment');
                         const segmentCoords = routeCoords.slice(actualStart, actualEnd + 1);
                         let minLng = segmentCoords[0][0], maxLng = segmentCoords[0][0];
                         let minLat = segmentCoords[0][1], maxLat = segmentCoords[0][1];
@@ -1102,9 +1112,12 @@ export function useMapbox({ containerRef, onTrekSelect, onPhotoClick, onRouteCli
 
                         highlightSegment(trekData, selectedCamp);
                         return;
+                    } else {
+                        console.log('[flyToTrek RAF] No valid segment, falling through to simple flyTo');
                     }
                 }
 
+                console.log('[flyToTrek RAF] Using simple flyTo to camp coordinates:', selectedCamp.coordinates);
                 if (selectedCamp.bearing !== undefined) {
                     bearing = selectedCamp.bearing;
                 }
