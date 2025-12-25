@@ -35,6 +35,11 @@ interface TestHelpers {
     selectTrek: (id: string) => boolean;
     getTreks: () => Array<{ id: string; name: string }>;
     getSelectedTrek: () => string | null;
+    selectDay: (dayNumber: number) => boolean;
+    getCurrentDay: () => number | null;
+    getCamps: () => Array<{ id: string; name: string; dayNumber: number }>;
+    getTrekDataKeys: () => string[]; // Debug: see what trek IDs are in trekDataMap
+    getTrekData: (id: string) => any; // Debug: get full trek data
     isMapReady: () => boolean;
     isDataLoaded: () => boolean;
 }
@@ -243,6 +248,9 @@ export function MapboxGlobe({ selectedTrek, selectedCamp, onSelectTrek, view, ph
     useEffect(() => {
         if (!isE2ETestMode) return;
 
+        // Get camps for currently selected trek
+        const currentCamps = selectedTrek ? trekDataMap[selectedTrek.id]?.camps || [] : [];
+
         // Create test helpers object
         const testHelpers: TestHelpers = {
             selectTrek: (id: string) => {
@@ -255,6 +263,37 @@ export function MapboxGlobe({ selectedTrek, selectedCamp, onSelectTrek, view, ph
             },
             getTreks: () => treks.map(t => ({ id: t.id, name: t.name })),
             getSelectedTrek: () => selectedTrek?.id || null,
+            selectDay: (dayNumber: number) => {
+                if (!selectedTrek || !onCampSelect) return false;
+                const camp = currentCamps.find(c => c.dayNumber === dayNumber);
+                if (camp) {
+                    onCampSelect(camp);
+                    return true;
+                }
+                return false;
+            },
+            getCurrentDay: () => selectedCamp?.dayNumber || null,
+            getCamps: () => currentCamps.map(c => ({
+                id: c.id,
+                name: c.name,
+                dayNumber: c.dayNumber
+            })),
+            getTrekDataKeys: () => Object.keys(trekDataMap),
+            getTrekData: (id: string) => {
+                const data = trekDataMap[id];
+                if (!data) return null;
+                return {
+                    id: data.id,
+                    name: data.name,
+                    campCount: data.camps?.length || 0,
+                    camps: data.camps?.map(c => ({
+                        id: c.id,
+                        name: c.name,
+                        dayNumber: c.dayNumber,
+                        elevation: c.elevation
+                    })) || []
+                };
+            },
             isMapReady: () => mapReady,
             isDataLoaded: () => !journeysLoading && treks.length > 0
         };
@@ -265,7 +304,7 @@ export function MapboxGlobe({ selectedTrek, selectedCamp, onSelectTrek, view, ph
         return () => {
             delete window.testHelpers;
         };
-    }, [mapReady, treks, selectedTrek, onSelectTrek, journeysLoading]);
+    }, [mapReady, treks, selectedTrek, selectedCamp, trekDataMap, onSelectTrek, onCampSelect, journeysLoading]);
 
     // Expose flyToPhoto to parent via ref
     useEffect(() => {
