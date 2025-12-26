@@ -143,14 +143,23 @@ export function useTrekData(): UseTrekDataReturn {
         };
     }, [trekData]);
 
-    // Handle explore button click - show full journey overview first
+    // Handle explore button click - go directly to Day 1
     const handleExplore = useCallback(() => {
         if (!selectedTrek) return;
-        // Don't select a camp - show full journey overview
-        // User can then select a specific day from the nav pill
-        setSelectedCamp(null);
+
+        // Get trek data and find Day 1 camp
+        const data = trekDataMap[selectedTrek.id];
+        if (data && data.camps.length > 0) {
+            // Find the camp with dayNumber === 1, or use the first camp if no Day 1 exists
+            const day1Camp = data.camps.find(c => c.dayNumber === 1) || data.camps[0];
+            setSelectedCamp(day1Camp);
+        } else {
+            // Fallback: no camp data, show overview
+            setSelectedCamp(null);
+        }
+
         setView('trek');
-    }, [selectedTrek, setView]);
+    }, [selectedTrek, trekDataMap, setView]);
 
     // Handle back to globe view
     const handleBackToGlobe = useCallback(() => {
