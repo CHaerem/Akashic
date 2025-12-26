@@ -18,8 +18,6 @@ import { cn } from '@/lib/utils';
 
 type DayFilter = 'all' | 'unassigned' | number; // 'all', 'unassigned', or a day number
 type MediaTypeFilter = 'all' | MediaType;
-type LocationFilter = 'any' | 'geotagged';
-type SortOrder = 'journey' | 'captured';
 type MapBounds = mapboxgl.LngLatBoundsLike | null;
 
 // Pagination settings
@@ -196,16 +194,11 @@ export function PhotosTab({ trekData, isMobile, editMode = false, onViewPhotoOnM
     const [error, setError] = useState<string | null>(null);
     const [journeyDbId, setJourneyDbId] = useState<string | null>(null);
     const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
-    const [viewerMode, setViewerMode] = useState<'sequential' | 'day-filtered'>('day-filtered');
     const [editingPhoto, setEditingPhoto] = useState<Photo | null>(null);
     const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
     const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
     const [dayFilter, setDayFilter] = useState<DayFilter>('all');
     const [mediaTypeFilter, setMediaTypeFilter] = useState<MediaTypeFilter>('all');
-    const [locationFilter, setLocationFilter] = useState<LocationFilter>('any');
-    const [sortOrder, setSortOrder] = useState<SortOrder>('journey');
-    const [searchQuery, setSearchQuery] = useState('');
-    const [mapScopeEnabled, setMapScopeEnabled] = useState(false);
     const [visibleCount, setVisibleCount] = useState(PHOTOS_PER_PAGE);
     const dragTimeoutRef = useRef<number | null>(null);
     const gridContainerRef = useRef<HTMLDivElement>(null);
@@ -229,31 +222,15 @@ export function PhotosTab({ trekData, isMobile, editMode = false, onViewPhotoOnM
     const sortPhotos = useCallback((list: Photo[]): Photo[] => {
         const withIndex = list.map((photo, index) => ({ photo, index }));
 
-        if (sortOrder === 'journey') {
-            return withIndex
-                .sort((a, b) => {
-                    const orderA = a.photo.sort_order ?? a.index;
-                    const orderB = b.photo.sort_order ?? b.index;
-                    return orderA - orderB;
-                })
-                .map(item => item.photo);
-        }
-
-        const getTimestamp = (photo: Photo) => {
-            const dateStr = photo.taken_at || photo.created_at;
-            return dateStr ? new Date(dateStr).getTime() : 0;
-        };
-
+        // Always use journey order (respects manual reordering from edit mode)
         return withIndex
             .sort((a, b) => {
-                const timeDiff = getTimestamp(a.photo) - getTimestamp(b.photo);
-                if (timeDiff !== 0) return timeDiff;
                 const orderA = a.photo.sort_order ?? a.index;
                 const orderB = b.photo.sort_order ?? b.index;
                 return orderA - orderB;
             })
             .map(item => item.photo);
-    }, [sortOrder]);
+    }, []);
 
     const isWithinBounds = useCallback((coords: number[] | null | undefined, bounds: MapBounds) => {
         if (!coords || coords.length !== 2 || !bounds) return false;
@@ -285,34 +262,26 @@ export function PhotosTab({ trekData, isMobile, editMode = false, onViewPhotoOnM
         return false;
     }, []);
 
-    // Filter photos based on selected day and other filters
+    // Filter photos based on selected day and media type
     const filteredPhotos = useMemo(() => {
-        const query = searchQuery.trim().toLowerCase();
-
         const filtered = dayScopedPhotos.filter(photo => {
+            // 1. Media type filter
             const matchesType = mediaTypeFilter === 'all'
                 ? true
                 : (photo.media_type || 'image') === mediaTypeFilter;
 
-            const matchesLocation = locationFilter === 'any'
-                ? true
-                : Boolean(photo.coordinates && photo.coordinates.length === 2);
-
-            const matchesSearch = query.length === 0
-                ? true
-                : (photo.caption || '').toLowerCase().includes(query);
-
-            const matchesMap = !mapScopeEnabled || !mapViewportBounds
+            // 2. Map viewport filter (automatic when map is open with photos)
+            const matchesMap = !mapViewportBounds
                 ? true
                 : mapViewportPhotoIdSet
                     ? mapViewportPhotoIdSet.has(photo.id)
                     : isWithinBounds(photo.coordinates, mapViewportBounds);
 
-            return matchesType && matchesLocation && matchesSearch && matchesMap;
+            return matchesType && matchesMap;
         });
 
         return sortPhotos(filtered);
-    }, [dayScopedPhotos, isWithinBounds, locationFilter, mapScopeEnabled, mapViewportBounds, mapViewportPhotoIdSet, mediaTypeFilter, searchQuery, sortPhotos]);
+    }, [dayScopedPhotos, isWithinBounds, mapViewportBounds, mapViewportPhotoIdSet, mediaTypeFilter, sortPhotos]);
 
     // All photos sorted (for sequential mode)
     const sortedPhotos = useMemo(() => {
@@ -322,7 +291,7 @@ export function PhotosTab({ trekData, isMobile, editMode = false, onViewPhotoOnM
     // Reset visible count when filters change
     useEffect(() => {
         setVisibleCount(PHOTOS_PER_PAGE);
-    }, [dayFilter, mediaTypeFilter, locationFilter, sortOrder, searchQuery, mapScopeEnabled]);
+    }, [dayFilter, mediaTypeFilter]);
 
     // Paginated photos for rendering (limits DOM elements for performance)
     const visiblePhotos = useMemo(() => {
@@ -494,30 +463,24 @@ export function PhotosTab({ trekData, isMobile, editMode = false, onViewPhotoOnM
         ? `${filteredPhotos.length}`
         : `${filteredPhotos.length} of ${baseCount}`;
 
-    const trimmedSearchQuery = searchQuery.trim();
-
-    const hasActiveFilters = mediaTypeFilter !== 'all'
-        || locationFilter !== 'any'
-        || trimmedSearchQuery.length > 0
-        || sortOrder === 'captured'
-        || mapScopeEnabled;
-
-    const hasNonDefaultView = dayFilter !== 'all' || hasActiveFilters;
+    const hasNonDefaultView = dayFilter !== 'all' || mediaTypeFilter !== 'all';
 
     const filterSummary = useMemo(() => {
-        const parts: string[] = [
-            mapScopeEnabled ? 'In current map view' : '',
-            mediaTypeFilter !== 'all' ? (mediaTypeFilter === 'image' ? 'Photos' : 'Videos') : '',
-            locationFilter === 'geotagged' ? 'Map-ready only' : '',
-            sortOrder === 'captured' ? 'Captured timeline' : '',
-            trimmedSearchQuery.length > 0 ? `Search: “${trimmedSearchQuery}”` : '',
-        ].filter(Boolean);
+        if (!hasNonDefaultView) return null;
 
-        if (parts.length === 0) return null;
+        const parts: string[] = [];
+
+        if (mediaTypeFilter !== 'all') {
+            parts.push(mediaTypeFilter === 'image' ? 'Photos' : 'Videos');
+        }
+
+        if (dayFilter !== 'all') {
+            parts.push(dayFilter === 'unassigned' ? 'Unassigned' : `Day ${dayFilter}`);
+        }
 
         parts.push(`Showing ${countLabel}`);
         return parts.join(' • ');
-    }, [countLabel, locationFilter, mapScopeEnabled, mediaTypeFilter, sortOrder, trimmedSearchQuery]);
+    }, [countLabel, dayFilter, hasNonDefaultView, mediaTypeFilter]);
 
     const dayTabClasses = useMemo(() => {
         const base = "flex-shrink-0 px-3 py-1.5 rounded-full text-[11px] font-semibold transition-all";
@@ -546,27 +509,9 @@ export function PhotosTab({ trekData, isMobile, editMode = false, onViewPhotoOnM
         };
     }, []);
 
-    const filterPillClasses = useMemo(() => {
-        const base = "px-2.5 py-1 rounded-full text-xs font-medium transition-all";
-        const inactive = "border border-white/10 bg-white/[0.02] text-white/65 light:border-black/10 light:text-slate-600";
-        const activeBase = "border-white/30 bg-white/10 text-white/90";
-
-        const activeWithShadow = (shadow: string) => cn(activeBase, shadow);
-
-        return {
-            base,
-            inactive,
-            activeWithShadow,
-        };
-    }, []);
-
     const resetView = useCallback(() => {
         setDayFilter('all');
         setMediaTypeFilter('all');
-        setLocationFilter('any');
-        setSortOrder('journey');
-        setSearchQuery('');
-        setMapScopeEnabled(false);
     }, []);
 
     const topControls = (
@@ -632,198 +577,63 @@ export function PhotosTab({ trekData, isMobile, editMode = false, onViewPhotoOnM
                     </div>
                 )}
 
-                    <div className="flex flex-wrap items-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-3 light:border-black/10 light:bg-black/[0.02]">
-                        <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-white/60 light:text-slate-600">
-                            <span className="h-1.5 w-1.5 rounded-full bg-white/40 shadow-[0_0_0_4px_rgba(255,255,255,0.04)]" />
-                            Filters
-                        </div>
-                        {hasNonDefaultView && (
-                            <button
-                                type="button"
-                                onClick={resetView}
-                                className={cn(
-                                    "px-2.5 py-1 rounded-full text-[11px] font-semibold uppercase tracking-[0.08em] transition-all",
-                                    "border border-white/10 bg-white/[0.02] text-white/55 hover:text-white/85 hover:border-white/20 hover:bg-white/[0.04]",
-                                    "light:border-black/10 light:text-slate-600 light:hover:text-slate-900 light:hover:border-black/20"
-                                )}
-                                aria-label="Reset filters"
-                            >
-                                Reset
-                            </button>
-                        )}
-
-                        <div className="flex gap-1.5">
-                            <button
-                                type="button"
-                                onClick={() => setMediaTypeFilter('all')}
-                                className={cn(
-                                    filterPillClasses.base,
-                                    filterPillClasses.inactive,
-                                    mediaTypeFilter === 'all' && filterPillClasses.activeWithShadow("shadow-[0_10px_30px_-18px_rgba(59,130,246,0.8)]")
-                                )}
-                            >
-                                All media
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => setMediaTypeFilter('image')}
-                                className={cn(
-                                    filterPillClasses.base,
-                                    filterPillClasses.inactive,
-                                    mediaTypeFilter === 'image' && filterPillClasses.activeWithShadow("shadow-[0_10px_30px_-18px_rgba(59,130,246,0.8)]")
-                                )}
-                            >
-                                Photos
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => setMediaTypeFilter('video')}
-                                className={cn(
-                                    filterPillClasses.base,
-                                    filterPillClasses.inactive,
-                                    mediaTypeFilter === 'video' && filterPillClasses.activeWithShadow("shadow-[0_10px_30px_-18px_rgba(59,130,246,0.8)]")
-                                )}
-                            >
-                                Videos
-                            </button>
-                        </div>
-
-                    <div className="h-6 w-px bg-white/10 light:bg-black/10" />
-
-                    <div className="flex items-center gap-1 text-[11px] uppercase tracking-[0.08em] text-white/50 light:text-slate-600">
-                        Location
-                    </div>
-                        <div className="flex gap-1.5">
-                            <button
-                                type="button"
-                                onClick={() => setLocationFilter('any')}
-                                className={cn(
-                                    filterPillClasses.base,
-                                    filterPillClasses.inactive,
-                                    locationFilter === 'any' && filterPillClasses.activeWithShadow("shadow-[0_10px_30px_-18px_rgba(52,211,153,0.7)]")
-                                )}
-                            >
-                                All
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => setLocationFilter('geotagged')}
-                                className={cn(
-                                    filterPillClasses.base,
-                                    filterPillClasses.inactive,
-                                    locationFilter === 'geotagged' && filterPillClasses.activeWithShadow("shadow-[0_10px_30px_-18px_rgba(52,211,153,0.7)]")
-                                )}
-                            >
-                                Map-ready
-                            </button>
-                        </div>
-
-                    <div className="h-6 w-px bg-white/10 light:bg-black/10" />
-
-                    <div className="flex items-center gap-1 text-[11px] uppercase tracking-[0.08em] text-white/50 light:text-slate-600">
-                        Map
-                    </div>
-                    <button
-                        type="button"
-                        disabled={!mapViewportBounds}
-                        onClick={() => mapViewportBounds && setMapScopeEnabled(prev => !prev)}
-                        aria-pressed={mapScopeEnabled}
-                        title={!mapViewportBounds ? 'Open the map to enable map filtering' : undefined}
-                        className={cn(
-                            "px-2.5 py-1 rounded-full text-xs font-medium transition-all flex items-center gap-1",
-                            "border border-white/10 bg-white/[0.02] text-white/65 light:border-black/10 light:text-slate-600",
-                            mapScopeEnabled && "border-white/30 bg-white/10 text-white/90 shadow-[0_10px_30px_-18px_rgba(96,165,250,0.8)]",
-                            !mapViewportBounds && "opacity-40 cursor-not-allowed"
-                        )}
-                    >
-                        <span
-                            className={cn(
-                                "inline-flex h-2 w-2 rounded-full",
-                                mapScopeEnabled ? "bg-blue-300/70" : "bg-white/25",
-                                !mapViewportBounds && "bg-white/15"
-                            )}
-                            aria-hidden
-                        />
-                        {mapViewportBounds ? 'Follow map view' : 'Open map to enable'}
-                    </button>
-
-                    <div className="h-6 w-px bg-white/10 light:bg-black/10" />
-
-                    <div className="flex items-center gap-1 text-[11px] uppercase tracking-[0.08em] text-white/50 light:text-slate-600">
-                        Viewing
-                    </div>
-                    <div className="flex gap-1.5">
+                    {/* Media type filter - Simplified calm design */}
+                    <div className="flex justify-center gap-1.5 py-3">
                         <button
                             type="button"
-                            onClick={() => setViewerMode('day-filtered')}
-                            className={cn(
-                                filterPillClasses.base,
-                                filterPillClasses.inactive,
-                                viewerMode === 'day-filtered' && filterPillClasses.activeWithShadow("shadow-[0_10px_30px_-18px_rgba(168,85,247,0.7)]")
-                            )}
-                            title="View photos filtered by current selection"
+                            onClick={() => setMediaTypeFilter('all')}
+                            style={{
+                                padding: '8px 16px',
+                                borderRadius: '12px',
+                                border: `1px solid ${mediaTypeFilter === 'all' ? 'rgba(255,255,255,0.3)' : 'rgba(255,255,255,0.1)'}`,
+                                background: mediaTypeFilter === 'all' ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.02)',
+                                color: mediaTypeFilter === 'all' ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.65)',
+                                fontSize: '13px',
+                                fontWeight: 500,
+                                cursor: 'pointer',
+                                transition: 'all 0.2s ease',
+                                boxShadow: mediaTypeFilter === 'all' ? '0 10px 30px -18px rgba(139,92,246,0.7)' : 'none',
+                            }}
                         >
-                            Filtered
+                            All
                         </button>
                         <button
                             type="button"
-                            onClick={() => setViewerMode('sequential')}
-                            className={cn(
-                                filterPillClasses.base,
-                                filterPillClasses.inactive,
-                                viewerMode === 'sequential' && filterPillClasses.activeWithShadow("shadow-[0_10px_30px_-18px_rgba(168,85,247,0.7)]")
-                            )}
-                            title="Walk through all photos across the journey"
+                            onClick={() => setMediaTypeFilter('image')}
+                            style={{
+                                padding: '8px 16px',
+                                borderRadius: '12px',
+                                border: `1px solid ${mediaTypeFilter === 'image' ? 'rgba(255,255,255,0.3)' : 'rgba(255,255,255,0.1)'}`,
+                                background: mediaTypeFilter === 'image' ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.02)',
+                                color: mediaTypeFilter === 'image' ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.65)',
+                                fontSize: '13px',
+                                fontWeight: 500,
+                                cursor: 'pointer',
+                                transition: 'all 0.2s ease',
+                                boxShadow: mediaTypeFilter === 'image' ? '0 10px 30px -18px rgba(139,92,246,0.7)' : 'none',
+                            }}
                         >
-                            Walk Journey
-                        </button>
-                    </div>
-
-                    <div className="h-6 w-px bg-white/10 light:bg-black/10" />
-
-                    <div className="flex items-center gap-1 text-[11px] uppercase tracking-[0.08em] text-white/50 light:text-slate-600">
-                        Order
-                    </div>
-                    <div className="flex gap-1.5">
-                        <button
-                            type="button"
-                            onClick={() => setSortOrder('journey')}
-                            className={cn(
-                                filterPillClasses.base,
-                                filterPillClasses.inactive,
-                                sortOrder === 'journey' && filterPillClasses.activeWithShadow("shadow-[0_10px_30px_-18px_rgba(167,139,250,0.8)]")
-                            )}
-                        >
-                            Curated
+                            Photos
                         </button>
                         <button
                             type="button"
-                            onClick={() => setSortOrder('captured')}
-                            className={cn(
-                                filterPillClasses.base,
-                                filterPillClasses.inactive,
-                                sortOrder === 'captured' && filterPillClasses.activeWithShadow("shadow-[0_10px_30px_-18px_rgba(167,139,250,0.8)]")
-                            )}
+                            onClick={() => setMediaTypeFilter('video')}
+                            style={{
+                                padding: '8px 16px',
+                                borderRadius: '12px',
+                                border: `1px solid ${mediaTypeFilter === 'video' ? 'rgba(255,255,255,0.3)' : 'rgba(255,255,255,0.1)'}`,
+                                background: mediaTypeFilter === 'video' ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.02)',
+                                color: mediaTypeFilter === 'video' ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.65)',
+                                fontSize: '13px',
+                                fontWeight: 500,
+                                cursor: 'pointer',
+                                transition: 'all 0.2s ease',
+                                boxShadow: mediaTypeFilter === 'video' ? '0 10px 30px -18px rgba(139,92,246,0.7)' : 'none',
+                            }}
                         >
-                            Captured timeline
+                            Videos
                         </button>
                     </div>
-
-                    <div className="ml-auto flex-1 min-w-[200px]">
-                        <label className="sr-only" htmlFor="media-search">Search media</label>
-                        <div className="relative">
-                            <input
-                                id="media-search"
-                                type="search"
-                                value={searchQuery}
-                                onChange={(e) => setSearchQuery(e.target.value)}
-                                placeholder="Search captions"
-                                className="w-full rounded-lg border border-white/10 bg-white/[0.05] px-3 py-2 text-sm text-white placeholder:text-white/40 focus:outline-none focus:ring-2 focus:ring-white/30 light:bg-white light:text-slate-900 light:placeholder:text-slate-400 light:border-black/10"
-                            />
-                            <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[11px] uppercase tracking-[0.08em] text-white/30 light:text-slate-400">Find</span>
-                        </div>
-                    </div>
-                </div>
             </div>
         </>
     );
@@ -967,21 +777,21 @@ export function PhotosTab({ trekData, isMobile, editMode = false, onViewPhotoOnM
                 </div>
             )}
 
-            {/* Unified Photo Viewer - supports both day-filtered and sequential modes */}
+            {/* Unified Photo Viewer - always sequential mode for immersive journey walkthrough */}
             {/* Key prop forces remount when clicking different photo, ensuring correct initial index */}
             <UnifiedPhotoViewer
-                key={lightboxIndex !== null ? `viewer-${lightboxIndex}-${viewerMode}` : 'viewer-closed'}
-                photos={viewerMode === 'sequential' ? sortedPhotos : filteredPhotos}
+                key={lightboxIndex !== null ? `viewer-${lightboxIndex}` : 'viewer-closed'}
+                photos={sortedPhotos}
                 initialIndex={lightboxIndex ?? 0}
                 isOpen={lightboxIndex !== null}
                 onClose={closeLightbox}
                 getMediaUrl={getMediaUrl}
                 trekData={trekData}
-                mode={viewerMode}
-                initialDay={typeof dayFilter === 'number' ? dayFilter : undefined}
-                enableDayNavigation={viewerMode === 'sequential'}
-                showDayProgress={viewerMode === 'sequential'}
-                showCampInfo={viewerMode === 'sequential'}
+                mode="sequential"
+                initialDay={typeof dayFilter === 'number' ? dayFilter : 1}
+                enableDayNavigation={true}
+                showDayProgress={true}
+                showCampInfo={true}
                 editMode={editMode}
                 onViewOnMap={onViewPhotoOnMap}
                 onDelete={editMode ? handleDeletePhoto : undefined}
