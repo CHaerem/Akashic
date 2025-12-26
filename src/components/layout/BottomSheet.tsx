@@ -2,7 +2,7 @@ import { useRef, useEffect, useCallback, useState, type ReactNode } from 'react'
 import { motion, AnimatePresence } from 'framer-motion';
 import { useDragGesture } from '../../hooks/useDragGesture';
 import { colors, radius, transitions } from '../../styles/liquidGlass';
-import type { Camp, TrekConfig } from '../../types/trek';
+import type { Camp, TrekConfig, TrekData } from '../../types/trek';
 import type { ContentMode } from '../../hooks/useTrekData';
 import { ChevronIcon } from '../icons';
 import { getCountryFlag } from '../../utils/countryFlags';
@@ -36,6 +36,7 @@ interface BottomSheetProps {
     selectedTrek: TrekConfig | null;
     selectedCamp: Camp | null;
     totalDays: number;
+    trekData?: TrekData | null;
     activeMode: ContentMode;
     onModeChange: (mode: ContentMode) => void;
     onDaySelect: (dayNumber: number) => void;
@@ -68,6 +69,7 @@ export function BottomSheet({
     selectedTrek,
     selectedCamp,
     totalDays,
+    trekData,
     activeMode,
     onModeChange,
     onDaySelect,
@@ -232,6 +234,7 @@ export function BottomSheet({
                         <TrekOverviewHeader
                             trekName={selectedTrek?.name ?? ''}
                             totalDays={totalDays}
+                            trekData={trekData}
                             onStart={onStart}
                             isMobile={isMobile}
                         />
@@ -503,36 +506,42 @@ function GlobeHeader({ trek, onPrevJourney, onNextJourney, totalJourneys, isMobi
 interface TrekOverviewHeaderProps {
     trekName: string;
     totalDays: number;
+    trekData?: TrekData | null;
     onStart: () => void;
     isMobile: boolean;
 }
 
-function TrekOverviewHeader({ trekName, totalDays, onStart, isMobile }: TrekOverviewHeaderProps) {
+function TrekOverviewHeader({ trekName, totalDays, trekData, onStart, isMobile }: TrekOverviewHeaderProps) {
+    // Format stats: "5 days · 42km · Summit 5,895m"
+    const statsText = trekData
+        ? `${totalDays} days · ${trekData.stats.totalDistance}km · Summit ${trekData.stats.highestPoint.elevation.toLocaleString()}m`
+        : `${totalDays} days`;
+
     return (
         <>
-            <span
-                style={{
-                    fontSize: 11,
-                    fontWeight: 600,
-                    color: colors.accent.primary,
-                    background: 'rgba(96, 165, 250, 0.15)',
-                    padding: '3px 8px',
-                    borderRadius: 6,
-                }}
-            >
-                {totalDays} days
-            </span>
-            <span
+            <div
                 style={{
                     padding: '4px 8px',
                     color: colors.text.primary,
                     fontSize: isMobile ? 14 : 15,
                     fontWeight: 500,
                     flex: 1,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 2,
                 }}
             >
-                {trekName}
-            </span>
+                <span>{trekName}</span>
+                <span
+                    style={{
+                        fontSize: 11,
+                        color: colors.text.tertiary,
+                        fontWeight: 400,
+                    }}
+                >
+                    {statsText}
+                </span>
+            </div>
             <motion.button
                 onClick={onStart}
                 whileHover={{ scale: 1.05 }}

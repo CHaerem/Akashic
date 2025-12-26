@@ -1,7 +1,7 @@
 import { useRef, useCallback, useState, type ReactNode } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { colors, radius, transitions, effects } from '../../styles/liquidGlass';
-import type { Camp, TrekConfig } from '../../types/trek';
+import type { Camp, TrekConfig, TrekData } from '../../types/trek';
 import type { ContentMode } from '../../hooks/useTrekData';
 import { ChevronIcon } from '../icons';
 import { getCountryFlag } from '../../utils/countryFlags';
@@ -24,6 +24,7 @@ interface SidebarProps {
     selectedTrek: TrekConfig | null;
     selectedCamp: Camp | null;
     totalDays: number;
+    trekData?: TrekData | null;
     activeMode: ContentMode;
     onModeChange: (mode: ContentMode) => void;
     onDaySelect: (dayNumber: number) => void;
@@ -52,6 +53,7 @@ export function Sidebar({
     selectedTrek,
     selectedCamp,
     totalDays,
+    trekData,
     activeMode,
     onModeChange,
     onDaySelect,
@@ -215,6 +217,7 @@ export function Sidebar({
                             <TrekOverviewNavigation
                                 trekName={selectedTrek?.name ?? ''}
                                 totalDays={totalDays}
+                                trekData={trekData}
                                 onStart={onStart}
                             />
                         ) : view === 'trek' ? (
@@ -347,38 +350,52 @@ function GlobeNavigation({ trek, onPrevJourney, onNextJourney, totalJourneys }: 
 interface TrekOverviewNavigationProps {
     trekName: string;
     totalDays: number;
+    trekData?: TrekData | null;
     onStart: () => void;
 }
 
-function TrekOverviewNavigation({ trekName, totalDays, onStart }: TrekOverviewNavigationProps) {
+function TrekOverviewNavigation({ trekName, totalDays, trekData, onStart }: TrekOverviewNavigationProps) {
+    // Format stats: "5 days · 42km · Summit 5,895m"
+    const statsText = trekData
+        ? `${totalDays} days · ${trekData.stats.totalDistance}km · Summit ${trekData.stats.highestPoint.elevation.toLocaleString()}m`
+        : `${totalDays} days`;
+
     return (
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%' }}>
-            <span
+            <div
                 style={{
-                    fontSize: 11,
-                    fontWeight: 600,
-                    color: colors.accent.primary,
-                    background: 'rgba(96, 165, 250, 0.15)',
-                    padding: '4px 10px',
-                    borderRadius: 6,
-                    flexShrink: 0,
-                }}
-            >
-                {totalDays} days
-            </span>
-            <span
-                style={{
-                    color: colors.text.primary,
-                    fontSize: 15,
-                    fontWeight: 500,
                     flex: 1,
-                    whiteSpace: 'nowrap',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 2,
                     overflow: 'hidden',
-                    textOverflow: 'ellipsis',
                 }}
             >
-                {trekName}
-            </span>
+                <span
+                    style={{
+                        color: colors.text.primary,
+                        fontSize: 15,
+                        fontWeight: 500,
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                    }}
+                >
+                    {trekName}
+                </span>
+                <span
+                    style={{
+                        fontSize: 11,
+                        color: colors.text.tertiary,
+                        fontWeight: 400,
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                    }}
+                >
+                    {statsText}
+                </span>
+            </div>
             <motion.button
                 onClick={onStart}
                 whileHover={{ scale: 1.05 }}

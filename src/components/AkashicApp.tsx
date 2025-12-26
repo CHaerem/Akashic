@@ -323,6 +323,7 @@ export default function AkashicApp() {
                         selectedTrek={selectedTrek}
                         selectedCamp={selectedCamp}
                         totalDays={trekData?.camps.length ?? 0}
+                        trekData={trekData}
                         activeMode={activeMode}
                         onModeChange={setActiveMode}
                         onDaySelect={handleDaySelect}
@@ -365,6 +366,7 @@ export default function AkashicApp() {
                         selectedTrek={selectedTrek}
                         selectedCamp={selectedCamp}
                         totalDays={trekData?.camps.length ?? 0}
+                        trekData={trekData}
                         activeMode={activeMode}
                         onModeChange={setActiveMode}
                         onDaySelect={handleDaySelect}
