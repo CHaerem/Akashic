@@ -11,7 +11,7 @@ import { useMedia } from '../../hooks/useMedia';
 import { usePhotoDay } from '../../hooks/usePhotoDay';
 import { fetchPhotos, createPhoto, deletePhoto, getJourneyIdBySlug, updatePhoto } from '../../lib/journeys';
 import { PhotoUpload } from './PhotoUpload';
-import { PhotoLightbox } from '../common/PhotoLightbox';
+import { UnifiedPhotoViewer } from '../common/UnifiedPhotoViewer';
 import { PhotoEditModal } from './PhotoEditModal';
 import { SkeletonPhotoGrid } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
@@ -196,6 +196,7 @@ export function PhotosTab({ trekData, isMobile, editMode = false, onViewPhotoOnM
     const [error, setError] = useState<string | null>(null);
     const [journeyDbId, setJourneyDbId] = useState<string | null>(null);
     const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+    const [viewerMode, setViewerMode] = useState<'sequential' | 'day-filtered'>('day-filtered');
     const [editingPhoto, setEditingPhoto] = useState<Photo | null>(null);
     const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
     const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
@@ -744,6 +745,38 @@ export function PhotosTab({ trekData, isMobile, editMode = false, onViewPhotoOnM
                     <div className="h-6 w-px bg-white/10 light:bg-black/10" />
 
                     <div className="flex items-center gap-1 text-[11px] uppercase tracking-[0.08em] text-white/50 light:text-slate-600">
+                        Viewing
+                    </div>
+                    <div className="flex gap-1.5">
+                        <button
+                            type="button"
+                            onClick={() => setViewerMode('day-filtered')}
+                            className={cn(
+                                filterPillClasses.base,
+                                filterPillClasses.inactive,
+                                viewerMode === 'day-filtered' && filterPillClasses.activeWithShadow("shadow-[0_10px_30px_-18px_rgba(168,85,247,0.7)]")
+                            )}
+                            title="View photos filtered by current selection"
+                        >
+                            Filtered
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setViewerMode('sequential')}
+                            className={cn(
+                                filterPillClasses.base,
+                                filterPillClasses.inactive,
+                                viewerMode === 'sequential' && filterPillClasses.activeWithShadow("shadow-[0_10px_30px_-18px_rgba(168,85,247,0.7)]")
+                            )}
+                            title="Walk through all photos across the journey"
+                        >
+                            Walk Journey
+                        </button>
+                    </div>
+
+                    <div className="h-6 w-px bg-white/10 light:bg-black/10" />
+
+                    <div className="flex items-center gap-1 text-[11px] uppercase tracking-[0.08em] text-white/50 light:text-slate-600">
                         Order
                     </div>
                     <div className="flex gap-1.5">
@@ -929,18 +962,24 @@ export function PhotosTab({ trekData, isMobile, editMode = false, onViewPhotoOnM
                 </div>
             )}
 
-            {/* Lightbox - uses filtered photos for navigation within selected day */}
+            {/* Unified Photo Viewer - supports both day-filtered and sequential modes */}
             {/* Key prop forces remount when clicking different photo, ensuring correct initial index */}
-            <PhotoLightbox
-                key={lightboxIndex !== null ? `lightbox-${lightboxIndex}` : 'lightbox-closed'}
-                photos={filteredPhotos}
+            <UnifiedPhotoViewer
+                key={lightboxIndex !== null ? `viewer-${lightboxIndex}-${viewerMode}` : 'viewer-closed'}
+                photos={viewerMode === 'sequential' ? sortedPhotos : filteredPhotos}
                 initialIndex={lightboxIndex ?? 0}
                 isOpen={lightboxIndex !== null}
                 onClose={closeLightbox}
                 getMediaUrl={getMediaUrl}
-                onDelete={editMode ? handleDeletePhoto : undefined}
+                trekData={trekData}
+                mode={viewerMode}
+                initialDay={typeof dayFilter === 'number' ? dayFilter : undefined}
+                enableDayNavigation={viewerMode === 'sequential'}
+                showDayProgress={viewerMode === 'sequential'}
+                showCampInfo={viewerMode === 'sequential'}
                 editMode={editMode}
                 onViewOnMap={onViewPhotoOnMap}
+                onDelete={editMode ? handleDeletePhoto : undefined}
                 onEdit={editMode ? handleEditPhoto : undefined}
             />
 
