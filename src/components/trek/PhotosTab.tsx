@@ -373,8 +373,13 @@ export function PhotosTab({ trekData, isMobile, editMode = false, onViewPhotoOnM
     }, []);
 
     const handlePhotoClick = useCallback((index: number) => {
-        setLightboxIndex(index);
-    }, []);
+        // Map from visiblePhotos index to sortedPhotos index
+        const clickedPhoto = visiblePhotos[index];
+        if (clickedPhoto) {
+            const globalIndex = sortedPhotos.findIndex(p => p.id === clickedPhoto.id);
+            setLightboxIndex(globalIndex !== -1 ? globalIndex : index);
+        }
+    }, [visiblePhotos, sortedPhotos]);
 
     const closeLightbox = useCallback(() => {
         setLightboxIndex(null);
