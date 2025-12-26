@@ -12,7 +12,7 @@ import { memo, useMemo, useState, useCallback, useEffect, useRef } from 'react';
 import type { TrekData, Camp, Photo, RouteSegment } from '../../types/trek';
 import { DayChapter } from './DayChapter';
 import { SegmentTransition } from './SegmentTransition';
-import { PhotoLightbox } from '../common/PhotoLightbox';
+import { UnifiedPhotoViewer } from '../common/UnifiedPhotoViewer';
 import { calculateAllSegments } from '../../utils/routeUtils';
 import { getDateForDay, isPhotoFromDay } from '../../utils/dates';
 import { colors } from '../../styles/liquidGlass';
@@ -209,13 +209,19 @@ export const JourneyTimeline = memo(function JourneyTimeline({
                 </div>
             </div>
 
-            {/* Photo Lightbox */}
-            <PhotoLightbox
+            {/* Unified Photo Viewer - day-filtered mode for timeline */}
+            <UnifiedPhotoViewer
                 photos={lightboxPhotos}
                 initialIndex={lightboxIndex ?? 0}
                 isOpen={lightboxIndex !== null}
                 onClose={closeLightbox}
                 getMediaUrl={getMediaUrl}
+                trekData={trekData}
+                mode="day-filtered"
+                initialDay={selectedCamp?.dayNumber}
+                showDayProgress={false}
+                showCampInfo={false}
+                enableDayNavigation={false}
                 onViewOnMap={onPhotoClick}
             />
         </div>

@@ -12,8 +12,7 @@ import { MapboxGlobe } from './MapboxGlobe';
 import { OfflineIndicator } from './OfflineIndicator';
 import { GlobeHint } from './home/GlobeHint';
 import { ShareTargetModal } from './ShareTargetModal';
-import { PhotoLightbox } from './common/PhotoLightbox';
-import { DayGallery } from './common/DayGallery';
+import { UnifiedPhotoViewer } from './common/UnifiedPhotoViewer';
 import { BottomSheet } from './layout/BottomSheet';
 import { Sidebar } from './layout/Sidebar';
 import { BottomSheetContent } from './layout/BottomSheetContent';
@@ -32,6 +31,7 @@ export default function AkashicApp() {
     // Defer photo updates to prevent re-renders during camera animations
     const deferredPhotos = useDeferredValue(photos);
     const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+    const [viewerMode, setViewerMode] = useState<'sequential' | 'day-filtered'>('day-filtered');
     const [showShareTarget, setShowShareTarget] = useState(false);
     const flyToPhotoRef = useRef<((photo: Photo) => void) | null>(null);
     const recenterRef = useRef<(() => void) | null>(null);
@@ -81,8 +81,11 @@ export default function AkashicApp() {
         handleCampSelect
     } = useTrekData();
 
-    // Day gallery state
-    const [showDayGallery, setShowDayGallery] = useState(false);
+    // Handler to open photo viewer in sequential mode (for "View Day Photos" button)
+    const handleOpenDayGallery = useCallback(() => {
+        setViewerMode('sequential');
+        setLightboxIndex(0);
+    }, []);
 
     // Check for pending shared photos (from PWA share target)
     useEffect(() => {
@@ -131,6 +134,7 @@ export default function AkashicApp() {
 
     // Handle photo click from map markers - open lightbox
     const handleMapPhotoClick = useCallback((_photo: Photo, index: number) => {
+        setViewerMode('day-filtered'); // Map photos use filtered mode
         setLightboxIndex(index);
     }, []);
 
@@ -345,7 +349,7 @@ export default function AkashicApp() {
                             onExplore={handleExplore}
                             onCampSelect={handleCampSelect}
                             onViewPhotoOnMap={handleViewOnMap}
-                            onOpenDayGallery={() => setShowDayGallery(true)}
+                            onOpenDayGallery={handleOpenDayGallery}
                             onJourneySaved={refetchJourneys}
                             editMode={editMode}
                             isMobile={isMobile}
@@ -386,7 +390,7 @@ export default function AkashicApp() {
                             onExplore={handleExplore}
                             onCampSelect={handleCampSelect}
                             onViewPhotoOnMap={handleViewOnMap}
-                            onOpenDayGallery={() => setShowDayGallery(true)}
+                            onOpenDayGallery={handleOpenDayGallery}
                             onJourneySaved={refetchJourneys}
                             editMode={editMode}
                             isMobile={false}
@@ -397,31 +401,26 @@ export default function AkashicApp() {
                 )
             )}
 
-            {/* Day Gallery - fullscreen photo exploration */}
+            {/* Unified Photo Viewer - handles both map photos and day gallery */}
+            {/* Key forces remount when opening with different index - prevents stale state */}
             {trekData && (
-                <DayGallery
-                    isOpen={showDayGallery}
-                    onClose={() => setShowDayGallery(false)}
-                    trekData={trekData}
-                    photos={deferredPhotos}
+                <UnifiedPhotoViewer
+                    key={lightboxIndex !== null ? `viewer-${lightboxIndex}-${viewerMode}` : 'viewer-closed'}
+                    photos={viewerMode === 'sequential' ? deferredPhotos : photosWithCoords}
+                    initialIndex={lightboxIndex ?? 0}
+                    isOpen={lightboxIndex !== null}
+                    onClose={handleCloseLightbox}
                     getMediaUrl={getMediaUrl}
+                    trekData={trekData}
+                    mode={viewerMode}
                     initialDay={selectedCamp?.dayNumber ?? 1}
-                    onDayChange={handleDaySelect}
+                    enableDayNavigation={viewerMode === 'sequential'}
+                    showDayProgress={viewerMode === 'sequential'}
+                    showCampInfo={viewerMode === 'sequential'}
                     onViewOnMap={handleViewOnMap}
+                    onDayChange={handleDaySelect}
                 />
             )}
-
-            {/* Photo Lightbox - triggered from map photo markers */}
-            {/* Key forces remount when opening with different index - prevents stale state */}
-            <PhotoLightbox
-                key={lightboxIndex !== null ? `lightbox-${lightboxIndex}` : 'lightbox-closed'}
-                photos={photosWithCoords}
-                initialIndex={lightboxIndex ?? 0}
-                isOpen={lightboxIndex !== null}
-                onClose={handleCloseLightbox}
-                getMediaUrl={getMediaUrl}
-                onViewOnMap={handleViewOnMap}
-            />
 
             {/* Share Target Modal - for photos shared from other apps */}
             <ShareTargetModal
