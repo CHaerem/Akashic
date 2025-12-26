@@ -314,6 +314,11 @@ export function PhotosTab({ trekData, isMobile, editMode = false, onViewPhotoOnM
         return sortPhotos(filtered);
     }, [dayScopedPhotos, isWithinBounds, locationFilter, mapScopeEnabled, mapViewportBounds, mapViewportPhotoIdSet, mediaTypeFilter, searchQuery, sortPhotos]);
 
+    // All photos sorted (for sequential mode)
+    const sortedPhotos = useMemo(() => {
+        return sortPhotos(photos);
+    }, [photos, sortPhotos]);
+
     // Reset visible count when filters change
     useEffect(() => {
         setVisibleCount(PHOTOS_PER_PAGE);
