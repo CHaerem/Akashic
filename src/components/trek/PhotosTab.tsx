@@ -736,7 +736,7 @@ export function PhotosTab({ trekData, isMobile, editMode = false, onViewPhotoOnM
             {photos.length > 0 && filteredPhotos.length === 0 && (
                 <div className="text-center py-10 text-white/40 light:text-slate-400">
                     <p className="m-0 mb-2">
-                        {mapScopeEnabled && mapViewportBounds
+                        {mapViewportBounds
                             ? 'No media in this map view yet'
                             : dayFilter === 'unassigned'
                                 ? 'No unassigned media'
@@ -746,7 +746,7 @@ export function PhotosTab({ trekData, isMobile, editMode = false, onViewPhotoOnM
                         }
                     </p>
                     <p className="m-0 text-xs">
-                        {mapScopeEnabled && mapViewportBounds
+                        {mapViewportBounds
                             ? 'Pan or zoom the map to explore nearby uploads.'
                             : 'Adjust the filters or add new uploads to fill this space.'
                         }
