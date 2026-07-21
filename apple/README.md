@@ -1,12 +1,16 @@
 # Akashic — iOS/iPadOS app
 
-Native SwiftUI client for Akashic (Phase 1 of [`APPLE-MIGRATION-PLAN.md`](../APPLE-MIGRATION-PLAN.md)).
-Read-only MVP: journey list, per-day detail, stats, and a flat route map — running on the
-recovered trek fixtures until CloudKit is wired up.
+Native SwiftUI client for Akashic ([`APPLE-MIGRATION-PLAN.md`](../APPLE-MIGRATION-PLAN.md)),
+well beyond the Phase-1 MVP: the signature globe → fly-in → day-navigation map experience,
+day content (weather, fun facts, POIs, historical sites), photo grid/lightbox with map
+markers, interactive elevation profiles + full stats, contextual editing (journey/waypoint/
+photo), a PhotosPicker → EXIF → thumbnail import pipeline, day comments, App Intents (D8),
+live Spotlight indexing, and a (dormant until App Group) stats widget — running on the REAL
+family data via the local import pipeline, until CloudKit is wired up.
 
-> **Status:** Phase 1 scaffold. Read-only. Fixtures by default. CloudKit sync compiled but
-> not yet activated. App Intents (D8) mirror the MCP tool surface (see below). Photo pipeline,
-> sharing, and editing are later phases.
+> **Status:** feature-parity build on the local store. CloudKit sync compiled but not
+> activated — blocked on the D4 sync-strategy decision and the container (runbook §1–2).
+> CKShare collaboration and the CloudKit importer (T2.5) are the main remaining phases.
 
 ---
 
@@ -61,6 +65,13 @@ The app reads two launch environment variables (used for the screenshots in `Doc
 |----------|--------|
 | `AKASHIC_TAB=0..3` | Select Journeys / Map / Stats / Settings |
 | `AKASHIC_OPEN=<slug or id>` | Open that journey's detail |
+| `AKASHIC_FORCE_LOCAL=1` | Force the on-disk `.local` store before the store is built |
+| `AKASHIC_IMPORT_ON_LAUNCH=1` | Run the export import at startup (see below) |
+| `AKASHIC_IMPORT_PATH=<dir>` | Export bundle path (default `Config.importBundlePath`) |
+| `AKASHIC_MEDIA_ROOT=<dir>` | Media root (default `<bundle>/r2/objects`) |
+| `AKASHIC_IMPORT_RESET=1` | Clear the fixture seed before importing (clean demo) |
+| `AKASHIC_SCREEN=photos` | Deep-link to the imported-photos journey list |
+| `AKASHIC_SCREEN=photogrid` + `AKASHIC_PHOTOS_JOURNEY=<id>` | Deep-link to a journey's thumbnail grid |
 
 ```bash
 UDID=$(xcrun simctl list devices booted | grep -oE '[0-9A-F-]{36}' | head -1)
@@ -69,7 +80,64 @@ SIMCTL_CHILD_AKASHIC_OPEN=kilimanjaro \
 xcrun simctl io "$UDID" screenshot Docs/screenshot-journey-detail.png
 ```
 
-Screenshots live in [`Docs/`](Docs).
+Screenshots live in [`Docs/`](Docs). The real-data screenshots are `Docs/screenshot-real-{list,detail,photos}.png`.
+
+## Import real data from a Supabase export (T2.12; groundwork for the CloudKit importer T2.5)
+
+The `Import/` module reads a Supabase JSON export (the `supabase/*.json` dump + the R2 media
+tree) and upserts it into the **local Core Data store**, preserving every original Postgres
+UUID. It is the tonight/on-device counterpart to the CloudKit importer (T2.5), which reuses
+the same reader + transform behind a different write sink.
+
+**Pipeline (all in `Akashic/Import/`):**
+
+```
+ExportBundle  →  ExportMapper       →  ImportSink            →  ImportReport
+(read *.json)    (rows → Journey/     (CoreDataImportSink now;
+                  Photo, sink-free)    CloudKitImportSink T2.5)
+```
+
+- **`ExportBundle`** — tolerant `Decodable` structs for the 6 tables (`profiles`, `journeys`,
+  `journey_members`, `waypoints`, `photos`, `day_comments`). Unknown columns are ignored;
+  dates stay ISO strings; `GeoCoordinate` normalizes the **two** coordinate encodings (GeoJSON
+  `Point` object *and* bare `[lng, lat]` array). Decoded with `.convertFromSnakeCase`.
+- **`ExportMapper`** — pure rows → domain `Journey`/`Camp`/`Photo`. Recomputes per-day route
+  stats via `DayStats`. Resolves each photo's R2 path (`journeys/{jid}/photos/{pid}.jpg`) to an
+  on-disk file under the **media root** (existence-checked; missing bytes tolerated).
+- **`LocalImporter`** — idempotent orchestrator (`run(exportRoot:mediaRoot:)`): journeys +
+  waypoints first, then photos linked to them. Re-running updates in place (no duplicates) and
+  returns an `ImportReport` (journeys/waypoints/photos created·updated·skipped, thumbs/originals
+  on disk, missing-media count). The `ImportSink` protocol is the only piece the CloudKit
+  importer must replace.
+- **`PhotoDayMatcher`** — the web's `usePhotoDay.ts` 4-tier day matcher, ported 1:1: explicit
+  `waypoint_id` → date-vs-`dateStarted` → route proximity (< 2 km) → nearest camp (< 5 km).
+- **Core Data** — `CDPhoto` gained `localOriginalPath` / `localThumbPath` (optional strings,
+  CloudKit-compatible) holding the resolved on-disk paths so views build a file `URL` without
+  knowing where the export lives (`Photo.thumbnailFileURL` / `.originalFileURL`).
+
+**From the app:** Settings → *Import from export bundle* — set the export path + media root
+(defaults work in the Simulator, which reads host paths directly), tap Import, watch progress,
+and browse the imported photo grid. For results that persist and show photos, switch the store
+to **Local** first and relaunch.
+
+**Headless / scriptable demo** (imports the real export, then screenshots):
+
+```bash
+UDID=$(xcrun simctl list devices booted | grep -oE '[0-9A-F-]{36}' | head -1)
+# 1. Force local, wipe the fixture seed, import the real export at launch:
+SIMCTL_CHILD_AKASHIC_FORCE_LOCAL=1 SIMCTL_CHILD_AKASHIC_IMPORT_ON_LAUNCH=1 \
+SIMCTL_CHILD_AKASHIC_IMPORT_RESET=1 \
+SIMCTL_CHILD_AKASHIC_IMPORT_PATH=/Users/cher/Privat/AkashicExport-20260722 \
+  xcrun simctl launch --terminate-running-process "$UDID" no.akashic.app
+# 2. Deep-link to a journey's real photo grid:
+SIMCTL_CHILD_AKASHIC_FORCE_LOCAL=1 SIMCTL_CHILD_AKASHIC_SCREEN=photogrid \
+SIMCTL_CHILD_AKASHIC_PHOTOS_JOURNEY=e27c89f6-8d7f-4b30-a0c9-54fe44e01a9b \
+  xcrun simctl launch --terminate-running-process "$UDID" no.akashic.app
+xcrun simctl io "$UDID" screenshot Docs/screenshot-real-photos.png
+```
+
+`ImportTests` covers the reader + importer against tiny inline fixtures and (filesystem-gated,
+skipped when absent) the real export dir; `PhotoDayMatcherTests` covers all four matching tiers.
 
 ## Switch persistence modes
 
@@ -131,23 +199,31 @@ placeholder NSPCKC wiring):
 apple/
   project.yml                     XcodeGen spec (source of truth)
   Akashic/
-    App/                          @main app, Config (modes/flags), JourneyStore
+    App/                          @main app, Config (modes/flags), JourneyStore, AppGroup
     Models/                       Domain value types, flexible decoding, DayStats (per-day route math)
+    Import/                       T2.4: ExportBundle reader, ExportMapper, LocalImporter (+ sink
+                                  seam), PhotoDayMatcher, ImportBrowserView (photo grid)
     Intents/                      App Intents (D8): 5 MCP-parity intents, JourneyEntity, stats calc
+    Services/                     SpotlightIndexer, WidgetSnapshot(+Journey)/WidgetDataStore/
+                                  WidgetPublisher, JourneyStatsWidgetView, WidgetGallery harness
     Fixtures/                     FixtureModels + FixtureLoader (old camp shape -> domain)
     Persistence/                  PersistenceController, Core Data <-> domain mapping, JSON coders
-      Akashic.xcdatamodeld        Core Data model (CloudKit-compatible)
+      Akashic.xcdatamodeld        Core Data model (CloudKit-compatible; CDPhoto local media paths)
     Views/                        SwiftUI: list, detail, stats, map, settings, theme
     Resources/                    Assets.xcassets (AppIcon placeholder, AccentColor)
     Support/                      Akashic.entitlements (Release-CloudKit only)
-  AkashicTests/                   XCTest: fixtures, day-stats, Core Data round-trip
-  Docs/                           Screenshots
+  AkashicWidgets/                 WidgetKit extension: JourneyStatsWidget + provider + placeholder
+                                  (shares the WidgetSnapshot/view files from Akashic/Services)
+  AkashicTests/                   XCTest: fixtures, day-stats, Core Data round-trip, import, day matcher,
+                                  Spotlight items, widget snapshot/data-store
+  Docs/                           Screenshots (incl. screenshot-widgets.png)
   Fixtures/recovered/             Input JSON (owned elsewhere; read-only here)
 ```
 
 ## Data model notes (Core Data ↔ CloudKit)
 
-The Core Data model mirrors the **real Postgres schema** (see `report-db-schema.md`), designed
+The Core Data model mirrors the **real Postgres schema** (authoritative mapping:
+[`CloudKit/MAPPING.md`](CloudKit/MAPPING.md), derived from `supabase/migrations/`), designed
 for `NSPersistentCloudKitContainer`:
 
 - Every attribute is **optional or has a default**; **no unique constraints**; every
@@ -219,6 +295,62 @@ Tests live in `AkashicTests/IntentModelTests.swift`, `IntentQueryTests.swift`,
 `IntentStatsTests.swift` (21 tests): wire-shape golden encode/decode, the Kilimanjaro
 `ExtendedStats` numbers (70 km, avg `"10.0"` km/day, `Xh Ymin`, difficulty `Hard`), limit
 clamps (500 → 100 / 50 / 200), and UUID-or-slug resolution.
+
+## Widgets (WidgetKit) & Spotlight
+
+Two "extras" from Phase 6, pulled forward. Both are additive — the default unsigned simulator
+build keeps working with no team, and the app scheme builds/embeds the widget automatically.
+
+### Spotlight — works tonight, no entitlement
+
+`Services/SpotlightIndexer.swift` indexes every journey **and each of its days** into
+`CSSearchableIndex` (`CoreSpotlight` needs no App Group or signing, so this is live on the
+plain simulator build). It runs from the store's load path (`JourneyStore.reload()`), so it
+**de-indexes + re-indexes idempotently on every load / import**.
+
+- **Item ids** — `journey/<id>` and `journey/<id>/day/<n>`; both decode back to the journey id.
+- **Deep-link** — `AkashicApp` handles `onContinueUserActivity(CSSearchableItemActionType)` and
+  records the tapped journey on `JourneyStore.pendingJourneySelection`; `GlobeExperienceView`
+  observes it (`.onChange(of: store.pendingJourneySelection)`) and flies the globe to the
+  journey. Fully wired — tapping a Spotlight result opens the app on that journey.
+- Pure item-building + id parsing are unit-tested (`AkashicTests/SpotlightIndexerTests.swift`);
+  the `CSSearchableIndex` writes are skipped under XCTest.
+
+### Widgets — build tonight, real data needs an App Group
+
+`AkashicWidgets/` is a WidgetKit extension with `JourneyStatsWidget` (small: name + flag +
+km/days/summit; medium: adds a mini stats row and a self-contained elevation sparkline drawn
+with `Path`). It renders from a `WidgetSnapshot` — a tiny precomputed Codable value (display
+strings, flag, downsampled elevation profile, optional thumbnail path) — never from Core Data.
+
+Widgets run in a separate process, so the only channel is a **shared App-Group container**:
+
+```
+app  → WidgetPublisher.publish(journeys) → WidgetSnapshot JSON in group.no.akashic container
+widget ← WidgetDataStore.load() ← same container   (falls back to bundled placeholder if empty)
+```
+
+**Tonight (unsigned simulator build): there is no App Group**, so
+`AppGroup.containerURL == nil` — the publisher writes nothing and the widget shows its bundled
+placeholder (`AkashicWidgets/Resources/placeholder-snapshot.json`). This is by design and
+requires no code change to light up.
+
+Preview the widget designs without the (non-scriptable) long-press Add-Widget flow via the
+debug harness — launch the app with `AKASHIC_SCREEN=widgets` (renders the real fixture data;
+see `Docs/screenshot-widgets.png`).
+
+#### Runbook — enable real widget data (Christopher, once a signing team exists)
+
+1. In the signing config, turn on the **App Groups** capability with `group.no.akashic` on
+   **BOTH** the `Akashic` app target and the `AkashicWidgets` extension.
+   (The app's `Support/Akashic.entitlements` already carries
+   `com.apple.security.application-groups → group.no.akashic`; give the widget its own
+   entitlements file with the same group and reference it from the widget's signed config.)
+2. Build the `Release-CloudKit` configuration with `DEVELOPMENT_TEAM` set (same team as CloudKit).
+3. That's it — `AppGroup.containerURL` now resolves, `WidgetPublisher` writes on every store
+   load, and `WidgetCenter.reloadAllTimelines()` refreshes the widget with live journey data
+   (a hero thumbnail is also copied into the shared container for a future photo-bearing
+   widget design; the current widget renders stats and the elevation sparkline only).
 
 ## What remains (later phases)
 

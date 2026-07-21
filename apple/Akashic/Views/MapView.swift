@@ -28,59 +28,22 @@ struct RouteMapView: View {
     }
 }
 
-/// Map tab — pick a journey and view its route.
+/// The Map screen is now the signature globe experience (`GlobeExperienceView`), wired as
+/// the app's primary landing screen in `RootView`. The former flat picker-and-route
+/// placeholder was replaced by the ported MapKit globe / trek choreography (see
+/// `Views/Map/`). `RouteMapView` above is kept as the read-only route thumbnail used by
+/// `JourneyDetailView`.
 struct MapView: View {
-    @EnvironmentObject private var store: JourneyStore
-    @State private var selectedID: String?
-
-    private var selected: Journey? {
-        store.journey(withID: selectedID ?? store.journeys.first?.id ?? "")
-    }
+    /// Optional photo markers forwarded to the globe experience (default empty).
+    var photos: [MapPhoto] = []
 
     var body: some View {
-        ZStack {
-            Theme.background.ignoresSafeArea()
-            if let journey = selected {
-                RouteMapView(journey: journey)
-                    .ignoresSafeArea(edges: .bottom)
-                    .overlay(alignment: .top) { picker }
-            } else {
-                ContentUnavailableView("No route", systemImage: "map")
-            }
-        }
-        .navigationTitle("Map")
-        .navigationBarTitleDisplayMode(.inline)
-        .onAppear { if selectedID == nil { selectedID = store.journeys.first?.id } }
-    }
-
-    private var picker: some View {
-        Menu {
-            ForEach(store.journeys) { journey in
-                Button {
-                    selectedID = journey.id
-                } label: {
-                    Label(journey.shortName, systemImage: journey.id == selected?.id ? "checkmark" : "mountain.2")
-                }
-            }
-        } label: {
-            HStack(spacing: 8) {
-                Text(selected?.countryFlag ?? "🌍")
-                Text(selected?.shortName ?? "Select")
-                    .font(.subheadline.weight(.semibold))
-                Image(systemName: "chevron.down")
-                    .font(.caption2)
-            }
-            .foregroundStyle(Theme.textPrimary)
-            .padding(.vertical, 10)
-            .padding(.horizontal, 16)
-            .background(.ultraThinMaterial, in: Capsule())
-        }
-        .padding(.top, 8)
+        GlobeExperienceView(photos: photos)
     }
 }
 
 #Preview {
-    NavigationStack { MapView() }
+    MapView()
         .environmentObject(JourneyStore(persistence: .preview))
         .preferredColorScheme(.dark)
 }

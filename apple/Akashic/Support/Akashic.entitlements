@@ -20,5 +20,19 @@
 	<string>$(TeamIdentifierPrefix)$(CFBundleIdentifier)</string>
 	<key>aps-environment</key>
 	<string>development</string>
+	<!--
+	  App Group shared with the AkashicWidgets extension so the widget can read the
+	  WidgetSnapshot JSON the app writes (see AppGroup / WidgetDataStore / README "Widgets &
+	  Spotlight"). Like the CloudKit keys above, this only takes effect in the signed
+	  `Release-CloudKit` build.
+	  TODO(Christopher): to light up real widget data you must ALSO:
+	    1. Enable the "App Groups" capability (group.no.akashic) on BOTH the Akashic app target
+	       and the AkashicWidgets extension in the signing config, and
+	    2. give the widget extension its own entitlements file carrying the same group.
+	-->
+	<key>com.apple.security.application-groups</key>
+	<array>
+		<string>group.no.akashic</string>
+	</array>
 </dict>
 </plist>

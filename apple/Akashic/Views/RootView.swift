@@ -1,10 +1,12 @@
 import SwiftUI
 
-/// Top-level tab shell: Journeys, Map, Stats, Settings.
+/// Top-level shell. The signature globe experience (`GlobeExperienceView`) is now the
+/// PRIMARY landing screen (tab 0) — it replaces the old flat journey list as the app's
+/// front door, with the list still reachable via its "Journeys" button/sheet. Stats and
+/// Settings remain as secondary tabs.
 struct RootView: View {
     @EnvironmentObject private var store: JourneyStore
     @State private var selectedTab = 0
-    @State private var journeysPath: [String] = []
 
     init() {
         // Dark, translucent tab + nav bars consistent with the night-sky palette.
@@ -25,44 +27,33 @@ struct RootView: View {
 
     var body: some View {
         TabView(selection: $selectedTab) {
-            NavigationStack(path: $journeysPath) {
-                JourneyListView()
-            }
-            .tabItem { Label("Journeys", systemImage: "mountain.2.fill") }
-            .tag(0)
-
-            NavigationStack {
-                MapView()
-            }
-            .tabItem { Label("Map", systemImage: "map.fill") }
-            .tag(1)
+            // Primary landing: the signature globe / trek map (full-bleed).
+            GlobeExperienceView()
+                .tabItem { Label("Explore", systemImage: "globe") }
+                .tag(0)
 
             NavigationStack {
                 StatsTabView()
             }
             .tabItem { Label("Stats", systemImage: "chart.bar.fill") }
-            .tag(2)
+            .tag(1)
 
             NavigationStack {
                 SettingsView()
             }
             .tabItem { Label("Settings", systemImage: "gearshape.fill") }
-            .tag(3)
+            .tag(2)
         }
         .onAppear(perform: applyLaunchEnvironment)
     }
 
-    /// Deep-link seam for UI tests / screenshots, e.g.
-    /// `AKASHIC_TAB=2` or `AKASHIC_OPEN=<journey id or slug>`.
+    /// Deep-link seam for UI tests / screenshots, e.g. `AKASHIC_TAB=1`.
+    /// The globe's own scene control (`AKASHIC_SCENE` / `AKASHIC_JOURNEY` / `AKASHIC_OPEN`)
+    /// is applied inside `GlobeExperienceView` via `TrekCameraController.applyLaunchScene`.
     private func applyLaunchEnvironment() {
         let env = ProcessInfo.processInfo.environment
-        if let raw = env["AKASHIC_TAB"], let tab = Int(raw), (0...3).contains(tab) {
+        if let raw = env["AKASHIC_TAB"], let tab = Int(raw), (0...2).contains(tab) {
             selectedTab = tab
-        }
-        if let key = env["AKASHIC_OPEN"],
-           let match = store.journeys.first(where: { $0.id == key || $0.slug == key }) {
-            selectedTab = 0
-            journeysPath = [match.id]
         }
     }
 }

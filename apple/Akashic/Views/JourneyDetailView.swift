@@ -2,9 +2,21 @@ import SwiftUI
 
 /// Journey detail: header, inline route map, stats summary, and a per-day list.
 struct JourneyDetailView: View {
+    @EnvironmentObject private var store: JourneyStore
     let journey: Journey
 
+    /// Which day (index into `camps`) is shown in the presented `DayDetailSheet`, if any.
+    @State private var selectedDayIndex: Int?
+    @State private var showJourneyEdit = false
+    @State private var showImport = false
+    @State private var editingCamp: Camp?
+
+    /// The freshest copy of this journey from the store, so contextual edits reflect
+    /// immediately after `store.reload()` (this view observes the store).
+    private var live: Journey { store.journey(withID: journey.id) ?? journey }
+
     var body: some View {
+        let live = self.live
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 header
@@ -18,9 +30,10 @@ struct JourneyDetailView: View {
                     )
 
                 statsSummary
+                photosLink
 
-                if !journey.description.isEmpty {
-                    Text(journey.description)
+                if !live.description.isEmpty {
+                    Text(live.description)
                         .font(.callout)
                         .foregroundStyle(Theme.textSecondary)
                 }
@@ -30,22 +43,92 @@ struct JourneyDetailView: View {
             .padding(16)
         }
         .background(Theme.background.ignoresSafeArea())
-        .navigationTitle(journey.shortName)
+        .navigationTitle(live.shortName)
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Menu {
+                    Button { showJourneyEdit = true } label: {
+                        Label("Edit journey", systemImage: "square.and.pencil")
+                    }
+                    Button { showImport = true } label: {
+                        Label("Add photos", systemImage: "photo.badge.plus")
+                    }
+                } label: {
+                    Image(systemName: "ellipsis.circle")
+                }
+                .tint(Theme.accent)
+            }
+        }
+        .sheet(isPresented: daySheetPresented) {
+            if let index = selectedDayIndex {
+                DayDetailSheet(
+                    journey: live,
+                    dayIndex: index,
+                    onSelectDay: { selectedDayIndex = $0 },
+                    onClose: { selectedDayIndex = nil }
+                )
+                .environmentObject(store)
+                .preferredColorScheme(.dark)
+                .presentationDetents([.medium, .large])
+                .presentationBackground(Theme.background)
+            }
+        }
+        .sheet(isPresented: $showJourneyEdit) {
+            JourneyEditSheet(journey: live).environmentObject(store)
+        }
+        .sheet(isPresented: $showImport) {
+            PhotoImportSheet(journey: live).environmentObject(store)
+        }
+        .sheet(item: $editingCamp) { camp in
+            WaypointEditSheet(journeyID: live.id, camp: camp).environmentObject(store)
+        }
+    }
+
+    private var daySheetPresented: Binding<Bool> {
+        Binding(get: { selectedDayIndex != nil },
+                set: { if !$0 { selectedDayIndex = nil } })
+    }
+
+    private var photosLink: some View {
+        NavigationLink {
+            PhotosGridView(journeyID: journey.id)
+                .environmentObject(store)
+        } label: {
+            HStack(spacing: 10) {
+                Image(systemName: "photo.on.rectangle.angled")
+                    .font(.subheadline)
+                    .foregroundStyle(Theme.accent)
+                Text("View all photos")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(Theme.textPrimary)
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.footnote)
+                    .foregroundStyle(Theme.textTertiary)
+            }
+            .padding(14)
+            .background(Theme.surface, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .strokeBorder(Theme.hairline, lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
     }
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
-                Text(journey.shortName)
+                Text(live.shortName)
                     .font(.largeTitle.weight(.bold))
                     .foregroundStyle(Theme.textPrimary)
                 Spacer()
-                Text(journey.countryFlag).font(.system(size: 40))
+                Text(live.countryFlag).font(.system(size: 40))
             }
             HStack(spacing: 8) {
-                Text(journey.country).foregroundStyle(Theme.textSecondary)
-                if let dates = Formatters.dateRange(journey.dateStarted, journey.dateEnded) {
+                Text(live.country).foregroundStyle(Theme.textSecondary)
+                if let dates = Formatters.dateRange(live.dateStarted, live.dateEnded) {
                     Text("·").foregroundStyle(Theme.textTertiary)
                     Text(dates).foregroundStyle(Theme.textSecondary)
                 }
@@ -56,10 +139,10 @@ struct JourneyDetailView: View {
 
     private var statsSummary: some View {
         HStack(spacing: 10) {
-            StatChip(icon: "figure.walk", value: Formatters.distanceKm(journey.stats.totalDistance), caption: "Distance")
-            StatChip(icon: "arrow.up.forward", value: Formatters.meters(journey.stats.totalElevationGain), caption: "Ascent")
-            StatChip(icon: "mountain.2", value: Formatters.meters(journey.stats.highestPoint?.elevation ?? 0), caption: "Summit")
-            StatChip(icon: "calendar", value: "\(journey.stats.duration)", caption: "Days")
+            StatChip(icon: "figure.walk", value: Formatters.distanceKm(live.stats.totalDistance), caption: "Distance")
+            StatChip(icon: "arrow.up.forward", value: Formatters.meters(live.stats.totalElevationGain), caption: "Ascent")
+            StatChip(icon: "mountain.2", value: Formatters.meters(live.stats.highestPoint?.elevation ?? 0), caption: "Summit")
+            StatChip(icon: "calendar", value: "\(live.stats.duration)", caption: "Days")
         }
     }
 
@@ -68,8 +151,18 @@ struct JourneyDetailView: View {
             Text("Days")
                 .font(.title3.weight(.semibold))
                 .foregroundStyle(Theme.textPrimary)
-            ForEach(journey.camps) { camp in
-                DayRow(camp: camp)
+            ForEach(Array(live.camps.enumerated()), id: \.element.id) { index, camp in
+                Button {
+                    selectedDayIndex = index
+                } label: {
+                    DayRow(camp: camp)
+                }
+                .buttonStyle(.plain)
+                .contextMenu {
+                    Button { editingCamp = camp } label: {
+                        Label("Edit day", systemImage: "square.and.pencil")
+                    }
+                }
             }
         }
     }
@@ -174,5 +267,6 @@ struct FlowChips: View {
             JourneyDetailView(journey: journey)
         }
     }
+    .environmentObject(JourneyStore(persistence: .preview))
     .preferredColorScheme(.dark)
 }

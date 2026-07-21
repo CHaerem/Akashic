@@ -67,6 +67,8 @@
         <attribute name="id" optional="YES" attributeType="String"/>
         <attribute name="isHero" optional="YES" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
         <attribute name="journeyId" optional="YES" attributeType="String"/>
+        <attribute name="localOriginalPath" optional="YES" attributeType="String"/>
+        <attribute name="localThumbPath" optional="YES" attributeType="String"/>
         <attribute name="locationSource" optional="YES" attributeType="String"/>
         <attribute name="mediaType" optional="YES" attributeType="String" defaultValueString="image"/>
         <attribute name="rotation" optional="YES" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
@@ -81,6 +83,7 @@
         <relationship name="waypoint" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="CDWaypoint" inverseName="photos" inverseEntity="CDWaypoint"/>
     </entity>
     <entity name="CDDayComment" representedClassName="CDDayComment" syncable="YES" codeGenerationType="class">
+        <attribute name="authorDisplayName" optional="YES" attributeType="String"/>
         <attribute name="content" optional="YES" attributeType="String"/>
         <attribute name="createdAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
         <attribute name="id" optional="YES" attributeType="String"/>

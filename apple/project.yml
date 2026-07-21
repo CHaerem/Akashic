@@ -46,6 +46,11 @@ targets:
         buildPhase: resources
       - path: Fixtures/recovered/incaTrail.json
         buildPhase: resources
+    dependencies:
+      # WidgetKit extension, embedded in the app bundle. Builds unsigned for the simulator
+      # (inherits the project's CODE_SIGNING_ALLOWED=NO base), so CI stays team-free.
+      - target: AkashicWidgets
+        embed: true
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: no.akashic.app
@@ -95,6 +100,35 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: no.akashic.app.tests
         GENERATE_INFOPLIST_FILE: "YES"
+
+  # WidgetKit extension. Data reaches it via a WidgetSnapshot JSON in the App-Group container
+  # (see AppGroup / WidgetDataStore); with no App Group configured (unsigned simulator build)
+  # the widget renders its bundled placeholder. The shared snapshot/view/data files live in the
+  # app tree and are referenced explicitly here so the widget compiles JUST those (never the
+  # whole app / Core Data / domain layer). Inherits the project's unsigned-simulator base.
+  AkashicWidgets:
+    type: app-extension
+    platform: iOS
+    deploymentTarget: "17.0"
+    sources:
+      - path: AkashicWidgets
+      # Shared (App-Group-free / domain-free) files compiled into both targets:
+      - path: Akashic/App/AppGroup.swift
+      - path: Akashic/Services/WidgetSnapshot.swift
+      - path: Akashic/Services/WidgetDataStore.swift
+      - path: Akashic/Services/JourneyStatsWidgetView.swift
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: no.akashic.app.widgets
+        PRODUCT_NAME: AkashicWidgets
+        MARKETING_VERSION: "0.1.0"
+        CURRENT_PROJECT_VERSION: "1"
+        TARGETED_DEVICE_FAMILY: "1,2"
+        INFOPLIST_FILE: AkashicWidgets/Info.plist
+        GENERATE_INFOPLIST_FILE: "NO"
+        # Extensions are packaged inside the host app, never installed on their own.
+        SKIP_INSTALL: "YES"
+        SWIFT_EMIT_LOC_STRINGS: "YES"
 
 schemes:
   Akashic:

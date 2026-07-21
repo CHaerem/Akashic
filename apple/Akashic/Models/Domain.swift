@@ -44,6 +44,63 @@ struct WeatherData: Codable, Equatable {
     var weatherCode: Int?
 }
 
+// MARK: - Day content payloads (waypoint JSONB columns)
+//
+// These mirror the web app's `FunFact` / `PointOfInterest` / `HistoricalSite`
+// (src/types/trek.ts) and decode from BOTH:
+//   * the Supabase export JSON (snake_case, via `.convertFromSnakeCase`), and
+//   * the Core Data Binary attributes (camelCase, via `JSONCoding`'s default coder).
+// Property names are camelCase so a single definition serves both paths.
+
+/// An educational trivia card attached to a day. `category` stays a raw string so
+/// unknown categories degrade gracefully to a default style.
+struct FunFact: Codable, Equatable, Identifiable {
+    var id: String
+    var content: String
+    var category: String
+    var source: String?
+    var learnMoreUrl: String?
+    var icon: String?
+}
+
+/// A notable location encountered during a day's trek.
+struct PointOfInterest: Codable, Equatable, Identifiable {
+    var id: String
+    var name: String
+    var category: String
+    var coordinates: [Double]?   // [lng, lat]
+    var elevation: Int?
+    var description: String?
+    var routeDistanceKm: Double?
+    var tips: [String]?
+    var timeFromPrevious: String?
+    var icon: String?
+}
+
+/// An outbound reference on a historical site.
+struct SiteLink: Codable, Equatable, Identifiable {
+    var label: String
+    var url: String
+    var id: String { url }
+}
+
+/// A historical site with an expandable description and significance badge.
+struct HistoricalSite: Codable, Equatable, Identifiable {
+    var id: String
+    var name: String
+    var coordinates: [Double]?   // [lng, lat]
+    var elevation: Int?
+    var routeDistanceKm: Double?
+    var summary: String
+    var description: String?
+    var period: String?
+    var significance: String?    // "major" | "notable" | "minor"
+    var imageUrls: [String]?
+    var links: [SiteLink]?
+    var tags: [String]?
+    var dayNumber: Int?
+}
+
 /// A "day"/waypoint along a journey (a camp in trek terms).
 struct Camp: Codable, Equatable, Identifiable {
     var id: String
@@ -69,6 +126,12 @@ struct Camp: Codable, Equatable, Identifiable {
     var elevationLossFromPrevious: Int = 0
 
     var weather: WeatherData?
+
+    // Day content (waypoint JSONB payloads). Optional so decode tolerates absence and the
+    // memberwise initialiser keeps every existing call site (which omit them) compiling.
+    var funFacts: [FunFact]?
+    var pointsOfInterest: [PointOfInterest]?
+    var historicalSites: [HistoricalSite]?
 
     /// Latitude convenience (coordinates are `[lng, lat]`).
     var latitude: Double { coordinates.count > 1 ? coordinates[1] : 0 }
@@ -111,6 +174,82 @@ struct Journey: Codable, Equatable, Identifiable {
         let mid = route.coordinates[route.coordinates.count / 2]
         return mid.count >= 2 ? [mid[0], mid[1]] : nil
     }
+}
+
+/// A photo/video attached to a journey (and optionally a waypoint/day).
+///
+/// Mirrors the Postgres `photos` row. `url` / `thumbnailURL` are the R2 object *paths*
+/// (`journeys/{journeyId}/photos/{photoId}.{ext}`) exactly as stored in the DB. After a
+/// local import, `localOriginalPath` / `localThumbPath` hold absolute on-disk paths under
+/// the configured media root (resolved + existence-checked at import time) so the UI can
+/// build a file `URL` without knowing where the export lives.
+struct Photo: Codable, Equatable, Identifiable {
+    var id: String              // stable identity — DB UUID string
+    var journeyId: String
+    var waypointId: String?
+    var url: String             // R2 relative object path for the original
+    var thumbnailURL: String?   // R2 relative object path for the thumbnail
+    var caption: String?
+    var coordinates: [Double]?  // normalised [lng, lat]
+    var takenAt: String?        // ISO-8601 timestamp string (as exported)
+    var isHero: Bool = false
+    var sortOrder: Int = 0
+    var rotation: Int = 0       // 0/90/180/270 display transform
+    var mediaType: String = "image"  // "image" | "video"
+    var duration: Int?          // seconds, for videos
+    var locationSource: String? // "exif" | "estimated" | "manual"
+
+    /// Absolute on-disk path to the original bytes, if present under the media root.
+    var localOriginalPath: String?
+    /// Absolute on-disk path to the thumbnail bytes, if present under the media root.
+    var localThumbPath: String?
+
+    var isVideo: Bool { mediaType == "video" }
+
+    /// File URL for the thumbnail, preferring the resolved thumb, falling back to the
+    /// original (so a photo with only its full-res downloaded still shows something).
+    var thumbnailFileURL: URL? {
+        if let localThumbPath { return URL(fileURLWithPath: localThumbPath) }
+        if let localOriginalPath { return URL(fileURLWithPath: localOriginalPath) }
+        return nil
+    }
+
+    /// File URL for the full-resolution original, if the bytes are on disk.
+    var originalFileURL: URL? {
+        if let localOriginalPath { return URL(fileURLWithPath: localOriginalPath) }
+        return nil
+    }
+
+    /// Any displayable bytes on disk (thumb or original).
+    var hasLocalMedia: Bool { localThumbPath != nil || localOriginalPath != nil }
+}
+
+// MARK: - Day comments
+//
+// Web parity: `src/components/comments/*` + `commentAPI` (see report-data-layer §1.9).
+// A comment is attached to a waypoint/day (`waypointId`) within a `journeyId`.
+//
+// Author identity: under CloudKit the author is the participant identity resolved from the
+// record's `creatorUserRecordID`, and `authorDisplayName` is populated ONLY for records
+// migrated from Supabase (it preserves the original `profiles.display_name` because the
+// migration runs in the owner's context and would otherwise collapse every author to the
+// owner — see CloudKit/MAPPING.md §7). Locally (fixtures/.local mode) there is no CloudKit
+// participant, so `CommentService` stamps a stable local user id + the "Your name" setting
+// into `userId` / `authorDisplayName` at create time; `isMine` compares `userId` against the
+// current local user id.
+struct DayComment: Codable, Equatable, Identifiable {
+    var id: String            // stable identity — UUID string
+    var waypointId: String
+    var journeyId: String
+    var authorName: String    // display name (local "Your name" or migrated author)
+    var content: String
+    var createdAt: Date
+    var updatedAt: Date
+    /// True when the current local user authored this comment (drives edit/delete affordances).
+    var isMine: Bool
+
+    /// Web parity: an "(edited)" marker is shown when `updatedAt` is later than `createdAt`.
+    var wasEdited: Bool { updatedAt > createdAt }
 }
 
 // MARK: - Country flags

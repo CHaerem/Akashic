@@ -36,6 +36,33 @@ enum Config {
     static let coreDataModelName = "Akashic"
     static let persistenceModeOverrideKey = "akashic.persistenceMode.override"
 
+    // MARK: - Data import (T2.4)
+
+    static let importBundlePathKey = "akashic.import.bundlePath"
+    static let importMediaRootKey = "akashic.import.mediaRoot"
+
+    /// Default export bundle path. The iOS Simulator can read host filesystem paths
+    /// directly, so this works out of the box for the tonight demo.
+    static let defaultImportBundlePath = "/Users/cher/Privat/AkashicExport-20260722"
+
+    /// Media root = R2 objects tree inside the export (`<bundle>/r2/objects`).
+    static func defaultMediaRoot(forBundlePath bundlePath: String) -> String {
+        (bundlePath as NSString).appendingPathComponent("r2/objects")
+    }
+
+    static var importBundlePath: String {
+        get { UserDefaults.standard.string(forKey: importBundlePathKey) ?? defaultImportBundlePath }
+        set { UserDefaults.standard.set(newValue, forKey: importBundlePathKey) }
+    }
+
+    static var importMediaRoot: String {
+        get {
+            UserDefaults.standard.string(forKey: importMediaRootKey)
+                ?? defaultMediaRoot(forBundlePath: importBundlePath)
+        }
+        set { UserDefaults.standard.set(newValue, forKey: importMediaRootKey) }
+    }
+
     static var resolvedPersistenceMode: PersistenceMode {
         if let raw = UserDefaults.standard.string(forKey: persistenceModeOverrideKey),
            let mode = PersistenceMode(rawValue: raw) {
