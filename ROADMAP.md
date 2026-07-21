@@ -1,5 +1,11 @@
 # Akashic Roadmap
 
+> **⚠️ Status update (2026-07-22): Akashic is mid-migration to an Apple-platform stack** (CloudKit + native iOS app + GitHub Pages). This roadmap documents the **current Supabase/Cloudflare web app**, which is being replaced — treat it as historical for the parts that overlap the migration. Recent state:
+> - The Supabase project (paused for ~7 months) was **resumed 2026-07-21**; a full data rescue completed (export + R2 archive + verification), **akashic.no is live again**, and both are now **read-only until the migration's Phase 5**.
+> - A **native iOS app** now exists well beyond MVP (globe/fly-in map, day content, photos, elevation/stats, a dormant widget, live Spotlight).
+>
+> For the authoritative forward plan and status see [APPLE-MIGRATION-PLAN.md](./APPLE-MIGRATION-PLAN.md), [APPLE-MIGRATION-TASKS.md](./APPLE-MIGRATION-TASKS.md), [APPLE-MIGRATION-RUNBOOK.md](./APPLE-MIGRATION-RUNBOOK.md), and [ARCHITECTURE.md](./ARCHITECTURE.md).
+
 ## Overview
 
 This document outlines the feature development roadmap for Akashic, from MVP to full multi-user platform.

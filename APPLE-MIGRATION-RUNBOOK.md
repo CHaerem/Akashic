@@ -17,9 +17,22 @@ records). Read Step 0 before anything else.
 
 ---
 
-## STEP 0 — URGENT DATA TRIAGE (do this tonight, before anything else)
+## STEP 0 — URGENT DATA TRIAGE — ✅ RESOLVED (2026-07-21 → 22)
 
-**Why this is first:** Tonight's recon found the Supabase project
+> ### ✅ Outcome — data rescue complete
+>
+> The project was **paused, not deleted**. Christopher **resumed it ~23:00 on 2026-07-21** and the full rescue completed the same night:
+> - **Supabase export:** 3 journeys · 18 waypoints · **1538 photos** · 3 profiles/members · **0 day_comments**.
+> - **R2 archive:** **8 147 objects · 16.41 GB** pulled in full.
+> - **Verification (`verifyExport`) PASSED:** **0 missing originals/thumbs**; 2 747 orphan R2 objects (old/pre-migration formats, spot-checked clean — harmless).
+> - **Archive location:** `/Users/cher/Privat/AkashicExport-20260722` (duplicated offline).
+> - **akashic.no re-verified live** (E2E: chromium 16 pass / mobile-chrome 23 pass).
+>
+> **Still in force:** keep Cloudflare (Worker, R2, Pages, DNS) and Supabase **read-only until the Phase 5 gate** — do not run any upload/delete script against R2, and do not delete anything until the family has used the native app ≥1 month.
+>
+> The original triage steps below are retained for the record; **no action is outstanding here.**
+
+**Why this was first:** Tonight's recon found the Supabase project
 `pbqvnxeldpgvcrdbxcvr.supabase.co` **no longer resolves in DNS (NXDOMAIN)**. The repo has been
 dormant since **2025-12-26 (~7 months)**. Supabase free-tier projects pause after ~1 week idle and
 become **eligible for deletion / data loss after ~90 days paused** — we are well past that window.
@@ -172,6 +185,17 @@ identity and App Store Connect access.
   signing.
 - ☐ Confirm the **CloudKit** capability is enabled and points at container `iCloud.no.akashic` in the
   relevant build config.
+- ☐ **App Group (for the widget):** enable the **App Groups** capability with group
+  **`group.no.akashic`** on **both** targets — `Akashic` **and** `AkashicWidgets`. The widget is built
+  but **dormant** until this exists (it reads journey stats the app writes into the shared App Group
+  container — see `apple/Akashic/App/AppGroup.swift`, `identifier = "group.no.akashic"`). Until enabled
+  the widget shows placeholder data.
+- ☐ **Universal Links (Team ID substitution):** once your **Team ID** is known (Membership page), tell
+  the agent to replace the `<TEAMID>` placeholder in
+  [`public/.well-known/apple-app-site-association`](../public/.well-known/apple-app-site-association)
+  so the `appIDs` entry reads `<TEAMID>.no.akashic.app`. Also add the **Associated Domains** capability
+  to the `Akashic` target with entry `applinks:akashic.no`. (Serving details:
+  [`docs/github-pages-cutover.md`](../docs/github-pages-cutover.md) → "Universal Links".)
 - ☐ Plug in a personal iPhone (iOS 17+), select it, **Run**. Trust the developer cert on-device if
   prompted.
 
@@ -296,11 +320,11 @@ mark the Phase 5 security item done. Do not paste any key.
 
 | # | Your action | Unblocks (repo tasks / phases) |
 |---|-------------|--------------------------------|
-| **0** | Supabase restore + export (or salvage) | **All data migration** — Phase 2 has no data without this. Highest priority. |
+| **0** | ✅ **DONE (2026-07-21 → 22)** — Supabase resumed + exported; R2 archived; verified | **All data migration** unblocked. Archive at `/Users/cher/Privat/AkashicExport-20260722`. No longer a blocker. |
 | 1 | CloudKit container + App ID | Native app build, cktool import, CloudKit JS — everything Apple |
 | 2 | cktool management token + schema import (Dev) | **Spike A** data; web CloudKit adapter (T3.2); Phase-2 importer (T2.5). Native app needs the D4/T2.3 decision too |
 | 3 | CloudKit JS web API token | **Spike A** (proves D6); Phase 4 web-on-CloudKit adapter |
-| 4 | Xcode Team signing | On-device builds; Phase 1 MVP |
+| 4 | Xcode Team signing + **App Group `group.no.akashic`** (both targets) | On-device builds; Phase 1 MVP; **activates the journey-stats widget** (dormant until the App Group exists) |
 | 4 | App Store Connect + TestFlight group | **Family testing** (Phase 2); needs Section 7 Apple IDs |
 | 5 | R2 read-only S3 token | **Archive pull** (`pullR2Archive.ts`); photo/video import to CKAsset (Phase 2) |
 | 6 | GitHub Pages source = Actions | Pages deploy workflow (Phase 4) |

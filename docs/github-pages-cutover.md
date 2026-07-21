@@ -162,6 +162,70 @@ Settings → Pages to stop the `github.io` → akashic.no redirect.
 
 ---
 
+## Universal Links (`apple-app-site-association`)
+
+To let `https://akashic.no/?journey=<slug>` open a shared journey directly in the
+native app (plan Open Q5), the site must serve an Apple App Site Association
+(AASA) file. It already lives in the repo at
+[`public/.well-known/apple-app-site-association`](../public/.well-known/apple-app-site-association)
+(no file extension, JSON body). Vite copies `public/` into `dist/` verbatim, so the
+deployed artifact carries it at `https://akashic.no/.well-known/apple-app-site-association`.
+
+**Before it works, two placeholders must be filled (see runbook §4):**
+
+1. Replace `<TEAMID>` in the file so `appIDs` reads `<TEAMID>.no.akashic.app`
+   (Team ID is on the Apple Developer *Membership* page).
+2. Add the **Associated Domains** capability to the `Akashic` app target with the
+   entry `applinks:akashic.no`.
+
+The AASA uses the modern `components` matcher (iOS 14+; the app minimum is iOS 17):
+it matches path `/` with a non-empty `journey` query value (`"?": { "journey": "?*" }`),
+which mirrors the web app's query-param deep links (there is no client-side router).
+
+### Serving requirements on GitHub Pages (content-type caveat)
+
+Apple's **hard** requirements — all satisfiable on GitHub Pages:
+
+- Served over **HTTPS** with a valid cert (Pages issues Let's Encrypt after cutover). ✅
+- Reachable at `/.well-known/apple-app-site-association` **with no redirect** (no 3xx). ✅
+  — confirm the path returns `200` directly; a *missing* file would fall through to
+  `404.html` (a 404, not a redirect), so verify the file is actually in the artifact.
+- **Valid JSON**, **no `.json` extension**. ✅ (both true for the committed file)
+
+The **content-type** is the one soft spot:
+
+- Apple's documentation says to serve the file as **`application/json`**.
+- **GitHub Pages serves extensionless files as `application/octet-stream`** and gives
+  you **no way to override response headers** for a static file.
+- Historically this has been **tolerated**: since iOS 14 the device does not fetch the
+  AASA file directly — Apple's CDN (`https://app-site-association.cdn-apple.com/a/v1/akashic.no`)
+  fetches and caches it, and that fetcher accepts `application/octet-stream` as long as
+  the **body parses as JSON**. Universal Links have worked from Pages this way for years.
+- **State it conservatively:** octet-stream is *tolerated in practice, not promised by
+  Apple's docs*. Treat it as "very likely fine, must be verified," not guaranteed.
+
+> **Jekyll note:** this repo deploys a prebuilt Vite `dist/` artifact via
+> `deploy-pages.yml` (GitHub Actions), so **Jekyll never runs** — the dot-directory
+> `.well-known/` is served as-is. (Jekyll's historical habit of ignoring dot/underscore
+> paths does not apply to Actions-artifact deploys.)
+
+### Verify after deploy
+
+- `curl -sI https://akashic.no/.well-known/apple-app-site-association` → expect
+  `HTTP/2 200`, **no** `Location:` redirect. (Content-Type will read
+  `application/octet-stream` on Pages — expected.)
+- `curl -s https://akashic.no/.well-known/apple-app-site-association | python3 -m json.tool`
+  → must pretty-print (valid JSON) and show the real Team ID, not `<TEAMID>`.
+- After the app is signed and installed, check
+  `https://app-site-association.cdn-apple.com/a/v1/akashic.no` (Apple's cached copy) and
+  test a `?journey=` link from Notes/Messages; on macOS `swcutil dl -d akashic.no`
+  dumps what Apple resolved.
+- **Fallback only if the CDN ever rejects octet-stream:** serve the AASA from a host
+  where you control headers. Avoid reintroducing the Cloudflare Worker (it is retired in
+  Phase 5) — prefer confirming validation on Pages first; do not move hosting on a hunch.
+
+---
+
 ## Staging preview: loss and alternatives
 
 Cloudflare's shared **`staging.akashic.pages.dev`** preview (produced by

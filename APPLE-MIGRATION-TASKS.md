@@ -3,7 +3,7 @@
 **Companion to:** [APPLE-MIGRATION-PLAN.md](./APPLE-MIGRATION-PLAN.md) (the *what/why*) and [APPLE-MIGRATION-RUNBOOK.md](./APPLE-MIGRATION-RUNBOOK.md) (the *manual steps only Christopher can do*).
 **Purpose:** the plan broken into self-contained subtasks sized for delegation to coding agents (Opus 4.8 class). Each task lists its inputs, file scope, acceptance criteria, and a prompt seed. Tasks marked 🧑 need Christopher personally (credentials/accounts); tasks marked 🤖 are agent-executable; 🤝 = agent does the work, Christopher supplies a token/click first.
 
-**Status legend:** ✅ done (this branch, night of 2026-07-21) · 🔄 in flight · ⬜ open · ⛔ blocked (see `needs:`)
+**Status legend:** ✅ done · 🔄 in flight · ⬜ open · ⛔ blocked (see `needs:`) — most ✅ items landed across **two build nights** (2026-07-21 and 2026-07-21 → 22). **W0 data rescue completed night 2** and the native app is now well beyond the Phase-1 MVP (see the "Delivered ahead of schedule" block under W2).
 
 ---
 
@@ -11,7 +11,7 @@
 
 Facts the plan didn't know, now baked into the tasks below:
 
-1. **The Supabase project is dark.** `pbqvnxeldpgvcrdbxcvr.supabase.co` returns NXDOMAIN (verified against 1.1.1.1 too). The repo has been dormant since 2025-12-26; Supabase free tier pauses projects after ~1 week inactivity and they become deletion-eligible after ~90 days. The production site akashic.no still serves its static bundle (Cloudflare Pages) with that dead URL baked in — **the live app's data layer is currently broken**. The Cloudflare Worker + R2 bucket are alive (MCP `ping` verified) → all photo/video bytes are safe. At risk (Postgres-only): captions, day comments, photo↔day assignments, weather/fun-facts/POI/historical-sites payloads, journey members, post-Nov-2025 route edits. **Workstream W0 (data rescue) now precedes everything and is Christopher's most urgent action.**
+1. **The Supabase project is dark.** `pbqvnxeldpgvcrdbxcvr.supabase.co` returns NXDOMAIN (verified against 1.1.1.1 too). The repo has been dormant since 2025-12-26; Supabase free tier pauses projects after ~1 week inactivity and they become deletion-eligible after ~90 days. The production site akashic.no still serves its static bundle (Cloudflare Pages) with that dead URL baked in — **the live app's data layer is currently broken**. The Cloudflare Worker + R2 bucket are alive (MCP `ping` verified) → all photo/video bytes are safe. At risk (Postgres-only): captions, day comments, photo↔day assignments, weather/fun-facts/POI/historical-sites payloads, journey members, post-Nov-2025 route edits. **Workstream W0 (data rescue) now precedes everything and is Christopher's most urgent action.** — **UPDATE (night 2, 2026-07-22): RESOLVED.** The project was *paused*, not deleted; Christopher resumed it (~23:00, 2026-07-21) and the full rescue (Postgres export + complete R2 archive + verification) completed — see **W0** below. W0 is done and no longer blocks Phase 2 data.
 2. **Partial offline backup recovered from git history** into `apple/Fixtures/recovered/` (`kilimanjaro.json` 188 route pts + 8 camps, `mountKenya.json`, `incaTrail.json`, `trekConfig.ts` — state as of 2025-11-26, the day the JSON files were deleted in favor of Supabase).
 3. **No react-router.** The dependency exists but is never imported; navigation is `?journey=&day=` query params. The Pages `404.html` fallback is still useful, but the plan's SPA-routing rationale is wrong, and `react-router-dom` can be dropped from `package.json` at cleanup.
 4. **`journeys.gpx_url` is NULL everywhere.** Routes live in `journeys.route` JSONB. The plan's `gpx: CKAsset` has no source data; export can *generate* GPX from the LineString if wanted (D10), but nothing to copy.
@@ -27,12 +27,12 @@ Facts the plan didn't know, now baked into the tasks below:
 
 ```mermaid
 graph TD
-    subgraph W0["W0 — Data rescue (URGENT)"]
-        T01["T0.1 🧑 Supabase dashboard triage"]
-        T02["T0.2 🤝 Run Supabase export"]
-        T03["T0.3 🤝 Pull R2 archive"]
-        T04["T0.4 🤖 Salvage reconstruct (only if T0.1 = gone)"]
-        T05["T0.5 🤖 Verify + freeze sources"]
+    subgraph W0["W0 — Data rescue (✅ done)"]
+        T01["T0.1 ✅ Supabase dashboard triage"]
+        T02["T0.2 ✅ Run Supabase export"]
+        T03["T0.3 ✅ Pull R2 archive"]
+        T04["T0.4 ⛔ Salvage reconstruct — not needed"]
+        T05["T0.5 ✅ Verify + freeze sources"]
         T01 -->|restored| T02 --> T05
         T01 -->|gone| T04 --> T05
         T03 --> T05
@@ -54,8 +54,8 @@ graph TD
         T23["T2.3 🤝 Activate NSPCKC + signing"]
         T24["T2.4 🤖 Sync round-trip proof"]
         T25["T2.5 🤖 Debug Import screen (real data)"]
-        T26["T2.6 🤖 Real map experience (post-D5)"]
-        T27["T2.7 🤖 Photo upload pipeline"]
+        T26["T2.6 ✅ Real map experience (pending D5)"]
+        T27["T2.7 ✅ Photo upload pipeline (local)"]
         T28["T2.8 🤖 CKShare invitations UI"]
         T29["T2.9 ✅ App Intents layer"]
         T210["T2.10 🤖 Export function (D10)"]
@@ -99,31 +99,31 @@ graph TD
 
 ---
 
-## W0 — Data rescue (do first; supersedes plan §6 ordering)
+## W0 — Data rescue (✅ complete — night 2, 2026-07-21 → 22)
 
-### T0.1 🧑 Supabase dashboard triage — **most urgent single action**
-- **Do:** RUNBOOK Step 0. Log into supabase.com → project `pbqvnxeldpgvcrdbxcvr` → determine: *Paused* (→ restore now, verify tables in Table Editor, then T0.2 same day) / *Deleted with backup download* (→ download, hand file to an agent) / *Gone* (→ T0.4 salvage path; optionally contact Supabase support — recently-deleted projects have occasionally been restorable).
-- **Accept:** a definitive answer: `restored | backup-file | gone`, recorded at the top of the runbook.
+> **✅ RESOLVED.** The Supabase project was **paused**, not deleted. Christopher resumed it (~23:00, 2026-07-21) and the full rescue ran end-to-end:
+> - **Postgres export:** 3 journeys · 18 waypoints · **1538 photos** · 3 profiles/members · **0 day_comments**.
+> - **R2 archive:** **8 147 objects, 16.41 GB** pulled in full.
+> - **`verifyExport` PASSED:** **0 missing originals/thumbs**; spot-checks clean.
+> - **Archive location:** `/Users/cher/Privat/AkashicExport-20260722` (duplicated offline).
+> - **Orphans:** verification flagged **2 747 orphan R2 objects** = old/pre-migration formats and leftovers, referenced by no DB row; spot-checked clean → expected and harmless (dropped at Phase 5, never re-imported).
+> - **Web app re-verified** end-to-end after resume (E2E chromium 16 pass / mobile-chrome 23 pass); **akashic.no is live again**.
+> - **T0.4 salvage was not needed.** Sources are now treated **read-only until Phase 5**.
 
-### T0.2 🤝 Run the Supabase export (if restored)
-- **Needs:** T0.1 = restored; `SUPABASE_URL` + `SUPABASE_SERVICE_KEY` in env.
-- **Do:** `scripts/export/README.md` path A — `exportFromSupabase.ts` → JSON per table + manifest with sha256s.
-- **Accept:** manifest row counts match dashboard counts; 3 journeys / 18 waypoints / photos+day_comments non-empty; output archived outside the repo too (e.g. external disk + iCloud Drive).
+### T0.1 ✅ Supabase dashboard triage — **done (paused → resumed)**
+- **Outcome:** project `pbqvnxeldpgvcrdbxcvr` found **Paused**; resumed ~23:00 on 2026-07-21; rows confirmed in Table Editor (`journeys`, `waypoints`, `photos`, `profiles`, `journey_members`; `day_comments` empty). Answer recorded: **`restored`**.
 
-### T0.3 🤝 Pull the R2 media archive
-- **Needs:** read-only R2 S3 token (RUNBOOK §5). Independent of T0.1 — do it regardless.
-- **Do:** `pullR2Archive.ts` → full object inventory + all bytes locally, resumable.
-- **Accept:** inventory count == downloaded count; byte total logged; spot-check a photo opens; archive duplicated offline.
+### T0.2 ✅ Run the Supabase export — **done**
+- **Outcome:** `exportFromSupabase.ts` produced JSON per table + manifest with sha256s. Row counts: **3 journeys / 18 waypoints / 1538 photos / 3 profiles + members / 0 day_comments** (match the dashboard). Archived to `/Users/cher/Privat/AkashicExport-20260722` and duplicated offline.
 
-### T0.4 🤖 Salvage reconstruction (only if Supabase is gone)
-- **Needs:** T0.3 output + `apple/Fixtures/recovered/`.
-- **Do:** `salvageReconstruct.ts` → Supabase-shaped JSON from R2 paths (journey/photo UUIDs), EXIF (taken_at, GPS), `_thumb` pairing, R2 customMetadata (uploadedAt/originalName), recovered trek JSONs (routes/camps/descriptions). Fill `slugMap.json` (UUID↔slug — derivable from R2 inventory + which journey has which photo count, or from any old browser cache/localStorage on a family device that has the app data cached!).
-- **Accept:** `export/salvage/*` produced; SALVAGE-GAPS section explicitly lists what's lost (captions, comments, assignments, JSONB payloads) so the family can decide what to manually re-create.
-- **Prompt seed:** "Run and refine scripts/export/salvageReconstruct.ts against the local R2 archive at <path>; resolve the slugMap; produce the salvage export and gap report."
+### T0.3 ✅ Pull the R2 media archive — **done**
+- **Outcome:** `pullR2Archive.ts` inventoried and downloaded **8 147 objects / 16.41 GB**; inventory count == downloaded count; photo spot-checks open; archive duplicated offline (same bundle path as T0.2).
 
-### T0.5 🤖 Verify + freeze
-- **Do:** `verifyExport.ts` cross-checks (DB rows ↔ R2 objects both directions, thumb coverage, checksums). Then treat Supabase (if alive) and R2 as **read-only until Phase 5**.
-- **Accept:** `export/verification-report.md` has zero unexplained discrepancies; a dated "pre-migration archive" bundle exists offline (plan §6.4).
+### ~~T0.4 🤖 Salvage reconstruction~~ — **not needed (Supabase was alive)**
+- Skipped: this path only runs if Postgres is unrecoverable. Since T0.1 came back `restored`, the real export (T0.2) superseded it. `scripts/export/salvageReconstruct.ts` remains in the repo as a break-glass tool, unused.
+
+### T0.5 ✅ Verify + freeze — **done (PASSED)**
+- **Outcome:** `verifyExport.ts` cross-checked DB rows ↔ R2 objects both directions + thumb coverage + checksums → **0 missing originals/thumbs**. The **2 747 orphan R2 objects** are explained (old formats / pre-migration leftovers, spot-checked clean). A dated pre-migration archive bundle exists offline. Supabase + R2 are now **read-only until Phase 5**.
 
 ---
 
@@ -168,11 +168,13 @@ Two simulators/devices, one journey, edit on A → appears on B; offline edit �
 ### T2.5 🤖 Debug Import screen (plan §6.2)
 SwiftUI debug-only screen: point at the export bundle (T0.2/T0.4 output) → creates zones/records/CKAssets in the owner's private DB preserving original UUIDs (critical: photo/journey UUIDs are the R2 path keys and future recordNames), re-links waypointRefs, uploads originals+thumbs as assets, idempotent (re-run = upsert), progress + failure log. Accept: all 3 journeys + all media imported to Dev env; counts match manifest; then re-run against Production before T2.11.
 
-### T2.6 🤖 Real map experience (post-D5)
-Port the full choreography into the main app per the spike + `report-globe-map` spec values (or integrate Mapbox iOS SDK if D5 said fallback). Includes elevation profile as Swift Charts/Canvas at the documented coordinate spaces.
+### T2.6 ✅ Real map experience — built night 2 (**pending D5 confirmation**)
+The full **globe → fly-in → day-navigation** choreography now lives in the main app: `apple/Akashic/Views/Map/` (`GlobeExperienceView`, `DayNavigationView`, `TrekCameraController`, `GlobeMapComponents`, `MapGeoMath`). MapKit only.
+- **Pitch caveat (the D5 trade-off, in code):** MapKit hard-clamps oblique camera pitch to ~30–35° — the app requests `TrekCameraController.maxObliquePitch = 35` for day framing rather than fighting the silent clamp, so the tilt is shallower than Mapbox's 55–60°. The globe idle-rotation and fly-in read well regardless. **This is exactly the trade-off D5 must still ratify.** If D5 says "Mapbox iOS SDK", only the camera layer is swapped; the surrounding day-navigation UI stays. Marked ✅ for *built + working on real data*, **pending the D5 verdict**.
+- Elevation profile shipped separately under `Views/Charts/` (see the "Delivered ahead of schedule" block).
 
-### T2.7 🤖 Photo upload pipeline
-PhotosPicker → EXIF (taken_at/GPS via ImageIO) → 400 px JPEG q0.8 thumbnail → CKAsset pair on `Photo` record → background upload; HEIC passthrough decision; video import (mp4 ≤500 MB) with poster-frame thumb. Mirrors `bulkUploadR2.ts` semantics documented in MAPPING.md.
+### T2.7 ✅ Photo upload pipeline (local half) + editing UI — done night 2
+PhotosPicker → EXIF (taken_at/GPS/orientation/make/model via ImageIO) → 400 px JPEG q0.8 thumbnail → local store under the R2 key scheme; HEIC kept as original with JPEG thumb; video import with AVAsset poster-frame + duration. Plus contextual editing: photo caption/rotation/hero/day-assignment/delete, waypoint and journey edit sheets. 20 new tests. **Remaining CloudKit half:** the CKAsset upload target activates with D4/T2.3 — the store write methods are the documented seam.
 
 ### T2.8 🤖 CKShare invitations + participant management
 `ShareLink`/`UICloudSharingController` on the journey zone share; role mapping owner/editor/viewer; participant list UI (replaces `memberAPI`).
@@ -184,6 +186,18 @@ The 5 MCP tools mirrored 1:1 as App Intents against the local store (`apple/Akas
 Per-journey export: GPX (generated from route LineString), JSON (full records), original photos — share sheet/Files. Keeps exit cost low.
 
 ### T2.11 🧑 TestFlight + family onboarding (RUNBOOK §4/§7)
+
+### Delivered ahead of schedule (night 2 — off the original W2 critical path)
+
+Unblocked once the real data arrived (W0), these landed early. They run on the local `.local` / `.fixtures` store today and bind to CloudKit automatically via `PersistenceController` once **T2.3** (sync/signing) and **T2.5** (importer) land. Test suite now **105+ unit tests, all green.**
+
+- **T2.12 ✅ Real-data local import pipeline** — `apple/Akashic/Import/` (`ExportBundle`, `ExportMapper`, `LocalImporter`, `ImportBrowserView`, `PhotoDayMatcher`) imports the T0.2/T0.3 export bundle into the local store. Built around an **`ImportSink` protocol seam** (`LocalImporter.swift`): `CoreDataImportSink` writes the local Core Data store tonight; the **`CloudKitImportSink` for T2.5** drops into the *same seam* to write CKRecords into per-journey zones. This is pre-T2.5 groundwork, not a replacement for it.
+- **T2.13 ✅ Day-content UI** — `apple/Akashic/Views/Day/` (`DayDetailSheet`, `DayDiscoveriesView`, `WeatherRow`, `FunFactsCarousel`, `DayContentConfig`): weather, fun facts, POIs, historical sites. **Fix along the way:** the first importer version silently dropped these JSONB payloads (`weather` / `fun_facts` / `points_of_interest` / `historical_sites`); the mapper now carries them through.
+- **T2.14 ✅ Photos UI** — `apple/Akashic/Views/Photos/` (`PhotosGridView`, `PhotoLightboxView`, `DayPhotoStrip`) + photo markers on the map layer.
+- **T2.15 ✅ Elevation + stats** — interactive 300×120 + mini elevation profiles (`Views/Charts/InteractiveElevationProfileView`, `MiniElevationProfileView`, `Models/ElevationProfileModel`) and the full stats view (`Views/StatsView`, `Models/DayStats`).
+- **T2.16 ✅ WidgetKit journey-stats widget (dormant)** — `apple/AkashicWidgets/JourneyStatsWidget.swift` + `Akashic/Services/Widget*`, sharing data via the **`group.no.akashic` App Group** (`Akashic/App/AppGroup.swift`). Placeholder data tonight; goes live once the App Group capability is enabled on **both** the app and widget targets (runbook §4).
+- **T2.17 ✅ Spotlight indexing (live)** — `apple/Akashic/Services/SpotlightIndexer.swift`; `CSSearchableItem` entries with **deep-link fly-in** into the map experience.
+- **T2.18 ✅ Day comments UI (C2)** — done night 2: `DayCommentsSection` in the day sheet (list, edit/delete own, composer with 1–2000 validation, local author identity), `CommentService`, `authorDisplayName` on CDDayComment matching schema.ckdb, 15 tests. Note the export carried **0 day_comments**, so there was no historical comment data to import — this is net-new authoring UI.
 
 ---
 
@@ -227,7 +241,7 @@ T5.1 🤖 final archival export → T5.2 🧑 delete Cloudflare (Worker, R2, Pag
 ---
 
 ## W6 — Polish (ongoing, post-launch)
-Widgets (journey stats), Spotlight indexing, Siri suggestion phrases, Universal Links (`apple-app-site-association` on Pages — plan Open Q5), unlisted App Store release, watch SwiftData-sharing/system-MCP/MapKit-globe evolution (plan Phase 6).
+**Delivered early (night 2):** journey-stats **widget** ✅ (dormant until the `group.no.akashic` App Group is enabled — runbook §4) and **Spotlight indexing** ✅ (live). **Still open:** Siri suggestion phrases; **Universal Links** — the `apple-app-site-association` file is now scaffolded at `public/.well-known/apple-app-site-association` (TEAMID placeholder; serving notes in `docs/github-pages-cutover.md` and runbook §4) — plan Open Q5; unlisted App Store release; watch SwiftData-sharing / system-MCP / MapKit-globe evolution (plan Phase 6).
 
 ---
 
@@ -235,8 +249,10 @@ Widgets (journey stats), Spotlight indexing, Siri suggestion phrases, Universal 
 
 | Batch | Tasks | Parallel? | Size |
 |---|---|---|---|
-| Tonight (done) | T2.1, T2.9, T3.1, T4.1, Spike A build, Spike B build + D5 assessment, schema authoring, export/salvage tooling, runbook, this doc | yes | — |
-| Christopher's next session | T0.1 → T0.2/T0.3, T1.1, T2.2, Xcode team (≈1–2 h total, mostly T0.1) | T0.3 parallel with everything | S |
+| Night 1 — done (2026-07-21) | T2.1, T2.9, T3.1, T4.1, Spike A build, Spike B build + D5 assessment, schema authoring, export/salvage tooling, runbook, this doc | yes | — |
+| Night 2 — done (2026-07-21 → 22) | **W0 data rescue** (T0.1/T0.2/T0.3/T0.5; T0.4 not needed), **T2.6** map experience, **T2.12–T2.17** (real-data import pipeline, day content, photos, elevation/stats, widget-dormant, Spotlight-live) | yes | — |
+| Night 2 (late) — done | **T2.7 / C1** (editing UI + PhotosPicker→EXIF→thumbnail), **T2.18 / C2** (day comments UI), night-2 review fixes | yes | — |
+| Christopher's next session | T1.1, T2.2, Xcode team + **App Group `group.no.akashic`** (runbook §4), CloudKit/JS tokens (W0 already done) | mostly parallel | S |
 | Agent batch 2 | T0.4/T0.5, T1.2 analysis, T1.3/T1.4, T2.3, T3.2 | after tokens/data | M |
 | Agent batch 3 | T2.4, T2.5, T2.10 | T2.10 parallel | M |
 | Agent batch 4 | T2.6, T2.7, T2.8, T3.3 | partly | L |

@@ -2,7 +2,7 @@
 
 > **⚠️ Migration in progress (2026-07):** Akashic is moving to an Apple-platform architecture (CloudKit + native iOS app + GitHub Pages). See [APPLE-MIGRATION-PLAN.md](./APPLE-MIGRATION-PLAN.md) (target architecture & decisions), [APPLE-MIGRATION-TASKS.md](./APPLE-MIGRATION-TASKS.md) (task breakdown & status), and [APPLE-MIGRATION-RUNBOOK.md](./APPLE-MIGRATION-RUNBOOK.md) (manual/operator steps). Those documents supersede the "Target Architecture" here.
 >
-> **⚠️ Status caveat (2026-07-21):** the Supabase project referenced below no longer resolves in DNS (likely paused/deleted after 7 months of inactivity) — the "Active" statuses in this file predate that. Data-rescue steps are in the runbook, Step 0.
+> **⚠️ Status caveat (updated 2026-07-22):** the Supabase project below had been **paused** (not deleted); it was **resumed on 2026-07-21** and the full data rescue is **complete** — Postgres export (3 journeys · 18 waypoints · 1538 photos) + a complete R2 archive (8 147 objects · 16.41 GB), verification passed, bundle at `/Users/cher/Privat/AkashicExport-20260722`; **akashic.no is live again**. Supabase + R2 are now treated **read-only until Phase 5**. Meanwhile the **native iOS app has moved well beyond the Phase-1 MVP** (globe/fly-in map, day content, photos, elevation/stats, a dormant widget, and live Spotlight indexing). The "Active"/"Target Architecture" sections in this file describe the *current* Supabase/Cloudflare stack, which is being replaced — for the authoritative target and status see [APPLE-MIGRATION-PLAN.md](./APPLE-MIGRATION-PLAN.md), [APPLE-MIGRATION-TASKS.md](./APPLE-MIGRATION-TASKS.md), and [APPLE-MIGRATION-RUNBOOK.md](./APPLE-MIGRATION-RUNBOOK.md).
 
 ## Vision
 
