@@ -1,5 +1,7 @@
 # Akashic Architecture
 
+> **Note:** A migration to an iOS/iPadOS-first architecture on Apple platform services (CloudKit, MapKit, GitHub Pages) is planned. See [APPLE-MIGRATION-PLAN.md](./APPLE-MIGRATION-PLAN.md) for the target architecture. The sections below describe the *current* (Supabase + Cloudflare) system.
+
 ## Vision
 
 An interactive platform to explore family travel journeys with photos, routes, and memories displayed on an immersive 3D globe. Designed to eventually support multiple users creating and sharing their own journeys.
@@ -768,4 +770,5 @@ Utility scripts in `scripts/` for data management and operations.
 
 ## Related Documents
 
+- [APPLE-MIGRATION-PLAN.md](./APPLE-MIGRATION-PLAN.md) - Target architecture: iOS/iPadOS-first on Apple platform services
 - [ROADMAP.md](./ROADMAP.md) - Feature roadmap and development phases
