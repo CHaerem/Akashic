@@ -55,9 +55,9 @@ test.describe('Akashic App', () => {
         const canvas = page.locator('canvas');
         await expect(canvas).toBeVisible();
 
-        // Wait for data and check hint
+        // Wait for data and check hint (desktop shows "Click", mobile shows "Tap")
         await waitForMapReady(page);
-        await expect(page.getByText('Click a marker to explore')).toBeVisible();
+        await expect(page.getByText(/(Click|Tap) a marker to explore/)).toBeVisible();
     });
 
     // Test trek selection shows info panel
