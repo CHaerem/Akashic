@@ -3,12 +3,16 @@
  */
 
 import { supabase } from '../supabase';
+import { isCloudKitBackend } from '../backend';
 import type { Profile, JourneyMember, JourneyRole } from '../../types/trek';
+import * as ckMember from './adapters/cloudkit/memberAdapter';
 
 /**
  * Get all members of a journey with their profiles
  */
 export async function getJourneyMembers(journeyId: string): Promise<JourneyMember[]> {
+    if (isCloudKitBackend) return ckMember.getJourneyMembers(journeyId);
+
     if (!supabase) {
         console.warn('Supabase not configured');
         return [];
@@ -35,6 +39,8 @@ export async function getJourneyMembers(journeyId: string): Promise<JourneyMembe
  * Get all registered users (for invite dropdown)
  */
 export async function getRegisteredUsers(): Promise<Profile[]> {
+    if (isCloudKitBackend) return ckMember.getRegisteredUsers();
+
     if (!supabase) {
         console.warn('Supabase not configured');
         return [];
@@ -61,6 +67,8 @@ export async function addJourneyMember(
     userId: string,
     role: JourneyRole
 ): Promise<JourneyMember | null> {
+    if (isCloudKitBackend) return ckMember.addJourneyMember(journeyId, userId, role);
+
     if (!supabase) {
         console.warn('Supabase not configured');
         return null;
@@ -95,6 +103,8 @@ export async function addJourneyMember(
  * Remove a member from a journey (owner only, or self-remove)
  */
 export async function removeJourneyMember(journeyId: string, userId: string): Promise<boolean> {
+    if (isCloudKitBackend) return ckMember.removeJourneyMember(journeyId, userId);
+
     if (!supabase) {
         console.warn('Supabase not configured');
         return false;
@@ -122,6 +132,8 @@ export async function updateMemberRole(
     userId: string,
     newRole: JourneyRole
 ): Promise<boolean> {
+    if (isCloudKitBackend) return ckMember.updateMemberRole(journeyId, userId, newRole);
+
     if (!supabase) {
         console.warn('Supabase not configured');
         return false;
@@ -145,6 +157,8 @@ export async function updateMemberRole(
  * Get current user's role in a journey
  */
 export async function getUserJourneyRole(journeyId: string): Promise<JourneyRole | null> {
+    if (isCloudKitBackend) return ckMember.getUserJourneyRole(journeyId);
+
     if (!supabase) {
         console.warn('Supabase not configured');
         return null;

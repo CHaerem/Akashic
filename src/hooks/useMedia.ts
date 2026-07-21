@@ -4,6 +4,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
+import { isCloudKitBackend } from '../lib/backend';
 import { buildMediaUrl, getJourneyPhotoPath } from '../lib/media';
 
 interface UseMediaReturn {
@@ -26,7 +27,9 @@ export function useMedia(): UseMediaReturn {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        if (!supabase) {
+        // In CloudKit mode there is no bearer token — asset URLs are absolute
+        // and pre-authenticated, so skip all Supabase session wiring.
+        if (isCloudKitBackend || !supabase) {
             setLoading(false);
             return;
         }

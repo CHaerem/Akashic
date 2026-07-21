@@ -3,7 +3,9 @@
  */
 
 import { supabase } from '../supabase';
+import { isCloudKitBackend } from '../backend';
 import type { DayComment, NewDayComment, DayCommentUpdate, CommentAuthor } from './types';
+import * as ckComment from './adapters/cloudkit/commentAdapter';
 
 /**
  * Default author when profile is not available
@@ -19,6 +21,8 @@ const DEFAULT_AUTHOR: CommentAuthor = {
  * Includes author profile info
  */
 export async function getCommentsForWaypoint(waypointId: string): Promise<DayComment[]> {
+    if (isCloudKitBackend) return ckComment.getCommentsForWaypoint(waypointId);
+
     if (!supabase) {
         console.warn('Supabase not configured');
         return [];
@@ -48,6 +52,8 @@ export async function getCommentsForWaypoint(waypointId: string): Promise<DayCom
  * Fetch all comments for a journey (for overview/stats)
  */
 export async function getCommentsForJourney(journeyId: string): Promise<DayComment[]> {
+    if (isCloudKitBackend) return ckComment.getCommentsForJourney(journeyId);
+
     if (!supabase) {
         console.warn('Supabase not configured');
         return [];
@@ -79,6 +85,8 @@ export async function getCommentsForJourney(journeyId: string): Promise<DayComme
 export async function getCommentCountsForJourney(
     journeyId: string
 ): Promise<Record<string, number>> {
+    if (isCloudKitBackend) return ckComment.getCommentCountsForJourney(journeyId);
+
     if (!supabase) {
         console.warn('Supabase not configured');
         return {};
@@ -106,6 +114,8 @@ export async function getCommentCountsForJourney(
  * Create a new comment
  */
 export async function createComment(comment: NewDayComment): Promise<DayComment | null> {
+    if (isCloudKitBackend) return ckComment.createComment(comment);
+
     if (!supabase) {
         console.warn('Supabase not configured');
         return null;
@@ -147,6 +157,8 @@ export async function updateComment(
     commentId: string,
     update: DayCommentUpdate
 ): Promise<DayComment | null> {
+    if (isCloudKitBackend) return ckComment.updateComment(commentId, update);
+
     if (!supabase) {
         console.warn('Supabase not configured');
         return null;
@@ -177,6 +189,8 @@ export async function updateComment(
  * Delete a comment
  */
 export async function deleteComment(commentId: string): Promise<boolean> {
+    if (isCloudKitBackend) return ckComment.deleteComment(commentId);
+
     if (!supabase) {
         console.warn('Supabase not configured');
         return false;
@@ -199,6 +213,8 @@ export async function deleteComment(commentId: string): Promise<boolean> {
  * Check if current user can comment on a journey
  */
 export async function canUserComment(journeyId: string): Promise<boolean> {
+    if (isCloudKitBackend) return ckComment.canUserComment(journeyId);
+
     if (!supabase) return false;
 
     const { data: { user } } = await supabase.auth.getUser();
@@ -228,6 +244,8 @@ export async function canUserComment(journeyId: string): Promise<boolean> {
  * Get current user's ID (helper for checking comment ownership)
  */
 export async function getCurrentUserId(): Promise<string | null> {
+    if (isCloudKitBackend) return ckComment.getCurrentUserId();
+
     if (!supabase) return null;
 
     const { data: { user } } = await supabase.auth.getUser();

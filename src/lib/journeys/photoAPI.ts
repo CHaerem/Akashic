@@ -3,12 +3,16 @@
  */
 
 import { supabase } from '../supabase';
+import { isCloudKitBackend } from '../backend';
 import type { Photo } from '../../types/trek';
+import * as ckPhoto from './adapters/cloudkit/photoAdapter';
 
 /**
  * Fetch photos for a journey
  */
 export async function fetchPhotos(journeyId: string): Promise<Photo[]> {
+    if (isCloudKitBackend) return ckPhoto.fetchPhotos(journeyId);
+
     if (!supabase) {
         console.warn('Supabase not configured');
         return [];
@@ -45,6 +49,8 @@ export async function createPhoto(photo: {
     taken_at?: string;
     waypoint_id?: string;
 }): Promise<Photo | null> {
+    if (isCloudKitBackend) return ckPhoto.createPhoto(photo);
+
     if (!supabase) {
         console.warn('Supabase not configured');
         return null;
@@ -71,6 +77,8 @@ export async function updatePhoto(
     photoId: string,
     updates: Partial<Pick<Photo, 'caption' | 'waypoint_id' | 'coordinates' | 'is_hero' | 'sort_order' | 'rotation' | 'location_source'>>
 ): Promise<Photo | null> {
+    if (isCloudKitBackend) return ckPhoto.updatePhoto(photoId, updates);
+
     if (!supabase) {
         console.warn('Supabase not configured');
         return null;
@@ -95,6 +103,8 @@ export async function updatePhoto(
  * Delete a photo record and its files from R2 storage
  */
 export async function deletePhoto(photoId: string): Promise<boolean> {
+    if (isCloudKitBackend) return ckPhoto.deletePhoto(photoId);
+
     if (!supabase) {
         console.warn('Supabase not configured');
         return false;
@@ -143,6 +153,8 @@ export async function deletePhoto(photoId: string): Promise<boolean> {
  * Assign a photo to a waypoint (day)
  */
 export async function assignPhotoToWaypoint(photoId: string, waypointId: string | null): Promise<boolean> {
+    if (isCloudKitBackend) return ckPhoto.assignPhotoToWaypoint(photoId, waypointId);
+
     if (!supabase) {
         console.warn('Supabase not configured');
         return false;
@@ -165,6 +177,8 @@ export async function assignPhotoToWaypoint(photoId: string, waypointId: string 
  * Get photos assigned to a specific waypoint
  */
 export async function getPhotosForWaypoint(waypointId: string): Promise<Photo[]> {
+    if (isCloudKitBackend) return ckPhoto.getPhotosForWaypoint(waypointId);
+
     if (!supabase) return [];
 
     const { data, error } = await supabase
