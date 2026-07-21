@@ -1,5 +1,9 @@
 # Akashic Architecture
 
+> **⚠️ Migration in progress (2026-07):** Akashic is moving to an Apple-platform architecture (CloudKit + native iOS app + GitHub Pages). See [APPLE-MIGRATION-PLAN.md](./APPLE-MIGRATION-PLAN.md) (target architecture & decisions), [APPLE-MIGRATION-TASKS.md](./APPLE-MIGRATION-TASKS.md) (task breakdown & status), and [APPLE-MIGRATION-RUNBOOK.md](./APPLE-MIGRATION-RUNBOOK.md) (manual/operator steps). Those documents supersede the "Target Architecture" here.
+>
+> **⚠️ Status caveat (2026-07-21):** the Supabase project referenced below no longer resolves in DNS (likely paused/deleted after 7 months of inactivity) — the "Active" statuses in this file predate that. Data-rescue steps are in the runbook, Step 0.
+
 ## Vision
 
 An interactive platform to explore family travel journeys with photos, routes, and memories displayed on an immersive 3D globe. Designed to eventually support multiple users creating and sharing their own journeys.
