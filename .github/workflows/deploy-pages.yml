@@ -1,0 +1,101 @@
+name: Deploy to GitHub Pages
+
+# =============================================================================
+# GitHub Pages deploy - Phase 4 / D7 of APPLE-MIGRATION-PLAN.md.
+#
+# DORMANT during migration prep. This workflow runs ONLY on manual dispatch, so
+# it does NOT interfere with the live Cloudflare Pages deploy driven by
+# .github/workflows/deploy.yml. Both workflows can coexist on `main` safely
+# because only one of them (Cloudflare) is triggered by pushes today.
+#
+# CUTOVER (Phase 4, see docs/github-pages-cutover.md): once GitHub Pages serves
+# akashic.no correctly, replace the trigger below with:
+#
+#   on:
+#     push:
+#       branches: [main]
+#
+# ...and then DELETE .github/workflows/deploy.yml (the Cloudflare workflow) so
+# the two hosts never build and deploy the same commit in parallel.
+# =============================================================================
+
+on:
+  # Manual-only while prepping the cutover. Switch to `push: branches: [main]`
+  # at cutover (see header) and delete deploy.yml at Phase 5.
+  workflow_dispatch:
+
+# GITHUB_TOKEN scopes the GitHub Pages deployment needs.
+# `pages: write` + `id-token: write` are required by actions/deploy-pages@v4;
+# `contents: read` lets actions/checkout read the (public) repo.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Allow only one concurrent Pages deployment, and never cancel an in-flight
+# one - cancelling mid-deploy can leave the live site half-published.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        env:
+          # --- Secrets (same three the Cloudflare workflow uses today) ---
+          VITE_MAPBOX_TOKEN: ${{ secrets.VITE_MAPBOX_TOKEN }}
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          # --- Future CloudKit backend (Phase 4 data-layer swap) ---
+          # These are NOT secrets: VITE_DATA_BACKEND selects the adapter, and a
+          # CloudKit JS API token is a public, container-scoped token that ends
+          # up baked into the client bundle anyway - so they come from repo/org
+          # `vars` (not `secrets`) with sensible fallbacks and stay no-op until
+          # you set them. Until then the build keeps using Supabase.
+          VITE_DATA_BACKEND: ${{ vars.VITE_DATA_BACKEND || 'supabase' }}
+          VITE_CLOUDKIT_ENV: ${{ vars.VITE_CLOUDKIT_ENV || 'development' }}
+          VITE_CLOUDKIT_API_TOKEN: ${{ vars.VITE_CLOUDKIT_API_TOKEN || '' }}
+        run: npm run build
+
+      - name: Create static fallback (404.html)
+        # Copy index.html -> 404.html so GitHub Pages serves the app shell for
+        # any unknown path. NOTE: the app has NO client-side router - navigation
+        # is query-param deep links against a single index.html - so this is
+        # only a PWA/static safety net for stray or mistyped paths and hard
+        # refreshes, NOT SPA route rewriting. Done in CI only (never committed).
+        run: cp dist/index.html dist/404.html
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          # public/CNAME is copied into dist/ by Vite, so the uploaded artifact
+          # carries the akashic.no custom-domain marker (see cutover doc).
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
