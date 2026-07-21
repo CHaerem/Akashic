@@ -1,0 +1,845 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Akashic — Spike A: CloudKit JS</title>
+<style>
+  :root {
+    --bg: #0e1116;
+    --panel: #171b22;
+    --panel-2: #1e232c;
+    --border: #2a313c;
+    --text: #e6e9ee;
+    --muted: #9aa4b2;
+    --accent: #4c8dff;
+    --pass: #2ecc71;
+    --fail: #ff5c5c;
+    --pending: #b9a94a;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.45;
+  }
+  header {
+    padding: 18px 24px;
+    border-bottom: 1px solid var(--border);
+    background: var(--panel);
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+  header h1 { margin: 0 0 2px; font-size: 18px; }
+  header p { margin: 0; color: var(--muted); font-size: 13px; }
+  .layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(360px, 520px);
+    gap: 20px;
+    padding: 20px 24px 60px;
+    align-items: start;
+  }
+  @media (max-width: 1000px) { .layout { grid-template-columns: 1fr; } }
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px 18px;
+    margin-bottom: 16px;
+  }
+  .panel h2 { margin: 0 0 4px; font-size: 15px; display: flex; align-items: center; gap: 10px; }
+  .panel .hint { color: var(--muted); font-size: 12px; margin: 0 0 12px; }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin: 8px 0; }
+  label { font-size: 12px; color: var(--muted); display: block; margin-bottom: 3px; }
+  input[type=text] {
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 6px;
+    padding: 7px 9px;
+    font-size: 13px;
+    font-family: var(--mono);
+    min-width: 180px;
+    flex: 1;
+  }
+  .field { display: flex; flex-direction: column; flex: 1; min-width: 160px; }
+  button {
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    padding: 8px 14px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  button.secondary { background: var(--panel-2); border: 1px solid var(--border); color: var(--text); }
+  button:disabled { opacity: 0.45; cursor: not-allowed; }
+  button:hover:not(:disabled) { filter: brightness(1.08); }
+  .badge {
+    font-size: 11px;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 20px;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    background: var(--panel-2);
+    color: var(--muted);
+    border: 1px solid var(--border);
+  }
+  .badge.pass { background: rgba(46,204,113,0.15); color: var(--pass); border-color: rgba(46,204,113,0.4); }
+  .badge.fail { background: rgba(255,92,92,0.15); color: var(--fail); border-color: rgba(255,92,92,0.4); }
+  .badge.pending { background: rgba(185,169,74,0.15); color: var(--pending); border-color: rgba(185,169,74,0.4); }
+  .result {
+    font-family: var(--mono);
+    font-size: 12px;
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 8px 10px;
+    margin-top: 10px;
+    max-height: 240px;
+    overflow: auto;
+    white-space: pre-wrap;
+    word-break: break-word;
+    display: none;
+  }
+  .result.show { display: block; }
+  /* Apple sign-in / sign-out button target divs (CloudKit JS renders into these) */
+  #apple-sign-in-button, #apple-sign-out-button { display: inline-block; cursor: pointer; min-height: 32px; }
+  .identity { font-family: var(--mono); font-size: 12px; color: var(--muted); margin-top: 8px; }
+  .identity b { color: var(--text); }
+  #logPanel { position: sticky; top: 74px; }
+  #log {
+    font-family: var(--mono);
+    font-size: 11.5px;
+    background: #0a0d12;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px;
+    height: 70vh;
+    min-height: 360px;
+    overflow: auto;
+    white-space: pre-wrap;
+    word-break: break-word;
+    margin: 0;
+  }
+  .log-req { color: var(--accent); }
+  .log-ok { color: var(--pass); }
+  .log-err { color: var(--fail); }
+  .log-info { color: var(--muted); }
+  .log-time { color: #55606e; }
+  .warn {
+    font-size: 12px;
+    color: #f1c453;
+    background: rgba(241,196,83,0.08);
+    border: 1px solid rgba(241,196,83,0.3);
+    border-radius: 6px;
+    padding: 8px 10px;
+    margin: 0 0 12px;
+  }
+  code { font-family: var(--mono); background: var(--panel-2); padding: 1px 4px; border-radius: 4px; }
+  .config-warn { display: none; }
+  .config-warn.show { display: block; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Akashic · Spike A — CloudKit JS</h1>
+  <p>Proves decision <b>D6</b> (web = read-mostly CloudKit JS client): Apple ID sign-in → read a <b>shared</b> zone → accept a share → read <b>public</b> DB without sign-in.</p>
+</header>
+
+<div class="layout">
+  <!-- ===================== LEFT COLUMN: TESTS ===================== -->
+  <div>
+    <div class="config-warn warn" id="configWarn">
+      ⚠️ <b>API token not filled in.</b> Edit the <code>CONFIG</code> object at the top of the
+      <code>&lt;script&gt;</code> in this file and set <code>apiToken</code>. See <code>README.md</code>.
+    </div>
+
+    <!-- Identity / auth -->
+    <div class="panel">
+      <h2>Identity <span class="badge pending" id="badge-auth">not signed in</span></h2>
+      <p class="hint">
+        CloudKit JS renders Apple's own sign-in / sign-out control into the divs below (via
+        <code>apiTokenAuth.signInButton</code>). Sign-in opens Apple's popup — allow popups for this origin.
+      </p>
+      <div class="row">
+        <div id="apple-sign-in-button" title="Sign in with Apple ID"></div>
+        <div id="apple-sign-out-button" title="Sign out"></div>
+        <button class="secondary" id="btn-name-permission" disabled>Request name permission</button>
+      </div>
+      <div class="identity" id="identity">Container not configured yet…</div>
+    </div>
+
+    <!-- Panel 1: Private DB -->
+    <div class="panel">
+      <h2>1 · Private DB <span class="badge" id="badge-private">idle</span></h2>
+      <p class="hint">
+        Zones + records in the <b>signed-in user's own</b> private database. Requires sign-in.
+        <code>privateCloudDatabase.fetchAllRecordZones()</code> then
+        <code>performQuery({recordType})</code> scoped to a zone.
+      </p>
+      <div class="row">
+        <button id="btn-private-zones" disabled>List private zones</button>
+      </div>
+      <div class="row">
+        <div class="field">
+          <label>Record type</label>
+          <input type="text" id="private-recordtype" value="Journey" />
+        </div>
+        <div class="field">
+          <label>Zone name (blank = default zone)</label>
+          <input type="text" id="private-zone" placeholder="journey-<uuid> or _defaultZone" />
+        </div>
+      </div>
+      <div class="row">
+        <button id="btn-private-query" disabled>Query private records</button>
+      </div>
+      <pre class="result" id="result-private"></pre>
+    </div>
+
+    <!-- Panel 2: Shared DB (critical test) -->
+    <div class="panel">
+      <h2>2 · Shared DB <span class="badge" id="badge-shared">idle</span></h2>
+      <p class="hint">
+        <b>The critical test.</b> Zones/records shared with the signed-in user via <code>CKShare</code>
+        appear in the <b>shared</b> database. If this reads records from a journey another Apple ID shared
+        with you, D6's core assumption holds.
+        <code>sharedCloudDatabase.fetchAllRecordZones()</code> →
+        <code>performQuery(...)</code> scoped to a shared zone (zone name <i>and</i> its owner record name).
+      </p>
+      <div class="row">
+        <button id="btn-shared-zones" disabled>List shared zones</button>
+      </div>
+      <div class="row">
+        <div class="field">
+          <label>Record type</label>
+          <input type="text" id="shared-recordtype" value="Journey" />
+        </div>
+        <div class="field">
+          <label>Shared zone name</label>
+          <input type="text" id="shared-zone" placeholder="journey-<uuid>" />
+        </div>
+        <div class="field">
+          <label>Zone owner record name (from zone list)</label>
+          <input type="text" id="shared-zone-owner" placeholder="_<owner record name>" />
+        </div>
+      </div>
+      <div class="row">
+        <button id="btn-shared-query" disabled>Query shared records</button>
+      </div>
+      <pre class="result" id="result-shared"></pre>
+    </div>
+
+    <!-- Panel 3: Share acceptance -->
+    <div class="panel">
+      <h2>3 · Share acceptance <span class="badge" id="badge-share">idle</span></h2>
+      <p class="hint">
+        Accept a <code>CKShare</code> on the web. Paste the share's short URL
+        (<code>https://www.icloud.com/share/…</code>) or its shortGUID. Requires sign-in.
+        See the long comment in the source for the known web-share caveat — this is the API area most
+        likely to be thin in the aging CloudKit JS library, so multiple paths are attempted and each is logged.
+      </p>
+      <div class="row">
+        <div class="field">
+          <label>Share URL or shortGUID</label>
+          <input type="text" id="share-url" placeholder="https://www.icloud.com/share/0ABC…  or  0ABC…" />
+        </div>
+      </div>
+      <div class="row">
+        <button id="btn-share-fetch" disabled>Fetch share metadata</button>
+        <button id="btn-share-accept" disabled>Accept share</button>
+        <button class="secondary" id="btn-share-methods">Inspect share API surface</button>
+      </div>
+      <pre class="result" id="result-share"></pre>
+    </div>
+
+    <!-- Panel 4: Public DB (no sign-in) -->
+    <div class="panel">
+      <h2>4 · Public DB <span class="badge" id="badge-public">idle</span></h2>
+      <p class="hint">
+        Query the <b>public</b> database using only the API token — <b>no sign-in required</b>. This is how
+        <code>akashic.no</code> serves public journeys anonymously.
+        <code>publicCloudDatabase.performQuery({recordType})</code>.
+      </p>
+      <div class="row">
+        <div class="field">
+          <label>Record type</label>
+          <input type="text" id="public-recordtype" value="PublicJourney" />
+        </div>
+        <button id="btn-public-query">Query public records</button>
+      </div>
+      <pre class="result" id="result-public"></pre>
+    </div>
+  </div>
+
+  <!-- ===================== RIGHT COLUMN: LOG ===================== -->
+  <div id="logPanel">
+    <div class="panel" style="margin-bottom:0;">
+      <h2>Log <button class="secondary" id="btn-clear-log" style="margin-left:auto;padding:4px 10px;font-size:12px;">Clear</button></h2>
+      <p class="hint">Every request/response is logged as JSON. CloudKit errors surface
+        <code>ckErrorCode</code>, <code>serverErrorCode</code> and <code>reason</code>.</p>
+      <pre id="log"></pre>
+    </div>
+  </div>
+</div>
+
+<!-- Apple's official CloudKit JS SDK (v2). No other external dependency. -->
+<script src="https://cdn.apple-cloudkit.com/ck/2/cloudkit.js" async></script>
+
+<script>
+/* =============================================================================
+ *  CONFIG  —  FILL IN
+ *  ---------------------------------------------------------------------------
+ *  containerIdentifier : your CloudKit container ID.
+ *  environment         : 'development' (test schema) or 'production'.
+ *  apiToken            : an API token created in CloudKit Console
+ *                        (Tokens & IDs → API Tokens). The token's *allowed
+ *                        origins* must include the exact origin you serve this
+ *                        page from (e.g. http://localhost:8000). See README.md.
+ * ========================================================================== */
+var CONFIG = {
+  containerIdentifier: 'iCloud.no.akashic',        // FILL IN (default is Akashic's container)
+  environment:         'development',              // FILL IN: 'development' | 'production'
+  apiToken:            'PASTE_API_TOKEN_HERE'      // FILL IN  (apiTokenPlaceholder)
+};
+
+/* =============================================================================
+ *  Small helpers: logging + PASS/FAIL badges
+ * ========================================================================== */
+var logEl = document.getElementById('log');
+
+function ts() {
+  var d = new Date();
+  return d.toTimeString().slice(0, 8) + '.' + String(d.getMilliseconds()).padStart(3, '0');
+}
+function log(kind, label, payload) {
+  var cls = { req: 'log-req', ok: 'log-ok', err: 'log-err', info: 'log-info' }[kind] || 'log-info';
+  var line = document.createElement('span');
+  var body = payload === undefined ? '' : '\n' + safeStringify(payload);
+  line.innerHTML =
+    '<span class="log-time">' + ts() + '</span> ' +
+    '<span class="' + cls + '">' + escapeHtml(label) + '</span>' +
+    escapeHtml(body) + '\n\n';
+  logEl.appendChild(line);
+  logEl.scrollTop = logEl.scrollHeight;
+  // Mirror to devtools for good measure.
+  (kind === 'err' ? console.error : console.log)('[spike] ' + label, payload);
+}
+function safeStringify(obj) {
+  try { return JSON.stringify(obj, null, 2); }
+  catch (e) { return String(obj); }
+}
+function escapeHtml(s) {
+  return String(s).replace(/[&<>]/g, function (c) {
+    return { '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c];
+  });
+}
+function setBadge(id, state, text) {
+  var el = document.getElementById(id);
+  el.className = 'badge ' + (state || '');
+  el.textContent = text || state;
+}
+function showResult(id, obj) {
+  var el = document.getElementById(id);
+  el.textContent = safeStringify(obj);
+  el.classList.add('show');
+}
+
+/* CloudKit errors are plain objects with ckErrorCode / serverErrorCode / reason.
+ * Some come back as thrown errors, some as response.errors[]. Normalise both. */
+function describeCkError(err) {
+  if (!err) return { message: 'unknown error' };
+  return {
+    ckErrorCode:      err.ckErrorCode      || null,
+    serverErrorCode:  err.serverErrorCode  || null,
+    reason:           err.reason           || err.message || null,
+    retryAfter:       err.retryAfter       || null,
+    uuid:             err.uuid             || null,
+    redirectURL:      err.redirectURL      || null,
+    _raw:             err
+  };
+}
+function fail(badgeId, label, err) {
+  var d = describeCkError(err);
+  log('err', label, d);
+  setBadge(badgeId, 'fail', 'FAIL');
+  return d;
+}
+
+/* =============================================================================
+ *  Bootstrap CloudKit JS
+ *  Standard async pattern: the CDN script fires 'cloudkitloaded' on window
+ *  once the global `CloudKit` object is ready.
+ * ========================================================================== */
+var container = null;
+
+if (CONFIG.apiToken === 'PASTE_API_TOKEN_HERE' || !CONFIG.apiToken) {
+  document.getElementById('configWarn').classList.add('show');
+}
+
+window.addEventListener('cloudkitloaded', function () {
+  try {
+    // CloudKit.configure takes a `containers` array. apiTokenAuth wires up the
+    // sign-in/out buttons (rendered into the divs whose ids we pass) and, with
+    // persist:true, keeps the web-auth token in a cookie so the session survives
+    // reloads. (Session persistence is a known CloudKit JS wobble — see README.)
+    CloudKit.configure({
+      containers: [{
+        containerIdentifier: CONFIG.containerIdentifier,
+        apiTokenAuth: {
+          apiToken: CONFIG.apiToken,
+          persist: true,
+          signInButton:  { id: 'apple-sign-in-button',  theme: 'black' },
+          signOutButton: { id: 'apple-sign-out-button', theme: 'black' }
+        },
+        environment: CONFIG.environment
+      }]
+    });
+
+    container = CloudKit.getDefaultContainer();
+    log('info', 'CloudKit configured', {
+      version: (CloudKit.version || 'unknown'),
+      container: CONFIG.containerIdentifier,
+      environment: CONFIG.environment,
+      origin: location.origin
+    });
+    document.getElementById('identity').textContent =
+      'Configured. Public DB works now; sign in for private + shared + share tests.';
+
+    // Public DB needs no user — enable immediately.
+    document.getElementById('btn-public-query').disabled = false;
+
+    setUpAuth();
+    detectShareInURL();
+  } catch (e) {
+    log('err', 'CloudKit.configure threw', describeCkError(e));
+    document.getElementById('identity').textContent =
+      'CloudKit.configure failed — check CONFIG (container id / token / origin).';
+  }
+});
+
+// If the SDK never loads (blocked CDN, offline), say so instead of hanging.
+window.addEventListener('load', function () {
+  setTimeout(function () {
+    if (typeof CloudKit === 'undefined') {
+      log('err', 'CloudKit JS did not load from Apple CDN', {
+        hint: 'Check network / CSP / that the CDN script tag is present.'
+      });
+    }
+  }, 4000);
+});
+
+/* =============================================================================
+ *  Auth state machine
+ *  container.setUpAuth() renders the buttons and resolves with the current
+ *  userIdentity (or null). whenUserSignsIn / whenUserSignsOut then drive the
+ *  transitions. This is Apple's documented pattern.
+ * ========================================================================== */
+function setUpAuth() {
+  log('req', 'container.setUpAuth()');
+  container.setUpAuth().then(function (userIdentity) {
+    if (userIdentity) gotoAuthenticated(userIdentity);
+    else              gotoUnauthenticated();
+  }).catch(function (e) {
+    fail('badge-auth', 'setUpAuth() failed', e);
+  });
+}
+
+function gotoAuthenticated(userIdentity) {
+  log('ok', 'Signed in — userIdentity', userIdentity);
+  setBadge('badge-auth', 'pass', 'signed in');
+  renderIdentity(userIdentity);
+  setSignedInEnabled(true);
+
+  // Re-arm the sign-out transition.
+  container.whenUserSignsOut()
+    .then(function () { gotoUnauthenticated(); })
+    .catch(function (e) { log('err', 'whenUserSignsOut error', describeCkError(e)); });
+}
+
+function gotoUnauthenticated(err) {
+  if (err) log('info', 'Unauthenticated', describeCkError(err));
+  else     log('info', 'Signed out / not signed in');
+  setBadge('badge-auth', 'pending', 'not signed in');
+  document.getElementById('identity').textContent =
+    'Not signed in. Click the Apple sign-in button above.';
+  setSignedInEnabled(false);
+
+  // Re-arm the sign-in transition.
+  container.whenUserSignsIn()
+    .then(gotoAuthenticated)
+    .catch(gotoUnauthenticated);
+}
+
+function renderIdentity(id) {
+  var nc = id.nameComponents;
+  var name = nc ? [nc.givenName, nc.familyName].filter(Boolean).join(' ') : null;
+  document.getElementById('identity').innerHTML =
+    'userRecordName: <b>' + escapeHtml(id.userRecordName || '—') + '</b><br>' +
+    'name: <b>' + escapeHtml(name || '(not shared — request name permission)') + '</b>';
+}
+
+function setSignedInEnabled(on) {
+  ['btn-name-permission',
+   'btn-private-zones', 'btn-private-query',
+   'btn-shared-zones', 'btn-shared-query',
+   'btn-share-fetch', 'btn-share-accept'
+  ].forEach(function (bid) { document.getElementById(bid).disabled = !on; });
+}
+
+/* Optional: ask for USER_DISCOVERABILITY so we can show the person's name.
+ * (This permission API is old and may be a no-op / deprecated on newer accounts
+ * — feature-detected, failures are non-fatal.) */
+document.getElementById('btn-name-permission').addEventListener('click', function () {
+  if (!container.requestApplicationPermission || !CloudKit.ApplicationPermission) {
+    log('info', 'requestApplicationPermission not available in this CloudKit JS build');
+    return;
+  }
+  log('req', 'requestApplicationPermission(USER_DISCOVERABILITY)');
+  container.requestApplicationPermission(CloudKit.ApplicationPermission.USER_DISCOVERABILITY)
+    .then(function (res) {
+      log('ok', 'permission result', res);
+      if (container.fetchCurrentUserIdentity) {
+        return container.fetchCurrentUserIdentity().then(function (idn) {
+          log('ok', 'fetchCurrentUserIdentity', idn);
+          renderIdentity(idn);
+        });
+      }
+    })
+    .catch(function (e) { log('err', 'permission request failed', describeCkError(e)); });
+});
+
+/* =============================================================================
+ *  Shared query runner
+ *  performQuery(query, options). There is genuine version-to-version ambiguity
+ *  about where zoneID belongs: the modern docs put it in the *options* (2nd)
+ *  arg, but some older builds/examples expect it inside the *query* dict. We try
+ *  options-first, then fall back to query-embedded on a zone-shaped error.
+ *  `ownerRecordName` matters for SHARED zones (they are owned by someone else).
+ * ========================================================================== */
+function buildZoneID(zoneName, ownerRecordName) {
+  if (!zoneName) return null;
+  var z = { zoneName: zoneName };
+  if (ownerRecordName) z.ownerRecordName = ownerRecordName;
+  return z;
+}
+
+function runQuery(database, dbLabel, recordType, zoneName, ownerRecordName) {
+  var query = { recordType: recordType };
+  var zoneID = buildZoneID(zoneName, ownerRecordName);
+  var optionsPrimary = zoneID ? { zoneID: zoneID, resultsLimit: 50 } : { resultsLimit: 50 };
+
+  log('req', dbLabel + '.performQuery (zoneID in options)', { query: query, options: optionsPrimary });
+
+  return database.performQuery(query, optionsPrimary).then(function (response) {
+    if (response.hasErrors) throw response.errors && response.errors[0] ? response.errors[0] : response;
+    return response;
+  }).catch(function (e) {
+    var d = describeCkError(e);
+    // Fallback: some builds want zoneID inside the query dict.
+    if (zoneID) {
+      log('info', 'Primary query errored — retrying with zoneID embedded in query dict', d);
+      var query2 = { recordType: recordType, zoneID: zoneID };
+      log('req', dbLabel + '.performQuery (zoneID in query)', { query: query2, options: { resultsLimit: 50 } });
+      return database.performQuery(query2, { resultsLimit: 50 }).then(function (response) {
+        if (response.hasErrors) throw response.errors && response.errors[0] ? response.errors[0] : response;
+        return response;
+      });
+    }
+    throw e;
+  });
+}
+
+function summariseRecords(response) {
+  var recs = response.records || [];
+  return {
+    count: recs.length,
+    continuationMarker: response.continuationMarker || null,
+    records: recs.map(function (r) {
+      return {
+        recordName: r.recordName,
+        recordType: r.recordType,
+        zoneID: r.zoneID,
+        fields: r.fields   // full field payload so you can eyeball the data
+      };
+    })
+  };
+}
+
+/* =============================================================================
+ *  PANEL 1 — Private DB
+ * ========================================================================== */
+document.getElementById('btn-private-zones').addEventListener('click', function () {
+  setBadge('badge-private', 'pending', 'running…');
+  log('req', 'privateCloudDatabase.fetchAllRecordZones()');
+  container.privateCloudDatabase.fetchAllRecordZones().then(function (response) {
+    if (response.hasErrors) throw response.errors[0];
+    log('ok', 'private zones', response.zones);
+    showResult('result-private', response.zones);
+    setBadge('badge-private', 'pass', 'PASS');
+  }).catch(function (e) { fail('badge-private', 'fetchAllRecordZones (private) failed', e); });
+});
+
+document.getElementById('btn-private-query').addEventListener('click', function () {
+  var recordType = val('private-recordtype');
+  var zone = val('private-zone');
+  setBadge('badge-private', 'pending', 'running…');
+  runQuery(container.privateCloudDatabase, 'privateCloudDatabase', recordType, zone, null)
+    .then(function (response) {
+      var s = summariseRecords(response);
+      log('ok', 'private records', s);
+      showResult('result-private', s);
+      setBadge('badge-private', 'pass', 'PASS · ' + s.count);
+    })
+    .catch(function (e) { fail('badge-private', 'private performQuery failed', e); });
+});
+
+/* =============================================================================
+ *  PANEL 2 — Shared DB  (the critical D6 test)
+ * ========================================================================== */
+document.getElementById('btn-shared-zones').addEventListener('click', function () {
+  setBadge('badge-shared', 'pending', 'running…');
+  log('req', 'sharedCloudDatabase.fetchAllRecordZones()');
+  container.sharedCloudDatabase.fetchAllRecordZones().then(function (response) {
+    if (response.hasErrors) throw response.errors[0];
+    log('ok', 'shared zones', response.zones);
+    showResult('result-shared', response.zones);
+    // Convenience: prefill the query inputs from the first shared zone.
+    if (response.zones && response.zones[0]) {
+      var z = response.zones[0].zoneID || {};
+      if (z.zoneName)        setVal('shared-zone', z.zoneName);
+      if (z.ownerRecordName) setVal('shared-zone-owner', z.ownerRecordName);
+    }
+    setBadge('badge-shared', response.zones && response.zones.length ? 'pass' : 'pending',
+             response.zones && response.zones.length ? 'PASS · ' + response.zones.length + ' zone(s)' : 'no shared zones');
+  }).catch(function (e) { fail('badge-shared', 'fetchAllRecordZones (shared) failed', e); });
+});
+
+document.getElementById('btn-shared-query').addEventListener('click', function () {
+  var recordType = val('shared-recordtype');
+  var zone = val('shared-zone');
+  var owner = val('shared-zone-owner');
+  setBadge('badge-shared', 'pending', 'running…');
+  runQuery(container.sharedCloudDatabase, 'sharedCloudDatabase', recordType, zone, owner)
+    .then(function (response) {
+      var s = summariseRecords(response);
+      log('ok', 'SHARED records', s);
+      showResult('result-shared', s);
+      setBadge('badge-shared', 'pass', 'PASS · ' + s.count);
+    })
+    .catch(function (e) { fail('badge-shared', 'shared performQuery failed', e); });
+});
+
+/* =============================================================================
+ *  PANEL 3 — Share acceptance
+ *  ---------------------------------------------------------------------------
+ *  KNOWN CAVEAT (read before trusting a FAIL here):
+ *
+ *  On Apple's native platforms you accept a CKShare with a CKShareMetadata that
+ *  the system produces from the share URL (UIApplicationDelegate
+ *  userDidAcceptCloudKitShareWith:). On the WEB there is no OS to hand you that
+ *  metadata. The documented CloudKit JS story is thin and has drifted across
+ *  versions, so this panel is deliberately defensive:
+ *
+ *    1. It parses a shortGUID out of the pasted share URL
+ *       (https://www.icloud.com/share/<shortGUID>).
+ *    2. It FEATURE-DETECTS whatever share methods this build of CloudKit JS
+ *       actually exposes on the container (fetchShareMetadata /
+ *       acceptShareMetadata / acceptShares / acceptShare) — press
+ *       "Inspect share API surface" to dump them into the log — and calls the
+ *       ones that exist.
+ *    3. If no first-class method exists (the likely case for the aging lib), it
+ *       falls back to the CloudKit *Web Services* REST endpoint that CloudKit JS
+ *       wraps:  POST .../database/1/<container>/<env>/shared/records/accept with
+ *       body { shortGUIDs:[{ value:<shortGUID> }] }. That call needs the signed-in
+ *       web-auth token; the browser fetch is best-effort (CORS/cookies may block
+ *       it) and the exact request is ALSO logged so you can replay it in the
+ *       CloudKit Console / curl and see the real server response.
+ *
+ *  The redirect flow: a share URL opened in a browser can bounce back to your
+ *  app with the share info in the query/fragment; detectShareInURL() below reads
+ *  ckShareMetadata / ckShareShortGUID / share params on load and pre-fills panel 3.
+ * ========================================================================== */
+function parseShortGUID(input) {
+  if (!input) return null;
+  input = input.trim();
+  // Full iCloud share URL → last path segment (may carry ?ck... which we strip).
+  var m = input.match(/icloud\.com\/share\/([^/?#]+)/i);
+  if (m) return decodeURIComponent(m[1]);
+  // A bare token/shortGUID pasted directly.
+  if (!/[/\s]/.test(input)) return input;
+  return null;
+}
+
+function shareMethodsPresent() {
+  var wanted = ['fetchShareMetadata', 'acceptShareMetadata', 'acceptShares', 'acceptShare'];
+  var present = {};
+  wanted.forEach(function (n) { present[n] = typeof (container && container[n]) === 'function'; });
+  return present;
+}
+
+document.getElementById('btn-share-methods').addEventListener('click', function () {
+  if (!container) { log('info', 'Configure CloudKit first'); return; }
+  var proto = [];
+  var o = container;
+  while (o && o !== Object.prototype) {
+    Object.getOwnPropertyNames(o).forEach(function (n) {
+      if (typeof container[n] === 'function' && proto.indexOf(n) < 0) proto.push(n);
+    });
+    o = Object.getPrototypeOf(o);
+  }
+  proto.sort();
+  log('info', 'Container methods exposed by this CloudKit JS build', {
+    shareRelated: shareMethodsPresent(),
+    allMethods: proto
+  });
+});
+
+document.getElementById('btn-share-fetch').addEventListener('click', function () {
+  var shortGUID = parseShortGUID(val('share-url'));
+  setBadge('badge-share', 'pending', 'running…');
+  if (!shortGUID) { setBadge('badge-share', 'fail', 'FAIL'); log('err', 'Could not parse a shortGUID from input'); return; }
+
+  var present = shareMethodsPresent();
+  log('info', 'share methods present', present);
+
+  if (present.fetchShareMetadata) {
+    log('req', 'container.fetchShareMetadata', { shortGUID: shortGUID });
+    container.fetchShareMetadata({ shortGUIDs: [{ value: shortGUID }] })
+      .then(function (res) {
+        log('ok', 'share metadata', res);
+        showResult('result-share', res);
+        setBadge('badge-share', 'pass', 'metadata OK');
+      })
+      .catch(function (e) { fail('badge-share', 'fetchShareMetadata failed', e); });
+  } else {
+    // REST fallback: fetch metadata for the share (does not accept it yet).
+    restShareCall('fetch', shortGUID);
+  }
+});
+
+document.getElementById('btn-share-accept').addEventListener('click', function () {
+  var shortGUID = parseShortGUID(val('share-url'));
+  setBadge('badge-share', 'pending', 'running…');
+  if (!shortGUID) { setBadge('badge-share', 'fail', 'FAIL'); log('err', 'Could not parse a shortGUID from input'); return; }
+
+  var present = shareMethodsPresent();
+  log('info', 'share methods present', present);
+
+  // Preferred: metadata-based accept if the build exposes it.
+  if (present.fetchShareMetadata && present.acceptShareMetadata) {
+    log('req', 'fetchShareMetadata → acceptShareMetadata', { shortGUID: shortGUID });
+    container.fetchShareMetadata({ shortGUIDs: [{ value: shortGUID }] })
+      .then(function (metaRes) {
+        var meta = (metaRes && metaRes.shares && metaRes.shares[0]) || metaRes;
+        log('ok', 'metadata fetched, accepting…', meta);
+        return container.acceptShareMetadata(meta);
+      })
+      .then(function (res) {
+        log('ok', 'share accepted', res);
+        showResult('result-share', res);
+        setBadge('badge-share', 'pass', 'ACCEPTED');
+      })
+      .catch(function (e) { fail('badge-share', 'acceptShareMetadata failed', e); });
+    return;
+  }
+  if (present.acceptShares || present.acceptShare) {
+    var fn = present.acceptShares ? 'acceptShares' : 'acceptShare';
+    log('req', 'container.' + fn, { shortGUID: shortGUID });
+    // Shape is uncertain across builds; try the shortGUIDs form.
+    container[fn]({ shortGUIDs: [{ value: shortGUID }] })
+      .then(function (res) {
+        log('ok', 'share accepted', res);
+        showResult('result-share', res);
+        setBadge('badge-share', 'pass', 'ACCEPTED');
+      })
+      .catch(function (e) { fail('badge-share', fn + ' failed', e); });
+    return;
+  }
+  // No first-class method → REST accept fallback (best-effort; see comment).
+  restShareCall('accept', shortGUID);
+});
+
+/* Best-effort direct call to the CloudKit Web Services shared-records endpoint.
+ * Logs the exact request either way so you can replay it manually if the browser
+ * fetch is blocked by CORS or missing the web-auth token. */
+function restShareCall(kind, shortGUID) {
+  var base = 'https://api.apple-cloudkit.com/database/1/' +
+             encodeURIComponent(CONFIG.containerIdentifier) + '/' +
+             CONFIG.environment + '/shared/records/' + kind;
+  var url = base + '?ckAPIToken=' + encodeURIComponent(CONFIG.apiToken);
+  var body = { shortGUIDs: [{ value: shortGUID }] };
+
+  log('info', 'REST fallback (' + kind + ') — CloudKit JS exposes no first-class share method here. ' +
+              'This browser fetch is best-effort; replay it via curl if CORS/auth blocks it.',
+      { method: 'POST', url: url + '  (+ ckWebAuthToken from the signed-in session)', body: body });
+
+  fetch(url, {
+    method: 'POST',
+    credentials: 'include',                 // send the ckSession cookie if present
+    headers: { 'Content-Type': 'text/plain' },
+    body: JSON.stringify(body)
+  })
+    .then(function (r) { return r.text().then(function (t) { return { status: r.status, body: tryJSON(t) }; }); })
+    .then(function (res) {
+      log(res.status < 400 ? 'ok' : 'err', 'REST ' + kind + ' response', res);
+      showResult('result-share', res);
+      setBadge('badge-share', res.status < 400 ? 'pass' : 'fail', res.status < 400 ? (kind === 'accept' ? 'ACCEPTED' : 'metadata OK') : 'FAIL');
+    })
+    .catch(function (e) {
+      log('err', 'REST ' + kind + ' fetch blocked (likely CORS or missing ckWebAuthToken)', { message: String(e) });
+      setBadge('badge-share', 'fail', 'FAIL (see log)');
+    });
+}
+function tryJSON(t) { try { return JSON.parse(t); } catch (e) { return t; } }
+
+/* On load: detect a share handed to us via URL params/fragment and pre-fill panel 3. */
+function detectShareInURL() {
+  var params = new URLSearchParams(location.search);
+  var hash = new URLSearchParams((location.hash || '').replace(/^#/, ''));
+  var candidate =
+    params.get('ckShareShortGUID') || params.get('shortGUID') || params.get('share') ||
+    params.get('ckShareMetadata')  || params.get('ckShare')   ||
+    hash.get('ckShareShortGUID')   || hash.get('share');
+  if (candidate) {
+    setVal('share-url', candidate);
+    log('info', 'Detected a share reference in the page URL — pre-filled panel 3. Review and click "Accept share".',
+        { candidate: candidate });
+    setBadge('badge-share', 'pending', 'share detected');
+  }
+}
+
+/* =============================================================================
+ *  PANEL 4 — Public DB (NO sign-in)
+ * ========================================================================== */
+document.getElementById('btn-public-query').addEventListener('click', function () {
+  if (!container) { log('err', 'CloudKit not configured yet'); return; }
+  var recordType = val('public-recordtype');
+  setBadge('badge-public', 'pending', 'running…');
+  log('req', 'publicCloudDatabase.performQuery (no auth)', { recordType: recordType });
+  container.publicCloudDatabase.performQuery({ recordType: recordType }, { resultsLimit: 50 })
+    .then(function (response) {
+      if (response.hasErrors) throw response.errors[0];
+      var s = summariseRecords(response);
+      log('ok', 'PUBLIC records', s);
+      showResult('result-public', s);
+      setBadge('badge-public', 'pass', 'PASS · ' + s.count);
+    })
+    .catch(function (e) { fail('badge-public', 'public performQuery failed', e); });
+});
+
+/* =============================================================================
+ *  misc utils
+ * ========================================================================== */
+function val(id)      { return document.getElementById(id).value.trim(); }
+function setVal(id,v) { document.getElementById(id).value = v; }
+document.getElementById('btn-clear-log').addEventListener('click', function () { logEl.textContent = ''; });
+</script>
+</body>
+</html>
