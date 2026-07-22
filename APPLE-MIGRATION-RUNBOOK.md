@@ -195,7 +195,23 @@ with Apple ID sign-in. Only you can create it.
 
 ---
 
-## 4. Xcode signing + TestFlight
+## 4. Xcode signing + TestFlight — ✅ CREDENTIALS IN PLACE (2026-07-22)
+
+> **Outcome:** signing team `9LVCB72DT8` is pinned in `project.yml` (both `*-CloudKit` configs);
+> App Store Connect record **Akashic Journeys** (App ID 6793442859, bundle `no.akashic.app`,
+> SKU `akashic-ios`, en-US) exists; an **App Store Connect API key** (Key ID `THX8B77MDH`, Admin)
+> is stored at `~/.appstoreconnect/private_keys/AuthKey_THX8B77MDH.p8` (chmod 600) with
+> `ASC_KEY_PATH` / `ASC_KEY_ID` / `ASC_ISSUER_ID` in the gitignored `.env`. Verified with
+> `xcrun altool --list-apps`. This key also makes future provisioning headless — pass
+> `-authenticationKeyPath/-authenticationKeyID/-authenticationKeyIssuerID` to `xcodebuild`
+> instead of using the Xcode GUI.
+>
+> **Upload:** `apple/Scripts/testflight-upload.sh` (archives `Release-CloudKit`, exports, uploads).
+> **Gate:** do not upload a build until the CloudKit sync layer's data-safety fixes are verified —
+> TestFlight builds are entitled, so the sync engine actually runs on family devices.
+>
+> **Remaining 🧑:** add the family as **internal testers** in TestFlight once the first build
+> finishes processing (~5–15 min after upload), and confirm every device runs iOS 17+.
 
 **Why:** Building on a real device and distributing to the family both require your Apple Developer
 identity and App Store Connect access.
