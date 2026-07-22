@@ -56,7 +56,7 @@ final class SyncStoreTests: XCTestCase {
 
         XCTAssertEqual(record.recordType, RecordCoder.RecordType.waypoint)
         XCTAssertEqual((record["journeyRef"] as? CKRecord.Reference)?.recordID.recordName, journey.id)
-        XCTAssertEqual((record["journeyRef"] as? CKRecord.Reference)?.action, .deleteSelf)
+        XCTAssertEqual((record["journeyRef"] as? CKRecord.Reference)?.action, CKRecord.ReferenceAction.none)
     }
 
     func testMakeRecordForUnknownIDReturnsNil() throws {

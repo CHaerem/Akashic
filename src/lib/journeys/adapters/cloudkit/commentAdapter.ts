@@ -10,16 +10,18 @@ import type { DayComment, NewDayComment, DayCommentUpdate, CommentAuthor } from 
 import { getSharedDatabase, getPrivateDatabase, getCloudKitSession } from '../../../cloudkit';
 import { recordToDayComment, identityToProfile } from './records';
 import { getJourneyMembers } from './memberAdapter';
+import { performQueryAll } from './paginate';
 
 const COMMENT_TYPE = 'DayComment';
 
 async function queryComments(query: CloudKitJS.Query): Promise<CloudKitJS.Record[]> {
     const [shared, priv] = await Promise.all([getSharedDatabase(), getPrivateDatabase()]);
+    // Paginated: a well-used journey accumulates more comments than one page holds.
     const responses = await Promise.all([
-        shared.performQuery(query).catch(() => ({ records: [] as CloudKitJS.Record[] })),
-        priv.performQuery(query).catch(() => ({ records: [] as CloudKitJS.Record[] })),
+        performQueryAll(shared, query).catch(() => [] as CloudKitJS.Record[]),
+        performQueryAll(priv, query).catch(() => [] as CloudKitJS.Record[]),
     ]);
-    return responses.flatMap((r) => r.records ?? []);
+    return responses.flat();
 }
 
 /**

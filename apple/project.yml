@@ -150,17 +150,27 @@ targets:
         SKIP_INSTALL: "YES"
         SWIFT_EMIT_LOC_STRINGS: "YES"
       configs:
-        # Signed builds: the widget carries the shared App Group so it can read the
-        # WidgetSnapshot the app writes (mirrors the app target's *-CloudKit configs).
+        # The widget ships WITHOUT the shared App Group for now — deliberately.
+        #
+        # It reads live journey data only when `AppGroup.containerURL` resolves; with
+        # no group it renders its bundled placeholder, which is exactly the state it
+        # is in today (nothing writes the snapshot yet). Carrying an entitlement the
+        # extension cannot use would only add a provisioning dependency for no gain,
+        # and `xcodebuild -allowProvisioningUpdates` cannot mint the widget's profile
+        # from an App Store Connect API key (it rejects the key that the ASC API
+        # itself accepts), so it blocked archiving outright.
+        #
+        # To light the widget up (see AkashicWidgets/AkashicWidgets.entitlements,
+        # kept as the reference): open the project in Xcode, select the
+        # AkashicWidgets target -> Signing & Capabilities -> add App Groups ->
+        # group.no.akashic, then restore CODE_SIGN_ENTITLEMENTS on both configs here.
         Debug-CloudKit:
-          CODE_SIGN_ENTITLEMENTS: AkashicWidgets/AkashicWidgets.entitlements
           CODE_SIGNING_ALLOWED: "YES"
           CODE_SIGNING_REQUIRED: "YES"
           CODE_SIGN_STYLE: Automatic
           CODE_SIGN_IDENTITY: "Apple Development"
           DEVELOPMENT_TEAM: 9LVCB72DT8
         Release-CloudKit:
-          CODE_SIGN_ENTITLEMENTS: AkashicWidgets/AkashicWidgets.entitlements
           CODE_SIGNING_ALLOWED: "YES"
           CODE_SIGNING_REQUIRED: "YES"
           CODE_SIGN_STYLE: Automatic

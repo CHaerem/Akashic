@@ -294,7 +294,10 @@
 
 <!-- Optional local override (gitignored): `window.AKASHIC_CK_TOKEN = '<token>';`
      keeps the real token out of the public repo. 404 here is harmless. -->
-<script src="config.local.js"></script>
+<!-- Cache-busted: plain `config.local.js` gets cached hard by the browser, so a
+     regenerated token (CloudKit deletes API tokens when an environment is reset)
+     would silently keep failing with AUTHENTICATION_FAILED. -->
+<script src="config.local.js?v=2"></script>
 <script>
 /* =============================================================================
  *  CONFIG  —  FILL IN
