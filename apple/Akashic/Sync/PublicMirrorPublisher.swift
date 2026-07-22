@@ -1,0 +1,521 @@
+import Foundation
+import CoreLocation
+import CloudKit
+
+/// Publishes one journey to the **public** showcase mirror (T3.3 / MAPPING §8).
+///
+/// The public mirror is a thumbnail-and-metadata copy of a journey, written to
+/// `CKContainer.publicCloudDatabase` so the signed-out web showcase can read it (D6/D9). It is
+/// deliberately *not* part of the private-DB sync path: `CKSyncEngine` only drives the private
+/// (and shared) databases, so publishing goes through a plain `CKModifyRecordsOperation` here.
+///
+/// ## Design notes shared with the sync engine / importer
+/// * **Record building is pure and compiles in plain Debug.** Only `CKRecord`/`CKAsset`/
+///   `CLLocation` are touched by `PublicMirrorBuilder`, none of which trap without the iCloud
+///   entitlement — so field mapping is unit-tested with no container. The *container* is built
+///   only inside `#if AKASHIC_CLOUDKIT_BUILD` by the view model, exactly like
+///   `AkashicSyncEngine.buildRealEngine()` and `CloudKitImportSink`.
+/// * **Last-writer-wins, single writer.** Only the owner writes the mirror
+///   (`GRANT WRITE TO "_creator"`), so saves use `savePolicy = .allKeys` — no change-tag dance,
+///   no existence fetch. Re-publishing is an upsert keyed by a stable `recordName`.
+/// * **The public DB has no custom zones.** Both record types live in the default zone; identity
+///   is the `recordName` alone — `journey.slug` for `PublicJourney`, `photo.id` for `PublicPhoto`.
+/// * **Assets are heavy, so operations are chunked** at 50 records/op (CloudKit hard-caps 400,
+///   and asset-bearing requests are large — Kilimanjaro alone is 939 photos).
+
+// MARK: - Public-DB seam
+//
+// The publisher talks to CloudKit only through this protocol so the whole chunking / diffing /
+// cursor-following machine is exercised by unit tests against a mock — no container, no account
+// (none exists in any simulator yet). The real `CKDatabase` conforms via the extension below.
+// Method names are prefixed `ck…` to avoid overload ambiguity with `CKDatabase`'s own members.
+
+/// Opaque paging token for a public-DB query.
+///
+/// CloudKit's own `CKQueryOperation.Cursor` cannot be constructed in a unit test, which would
+/// make the publisher's "follow the cursor to the last page" loop untestable. Wrapping it lets
+/// the real database hand back the real cursor while the test mock hands back a page index — the
+/// publisher's paging loop is identical for both.
+struct PublicMirrorCursor {
+    let underlying: Any
+}
+
+/// The subset of `CKDatabase` the public-mirror publisher needs, in async form.
+protocol PublicMirrorDatabase {
+    /// Save/delete a batch of public records. Non-atomic: a per-record failure must not roll
+    /// back the records that saved, so a re-publish only has to overwrite what already landed.
+    func ckModifyRecords(
+        saving recordsToSave: [CKRecord],
+        deleting recordIDsToDelete: [CKRecord.ID],
+        savePolicy: CKModifyRecordsOperation.RecordSavePolicy
+    ) async throws -> (saveResults: [CKRecord.ID: Result<CKRecord, Error>],
+                       deleteResults: [CKRecord.ID: Result<Void, Error>])
+
+    /// One page of `PublicPhoto` record IDs whose `journeySlug` equals `slug`. Pass the previous
+    /// page's cursor to continue; a nil return cursor means the last page was reached.
+    func ckQueryPublicPhotoIDs(
+        journeySlug slug: String,
+        cursor: PublicMirrorCursor?,
+        resultsLimit: Int
+    ) async throws -> (ids: [CKRecord.ID], cursor: PublicMirrorCursor?)
+}
+
+// `CKDatabase` already satisfies `ckModifyRecords(...)` through the importer's
+// `CKDatabaseProtocol` conformance (non-atomic, so a per-record failure never rolls back the
+// batch) — that same method fulfils this protocol's requirement, so only the query is added here.
+extension CKDatabase: PublicMirrorDatabase {
+    func ckQueryPublicPhotoIDs(
+        journeySlug slug: String,
+        cursor: PublicMirrorCursor?,
+        resultsLimit: Int
+    ) async throws -> (ids: [CKRecord.ID], cursor: PublicMirrorCursor?) {
+        let results: (matchResults: [(CKRecord.ID, Result<CKRecord, Error>)],
+                      queryCursor: CKQueryOperation.Cursor?)
+        if let cursor, let ckCursor = cursor.underlying as? CKQueryOperation.Cursor {
+            results = try await records(continuingMatchFrom: ckCursor,
+                                        desiredKeys: [], resultsLimit: resultsLimit)
+        } else {
+            let query = CKQuery(recordType: PublicMirrorBuilder.photoType,
+                                predicate: NSPredicate(format: "journeySlug == %@", slug))
+            results = try await records(matching: query, inZoneWith: nil,
+                                        desiredKeys: [], resultsLimit: resultsLimit)
+        }
+        // We only need the IDs (for a delete diff); a per-record fetch error still yields the ID.
+        let ids = results.matchResults.map(\.0)
+        let next = results.queryCursor.map { PublicMirrorCursor(underlying: $0) }
+        return (ids, next)
+    }
+}
+
+// MARK: - Record building (pure — no container, unit-tested in plain Debug)
+
+/// Builds the two public record types from domain values, authored to `schema.ckdb`
+/// (`PublicJourney` / `PublicPhoto`) + `MAPPING.md §8`.
+enum PublicMirrorBuilder {
+
+    static let journeyType = "PublicJourney"
+    static let photoType = "PublicPhoto"
+
+    // MARK: PublicJourney
+
+    /// The `PublicJourney` record for a journey. `recordName = journey.slug` (stable upsert key,
+    /// default zone). `photos` are used only to pick the hero thumbnail.
+    ///
+    /// Pass `existing` to update a fetched record in place; the asset fields are only ever *set*
+    /// (never assigned nil), so a transient missing-bytes read cannot strip a good asset — same
+    /// rule as `RecordCoder`.
+    static func journeyRecord(for journey: Journey,
+                              photos: [Photo],
+                              existing: CKRecord? = nil) -> CKRecord {
+        let record = existing ?? CKRecord(recordType: journeyType,
+                                          recordID: CKRecord.ID(recordName: journey.slug))
+        record["slug"] = journey.slug
+        record["name"] = journey.name
+        record["description"] = journey.description
+        record["country"] = journey.country
+        record["journeyType"] = "trek"
+        record["summitElevation"] = journey.summitElevation
+        record["totalDistance"] = journey.totalDistance
+        record["totalDays"] = journey.totalDays
+        record["preferredBearing"] = journey.preferredBearing
+        record["preferredPitch"] = journey.preferredPitch
+        record["dateStarted"] = DateOnly.date(from: journey.dateStarted)
+        record["dateEnded"] = DateOnly.date(from: journey.dateEnded)
+        record["centerLocation"] = location(from: journey.centerCoordinates)
+        record["statsJSON"] = jsonString(journey.stats)
+        // NEVER assign nil to a CKRecord key — it deletes the field server-side. Only set assets
+        // when the bytes/JSON are actually available (see RecordCoder for the full rationale).
+        if let route = jsonAsset(journey.route, prefix: "route") { record["routeJSON"] = route }
+        if let waypoints = jsonAsset(journey.camps, prefix: "waypoints") { record["waypointsJSON"] = waypoints }
+        if let heroURL = heroThumbURL(photos: photos) { record["heroThumb"] = CKAsset(fileURL: heroURL) }
+        return record
+    }
+
+    /// Thumbnail bytes ONLY — no fallback. `Photo.thumbnailFileURL` deliberately falls back to
+    /// the original bytes for display, but the public mirror must never ship an original
+    /// (MAPPING §8 / D9): a "thumb" that is secretly a 12 MP file is exactly the leak the
+    /// design forbids. A photo without real thumb bytes is skipped and counted instead.
+    static func strictThumbURL(for photo: Photo) -> URL? {
+        Photo.resolveMedia(absolutePath: photo.localThumbPath, relativeKey: photo.thumbnailURL)
+    }
+
+    /// The hero thumbnail's on-disk URL: the journey's hero photo, else the first photo by
+    /// `sortOrder`; nil when neither has thumbnail bytes on disk (then the field is skipped).
+    static func heroThumbURL(photos: [Photo]) -> URL? {
+        let ordered = photos.sorted { $0.sortOrder < $1.sortOrder }
+        let hero = photos.first(where: { $0.isHero }) ?? ordered.first
+        // Prefer the chosen hero, but a journey whose hero lacks thumb bytes still
+        // deserves a cover — fall through to the first photo that HAS them.
+        return hero.flatMap(strictThumbURL(for:))
+            ?? ordered.lazy.compactMap(strictThumbURL(for:)).first
+    }
+
+    // MARK: PublicPhoto
+
+    /// The `PublicPhoto` record for a photo, or **nil** when its thumbnail bytes are not on disk
+    /// (the caller skips it and counts it — a missing thumb never fails the whole publish).
+    ///
+    /// `recordName = photo.id` (default zone). `dayNumber` is omitted when the matcher can't
+    /// resolve one. Only the `thumb` asset ever leaves the device — never the original.
+    static func photoRecord(for photo: Photo,
+                            journeySlug slug: String,
+                            dayNumber: Int?,
+                            existing: CKRecord? = nil) -> CKRecord? {
+        guard let thumbURL = strictThumbURL(for: photo) else { return nil }
+        let record = existing ?? CKRecord(recordType: photoType,
+                                          recordID: CKRecord.ID(recordName: photo.id))
+        record["journeySlug"] = slug
+        record["thumb"] = CKAsset(fileURL: thumbURL)
+        record["caption"] = photo.caption
+        record["takenAt"] = isoDate(from: photo.takenAt)
+        record["coordinates"] = location(from: photo.coordinates)
+        // dayNumber is optional: omit the field entirely when unmatched (never write a sentinel).
+        if let dayNumber { record["dayNumber"] = dayNumber }
+        record["sortOrder"] = photo.sortOrder
+        return record
+    }
+
+    /// The default-zone record ID for a `PublicJourney` (recordName == slug).
+    static func journeyRecordID(slug: String) -> CKRecord.ID {
+        CKRecord.ID(recordName: slug)
+    }
+
+    // MARK: Field helpers
+
+    /// `[lng, lat]` (domain / GeoJSON order) → `CLLocation(latitude: lat, longitude: lng)`.
+    /// The SWAP is the critical bit (MAPPING §5): Postgres/GeoJSON store `[lng, lat]` but
+    /// `CLLocation` takes latitude first. Getting it wrong silently places every point in the
+    /// wrong hemisphere. Returns nil for absent/short input.
+    static func location(from coordinates: [Double]?) -> CLLocation? {
+        guard let c = coordinates, c.count >= 2 else { return nil }
+        return CLLocation(latitude: c[1], longitude: c[0])
+    }
+
+    private static func jsonString<T: Encodable>(_ value: T?) -> String? {
+        guard let value, let data = JSONCoding.encode(value) else { return nil }
+        return String(data: data, encoding: .utf8)
+    }
+
+    /// Scratch directory for the public-mirror JSON ASSET temp files (route + waypoints). A
+    /// dedicated subdirectory — separate from `RecordCoder`'s route scratch — so a sweep here
+    /// never touches an asset the sync engine is mid-upload.
+    static var assetScratchDirectory: URL {
+        FileManager.default.temporaryDirectory
+            .appendingPathComponent("akashic-public-mirror-assets", isDirectory: true)
+    }
+
+    /// Encode a value to a small temp-file JSON ASSET. Filenames stay per-call unique so a
+    /// fixed name can never be swapped out from under an in-flight upload.
+    private static func jsonAsset<T: Encodable>(_ value: T, prefix: String) -> CKAsset? {
+        guard let data = JSONCoding.encode(value) else { return nil }
+        let dir = assetScratchDirectory
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let url = dir.appendingPathComponent("akashic-public-\(prefix)-\(UUID().uuidString).json")
+        do { try data.write(to: url) } catch { return nil }
+        return CKAsset(fileURL: url)
+    }
+
+    /// Delete every previously written public-mirror ASSET temp file. Call only at a quiescent
+    /// point (after a publish's saves have all completed) — `CKAsset` reads its file lazily.
+    static func purgeAssetScratch(fileManager: FileManager = .default) {
+        guard let entries = try? fileManager.contentsOfDirectory(
+            at: assetScratchDirectory, includingPropertiesForKeys: nil) else { return }
+        for entry in entries { try? fileManager.removeItem(at: entry) }
+    }
+
+    private static let isoFormatter: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime]
+        return f
+    }()
+
+    /// Tolerant ISO-8601 parse (with or without fractional seconds), then bare `yyyy-MM-dd`.
+    private static func isoDate(from string: String?) -> Date? {
+        guard let string, !string.isEmpty else { return nil }
+        if let date = isoFormatter.date(from: string) { return date }
+        let withFraction = ISO8601DateFormatter()
+        withFraction.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let date = withFraction.date(from: string) { return date }
+        return DateOnly.date(from: string)
+    }
+}
+
+// MARK: - Config / progress / report
+
+struct PublicMirrorConfig: Equatable {
+    /// Records per `CKModifyRecordsOperation`. 50 keeps asset-heavy requests well under
+    /// CloudKit's 400-record hard cap.
+    var maxRecordsPerBatch = 50
+    /// Page size when querying existing `PublicPhoto` IDs for the stale diff / unpublish.
+    var queryPageSize = 200
+
+    static let `default` = PublicMirrorConfig()
+}
+
+/// Live progress for the UI: a 0…1 fraction and a short phase label.
+struct PublicMirrorProgress: Equatable {
+    var fraction: Double
+    var phase: String
+}
+
+/// Outcome of a publish or unpublish. Partial per-record failures are collected, not thrown.
+struct PublicMirrorReport: Equatable {
+    /// True once the `PublicJourney` metadata record saved (always false for unpublish).
+    var journeyPublished = false
+    /// `PublicPhoto` records saved.
+    var photosPublished = 0
+    /// Photos skipped because their thumbnail bytes were not on disk (never a hard failure).
+    var skippedNoThumb = 0
+    /// `PublicPhoto` records deleted — stale ones on update, or all of them on unpublish.
+    var deleted = 0
+    /// Per-record save/delete failures (surfaced, not thrown).
+    var failures: [RecordFailure] = []
+    var wasCancelled = false
+
+    /// Total records written (journey metadata + photos).
+    var published: Int { photosPublished + (journeyPublished ? 1 : 0) }
+    var failed: Int { failures.count }
+    var succeeded: Bool { failures.isEmpty && !wasCancelled }
+
+    var summary: String {
+        let head = wasCancelled ? "CANCELLED" : (succeeded ? "OK" : "COMPLETED WITH FAILURES")
+        return "\(head) — published \(published), skipped (no thumb) \(skippedNoThumb), "
+             + "deleted \(deleted), failed \(failed)"
+    }
+}
+
+// MARK: - Publisher
+
+/// Executes publish / unpublish against a `PublicMirrorDatabase`. Not main-actor: pure record
+/// building + async DB calls. The caller (a `@MainActor` view model) marshals `progress`.
+final class PublicMirrorPublisher {
+
+    private let database: PublicMirrorDatabase
+    private let config: PublicMirrorConfig
+
+    init(database: PublicMirrorDatabase, config: PublicMirrorConfig = .default) {
+        self.database = database
+        self.config = config
+    }
+
+    // MARK: Chunking
+
+    /// Split into fixed-size chunks (e.g. 120 photos, size 50 → [50, 50, 20]). Pure + static so
+    /// the boundary is unit-tested directly.
+    static func chunked<T>(_ items: [T], size: Int) -> [[T]] {
+        guard size > 0 else { return items.isEmpty ? [] : [items] }
+        return stride(from: 0, to: items.count, by: size).map {
+            Array(items[$0 ..< min($0 + size, items.count)])
+        }
+    }
+
+    // MARK: Publish (upsert + stale-photo reconciliation)
+
+    /// Publish (or re-publish) a journey to the mirror.
+    ///
+    /// Upserts the `PublicJourney` record and one `PublicPhoto` per photo with thumbnail bytes,
+    /// then reconciles: any `PublicPhoto` still in the mirror for this slug that is **not** in the
+    /// freshly-built set is deleted (a photo removed locally must leave the showcase).
+    @discardableResult
+    func publish(journey: Journey,
+                 photos: [Photo],
+                 progress: ((PublicMirrorProgress) -> Void)? = nil) async -> PublicMirrorReport {
+        var report = PublicMirrorReport()
+        defer { PublicMirrorBuilder.purgeAssetScratch() }
+
+        let matcher = PhotoDayMatcher(journey: journey)
+
+        // Build the desired PublicPhoto set (skipping thumbless photos), tracking their IDs for
+        // the stale diff.
+        var photoRecords: [CKRecord] = []
+        var desiredPhotoNames: Set<String> = []
+        for photo in photos {
+            if let record = PublicMirrorBuilder.photoRecord(for: photo,
+                                                            journeySlug: journey.slug,
+                                                            dayNumber: matcher.day(for: photo)) {
+                photoRecords.append(record)
+                desiredPhotoNames.insert(photo.id)
+            } else {
+                report.skippedNoThumb += 1
+            }
+        }
+
+        let totalToSave = 1 + photoRecords.count
+        var savedUnits = 0
+        func reportSave(_ phase: String) {
+            let frac = totalToSave == 0 ? 0 : Double(savedUnits) / Double(totalToSave) * 0.9
+            progress?(PublicMirrorProgress(fraction: frac, phase: phase))
+        }
+
+        reportSave("Publishing metadata")
+
+        // 1. The metadata record (its own op — it carries the heavy route/waypoints/hero assets).
+        if Task.isCancelled { report.wasCancelled = true; return report }
+        let journeyRecord = PublicMirrorBuilder.journeyRecord(for: journey, photos: photos)
+        let metaOutcome = await save([journeyRecord])
+        if metaOutcome.saved.contains(journey.slug) { report.journeyPublished = true }
+        report.failures.append(contentsOf: metaOutcome.failures)
+        savedUnits += 1
+        reportSave("Publishing metadata")
+
+        // 2. Photo thumbnails, chunked.
+        for chunk in Self.chunked(photoRecords, size: config.maxRecordsPerBatch) {
+            if Task.isCancelled { report.wasCancelled = true; return report }
+            let outcome = await save(chunk)
+            report.photosPublished += outcome.saved.count
+            report.failures.append(contentsOf: outcome.failures)
+            savedUnits += chunk.count
+            reportSave("Publishing photos (\(report.photosPublished)/\(photoRecords.count))")
+        }
+
+        // 3. Reconcile: delete PublicPhotos that no longer exist locally.
+        if Task.isCancelled { report.wasCancelled = true; return report }
+        progress?(PublicMirrorProgress(fraction: 0.92, phase: "Cleaning up removed photos"))
+        do {
+            let existing = try await allExistingPhotoIDs(slug: journey.slug)
+            let stale = existing.filter { !desiredPhotoNames.contains($0.recordName) }
+            let deleteOutcome = await delete(stale)
+            report.deleted += deleteOutcome.deleted
+            report.failures.append(contentsOf: deleteOutcome.failures)
+        } catch is CancellationError {
+            report.wasCancelled = true
+            return report
+        } catch {
+            // A failed reconciliation query does not undo a successful publish — surface it and
+            // finish. The stale photos simply linger until the next publish.
+            report.failures.append(RecordFailure(recordName: journey.slug, recordType: PublicMirrorBuilder.photoType,
+                                                 zoneName: "_defaultZone", code: Self.code(of: error),
+                                                 message: "stale-photo query failed: \(error)"))
+        }
+
+        progress?(PublicMirrorProgress(fraction: 1.0, phase: "Done"))
+        return report
+    }
+
+    // MARK: Unpublish
+
+    /// Remove a journey from the mirror entirely: delete every `PublicPhoto` for the slug
+    /// (following query cursors), then the `PublicJourney` record.
+    @discardableResult
+    func unpublish(slug: String,
+                   progress: ((PublicMirrorProgress) -> Void)? = nil) async -> PublicMirrorReport {
+        var report = PublicMirrorReport()
+        progress?(PublicMirrorProgress(fraction: 0.0, phase: "Finding published photos"))
+
+        let existing: [CKRecord.ID]
+        do {
+            existing = try await allExistingPhotoIDs(slug: slug)
+        } catch is CancellationError {
+            report.wasCancelled = true
+            return report
+        } catch {
+            report.failures.append(RecordFailure(recordName: slug, recordType: PublicMirrorBuilder.photoType,
+                                                 zoneName: "_defaultZone", code: Self.code(of: error),
+                                                 message: "photo query failed: \(error)"))
+            return report
+        }
+
+        let chunks = Self.chunked(existing, size: config.maxRecordsPerBatch)
+        var done = 0
+        for chunk in chunks {
+            if Task.isCancelled { report.wasCancelled = true; return report }
+            let outcome = await delete(chunk)
+            report.deleted += outcome.deleted
+            report.failures.append(contentsOf: outcome.failures)
+            done += chunk.count
+            let frac = existing.isEmpty ? 0.9 : Double(done) / Double(existing.count) * 0.9
+            progress?(PublicMirrorProgress(fraction: frac, phase: "Removing photos (\(done)/\(existing.count))"))
+        }
+
+        // Finally the metadata record.
+        if Task.isCancelled { report.wasCancelled = true; return report }
+        progress?(PublicMirrorProgress(fraction: 0.95, phase: "Removing metadata"))
+        let metaOutcome = await delete([PublicMirrorBuilder.journeyRecordID(slug: slug)])
+        report.deleted += metaOutcome.deleted
+        report.failures.append(contentsOf: metaOutcome.failures)
+
+        progress?(PublicMirrorProgress(fraction: 1.0, phase: "Done"))
+        return report
+    }
+
+    // MARK: Query (cursor-following — one page is never the answer)
+
+    /// Every `PublicPhoto` record ID for a slug, following the query cursor to the last page.
+    private func allExistingPhotoIDs(slug: String) async throws -> [CKRecord.ID] {
+        var ids: [CKRecord.ID] = []
+        var cursor: PublicMirrorCursor?
+        repeat {
+            if Task.isCancelled { throw CancellationError() }
+            let page = try await database.ckQueryPublicPhotoIDs(
+                journeySlug: slug, cursor: cursor, resultsLimit: config.queryPageSize)
+            ids.append(contentsOf: page.ids)
+            cursor = page.cursor
+        } while cursor != nil
+        return ids
+    }
+
+    // MARK: Save / delete one op (partial-failure collecting)
+
+    private struct SaveOutcome { var saved: Set<String> = []; var failures: [RecordFailure] = [] }
+    private struct DeleteOutcome { var deleted = 0; var failures: [RecordFailure] = [] }
+
+    private func save(_ records: [CKRecord]) async -> SaveOutcome {
+        guard !records.isEmpty else { return SaveOutcome() }
+        var outcome = SaveOutcome()
+        do {
+            let (saveResults, _) = try await database.ckModifyRecords(
+                saving: records, deleting: [], savePolicy: .allKeys)
+            for record in records {
+                switch saveResults[record.recordID] {
+                case .success:
+                    outcome.saved.insert(record.recordID.recordName)
+                case .failure(let error):
+                    outcome.failures.append(Self.failure(record.recordID, type: record.recordType, error: error))
+                case .none:
+                    outcome.failures.append(RecordFailure(recordName: record.recordID.recordName,
+                                                          recordType: record.recordType, zoneName: "_defaultZone",
+                                                          code: -1, message: "no result returned"))
+                }
+            }
+        } catch {
+            // Whole-op failure: record each item and keep going (never throw away the batch).
+            for record in records {
+                outcome.failures.append(Self.failure(record.recordID, type: record.recordType, error: error))
+            }
+        }
+        return outcome
+    }
+
+    private func delete(_ ids: [CKRecord.ID]) async -> DeleteOutcome {
+        guard !ids.isEmpty else { return DeleteOutcome() }
+        var outcome = DeleteOutcome()
+        do {
+            let (_, deleteResults) = try await database.ckModifyRecords(
+                saving: [], deleting: ids, savePolicy: .allKeys)
+            for id in ids {
+                switch deleteResults[id] {
+                case .success, .none:
+                    // A delete whose target is already gone reports no failure — treat absence as
+                    // success (the desired end state is "not present").
+                    outcome.deleted += 1
+                case .failure(let error):
+                    outcome.failures.append(Self.failure(id, type: PublicMirrorBuilder.photoType, error: error))
+                }
+            }
+        } catch {
+            for id in ids {
+                outcome.failures.append(Self.failure(id, type: PublicMirrorBuilder.photoType, error: error))
+            }
+        }
+        return outcome
+    }
+
+    private static func failure(_ id: CKRecord.ID, type: String, error: Error) -> RecordFailure {
+        RecordFailure(recordName: id.recordName, recordType: type, zoneName: "_defaultZone",
+                      code: code(of: error), message: "\(error)")
+    }
+
+    private static func code(of error: Error) -> Int {
+        (error as? CKError)?.errorCode ?? (error as NSError).code
+    }
+}
