@@ -45,10 +45,19 @@ struct PhotoLightboxView: View {
 
     private var allowsEditing: Bool { journey != nil }
 
+    /// Backdrop fades out as the swipe-to-dismiss drag grows. Types are spelled out:
+    /// mixing integer and floating-point literals here is ambiguous to older type
+    /// checkers (Xcode 16 fails to compile it).
+    private var backdropOpacity: Double {
+        let dragSpan: CGFloat = 400
+        let maxFade: CGFloat = 0.6
+        return 1 - Double(min(abs(dragOffset) / dragSpan, maxFade))
+    }
+
     var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
-                .opacity(1 - min(abs(dragOffset) / 400, 0.6))
+                .opacity(backdropOpacity)
 
             pager
                 .offset(y: dragOffset)
