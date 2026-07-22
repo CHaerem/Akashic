@@ -60,6 +60,38 @@ enum RecordCoder {
     /// Zone name prefix — one custom zone per journey: `journey-<journey.id>` (MAPPING §1).
     static let journeyZonePrefix = "journey-"
 
+    // MARK: - Encoded system fields (server change tag persistence)
+
+    /// Archive a record's CloudKit **system fields** — its `recordID`, zone, and (once the server
+    /// has seen it) its change tag — for storage in the local meta side table.
+    ///
+    /// This is the base a later edit encodes its current field values onto, so `CKSyncEngine`
+    /// sends a diff against the last-known server version instead of a fresh insert (which
+    /// CloudKit rejects with server error 14 for any record it already holds). Only system fields
+    /// are captured; user field values are **not** — the caller re-applies those from the current
+    /// domain row.
+    ///
+    /// Pure and build-safe: `encodeSystemFields` + `NSKeyedArchiver` never touch a `CKContainer`,
+    /// so this is safe in every configuration (no `AKASHIC_CLOUDKIT_BUILD` gate needed).
+    static func archivedSystemFields(of record: CKRecord) -> Data {
+        let coder = NSKeyedArchiver(requiringSecureCoding: true)
+        record.encodeSystemFields(with: coder)
+        coder.finishEncoding()
+        return coder.encodedData
+    }
+
+    /// Rebuild a bare `CKRecord` (system fields only — `recordID`, zone, change tag; **no** user
+    /// fields) from data produced by `archivedSystemFields(of:)`. Returns nil if the bytes are not
+    /// a valid archive, so a corrupt/stale meta row degrades to the old "build fresh" behavior
+    /// rather than crashing.
+    static func recordFromSystemFields(_ data: Data) -> CKRecord? {
+        guard let coder = try? NSKeyedUnarchiver(forReadingFrom: data) else { return nil }
+        coder.requiresSecureCoding = true
+        let record = CKRecord(coder: coder)
+        coder.finishDecoding()
+        return record
+    }
+
     // MARK: - Zone routing
 
     /// Custom zone id for a journey: `journey-<journeyID>` in the current user's DB.

@@ -252,4 +252,12 @@ final class JourneyStore: ObservableObject {
         reload()
         return ok
     }
+
+    /// Mark a journey public/private (drives the public showcase mirror — T3.3 / MAPPING §8).
+    @discardableResult
+    func setJourneyPublic(_ isPublic: Bool, forJourney id: String) -> Bool {
+        let ok = persistence.setJourneyPublic(id: id, isPublic: isPublic)
+        reload()
+        return ok
+    }
 }

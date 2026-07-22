@@ -83,6 +83,17 @@ protocol SyncLocalStore: AnyObject {
     /// Apply a fetched server deletion by record name + type.
     func applyDeletedRecord(recordName: String, recordType: String)
 
+    /// Persist the encoded CloudKit system fields (identity + change tag) for records the server
+    /// just accepted, so a later edit of the same row is sent as an update rather than an insert
+    /// that always conflicts (server error 14). This is what makes the SECOND edit of a locally
+    /// created record carry a tag — the fetch-apply path only ever sees records the server
+    /// originated, never ones this device just uploaded.
+    func recordsDidSave(_ records: [CKRecord])
+
+    /// Drop the persisted system fields for records the server just deleted (local deletes that
+    /// landed), so a row later re-created under the same name is not rehydrated onto a dead tag.
+    func recordsDidDelete(_ recordIDs: [CKRecord.ID])
+
     /// Bracket a batch of fetched-change applications so the store can suppress the local-save
     /// echo (`beginRemoteApply`) and commit once (`endRemoteApply`).
     func beginRemoteApply()

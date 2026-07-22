@@ -117,30 +117,81 @@ extension PersistenceController: SyncLocalStore {
     /// Resolve a pending record id to its current domain value and encode it. Returns nil if
     /// the row is gone (the batch then skips the save).
     ///
-    /// TODO(live-test): persist each record's `encodedSystemFields` alongside the row so updates
-    /// carry the last-known server change tag, letting `CKSyncEngine` diff efficiently instead
-    /// of relying solely on the `serverRecordChanged` retry. `existing` is honored today only
-    /// when the caller supplies a rebased server record (conflict path).
+    /// When the caller does not supply a rebased server record (the conflict path), the base is
+    /// rehydrated from the persisted system fields (`CDSyncRecordMeta`, written on every
+    /// remote-apply and successful send). This carries the last-known server change tag, so a
+    /// first edit of an existing row is sent as an UPDATE and `CKSyncEngine` diffs it — instead
+    /// of the old behavior, where every save built a fresh `CKRecord`, looked like an INSERT, and
+    /// bounced off CloudKit's "record to insert already exists" (server error 14) before the
+    /// `serverRecordChanged` retry rebased it (double round-trips + backoff, see
+    /// `Docs/sync-verification.md`).
     func makeRecord(forRecordName recordName: String,
                     zoneID: CKRecordZone.ID,
                     existing: CKRecord?) -> CKRecord? {
+        // Prefer the caller's rebased record (conflict path); otherwise rehydrate the last-known
+        // server record's system fields so this save carries its change tag.
+        let base = existing ?? systemFieldsRecord(forRecordName: recordName, zoneID: zoneID)
         if let cd = syncFetchJourney(recordName) {
-            return RecordCoder.record(for: CoreDataMapping.journey(from: cd), in: zoneID, existing: existing)
+            return RecordCoder.record(for: CoreDataMapping.journey(from: cd), in: zoneID, existing: base)
         }
         if let cd = syncFetchWaypoint(recordName), let cdJourney = cd.journey {
             let journey = CoreDataMapping.journey(from: cdJourney)
             guard let index = journey.camps.firstIndex(where: { $0.id == recordName }) else { return nil }
             return RecordCoder.record(forWaypoint: journey.camps[index], journeyID: journey.id,
-                                      sortOrder: index, in: zoneID, existing: existing)
+                                      sortOrder: index, in: zoneID, existing: base)
         }
         if let cd = syncFetchPhoto(recordName) {
-            return RecordCoder.record(for: CoreDataMapping.photo(from: cd), in: zoneID, existing: existing)
+            return RecordCoder.record(for: CoreDataMapping.photo(from: cd), in: zoneID, existing: base)
         }
         if let cd = syncFetchComment(recordName) {
             return RecordCoder.record(for: CoreDataMapping.dayComment(from: cd, currentUserId: nil),
-                                      in: zoneID, existing: existing)
+                                      in: zoneID, existing: base)
         }
         return nil
+    }
+
+    // MARK: Encoded system fields (server change tag persistence)
+
+    /// Persist the system fields (identity + change tag) of records the server just accepted.
+    ///
+    /// This is the ONLY place the tag for a *locally originated* record is captured: the
+    /// fetch-apply path only ever sees records the server produced, never the ones this device
+    /// uploaded. Without it the second edit of a freshly created record would still take the
+    /// code-14 rebase path. Runs its own commit under the remote-apply flag so the resulting
+    /// Core Data save is not mistaken for a fresh local edit (though `CDSyncRecordMeta` maps to
+    /// no `LocalChange` anyway).
+    func recordsDidSave(_ records: [CKRecord]) {
+        guard !records.isEmpty else { return }
+        let wasApplying = syncIsApplyingRemoteChanges
+        syncIsApplyingRemoteChanges = true
+        for record in records { upsertSystemFields(for: record) }
+        if viewContext.hasChanges {
+            do {
+                try viewContext.save()
+                SyncLog.log("recordsDidSave: stored systemFields for \(records.count) saved record(s)")
+            } catch {
+                SyncLog.error("recordsDidSave: systemFields save FAILED for \(records.count): \(error)")
+            }
+        }
+        syncIsApplyingRemoteChanges = wasApplying
+    }
+
+    /// Drop persisted system fields for records the server just deleted, so a row later
+    /// re-created under the same name is not rehydrated onto a dead change tag.
+    func recordsDidDelete(_ recordIDs: [CKRecord.ID]) {
+        guard !recordIDs.isEmpty else { return }
+        let wasApplying = syncIsApplyingRemoteChanges
+        syncIsApplyingRemoteChanges = true
+        removeSystemFields(forRecordNames: recordIDs.map { $0.recordName })
+        if viewContext.hasChanges {
+            do {
+                try viewContext.save()
+                SyncLog.log("recordsDidDelete: dropped systemFields for \(recordIDs.count) record(s)")
+            } catch {
+                SyncLog.error("recordsDidDelete: systemFields cleanup FAILED for \(recordIDs.count): \(error)")
+            }
+        }
+        syncIsApplyingRemoteChanges = wasApplying
     }
 
     // MARK: Apply side (server-authoritative, per record)
@@ -186,19 +237,32 @@ extension PersistenceController: SyncLocalStore {
             if let comment = RecordCoder.dayComment(from: record) { applyComment(comment) }
         default:
             SyncLog.log("applyFetchedRecord: UNKNOWN recordType \(record.recordType)")
+            return   // unknown type wasn't applied to any row — don't persist its system fields
         }
+        // Persist the server's system fields for the record we just applied, so a later local
+        // edit of this row rehydrates its change tag in `makeRecord` (update, not insert).
+        // Committed by `endRemoteApply` alongside the domain writes.
+        upsertSystemFields(for: record)
     }
 
     func applyDeletedRecord(recordName: String, recordType: String) {
+        // Gather the record names whose meta must go before the Core Data cascade removes the
+        // rows: a journey delete cascades to its waypoints/photos/comments, but the meta side
+        // table has no relationship to cascade through, so their tags would otherwise leak.
+        var metaNamesToDrop = [recordName]
         let object: NSManagedObject?
         switch recordType {
-        case RecordCoder.RecordType.journey:    object = syncFetchJourney(recordName)
+        case RecordCoder.RecordType.journey:
+            let journey = syncFetchJourney(recordName)
+            if let journey { metaNamesToDrop += childRecordNames(of: journey) }
+            object = journey
         case RecordCoder.RecordType.waypoint:   object = syncFetchWaypoint(recordName)
         case RecordCoder.RecordType.photo:      object = syncFetchPhoto(recordName)
         case RecordCoder.RecordType.dayComment: object = syncFetchComment(recordName)
         default:                                object = nil
         }
         if let object { viewContext.delete(object) }   // journey delete cascades to its children
+        removeSystemFields(forRecordNames: metaNamesToDrop)
     }
 
     // MARK: Per-record upserts
@@ -362,6 +426,58 @@ extension PersistenceController: SyncLocalStore {
         // userId (local-author identity) is not carried on the record; left as-is on remote apply.
     }
 
+    // MARK: - System-fields meta side table (CDSyncRecordMeta)
+
+    /// The last-known server record (system fields only) for a row, rehydrated from the meta side
+    /// table — or nil when we have never seen a server copy, the bytes are unreadable, or the
+    /// stored identity does not match the pending change. The identity guard matters: the returned
+    /// record's `recordID` is the one `CKSyncEngine` saves under, so a base whose zone differs from
+    /// the requested one would send the record to the wrong place. In production the two always
+    /// agree (both derive from the journey's `zoneOwnerName`); the guard is defense in depth and,
+    /// on a mismatch, falls back to the safe fresh-insert behavior.
+    private func systemFieldsRecord(forRecordName recordName: String,
+                                    zoneID: CKRecordZone.ID) -> CKRecord? {
+        guard let meta = syncFetchMeta(recordName),
+              let data = meta.systemFields,
+              let record = RecordCoder.recordFromSystemFields(data),
+              record.recordID.recordName == recordName,
+              record.recordID.zoneID == zoneID
+        else { return nil }
+        return record
+    }
+
+    /// Insert-or-update the meta row for a record's encoded system fields. The uniqueness
+    /// constraint on `recordName` is a backstop; this fetch-or-create keeps it from ever firing.
+    private func upsertSystemFields(for record: CKRecord) {
+        let name = record.recordID.recordName
+        let meta = syncFetchMeta(name) ?? CDSyncRecordMeta(context: viewContext)
+        meta.recordName = name
+        meta.systemFields = RecordCoder.archivedSystemFields(of: record)
+    }
+
+    /// Delete the meta rows for the given record names (no-op for names with no row). Does NOT
+    /// save — the caller commits alongside its other changes.
+    private func removeSystemFields(forRecordNames names: [String]) {
+        guard !names.isEmpty else { return }
+        let request = NSFetchRequest<CDSyncRecordMeta>(entityName: "CDSyncRecordMeta")
+        request.predicate = NSPredicate(format: "recordName IN %@", names)
+        for meta in (try? viewContext.fetch(request)) ?? [] { viewContext.delete(meta) }
+    }
+
+    private func syncFetchMeta(_ recordName: String) -> CDSyncRecordMeta? {
+        syncFetchOne("CDSyncRecordMeta", recordName, key: "recordName")
+    }
+
+    /// Every child record name of a journey (waypoints, photos, comments) — used to clean up the
+    /// meta side table when a journey delete cascades in Core Data.
+    private func childRecordNames(of journey: CDJourney) -> [String] {
+        var names: [String] = []
+        names += (journey.waypoints as? Set<CDWaypoint> ?? []).compactMap(\.id)
+        names += (journey.photos as? Set<CDPhoto> ?? []).compactMap(\.id)
+        names += (journey.dayComments as? Set<CDDayComment> ?? []).compactMap(\.id)
+        return names
+    }
+
     // MARK: Fetch-by-id helpers
 
     private func syncFetchJourney(_ id: String) -> CDJourney? { syncFetchOne("CDJourney", id) }
@@ -369,9 +485,10 @@ extension PersistenceController: SyncLocalStore {
     private func syncFetchPhoto(_ id: String) -> CDPhoto? { syncFetchOne("CDPhoto", id) }
     private func syncFetchComment(_ id: String) -> CDDayComment? { syncFetchOne("CDDayComment", id) }
 
-    private func syncFetchOne<T: NSManagedObject>(_ entity: String, _ id: String) -> T? {
+    private func syncFetchOne<T: NSManagedObject>(_ entity: String, _ value: String,
+                                                  key: String = "id") -> T? {
         let request = NSFetchRequest<T>(entityName: entity)
-        request.predicate = NSPredicate(format: "id == %@", id)
+        request.predicate = NSPredicate(format: "%K == %@", key, value)
         request.fetchLimit = 1
         return (try? viewContext.fetch(request))?.first
     }

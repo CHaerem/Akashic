@@ -362,6 +362,23 @@ final class SyncEngineTests: XCTestCase {
         XCTAssertEqual(merged["country"] as? String, "Tanzania", "rebased onto the server record")
     }
 
+    /// A successful send must persist the saved records' system fields (the change tag) and drop
+    /// the meta for deleted ones — this is the only path that captures the tag for a record this
+    /// device originated, so without it the second edit still takes the code-14 rebase.
+    func testSentChangesPersistAndCleanUpSystemFields() async {
+        let (engine, _, store, _) = makeEngine(account: .available)
+        await engine.activate()
+
+        let savedID = CKRecord.ID(recordName: "j1", zoneID: RecordCoder.zoneID(forJourneyID: "j1"))
+        let saved = CKRecord(recordType: "Journey", recordID: savedID)
+        let deletedID = CKRecord.ID(recordName: "p1", zoneID: RecordCoder.zoneID(forJourneyID: "j1"))
+
+        engine.handleSentChanges(saved: [saved], failed: [], deleted: [deletedID])
+
+        XCTAssertEqual(store.savedMetaRecordNames, ["j1"], "saved records' system fields are persisted")
+        XCTAssertEqual(store.deletedMetaRecordIDs, [deletedID], "deleted records' system fields are dropped")
+    }
+
     // MARK: - Batch materialization
 
     func testNextBatchUsesStoreRecordsAndSkipsMissing() async {
@@ -500,10 +517,13 @@ final class FakeLocalStore: SyncLocalStore {
 
     private(set) var appliedRecords: [CKRecord] = []
     private(set) var deletedRecords: [(recordName: String, recordType: String)] = []
+    private(set) var savedMetaRecords: [CKRecord] = []
+    private(set) var deletedMetaRecordIDs: [CKRecord.ID] = []
     private(set) var beginCount = 0
     private(set) var endCount = 0
 
     var appliedRecordNames: [String] { appliedRecords.map { $0.recordID.recordName } }
+    var savedMetaRecordNames: [String] { savedMetaRecords.map { $0.recordID.recordName } }
 
     func makeRecord(forRecordName recordName: String, zoneID: CKRecordZone.ID, existing: CKRecord?) -> CKRecord? {
         records[recordName]
@@ -512,6 +532,8 @@ final class FakeLocalStore: SyncLocalStore {
     func applyDeletedRecord(recordName: String, recordType: String) {
         deletedRecords.append((recordName, recordType))
     }
+    func recordsDidSave(_ records: [CKRecord]) { savedMetaRecords.append(contentsOf: records) }
+    func recordsDidDelete(_ recordIDs: [CKRecord.ID]) { deletedMetaRecordIDs.append(contentsOf: recordIDs) }
     func allLocalJourneyIDs() -> [String] { journeyIDs }
     func zoneOwnerName(forJourneyID journeyID: String) -> String? { zoneOwners[journeyID] }
     func recordIdentities(forJourneyID journeyID: String) -> [LocalChange] { identities[journeyID] ?? [] }

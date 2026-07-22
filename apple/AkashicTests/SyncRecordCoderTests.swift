@@ -284,6 +284,42 @@ final class SyncRecordCoderTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: url.path), "scratch files are sweepable")
     }
 
+    // MARK: - Encoded system fields (server change tag persistence)
+
+    /// The archive→rehydrate round-trip must preserve the record's identity (recordID + zone +
+    /// type). That identity is what lets a re-encoded record be sent as an update against the
+    /// server's copy instead of a fresh insert.
+    func testSystemFieldsArchiveRoundTripPreservesIdentity() throws {
+        let owned = CKRecordZone.ID(zoneName: "journey-sf", ownerName: "family-owner-123")
+        let original = CKRecord(recordType: RecordCoder.RecordType.photo,
+                                recordID: CKRecord.ID(recordName: "photo-sf", zoneID: owned))
+
+        let data = RecordCoder.archivedSystemFields(of: original)
+        let rehydrated = try XCTUnwrap(RecordCoder.recordFromSystemFields(data))
+
+        XCTAssertEqual(rehydrated.recordID, original.recordID)
+        XCTAssertEqual(rehydrated.recordID.zoneID, owned, "zone (incl. owner) survives the round-trip")
+        XCTAssertEqual(rehydrated.recordType, RecordCoder.RecordType.photo)
+    }
+
+    /// System-field archiving carries ONLY the system fields — never user values. A later edit
+    /// re-applies field values from the current domain row onto this bare base.
+    func testArchivedSystemFieldsDropUserValues() throws {
+        let record = CKRecord(recordType: RecordCoder.RecordType.journey,
+                              recordID: CKRecord.ID(recordName: "j-sf", zoneID: zone))
+        record["name"] = "Local Only"
+        let rehydrated = try XCTUnwrap(RecordCoder.recordFromSystemFields(
+            RecordCoder.archivedSystemFields(of: record)))
+        XCTAssertNil(rehydrated["name"], "user fields are not part of the system-field archive")
+    }
+
+    /// Corrupt/foreign bytes decode to nil so a stale meta row degrades to the safe fresh-insert
+    /// behavior rather than crashing.
+    func testRecordFromSystemFieldsRejectsGarbage() {
+        XCTAssertNil(RecordCoder.recordFromSystemFields(Data("not a keyed archive".utf8)))
+        XCTAssertNil(RecordCoder.recordFromSystemFields(Data()))
+    }
+
     // MARK: - Builders
 
     private func makeCamp(id: String, coordinates: [Double]) -> Camp {

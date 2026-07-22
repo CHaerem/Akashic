@@ -121,6 +121,139 @@ final class SyncStoreTests: XCTestCase {
         XCTAssertEqual(journeys.first?.name, "Brand New")
     }
 
+    // MARK: - Encoded system fields (the code-14 first-save fix)
+    //
+    // Before this: `makeRecord` built every outgoing CKRecord from scratch, with no server change
+    // tag, so CloudKit saw the first save of any existing record as an INSERT and answered
+    // "record to insert already exists" (server error 14); the edit only landed via the
+    // serverRecordChanged rebase — double round-trips plus the engine's backoff. The fix persists
+    // each record's encoded system fields (in the CDSyncRecordMeta side table) on remote-apply and
+    // on a successful send, then rehydrates that base in makeRecord so the save carries the tag.
+
+    private func fetchMeta(_ controller: PersistenceController, _ recordName: String) throws -> CDSyncRecordMeta? {
+        let request = NSFetchRequest<CDSyncRecordMeta>(entityName: "CDSyncRecordMeta")
+        request.predicate = NSPredicate(format: "recordName == %@", recordName)
+        return try controller.viewContext.fetch(request).first
+    }
+
+    /// Applying a fetched record persists its system fields, rehydratable to the same identity.
+    func testApplyFetchedRecordPersistsRehydratableSystemFields() throws {
+        let (controller, journey) = try seededController()
+        let zone = RecordCoder.zoneID(forJourneyID: journey.id)
+        let record = try XCTUnwrap(controller.makeRecord(forRecordName: journey.id, zoneID: zone, existing: nil))
+
+        controller.beginRemoteApply()
+        controller.applyFetchedRecord(record)
+        controller.endRemoteApply()
+
+        let meta = try XCTUnwrap(try fetchMeta(controller, journey.id),
+                                 "apply must write a CDSyncRecordMeta row for the record")
+        let bytes = try XCTUnwrap(meta.systemFields)
+        let rehydrated = try XCTUnwrap(RecordCoder.recordFromSystemFields(bytes))
+        XCTAssertEqual(rehydrated.recordID.recordName, journey.id)
+        XCTAssertEqual(rehydrated.recordID.zoneID, zone, "stored system fields carry the record's zone")
+    }
+
+    /// After a fetch-apply, makeRecord rehydrates the persisted base instead of building a fresh
+    /// record: its outgoing system-field identity is exactly what was stored (this is what makes
+    /// the save an update against the server's copy rather than an insert). Old code ignored the
+    /// meta table entirely and always built fresh.
+    func testMakeRecordAfterApplyReusesPersistedSystemFields() throws {
+        let (controller, journey) = try seededController()
+        let camp = journey.camps[0]
+        let zone = RecordCoder.zoneID(forJourneyID: journey.id)
+        let fetched = try XCTUnwrap(controller.makeRecord(forRecordName: camp.id, zoneID: zone, existing: nil))
+
+        controller.beginRemoteApply()
+        controller.applyFetchedRecord(fetched)
+        controller.endRemoteApply()
+        let storedBytes = try XCTUnwrap(try fetchMeta(controller, camp.id)?.systemFields)
+
+        let outgoing = try XCTUnwrap(controller.makeRecord(forRecordName: camp.id, zoneID: zone, existing: nil))
+        XCTAssertEqual(RecordCoder.archivedSystemFields(of: outgoing), storedBytes,
+                       "makeRecord must send the persisted server identity, not a fresh insert")
+        XCTAssertEqual(outgoing.recordID.zoneID, zone, "recordID.zoneID survives the rehydrate")
+    }
+
+    /// System fields recorded for a record the server accepted (the send path) are what makes the
+    /// SECOND edit of a locally created record carry a tag — the fetch-apply path never sees it.
+    func testRecordsDidSavePersistsSystemFieldsForSentRecords() throws {
+        let (controller, journey) = try seededController()
+        let zone = RecordCoder.zoneID(forJourneyID: journey.id)
+        let saved = try XCTUnwrap(controller.makeRecord(forRecordName: journey.id, zoneID: zone, existing: nil))
+
+        XCTAssertNil(try fetchMeta(controller, journey.id), "precondition: nothing persisted yet")
+        controller.recordsDidSave([saved])
+
+        let meta = try XCTUnwrap(try fetchMeta(controller, journey.id))
+        let rehydrated = try XCTUnwrap(RecordCoder.recordFromSystemFields(try XCTUnwrap(meta.systemFields)))
+        XCTAssertEqual(rehydrated.recordID.recordName, journey.id)
+    }
+
+    /// A stale/foreign meta row (wrong zone) must not be used as the base — makeRecord falls back
+    /// to a fresh record rather than sending the row to the wrong zone.
+    func testMakeRecordIgnoresMetaWithMismatchedZone() throws {
+        let (controller, journey) = try seededController()
+        let realZone = RecordCoder.zoneID(forJourneyID: journey.id)
+        // Persist a base whose zone owner differs from the one makeRecord will be asked for.
+        let foreignZone = RecordCoder.zoneID(forJourneyID: journey.id, ownerName: "someone-else")
+        let foreign = CKRecord(recordType: RecordCoder.RecordType.journey,
+                               recordID: CKRecord.ID(recordName: journey.id, zoneID: foreignZone))
+        controller.recordsDidSave([foreign])
+
+        let outgoing = try XCTUnwrap(controller.makeRecord(forRecordName: journey.id, zoneID: realZone, existing: nil))
+        XCTAssertEqual(outgoing.recordID.zoneID, realZone,
+                       "a meta row for a different zone must not redirect the record")
+    }
+
+    /// Deleting a record removes its meta row; deleting a journey also removes its children's.
+    func testDeletingRecordsRemovesTheirSystemFields() throws {
+        let (controller, journey) = try seededController()
+        let zone = RecordCoder.zoneID(forJourneyID: journey.id)
+        let camp = journey.camps[0]
+
+        // Seed meta for the journey and one of its waypoints via the apply path.
+        controller.beginRemoteApply()
+        controller.applyFetchedRecord(try XCTUnwrap(controller.makeRecord(forRecordName: journey.id, zoneID: zone, existing: nil)))
+        controller.applyFetchedRecord(try XCTUnwrap(controller.makeRecord(forRecordName: camp.id, zoneID: zone, existing: nil)))
+        controller.endRemoteApply()
+        XCTAssertNotNil(try fetchMeta(controller, journey.id))
+        XCTAssertNotNil(try fetchMeta(controller, camp.id))
+
+        controller.beginRemoteApply()
+        controller.applyDeletedRecord(recordName: journey.id, recordType: RecordCoder.RecordType.journey)
+        controller.endRemoteApply()
+
+        XCTAssertNil(try fetchMeta(controller, journey.id), "journey meta removed on delete")
+        XCTAssertNil(try fetchMeta(controller, camp.id),
+                     "the cascade's child meta rows are removed too (no orphaned tags)")
+    }
+
+    /// A confirmed server delete (local delete that landed) drops the meta row.
+    func testRecordsDidDeleteRemovesSystemFields() throws {
+        let (controller, journey) = try seededController()
+        let zone = RecordCoder.zoneID(forJourneyID: journey.id)
+        controller.recordsDidSave([try XCTUnwrap(controller.makeRecord(forRecordName: journey.id, zoneID: zone, existing: nil))])
+        XCTAssertNotNil(try fetchMeta(controller, journey.id))
+
+        controller.recordsDidDelete([CKRecord.ID(recordName: journey.id, zoneID: zone)])
+        XCTAssertNil(try fetchMeta(controller, journey.id))
+    }
+
+    /// resetJourneys clears the meta side table along with the domain rows.
+    func testResetJourneysPurgesSystemFields() throws {
+        let (controller, journey) = try seededController()
+        let zone = RecordCoder.zoneID(forJourneyID: journey.id)
+        controller.recordsDidSave([try XCTUnwrap(controller.makeRecord(forRecordName: journey.id, zoneID: zone, existing: nil))])
+        XCTAssertNotNil(try fetchMeta(controller, journey.id))
+
+        controller.resetJourneys()
+
+        let request = NSFetchRequest<CDSyncRecordMeta>(entityName: "CDSyncRecordMeta")
+        XCTAssertEqual(try controller.viewContext.count(for: request), 0,
+                       "a full reset must not leave stale system-field rows behind")
+    }
+
     // MARK: - Media pointers (CRITICAL: a fetched photo must never destroy media pointers)
 
     /// Insert a CDPhoto row that looks like an imported archive photo.

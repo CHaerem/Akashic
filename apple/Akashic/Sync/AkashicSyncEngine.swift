@@ -408,6 +408,11 @@ final class AkashicSyncEngine: NSObject, CKSyncEngineDelegate {
     func handleSentChanges(saved: [CKRecord],
                            failed: [(record: CKRecord, error: CKError)],
                            deleted: [CKRecord.ID]) {
+        // Persist the server change tag for everything that landed, so the SECOND edit of a
+        // locally created record diffs against the server version instead of re-inserting (the
+        // fetch-apply path never sees a record this device uploaded, so this is its only source).
+        store.recordsDidSave(saved)
+        store.recordsDidDelete(deleted)
         var rebased: [CKSyncEngine.PendingRecordZoneChange] = []
         for failure in failed {
             SyncLog.log("sendFailure \(failure.record.recordType)/\(failure.record.recordID.recordName) code=\(failure.error.code.rawValue) \(failure.error.localizedDescription)")

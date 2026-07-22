@@ -18,7 +18,7 @@ chris.haerem@gmail.com. Everything below is observed evidence, not reasoning.
 | Direction | Status |
 |---|---|
 | Down (server → new local store) | **Works.** A clean install ends with 3 journeys / 18 waypoints / 1538 photos + 3067 media files (~5 GB), all visible in the UI. |
-| Up (local edit → server) | **Works**, with a documented inefficiency: the first save of any record always costs one wasted round-trip (see gotcha 5). |
+| Up (local edit → server) | **Works.** As first verified it cost one wasted round-trip on every record's first save (the code-14 conflict, gotcha 5); that has since been fixed by persisting each record's encoded system fields — pending live re-verification (gotcha 5). |
 | Zone deletion / conflict / account switching | Unit-tested only. Not exercised live. |
 
 ## How to reproduce
@@ -240,13 +240,56 @@ idempotent) and carried on. The change token only advances on
    `willFetchRecordZoneChanges` and finished the remaining 959 from its change token.
    Do not treat a cancelled zone fetch as a failure; do not clear state on it.
 5. **Records are re-uploaded without a change tag, so the first save of each always
-   conflicts.** `makeRecord` builds a fresh `CKRecord`, so CloudKit sees an insert and
-   returns code 14 (`serverRecordChanged`, "record to insert already exists"). The
-   conflict path rebases onto the server record and the resend succeeds, so edits do
+   conflicts.** *(FIXED — see below. History kept because it is what the log lines in the
+   "up direction" evidence above show, and what live re-verification must confirm is gone.)*
+   As first observed: `makeRecord` built a fresh `CKRecord`, so CloudKit saw an insert and
+   returned code 14 (`serverRecordChanged`, "record to insert already exists"). The
+   conflict path rebased onto the server record and the resend succeeded, so edits did
    land — at double the round-trips, and only after the engine's retry backoff (minutes,
-   not seconds, on the Simulator). The fix is the existing TODO in
-   `PersistenceController+Sync.makeRecord`: persist `encodedSystemFields` per row.
-   Deliberately not done here — it is a Core Data schema change.
+   not seconds, on the Simulator).
+
+   **The fix (post-T2.4): persist each record's encoded system fields.** A new Core Data
+   model version (`Akashic 3`) adds a single side table,
+   `CDSyncRecordMeta { recordName (unique, indexed), systemFields: Binary }`.
+   `RecordCoder.archivedSystemFields(of:)` / `recordFromSystemFields(_:)` archive and
+   rehydrate a record's system fields (`encodeSystemFields` + `NSKeyedArchiver`, secure
+   coding). A meta row is written for **every applied fetched record**
+   (`applyFetchedRecord`) and **every successfully sent record**
+   (`AkashicSyncEngine.handleSentChanges` → `recordsDidSave`, so the second edit of a
+   locally created record also carries a tag), and removed when a record is deleted
+   locally/remotely (`applyDeletedRecord`, `recordsDidDelete`) or a store is purged
+   (`resetJourneys`). `makeRecord` now rehydrates that base when the caller supplies no
+   rebased record, so the outgoing save carries the last-known server change tag and
+   `CKSyncEngine` diffs it instead of re-inserting.
+
+   The migration is lightweight by construction: `Akashic 3` adds one **new** entity and
+   changes none of the four domain entities, so there are no existing rows to transform;
+   `NSPersistentContainer`'s default automatic + inferred migration handles it (guarded by
+   `StoreMigrationTests.testVersionTwoStoreMigratesToCurrent`).
+
+   **What live re-verification should show (the proof the code-14 path is gone).** Edit a
+   caption on a photo that was pulled down from the server (not one created in this session),
+   with `AKASHIC_SYNC_LOG=1`. Before the fix the log read:
+
+   ```
+   event: sentRecordZoneChanges saved=0 failedSaves=1
+   sendFailure Photo/<id> code=14 … "record to insert already exists"
+   nextBatch: pending=1 -> saves=1 deletes=0
+   event: sentRecordZoneChanges saved=1 failedSaves=0        <- accepted only on the RETRY
+   ```
+
+   After the fix it should be a single clean send, with **no `sendFailure … code=14`** line
+   and **no second `sentRecordZoneChanges`**:
+
+   ```
+   event: sentRecordZoneChanges saved=1 failedSaves=0        <- accepted first try
+   recordsDidSave: stored systemFields for 1 saved record(s)
+   ```
+
+   The `recordsDidSave: stored systemFields …` line (and the absence of `sendFailure`
+   code=14) is the positive signal. A `serverRecordChanged` rebase can still legitimately
+   occur if the server copy genuinely changed since the last pull — that is real conflict
+   resolution, not the first-save artifact.
 6. **Sends are the engine's business.** `automaticallySync = true` means the engine
    schedules sends itself; fetches still need an explicit `fetchChanges()` at
    activation, because the Simulator never receives the silent push that would trigger

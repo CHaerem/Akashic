@@ -147,10 +147,13 @@ final class PersistenceController {
     }
 
     /// Delete everything (journeys cascade to waypoints/photos/comments). Used to clear the
-    /// fixture seed before a fresh import so the store shows only the imported data.
+    /// fixture seed before a fresh import so the store shows only the imported data. Also clears
+    /// the sync system-fields side table (`CDSyncRecordMeta`) — those change tags belong to the
+    /// records being purged, and a stale tag rehydrated onto a re-imported record would send an
+    /// update against a version the server no longer has.
     func resetJourneys() {
         let context = container.viewContext
-        for entity in ["CDPhoto", "CDDayComment", "CDWaypoint", "CDJourney"] {
+        for entity in ["CDPhoto", "CDDayComment", "CDWaypoint", "CDJourney", "CDSyncRecordMeta"] {
             let request = NSFetchRequest<NSManagedObject>(entityName: entity)
             for object in (try? context.fetch(request)) ?? [] {
                 context.delete(object)
@@ -419,6 +422,25 @@ final class PersistenceController {
             }
         }
         cd.stats = JSONCoding.encode(stats)
+        cd.updatedAt = Date()
+        do {
+            try context.save()
+            return true
+        } catch {
+            context.rollback()
+            return false
+        }
+    }
+
+    /// Set a journey's `isPublic` flag. Drives the public showcase mirror (MAPPING §8): flipping
+    /// it true makes the journey's metadata + thumbnails eligible for the world-readable mirror.
+    /// The mirror write itself is a separate step (`PublicMirrorPublisher`); this only records
+    /// intent on the journey and lets the sync engine carry the flag to the private DB.
+    @discardableResult
+    func setJourneyPublic(id: String, isPublic: Bool) -> Bool {
+        let context = viewContext
+        guard let cd = fetchOne(CDJourney.self, matching: "id == %@", id) else { return false }
+        cd.isPublic = isPublic
         cd.updatedAt = Date()
         do {
             try context.save()
