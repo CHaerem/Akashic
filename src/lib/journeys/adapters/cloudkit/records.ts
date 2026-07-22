@@ -171,7 +171,25 @@ export async function resolveJsonField<T>(value: unknown): Promise<T | null> {
 }
 
 function timestampToIso(ts?: number): string | null {
-    return typeof ts === 'number' ? new Date(ts).toISOString() : null;
+    return typeof ts === 'number' && Number.isFinite(ts) ? new Date(ts).toISOString() : null;
+}
+
+/**
+ * Read a date field as an ISO string, whatever CloudKit hands back.
+ *
+ * Every date in the schema is a CloudKit `TIMESTAMP`, i.e. epoch **milliseconds as a
+ * number** — not the ISO strings Postgres returned. Reading them with `stringOrNull`
+ * yielded null for all of them, and nothing failed loudly: journeys simply had no date
+ * range, and all 939 Kilimanjaro photos had no `taken_at`. That last one is not
+ * cosmetic — `usePhotoDay` matches a photo to its day from `taken_at`, so every photo
+ * silently fell through to the coarser route-proximity tiers.
+ *
+ * Strings are still accepted, so records written by an older client keep working.
+ */
+function isoDateOrNull(value: unknown): string | null {
+    if (typeof value === 'number') return timestampToIso(value);
+    if (typeof value === 'string' && value) return value;
+    return null;
 }
 
 /** Map a `Journey` record to a `DbJourney` row. */
@@ -186,8 +204,8 @@ export function recordToDbJourney(record: CKRecordLike): DbJourney {
         summit_elevation: numberOrNull(f('summitElevation')),
         total_distance: numberOrNull(f('totalDistance')),
         total_days: numberOrNull(f('totalDays')),
-        date_started: stringOrNull(f('dateStarted')),
-        date_ended: stringOrNull(f('dateEnded')),
+        date_started: isoDateOrNull(f('dateStarted')),
+        date_ended: isoDateOrNull(f('dateEnded')),
         hero_image_url: assetUrl(f('heroImage')) ?? stringOrNull(f('heroImageURL')),
         // Schema field is `centerLocation` (LOCATION); `centerCoordinates` kept as a defensive fallback.
         center_coordinates: toLngLat(f('centerLocation')) ?? toLngLat(f('centerCoordinates')),
@@ -248,11 +266,11 @@ export function recordToPhoto(record: CKRecordLike): Photo {
             stringOrNull(f('thumbnailUrl')),
         caption: stringOrNull(f('caption')),
         coordinates: toLngLat(f('coordinates')),
-        taken_at: stringOrNull(f('takenAt')),
+        taken_at: isoDateOrNull(f('takenAt')),
         is_hero: boolFromCK(f('isHero')),
         sort_order: numberOrNull(f('sortOrder')) ?? undefined,
         created_at:
-            stringOrNull(f('createdAt')) ?? timestampToIso(record.created?.timestamp) ?? undefined,
+            isoDateOrNull(f('createdAt')) ?? timestampToIso(record.created?.timestamp) ?? undefined,
         uploaded_by: referenceName(f('uploadedBy')) ?? record.created?.userRecordName ?? null,
         rotation: numberOrNull(f('rotation')),
         media_type: (stringOrNull(f('mediaType')) as MediaType | null) ?? undefined,
@@ -299,12 +317,12 @@ export function recordToDayComment(
         journey_id: referenceName(f('journeyRef')) ?? stringOrNull(f('journeyId')) ?? '',
         user_id: userId,
         content: stringOrNull(f('content')) ?? '',
-        created_at: stringOrNull(f('createdAt')) ?? timestampToIso(record.created?.timestamp) ?? '',
+        created_at: isoDateOrNull(f('createdAt')) ?? timestampToIso(record.created?.timestamp) ?? '',
         // Schema field is `modifiedAt` (explicit, survives migration); system
         // modification timestamp is the fallback.
         updated_at:
             stringOrNull(f('modifiedAt')) ??
-            stringOrNull(f('updatedAt')) ??
+            isoDateOrNull(f('updatedAt')) ??
             timestampToIso(record.modified?.timestamp) ??
             '',
         author,

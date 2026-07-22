@@ -13,6 +13,7 @@ import { toTrekConfig, toTrekData } from '../../transforms';
 import { setJourneyCacheState } from '../../journeyCache';
 import { getSharedDatabase, getPrivateDatabase } from '../../../cloudkit';
 import { performQueryAll } from './paginate';
+import { rememberJourneyZones, rememberChildZones } from './journeyZones';
 import {
     recordToDbJourney,
     recordToDbWaypoint,
@@ -46,11 +47,26 @@ export const CK_UNSUPPORTED = '[cloudkit] not supported on web — use the iOS a
  */
 async function queryAllZones(query: CloudKitJS.Query): Promise<CloudKitJS.Record[]> {
     const [shared, priv] = await Promise.all([getSharedDatabase(), getPrivateDatabase()]);
-    const responses = await Promise.all([
-        performQueryAll(shared, query).catch(() => [] as CloudKitJS.Record[]),
-        performQueryAll(priv, query).catch(() => [] as CloudKitJS.Record[]),
+    const [sharedRecords, privateRecords] = await Promise.all([
+        performQueryAll(shared, query).catch((err) => {
+            console.warn('[cloudkit] shared query failed:', err);
+            return [] as CloudKitJS.Record[];
+        }),
+        performQueryAll(priv, query).catch((err) => {
+            console.warn('[cloudkit] private query failed:', err);
+            return [] as CloudKitJS.Record[];
+        }),
     ]);
-    return responses.flat();
+    // Remember where each journey lives, so photo/comment reads can scope to its
+    // zone instead of filtering on a reference they cannot construct from a slug.
+    if (query.recordType === 'Journey') {
+        rememberJourneyZones(sharedRecords, 'shared');
+        rememberJourneyZones(privateRecords, 'private');
+    } else {
+        rememberChildZones(sharedRecords, 'shared');
+        rememberChildZones(privateRecords, 'private');
+    }
+    return [...sharedRecords, ...privateRecords];
 }
 
 /**

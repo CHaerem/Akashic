@@ -11,16 +11,31 @@ import { getSharedDatabase, getPrivateDatabase } from '../../../cloudkit';
 import { recordToPhoto } from './records';
 import { CK_UNSUPPORTED } from './journeyAdapter';
 import { performQueryAll } from './paginate';
+import { resolveJourneyZone, rememberRecordZone, resolveRecordZone } from './journeyZones';
 
 const PHOTO_TYPE = 'Photo';
 
-async function queryPhotos(query: CloudKitJS.Query): Promise<CloudKitJS.Record[]> {
+/**
+ * Query both databases. Errors are logged rather than swallowed: a query that
+ * fails and one that finds nothing are the same empty array to the caller, and
+ * that ambiguity is exactly what hid the broken photo filter (see journeyZones).
+ */
+async function queryPhotos(
+    query: CloudKitJS.Query,
+    options: CloudKitJS.QueryOptions = {}
+): Promise<CloudKitJS.Record[]> {
     const [shared, priv] = await Promise.all([getSharedDatabase(), getPrivateDatabase()]);
     // Paginated: a journey can hold hundreds of photos (939 on Kilimanjaro) and
     // a single performQuery returns only the first page.
     const responses = await Promise.all([
-        performQueryAll(shared, query).catch(() => [] as CloudKitJS.Record[]),
-        performQueryAll(priv, query).catch(() => [] as CloudKitJS.Record[]),
+        performQueryAll(shared, query, options).catch((err) => {
+            console.warn('[cloudkit] shared photo query failed:', err);
+            return [] as CloudKitJS.Record[];
+        }),
+        performQueryAll(priv, query, options).catch((err) => {
+            console.warn('[cloudkit] private photo query failed:', err);
+            return [] as CloudKitJS.Record[];
+        }),
     ]);
     return responses.flat();
 }
@@ -36,14 +51,24 @@ function sortPhotos(photos: Photo[]): Photo[] {
     });
 }
 
+/**
+ * All photos for a journey.
+ *
+ * Scoped to the journey's own zone rather than filtered by `journeyRef`: callers
+ * pass the slug, `journeyRef` holds a reference to a UUID, and comparing the two
+ * made CloudKit reject the query outright. One journey per zone (D3) means the
+ * zone already *is* the filter.
+ */
 export async function fetchPhotos(journeyId: string): Promise<Photo[]> {
     try {
-        const records = await queryPhotos({
-            recordType: PHOTO_TYPE,
-            filterBy: [
-                { fieldName: 'journeyRef', comparator: 'EQUALS', fieldValue: { value: journeyId } },
-            ],
-        });
+        const zone = await resolveJourneyZone(journeyId);
+        if (!zone) {
+            console.warn(`[cloudkit] no zone found for journey ${journeyId}`);
+            return [];
+        }
+        const records = await queryPhotos({ recordType: PHOTO_TYPE }, { zoneID: zone.zoneID });
+        // Reading is also how the write path learns where each photo lives.
+        rememberRecordZone(records, zone);
         return sortPhotos(records.map(recordToPhoto));
     } catch (err) {
         console.error('[cloudkit] Error fetching photos:', err);
@@ -51,12 +76,25 @@ export async function fetchPhotos(journeyId: string): Promise<Photo[]> {
     }
 }
 
+/**
+ * Photos explicitly assigned to one day.
+ *
+ * A reference field needs a reference predicate — `{ value: { recordName }, type:
+ * 'REFERENCE' }`, not a bare string. Note that in the migrated archive `waypointRef`
+ * is unset on every photo (day assignment is derived from `taken_at` by
+ * `usePhotoDay`, exactly as it was under Postgres), so this legitimately returns
+ * nothing for imported data. It is correct for photos added since.
+ */
 export async function getPhotosForWaypoint(waypointId: string): Promise<Photo[]> {
     try {
         const records = await queryPhotos({
             recordType: PHOTO_TYPE,
             filterBy: [
-                { fieldName: 'waypointRef', comparator: 'EQUALS', fieldValue: { value: waypointId } },
+                {
+                    fieldName: 'waypointRef',
+                    comparator: 'EQUALS',
+                    fieldValue: { value: { recordName: waypointId }, type: 'REFERENCE' },
+                },
             ],
         });
         return sortPhotos(records.map(recordToPhoto));
@@ -80,15 +118,41 @@ export async function updatePhoto(
         return null;
     }
 
+    // A save needs three things the record name alone does not carry: which database
+    // owns the record, its zone (with `ownerRecordName` when shared — the shared
+    // database rejects a zone ID without it), and the current `recordChangeTag`.
+    // Saving without the tag is an insert, which collides with the existing record.
+    const zone = resolveRecordZone(photoId);
+    if (!zone) {
+        throw new Error(`[cloudkit] unknown zone for photo ${photoId} — load the journey first`);
+    }
+
     try {
-        const db = await getSharedDatabase();
-        // TODO(cloudkit): resolve the record's home database + recordChangeTag,
-        // and translate remaining light-edit fields once the schema is pinned.
-        const response = await db.saveRecords({
-            recordType: PHOTO_TYPE,
-            recordName: photoId,
-            fields: { caption: { value: updates.caption } },
-        });
+        const db = zone.scope === 'shared' ? await getSharedDatabase() : await getPrivateDatabase();
+        // `recordName` is not a queryable field — a record is fetched by name, not
+        // filtered by it.
+        const existing = await db.fetchRecords(photoId, { zoneID: zone.zoneID });
+        const current = existing.records?.[0];
+
+        // The zone belongs in the *options* argument. Putting `zoneID` on the record
+        // is accepted without complaint and then ignored: the save is aimed at the
+        // default zone, where the record does not exist, and comes back
+        // "recordChangeTag specified, but record not found".
+        const response = await db.saveRecords(
+            [
+                {
+                    recordType: PHOTO_TYPE,
+                    recordName: photoId,
+                    recordChangeTag: current?.recordChangeTag,
+                    fields: { caption: { value: updates.caption } },
+                },
+            ],
+            { zoneID: zone.zoneID }
+        );
+        if (response.hasErrors) {
+            const reason = response.errors?.[0]?.reason ?? 'unknown CloudKit error';
+            throw new Error(`[cloudkit] caption save rejected: ${reason}`);
+        }
         const saved = response.records?.[0];
         return saved ? recordToPhoto(saved) : null;
     } catch (err) {

@@ -23,9 +23,21 @@ declare namespace CloudKitJS {
         userRecordName: string;
     }
 
+    /**
+     * Identifies a custom zone. Under D3 every journey owns one
+     * (`journey-<uuid>`), so a zone-scoped query is a per-journey query.
+     */
+    interface ZoneID {
+        zoneName: string;
+        ownerRecordName?: string;
+        zoneType?: string;
+    }
+
     interface Record {
         recordName: string;
         recordType: string;
+        /** Present on query results; absent on records the client just built. */
+        zoneID?: ZoneID;
         fields: RecordFields;
         recordChangeTag?: string;
         created?: SystemMeta;
@@ -49,12 +61,15 @@ declare namespace CloudKitJS {
     interface Reference {
         recordName: string;
         action?: string;
-        zoneID?: { zoneName: string };
+        zoneID?: ZoneID;
     }
 
     interface QueryResponse {
         records: Record[];
         continuationMarker?: string;
+        /** True when CloudKit rejected part of the request — checking it is not optional. */
+        hasErrors?: boolean;
+        errors?: Array<{ reason?: string; serverErrorCode?: string; recordName?: string }>;
     }
 
     interface Query {
@@ -63,11 +78,19 @@ declare namespace CloudKitJS {
         sortBy?: unknown[];
     }
 
+    /** Second argument to `performQuery` — where `zoneID` and paging belong. */
+    interface QueryOptions {
+        zoneID?: ZoneID;
+        resultsLimit?: number;
+        continuationMarker?: string;
+        [key: string]: unknown;
+    }
+
     interface Database {
-        performQuery(query: Query, options?: unknown): Promise<QueryResponse>;
-        fetchRecords(recordNames: string | string[]): Promise<QueryResponse>;
-        saveRecords(records: unknown): Promise<QueryResponse>;
-        deleteRecords(records: unknown): Promise<QueryResponse>;
+        performQuery(query: Query, options?: QueryOptions): Promise<QueryResponse>;
+        fetchRecords(recordNames: string | string[], options?: QueryOptions): Promise<QueryResponse>;
+        saveRecords(records: unknown, options?: QueryOptions): Promise<QueryResponse>;
+        deleteRecords(records: unknown, options?: QueryOptions): Promise<QueryResponse>;
     }
 
     interface UserIdentity {

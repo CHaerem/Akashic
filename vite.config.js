@@ -188,6 +188,11 @@ export default defineConfig({
 		globals: true,
 		environment: "jsdom",
 		setupFiles: "./vitest.setup.js",
+		// Pin the data-backend flag. Without this the suite reads whatever
+		// VITE_DATA_BACKEND happens to be in a developer's .env.local, so running
+		// the app against CloudKit locally made 33 Supabase-mode tests fail with no
+		// change to the code. Tests that need the CloudKit path mock ./backend directly.
+		env: { VITE_DATA_BACKEND: "supabase" },
 		exclude: ["**/node_modules/**", "**/e2e/**"],
 		// Timeout settings for more robust tests
 		testTimeout: 10000,

@@ -70,7 +70,7 @@ graph TD
 
     subgraph W3["W3 — Web thin client"]
         T31["T3.1 ✅ CloudKit JS adapter (flagged)"]
-        T32["T3.2 🤖 Live-verify adapter vs Dev container"]
+        T32["T3.2 ✅ Live-verify adapter vs Dev container"]
         T33["T3.3 🤖 Public mirror + publish step"]
         T34["T3.4 🤖 Retire supabase-js"]
         T12 --> T32
@@ -209,10 +209,10 @@ Unblocked once the real data arrived (W0), these landed early. They run on the l
 ### T3.1 ✅ CloudKit JS adapter behind the flag (done tonight)
 `VITE_DATA_BACKEND=cloudkit` switches the data layer: `src/lib/backend.ts`, `src/lib/cloudkit.ts` (lazy CDN load, auth facade, sign-in button mount), adapters under `src/lib/journeys/adapters/cloudkit/` (reads + caption/comment writes; everything else safe-no-op with console guidance), absolute-URL passthrough in media, AuthGuard Apple ID path. Supabase mode untouched (default; full suite still green).
 
-### T3.2 🤖 Live-verify against the Dev container
-- **Needs:** T1.2 token + T2.5 imported data.
-- **Do:** run web app with the cloudkit flag against real records; fix the adapter where reality disagrees with mocks (record field names per MAPPING.md, asset URL shapes, shared-zone queries, pagination continuation).
-- **Accept:** globe loads all 3 journeys, day view + photos render via CKAsset URLs, comments list; light edits (caption, comment) round-trip; e2e smoke on the flag.
+### T3.2 ✅ Live-verify against the Dev container
+Verified against real records: 3 journeys / 18 waypoints / **1538 photos**, assets rendering from signed iCloud URLs, caption and comment edits round-tripping. Six adapter faults found and fixed — reference filters compared against slugs, dates read as strings when CloudKit sends TIMESTAMPs (which cost every photo its `taken_at`, and with it day matching), zone IDs passed on the record instead of in the options argument, writes aimed unconditionally at the shared database, and `hasErrors` never checked. Every one of them produced an empty result rather than an error, which is why the mocked tests passed throughout. Full write-up: [docs/cloudkit-js-verification.md](docs/cloudkit-js-verification.md).
+
+**Open, needs Christopher:** Mount Kenya's journey record is dated 2023-10-10 while its photos are dated 2024-10-10 — one year apart to the day.
 
 ### T3.3 🤖 Public mirror + publish step
 Native "publish" writes `PublicJourney` (+thumb records per D9); web unauthenticated path reads public DB; `?journey=` deep links work signed-out. Accept: public journey viewable in a private-browsing window with no sign-in.
