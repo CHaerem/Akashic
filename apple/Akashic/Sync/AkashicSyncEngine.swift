@@ -112,6 +112,7 @@ final class AkashicSyncEngine: NSObject, CKSyncEngineDelegate {
         status.set(.checkingAccount)
 
         let account = await accountProvider.accountStatus()
+        SyncLog.log("activate: accountStatus=\(account.rawValue) state=\(String(describing: Self.loadState() != nil))")
         if let blocked = SyncStatus.state(for: account) {
             status.set(blocked)          // .noAccount / .restricted / .unavailable -> engine OFF
             return
@@ -140,14 +141,33 @@ final class AkashicSyncEngine: NSObject, CKSyncEngineDelegate {
         // pushes, so without an explicit pull a launch shows stale data until one arrives.
         // The Simulator never receives them at all — which is exactly how this surfaced: a
         // clean install sat at 0 journeys while the container held 1559 records.
-        Task { [weak self] in
-            guard let self else { return }
-            do {
-                try await self.engine?.fetchChanges()
-                self.status.markSynced()
-            } catch {
-                self.status.set(.error("Initial fetch failed: \(error.localizedDescription)"))
-            }
+        //
+        // `Task.detached`, NEVER `Task {}` — see `fetchOnActivation`.
+        Task.detached { [weak self] in await self?.fetchOnActivation() }
+    }
+
+    /// The explicit activation pull, isolated in its own method so every caller reaches it the
+    /// same way: through a **detached** task.
+    ///
+    /// `CKSyncEngine` refuses (`fatalError`, uncatchable) any awaited call into the engine that
+    /// happens inside one of its own delegate callbacks — it cannot then guarantee serial
+    /// delivery. It detects "inside a callback" with a task-local, and a plain `Task { }`
+    /// *inherits task-locals*, so an inherited task is still "inside the callback" as far as
+    /// CloudKit is concerned. `Task.detached` starts with a clean task-local context and is the
+    /// only safe way to call back in. (Apple's own trap message says exactly this.)
+    ///
+    /// This is what actually broke the pull: `activate()` fetches, and the engine posts an
+    /// `.accountChange(.signIn)` event right after it starts — whose handler re-entered
+    /// `activate()` from inside `handleEvent`, hitting the trap and killing the app mid-fetch.
+    func fetchOnActivation() async {
+        do {
+            SyncLog.log("activate: fetchChanges() starting")
+            try await engine?.fetchChanges()
+            SyncLog.log("activate: fetchChanges() returned")
+            status.markSynced()
+        } catch {
+            SyncLog.error("activate: fetchChanges() threw \(error)")
+            status.set(.error("Initial fetch failed: \(error.localizedDescription)"))
         }
     }
 
@@ -212,6 +232,7 @@ final class AkashicSyncEngine: NSObject, CKSyncEngineDelegate {
     // MARK: - CKSyncEngineDelegate
 
     func handleEvent(_ event: CKSyncEngine.Event, syncEngine: CKSyncEngine) async {
+        SyncLog.log("event: \(Self.describe(event))")
         switch event {
         case .stateUpdate(let update):
             // Only now — once the engine's pending changes are durable — is it safe to record
@@ -257,7 +278,9 @@ final class AkashicSyncEngine: NSObject, CKSyncEngineDelegate {
                                    syncEngine: CKSyncEngine) async -> CKSyncEngine.RecordZoneChangeBatch? {
         let scope = context.options.scope
         let pending = syncEngine.state.pendingRecordZoneChanges.filter { scope.contains($0) }
-        return await nextBatch(for: pending)
+        let batch = await nextBatch(for: pending)
+        SyncLog.log("nextBatch: pending=\(pending.count) -> saves=\(batch?.recordsToSave.count ?? 0) deletes=\(batch?.recordIDsToDelete.count ?? 0)")
+        return batch
     }
 
     // MARK: - Testable event handling (plain inputs, no live engine required)
@@ -267,6 +290,7 @@ final class AkashicSyncEngine: NSObject, CKSyncEngineDelegate {
     func handleFetchedChanges(modifications: [CKRecord],
                               deletions: [(recordName: String, recordType: String)]) {
         guard !modifications.isEmpty || !deletions.isEmpty else { return }
+        SyncLog.log("handleFetchedChanges: applying mods=\(modifications.count) dels=\(deletions.count)")
         store.beginRemoteApply()
         for record in modifications { store.applyFetchedRecord(record) }
         for deletion in deletions {
@@ -328,6 +352,7 @@ final class AkashicSyncEngine: NSObject, CKSyncEngineDelegate {
                            deleted: [CKRecord.ID]) {
         var rebased: [CKSyncEngine.PendingRecordZoneChange] = []
         for failure in failed {
+            SyncLog.log("sendFailure \(failure.record.recordType)/\(failure.record.recordID.recordName) code=\(failure.error.code.rawValue) \(failure.error.localizedDescription)")
             switch failure.error.code {
             case .serverRecordChanged:
                 if let serverRecord = failure.error.serverRecord {
@@ -381,7 +406,7 @@ final class AkashicSyncEngine: NSObject, CKSyncEngineDelegate {
     private func handleAccountChange(_ change: CKSyncEngine.Event.AccountChange) {
         switch change.changeType {
         case .signIn:
-            Task { [weak self] in await self?.accountDidSignIn() }
+            handleAccountSignIn()
         case .signOut:
             accountDidSignOut()
         case .switchAccounts:
@@ -389,6 +414,24 @@ final class AkashicSyncEngine: NSObject, CKSyncEngineDelegate {
         @unknown default:
             break
         }
+    }
+
+    /// Handle a `.signIn` account change.
+    ///
+    /// `CKSyncEngine` posts one immediately after it starts on an already signed-in device —
+    /// i.e. while `activate()` is still in flight — so this fires on every ordinary launch, not
+    /// only when a user actually signs in. Re-entering `activate()` there is both pointless and
+    /// **fatal**: `activate()` awaits `fetchChanges()`, and awaiting into the engine from inside
+    /// a delegate callback trips an uncatchable `fatalError` (see `fetchOnActivation`). That
+    /// killed the app mid-pull on every clean CloudKit install.
+    ///
+    /// So only a sign-in that finds the engine stopped reactivates, and it does so detached.
+    func handleAccountSignIn() {
+        guard !isRunning else {
+            SyncLog.log("accountChange(.signIn) ignored: engine already running")
+            return
+        }
+        Task.detached { [weak self] in await self?.accountDidSignIn() }
     }
 
     /// Sign-in must go back through `activate()`. Only marking the status synced left
@@ -417,6 +460,37 @@ final class AkashicSyncEngine: NSObject, CKSyncEngineDelegate {
         defaults.removeObject(forKey: Self.didInitialUploadKey)
         Self.discardState()
         status.set(.noAccount)
+    }
+
+    /// One-line description of a sync event for `SyncLog`. Counts matter more than contents:
+    /// the question this answers is "which events fire, and with how many records".
+    private static func describe(_ event: CKSyncEngine.Event) -> String {
+        switch event {
+        case .stateUpdate:
+            return "stateUpdate"
+        case .accountChange(let change):
+            return "accountChange(\(change.changeType))"
+        case .fetchedDatabaseChanges(let changes):
+            let zones = changes.modifications.map { $0.zoneID.zoneName }.joined(separator: ",")
+            return "fetchedDatabaseChanges mods=\(changes.modifications.count) dels=\(changes.deletions.count) [\(zones)]"
+        case .fetchedRecordZoneChanges(let changes):
+            var byType: [String: Int] = [:]
+            for modification in changes.modifications {
+                byType[modification.record.recordType, default: 0] += 1
+            }
+            return "fetchedRecordZoneChanges mods=\(changes.modifications.count) dels=\(changes.deletions.count) \(byType)"
+        case .sentRecordZoneChanges(let changes):
+            return "sentRecordZoneChanges saved=\(changes.savedRecords.count) failedSaves=\(changes.failedRecordSaves.count) deleted=\(changes.deletedRecordIDs.count) failedDeletes=\(changes.failedRecordDeletes.count)"
+        case .sentDatabaseChanges(let changes):
+            return "sentDatabaseChanges savedZones=\(changes.savedZones.count) failedZoneSaves=\(changes.failedZoneSaves.count)"
+        case .willFetchChanges:            return "willFetchChanges"
+        case .didFetchChanges:             return "didFetchChanges"
+        case .willFetchRecordZoneChanges(let e): return "willFetchRecordZoneChanges(\(e.zoneID.zoneName))"
+        case .didFetchRecordZoneChanges(let e):  return "didFetchRecordZoneChanges(\(e.zoneID.zoneName)) error=\(String(describing: e.error))"
+        case .willSendChanges:             return "willSendChanges"
+        case .didSendChanges:              return "didSendChanges"
+        @unknown default:                  return "unknown"
+        }
     }
 
     private static func reason(for reason: CKDatabase.DatabaseChange.Deletion.Reason) -> ZoneDeletionReason {

@@ -100,7 +100,18 @@ extension PersistenceController: SyncLocalStore {
     }
 
     func endRemoteApply() {
-        if viewContext.hasChanges { try? viewContext.save() }
+        if viewContext.hasChanges {
+            let inserted = viewContext.insertedObjects.count
+            let updated = viewContext.updatedObjects.count
+            do {
+                try viewContext.save()
+                SyncLog.log("endRemoteApply: saved inserted=\(inserted) updated=\(updated)")
+            } catch {
+                // Previously `try?`: a validation failure silently discarded every fetched
+                // record with no trace anywhere. Never swallow this again.
+                SyncLog.error("endRemoteApply: SAVE FAILED inserted=\(inserted) updated=\(updated): \(error)")
+            }
+        }
         syncIsApplyingRemoteChanges = false
     }
 
@@ -122,7 +133,7 @@ extension PersistenceController: SyncLocalStore {
         case RecordCoder.RecordType.dayComment:
             if let comment = RecordCoder.dayComment(from: record) { applyComment(comment) }
         default:
-            break
+            SyncLog.log("applyFetchedRecord: UNKNOWN recordType \(record.recordType)")
         }
     }
 
@@ -234,7 +245,7 @@ extension PersistenceController: SyncLocalStore {
 
         // If the row already has usable bytes in our own media root, keep them: a corrupt or
         // stale server asset must never be allowed to replace a good local original.
-        if !hasStableLocalBytes(cd.localOriginalPath),
+        if !hasStableLocalBytes(cd.localOriginalPath, relativeKey: cd.url),
            let adopted = SyncMediaStaging.adopt(assetAt: staging.original,
                                                 kind: .original,
                                                 journeyId: journeyId,
@@ -245,7 +256,7 @@ extension PersistenceController: SyncLocalStore {
             if (cd.url ?? "").isEmpty { cd.url = adopted.relativeKey }
         }
 
-        if !hasStableLocalBytes(cd.localThumbPath),
+        if !hasStableLocalBytes(cd.localThumbPath, relativeKey: cd.thumbnailURL),
            let adopted = SyncMediaStaging.adopt(assetAt: staging.thumb,
                                                 kind: .thumbnail,
                                                 journeyId: journeyId,
@@ -257,14 +268,26 @@ extension PersistenceController: SyncLocalStore {
         }
     }
 
-    /// True when `path` names an existing file that lives inside our own media root — i.e.
-    /// bytes we own and that will still be there tomorrow (unlike a CloudKit staging path).
-    private func hasStableLocalBytes(_ path: String?) -> Bool {
-        guard let path, !path.isEmpty else { return false }
+    /// True when we already own the bytes inside our own media root — i.e. bytes that will still
+    /// be there tomorrow (unlike a CloudKit staging path, which CloudKit may purge).
+    ///
+    /// `relativeKey` is consulted when the stored absolute path no longer resolves: the app's
+    /// data container is re-created with a new UUID on reinstall/restore, which invalidates every
+    /// stored absolute path while the files survive (see `Photo.resolveMedia`). Without this, a
+    /// post-restore re-fetch would re-copy 1500 already-present originals out of CloudKit staging.
+    private func hasStableLocalBytes(_ path: String?, relativeKey: String?) -> Bool {
         let root = MediaLibrary.shared.root.standardizedFileURL.path
-        let standardized = URL(fileURLWithPath: path).standardizedFileURL.path
-        guard standardized.hasPrefix(root.hasSuffix("/") ? root : root + "/") else { return false }
-        return FileManager.default.fileExists(atPath: standardized)
+        let prefix = root.hasSuffix("/") ? root : root + "/"
+
+        if let path, !path.isEmpty {
+            let standardized = URL(fileURLWithPath: path).standardizedFileURL.path
+            if standardized.hasPrefix(prefix), FileManager.default.fileExists(atPath: standardized) {
+                return true
+            }
+        }
+        guard let relativeKey, !relativeKey.isEmpty else { return false }
+        let candidate = MediaLibrary.shared.absoluteURL(forRelative: relativeKey).standardizedFileURL.path
+        return candidate.hasPrefix(prefix) && FileManager.default.fileExists(atPath: candidate)
     }
 
     private func applyComment(_ comment: DayComment) {

@@ -198,6 +198,68 @@ final class SyncEngineTests: XCTestCase {
         XCTAssertTrue(mock.pendingDatabaseChanges.isEmpty)
     }
 
+    // MARK: - Activation pull + the sign-in re-entrancy guard (T2.4 live-test regressions)
+
+    /// The pull that makes a fresh install populate at all. A clean `.cloudKit` install has no
+    /// change token, so this single call is what discovers the zones and every record in them;
+    /// the Simulator never receives the silent push that would otherwise trigger it.
+    func testActivationPullFetchesOnce() async {
+        let (engine, mock, _, _) = makeEngine(account: .available)
+        await engine.activate()
+
+        await engine.fetchOnActivation()
+
+        XCTAssertEqual(mock.fetchCount, 1, "activation must pull explicitly")
+    }
+
+    /// Regression, live-found: `CKSyncEngine` posts `.signIn` right after it starts on an
+    /// already signed-in device — while `activate()` is still running. The old handler
+    /// re-entered `activate()` from inside the delegate callback, and awaiting into the engine
+    /// from there is an uncatchable `fatalError` ("Cannot await a call into CKSyncEngine from
+    /// within a delegate callback"). The app died mid-pull on every clean CloudKit install, with
+    /// the UI still claiming "Syncing".
+    func testSignInWhileAlreadyRunningDoesNotReactivate() async {
+        let (engine, mock, _, _) = makeEngine(account: .available)
+        await engine.activate()
+        let fetchesAfterActivation = mock.fetchCount
+
+        engine.handleAccountSignIn()
+
+        XCTAssertTrue(engine.isRunning)
+        XCTAssertEqual(mock.fetchCount, fetchesAfterActivation,
+                       "a redundant sign-in must not re-enter activation")
+    }
+
+    /// The guard must not break the real case: a sign-in that finds the engine stopped still
+    /// reactivates it (that path is covered end-to-end by `testSignOutThenSignInResumesEnqueueing`).
+    func testSignInAfterSignOutIsNotSuppressed() async {
+        let (engine, _, _, _) = makeEngine(account: .available)
+        await engine.activate()
+        engine.accountDidSignOut()
+        XCTAssertFalse(engine.isRunning)
+
+        await engine.accountDidSignIn()
+
+        XCTAssertTrue(engine.isRunning, "a genuine sign-in must still reactivate")
+    }
+
+    /// The UI does not observe Core Data; it publishes a snapshot taken by `JourneyStore.reload()`.
+    /// This callback is the only thing that re-takes that snapshot after a pull, so a clean
+    /// install showed "No journeys" over a fully populated store without it.
+    func testAppliedRemoteChangesNotifyObservers() async {
+        let (engine, _, _, _) = makeEngine(account: .available)
+        await engine.activate()
+        var notifications = 0
+        engine.onRemoteChangesApplied = { notifications += 1 }
+
+        let record = CKRecord(recordType: RecordCoder.RecordType.journey,
+                              recordID: CKRecord.ID(recordName: "j1",
+                                                    zoneID: CKRecordZone.ID(zoneName: zoneName)))
+        engine.handleFetchedChanges(modifications: [record], deletions: [])
+
+        XCTAssertEqual(notifications, 1, "each applied batch must re-publish the UI snapshot")
+    }
+
     // MARK: - Account changes
 
     /// Sign-out then sign-in used to leave `isRunning == false` while the status read

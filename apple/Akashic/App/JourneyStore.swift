@@ -22,6 +22,13 @@ final class JourneyStore: ObservableObject {
     init(persistence: PersistenceController = .shared) {
         self.persistence = persistence
         reload()
+        // Pulled server changes land straight in Core Data, which this store does NOT observe —
+        // it publishes a snapshot taken by `reload()`. Without this hook a clean `.cloudKit`
+        // install downloaded the whole archive and still showed "No journeys" until the next
+        // relaunch. The coordinator fires it on the main actor after each applied batch.
+        persistence.syncCoordinator?.onRemoteChangesApplied = { [weak self] in
+            self?.reload()
+        }
     }
 
     var mode: PersistenceMode { persistence.mode }

@@ -308,4 +308,71 @@ final class SyncStoreTests: XCTestCase {
         XCTAssertEqual(try controller.viewContext.count(for: waypointRequest), 0,
                        "deleting the journey cascades to its waypoints")
     }
+
+    // MARK: - Media paths survive a new data container (T2.4 live-test regression)
+    //
+    // An iOS app's data container is re-created with a fresh UUID on reinstall, restore and
+    // migration, which invalidates every absolute path stored in Core Data while the files
+    // themselves are carried across. That is precisely the "restore the archive onto a new
+    // phone" case CloudKit sync exists for — and it showed up the first time a synced install
+    // was reinstalled: 1538 photos on disk, every single thumbnail a broken-image placeholder.
+
+    private func makeMediaFile(relativeKey: String) throws -> URL {
+        let url = MediaLibrary.shared.absoluteURL(forRelative: relativeKey)
+        try FileManager.default.createDirectory(at: url.deletingLastPathComponent(),
+                                                withIntermediateDirectories: true)
+        try Data([0x1]).write(to: url)
+        addTeardownBlock { try? FileManager.default.removeItem(at: url) }
+        return url
+    }
+
+    func testStaleAbsolutePathFallsBackToTheRelativeKey() throws {
+        let key = "journeys/j-media/photos/p-media_thumb.jpg"
+        let real = try makeMediaFile(relativeKey: key)
+        var photo = Photo(id: "p-media", journeyId: "j-media", url: "", thumbnailURL: key)
+        photo.localThumbPath = "/var/mobile/Containers/Data/Application/DEAD-BEEF/Library/"
+            + "Application Support/media/" + key
+
+        XCTAssertEqual(photo.thumbnailFileURL?.standardizedFileURL,
+                       real.standardizedFileURL,
+                       "a dead container path must be re-resolved against the current media root")
+        XCTAssertTrue(photo.hasLocalMedia)
+    }
+
+    func testValidAbsolutePathOutsideTheMediaRootStillWins() throws {
+        // The local importer legitimately points at bytes inside the export bundle, where the
+        // R2 key does not resolve — so the absolute path must be tried first, not second.
+        let outside = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("akashic-outside-\(UUID().uuidString).jpg")
+        try Data([0x1]).write(to: outside)
+        addTeardownBlock { try? FileManager.default.removeItem(at: outside) }
+
+        var photo = Photo(id: "p-outside", journeyId: "j-outside", url: "",
+                          thumbnailURL: "journeys/j-outside/photos/nothing_thumb.jpg")
+        photo.localThumbPath = outside.path
+
+        XCTAssertEqual(photo.thumbnailFileURL?.standardizedFileURL, outside.standardizedFileURL)
+    }
+
+    func testMissingBytesResolveToNil() {
+        var photo = Photo(id: "p-gone", journeyId: "j-gone", url: "journeys/j-gone/photos/p-gone.jpg",
+                          thumbnailURL: "journeys/j-gone/photos/p-gone_thumb.jpg")
+        photo.localOriginalPath = "/nope/original.jpg"
+        photo.localThumbPath = "/nope/thumb.jpg"
+
+        XCTAssertNil(photo.thumbnailFileURL)
+        XCTAssertNil(photo.originalFileURL)
+        XCTAssertFalse(photo.hasLocalMedia, "nothing on disk must not report local media")
+    }
+
+    /// The thumbnail falls back to the original so a photo whose thumb never downloaded still
+    /// renders — via the same stale-path-tolerant resolution.
+    func testThumbnailFallsBackToOriginalThroughTheRelativeKey() throws {
+        let key = "journeys/j-fallback/photos/p-fallback.jpg"
+        let real = try makeMediaFile(relativeKey: key)
+        var photo = Photo(id: "p-fallback", journeyId: "j-fallback", url: key, thumbnailURL: nil)
+        photo.localOriginalPath = "/gone/p-fallback.jpg"
+
+        XCTAssertEqual(photo.thumbnailFileURL?.standardizedFileURL, real.standardizedFileURL)
+    }
 }
