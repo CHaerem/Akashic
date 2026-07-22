@@ -71,7 +71,7 @@ graph TD
     subgraph W3["W3 — Web thin client"]
         T31["T3.1 ✅ CloudKit JS adapter (flagged)"]
         T32["T3.2 ✅ Live-verify adapter vs Dev container"]
-        T33["T3.3 🤖 Public mirror + publish step"]
+        T33["T3.3 🌗 Public mirror + publish step (code done)"]
         T34["T3.4 ✅ Retire supabase-js"]
         T12 --> T32
         T25 --> T32
@@ -214,8 +214,11 @@ Verified against real records: 3 journeys / 18 waypoints / **1538 photos**, asse
 
 **Open, needs Christopher:** Mount Kenya's journey record is dated 2023-10-10 while its photos are dated 2024-10-10 — one year apart to the day.
 
-### T3.3 🤖 Public mirror + publish step
-Native "publish" writes `PublicJourney` (+thumb records per D9); web unauthenticated path reads public DB; `?journey=` deep links work signed-out. Accept: public journey viewable in a private-browsing window with no sign-in.
+### T3.3 🌗 Public mirror + publish step — code done, first publish is a morning step
+Both halves built and tested (night 3):
+- **iOS** — `apple/Akashic/Sync/PublicMirrorPublisher.swift` + Showcase sheet on the journey menu. Chunked `.allKeys` saves, stale-photo reconciliation, unpublish, progress + result summary. Hard rule with its own tests: **originals never leave the private DB** — `strictThumbURL` refuses `Photo.thumbnailFileURL`'s display-fallback to original bytes.
+- **Web** — `src/lib/journeys/adapters/cloudkit/publicAdapter.ts` + AuthGuard showcase mode: signed-out visitors read the public DB anonymously (globe, days via `waypointsJSON`, thumbs, deep links); family signs in via a pill → CloudKit JS Apple button.
+- **Live tonight:** signed-out web verified against the real container (clean empty state, pill, overlay); the publish itself was blocked by iOS demanding the Apple ID password on the simulator — surfaced exactly as designed in the sheet. **Accept-kriteriet (public journey i privat vindu) lukkes av morgensteg 1–3 i runboken.** `cktool` seeding was rejected as an alternative: record writes need a user token, and foreign-creator records could never be overwritten by the app (`GRANT WRITE TO _creator`).
 
 ### T3.4 ✅ Retire supabase
 `@supabase/supabase-js` uninstalled; `src/lib/supabase.ts`, `src/lib/backend.ts` and the whole `VITE_DATA_BACKEND` flag deleted; the five `*API.ts` modules are now thin re-exports of the CloudKit adapters; AuthGuard is Apple-ID-only; `useMedia` no longer waits for a token; Supabase runtime caching gone from the SW config and `VITE_SUPABASE_*` gone from all five workflows.

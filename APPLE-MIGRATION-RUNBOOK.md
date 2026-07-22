@@ -1,5 +1,30 @@
 # Apple Migration — Operator Runbook
 
+> **⏰ MORNING STEPS (written overnight 2026-07-22 → 23) — ~10 minutes total:**
+>
+> 1. **Re-enter your Apple ID password on the simulator** (iPhone 17 Pro). iOS
+>    demanded account re-verification last night, which blocked every CloudKit
+>    call ("iCloud temporarily unavailable" in the app's Settings — the status
+>    row caught it). Simulator → Settings → tap the banner → password.
+> 2. **Publish the showcase (first real run):** the Debug-CloudKit build is
+>    already installed. Launch Akashic (it needs the CloudKit env; easiest from
+>    terminal):
+>    `SIMCTL_CHILD_AKASHIC_CLOUDKIT=1 SIMCTL_CHILD_AKASHIC_SYNC_LOG=1 xcrun simctl launch --terminate-running-process 5B09400C-4865-4044-8398-5BB050B762C9 no.akashic.app`
+>    Then per journey: **Journeys → ⋯ → Showcase → Publish/Update**. Kilimanjaro
+>    uploads 939 thumbs — expect a few minutes; watch the progress bar and the
+>    result summary (published / skipped / removed / failed).
+> 3. **See the public showcase:** open a private browser window on
+>    `http://localhost:5173` (`npm run dev`) — the globe should show the
+>    published journeys with days and thumbnails, **no sign-in**. Deep link:
+>    `?journey=kilimanjaro`. That closes T3.3's acceptance.
+> 4. **Verify the first-save fix while you're in the app:** edit any photo
+>    caption. In the sync log, the save should succeed on the FIRST
+>    `sentRecordZoneChanges` (no `code=14` line) followed by
+>    `recordsDidSave: stored systemFields`.
+> 5. Then the standing items: **merge PR #41**, add family TestFlight testers
+>    (§4/§7), and answer whether anyone in the family uses Windows (decides the
+>    web client's long-term scope, D6).
+
 **Who this is for:** Christopher (chris.haerem@gmail.com), the owner. Every step below needs a
 credential, an Apple/Cloudflare/GitHub account, or a physical device that an agent does **not**
 have. Do these yourself, in order. Everything else in the migration (code, schema files, export
