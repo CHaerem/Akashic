@@ -192,7 +192,7 @@ Verified end to end on the simulator: the produced archive is well-formed GPX (`
 
 ### Delivered ahead of schedule (night 2 — off the original W2 critical path)
 
-Unblocked once the real data arrived (W0), these landed early. They run on the local `.local` / `.fixtures` store today and bind to CloudKit automatically via `PersistenceController` once **T2.3** (sync/signing) and **T2.5** (importer) land. Test suite now **105+ unit tests, all green.**
+Unblocked once the real data arrived (W0), these landed early. They run on the local `.local` / `.fixtures` store today and bind to CloudKit automatically via `PersistenceController` once **T2.3** (sync/signing) and **T2.5** (importer) land. Test suite now **105+ unit tests, all green** (night 3: 309 apple / 378 web).
 
 - **T2.12 ✅ Real-data local import pipeline** — `apple/Akashic/Import/` (`ExportBundle`, `ExportMapper`, `LocalImporter`, `ImportBrowserView`, `PhotoDayMatcher`) imports the T0.2/T0.3 export bundle into the local store. Built around an **`ImportSink` protocol seam** (`LocalImporter.swift`): `CoreDataImportSink` writes the local Core Data store tonight; the **`CloudKitImportSink` for T2.5** drops into the *same seam* to write CKRecords into per-journey zones. This is pre-T2.5 groundwork, not a replacement for it.
 - **T2.13 ✅ Day-content UI** — `apple/Akashic/Views/Day/` (`DayDetailSheet`, `DayDiscoveriesView`, `WeatherRow`, `FunFactsCarousel`, `DayContentConfig`): weather, fun facts, POIs, historical sites. **Fix along the way:** the first importer version silently dropped these JSONB payloads (`weather` / `fun_facts` / `points_of_interest` / `historical_sites`); the mapper now carries them through.
