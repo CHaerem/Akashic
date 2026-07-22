@@ -80,25 +80,20 @@ nothing.
   earlier, then appeared on the next call. The UI should insert optimistically rather
   than refetch to confirm a write it already knows succeeded.
 
-## Data discrepancy worth a human decision
+## Data discrepancy — RESOLVED
 
-**Mount Kenya is dated a year before its own photos.** The journey record says
-`2023-10-10`; the 264 dated photos run `2024-10-10` → `2024-10-17` — same day and
-month, one year apart. That looks like a typo in the journey record rather than bad
-EXIF, but only Christopher knows which year he climbed it. Until it is settled, date
-matching finds no day for any Mount Kenya photo and they fall through to route
-proximity.
+**Mount Kenya was dated a year before its own photos** (journey said `2023-10-10`,
+photos ran `2024-10-10` → `2024-10-17`). Christopher confirmed 2026-07-22: the trek
+was **2024**. The journey record was corrected in CloudKit (dateStarted/dateEnded
++1 year); its 318 photos now date-match across all 5 days.
 
 ## Running it
 
 ```bash
-VITE_DATA_BACKEND=cloudkit npm run dev
+npm run dev
 ```
 
 with `VITE_CLOUDKIT_API_TOKEN` and `VITE_CLOUDKIT_ENV=development` in `.env.local`.
-Sign in with the Apple ID that owns the container.
-
-Note that the **test suite pins `VITE_DATA_BACKEND=supabase`** (`vite.config.js`).
-Without that pin the suite read whatever was in a developer's `.env.local`, and running
-the app against CloudKit locally made 33 Supabase-mode tests fail with no change to
-the code.
+CloudKit is the only backend since T3.4 — the `VITE_DATA_BACKEND` flag no longer
+exists. Sign in with the Apple ID that owns the container; signed-out visitors get
+the public showcase (T3.3).

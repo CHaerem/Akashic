@@ -47,6 +47,12 @@ jobs:
       - name: Run E2E tests
         env:
           VITE_MAPBOX_TOKEN: ${{ secrets.VITE_MAPBOX_TOKEN }}
+          # CloudKit is the only backend (T3.4). The JS API token is public and
+          # container-scoped — it is baked into the client bundle either way — so
+          # it lives in repo vars, not secrets. Signed-out e2e reads the public
+          # showcase mirror (T3.3) in the Development environment.
+          VITE_CLOUDKIT_ENV: ${{ vars.VITE_CLOUDKIT_ENV || 'development' }}
+          VITE_CLOUDKIT_API_TOKEN: ${{ vars.VITE_CLOUDKIT_API_TOKEN || '' }}
           VITE_E2E_TEST_MODE: 'true'
           CI: 'true'
         run: npx playwright test --project=chromium --ignore-snapshots

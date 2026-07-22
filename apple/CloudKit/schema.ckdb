@@ -101,6 +101,7 @@ DEFINE SCHEMA
         defaultZoom          DOUBLE,
         routeJSON            ASSET,
         statsJSON            STRING,
+        waypointsJSON        ASSET,
         heroThumb            ASSET,
         "___recordID"        REFERENCE QUERYABLE,
         GRANT WRITE TO "_creator",

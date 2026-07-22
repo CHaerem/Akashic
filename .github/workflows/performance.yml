@@ -54,6 +54,8 @@ jobs:
       - name: Run performance tests
         env:
           VITE_MAPBOX_TOKEN: ${{ secrets.VITE_MAPBOX_TOKEN }}
+          VITE_CLOUDKIT_ENV: ${{ vars.VITE_CLOUDKIT_ENV || 'development' }}
+          VITE_CLOUDKIT_API_TOKEN: ${{ vars.VITE_CLOUDKIT_API_TOKEN || '' }}
           VITE_E2E_TEST_MODE: 'true'
           CI: 'true'
         run: npm run test:e2e:perf
@@ -103,6 +105,8 @@ jobs:
       - name: Run mobile performance tests
         env:
           VITE_MAPBOX_TOKEN: ${{ secrets.VITE_MAPBOX_TOKEN }}
+          VITE_CLOUDKIT_ENV: ${{ vars.VITE_CLOUDKIT_ENV || 'development' }}
+          VITE_CLOUDKIT_API_TOKEN: ${{ vars.VITE_CLOUDKIT_API_TOKEN || '' }}
           VITE_E2E_TEST_MODE: 'true'
           CI: 'true'
         run: npm run test:e2e:perf:mobile

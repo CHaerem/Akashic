@@ -231,7 +231,15 @@ CloudKit JS + a public API token, **no sign-in required** (D6/D9).
 
 **Publish flow (owner's native app), triggered when `Journey.isPublic` flips true:**
 1. Upsert a **`PublicJourney`** record (public DB) = journey metadata +
-   `heroThumb` + `routeJSON` + `statsJSON`. **No `original` photos, ever.**
+   `heroThumb` + `routeJSON` + `statsJSON` + `waypointsJSON`. **No `original`
+   photos, ever.**
+
+   `waypointsJSON` (added 2026-07-22, T3.3) carries the full day/camp payload —
+   names, notes, highlights, weather, fun facts, POIs, historical sites. This
+   content was always public: the old akashic.no shipped it as fixtures in a
+   public repo, and without it the signed-out showcase loses the entire day
+   experience. D9's quota concern was full-resolution *photos*, which stay
+   private. As an ASSET it is fetched lazily, so the metadata record stays tiny.
 2. Upsert one **`PublicPhoto`** per journey photo = **`thumb` only** (400px, q80),
    plus `journeySlug` (QUERYABLE, the join key the web queries on), `caption`,
    `takenAt`, `coordinates`, `dayNumber` (for day-grouping the showcase without
@@ -247,12 +255,14 @@ ASSET-list of thumbs (D9 quota reasoning):**
   read. Separate `PublicPhoto` records let the web query thumbs lazily by
   `journeySlug` and page them, keeping the `PublicJourney` metadata record tiny and
   fast to load for the globe/showcase.
-- Thumbnails only (~20–50 KB each). ~96 photos + 3 journeys today ⇒ ~96
-  `PublicPhoto` + 3 `PublicJourney` records — negligible against public-DB quota,
-  and full-resolution originals never leave the private DB.
+- Thumbnails only (~20–50 KB each). The real archive is 1538 photos across 3
+  journeys ⇒ ~1538 `PublicPhoto` + 3 `PublicJourney` records, roughly 30–75 MB of
+  asset storage — well inside the public-DB baseline, and full-resolution
+  originals never leave the private DB. (An earlier draft said ~96 photos; that
+  predated the full import.)
 
 All 3 current journeys are `is_public = true`, so the first publish creates 3
-`PublicJourney` + ~96 `PublicPhoto` records.
+`PublicJourney` + ~1538 `PublicPhoto` records.
 
 Public identity/write model: only the owner writes the public mirror
 (`GRANT WRITE TO "_creator"`); the world only reads it.
