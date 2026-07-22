@@ -72,7 +72,7 @@ graph TD
         T31["T3.1 ✅ CloudKit JS adapter (flagged)"]
         T32["T3.2 ✅ Live-verify adapter vs Dev container"]
         T33["T3.3 🤖 Public mirror + publish step"]
-        T34["T3.4 🤖 Retire supabase-js"]
+        T34["T3.4 ✅ Retire supabase-js"]
         T12 --> T32
         T25 --> T32
         T32 --> T33 --> T34
@@ -217,8 +217,12 @@ Verified against real records: 3 journeys / 18 waypoints / **1538 photos**, asse
 ### T3.3 🤖 Public mirror + publish step
 Native "publish" writes `PublicJourney` (+thumb records per D9); web unauthenticated path reads public DB; `?journey=` deep links work signed-out. Accept: public journey viewable in a private-browsing window with no sign-in.
 
-### T3.4 🤖 Retire supabase
-Remove `@supabase/supabase-js`, `react-router-dom` (unused), supabase runtime caching in `vite.config.js` SW config, `VITE_SUPABASE_*` from workflows; delete `src/lib/supabase.ts` after AuthGuard/useMedia fully switch. Gate: T3.2 green ≥2 weeks.
+### T3.4 ✅ Retire supabase
+`@supabase/supabase-js` uninstalled; `src/lib/supabase.ts`, `src/lib/backend.ts` and the whole `VITE_DATA_BACKEND` flag deleted; the five `*API.ts` modules are now thin re-exports of the CloudKit adapters; AuthGuard is Apple-ID-only; `useMedia` no longer waits for a token; Supabase runtime caching gone from the SW config and `VITE_SUPABASE_*` gone from all five workflows.
+
+**The plan's gate (T3.2 green ≥2 weeks) was not waited out** — done on Christopher's "jeg vil gjøre alt". The fallback it protected was illusory anyway: every write since the migration has gone to CloudKit, so falling back to Supabase would serve an archive frozen at migration day. The real safety net is the 16.41 GB export bundle.
+
+Found while verifying: day content (weather, fun facts, POIs, historical sites) is written by the iOS app in camelCase but read against the Postgres-derived snake_case shapes — the day header showed "NaN°C" over intact weather data. Normalised in `records.ts`.
 
 ---
 

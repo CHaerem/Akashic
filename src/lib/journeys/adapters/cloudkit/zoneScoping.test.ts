@@ -19,7 +19,7 @@ vi.mock('../../../cloudkit', () => ({
 }));
 
 import { fetchPhotos, getPhotosForWaypoint } from './photoAdapter';
-import { recordToPhoto, recordToDbJourney } from './records';
+import { recordToPhoto, recordToDbJourney, snakeCaseKeys } from './records';
 import { rememberJourneyZones, resolveJourneyZone, clearJourneyZones } from './journeyZones';
 
 const ZONE = { zoneName: 'journey-uuid-1', ownerRecordName: '_owner', zoneType: 'REGULAR_CUSTOM_ZONE' };
@@ -180,5 +180,32 @@ describe('date fields arrive as CloudKit TIMESTAMPs', () => {
             fields: {},
         } as unknown as CloudKitJS.Record);
         expect(photo.taken_at).toBeNull();
+    });
+});
+
+describe('day content is written in camelCase by the app', () => {
+    /**
+     * The iOS app writes these payloads with Swift's camelCase; the web's `Db*`
+     * shapes came from the Postgres column names. The mismatch was invisible until
+     * the day header rendered "NaN°C" over a weather record that was entirely intact.
+     */
+    it('normalises weather keys so the transform can read them', () => {
+        expect(
+            snakeCaseKeys<{ temperature_max: number }>({ temperatureMax: 13.2 })
+        ).toEqual({ temperature_max: 13.2 });
+    });
+
+    it('recurses into arrays and nested objects', () => {
+        expect(
+            snakeCaseKeys([{ learnMoreUrl: 'x', nested: { routeDistanceKm: 4 } }])
+        ).toEqual([{ learn_more_url: 'x', nested: { route_distance_km: 4 } }]);
+    });
+
+    it('leaves snake_case and scalars alone', () => {
+        expect(snakeCaseKeys({ temperature_max: 1, tips: ['a', 'b'] })).toEqual({
+            temperature_max: 1,
+            tips: ['a', 'b'],
+        });
+        expect(snakeCaseKeys(null)).toBeNull();
     });
 });

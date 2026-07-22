@@ -43,12 +43,12 @@ async function selectFirstTrek(page: Page): Promise<boolean> {
     }
 }
 
-test.describe('Supabase Data Loading', () => {
-    // Test app loads with Supabase data
-    test('app loads with Supabase data', async ({ page }) => {
+test.describe('CloudKit Data Loading', () => {
+    // Test app loads with CloudKit data
+    test('app loads with CloudKit data', async ({ page }) => {
         const errors: string[] = [];
         page.on('console', msg => {
-            if (msg.type() === 'error' && msg.text().toLowerCase().includes('supabase')) {
+            if (msg.type() === 'error' && /supabase|cloudkit/.test(msg.text().toLowerCase())) {
                 errors.push(msg.text());
             }
         });
@@ -65,12 +65,12 @@ test.describe('Supabase Data Loading', () => {
         // Hint appears only after data is available (desktop shows "Click", mobile shows "Tap")
         await expect(page.getByText(/(Click|Tap) a marker to explore/)).toBeVisible({ timeout: DATA_TIMEOUT });
 
-        // No Supabase errors
+        // No CloudKit errors
         expect(errors).toHaveLength(0);
     });
 
-    // Test trek data loads from Supabase
-    test('trek data loads from Supabase', async ({ page }) => {
+    // Test trek data loads from CloudKit
+    test('trek data loads from CloudKit', async ({ page }) => {
         await page.goto('/');
         await page.waitForSelector('canvas', { timeout: MAP_TIMEOUT });
         await waitForMapReady(page);
@@ -82,7 +82,7 @@ test.describe('Supabase Data Loading', () => {
             return;
         }
 
-        // Verify trek data is displayed (from Supabase)
+        // Verify trek data is displayed (from CloudKit)
         await expect(page.getByText('Summit:')).toBeVisible();
 
         // Click explore

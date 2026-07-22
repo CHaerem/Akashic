@@ -64,22 +64,6 @@ export default defineConfig({
 				navigateFallback: "/index.html",
 				navigateFallbackDenylist: [/^\/api/, /^\/share-target/],
 				runtimeCaching: [
-					// Supabase API - cache journey data for offline access
-					{
-						urlPattern: /^https:\/\/.*\.supabase\.co\/rest\/v1\//,
-						handler: "NetworkFirst",
-						options: {
-							cacheName: "supabase-api-v2", // v2: reduced cache time to 5min
-							expiration: {
-								maxEntries: 50,
-								maxAgeSeconds: 60 * 5, // 5 minutes - short cache for data that can change
-							},
-							networkTimeoutSeconds: 10,
-							cacheableResponse: {
-								statuses: [0, 200],
-							},
-						},
-					},
 					// R2 media - cache photos for offline viewing
 					{
 						urlPattern: /^https:\/\/akashic-media\..*\.workers\.dev\//,
@@ -188,11 +172,6 @@ export default defineConfig({
 		globals: true,
 		environment: "jsdom",
 		setupFiles: "./vitest.setup.js",
-		// Pin the data-backend flag. Without this the suite reads whatever
-		// VITE_DATA_BACKEND happens to be in a developer's .env.local, so running
-		// the app against CloudKit locally made 33 Supabase-mode tests fail with no
-		// change to the code. Tests that need the CloudKit path mock ./backend directly.
-		env: { VITE_DATA_BACKEND: "supabase" },
 		exclude: ["**/node_modules/**", "**/e2e/**"],
 		// Timeout settings for more robust tests
 		testTimeout: 10000,

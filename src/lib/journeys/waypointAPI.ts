@@ -1,15 +1,11 @@
 /**
- * Waypoint CRUD operations
+ * Waypoints (days/camps).
+ *
+ * Reads only on web — creating, editing, repositioning, deleting and reordering days
+ * are native-only (D6). The shapes below stay here rather than in the adapter because
+ * the adapter imports them.
  */
 
-import { supabase } from '../supabase';
-import { isCloudKitBackend } from '../backend';
-import type { DbWaypoint } from './types';
-import * as ckWaypoint from './adapters/cloudkit/waypointAdapter';
-
-/**
- * Editable waypoint fields
- */
 export interface WaypointUpdate {
     name?: string;
     description?: string;
@@ -21,99 +17,6 @@ export interface WaypointUpdate {
     route_point_index?: number | null;
 }
 
-/**
- * Update a waypoint
- */
-export async function updateWaypoint(waypointId: string, updates: WaypointUpdate): Promise<boolean> {
-    if (isCloudKitBackend) return ckWaypoint.updateWaypoint(waypointId, updates);
-
-    if (!supabase) {
-        console.warn('Supabase not configured');
-        return false;
-    }
-
-    const { error } = await supabase
-        .from('waypoints')
-        .update(updates)
-        .eq('id', waypointId);
-
-    if (error) {
-        console.error('Error updating waypoint:', error);
-        throw new Error(error.message);
-    }
-
-    return true;
-}
-
-/**
- * Get waypoint by ID
- */
-export async function getWaypoint(waypointId: string): Promise<DbWaypoint | null> {
-    if (isCloudKitBackend) return ckWaypoint.getWaypoint(waypointId);
-
-    if (!supabase) return null;
-
-    const { data, error } = await supabase
-        .from('waypoints')
-        .select('*')
-        .eq('id', waypointId)
-        .single();
-
-    if (error) {
-        console.error('Error fetching waypoint:', error);
-        return null;
-    }
-
-    return data;
-}
-
-/**
- * Update waypoint position on route
- * Used when dragging a camp marker to a new position
- */
-export async function updateWaypointPosition(
-    waypointId: string,
-    coordinates: [number, number],
-    elevation: number | null,
-    routeDistanceKm: number | null,
-    routePointIndex: number | null
-): Promise<boolean> {
-    if (isCloudKitBackend) {
-        return ckWaypoint.updateWaypointPosition(
-            waypointId,
-            coordinates,
-            elevation,
-            routeDistanceKm,
-            routePointIndex
-        );
-    }
-
-    if (!supabase) {
-        console.warn('Supabase not configured');
-        return false;
-    }
-
-    const { error } = await supabase
-        .from('waypoints')
-        .update({
-            coordinates,
-            elevation,
-            route_distance_km: routeDistanceKm,
-            route_point_index: routePointIndex
-        })
-        .eq('id', waypointId);
-
-    if (error) {
-        console.error('Error updating waypoint position:', error);
-        throw new Error(error.message);
-    }
-
-    return true;
-}
-
-/**
- * New waypoint data structure
- */
 export interface NewWaypoint {
     journey_id: string;
     name: string;
@@ -127,91 +30,11 @@ export interface NewWaypoint {
     route_point_index?: number;
 }
 
-/**
- * Create a new waypoint for a journey
- */
-export async function createWaypoint(waypoint: NewWaypoint): Promise<DbWaypoint | null> {
-    if (isCloudKitBackend) return ckWaypoint.createWaypoint(waypoint);
-
-    if (!supabase) {
-        console.warn('Supabase not configured');
-        return null;
-    }
-
-    const { data, error } = await supabase
-        .from('waypoints')
-        .insert({
-            ...waypoint,
-            waypoint_type: waypoint.waypoint_type || 'camp'
-        })
-        .select()
-        .single();
-
-    if (error) {
-        console.error('Error creating waypoint:', error);
-        throw new Error(error.message);
-    }
-
-    return data;
-}
-
-/**
- * Delete a waypoint
- */
-export async function deleteWaypoint(waypointId: string): Promise<boolean> {
-    if (isCloudKitBackend) return ckWaypoint.deleteWaypoint(waypointId);
-
-    if (!supabase) {
-        console.warn('Supabase not configured');
-        return false;
-    }
-
-    const { error } = await supabase
-        .from('waypoints')
-        .delete()
-        .eq('id', waypointId);
-
-    if (error) {
-        console.error('Error deleting waypoint:', error);
-        throw new Error(error.message);
-    }
-
-    return true;
-}
-
-/**
- * Update sort order for multiple waypoints (for reordering)
- */
-export async function updateWaypointOrder(
-    updates: Array<{ id: string; sort_order: number; day_number: number }>
-): Promise<boolean> {
-    if (isCloudKitBackend) return ckWaypoint.updateWaypointOrder(updates);
-
-    if (!supabase) {
-        console.warn('Supabase not configured');
-        return false;
-    }
-
-    // Process all updates and collect any failures
-    const failures: Array<{ id: string; error: string }> = [];
-
-    for (const update of updates) {
-        const { error } = await supabase
-            .from('waypoints')
-            .update({ sort_order: update.sort_order, day_number: update.day_number })
-            .eq('id', update.id);
-
-        if (error) {
-            console.error(`Error updating waypoint ${update.id}:`, error);
-            failures.push({ id: update.id, error: error.message });
-        }
-    }
-
-    // If any failures occurred, throw with details
-    if (failures.length > 0) {
-        const failedIds = failures.map(f => f.id).join(', ');
-        throw new Error(`Failed to update ${failures.length} waypoint(s): ${failedIds}`);
-    }
-
-    return true;
-}
+export {
+    getWaypoint,
+    updateWaypoint,
+    updateWaypointPosition,
+    createWaypoint,
+    deleteWaypoint,
+    updateWaypointOrder,
+} from './adapters/cloudkit/waypointAdapter';

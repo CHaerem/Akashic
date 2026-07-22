@@ -117,7 +117,7 @@ export async function getPublicDatabase(): Promise<CloudKitJS.Database> {
 }
 
 // ---------------------------------------------------------------------------
-// Auth facade (mirrors the supabase.auth surface the app relies on)
+// Auth facade
 // ---------------------------------------------------------------------------
 
 export interface CloudKitSession {
@@ -126,7 +126,7 @@ export interface CloudKitSession {
 }
 
 /**
- * Equivalent of `supabase.auth.getSession()`: returns the current CloudKit
+ * Returns the current CloudKit
  * identity (or null). Setting up auth is what surfaces the persisted session.
  */
 export async function getCloudKitSession(): Promise<CloudKitSession> {
@@ -136,7 +136,7 @@ export async function getCloudKitSession(): Promise<CloudKitSession> {
 }
 
 /**
- * Equivalent of `supabase.auth.onAuthStateChange()`: invokes `handler` whenever
+ * Invokes `handler` whenever
  * the user signs in or out. Returns an unsubscribe function.
  */
 export function onCloudKitAuthChange(handler: (session: CloudKitSession) => void): () => void {

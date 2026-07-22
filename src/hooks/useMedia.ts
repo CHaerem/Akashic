@@ -1,65 +1,33 @@
 /**
- * Hook for loading authenticated media from R2 storage
+ * Media URL helpers for components.
+ *
+ * There is no longer a token to wait for: CloudKit asset URLs are absolute and
+ * pre-authenticated. The hook keeps its shape (including `token` and `loading`, which
+ * callers gate their first render on) so components did not have to change with T3.4.
  */
 
-import { useState, useEffect, useCallback } from 'react';
-import { supabase } from '../lib/supabase';
-import { isCloudKitBackend } from '../lib/backend';
+import { useCallback } from 'react';
 import { buildMediaUrl, getJourneyPhotoPath } from '../lib/media';
 
 interface UseMediaReturn {
-    /** Current access token (may be null if not authenticated) */
-    token: string | null;
-    /** Build an authenticated URL for any media path */
+    /** Always null — CloudKit assets carry their own authorisation. */
+    token: null;
+    /** Build a loadable URL for any media path or absolute asset URL. */
     getMediaUrl: (path: string) => string;
-    /** Get authenticated photo URL (using journey UUID) */
+    /** Legacy relative path for a journey photo (pre-CloudKit objects). */
     getPhotoUrl: (journeyId: string, photoId: string, extension?: string) => string;
-    /** Whether the token is being loaded */
-    loading: boolean;
+    /** Always false — nothing is fetched here any more. */
+    loading: false;
 }
 
-/**
- * Hook that provides authenticated media URLs
- * Automatically refreshes when auth state changes
- */
 export function useMedia(): UseMediaReturn {
-    const [token, setToken] = useState<string | null>(null);
-    const [loading, setLoading] = useState(true);
+    const getMediaUrl = useCallback((path: string) => buildMediaUrl(path), []);
 
-    useEffect(() => {
-        // In CloudKit mode there is no bearer token — asset URLs are absolute
-        // and pre-authenticated, so skip all Supabase session wiring.
-        if (isCloudKitBackend || !supabase) {
-            setLoading(false);
-            return;
-        }
+    const getPhotoUrl = useCallback(
+        (journeyId: string, photoId: string, extension = 'jpg') =>
+            buildMediaUrl(getJourneyPhotoPath(journeyId, photoId, extension)),
+        []
+    );
 
-        // Get initial session
-        supabase.auth.getSession().then(({ data: { session } }) => {
-            setToken(session?.access_token ?? null);
-            setLoading(false);
-        });
-
-        // Listen for auth changes
-        const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-            setToken(session?.access_token ?? null);
-        });
-
-        return () => subscription.unsubscribe();
-    }, []);
-
-    const getMediaUrl = useCallback((path: string) => {
-        return buildMediaUrl(path, token);
-    }, [token]);
-
-    const getPhotoUrl = useCallback((journeyId: string, photoId: string, extension = 'jpg') => {
-        return buildMediaUrl(getJourneyPhotoPath(journeyId, photoId, extension), token);
-    }, [token]);
-
-    return {
-        token,
-        getMediaUrl,
-        getPhotoUrl,
-        loading,
-    };
+    return { token: null, getMediaUrl, getPhotoUrl, loading: false };
 }

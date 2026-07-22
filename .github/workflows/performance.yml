@@ -54,8 +54,6 @@ jobs:
       - name: Run performance tests
         env:
           VITE_MAPBOX_TOKEN: ${{ secrets.VITE_MAPBOX_TOKEN }}
-          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
-          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
           VITE_E2E_TEST_MODE: 'true'
           CI: 'true'
         run: npm run test:e2e:perf
@@ -105,8 +103,6 @@ jobs:
       - name: Run mobile performance tests
         env:
           VITE_MAPBOX_TOKEN: ${{ secrets.VITE_MAPBOX_TOKEN }}
-          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
-          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
           VITE_E2E_TEST_MODE: 'true'
           CI: 'true'
         run: npm run test:e2e:perf:mobile

@@ -56,17 +56,10 @@ jobs:
 
       - name: Build
         env:
-          # --- Secrets (same three the Cloudflare workflow uses today) ---
           VITE_MAPBOX_TOKEN: ${{ secrets.VITE_MAPBOX_TOKEN }}
-          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
-          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
-          # --- Future CloudKit backend (Phase 4 data-layer swap) ---
-          # These are NOT secrets: VITE_DATA_BACKEND selects the adapter, and a
-          # CloudKit JS API token is a public, container-scoped token that ends
-          # up baked into the client bundle anyway - so they come from repo/org
-          # `vars` (not `secrets`) with sensible fallbacks and stay no-op until
-          # you set them. Until then the build keeps using Supabase.
-          VITE_DATA_BACKEND: ${{ vars.VITE_DATA_BACKEND || 'supabase' }}
+          # A CloudKit JS API token is public and container-scoped — it is baked
+          # into the client bundle either way — so it comes from repo `vars`,
+          # not `secrets`.
           VITE_CLOUDKIT_ENV: ${{ vars.VITE_CLOUDKIT_ENV || 'development' }}
           VITE_CLOUDKIT_API_TOKEN: ${{ vars.VITE_CLOUDKIT_API_TOKEN || '' }}
         run: npm run build

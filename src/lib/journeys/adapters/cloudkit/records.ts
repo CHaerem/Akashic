@@ -113,6 +113,31 @@ export function assetUrl(value: unknown): string | null {
 }
 
 /**
+ * Rewrite object keys from camelCase to snake_case, recursively.
+ *
+ * The day-content payloads (weather, fun facts, POIs, historical sites) are written by
+ * the iOS app, where Swift's `Codable` emits camelCase — but the web's `Db*` shapes and
+ * `transforms.ts` were built on the Postgres column names, which are snake_case. So
+ * `temperatureMax` arrived where `temperature_max` was expected, the transform read
+ * undefined, and the day header rendered "NaN°C" over a weather record that was
+ * perfectly intact.
+ *
+ * Keys already in snake_case pass through untouched, so this is safe on both the
+ * migrated payloads and anything the app writes later.
+ */
+export function snakeCaseKeys<T>(value: unknown): T {
+    if (Array.isArray(value)) return value.map((v) => snakeCaseKeys(v)) as T;
+    if (value === null || typeof value !== 'object') return value as T;
+
+    const out: Record<string, unknown> = {};
+    for (const [key, val] of Object.entries(value as Record<string, unknown>)) {
+        const snake = key.replace(/([a-z0-9])([A-Z])/g, '$1_$2').toLowerCase();
+        out[snake] = snakeCaseKeys(val);
+    }
+    return out as T;
+}
+
+/**
  * Parse a JSON-backed field. Handles the inline STRING encoding; an
  * already-structured value passes through.
  */
@@ -233,10 +258,16 @@ export function recordToDbWaypoint(record: CKRecordLike): DbWaypoint {
         sort_order: numberOrNull(f('sortOrder')),
         route_distance_km: numberOrNull(f('routeDistanceKm')),
         route_point_index: numberOrNull(f('routePointIndex')),
-        weather: parseJsonField<WeatherData>(f('weatherJSON')),
-        fun_facts: parseJsonField<DbFunFact[]>(f('funFactsJSON')),
-        points_of_interest: parseJsonField<DbPointOfInterest[]>(f('pointsOfInterestJSON')),
-        historical_sites: parseJsonField<DbHistoricalSite[]>(f('historicalSitesJSON')),
+        // Day content is written by the iOS app in camelCase; the shapes below are
+        // the Postgres-derived snake_case ones. See `snakeCaseKeys`.
+        weather: snakeCaseKeys<WeatherData | null>(parseJsonField<WeatherData>(f('weatherJSON'))),
+        fun_facts: snakeCaseKeys<DbFunFact[] | null>(parseJsonField<DbFunFact[]>(f('funFactsJSON'))),
+        points_of_interest: snakeCaseKeys<DbPointOfInterest[] | null>(
+            parseJsonField<DbPointOfInterest[]>(f('pointsOfInterestJSON'))
+        ),
+        historical_sites: snakeCaseKeys<DbHistoricalSite[] | null>(
+            parseJsonField<DbHistoricalSite[]>(f('historicalSitesJSON'))
+        ),
     };
 }
 

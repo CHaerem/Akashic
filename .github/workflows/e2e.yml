@@ -47,8 +47,6 @@ jobs:
       - name: Run E2E tests
         env:
           VITE_MAPBOX_TOKEN: ${{ secrets.VITE_MAPBOX_TOKEN }}
-          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
-          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
           VITE_E2E_TEST_MODE: 'true'
           CI: 'true'
         run: npx playwright test --project=chromium --ignore-snapshots

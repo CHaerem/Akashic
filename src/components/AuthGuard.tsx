@@ -1,52 +1,27 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { supabase, isAuthEnabled } from '../lib/supabase';
-import { isCloudKitBackend } from '../lib/backend';
 import {
     getCloudKitSession,
     onCloudKitAuthChange,
     mountAppleSignInButton,
 } from '../lib/cloudkit';
-import type { User } from '@supabase/supabase-js';
-import { Button } from './ui/button';
 import { Card } from './ui/card';
 import { typography, colors } from '../styles/liquidGlass';
+
+/** E2E runs need the app without an Apple ID prompt. */
+const isE2ETestMode = import.meta.env.VITE_E2E_TEST_MODE === 'true';
 
 interface AuthGuardProps {
     children: ReactNode;
 }
 
 export function AuthGuard({ children }: AuthGuardProps) {
-    const [user, setUser] = useState<User | CloudKitJS.UserIdentity | null>(null);
+    const [user, setUser] = useState<CloudKitJS.UserIdentity | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const signInButtonRef = useRef<HTMLDivElement>(null);
 
-    // Supabase (Google OAuth) session wiring.
-    useEffect(() => {
-        if (isCloudKitBackend) return;
-        if (!supabase) {
-            setLoading(false);
-            return;
-        }
-
-        // Get initial session
-        supabase.auth.getSession().then(({ data: { session } }) => {
-            setUser(session?.user ?? null);
-            setLoading(false);
-        });
-
-        // Listen for auth changes
-        const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-            setUser(session?.user ?? null);
-            setError(null);
-        });
-
-        return () => subscription.unsubscribe();
-    }, []);
-
     // CloudKit (Apple ID) session wiring.
     useEffect(() => {
-        if (!isCloudKitBackend) return;
         let mounted = true;
 
         getCloudKitSession()
@@ -71,24 +46,8 @@ export function AuthGuard({ children }: AuthGuardProps) {
         };
     }, []);
 
-    const handleGoogleSignIn = async () => {
-        if (!supabase) return;
-        setError(null);
-
-        const { error } = await supabase.auth.signInWithOAuth({
-            provider: 'google',
-            options: {
-                redirectTo: window.location.origin
-            }
-        });
-
-        if (error) {
-            setError(error.message);
-        }
-    };
-
-    // Auth is required in CloudKit mode (Apple ID) as well as Supabase mode.
-    const authEnabled = isCloudKitBackend || isAuthEnabled;
+    // Signing in with an Apple ID is how the web app reaches the private database.
+    const authEnabled = !isE2ETestMode;
 
     // If auth is not enabled, show children directly
     const searchParams = new URLSearchParams(window.location.search);
@@ -99,7 +58,7 @@ export function AuthGuard({ children }: AuthGuardProps) {
     // Let CloudKit JS render its own "Sign in with Apple" button once the
     // login screen is visible.
     useEffect(() => {
-        if (!isCloudKitBackend || !showLogin) return;
+        if (!showLogin) return;
         const el = signInButtonRef.current;
         if (!el) return;
         mountAppleSignInButton(el).catch((err: unknown) => {
@@ -140,20 +99,8 @@ export function AuthGuard({ children }: AuthGuardProps) {
                     Akashic
                 </h1>
 
-                {isCloudKitBackend ? (
-                    // CloudKit JS renders its own Apple ID sign-in button here.
+                {/* CloudKit JS renders its own Apple ID sign-in button here. */}
                     <div ref={signInButtonRef} className="tracking-wider" />
-                ) : (
-                    // Google only (sign-ups disabled in Supabase)
-                    <Button
-                        variant="default"
-                        size="lg"
-                        onClick={handleGoogleSignIn}
-                        className="tracking-wider"
-                    >
-                        Sign in with Google
-                    </Button>
-                )}
 
                 {error && (
                     <p className="text-red-400 text-xs mt-6 text-center transition-opacity">
