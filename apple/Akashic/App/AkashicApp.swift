@@ -29,6 +29,9 @@ struct AkashicApp: App {
         if ProcessInfo.processInfo.environment["AKASHIC_FORCE_LOCAL"] != nil {
             Config.setPersistenceModeOverride(.local)
         }
+        // Exports are transient: the file matters until it has been shared, and an archive of
+        // a photo-heavy journey is gigabytes. Clearing at launch keeps them from accumulating.
+        ExportWorkspace.purge()
     }
 
     var body: some Scene {

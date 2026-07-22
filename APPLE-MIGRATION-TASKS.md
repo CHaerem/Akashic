@@ -58,7 +58,7 @@ graph TD
         T27["T2.7 ✅ Photo upload pipeline (local)"]
         T28["T2.8 ✅ CKShare invitations UI"]
         T29["T2.9 ✅ App Intents layer"]
-        T210["T2.10 🤖 Export function (D10)"]
+        T210["T2.10 ✅ Export function (D10)"]
         T211["T2.11 🧑 TestFlight + family onboard"]
         T11 --> T22 --> T23 --> T24 --> T25
         T05 --> T25
@@ -183,8 +183,10 @@ Zone-wide `CKShare` per journey (`apple/Akashic/Sync/JourneySharing.swift`, `Clo
 ### T2.9 ✅ App Intents (D8) — done tonight
 The 5 MCP tools mirrored 1:1 as App Intents against the local store (`apple/Akashic/Intents/`): exact wire shapes/clamps, ported `ExtendedStats` math, `JourneyEntity` autocomplete, Siri/Shortcuts phrases (EN + NO), 21 new unit tests. Works on fixtures now; binds to CloudKit automatically via `PersistenceController` when T2.3 lands (photos intent lights up after T2.5 import).
 
-### T2.10 🤖 Export function (D10)
-Per-journey export: GPX (generated from route LineString), JSON (full records), original photos — share sheet/Files. Keeps exit cost low.
+### T2.10 ✅ Export function (D10)
+Per-journey `.zip` via the share sheet (`apple/Akashic/Export/`, `Views/Export/JourneyExportSheet.swift`): `route.gpx` generated from the route LineString + camps as waypoints, `journey.json` with everything else, `photos/` with the originals in album order, and a README. Zipping uses `NSFileCoordinator(.forUploading)` — no vendored dependency.
+
+Verified end to end on the simulator: the produced archive is well-formed GPX (`xmllint`), all 188 route points survive, and coordinates land on Kilimanjaro. Photos missing from the device are **reported**, never silently skipped.
 
 ### T2.11 🧑 TestFlight + family onboarding (RUNBOOK §4/§7)
 
