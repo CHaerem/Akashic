@@ -1,8 +1,10 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import {
     toLngLat,
     assetUrl,
     parseJsonField,
+    resolveJsonField,
+    isAssetBacked,
     referenceName,
     recordToDbJourney,
     recordToDbWaypoint,
@@ -70,13 +72,55 @@ describe('cloudkit record mappers', () => {
             expect(parseJsonField(stats)).toEqual(stats);
         });
 
-        it('returns null (TODO) for an asset-backed field', () => {
+        it('returns null for an asset-backed field (use resolveJsonField instead)', () => {
             expect(parseJsonField({ downloadURL: 'https://x/y.json', fileChecksum: 'z' })).toBeNull();
         });
 
         it('returns null for nullish input', () => {
             expect(parseJsonField(null)).toBeNull();
             expect(parseJsonField(undefined)).toBeNull();
+        });
+    });
+
+    describe('resolveJsonField (inline STRING *and* CKAsset shapes)', () => {
+        const route = { type: 'LineString', coordinates: [[37, -3, 1800]] };
+
+        it('parses the inline STRING encoding without fetching', async () => {
+            const fetchMock = vi.fn();
+            vi.stubGlobal('fetch', fetchMock);
+            await expect(resolveJsonField(JSON.stringify(route))).resolves.toEqual(route);
+            expect(fetchMock).not.toHaveBeenCalled();
+            vi.unstubAllGlobals();
+        });
+
+        it('fetches and parses the CKAsset encoding (routeJSON is always an asset)', async () => {
+            vi.stubGlobal(
+                'fetch',
+                vi.fn(async () => ({ ok: true, json: async () => route }) as unknown as Response)
+            );
+            await expect(
+                resolveJsonField({ downloadURL: 'https://cvws.icloud/r.json', fileChecksum: 'z' })
+            ).resolves.toEqual(route);
+            vi.unstubAllGlobals();
+        });
+
+        it('degrades to null on a non-ok response or a throwing fetch', async () => {
+            vi.stubGlobal('fetch', vi.fn(async () => ({ ok: false }) as unknown as Response));
+            await expect(resolveJsonField({ downloadURL: 'https://x/y.json' })).resolves.toBeNull();
+            vi.stubGlobal(
+                'fetch',
+                vi.fn(async () => {
+                    throw new Error('offline');
+                })
+            );
+            await expect(resolveJsonField({ downloadURL: 'https://x/y.json' })).resolves.toBeNull();
+            vi.unstubAllGlobals();
+        });
+
+        it('flags asset-backed values', () => {
+            expect(isAssetBacked({ downloadURL: 'https://x/y.json' })).toBe(true);
+            expect(isAssetBacked(JSON.stringify(route))).toBe(false);
+            expect(isAssetBacked(null)).toBe(false);
         });
     });
 

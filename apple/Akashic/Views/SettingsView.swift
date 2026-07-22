@@ -17,6 +17,10 @@ struct SettingsView: View {
     @State private var mediaRoot = Config.importMediaRoot
     @State private var showFolderPicker = false
 
+    // CloudKit import (T2.5).
+    @StateObject private var ckImport = CloudKitImportViewModel()
+    @State private var showCloudKitConfirm = false
+
     var body: some View {
         Form {
             Section("Active store") {
@@ -28,6 +32,8 @@ struct SettingsView: View {
             }
 
             importSection
+
+            cloudKitImportSection
 
             Section {
                 Picker("Persistence mode", selection: Binding(
@@ -73,6 +79,127 @@ struct SettingsView: View {
                 bundlePath = url.path
                 mediaRoot = Config.defaultMediaRoot(forBundlePath: url.path)
                 persistImportPaths()
+            }
+        }
+        .alert("Import to CloudKit?", isPresented: $showCloudKitConfirm) {
+            Button("Cancel", role: .cancel) {}
+            Button("Upload", role: .destructive) {
+                persistImportPaths()
+                ckImport.runRealImport(bundlePath: bundlePath, mediaRoot: mediaRoot)
+            }
+        } message: {
+            Text("This uploads the full export to \(ckImport.containerID) · \(ckImport.environment.rawValue) (the owner's private database). Production is never touched. CloudKit sync must be quiesced first — the importer writes the private database directly and must never run alongside the sync engine. Re-running is safe (idempotent, no duplicates) but restarts the upload from the beginning.")
+        }
+    }
+
+    // MARK: - CloudKit import section (T2.5)
+
+    @ViewBuilder
+    private var cloudKitImportSection: some View {
+        Section {
+            labelled("Target container", ckImport.containerID)
+            labelled("Environment", ckImport.environment.rawValue)
+
+            Button {
+                persistImportPaths()
+                ckImport.computePlan(bundlePath: bundlePath, mediaRoot: mediaRoot)
+            } label: {
+                HStack {
+                    Image(systemName: "list.bullet.rectangle")
+                    Text("Compute import plan (dry run)")
+                    if ckImport.isRunning { Spacer(); ProgressView() }
+                }
+            }
+            .disabled(ckImport.isRunning)
+            .foregroundStyle(ckImport.isRunning ? Theme.textTertiary : Theme.accent)
+
+            if let plan = ckImport.plan {
+                cloudKitPlanView(plan)
+            }
+
+            if let progress = ckImport.progress, ckImport.isRunning {
+                cloudKitProgressView(progress)
+            }
+
+            if ckImport.isRunning {
+                Button(role: .destructive) { ckImport.cancel() } label: {
+                    Label("Cancel", systemImage: "xmark.circle")
+                }
+            }
+
+            if let message = ckImport.statusMessage {
+                Text(message)
+                    .font(.caption2.monospaced())
+                    .foregroundStyle(Theme.textSecondary)
+            }
+
+            if let report = ckImport.report, !report.dryRun {
+                cloudKitReportView(report)
+            }
+
+            // Real run — gated behind the CloudKit *build* (compile-time entitlement gate; a
+            // CKContainer traps without the entitlement), the sync interlock, and confirmation.
+            Button {
+                showCloudKitConfirm = true
+            } label: {
+                Label("Run import to CloudKit…", systemImage: "icloud.and.arrow.up")
+            }
+            .disabled(!ckImport.canStartRealImport)
+            .foregroundStyle(ckImport.canStartRealImport ? Theme.accent : Theme.textTertiary)
+
+            if let reason = ckImport.realRunBlockedReason {
+                Label(reason, systemImage: "exclamationmark.triangle")
+                    .font(.caption2)
+                    .foregroundStyle(Theme.textSecondary)
+            }
+        } header: {
+            Text("Import to CloudKit (T2.5)")
+        } footer: {
+            Text(ckImport.realRunAvailable
+                 ? "Uploads per-journey zones (journey-<uuid>) to the owner's private DB. Idempotent: re-running creates no duplicates, but it restarts the upload from the beginning (nothing is persisted to resume from). CloudKit sync must not be running: the importer bypasses CKSyncEngine and both writing at once is unsafe."
+                 : "Dry-run computes the full plan (no account or entitlement needed). The real upload requires the Debug-CloudKit / Release-CloudKit build with entitlements and an iCloud account signed into this device — the default build cannot even construct a CloudKit container.")
+        }
+    }
+
+    private func cloudKitPlanView(_ plan: CloudKitImportPlan) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            labelled("Zones", "\(plan.zoneCount)")
+            labelled("Records", "\(plan.recordCount) (\(plan.journeyCount)J / \(plan.waypointCount)W / \(plan.photoCount)P / \(plan.commentCount)C)")
+            labelled("Assets", "\(plan.assetCount) · \(ByteCount.string(plan.totalAssetBytes))")
+            labelled("  originals / thumbs", "\(plan.originalAssetCount) / \(plan.thumbAssetCount)")
+            labelled("Upload ops", "\(plan.batchCount) batches")
+            labelled("  hero images", "\(plan.heroAssetCount)/\(plan.heroAssetCount + plan.heroMissing)")
+            labelled("Thumbs missing", "\(plan.thumbsMissing)")
+            labelled("Heroes missing", "\(plan.heroMissing)")
+            labelled("Skipped (no media)", "\(plan.missingMedia.count)")
+        }
+    }
+
+    private func cloudKitProgressView(_ progress: CloudKitImportProgress) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            labelled("Journeys", "\(progress.journeysDone)/\(progress.journeysTotal)")
+            ProgressView(value: progress.recordFraction) {
+                Text("Records \(progress.recordsDone)/\(progress.recordsTotal)")
+                    .font(.caption2).foregroundStyle(Theme.textSecondary)
+            }
+            ProgressView(value: progress.byteFraction) {
+                Text("Uploaded \(ByteCount.string(progress.bytesDone)) / \(ByteCount.string(progress.bytesTotal))")
+                    .font(.caption2).foregroundStyle(Theme.textSecondary)
+            }
+        }
+        .tint(Theme.accent)
+    }
+
+    private func cloudKitReportView(_ report: CloudKitImportReport) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            labelled("Zones created", "\(report.zonesCreated)")
+            labelled("Records saved", "\(report.recordsSaved)/\(report.plan.recordCount)")
+            labelled("Bytes uploaded", ByteCount.string(report.bytesUploaded))
+            labelled("Failures", "\(report.failures.count)")
+            ForEach(report.failures.prefix(8)) { failure in
+                Text("• \(failure.recordType) \(failure.recordName.prefix(8)) — \(failure.message)")
+                    .font(.caption2.monospaced())
+                    .foregroundStyle(.red)
             }
         }
     }

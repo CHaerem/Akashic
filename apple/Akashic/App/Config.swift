@@ -6,7 +6,10 @@ enum PersistenceMode: String, CaseIterable, Identifiable {
     case fixtures
     /// Plain on-disk Core Data store (offline, no sync).
     case local
-    /// `NSPersistentCloudKitContainer` mirroring to `iCloud.no.akashic` (needs entitlements).
+    /// On-disk store with the `CKSyncEngine`-backed `AkashicSyncEngine` attached (D4), syncing
+    /// custom record types to `iCloud.no.akashic`, one custom zone per journey. Needs the
+    /// `Debug-CloudKit`/`Release-CloudKit` entitlements + an iCloud account to actually sync;
+    /// stays local otherwise.
     case cloudKit
 
     var id: String { rawValue }
@@ -21,9 +24,18 @@ enum PersistenceMode: String, CaseIterable, Identifiable {
 }
 
 /// Static build-time feature flags. Flip `cloudKitEnabled` once the CloudKit container +
-/// entitlements are configured (and build the `Release-CloudKit` configuration).
+/// entitlements are configured (and build the `Debug-CloudKit` / `Release-CloudKit`
+/// configuration). Even when true, the sync engine only *starts* if an iCloud account is
+/// available — otherwise the app runs on the local store (see `AkashicSyncEngine.activate`).
 enum FeatureFlags {
     static let cloudKitEnabled = false
+
+    /// Launch-time seam: `AKASHIC_CLOUDKIT=1` selects `.cloudKit` mode for a single run without
+    /// flipping the build flag — the activation path for a simulator signed into iCloud
+    /// (launch the `Debug-CloudKit` build with this env set; see README).
+    static var cloudKitEnvOverride: Bool {
+        ProcessInfo.processInfo.environment["AKASHIC_CLOUDKIT"] == "1"
+    }
 }
 
 /// App configuration + the resolved persistence mode.
@@ -64,10 +76,14 @@ enum Config {
     }
 
     static var resolvedPersistenceMode: PersistenceMode {
+        // 1. An explicit in-app override (Settings) always wins.
         if let raw = UserDefaults.standard.string(forKey: persistenceModeOverrideKey),
            let mode = PersistenceMode(rawValue: raw) {
             return mode
         }
+        // 2. The launch-time env seam selects CloudKit for one run.
+        if FeatureFlags.cloudKitEnvOverride { return .cloudKit }
+        // 3. Otherwise the build flag.
         return FeatureFlags.cloudKitEnabled ? .cloudKit : .fixtures
     }
 

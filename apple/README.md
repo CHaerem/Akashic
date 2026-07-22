@@ -8,9 +8,13 @@ photo), a PhotosPicker → EXIF → thumbnail import pipeline, day comments, App
 live Spotlight indexing, and a (dormant until App Group) stats widget — running on the REAL
 family data via the local import pipeline, until CloudKit is wired up.
 
-> **Status:** feature-parity build on the local store. CloudKit sync compiled but not
-> activated — blocked on the D4 sync-strategy decision and the container (runbook §1–2).
-> CKShare collaboration and the CloudKit importer (T2.5) are the main remaining phases.
+> **Status:** feature-parity build on the local store. **D4 decided: custom `CKRecord` sync
+> via `CKSyncEngine`, one custom zone per journey, Core Data as the local store** (Option A in
+> `CloudKit/MAPPING.md` §12). The sync layer (`Akashic/Sync/`) is built, unit-tested against a
+> mocked engine, and compiles into every build — but only *runs* in an entitled `*-CloudKit`
+> build signed into iCloud (see [Activating CloudKit sync](#activating-cloudkit-sync)). CKShare
+> collaboration is the main remaining phase; the CloudKit importer (T2.5) is a sibling module
+> (`Import/CloudKitImportSink.swift`) that shares this layer's `Sync/RecordCoder.swift`.
 
 ---
 
@@ -150,48 +154,92 @@ The store mode resolves from `Config.resolvedPersistenceMode`:
 |------|-------|---------|
 | `.fixtures` | in-memory SQLite (`/dev/null`) | yes, from fixtures |
 | `.local` | on-disk SQLite | seeded once if empty |
-| `.cloudKit` | `NSPersistentCloudKitContainer` → `iCloud.no.akashic` (private DB) | no — data arrives via sync |
+| `.cloudKit` | on-disk SQLite (same as `.local`) **+ `AkashicSyncEngine` (`CKSyncEngine`)** → `iCloud.no.akashic` private DB, one custom zone per journey | no — data arrives via import + sync |
 
-## Flipping on CloudKit later
+## The sync layer (`Akashic/Sync/`)
 
-CloudKit code is present and compiles today; it is inert until an Apple Developer team +
-entitlements are configured.
+D4 is **decided**: custom `CKRecord` sync via **`CKSyncEngine`** (iOS 17+), one custom zone per
+journey, Core Data as the local store — Option A in
+[`CloudKit/MAPPING.md`](CloudKit/MAPPING.md) §12. The retired
+`NSPersistentCloudKitContainer` (NSPCKC) placeholder is gone; NSPCKC would have generated an
+incompatible `CD_`-prefixed schema in the single default zone, invalidating `schema.ckdb` and
+the web adapter's queries. The layer is built to the hand-authored
+[`schema.ckdb`](CloudKit/schema.ckdb) (verified byte-for-byte against the live Development
+container).
 
-> [!WARNING]
-> **The shipped `NSPersistentCloudKitContainer` (NSPCKC) mode is a Phase-1 _placeholder_, not
-> the migration path.** On first run against a real container it would auto-generate its **own**
-> schema — `CD_CDJourney`, `CD_CDWaypoint`, `CD_CDPhoto`, … record types with `CD_`-prefixed
-> fields, all in the single default zone `com.apple.coredata.cloudkit.zone`. **That is not the
-> migration schema.**
->
-> The migration target is the **hand-authored custom records** — `Journey` / `Waypoint` /
-> `Photo` / `DayComment` — in **per-journey custom zones** named `journey-<journey-uuid>`,
-> defined by [`CloudKit/schema.ckdb`](CloudKit/schema.ckdb) and
-> [`CloudKit/MAPPING.md`](CloudKit/MAPPING.md). Letting NSPCKC create its `CD_` schema would
-> **invalidate both `schema.ckdb` _and_ the web adapter's queries** (which expect the
-> `Journey`/`Waypoint`/`Photo`/`DayComment` types with the MAPPING.md field names).
->
-> Which sync strategy to ship is the **open D4 / T2.3 decision** in
-> [`APPLE-MIGRATION-TASKS.md`](../APPLE-MIGRATION-TASKS.md): **(a)** custom `CKRecord` sync
-> (`CKSyncEngine` or hand-rolled) honoring `schema.ckdb` + per-journey zones + `CKShare` —
-> matching everything authored so far; or **(b)** accept NSPCKC's generated schema — which then
-> forces rewriting `schema.ckdb`, the web adapter, and D3's zone-per-journey sharing model to the
-> `CD_` shapes. **Until D4 is decided, do NOT flip `.cloudKit` mode against the real
-> `iCloud.no.akashic` container** — a first sync would bake the `CD_` schema into Development.
+| File | Responsibility |
+|------|----------------|
+| `Sync/RecordCoder.swift` | Bidirectional domain ↔ `CKRecord` mapping, **exactly** per `schema.ckdb`/`MAPPING.md`: field names, `LOCATION` `[lng,lat]`→`(lat,lng)` swap, `routeJSON` ASSET, JSON-string payloads, `highlights` `LIST<STRING>`, reference delete actions, recordNames = original UUIDs, zone `journey-<uuid>`. **Shared with the importer** (`Import/CloudKitImportSink.swift`) as the one (de)serialization contract. |
+| `Sync/AkashicSyncEngine.swift` | The coordinator (a `CKSyncEngineDelegate`) behind a `SyncEngineProtocol` seam. Account-gated activation, initial upload, pending-change enqueue, fetched-change apply, zone-deletion, and conflict handling. Delegate callbacks are thin adapters over plain, unit-tested methods. |
+| `Sync/SyncSeam.swift` | `SyncEngineProtocol` (mockable engine) + `CKSyncEngineAdapter` (real) + `SyncLocalStore` (mockable local store) + `LocalChange`. |
+| `Sync/SyncScheduler.swift` | Observes `NSManagedObjectContextDidSave` and forwards local writes as pending changes — zero edits to the persistence write methods. Suppresses the echo while remote changes are applied. |
+| `Sync/PersistenceController+Sync.swift` | `SyncLocalStore` conformance: materialize a `CKRecord` from a stored row; apply a fetched record (server-authoritative, **per record** — never cascading to siblings, unlike the importer's whole-journey upsert). |
+| `Sync/SyncStatus.swift` | Observable status the UI can surface + the `AccountStatusProviding` seam. |
 
-To activate (once D4 lands, and — for option (a) — a custom-record sync layer replaces the
-placeholder NSPCKC wiring):
+**Conflict policy (chosen):** *last-writer-wins, server-authoritative.* Fetched server records
+overwrite the local copy; on a send conflict (`serverRecordChanged`) the local edit is **rebased
+onto the server record** (our field values copied onto it) so the resend carries the correct
+change tag and our latest values win. Future refinement (documented TODO, not built): field-level
+merge keyed on the domain edit timestamps the app already keeps (`DayComment.modifiedAt`,
+`Journey.updatedAt`).
 
-1. In **`project.yml`**, set `DEVELOPMENT_TEAM` under the `Release-CloudKit` config (or pass
-   `DEVELOPMENT_TEAM=XXXXXXXXXX` on the `xcodebuild` command line), then `xcodegen generate`.
-2. Build the **`Release-CloudKit`** configuration — it is the only config that references
-   `Akashic/Support/Akashic.entitlements` (CloudKit + Push). Debug/Release stay team-free so
-   CI and local simulator builds never need signing.
-3. Create the CloudKit container `iCloud.no.akashic` (Development env) in the Apple Developer
-   portal / CloudKit Console, and import the custom schema with `cktool` (see
-   [`CloudKit/README.md`](CloudKit/README.md)) — do **not** rely on NSPCKC to generate it.
-4. Set `FeatureFlags.cloudKitEnabled = true` (or use the Settings override) and relaunch on a
-   device signed into iCloud.
+> [!IMPORTANT]
+> **A `CKContainer` instantiated in a binary WITHOUT the `com.apple.developer.icloud-services`
+> entitlement traps (SIGTRAP).** So the runtime account check cannot be the first safety gate —
+> the entitlement is. Every `CKContainer`/`CKSyncEngine` touchpoint is behind
+> `#if AKASHIC_CLOUDKIT_BUILD`, a compilation condition defined **only** by the signed
+> `Debug-CloudKit` / `Release-CloudKit` configs. In the default Debug/Release build the sync
+> layer compiles but never constructs a container: `startSync()` no-ops, the status row shows
+> "Rebuild with the CloudKit configuration to sync", and `.cloudKit` mode just runs on the local
+> store. This holds even if the user selects `.cloudKit` in Settings.
+
+## Activating CloudKit sync
+
+The layer runs only in an **entitled** build signed into iCloud. Nothing is tested end-to-end
+until an iCloud account is signed into a simulator — the steps below are the activation path.
+
+1. **Set a signing team.** `project.yml` already pins `DEVELOPMENT_TEAM: 9LVCB72DT8` on the
+   `*-CloudKit` configs; override with `DEVELOPMENT_TEAM=XXXXXXXXXX` on the CLI if needed. Then
+   `xcodegen generate`.
+2. **Import the schema** to the container's Development environment (once):
+   ```sh
+   xcrun cktool import-schema --team-id 9LVCB72DT8 --container-id iCloud.no.akashic \
+     --environment DEVELOPMENT --validate --file CloudKit/schema.ckdb
+   ```
+   (Already imported for `iCloud.no.akashic`; see [`CloudKit/README.md`](CloudKit/README.md).)
+3. **Sign the Simulator into iCloud:** boot the sim → Settings app → *Sign in to your iPhone* →
+   sign in with an Apple Account. (Simulator builds honor entitlements without provisioning, so
+   no device is required.)
+4. **Build the `Debug-CloudKit` configuration** and launch with `AKASHIC_CLOUDKIT=1`:
+   ```sh
+   UDID=$(xcrun simctl list devices booted | grep -oE '[0-9A-F-]{36}' | head -1)
+   xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug-CloudKit \
+     -destination "platform=iOS Simulator,id=$UDID" build
+   xcrun simctl install "$UDID" "<DerivedData>/Build/Products/Debug-CloudKit-iphonesimulator/Akashic.app"
+   SIMCTL_CHILD_AKASHIC_CLOUDKIT=1 \
+     xcrun simctl launch --terminate-running-process "$UDID" no.akashic.app
+   ```
+   `AKASHIC_CLOUDKIT=1` selects `.cloudKit` mode for the run without flipping the build flag
+   (permanent activation: `FeatureFlags.cloudKitEnabled = true`).
+5. **What to expect.** On first launch with an available account, `AkashicSyncEngine.activate()`
+   creates one custom zone per local journey (`journey-<uuid>`) and enqueues an initial upload of
+   every `Journey`/`Waypoint`/`Photo`/`DayComment`. Local edits (via the existing edit UI) enqueue
+   incremental changes automatically. The Settings status row reflects state
+   (`Checking iCloud account…` → `Syncing with iCloud`). With **no** account signed in, the engine
+   stays off and the app keeps working locally (status: `Sign in to iCloud to sync`).
+
+### Two-simulator round-trip test (T2.4, later)
+
+To verify real sync once accounts are available:
+
+1. Boot two simulators; sign **both** into the **same** iCloud account.
+2. Install the `Debug-CloudKit` build on both; launch both with `AKASHIC_CLOUDKIT=1`.
+3. On sim A, import the export (or make an edit — e.g. rename a journey / add a day comment).
+4. Wait for sim A's status to read `Syncing with iCloud`, then foreground sim B and pull to
+   refresh / relaunch. The change should appear on B (server-authoritative apply).
+5. Make a conflicting edit to the same record on both while briefly offline, then reconnect: the
+   later write wins (last-writer-wins rebase). Inspect records in the CloudKit Console
+   (`iCloud.no.akashic` → Data → the `journey-<uuid>` zone) to confirm field values + zones.
 
 ## Project layout
 
@@ -207,8 +255,10 @@ apple/
     Services/                     SpotlightIndexer, WidgetSnapshot(+Journey)/WidgetDataStore/
                                   WidgetPublisher, JourneyStatsWidgetView, WidgetGallery harness
     Fixtures/                     FixtureModels + FixtureLoader (old camp shape -> domain)
-    Persistence/                  PersistenceController, Core Data <-> domain mapping, JSON coders
+    Persistence/                  PersistenceController (modes incl. CloudKit), Core Data <-> domain mapping, JSON coders
       Akashic.xcdatamodeld        Core Data model (CloudKit-compatible; CDPhoto local media paths)
+    Sync/                         D4 CloudKit sync: RecordCoder (domain<->CKRecord contract),
+                                  AkashicSyncEngine (CKSyncEngine + seams), SyncScheduler, SyncStatus
     Views/                        SwiftUI: list, detail, stats, map, settings, theme
     Resources/                    Assets.xcassets (AppIcon placeholder, AccentColor)
     Support/                      Akashic.entitlements (Release-CloudKit only)
@@ -223,24 +273,25 @@ apple/
 ## Data model notes (Core Data ↔ CloudKit)
 
 The Core Data model mirrors the **real Postgres schema** (authoritative mapping:
-[`CloudKit/MAPPING.md`](CloudKit/MAPPING.md), derived from `supabase/migrations/`), designed
-for `NSPersistentCloudKitContainer`:
+[`CloudKit/MAPPING.md`](CloudKit/MAPPING.md), derived from `supabase/migrations/`). The local
+store is plain Core Data; `RecordCoder` maps each row to/from its custom `CKRecord` for sync:
 
 - Every attribute is **optional or has a default**; **no unique constraints**; every
-  relationship has an **inverse**; to-one relationships are optional. These are CloudKit's
-  hard requirements.
+  relationship has an **inverse**; to-one relationships are optional (kept as CloudKit-friendly
+  invariants).
 - Delete rules mirror Postgres FKs: `journey → waypoints/photos/dayComments` **cascade**;
-  `waypoint → photos` **nullify** (`photos.waypoint_id ON DELETE SET NULL`).
+  `waypoint → photos` **nullify** (`photos.waypoint_id ON DELETE SET NULL`). The matching
+  CloudKit `CKReference` delete actions are set by `RecordCoder` at write time
+  (`.deleteSelf` / `.none`, per `MAPPING.md` §9).
 - JSONB payloads (`route`, `stats`, `center_coordinates`, `coordinates`, `weather`,
   `fun_facts`, `points_of_interest`, `historical_sites`, `highlights`) are stored as **Binary**
-  attributes holding JSON.
-- **External binary storage is intentionally _not_ enabled.** Core Data's "Allows External
-  Storage" flag is incompatible with `NSPersistentCloudKitContainer` (store load fails
-  validation). Large binaries — notably long-trek `route` JSON that may exceed 1 MB — are kept
-  as inline Binary; `NSPersistentCloudKitContainer` automatically promotes oversized values to
-  `CKAsset` on mirroring, which is the CloudKit-native equivalent of the plan's
-  "route JSON → Binary external storage" decision. `heroAssetData` / `thumbData` /
-  `assetData` are placeholders for the eventual photo/hero `CKAsset`s.
+  attributes holding JSON locally; `RecordCoder` re-encodes them per schema — `routeJSON` as a
+  `CKAsset` (temp-file JSON), the rest as inline STRING fields, `highlights` as a native
+  `LIST<STRING>`.
+- The `route` JSON can exceed inline limits for a long trek; as a `CKAsset` its bytes stay lazy
+  (`downloadURL`), keeping `Journey` records tiny so the list/globe query never drags every route
+  blob. `heroAssetData` / `thumbData` / `assetData` are local staging for the photo/hero
+  `CKAsset`s the importer attaches from R2.
 - A few **display-only extras** beyond Postgres (`waypoint.terrain`, `timeFromPrevious`,
   `dateLabel`) carry the richer fixture demo data. They are additive and CloudKit-compatible.
 
@@ -354,7 +405,10 @@ see `Docs/screenshot-widgets.png`).
 
 ## What remains (later phases)
 
-- **Sync activation** — turn on `.cloudKit` mode with entitlements; CKShare zone-per-journey.
+- **Sync activation (live test)** — the `CKSyncEngine` layer (`Akashic/Sync/`) is built and
+  unit-tested against a mocked engine; end-to-end sync needs an iCloud account on a simulator
+  (see [Activating CloudKit sync](#activating-cloudkit-sync)). CKShare zone-per-journey sharing
+  is the next phase.
 - **Photo pipeline** — `PhotosPicker` → EXIF → thumbnails → `CKAsset` (Phase 3). Wiring
   `CDPhoto` into `JourneyQuery.photos` lights up `GetJourneyPhotosIntent` with real data.
 - **Editing & collaboration** — journey/waypoint/comment edits, member management (Phase 3).

@@ -89,6 +89,102 @@ describe('cloudkit read path', () => {
             expect(cache.trekDataMap.kilimanjaro).toBeDefined();
         });
 
+        it('fetches an asset-backed routeJSON so the route survives to toTrekData', async () => {
+            // RecordCoder writes routeJSON as a CKAsset (MAPPING §6): CloudKit JS surfaces the
+            // field as a { downloadURL } descriptor, NOT the JSON string. Reading it with the
+            // synchronous parser alone silently produced route: null for every journey —
+            // no globe route line, and zeroed per-day distance/elevation on every camp.
+            const routeGeoJSON = {
+                type: 'LineString',
+                coordinates: [
+                    [37, -3, 1800],
+                    [37.2, -3.2, 2600],
+                ],
+            };
+            const journeyRecord = {
+                recordName: 'uuid-asset',
+                recordType: 'Journey',
+                fields: {
+                    slug: { value: 'kilimanjaro' },
+                    name: { value: 'Kilimanjaro' },
+                    centerLocation: { value: { latitude: -3.07, longitude: 37.35 } },
+                    routeJSON: {
+                        value: {
+                            downloadURL: 'https://cvws.icloud/route-uuid-asset.json',
+                            fileChecksum: 'abc123',
+                            size: 1234,
+                        },
+                    },
+                },
+            };
+            const waypointRecord = {
+                recordName: 'wp-1',
+                recordType: 'Waypoint',
+                fields: {
+                    journeyRef: { value: { recordName: 'uuid-asset' } },
+                    name: { value: 'Base Camp' },
+                    dayNumber: { value: 1 },
+                    coordinates: { value: [37.2, -3.2] },
+                    elevation: { value: 2600 },
+                    sortOrder: { value: 0 },
+                    routePointIndex: { value: 1 },
+                },
+            };
+
+            const fetchMock = vi.fn(async (url: string) => {
+                expect(url).toBe('https://cvws.icloud/route-uuid-asset.json');
+                return { ok: true, json: async () => routeGeoJSON } as unknown as Response;
+            });
+            vi.stubGlobal('fetch', fetchMock);
+
+            getSharedDatabase.mockResolvedValue(
+                makeDb({
+                    performQuery: async (q) => {
+                        if (q.recordType === 'Journey') return { records: [journeyRecord] };
+                        if (q.recordType === 'Waypoint') return { records: [waypointRecord] };
+                        return { records: [] };
+                    },
+                })
+            );
+            getPrivateDatabase.mockResolvedValue(makeDb({}));
+
+            const { trekDataMap } = await fetchJourneys();
+
+            expect(fetchMock).toHaveBeenCalledTimes(1);
+            expect(trekDataMap.kilimanjaro.route.coordinates).toEqual(routeGeoJSON.coordinates);
+            expect(trekDataMap.kilimanjaro.camps[0].elevationGainFromPrevious).toBeGreaterThan(0);
+            vi.unstubAllGlobals();
+        });
+
+        it('leaves the route null when the asset fetch fails, without throwing', async () => {
+            const journeyRecord = {
+                recordName: 'uuid-broken',
+                recordType: 'Journey',
+                fields: {
+                    slug: { value: 'inca-trail' },
+                    name: { value: 'Inca Trail' },
+                    routeJSON: { value: { downloadURL: 'https://cvws.icloud/gone.json' } },
+                },
+            };
+            vi.stubGlobal(
+                'fetch',
+                vi.fn(async () => {
+                    throw new Error('network down');
+                })
+            );
+            getSharedDatabase.mockResolvedValue(
+                makeDb({
+                    performQuery: async (q) =>
+                        q.recordType === 'Journey' ? { records: [journeyRecord] } : { records: [] },
+                })
+            );
+            getPrivateDatabase.mockResolvedValue(makeDb({}));
+
+            const { trekDataMap } = await fetchJourneys();
+            expect(trekDataMap['inca-trail'].route.coordinates).toEqual([]);
+            vi.unstubAllGlobals();
+        });
+
         it('returns empty data when no journey records exist', async () => {
             getSharedDatabase.mockResolvedValue(makeDb({}));
             getPrivateDatabase.mockResolvedValue(makeDb({}));

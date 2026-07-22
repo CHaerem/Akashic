@@ -7,8 +7,8 @@
  *
  * Field-name conventions (camelCase CloudKit fields -> snake_case DB rows)
  * follow apple/CloudKit/MAPPING.md. `route`/`stats`/`weather`/etc. are stored
- * as JSON — either an inline STRING field (`*JSON`) or, above the field size
- * limit, a CKAsset (handled as a TODO below).
+ * as JSON — either an inline STRING field (`*JSON`) or a CKAsset (`routeJSON`
+ * always is; see `resolveJsonField`, which the journey adapter awaits).
  */
 
 import type {
@@ -126,15 +126,48 @@ export function parseJsonField<T>(value: unknown): T | null {
         }
     }
     if (typeof value === 'object') {
-        // CKAsset-backed JSON cannot be read synchronously here.
-        if ('downloadURL' in (value as object) || 'fileChecksum' in (value as object)) {
-            // TODO(cloudkit): fetch asset-backed JSON (routeJSON/statsJSON) when a
-            // payload exceeds CloudKit's string-field size limit.
-            return null;
-        }
+        // CKAsset-backed JSON cannot be read synchronously here — the field value is a
+        // descriptor (downloadURL/fileChecksum), not the bytes. Callers that can await
+        // must use `resolveJsonField` instead; see `isAssetBacked` below.
+        if (isAssetBacked(value)) return null;
         return value as T;
     }
     return null;
+}
+
+/** True when a JSON field arrived as a CKAsset descriptor rather than an inline string. */
+export function isAssetBacked(value: unknown): boolean {
+    return (
+        value != null &&
+        typeof value === 'object' &&
+        ('downloadURL' in (value as object) || 'fileChecksum' in (value as object))
+    );
+}
+
+/**
+ * Async counterpart to `parseJsonField`: also handles the CKAsset encoding by
+ * fetching the asset's pre-authenticated `downloadURL` and parsing the body.
+ *
+ * `routeJSON` is written as an ASSET by the native `RecordCoder` (deliberate — see
+ * apple/CloudKit/MAPPING.md §6, so a journey query does not drag every route blob),
+ * while `statsJSON`/`weatherJSON`/etc. stay inline STRINGs. Reading route with the
+ * synchronous parser alone silently produced `route: null` for every migrated
+ * journey, which drops the globe route line and zeroes every camp's per-day
+ * distance/elevation. Fetch or parse failure degrades to `null` (never throws).
+ */
+export async function resolveJsonField<T>(value: unknown): Promise<T | null> {
+    const inline = parseJsonField<T>(value);
+    if (inline !== null) return inline;
+
+    const url = assetUrl(value);
+    if (!url) return null;
+    try {
+        const response = await fetch(url);
+        if (!response.ok) return null;
+        return (await response.json()) as T;
+    } catch {
+        return null;
+    }
 }
 
 function timestampToIso(ts?: number): string | null {

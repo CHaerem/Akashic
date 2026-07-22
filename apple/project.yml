@@ -8,13 +8,17 @@ options:
   groupSortPosition: top
 
 # Build configurations.
-#   Debug / Release  -> no code signing, no team required (default simulator builds).
-#   Release-CloudKit -> opt-in config that turns on the CloudKit + Push entitlements.
-#                       Enable a DEVELOPMENT_TEAM here (or via CLI override) once an
-#                       Apple Developer team is configured on the build machine.
+#   Debug / Release  -> no code signing, no team required (default simulator builds + CI).
+#   Debug-CloudKit   -> debug build WITH the CloudKit + Push entitlements, for running the
+#                       CKSyncEngine sync layer on a Simulator signed into iCloud (simulator
+#                       builds honor entitlements without provisioning). Launch it with
+#                       AKASHIC_CLOUDKIT=1 (see README "Activating CloudKit sync").
+#   Release-CloudKit -> release build with the same entitlements (device/TestFlight).
+#                       Both *-CloudKit configs need a DEVELOPMENT_TEAM (set below or via CLI).
 configs:
   Debug: debug
   Release: release
+  Debug-CloudKit: debug
   Release-CloudKit: release
 
 settings:
@@ -68,11 +72,25 @@ targets:
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
         SWIFT_EMIT_LOC_STRINGS: "YES"
       configs:
-        # Opt-in CloudKit build. Not used by the default `build`/`test` invocations,
-        # so the machine needs no signing team for CI. To ship CloudKit sync:
+        # Opt-in CloudKit builds. Not used by the default `build`/`test` invocations,
+        # so the machine needs no signing team for CI. To run/ship CloudKit sync:
         #   1. Set DEVELOPMENT_TEAM below (or pass DEVELOPMENT_TEAM=XXXX on the CLI).
-        #   2. Build the `Release-CloudKit` configuration.
-        #   3. Flip Config.persistenceMode default / FeatureFlags.cloudKitEnabled.
+        #   2. Build `Debug-CloudKit` (simulator dev) or `Release-CloudKit` (device).
+        #   3. Sign the Simulator into iCloud, then launch with AKASHIC_CLOUDKIT=1.
+        # SWIFT_ACTIVE_COMPILATION_CONDITIONS gates every CKContainer/CKSyncEngine touchpoint
+        # behind `#if AKASHIC_CLOUDKIT_BUILD`. CRITICAL: instantiating a CKContainer in a binary
+        # WITHOUT the icloud-services entitlement TRAPS (SIGTRAP) — so the runtime accountStatus
+        # gate cannot be the first line of defense; the entitlement itself is. Only these signed
+        # configs define the flag, so the default Debug/Release builds compile the sync layer but
+        # never construct a CKContainer.
+        Debug-CloudKit:
+          CODE_SIGN_ENTITLEMENTS: Akashic/Support/Akashic.entitlements
+          CODE_SIGNING_ALLOWED: "YES"
+          CODE_SIGNING_REQUIRED: "YES"
+          CODE_SIGN_STYLE: Automatic
+          CODE_SIGN_IDENTITY: "Apple Development"
+          DEVELOPMENT_TEAM: 9LVCB72DT8
+          SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) AKASHIC_CLOUDKIT_BUILD"
         Release-CloudKit:
           CODE_SIGN_ENTITLEMENTS: Akashic/Support/Akashic.entitlements
           CODE_SIGNING_ALLOWED: "YES"
@@ -80,6 +98,7 @@ targets:
           CODE_SIGN_STYLE: Automatic
           CODE_SIGN_IDENTITY: "Apple Development"
           DEVELOPMENT_TEAM: 9LVCB72DT8
+          SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) AKASHIC_CLOUDKIT_BUILD"
 
   AkashicTests:
     type: bundle.unit-test
@@ -132,7 +151,14 @@ targets:
         SWIFT_EMIT_LOC_STRINGS: "YES"
       configs:
         # Signed builds: the widget carries the shared App Group so it can read the
-        # WidgetSnapshot the app writes (mirrors the app target's Release-CloudKit).
+        # WidgetSnapshot the app writes (mirrors the app target's *-CloudKit configs).
+        Debug-CloudKit:
+          CODE_SIGN_ENTITLEMENTS: AkashicWidgets/AkashicWidgets.entitlements
+          CODE_SIGNING_ALLOWED: "YES"
+          CODE_SIGNING_REQUIRED: "YES"
+          CODE_SIGN_STYLE: Automatic
+          CODE_SIGN_IDENTITY: "Apple Development"
+          DEVELOPMENT_TEAM: 9LVCB72DT8
         Release-CloudKit:
           CODE_SIGN_ENTITLEMENTS: AkashicWidgets/AkashicWidgets.entitlements
           CODE_SIGNING_ALLOWED: "YES"

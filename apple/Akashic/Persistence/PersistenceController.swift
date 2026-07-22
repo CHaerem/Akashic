@@ -4,9 +4,12 @@ import CoreData
 ///
 /// - `.fixtures`  — in-memory store seeded from the recovered fixtures (app default today).
 /// - `.local`     — on-disk store, seeded once if empty.
-/// - `.cloudKit`  — `NSPersistentCloudKitContainer` mirroring to `iCloud.no.akashic`.
-///                  Fully compiled but only functional once CloudKit entitlements exist;
-///                  loading this store without them fails at runtime, never at build time.
+/// - `.cloudKit`  — the SAME on-disk local SQLite store as `.local`, with an
+///                  `AkashicSyncEngine` (D4: `CKSyncEngine`, custom record types, one custom
+///                  zone per journey — see `Sync/`) attached. The engine only starts when an
+///                  iCloud account is available; with none (the simulator today) the app keeps
+///                  working locally and `syncStatus` explains why. Compiles with no team;
+///                  needs the `Debug-CloudKit`/`Release-CloudKit` entitlements to run for real.
 final class PersistenceController {
 
     /// App-wide instance, mode chosen by `Config.resolvedPersistenceMode`.
@@ -17,6 +20,18 @@ final class PersistenceController {
 
     let container: NSPersistentContainer
     let mode: PersistenceMode
+
+    // MARK: - CloudKit sync stack (populated only in `.cloudKit` mode; see `Sync/`)
+
+    /// Observable sync status for the UI. Always present but `.disabled` outside `.cloudKit`.
+    let syncStatus = SyncStatus()
+    /// The sync coordinator; nil unless `.cloudKit`.
+    var syncCoordinator: AkashicSyncEngine?
+    /// Observes local Core Data saves and feeds them to the engine; nil unless `.cloudKit`.
+    var syncScheduler: SyncScheduler?
+    /// Set by the engine while applying fetched server records, so the scheduler ignores the
+    /// echo save (see `SyncScheduler` / `PersistenceController+Sync`).
+    var syncIsApplyingRemoteChanges = false
 
     /// A single shared model instance avoids "multiple NSEntityDescriptions claim…" warnings
     /// when several controllers are created (notably in tests).
@@ -37,19 +52,11 @@ final class PersistenceController {
         let model = PersistenceController.managedObjectModel
 
         switch mode {
-        case .cloudKit:
-            let ckContainer = NSPersistentCloudKitContainer(name: Config.coreDataModelName,
-                                                            managedObjectModel: model)
-            if let description = ckContainer.persistentStoreDescriptions.first {
-                description.setOption(true as NSNumber, forKey: NSPersistentHistoryTrackingKey)
-                description.setOption(true as NSNumber,
-                                      forKey: NSPersistentStoreRemoteChangeNotificationPostOptionKey)
-                description.cloudKitContainerOptions = NSPersistentCloudKitContainerOptions(
-                    containerIdentifier: Config.cloudKitContainerIdentifier)
-            }
-            container = ckContainer
-
-        case .local:
+        case .local, .cloudKit:
+            // `.cloudKit` uses the same on-disk local store as `.local`; sync is layered on top
+            // by `CKSyncEngine` (attached below), NOT by NSPersistentCloudKitContainer — that
+            // placeholder is retired (it would have generated an incompatible `CD_`-prefixed
+            // schema; see CloudKit/MAPPING.md §12 + the D4 decision).
             container = NSPersistentContainer(name: Config.coreDataModelName,
                                               managedObjectModel: model)
 
@@ -68,6 +75,14 @@ final class PersistenceController {
         if let loadError {
             // .fixtures/.local cannot function without a store; make the failure loud in debug.
             assertionFailure("Core Data store load failed (\(mode)): \(loadError)")
+        }
+
+        // Attach the CloudKit sync engine (account-gated inside `startSync`/`activate`). Built
+        // on the main actor: `.shared`/`.cloudKit` is created on launch from `@MainActor`
+        // `JourneyStore`. Tests never build a `.cloudKit` controller (they drive the engine and
+        // store seam directly), so this main-actor assumption is not exercised off-main.
+        if mode == .cloudKit {
+            MainActor.assumeIsolated { startSync() }
         }
 
         guard seed else { return }

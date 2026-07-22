@@ -1,0 +1,453 @@
+import Foundation
+import CloudKit
+
+/// Coordinates CloudKit sync for the `.cloudKit` persistence mode using `CKSyncEngine`
+/// (D4 = FINAL: custom record types, zone-per-journey, Core Data as the local store).
+///
+/// It sits behind two seams so its logic is unit-testable **without a live container**:
+///   * `SyncEngineProtocol` — the underlying `CKSyncEngine` (mocked in tests),
+///   * `SyncLocalStore`     — the local Core Data store (faked in tests).
+/// The delegate callbacks (`handleEvent` / `nextRecordZoneChangeBatch`) are thin adapters
+/// over the plain, testable methods below (`handleFetchedChanges`, `handleSentChanges`,
+/// `nextBatch`, `handleZoneDeletions`), which take ordinary `CKRecord`s that tests can build.
+///
+/// ## Conflict policy (chosen)
+/// **Last-writer-wins, server-authoritative.** Fetched server records overwrite the local
+/// copy (`applyFetchedRecord`). On a send conflict (`serverRecordChanged`) the local edit is
+/// **rebased onto the server record** — our changed field values are copied onto the server
+/// record so the resend carries the correct change tag and our latest values ultimately land.
+/// Future refinement (documented, not built tonight): field-level merge keyed on the domain
+/// edit timestamps the app already keeps (`DayComment.modifiedAt`, `Journey.updatedAt`).
+///
+/// SCOPE TONIGHT: a clean, compiling, unit-tested foundation. The real-engine wiring compiles
+/// and is gated behind `Config.cloudKitEnabled` + an available iCloud account, but end-to-end
+/// sync is untested until an account is signed into a simulator (see README activation guide).
+/// Why a record zone disappeared server-side. Mirrors CloudKit's reason so the (default-off)
+/// honor-a-real-delete path can never be reached by a purge / encrypted-data reset, and so the
+/// handler stays unit-testable without constructing a CloudKit event.
+enum ZoneDeletionReason: Equatable {
+    case deleted
+    case purged
+    case encryptedDataReset
+    case unknown
+}
+
+@MainActor
+final class AkashicSyncEngine: NSObject, CKSyncEngineDelegate {
+
+    private let store: SyncLocalStore
+    let status: SyncStatus
+    private let accountProvider: AccountStatusProviding
+    private let containerIdentifier: String
+    private let ownerName: String
+    private let defaults: UserDefaults
+
+    /// The underlying engine seam. `nil` until `activate()` builds it (production) or the test
+    /// injects one. Only used to enqueue/flush once `isRunning` is true.
+    private var engine: SyncEngineProtocol?
+
+    /// True only after `activate()` confirmed an available account and started the engine.
+    private(set) var isRunning = false
+    private var hasActivated = false
+    private var hasPurgedRouteScratch = false
+
+    /// Server records to resend on the next batch, keyed by id — populated when rebasing a
+    /// `serverRecordChanged` conflict so the resend carries the server's change tag.
+    private var mergedRecordCache: [CKRecord.ID: CKRecord] = [:]
+
+    /// Test seam: the rebased records still waiting to be sent.
+    var pendingMergedRecordIDs: Set<CKRecord.ID> { Set(mergedRecordCache.keys) }
+
+    /// Test/observation hook fired after fetched server changes are applied locally.
+    var onRemoteChangesApplied: (() -> Void)?
+
+    /// OFF by design: a server-side zone deletion never destroys local data (see
+    /// `handleZoneDeletions`). Nothing in the app sets this; it exists so that if honoring
+    /// genuine deletes is ever wanted, it must be turned on deliberately AND paired with
+    /// `confirmZoneDeletion`.
+    var honorsRemoteZoneDeletion = false
+
+    /// User-confirmation gate for the above. Returns true only if the user explicitly agreed
+    /// to destroy that journey locally.
+    var confirmZoneDeletion: ((String) -> Bool)?
+
+    /// True once the initial upload was enqueued in this process but the engine has not yet
+    /// confirmed it persisted its pending state. See the `.stateUpdate` handling.
+    private var initialUploadEnqueued = false
+
+    private static let didInitialUploadKey = "akashic.sync.didInitialUpload"
+
+    init(store: SyncLocalStore,
+         status: SyncStatus,
+         accountProvider: AccountStatusProviding,
+         containerIdentifier: String = Config.cloudKitContainerIdentifier,
+         ownerName: String = CKCurrentUserDefaultName,
+         defaults: UserDefaults = .standard,
+         engine: SyncEngineProtocol? = nil) {
+        self.store = store
+        self.status = status
+        self.accountProvider = accountProvider
+        self.containerIdentifier = containerIdentifier
+        self.ownerName = ownerName
+        self.defaults = defaults
+        self.engine = engine
+        super.init()
+    }
+
+    // MARK: - Activation (account-gated)
+
+    /// Check the iCloud account and, only if available, start the engine and enqueue the
+    /// initial upload. With no account (the simulator tonight) the engine stays OFF and the
+    /// app keeps working locally — `status` reflects why.
+    func activate() async {
+        guard !hasActivated else { return }
+        // First activation only — a genuinely quiescent point, nothing has been uploaded yet,
+        // so it is safe to sweep the route ASSET scratch files left behind by previous runs.
+        // (CKAsset reads its file lazily; deleting one while a modify operation is in flight
+        // would corrupt the upload, so this must never run mid-session.)
+        if !hasPurgedRouteScratch {
+            hasPurgedRouteScratch = true
+            RecordCoder.purgeRouteAssetDirectory()
+        }
+        status.set(.checkingAccount)
+
+        let account = await accountProvider.accountStatus()
+        if let blocked = SyncStatus.state(for: account) {
+            status.set(blocked)          // .noAccount / .restricted / .unavailable -> engine OFF
+            return
+        }
+
+        if engine == nil { engine = buildRealEngine() }
+        guard engine != nil else {
+            status.set(.error("Could not create the CloudKit sync engine"))
+            return
+        }
+
+        hasActivated = true
+        isRunning = true
+        enqueueInitialUploadIfNeeded()
+        status.markSynced()
+        Task { [weak self] in try? await self?.engine?.sendChanges() }
+    }
+
+    private func buildRealEngine() -> SyncEngineProtocol? {
+        // A CKContainer instantiated without the icloud-services entitlement TRAPS, so this is
+        // only ever built in an entitled `*-CloudKit` build. (Defense in depth: `startSync`
+        // already no-ops in non-CloudKit builds, and the account provider returns a sentinel.)
+        #if AKASHIC_CLOUDKIT_BUILD
+        let container = CKContainer(identifier: containerIdentifier)
+        var configuration = CKSyncEngine.Configuration(
+            database: container.privateCloudDatabase,
+            stateSerialization: Self.loadState(),
+            delegate: self)
+        configuration.automaticallySync = true
+        return CKSyncEngineAdapter(CKSyncEngine(configuration))
+        #else
+        return nil
+        #endif
+    }
+
+    /// Push existing local (imported) data up on first activation only. Gated on a flag so a
+    /// relaunch — where `CKSyncEngine` restores its own pending state from disk — does not
+    /// re-enqueue everything.
+    private func enqueueInitialUploadIfNeeded() {
+        guard !defaults.bool(forKey: Self.didInitialUploadKey) else { return }
+        guard let engine else { return }
+        for journeyID in store.allLocalJourneyIDs() {
+            let zoneID = RecordCoder.zoneID(forJourneyID: journeyID, ownerName: ownerName)
+            engine.add(pendingDatabaseChanges: [.saveZone(CKRecordZone(zoneID: zoneID))])
+            let saves = store.recordIdentities(forJourneyID: journeyID)
+                .map { CKSyncEngine.PendingRecordZoneChange.saveRecord($0.recordID(ownerName: ownerName)) }
+            if !saves.isEmpty { engine.add(pendingRecordZoneChanges: saves) }
+        }
+        // The flag is committed only once CKSyncEngine reports it persisted this pending state
+        // (see the `.stateUpdate` case). Until then every activate() re-runs the enqueue, which
+        // is harmless: pending changes are keyed by record id.
+        initialUploadEnqueued = true
+    }
+
+    // MARK: - Local write intake (called by SyncScheduler)
+
+    /// Translate observed local writes into pending record-zone changes (and a zone-save for a
+    /// newly-created journey root). No-op unless the engine is running.
+    func localStoreDidChange(_ changes: [LocalChange]) {
+        guard isRunning, let engine, !changes.isEmpty else { return }
+        var databaseChanges: [CKSyncEngine.PendingDatabaseChange] = []
+        var recordChanges: [CKSyncEngine.PendingRecordZoneChange] = []
+        for change in changes {
+            let recordID = change.recordID(ownerName: ownerName)
+            if change.isJourneyRoot, change.kind == .save {
+                databaseChanges.append(.saveZone(CKRecordZone(zoneID: recordID.zoneID)))
+            }
+            switch change.kind {
+            case .save:   recordChanges.append(.saveRecord(recordID))
+            case .delete: recordChanges.append(.deleteRecord(recordID))
+            }
+        }
+        if !databaseChanges.isEmpty { engine.add(pendingDatabaseChanges: databaseChanges) }
+        if !recordChanges.isEmpty { engine.add(pendingRecordZoneChanges: recordChanges) }
+    }
+
+    // MARK: - CKSyncEngineDelegate
+
+    func handleEvent(_ event: CKSyncEngine.Event, syncEngine: CKSyncEngine) async {
+        switch event {
+        case .stateUpdate(let update):
+            // Only now — once the engine's pending changes are durable — is it safe to record
+            // that the initial upload happened. Committing the flag at enqueue time meant a
+            // kill in between left the archive permanently un-uploaded with nothing retrying.
+            if Self.persistState(update.stateSerialization), initialUploadEnqueued {
+                defaults.set(true, forKey: Self.didInitialUploadKey)
+                initialUploadEnqueued = false
+            }
+
+        case .accountChange(let change):
+            handleAccountChange(change)
+
+        case .fetchedRecordZoneChanges(let changes):
+            handleFetchedChanges(
+                modifications: changes.modifications.map(\.record),
+                deletions: changes.deletions.map { (recordName: $0.recordID.recordName, recordType: $0.recordType) })
+
+        case .fetchedDatabaseChanges(let changes):
+            for deletion in changes.deletions {
+                handleZoneDeletions([deletion.zoneID], reason: Self.reason(for: deletion.reason))
+            }
+
+        case .sentRecordZoneChanges(let changes):
+            handleSentChanges(
+                saved: changes.savedRecords,
+                failed: changes.failedRecordSaves.map { (record: $0.record, error: $0.error) },
+                deleted: changes.deletedRecordIDs)
+
+        case .didFetchChanges, .didSendChanges:
+            status.markSynced()
+
+        case .willFetchChanges, .willSendChanges, .sentDatabaseChanges,
+             .willFetchRecordZoneChanges, .didFetchRecordZoneChanges:
+            break
+
+        @unknown default:
+            break
+        }
+    }
+
+    func nextRecordZoneChangeBatch(_ context: CKSyncEngine.SendChangesContext,
+                                   syncEngine: CKSyncEngine) async -> CKSyncEngine.RecordZoneChangeBatch? {
+        let scope = context.options.scope
+        let pending = syncEngine.state.pendingRecordZoneChanges.filter { scope.contains($0) }
+        return await nextBatch(for: pending)
+    }
+
+    // MARK: - Testable event handling (plain inputs, no live engine required)
+
+    /// Apply fetched server changes to the local store (server-authoritative). Suppresses the
+    /// scheduler while writing so the applied changes do not echo back as fresh local writes.
+    func handleFetchedChanges(modifications: [CKRecord],
+                              deletions: [(recordName: String, recordType: String)]) {
+        guard !modifications.isEmpty || !deletions.isEmpty else { return }
+        store.beginRemoteApply()
+        for record in modifications { store.applyFetchedRecord(record) }
+        for deletion in deletions {
+            store.applyDeletedRecord(recordName: deletion.recordName, recordType: deletion.recordType)
+        }
+        store.endRemoteApply()
+        onRemoteChangesApplied?()
+        status.markSynced()
+    }
+
+    /// A whole zone (journey) vanished server-side.
+    ///
+    /// **This never deletes local data.** The local Core Data store is the authoritative family
+    /// archive; CloudKit is the mirror. A zone can disappear for reasons that have nothing to do
+    /// with an intent to delete photos — iCloud account reset, the user toggling iCloud off and
+    /// on, a storage purge, a stray delete in the CloudKit dashboard during this migration, an
+    /// errant client. The old behavior (`applyDeletedRecord(.journey)`) cascaded the Core Data
+    /// delete to every waypoint, photo and comment of that journey, with no confirmation and no
+    /// undo. So instead we re-establish the mirror: re-enqueue the zone and all of its records,
+    /// exactly like the `.zoneNotFound` send-path recovery.
+    ///
+    /// Honoring a genuine remote delete would require BOTH `reason == .deleted` and an explicit
+    /// user confirmation; `honorsRemoteZoneDeletion` is the (default-off, currently unset) seam
+    /// for that and deliberately has no code path that sets it to true.
+    func handleZoneDeletions(_ zoneIDs: [CKRecordZone.ID],
+                             reason: ZoneDeletionReason = .unknown) {
+        let journeyIDs = zoneIDs.compactMap(RecordCoder.journeyID(fromZoneID:))
+        guard !journeyIDs.isEmpty else { return }
+
+        if honorsRemoteZoneDeletion, reason == .deleted, let confirm = confirmZoneDeletion {
+            let approved = journeyIDs.filter { confirm($0) }
+            guard !approved.isEmpty else { return }
+            store.beginRemoteApply()
+            for journeyID in approved {
+                store.applyDeletedRecord(recordName: journeyID,
+                                         recordType: RecordCoder.RecordType.journey)
+            }
+            store.endRemoteApply()
+            onRemoteChangesApplied?()
+            return
+        }
+
+        guard let engine else { return }
+        for journeyID in journeyIDs {
+            let identities = store.recordIdentities(forJourneyID: journeyID)
+            guard !identities.isEmpty else { continue }   // nothing local to protect / re-upload
+            let zoneID = RecordCoder.zoneID(forJourneyID: journeyID, ownerName: ownerName)
+            engine.add(pendingDatabaseChanges: [.saveZone(CKRecordZone(zoneID: zoneID))])
+            engine.add(pendingRecordZoneChanges: identities.map {
+                .saveRecord($0.recordID(ownerName: ownerName))
+            })
+        }
+    }
+
+    /// Handle the outcome of a send. The conflict path (`serverRecordChanged`) rebases the
+    /// local edit onto the server record and re-enqueues it (last-writer-wins).
+    func handleSentChanges(saved: [CKRecord],
+                           failed: [(record: CKRecord, error: CKError)],
+                           deleted: [CKRecord.ID]) {
+        var rebased: [CKSyncEngine.PendingRecordZoneChange] = []
+        for failure in failed {
+            switch failure.error.code {
+            case .serverRecordChanged:
+                if let serverRecord = failure.error.serverRecord {
+                    let merged = merge(client: failure.record, onto: serverRecord)
+                    mergedRecordCache[merged.recordID] = merged
+                    rebased.append(.saveRecord(merged.recordID))
+                }
+            case .zoneNotFound, .userDeletedZone:
+                // Zone missing server-side: recreate it and resend the record. Needs live-test.
+                let zoneID = failure.record.recordID.zoneID
+                engine?.add(pendingDatabaseChanges: [.saveZone(CKRecordZone(zoneID: zoneID))])
+                rebased.append(.saveRecord(failure.record.recordID))
+            case .serverRejectedRequest, .invalidArguments, .unknownItem:
+                // Non-retryable for this record: surface, do not loop.
+                status.set(.error(failure.error.localizedDescription))
+            default:
+                // Retryable/batch errors: CKSyncEngine reschedules automatically.
+                break
+            }
+        }
+        if !rebased.isEmpty { engine?.add(pendingRecordZoneChanges: rebased) }
+        if !saved.isEmpty || !deleted.isEmpty { status.markSynced() }
+    }
+
+    /// Materialize the CKRecords for a set of pending changes. Prefers a rebased record from
+    /// the conflict cache; otherwise asks the local store to build it. A `saveRecord` whose
+    /// row is gone yields `nil` from the provider and is skipped by the batch.
+    func nextBatch(for changes: [CKSyncEngine.PendingRecordZoneChange]) async
+        -> CKSyncEngine.RecordZoneChangeBatch? {
+        guard !changes.isEmpty else { return nil }
+        let cache = mergedRecordCache
+        let store = self.store
+        let batch = await CKSyncEngine.RecordZoneChangeBatch(pendingChanges: changes) { recordID in
+            if let merged = cache[recordID] { return merged }
+            return store.makeRecord(forRecordName: recordID.recordName, zoneID: recordID.zoneID, existing: nil)
+        }
+        // Evict ONLY what the batch actually materialized. `RecordZoneChangeBatch` honors
+        // CloudKit's per-operation record/byte limits and leaves the overflow pending, so
+        // clearing the whole `changes` list threw away rebased records (the ones carrying the
+        // server change tag) before they were ever sent — the same save then conflicted,
+        // rebased and ping-ponged indefinitely. Very likely during the asset-heavy archive
+        // upload, where batches hit the byte ceiling constantly.
+        if let batch {
+            for record in batch.recordsToSave { mergedRecordCache[record.recordID] = nil }
+        }
+        return batch
+    }
+
+    // MARK: - Helpers
+
+    private func handleAccountChange(_ change: CKSyncEngine.Event.AccountChange) {
+        switch change.changeType {
+        case .signIn:
+            Task { [weak self] in await self?.accountDidSignIn() }
+        case .signOut:
+            accountDidSignOut()
+        case .switchAccounts:
+            accountDidSwitchAccounts()
+        @unknown default:
+            break
+        }
+    }
+
+    /// Sign-in must go back through `activate()`. Only marking the status synced left
+    /// `isRunning == false` (cleared on sign-out) while the UI claimed "Syncing with iCloud",
+    /// so every local edit made before the next relaunch was silently dropped — and
+    /// `activate()` could not recover because `hasActivated` was still true.
+    func accountDidSignIn() async {
+        hasActivated = false
+        isRunning = false
+        await activate()
+    }
+
+    func accountDidSignOut() {
+        // Absent account: stop trusting pending state, but allow a later sign-in to reactivate.
+        isRunning = false
+        hasActivated = false
+        status.set(.noAccount)
+    }
+
+    func accountDidSwitchAccounts() {
+        isRunning = false
+        hasActivated = false
+        // A different account's private DB is empty: the initial upload must run again, and
+        // the previous account's engine state (change tokens, pending changes) is meaningless.
+        initialUploadEnqueued = false
+        defaults.removeObject(forKey: Self.didInitialUploadKey)
+        Self.discardState()
+        status.set(.noAccount)
+    }
+
+    private static func reason(for reason: CKDatabase.DatabaseChange.Deletion.Reason) -> ZoneDeletionReason {
+        switch reason {
+        case .deleted:             return .deleted
+        case .purged:              return .purged
+        case .encryptedDataReset:  return .encryptedDataReset
+        @unknown default:          return .unknown
+        }
+    }
+
+    /// Last-writer-wins rebase: copy our changed field values onto the server record so the
+    /// resend adopts the server's change tag while keeping our latest values.
+    private func merge(client: CKRecord, onto server: CKRecord) -> CKRecord {
+        for key in client.allKeys() { server[key] = client[key] }
+        return server
+    }
+
+    // MARK: - Engine state persistence
+
+    /// Returns true only when the serialization actually reached disk (the caller uses that to
+    /// decide whether the initial-upload flag may be committed).
+    @discardableResult
+    static func persistState(_ serialization: CKSyncEngine.State.Serialization) -> Bool {
+        guard let url = stateURL else { return false }
+        do {
+            let data = try JSONEncoder().encode(serialization)
+            try data.write(to: url, options: .atomic)
+            return true
+        } catch {
+            // State persistence is best-effort; a lost token triggers a full re-fetch next launch.
+            return false
+        }
+    }
+
+    /// Drop the persisted engine state (used when switching accounts).
+    static func discardState() {
+        guard let url = stateURL else { return }
+        try? FileManager.default.removeItem(at: url)
+    }
+
+    static func loadState() -> CKSyncEngine.State.Serialization? {
+        guard let url = stateURL, let data = try? Data(contentsOf: url) else { return nil }
+        return try? JSONDecoder().decode(CKSyncEngine.State.Serialization.self, from: data)
+    }
+
+    /// `<Application Support>/Akashic/cksyncengine-state.json`.
+    static var stateURL: URL? {
+        let fm = FileManager.default
+        guard let base = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else { return nil }
+        let dir = base.appendingPathComponent("Akashic", isDirectory: true)
+        try? fm.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir.appendingPathComponent("cksyncengine-state.json")
+    }
+}

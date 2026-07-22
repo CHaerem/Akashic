@@ -12,7 +12,29 @@ import type { JourneyUpdate } from '../../journeyAPI';
 import { toTrekConfig, toTrekData } from '../../transforms';
 import { setJourneyCacheState } from '../../journeyCache';
 import { getSharedDatabase, getPrivateDatabase } from '../../../cloudkit';
-import { recordToDbJourney, recordToDbWaypoint, referenceName, fieldValue } from './records';
+import {
+    recordToDbJourney,
+    recordToDbWaypoint,
+    referenceName,
+    fieldValue,
+    resolveJsonField,
+} from './records';
+
+/**
+ * `routeJSON` is stored as a CKAsset (MAPPING §6), so the synchronous mapper leaves
+ * `route` null and the bytes have to be fetched from the asset's pre-authenticated
+ * downloadURL. Without this the globe draws no route line and every camp reports
+ * zero day-distance / elevation gain. Failures degrade to a null route.
+ */
+async function hydrateRoutes(records: CloudKitJS.Record[], journeys: DbJourney[]): Promise<void> {
+    await Promise.all(
+        journeys.map(async (journey, index) => {
+            if (journey.route) return; // inline STRING encoding already parsed
+            const route = await resolveJsonField<Route>(fieldValue(records[index], 'routeJSON'));
+            if (route) journey.route = route;
+        })
+    );
+}
 
 export const CK_UNSUPPORTED = '[cloudkit] not supported on web — use the iOS app';
 
@@ -51,6 +73,7 @@ export async function fetchJourneys(): Promise<{
 
     const journeys: DbJourney[] = journeyRecords.map(recordToDbJourney);
     const waypoints: DbWaypoint[] = waypointRecords.map(recordToDbWaypoint);
+    await hydrateRoutes(journeyRecords, journeys);
 
     // Group waypoints by journey id (reference -> journey record name).
     const waypointsByJourney: Record<string, DbWaypoint[]> = {};
@@ -96,7 +119,10 @@ export async function getJourneyForEdit(slug: string): Promise<DbJourney | null>
             filterBy: [{ fieldName: 'slug', comparator: 'EQUALS', fieldValue: { value: slug } }],
         });
         const record = records.find((r) => referenceName(fieldValue(r, 'slug')) === slug) ?? records[0];
-        return record ? recordToDbJourney(record) : null;
+        if (!record) return null;
+        const journey = recordToDbJourney(record);
+        await hydrateRoutes([record], [journey]);
+        return journey;
     } catch (err) {
         console.error('[cloudkit] Error fetching journey:', err);
         return null;
