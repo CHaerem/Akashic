@@ -129,8 +129,8 @@ graph TD
 
 ## W1 — Phase 0 gates (spikes → decisions)
 
-### T1.1 🧑 Container + tokens (RUNBOOK §1–3)
-App ID `no.akashic.app` + container `iCloud.no.akashic`; cktool management token; CloudKit JS web API token (allowed origins: localhost:8000, localhost:5173, akashic.no).
+### T1.1 🧑 Container + tokens (RUNBOOK §1–3) — mostly ✅ (2026-07-22)
+✅ App ID `no.akashic.app` + `no.akashic.app.widgets`, container `iCloud.no.akashic`, App Group `group.no.akashic` registered (team 9LVCB72DT8, via Xcode automatic signing); ✅ cktool management token (was already saved). **Remaining 🧑:** the CloudKit JS web API token (CloudKit Console → Tokens & Keys; allowed origins: localhost:8000, localhost:5173, akashic.no) — needed for Spike A and the web adapter.
 
 ### T1.2 🤝 Execute Spike A (proves/disproves D6)
 - **Built tonight:** `spikes/cloudkit-js/index.html` + README (4 test panels: private DB, shared DB, share-accept, public DB; PASS/FAIL badges; full error surfacing). CloudKit JS confirmed to load and error-path verified with placeholder token.
@@ -153,9 +153,8 @@ Consolidate D4 (NSPCKC vs CKSyncEngine — informed by how the scaffold's Core D
 ### T2.1 ✅ Scaffold (done tonight — see `apple/README.md`)
 XcodeGen project (iOS 17, Swift lang mode 5), Core Data model mirroring the REAL schema (all 4 entities incl. the columns the plan missed), PersistenceController with `.cloudKit`/`.local`/`.fixtures` modes, fixture-seeded read-only UI (journey list → detail → days/stats + flat map placeholder), unit tests, CI workflow `apple-ci.yml`, simulator-verified with screenshots in `apple/Docs/`.
 
-### T2.2 🤝 Import the CloudKit schema (RUNBOOK §2)
-`apple/CloudKit/schema.ckdb` + `MAPPING.md` were authored tonight from the real migrations. Import to Development with cktool; fix any syntax the first import rejects (flagged candidates listed in `apple/CloudKit/README.md`); create a toy record set for Spike A.
-- **Accept:** `cktool` import succeeds; record types visible in CloudKit Console; Spike A panel 1 can query them.
+### T2.2 ✅ Import the CloudKit schema (RUNBOOK §2) — done 2026-07-22
+Schema validated and imported to **Development**; round-trip export confirms all six record types live. One syntax fix applied to `schema.ckdb`: `LIST<STRING>` (not `STRING LIST`). Remaining for Spike A: a toy record set (create in CloudKit Console, or wait for the T2.5 importer).
 
 ### T2.3 🤝 Activate CloudKit sync + signing
 - **Needs:** T2.2 + Xcode Team set (RUNBOOK §4).

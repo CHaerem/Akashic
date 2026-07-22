@@ -79,6 +79,7 @@ targets:
           CODE_SIGNING_REQUIRED: "YES"
           CODE_SIGN_STYLE: Automatic
           CODE_SIGN_IDENTITY: "Apple Development"
+          DEVELOPMENT_TEAM: 9LVCB72DT8
 
   AkashicTests:
     type: bundle.unit-test
@@ -129,6 +130,16 @@ targets:
         # Extensions are packaged inside the host app, never installed on their own.
         SKIP_INSTALL: "YES"
         SWIFT_EMIT_LOC_STRINGS: "YES"
+      configs:
+        # Signed builds: the widget carries the shared App Group so it can read the
+        # WidgetSnapshot the app writes (mirrors the app target's Release-CloudKit).
+        Release-CloudKit:
+          CODE_SIGN_ENTITLEMENTS: AkashicWidgets/AkashicWidgets.entitlements
+          CODE_SIGNING_ALLOWED: "YES"
+          CODE_SIGNING_REQUIRED: "YES"
+          CODE_SIGN_STYLE: Automatic
+          CODE_SIGN_IDENTITY: "Apple Development"
+          DEVELOPMENT_TEAM: 9LVCB72DT8
 
 schemes:
   Akashic:

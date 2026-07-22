@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!--
+	  App Group shared with the Akashic app so the widget can read the WidgetSnapshot
+	  JSON the app writes (see AppGroup / WidgetDataStore). Referenced ONLY by the
+	  `Release-CloudKit` build configuration — Debug/Release simulator builds stay
+	  unsigned and the widget falls back to its bundled placeholder snapshot.
+	-->
+	<key>com.apple.security.application-groups</key>
+	<array>
+		<string>group.no.akashic</string>
+	</array>
+</dict>
+</plist>

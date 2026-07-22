@@ -34,7 +34,7 @@ DEFINE SCHEMA
         coordinates          LOCATION QUERYABLE,
         elevation            INT64,
         description          STRING,
-        highlights           STRING LIST,
+        highlights           LIST<STRING>,
         arrivalTime          STRING,
         departureTime        STRING,
         dateVisited          TIMESTAMP,

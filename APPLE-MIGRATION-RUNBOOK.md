@@ -88,7 +88,15 @@ JSON dump exists and where you saved it (e.g. a local `export/` folder, kept off
 
 ---
 
-## 1. CloudKit container + App ID
+## 1. CloudKit container + App ID — ✅ DONE (2026-07-22)
+
+> **Outcome:** App ID `no.akashic.app` (+ `no.akashic.app.widgets`), container `iCloud.no.akashic`,
+> and App Group `group.no.akashic` were registered on team **9LVCB72DT8** via Xcode automatic
+> signing (Release-CloudKit config now carries `DEVELOPMENT_TEAM` in `project.yml`). Verified
+> server-side with `cktool`. Note for future headless provisioning: `xcodebuild
+> -allowProvisioningUpdates` cannot read the Xcode account session from a terminal — either use
+> the Xcode GUI once per new capability, or create an App Store Connect API key and pass
+> `-authenticationKeyPath/-authenticationKeyID/-authenticationKeyIssuerID`.
 
 **Why:** Everything native and web-CloudKit hangs off the container `iCloud.no.akashic`. Nothing can
 be built until it exists.
@@ -110,7 +118,12 @@ config (not a secret, but keep it out of chat if you prefer — it's on the Memb
 
 ---
 
-## 2. cktool management token + schema import
+## 2. cktool management token + schema import — ✅ DONE (2026-07-22)
+
+> **Outcome:** a management token was already saved on this machine. `schema.ckdb` was validated
+> and imported to **Development**; round-trip `export-schema` confirms all record types live
+> (`Journey`, `Waypoint`, `Photo`, `DayComment`, `PublicJourney`, `PublicPhoto`). One syntax fix:
+> list fields are `LIST<STRING>`, not `STRING LIST`. Dev→Prod promotion remains a Phase-2 step.
 
 **Why:** The CloudKit record types (Section 3 of the plan) are defined as a schema file the agent
 generates. You import it with `cktool`; that needs a management token only you can mint.
@@ -321,8 +334,8 @@ mark the Phase 5 security item done. Do not paste any key.
 | # | Your action | Unblocks (repo tasks / phases) |
 |---|-------------|--------------------------------|
 | **0** | ✅ **DONE (2026-07-21 → 22)** — Supabase resumed + exported; R2 archived; verified | **All data migration** unblocked. Archive at `/Users/cher/Privat/AkashicExport-20260722`. No longer a blocker. |
-| 1 | CloudKit container + App ID | Native app build, cktool import, CloudKit JS — everything Apple |
-| 2 | cktool management token + schema import (Dev) | **Spike A** data; web CloudKit adapter (T3.2); Phase-2 importer (T2.5). Native app needs the D4/T2.3 decision too |
+| 1 ✅ | CloudKit container + App ID — done 2026-07-22 | Native app build, cktool import, CloudKit JS — everything Apple |
+| 2 ✅ | cktool management token + schema import (Dev) — done 2026-07-22 | **Spike A** data; web CloudKit adapter (T3.2); Phase-2 importer (T2.5). Native app needs the D4/T2.3 decision too |
 | 3 | CloudKit JS web API token | **Spike A** (proves D6); Phase 4 web-on-CloudKit adapter |
 | 4 | Xcode Team signing + **App Group `group.no.akashic`** (both targets) | On-device builds; Phase 1 MVP; **activates the journey-stats widget** (dormant until the App Group exists) |
 | 4 | App Store Connect + TestFlight group | **Family testing** (Phase 2); needs Section 7 Apple IDs |
