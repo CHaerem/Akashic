@@ -40,16 +40,20 @@ const ROUTE_JSON = {
     ],
 };
 
-// camelCase, as Swift's Codable writes it into the waypointsJSON asset.
+// camelCase, exactly as Swift's Codable encodes a `Camp` (apple/Akashic/Models/
+// Domain.swift) into the waypointsJSON asset — note the day text field is `notes`,
+// NOT `description`, and route positioning is `routePointIndex` / `routeDistanceKm`.
 const WAYPOINTS_JSON = [
     {
         id: 'camp-1',
         name: 'Big Tree Camp',
         dayNumber: 1,
-        sortOrder: 0,
-        coordinates: [37.0, -3.0],
         elevation: 2780,
+        coordinates: [37.0, -3.0],
+        notes: 'Camp beneath the giant heather; a river runs alongside.',
+        highlights: ['Giant heather', 'River crossing'],
         routePointIndex: 0,
+        routeDistanceKm: 6.2,
         weather: { temperatureMax: 13.2, temperatureMin: 4.1 },
         funFacts: [{ id: 'f1', content: 'Giant heather grows here', category: 'nature', learnMoreUrl: 'https://x' }],
     },
@@ -57,10 +61,12 @@ const WAYPOINTS_JSON = [
         // no id — must fall back to `${slug}-day-${dayNumber}`
         name: 'Shira Camp',
         dayNumber: 2,
-        sortOrder: 1,
-        coordinates: [37.1, -3.1],
         elevation: 3500,
+        coordinates: [37.1, -3.1],
+        notes: 'Open moorland with the first summit views.',
+        highlights: ['Summit views'],
         routePointIndex: 1,
+        routeDistanceKm: 11.9,
     },
 ];
 
@@ -87,10 +93,27 @@ function makePublicJourneyRecord() {
     };
 }
 
+/**
+ * Mock public DB that HONORS `filterBy` for STRING equality — the real container
+ * rejects a malformed predicate outright, so a mock that ignored filterBy could not
+ * tell a correct journeySlug predicate from a dropped one (a dropped filter would bleed
+ * every journey's photos into each grid; a malformed one would return none).
+ */
 function makePublicDb(recordsByType: Record<string, unknown[]>) {
+    type Rec = { fields?: Record<string, { value?: unknown }> };
+    type Filter = { fieldName: string; comparator: string; fieldValue: { value?: unknown } };
+    const matches = (record: Rec, query: CloudKitJS.Query): boolean =>
+        ((query.filterBy ?? []) as Filter[]).every((f) => {
+            const actual = record.fields?.[f.fieldName]?.value;
+            // Only STRING equality is modelled here (journeySlug); anything else would
+            // need a shape this mock does not pretend to support.
+            return f.comparator === 'EQUALS' && actual === f.fieldValue.value;
+        });
     return {
         performQuery: vi.fn(async (query: CloudKitJS.Query) => ({
-            records: recordsByType[query.recordType] ?? [],
+            records: (recordsByType[query.recordType] ?? []).filter((r) =>
+                matches(r as Rec, query)
+            ),
         })),
         fetchRecords: vi.fn(async () => ({ records: [] })),
         saveRecords: vi.fn(async () => ({ records: [] })),
@@ -189,12 +212,73 @@ describe('publicAdapter — signed-out showcase', () => {
             expect(trekDataMap.kilimanjaro.camps[1].id).toBe('kilimanjaro-day-2');
         });
 
+        it('maps the Swift Camp `notes` field into camp notes (not the absent `description`)', async () => {
+            stubAssetFetch();
+            const { trekDataMap } = await fetchPublicJourneys();
+            const camps = trekDataMap.kilimanjaro.camps;
+            // The showcase used to drop every day's notes because mapWaypoint read
+            // `description`, which the Camp payload never carries.
+            expect(camps[0].notes).toBe('Camp beneath the giant heather; a river runs alongside.');
+            expect(camps[1].notes).toBe('Open moorland with the first summit views.');
+            // The rest of the day header/stats/highlights the web UI renders also survive.
+            expect(camps[0].highlights).toEqual(['Giant heather', 'River crossing']);
+            expect(camps[0].routeDistanceKm).toBe(6.2);
+            expect(camps[0].routePointIndex).toBe(0);
+        });
+
         it('populates the shared journeyCache the whole app reads', async () => {
             stubAssetFetch();
             await fetchPublicJourneys();
             const cache = getJourneyCacheState();
             expect(cache.loaded).toBe(true);
             expect(cache.trekDataMap.kilimanjaro).toBeDefined();
+        });
+    });
+
+    describe('fetchPublicJourneys — deterministic ordering', () => {
+        beforeEach(() => {
+            getCloudKitSession.mockResolvedValue({ user: null });
+        });
+
+        function journeyRecord(slug: string, name: string, dateMs: number, waypointsUrl: string) {
+            return {
+                recordName: slug,
+                recordType: 'PublicJourney',
+                fields: {
+                    slug: { value: slug },
+                    name: { value: name },
+                    dateStarted: { value: dateMs, type: 'TIMESTAMP' },
+                    waypointsJSON: { value: { downloadURL: waypointsUrl, fileChecksum: slug } },
+                },
+            };
+        }
+
+        it('orders by dateStarted descending, not by which asset resolves first', async () => {
+            const INCA_WP = 'https://cvws.icloud/inca-wp.json';
+            const KILI_WP = 'https://cvws.icloud/kili-wp.json';
+            // Records arrive inca-first (query order); only the sort should reorder them.
+            getPublicDatabase.mockResolvedValue(
+                makePublicDb({
+                    PublicJourney: [
+                        journeyRecord('inca-trail', 'Inca Trail', 1_600_000_000_000, INCA_WP), // 2020
+                        journeyRecord('kilimanjaro', 'Kilimanjaro', 1_700_000_000_000, KILI_WP), // 2023
+                    ],
+                })
+            );
+            // Completion order is the OPPOSITE of the desired order: the earlier-dated
+            // journey (inca) resolves immediately, the later-dated one (kili) after a
+            // tick. Without a deterministic sort, treks would come back [inca, kili].
+            vi.stubGlobal(
+                'fetch',
+                vi.fn(async (url: string) => {
+                    if (url === KILI_WP) await new Promise((r) => setTimeout(r, 5));
+                    return { ok: true, json: async () => [] } as unknown as Response;
+                })
+            );
+
+            const { treks } = await fetchPublicJourneys();
+            // Most recent first, regardless of asset-fetch latency — stable across reloads.
+            expect(treks.map((t) => t.id)).toEqual(['kilimanjaro', 'inca-trail']);
         });
     });
 
@@ -250,6 +334,34 @@ describe('publicAdapter — signed-out showcase', () => {
             expect(first.caption).toBe('Summit push');
             expect(first.taken_at).toBe('2022-10-02T14:24:22.000Z'); // TIMESTAMP -> ISO
             expect(first.coordinates).toEqual([37.0, -3.0]); // LOCATION -> [lng, lat]
+        });
+
+        it('filters PublicPhoto by the exact journeySlug STRING predicate (no cross-journey bleed)', async () => {
+            // Two journeys' photos share the PublicPhoto table; the query must select
+            // only this journey's. A dropped filter would bleed every journey's photos
+            // into each grid; a malformed one would return none. The mock DB honors
+            // filterBy, so a wrong predicate shape shows up as the wrong rows here.
+            const photos = [
+                { recordName: 'kili-1', fields: { journeySlug: { value: 'kilimanjaro' }, thumb: { value: { downloadURL: 'https://x/k1.jpg' } }, dayNumber: { value: 1 }, sortOrder: { value: 0 } } },
+                { recordName: 'inca-1', fields: { journeySlug: { value: 'inca-trail' }, thumb: { value: { downloadURL: 'https://x/i1.jpg' } }, dayNumber: { value: 1 }, sortOrder: { value: 0 } } },
+                { recordName: 'kili-2', fields: { journeySlug: { value: 'kilimanjaro' }, thumb: { value: { downloadURL: 'https://x/k2.jpg' } }, dayNumber: { value: 2 }, sortOrder: { value: 1 } } },
+            ];
+            const db = makePublicDb({ PublicPhoto: photos });
+            getPublicDatabase.mockResolvedValue(db);
+
+            const result = await fetchPublicPhotos('kilimanjaro');
+
+            // Only kilimanjaro's two photos — inca-trail's is excluded by the filter.
+            expect(result.map((p) => p.id)).toEqual(['kili-1', 'kili-2']);
+
+            // Pin the predicate's exact shape: a plain STRING equality on journeySlug
+            // (not a REFERENCE), which is what the world-readable public field takes.
+            const photoCall = db.performQuery.mock.calls.find(
+                ([q]) => (q as CloudKitJS.Query).recordType === 'PublicPhoto'
+            );
+            expect((photoCall?.[0] as CloudKitJS.Query).filterBy).toEqual([
+                { fieldName: 'journeySlug', comparator: 'EQUALS', fieldValue: { value: 'kilimanjaro' } },
+            ]);
         });
 
         it('synthesizes waypoint_id from dayNumber via the cached camps', async () => {

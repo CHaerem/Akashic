@@ -27,11 +27,12 @@ import { getJourneyCacheState } from '../../journeyCache';
 
 function makeDb(handlers: {
     performQuery?: (q: CloudKitJS.Query) => Promise<{ records: unknown[] }>;
+    fetchRecords?: (n: string) => Promise<{ records: unknown[]; hasErrors?: boolean }>;
     saveRecords?: (r: unknown) => Promise<{ records: unknown[] }>;
 }) {
     return {
         performQuery: vi.fn(handlers.performQuery ?? (async () => ({ records: [] }))),
-        fetchRecords: vi.fn(async () => ({ records: [] })),
+        fetchRecords: vi.fn(handlers.fetchRecords ?? (async () => ({ records: [] }))),
         saveRecords: vi.fn(handlers.saveRecords ?? (async () => ({ records: [] }))),
         deleteRecords: vi.fn(async () => ({ records: [] })),
     };
@@ -272,7 +273,14 @@ describe('cloudkit read path', () => {
                     image: { value: { downloadURL: 'https://cvws.icloud/x.jpg' } },
                 },
             };
-            const sharedDb = makeDb({ saveRecords: async () => ({ records: [saved] }) });
+            const sharedDb = makeDb({
+                // The record still exists — fetch returns it with a change tag, so the
+                // save is an UPDATE (tag present), not an insert.
+                fetchRecords: async () => ({
+                    records: [{ recordName: 'photo-1', recordChangeTag: 'tag-1', fields: {} }],
+                }),
+                saveRecords: async () => ({ records: [saved] }),
+            });
             getSharedDatabase.mockResolvedValue(sharedDb);
 
             const result = await updatePhoto('photo-1', { caption: 'New caption' });
@@ -283,6 +291,24 @@ describe('cloudkit read path', () => {
             });
             expect(result?.id).toBe('photo-1');
             expect(result?.caption).toBe('New caption');
+        });
+
+        it('refuses to save (no ghost insert) when the photo was deleted elsewhere', async () => {
+            // The photo was deleted from the iOS app; the lookup resolves with hasErrors
+            // and no usable record (verification doc fault #6). Without the guard the
+            // tagless save would be an INSERT, resurrecting a caption-only ghost photo.
+            const sharedDb = makeDb({
+                fetchRecords: async () => ({ records: [], hasErrors: true }),
+            });
+            getSharedDatabase.mockResolvedValue(sharedDb);
+            const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+            await expect(updatePhoto('photo-1', { caption: 'edit after delete' })).rejects.toThrow(
+                /not found/
+            );
+            // Critically, no save was attempted — nothing to resurrect.
+            expect(sharedDb.saveRecords).not.toHaveBeenCalled();
+            errSpy.mockRestore();
         });
     });
 });

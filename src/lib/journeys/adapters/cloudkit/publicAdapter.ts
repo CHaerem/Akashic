@@ -142,7 +142,12 @@ function mapWaypoint(raw: unknown, slug: string, index: number): DbWaypoint {
         day_number: dayNumber,
         coordinates: toLngLat(w.coordinates) ?? [0, 0],
         elevation: numberOrNull(w.elevation),
-        description: stringOrNull(w.description),
+        // The public mirror encodes a Swift `Camp` (Domain.swift), whose day text is
+        // `notes` — there is no `description` key. (The signed-in path differs: its
+        // RecordCoder renames camp.notes into the Waypoint record's `description`
+        // field.) snakeCaseKeys leaves the single word `notes` untouched, so read it
+        // directly, preferring `description` if a future writer ever emits it.
+        description: stringOrNull(w.description) ?? stringOrNull(w.notes),
         highlights: Array.isArray(w.highlights)
             ? w.highlights.filter((x): x is string => typeof x === 'string')
             : null,
@@ -186,14 +191,15 @@ export async function fetchPublicJourneys(): Promise<{
         return { treks: [], trekDataMap: {} };
     }
 
-    const treks: TrekConfig[] = [];
-    const trekDataMap: Record<string, TrekData> = {};
-
-    await Promise.all(
+    // Each journey awaits its route + waypoints asset fetches, so completion order
+    // follows network latency, not the query. Building treks inside the Promise.all
+    // callbacks therefore reshuffled the globe's journey order between page loads.
+    // Gather first, then sort deterministically below.
+    const mapped = await Promise.all(
         records.map(async (record) => {
             try {
                 const slug = stringOrNull(fieldValue(record, 'slug')) ?? record.recordName ?? '';
-                if (!slug) return;
+                if (!slug) return null;
                 const journey = recordToPublicDbJourney(record, slug);
                 // route + waypoints are ASSETs — a metadata query returns only their
                 // { downloadURL } descriptors, so fetch both bodies (in parallel).
@@ -203,13 +209,32 @@ export async function fetchPublicJourneys(): Promise<{
                 ]);
                 if (route) journey.route = route;
                 const waypoints = mapWaypointsPayload(waypointsPayload, slug);
-                treks.push(toTrekConfig(journey));
-                trekDataMap[slug] = toTrekData(journey, waypoints);
+                return { slug, journey, waypoints };
             } catch (err) {
                 console.error('[cloudkit] Failed to map public journey:', err);
+                return null;
             }
         })
     );
+
+    // Deterministic order: most recent journey first (dateStarted descending), name as
+    // a stable tiebreak, nulls last. Independent of asset-fetch completion order, so a
+    // signed-out visitor gets the same globe/list order on every reload.
+    const ordered = mapped
+        .filter((m): m is NonNullable<typeof m> => m !== null)
+        .sort((a, b) => {
+            const da = a.journey.date_started ?? '';
+            const db = b.journey.date_started ?? '';
+            if (da !== db) return da < db ? 1 : -1;
+            return a.journey.name.localeCompare(b.journey.name);
+        });
+
+    const treks: TrekConfig[] = [];
+    const trekDataMap: Record<string, TrekData> = {};
+    for (const { slug, journey, waypoints } of ordered) {
+        treks.push(toTrekConfig(journey));
+        trekDataMap[slug] = toTrekData(journey, waypoints);
+    }
 
     setJourneyCacheState({ treks, trekDataMap, loaded: true });
     return { treks, trekDataMap };

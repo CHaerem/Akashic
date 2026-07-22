@@ -84,11 +84,16 @@ export async function fetchPhotos(journeyId: string): Promise<Photo[]> {
 /**
  * Photos explicitly assigned to one day.
  *
- * A reference field needs a reference predicate — `{ value: { recordName }, type:
- * 'REFERENCE' }`, not a bare string. Note that in the migrated archive `waypointRef`
- * is unset on every photo (day assignment is derived from `taken_at` by
- * `usePhotoDay`, exactly as it was under Postgres), so this legitimately returns
- * nothing for imported data. It is correct for photos added since.
+ * Two things the live container taught us (see journeyZones / docs fault #2, #4):
+ *  - the query must be scoped to the journey's zone via the *options* argument, or it
+ *    runs against the default zone of both DBs where no Photo lives and returns [];
+ *  - the reference predicate needs the zone too — `{ value: { recordName, zoneID },
+ *    type: 'REFERENCE' }`, not a bare string.
+ * The zone is resolved from the waypoint, remembered when the journey loaded. When it
+ * is unknown (the journey was never loaded this session) we return [] rather than
+ * running an unscoped query that would silently find nothing. Note the migrated
+ * archive leaves `waypointRef` unset on every photo, so this legitimately returns
+ * nothing for imported data; it is correct for photos assigned since.
  */
 export async function getPhotosForWaypoint(waypointId: string): Promise<Photo[]> {
     // The public mirror has no per-waypoint photo query (thumbs carry a dayNumber, not
@@ -97,17 +102,30 @@ export async function getPhotosForWaypoint(waypointId: string): Promise<Photo[]>
     if (!(await isSignedIn())) {
         return [];
     }
+    const zone = resolveRecordZone(waypointId);
+    if (!zone) {
+        // Unknown zone: the waypoint's journey was never loaded this session. An
+        // unscoped query would query the wrong (default) zone and find nothing.
+        return [];
+    }
     try {
-        const records = await queryPhotos({
-            recordType: PHOTO_TYPE,
-            filterBy: [
-                {
-                    fieldName: 'waypointRef',
-                    comparator: 'EQUALS',
-                    fieldValue: { value: { recordName: waypointId }, type: 'REFERENCE' },
-                },
-            ],
-        });
+        const records = await queryPhotos(
+            {
+                recordType: PHOTO_TYPE,
+                filterBy: [
+                    {
+                        fieldName: 'waypointRef',
+                        comparator: 'EQUALS',
+                        fieldValue: {
+                            value: { recordName: waypointId, zoneID: zone.zoneID },
+                            type: 'REFERENCE',
+                        },
+                    },
+                ],
+            },
+            { zoneID: zone.zoneID }
+        );
+        rememberRecordZone(records, zone);
         return sortPhotos(records.map(recordToPhoto));
     } catch (err) {
         console.error('[cloudkit] Error fetching photos for waypoint:', err);
@@ -144,6 +162,17 @@ export async function updatePhoto(
         // filtered by it.
         const existing = await db.fetchRecords(photoId, { zoneID: zone.zoneID });
         const current = existing.records?.[0];
+
+        // A lookup for a record deleted elsewhere resolves with `hasErrors` and no
+        // usable record rather than rejecting (verification doc fault #6). Without the
+        // change tag the save below is an INSERT, which resurrects the photo as a ghost
+        // record carrying only a caption (no assets) — a broken empty tile for the whole
+        // family. Refuse the edit instead.
+        if (existing.hasErrors || !current?.recordChangeTag) {
+            throw new Error(
+                `[cloudkit] photo ${photoId} not found (it may have been deleted) — caption edit aborted`
+            );
+        }
 
         // The zone belongs in the *options* argument. Putting `zoneID` on the record
         // is accepted without complaint and then ignored: the save is aimed at the

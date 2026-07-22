@@ -350,9 +350,13 @@ export function recordToDayComment(
         content: stringOrNull(f('content')) ?? '',
         created_at: isoDateOrNull(f('createdAt')) ?? timestampToIso(record.created?.timestamp) ?? '',
         // Schema field is `modifiedAt` (explicit, survives migration); system
-        // modification timestamp is the fallback.
+        // modification timestamp is the fallback. `modifiedAt` is a CloudKit TIMESTAMP
+        // (epoch millis), so it must be read through isoDateOrNull like every other
+        // date — reading it as a string yielded null for every migrated comment, so
+        // updated_at fell back to the migration-run timestamp and CommentItem showed a
+        // spurious "(edited)" badge (updated_at !== created_at) on comments never edited.
         updated_at:
-            stringOrNull(f('modifiedAt')) ??
+            isoDateOrNull(f('modifiedAt')) ??
             isoDateOrNull(f('updatedAt')) ??
             timestampToIso(record.modified?.timestamp) ??
             '',

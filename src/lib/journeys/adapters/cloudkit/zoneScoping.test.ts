@@ -20,7 +20,13 @@ vi.mock('../../../cloudkit', () => ({
 
 import { fetchPhotos, getPhotosForWaypoint } from './photoAdapter';
 import { recordToPhoto, recordToDbJourney, snakeCaseKeys } from './records';
-import { rememberJourneyZones, resolveJourneyZone, clearJourneyZones } from './journeyZones';
+import {
+    rememberJourneyZones,
+    rememberRecordZone,
+    resolveJourneyZone,
+    clearJourneyZones,
+} from './journeyZones';
+import type { JourneyZone } from './journeyZones';
 import { resetAuthCache } from './publicAdapter';
 
 const ZONE = { zoneName: 'journey-uuid-1', ownerRecordName: '_owner', zoneType: 'REGULAR_CUSTOM_ZONE' };
@@ -121,21 +127,46 @@ describe('photo reads are scoped to the journey zone', () => {
         warn.mockRestore();
     });
 
-    /** A reference field needs a reference predicate, not a bare string. */
-    it('filters day photos with a typed REFERENCE predicate', async () => {
-        const priv = makeZoneAwareDb({});
+    /**
+     * A reference field needs a reference predicate, not a bare string — and the query
+     * must be scoped to the waypoint's zone (via the options argument), or it runs
+     * against the default zone where no Photo lives and returns [] for photos that exist.
+     */
+    it('scopes day-photo reads to the zone and uses a zoned REFERENCE predicate', async () => {
+        const zone: JourneyZone = { recordName: 'uuid-1', zoneID: ZONE, scope: 'private' };
+        // The waypoint's zone is learned when the journey/day loads.
+        rememberRecordZone([{ recordName: 'wp-1' } as unknown as CloudKitJS.Record], zone);
+        const photo = { recordName: 'p1', recordType: 'Photo', zoneID: ZONE, fields: { waypointRef: { value: { recordName: 'wp-1' } } } };
+        const priv = makeZoneAwareDb({ 'journey-uuid-1': [photo] });
         getPrivateDatabase.mockResolvedValue(priv.db);
         getSharedDatabase.mockResolvedValue(emptyDb());
 
-        await getPhotosForWaypoint('wp-1');
+        const photos = await getPhotosForWaypoint('wp-1');
+        expect(photos).toHaveLength(1);
 
+        // Zone-scoped: the query carries the zone in its options.
+        expect(priv.calls[0].options?.zoneID?.zoneName).toBe('journey-uuid-1');
         const filter = priv.calls[0].query.filterBy?.[0] as {
             fieldName: string;
-            fieldValue: { value: { recordName: string }; type: string };
+            fieldValue: { value: { recordName: string; zoneID?: CloudKitJS.ZoneID }; type: string };
         };
         expect(filter.fieldName).toBe('waypointRef');
         expect(filter.fieldValue.type).toBe('REFERENCE');
         expect(filter.fieldValue.value.recordName).toBe('wp-1');
+        // The reference itself carries the zone (a bare { recordName } is ambiguous
+        // once records live outside the default zone).
+        expect(filter.fieldValue.value.zoneID).toEqual(ZONE);
+    });
+
+    it('returns [] without querying when the waypoint zone is unknown', async () => {
+        // The journey was never loaded this session, so the waypoint's zone is unknown.
+        const priv = makeZoneAwareDb({ 'journey-uuid-1': [{ recordName: 'p1', fields: {} }] });
+        getPrivateDatabase.mockResolvedValue(priv.db);
+        getSharedDatabase.mockResolvedValue(emptyDb());
+
+        await expect(getPhotosForWaypoint('wp-unknown')).resolves.toEqual([]);
+        // No unscoped query is issued against the wrong (default) zone.
+        expect(priv.calls).toHaveLength(0);
     });
 });
 

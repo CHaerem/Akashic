@@ -33,7 +33,7 @@ let cloudKitPromise: Promise<CloudKitJS.CloudKitStatic> | null = null;
 export function loadCloudKit(): Promise<CloudKitJS.CloudKitStatic> {
     if (cloudKitPromise) return cloudKitPromise;
 
-    cloudKitPromise = new Promise((resolve, reject) => {
+    const promise = new Promise<CloudKitJS.CloudKitStatic>((resolve, reject) => {
         if (typeof window === 'undefined' || typeof document === 'undefined') {
             reject(new Error('[cloudkit] CloudKit JS requires a browser environment'));
             return;
@@ -70,7 +70,17 @@ export function loadCloudKit(): Promise<CloudKitJS.CloudKitStatic> {
         document.head.appendChild(script);
     });
 
-    return cloudKitPromise;
+    // Memoize so the CDN script is added at most once — but only a SUCCESSFUL load
+    // deserves to be cached. A transient failure (flaky wifi) previously stuck the
+    // page on the rejected promise: every later isSignedIn / getPublicDatabase /
+    // fetchPublicJourneys call replayed the rejection and the globe stayed empty until
+    // a full reload. Clearing the memo on rejection lets the next call retry.
+    cloudKitPromise = promise;
+    promise.catch(() => {
+        if (cloudKitPromise === promise) cloudKitPromise = null;
+    });
+
+    return promise;
 }
 
 let container: CloudKitJS.Container | null = null;

@@ -355,6 +355,25 @@ describe('cloudkit record mappers', () => {
             expect(c.author.avatar_url).toBe('https://a/o.png');
             expect(c.updated_at).toBe('2025-01-01T00:00:00Z');
         });
+
+        it('reads a numeric modifiedAt TIMESTAMP into an ISO string (not null)', () => {
+            // modifiedAt is a CloudKit TIMESTAMP (epoch millis). Read as a string it was
+            // always null, so updated_at fell back to the system modified timestamp.
+            const c = recordToDayComment({
+                recordName: 'comment-ts',
+                fields: {
+                    content: { value: 'hi' },
+                    // Numeric epoch millis, as a CloudKit TIMESTAMP arrives.
+                    createdAt: { value: 1664496000000 },
+                    modifiedAt: { value: 1664496000000 },
+                },
+                created: { userRecordName: 'owner-1', timestamp: 1664496000000 },
+                modified: { timestamp: 1721600000000 }, // migration run time — must NOT win
+            });
+            expect(c.updated_at).toBe('2022-09-30T00:00:00.000Z');
+            // Never edited: created_at === updated_at, so CommentItem shows no "(edited)".
+            expect(c.updated_at).toBe(c.created_at);
+        });
     });
 
     describe('participantToMember', () => {

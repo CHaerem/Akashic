@@ -241,12 +241,22 @@ export async function updateComment(
         // Without the current change tag the save is treated as an insert and
         // collides with the record it is trying to update.
         const existing = await db.fetchRecords(commentId, { zoneID: zone.zoneID });
+        // A lookup for a comment deleted elsewhere resolves with `hasErrors` and no
+        // usable record (verification doc fault #6). Saving without a change tag is an
+        // INSERT, which would resurrect the comment as a ghost with content but no
+        // waypointRef/journeyRef. Refuse the edit instead of recreating it.
+        const current = existing.records?.[0];
+        if (existing.hasErrors || !current?.recordChangeTag) {
+            throw new Error(
+                `[cloudkit] comment ${commentId} not found (it may have been deleted) — edit aborted`
+            );
+        }
         const response = await db.saveRecords(
             [
                 {
                     recordType: COMMENT_TYPE,
                     recordName: commentId,
-                    recordChangeTag: existing.records?.[0]?.recordChangeTag,
+                    recordChangeTag: current.recordChangeTag,
                     fields: { content: { value: update.content } },
                 },
             ],
@@ -288,14 +298,16 @@ export async function deleteComment(commentId: string): Promise<boolean> {
     }
 }
 
-export async function canUserComment(journeyId: string): Promise<boolean> {
+export async function canUserComment(_journeyId: string): Promise<boolean> {
+    // A signed-in user can comment on any journey they can read, and the read layer
+    // only ever surfaces journeys they own or participate in — so "can read" reduces
+    // to "is signed in". The previous membership check went through CKShare
+    // participants, which are empty for the OWNER of an unshared journey, so it
+    // returned false for every signed-in user and disabled the composer for the whole
+    // family. Sharing/permission is enforced natively at write time regardless.
     try {
         const session = await getCloudKitSession();
-        if (!session.user) return false;
-        // A signed-in participant of a shared journey can always comment; the
-        // public-mirror case is governed natively by the publish step.
-        const members = await getJourneyMembers(journeyId);
-        return members.some((m) => m.user_id === session.user?.userRecordName);
+        return session.user != null;
     } catch (err) {
         console.error('[cloudkit] Error checking comment permission:', err);
         return false;
