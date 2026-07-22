@@ -12,6 +12,9 @@ struct SettingsView: View {
     @State private var override: PersistenceMode?
     @State private var showRelaunchNote = false
 
+    /// Live sync state, so a stalled or erroring engine is visible instead of silent.
+    @ObservedObject private var syncStatus = PersistenceController.shared.syncStatus
+
     // Import state.
     @State private var bundlePath = Config.importBundlePath
     @State private var mediaRoot = Config.importMediaRoot
@@ -29,6 +32,9 @@ struct SettingsView: View {
                 labelled("Photos in store", "\(store.photoCount)")
                 labelled("CloudKit container", Config.cloudKitContainerIdentifier)
                 labelled("CloudKit enabled (build flag)", FeatureFlags.cloudKitEnabled ? "Yes" : "No")
+                // Sync state was previously computed but never shown, so a stalled sync looked
+                // identical to a working one — from the outside and from inside the app.
+                labelled("Sync", syncStatus.summary)
             }
 
             importSection

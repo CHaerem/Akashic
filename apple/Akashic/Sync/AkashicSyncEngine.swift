@@ -126,8 +126,29 @@ final class AkashicSyncEngine: NSObject, CKSyncEngineDelegate {
         hasActivated = true
         isRunning = true
         enqueueInitialUploadIfNeeded()
+        // Active as soon as the engine is running — the pull below refreshes the timestamp,
+        // but the engine's state must not depend on an async task having finished.
         status.markSynced()
-        Task { [weak self] in try? await self?.engine?.sendChanges() }
+
+        // Pull once, explicitly, on activation.
+        //
+        // `automaticallySync = true` leaves *sending* to the engine's own scheduler — and a
+        // manual `sendChanges()` here traps inside CloudKit (SIGTRAP, not a catchable error;
+        // `try?` does not save you), so that call is deliberately absent.
+        //
+        // Fetching is different: the engine learns about server-side changes from silent
+        // pushes, so without an explicit pull a launch shows stale data until one arrives.
+        // The Simulator never receives them at all — which is exactly how this surfaced: a
+        // clean install sat at 0 journeys while the container held 1559 records.
+        Task { [weak self] in
+            guard let self else { return }
+            do {
+                try await self.engine?.fetchChanges()
+                self.status.markSynced()
+            } catch {
+                self.status.set(.error("Initial fetch failed: \(error.localizedDescription)"))
+            }
+        }
     }
 
     private func buildRealEngine() -> SyncEngineProtocol? {
