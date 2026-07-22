@@ -10,16 +10,19 @@ import type { Photo } from '../../../../types/trek';
 import { getSharedDatabase, getPrivateDatabase } from '../../../cloudkit';
 import { recordToPhoto } from './records';
 import { CK_UNSUPPORTED } from './journeyAdapter';
+import { performQueryAll } from './paginate';
 
 const PHOTO_TYPE = 'Photo';
 
 async function queryPhotos(query: CloudKitJS.Query): Promise<CloudKitJS.Record[]> {
     const [shared, priv] = await Promise.all([getSharedDatabase(), getPrivateDatabase()]);
+    // Paginated: a journey can hold hundreds of photos (939 on Kilimanjaro) and
+    // a single performQuery returns only the first page.
     const responses = await Promise.all([
-        shared.performQuery(query).catch(() => ({ records: [] as CloudKitJS.Record[] })),
-        priv.performQuery(query).catch(() => ({ records: [] as CloudKitJS.Record[] })),
+        performQueryAll(shared, query).catch(() => [] as CloudKitJS.Record[]),
+        performQueryAll(priv, query).catch(() => [] as CloudKitJS.Record[]),
     ]);
-    return responses.flatMap((r) => r.records ?? []);
+    return responses.flat();
 }
 
 /** Photos ordered by sort_order asc, then taken_at asc (nulls last). */

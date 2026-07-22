@@ -12,6 +12,7 @@ import type { JourneyUpdate } from '../../journeyAPI';
 import { toTrekConfig, toTrekData } from '../../transforms';
 import { setJourneyCacheState } from '../../journeyCache';
 import { getSharedDatabase, getPrivateDatabase } from '../../../cloudkit';
+import { performQueryAll } from './paginate';
 import {
     recordToDbJourney,
     recordToDbWaypoint,
@@ -38,14 +39,18 @@ async function hydrateRoutes(records: CloudKitJS.Record[], journeys: DbJourney[]
 
 export const CK_UNSUPPORTED = '[cloudkit] not supported on web — use the iOS app';
 
-/** Run the same query against the shared + private databases and concat results. */
+/**
+ * Run the same query against the shared + private databases and concat results.
+ * Paginated — waypoint queries span every journey at once, so the first page is
+ * not the whole answer.
+ */
 async function queryAllZones(query: CloudKitJS.Query): Promise<CloudKitJS.Record[]> {
     const [shared, priv] = await Promise.all([getSharedDatabase(), getPrivateDatabase()]);
     const responses = await Promise.all([
-        shared.performQuery(query).catch(() => ({ records: [] as CloudKitJS.Record[] })),
-        priv.performQuery(query).catch(() => ({ records: [] as CloudKitJS.Record[] })),
+        performQueryAll(shared, query).catch(() => [] as CloudKitJS.Record[]),
+        performQueryAll(priv, query).catch(() => [] as CloudKitJS.Record[]),
     ]);
-    return responses.flatMap((r) => r.records ?? []);
+    return responses.flat();
 }
 
 /**
