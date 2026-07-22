@@ -94,6 +94,25 @@ protocol SyncLocalStore: AnyObject {
     /// landed), so a row later re-created under the same name is not rehydrated onto a dead tag.
     func recordsDidDelete(_ recordIDs: [CKRecord.ID])
 
+    /// Purge the persisted system fields (change tags) for a journey and **all** its child
+    /// records (waypoints / photos / comments).
+    ///
+    /// Called when a zone vanishes server-side (`handleZoneDeletions`, or the `.zoneNotFound`
+    /// send-recovery): the zone is gone or about to be recreated empty, so the protective
+    /// re-upload must send every record as a FRESH insert. A rehydrated dead change tag would
+    /// make the save fail permanently with `unknownItem` ("record not found"), silently losing
+    /// the CloudKit mirror of the journey. Does not delete any domain data.
+    func purgeSystemFields(forJourneyID journeyID: String)
+
+    /// Purge the persisted system fields for a specific set of record names (no-op for names
+    /// with no row). The record-name-granular counterpart to `purgeSystemFields(forJourneyID:)`.
+    func purgeSystemFields(forRecordNames names: [String])
+
+    /// Purge **every** persisted system-fields row. Used on an account switch: the new account's
+    /// databases hold none of these records, so every retained change tag is a dead pointer that
+    /// would make the whole archive's re-upload fail with `unknownItem`.
+    func purgeAllSystemFields()
+
     /// Bracket a batch of fetched-change applications so the store can suppress the local-save
     /// echo (`beginRemoteApply`) and commit once (`endRemoteApply`).
     func beginRemoteApply()

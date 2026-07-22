@@ -80,6 +80,9 @@ struct JourneyExportSheet: View {
             .background(Theme.background.ignoresSafeArea())
             .navigationTitle("Export")
             .navigationBarTitleDisplayMode(.inline)
+            // Block interactive swipe-dismiss while the archive is being built, matching the
+            // disabled Done button. (finding #8.)
+            .interactiveDismissDisabled(isWorking)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Done") { dismiss() }.tint(Theme.accent)

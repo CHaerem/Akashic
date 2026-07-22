@@ -375,4 +375,175 @@ final class PublicMirrorTests: XCTestCase {
         XCTAssertEqual(report.deleted, 1, "just the PublicJourney record")
         XCTAssertTrue(mock.deleted.contains(CKRecord.ID(recordName: "kilimanjaro")))
     }
+
+    // MARK: - Best-effort targeted photo removal (finding #7)
+
+    func testDeletePublicPhotosRemovesByRecordName() async {
+        let mock = MockPublicDatabase()
+        let report = await PublicMirrorPublisher(database: mock).deletePublicPhotos(ids: ["P1", "P2"])
+        XCTAssertEqual(report.deleted, 2)
+        XCTAssertTrue(mock.deleted.contains(CKRecord.ID(recordName: "P1")))
+        XCTAssertTrue(mock.deleted.contains(CKRecord.ID(recordName: "P2")))
+        XCTAssertTrue(report.failures.isEmpty)
+    }
+}
+
+// MARK: - ShowcaseViewModel: flag flips only after the network op, and only for the owner
+
+/// The Showcase flow's ordering + failure handling, which the review flagged as having zero
+/// coverage. Driven against a fake publisher so publish/unpublish can succeed or fail on demand;
+/// the injected `setPublic` closure stands in for `store.setJourneyPublic` and records the flip.
+@MainActor
+final class ShowcaseViewModelTests: XCTestCase {
+
+    /// Fake mirror publisher: returns a preset report and records which op ran.
+    final class FakePublisher: PublicMirrorPublishing {
+        var report: PublicMirrorReport
+        private(set) var publishCalled = false
+        private(set) var unpublishCalled = false
+        init(_ report: PublicMirrorReport) { self.report = report }
+        func publish(journey: Journey, photos: [Photo],
+                     progress: ((PublicMirrorProgress) -> Void)?) async -> PublicMirrorReport {
+            publishCalled = true; return report
+        }
+        func unpublish(slug: String,
+                       progress: ((PublicMirrorProgress) -> Void)?) async -> PublicMirrorReport {
+            unpublishCalled = true; return report
+        }
+    }
+
+    /// Records every isPublic flip the model asks for, and can be told to reject the write.
+    final class FlagRecorder {
+        private(set) var flips: [Bool] = []
+        var succeeds = true
+        func apply(_ value: Bool) -> Bool { flips.append(value); return succeeds }
+    }
+
+    private func journey() -> Journey {
+        Journey(id: "J1", slug: "kilimanjaro", name: "Kilimanjaro", country: "Tanzania",
+                description: "", heroImageURL: nil, dateStarted: nil, dateEnded: nil, isPublic: false,
+                summitElevation: nil, totalDistance: nil, totalDays: nil, centerCoordinates: nil,
+                preferredBearing: nil, preferredPitch: nil,
+                stats: TrekStats(duration: 0, totalDistance: 0, totalElevationGain: 0,
+                                 totalElevationLoss: nil, highestPoint: nil),
+                route: Route(type: "LineString", coordinates: []), camps: [])
+    }
+
+    private func publishedReport() -> PublicMirrorReport {
+        var r = PublicMirrorReport(); r.journeyPublished = true; r.photosPublished = 2; return r
+    }
+    private func failedReport() -> PublicMirrorReport {
+        var r = PublicMirrorReport()
+        r.failures = [RecordFailure(recordName: "P1", recordType: "PublicPhoto",
+                                    zoneName: "_defaultZone", code: 6, message: "network")]
+        return r
+    }
+
+    private func model(_ publisher: FakePublisher) -> ShowcaseViewModel {
+        ShowcaseViewModel(resolveMirror: { .ready(publisher) })
+    }
+
+    // MARK: Publish
+
+    func testPublishFlipsPublicOnlyAfterSuccessfulWrite() async {
+        let publisher = FakePublisher(publishedReport())
+        let flag = FlagRecorder()
+        let vm = model(publisher)
+
+        vm.publish(journey: journey(), photos: [], isOwner: true, setPublic: flag.apply)
+        await vm.awaitCurrentOperation()
+
+        XCTAssertTrue(publisher.publishCalled, "the mirror is written first")
+        XCTAssertEqual(flag.flips, [true], "isPublic flipped to true — and only once the write succeeded")
+        XCTAssertEqual(vm.phase, .done(publishedReport()))
+    }
+
+    func testFailedPublishNeverFlipsPublic() async {
+        // No account: the resolver reports unavailable before any publisher runs.
+        let flag = FlagRecorder()
+        let vm = ShowcaseViewModel(resolveMirror: { .unavailable("No iCloud account available.") })
+
+        vm.publish(journey: journey(), photos: [], isOwner: true, setPublic: flag.apply)
+        await vm.awaitCurrentOperation()
+
+        XCTAssertTrue(flag.flips.isEmpty, "a failed publish must never mark the journey Public")
+        XCTAssertEqual(vm.phase, .failed("No iCloud account available."))
+    }
+
+    func testPublishSurfacesFlagWriteFailure() async {
+        // The mirror write lands but the local flag write is rejected — must be surfaced, not
+        // silently claimed as success (finding #9).
+        let publisher = FakePublisher(publishedReport())
+        let flag = FlagRecorder(); flag.succeeds = false
+        let vm = model(publisher)
+
+        vm.publish(journey: journey(), photos: [], isOwner: true, setPublic: flag.apply)
+        await vm.awaitCurrentOperation()
+
+        XCTAssertEqual(flag.flips, [true], "the flip was attempted")
+        guard case .failed = vm.phase else {
+            return XCTFail("a rejected flag write must land in a retryable .failed state, got \(vm.phase)")
+        }
+    }
+
+    // MARK: Unpublish
+
+    func testUnpublishFlipsPrivateOnlyAfterEverythingRemoved() async {
+        var report = PublicMirrorReport(); report.deleted = 3
+        let publisher = FakePublisher(report)
+        let flag = FlagRecorder()
+        let vm = model(publisher)
+
+        vm.remove(slug: "kilimanjaro", isOwner: true, setPublic: flag.apply)
+        await vm.awaitCurrentOperation()
+
+        XCTAssertTrue(publisher.unpublishCalled, "the mirror is removed first")
+        XCTAssertEqual(flag.flips, [false], "isPublic flipped to false only after a clean unpublish")
+    }
+
+    func testFailedUnpublishLeavesJourneyPublic() async {
+        // A partial/failed unpublish must NOT flip to Private — world-readable records may remain,
+        // so the UI must keep showing Public (and its Remove button). (findings #5 / #13.)
+        let publisher = FakePublisher(failedReport())
+        let flag = FlagRecorder()
+        let vm = model(publisher)
+
+        vm.remove(slug: "kilimanjaro", isOwner: true, setPublic: flag.apply)
+        await vm.awaitCurrentOperation()
+
+        XCTAssertTrue(publisher.unpublishCalled)
+        XCTAssertTrue(flag.flips.isEmpty, "a failed unpublish must NOT claim the journey is Private")
+        guard case .done(let r) = vm.phase else {
+            return XCTFail("failure lands in a visible .done(report) state, got \(vm.phase)")
+        }
+        XCTAssertFalse(r.succeeded, "the report carries the failures for the UI to show")
+    }
+
+    // MARK: Ownership guard (finding #6)
+
+    func testParticipantCannotPublishSomeoneElsesJourney() async {
+        let publisher = FakePublisher(publishedReport())
+        let flag = FlagRecorder()
+        let vm = model(publisher)
+
+        vm.publish(journey: journey(), photos: [], isOwner: false, setPublic: flag.apply)
+        await vm.awaitCurrentOperation()
+
+        XCTAssertFalse(publisher.publishCalled, "a non-owner must never write the public mirror")
+        XCTAssertTrue(flag.flips.isEmpty)
+        XCTAssertEqual(vm.phase, .failed(ShowcaseViewModel.notOwnerMessage))
+    }
+
+    func testParticipantCannotRemoveSomeoneElsesJourney() async {
+        let publisher = FakePublisher(publishedReport())
+        let flag = FlagRecorder()
+        let vm = model(publisher)
+
+        vm.remove(slug: "kilimanjaro", isOwner: false, setPublic: flag.apply)
+        await vm.awaitCurrentOperation()
+
+        XCTAssertFalse(publisher.unpublishCalled)
+        XCTAssertTrue(flag.flips.isEmpty)
+        XCTAssertEqual(vm.phase, .failed(ShowcaseViewModel.notOwnerMessage))
+    }
 }

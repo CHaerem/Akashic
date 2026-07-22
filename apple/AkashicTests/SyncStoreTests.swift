@@ -240,6 +240,41 @@ final class SyncStoreTests: XCTestCase {
         XCTAssertNil(try fetchMeta(controller, journey.id))
     }
 
+    /// The account-switch hook: purging ALL system fields empties the meta side table (the new
+    /// account's DB holds none of these records, so every retained change tag is a dead pointer).
+    func testPurgeAllSystemFieldsClearsMetaTable() throws {
+        let (controller, journey) = try seededController()
+        let zone = RecordCoder.zoneID(forJourneyID: journey.id)
+        controller.recordsDidSave([try XCTUnwrap(controller.makeRecord(forRecordName: journey.id, zoneID: zone, existing: nil))])
+        controller.recordsDidSave([try XCTUnwrap(controller.makeRecord(forRecordName: journey.camps[0].id, zoneID: zone, existing: nil))])
+        let request = NSFetchRequest<CDSyncRecordMeta>(entityName: "CDSyncRecordMeta")
+        XCTAssertGreaterThan(try controller.viewContext.count(for: request), 0, "precondition: meta rows exist")
+
+        controller.purgeAllSystemFields()
+
+        XCTAssertEqual(try controller.viewContext.count(for: request), 0,
+                       "an account switch must leave the meta side table empty")
+    }
+
+    /// The zone-loss hook: purging by journey id drops the journey's meta AND its children's, but
+    /// leaves an unrelated journey's meta untouched.
+    func testPurgeSystemFieldsForJourneyIsScopedToThatJourney() throws {
+        let (controller, journey) = try seededController()
+        let zone = RecordCoder.zoneID(forJourneyID: journey.id)
+        controller.recordsDidSave([try XCTUnwrap(controller.makeRecord(forRecordName: journey.id, zoneID: zone, existing: nil))])
+        controller.recordsDidSave([try XCTUnwrap(controller.makeRecord(forRecordName: journey.camps[0].id, zoneID: zone, existing: nil))])
+        // An unrelated record's meta that must survive.
+        let otherZone = RecordCoder.zoneID(forJourneyID: "other-journey")
+        controller.recordsDidSave([CKRecord(recordType: RecordCoder.RecordType.journey,
+                                            recordID: CKRecord.ID(recordName: "other-journey", zoneID: otherZone))])
+
+        controller.purgeSystemFields(forJourneyID: journey.id)
+
+        XCTAssertNil(try fetchMeta(controller, journey.id), "journey meta purged")
+        XCTAssertNil(try fetchMeta(controller, journey.camps[0].id), "child (waypoint) meta purged")
+        XCTAssertNotNil(try fetchMeta(controller, "other-journey"), "an unrelated journey's meta is untouched")
+    }
+
     /// resetJourneys clears the meta side table along with the domain rows.
     func testResetJourneysPurgesSystemFields() throws {
         let (controller, journey) = try seededController()

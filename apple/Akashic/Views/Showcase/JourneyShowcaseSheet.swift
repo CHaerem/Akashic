@@ -37,6 +37,10 @@ struct JourneyShowcaseSheet: View {
             .background(Theme.background.ignoresSafeArea())
             .navigationTitle("Showcase")
             .navigationBarTitleDisplayMode(.inline)
+            // Block interactive swipe-dismiss while a publish/remove is in flight, matching the
+            // disabled Done button — otherwise a swipe leaves the CloudKit op running detached and
+            // its failure (or partial-failure) reports to nobody. (finding #8.)
+            .interactiveDismissDisabled(model.isWorking)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Done") { dismiss() }.tint(Theme.accent)
@@ -45,6 +49,10 @@ struct JourneyShowcaseSheet: View {
             }
         }
     }
+
+    /// Only the journey's owner may manage its public showcase. A journey shared *into* this
+    /// account is the owner's to publish/unpublish. (finding #6.)
+    private var isOwner: Bool { store.isOwnedByCurrentUser(journeyID: journey.id) }
 
     // MARK: - Status
 
@@ -70,6 +78,26 @@ struct JourneyShowcaseSheet: View {
 
     @ViewBuilder
     private var actionSection: some View {
+        if !isOwner {
+            participantSection
+        } else {
+            ownerActionSection
+        }
+    }
+
+    /// Shown when the journey was shared into this account: no publish/update/remove controls,
+    /// because managing the world-readable mirror is the owner's decision (and only `_creator`
+    /// can write the public records). (finding #6.)
+    private var participantSection: some View {
+        Section {
+            EmptyView()
+        } footer: {
+            Text("Only the journey's owner can manage the public showcase. This journey was shared with you, so whether it appears on the world-readable showcase is controlled on the owner's device.")
+        }
+    }
+
+    @ViewBuilder
+    private var ownerActionSection: some View {
         Section {
             switch model.phase {
             case .idle, .failed:
@@ -173,19 +201,27 @@ struct JourneyShowcaseSheet: View {
     // MARK: - Drive the model
 
     private func runPublish() async {
-        if !live.isPublic {
-            // Flip the domain flag first so the journey reads as public everywhere (and the sync
-            // engine carries the flag to the private DB). The mirror write follows.
-            store.setJourneyPublic(true, forJourney: live.id)
-        }
+        // The domain flag is flipped by the model AFTER the mirror write succeeds — never before,
+        // so a failed publish can never leave the UI claiming the journey is world-readable when
+        // nothing was written. (findings #5 / #9 / #10.)
         let target = live
-        model.publish(journey: target, photos: store.photos(forJourneyID: target.id))
+        let store = self.store
+        model.publish(journey: target,
+                      photos: store.photos(forJourneyID: target.id),
+                      isOwner: isOwner) { makePublic in
+            store.setJourneyPublic(makePublic, forJourney: target.id)
+        }
     }
 
     private func runRemove() async {
-        let slug = live.slug
-        store.setJourneyPublic(false, forJourney: live.id)
-        model.remove(slug: slug)
+        // Run the unpublish first; only flip to Private once every record is gone. A failed
+        // unpublish leaves the journey showing Public (with the Remove button still available) so
+        // the world-readable mirror is never silently misrepresented as private. (finding #5.)
+        let target = live
+        let store = self.store
+        model.remove(slug: target.slug, isOwner: isOwner) { makePublic in
+            store.setJourneyPublic(makePublic, forJourney: target.id)
+        }
     }
 }
 
@@ -205,9 +241,24 @@ final class ShowcaseViewModel: ObservableObject {
     @Published private(set) var phase: Phase = .idle
     @Published private(set) var progress: PublicMirrorProgress?
 
-    let containerID = Config.cloudKitContainerIdentifier
-
     private var task: Task<Void, Never>?
+
+    /// The outcome of resolving the mirror publisher: either a ready publisher, or a user-facing
+    /// reason it is unavailable (no iCloud account / unentitled build).
+    enum MirrorResolution {
+        case ready(PublicMirrorPublishing)
+        case unavailable(String)
+    }
+
+    /// Seam: resolve the mirror publisher, checking the iCloud account behind the entitlement gate.
+    /// Injectable so the ordering + failure handling below is unit-tested without a live container
+    /// — the whole point the review flagged as having zero coverage.
+    typealias MirrorResolver = () async -> MirrorResolution
+    private let resolveMirror: MirrorResolver
+
+    init(resolveMirror: MirrorResolver? = nil) {
+        self.resolveMirror = resolveMirror ?? ShowcaseViewModel.productionResolver
+    }
 
     var isWorking: Bool { if case .working = phase { return true } else { return false } }
 
@@ -220,24 +271,37 @@ final class ShowcaseViewModel: ObservableObject {
         #endif
     }
 
+    static let notOwnerMessage = "Only the journey's owner can manage the public showcase."
+
     func reset() {
         guard !isWorking else { return }
         phase = .idle
         progress = nil
     }
 
-    func publish(journey: Journey, photos: [Photo]) {
+    /// Publish (or update) a journey's public mirror, then — only if the mirror write succeeded —
+    /// flip its `isPublic` flag via `setPublic`. `setPublic` returns whether the local flag write
+    /// landed; a false is surfaced rather than ignored. `isOwner` is enforced here as a second line
+    /// of defense (the UI also hides the controls for a non-owner). (findings #5 / #6 / #9.)
+    func publish(journey: Journey, photos: [Photo], isOwner: Bool,
+                 setPublic: @escaping (Bool) -> Bool) {
         guard !isWorking else { return }
-        run { publisher in
+        guard isOwner else { phase = .failed(Self.notOwnerMessage); return }
+        run(flippingTo: true, setPublic: setPublic) { publisher in
             await publisher.publish(journey: journey, photos: photos) { [weak self] prog in
                 Task { @MainActor in self?.progress = prog }
             }
         }
     }
 
-    func remove(slug: String) {
+    /// Remove a journey from the public mirror, then — only once every record is gone — flip its
+    /// `isPublic` flag to false. A failed/partial unpublish leaves the flag TRUE (the UI keeps
+    /// showing Public and the Remove button), never silently claiming Private while world-readable
+    /// records remain. (findings #5 / #6.)
+    func remove(slug: String, isOwner: Bool, setPublic: @escaping (Bool) -> Bool) {
         guard !isWorking else { return }
-        run { publisher in
+        guard isOwner else { phase = .failed(Self.notOwnerMessage); return }
+        run(flippingTo: false, setPublic: setPublic) { publisher in
             await publisher.unpublish(slug: slug) { [weak self] prog in
                 Task { @MainActor in self?.progress = prog }
             }
@@ -248,25 +312,60 @@ final class ShowcaseViewModel: ObservableObject {
         task?.cancel()
     }
 
-    /// Shared harness: build the public database behind the entitlement gate, check the account,
-    /// then run `body` against a `PublicMirrorPublisher`.
-    private func run(_ body: @escaping (PublicMirrorPublisher) async -> PublicMirrorReport) {
+    /// Test hook: await the in-flight publish/remove task, if any (mirrors the engine's
+    /// `awaitActivationFetch`), so a test can assert on the settled phase without racing it.
+    func awaitCurrentOperation() async { await task?.value }
+
+    /// Shared harness: resolve the publisher (account + entitlement gate), run `body`, and flip the
+    /// domain flag ONLY when the network op actually did what the flag would claim.
+    ///
+    ///   * publish   → mark Public once the world-readable journey record has landed. A failed
+    ///                 publish never marks Public, so the label never over-claims exposure.
+    ///   * unpublish → mark Private only when every record was removed. A failed/partial unpublish
+    ///                 keeps it Public, so the label never under-claims exposure (the leak case).
+    private func run(flippingTo newPublic: Bool,
+                     setPublic: @escaping (Bool) -> Bool,
+                     _ body: @escaping (PublicMirrorPublishing) async -> PublicMirrorReport) {
         phase = .working
         progress = PublicMirrorProgress(fraction: 0, phase: "Starting")
-        task = Task { [containerID] in
-            #if AKASHIC_CLOUDKIT_BUILD
-            let container = CKContainer(identifier: containerID)
-            let status = (try? await container.accountStatus()) ?? .couldNotDetermine
-            guard status == .available else {
-                self.phase = .failed("No iCloud account available. Sign in (Settings → iCloud) and try again.")
-                return
+        task = Task {
+            switch await self.resolveMirror() {
+            case .unavailable(let message):
+                self.phase = .failed(message)
+            case .ready(let publisher):
+                let report = await body(publisher)
+                let networkOK = newPublic ? report.journeyPublished : report.succeeded
+                if networkOK {
+                    if !setPublic(newPublic) {
+                        // The mirror op landed but the local flag write failed — do NOT claim
+                        // success (that would leave state and reality disagreeing). Surface it in a
+                        // retryable state. (findings #9 / #11.)
+                        self.phase = .failed(newPublic ? Self.publishFlagWriteFailed : Self.removeFlagWriteFailed)
+                        return
+                    }
+                }
+                self.phase = .done(report)
             }
-            let publisher = PublicMirrorPublisher(database: container.publicCloudDatabase)
-            let report = await body(publisher)
-            self.phase = .done(report)
-            #else
-            self.phase = .failed("Publishing to the showcase requires the Debug-CloudKit / Release-CloudKit build.")
-            #endif
         }
+    }
+
+    static let publishFlagWriteFailed =
+        "The showcase was updated, but this device could not save the Public flag locally. The journey may still show as Private here — reopen and try again."
+    static let removeFlagWriteFailed =
+        "The showcase was removed, but this device could not save the Private flag locally. The journey may still show as Public here — reopen and try again."
+
+    /// Production resolver: build the public database behind the entitlement gate and confirm an
+    /// available iCloud account.
+    static func productionResolver() async -> MirrorResolution {
+        #if AKASHIC_CLOUDKIT_BUILD
+        let container = CKContainer(identifier: Config.cloudKitContainerIdentifier)
+        let status = (try? await container.accountStatus()) ?? .couldNotDetermine
+        guard status == .available else {
+            return .unavailable("No iCloud account available. Sign in (Settings → iCloud) and try again.")
+        }
+        return .ready(PublicMirrorPublisher(database: container.publicCloudDatabase))
+        #else
+        return .unavailable("Publishing to the showcase requires the Debug-CloudKit / Release-CloudKit build.")
+        #endif
     }
 }

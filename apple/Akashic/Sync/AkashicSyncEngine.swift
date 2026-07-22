@@ -55,8 +55,14 @@ final class AkashicSyncEngine: NSObject, CKSyncEngineDelegate {
     let databaseScope: CKDatabase.Scope
 
     /// The underlying engine seam. `nil` until `activate()` builds it (production) or the test
-    /// injects one. Only used to enqueue/flush once `isRunning` is true.
+    /// injects one. Only used to enqueue/flush once `isRunning` is true. Dropped (set to nil) on
+    /// an account switch so `activate()` rebuilds a fresh engine bound to the new account.
     private var engine: SyncEngineProtocol?
+
+    /// Test seam: overrides `buildRealEngine()` so `activate()` can rebuild the engine after it is
+    /// dropped (e.g. on an account switch, which nils it out). nil in production → the real
+    /// `CKSyncEngine` is built. Production never sets this; only tests inject it.
+    var engineBuilder: (() -> SyncEngineProtocol?)?
 
     /// True only after `activate()` confirmed an available account and started the engine.
     private(set) var isRunning = false
@@ -158,7 +164,7 @@ final class AkashicSyncEngine: NSObject, CKSyncEngineDelegate {
             return
         }
 
-        if engine == nil { engine = buildRealEngine() }
+        if engine == nil { engine = engineBuilder?() ?? buildRealEngine() }
         guard engine != nil else {
             status.set(.error("Could not create the CloudKit sync engine"))
             return
@@ -395,6 +401,12 @@ final class AkashicSyncEngine: NSObject, CKSyncEngineDelegate {
         for journeyID in journeyIDs {
             let identities = store.recordIdentities(forJourneyID: journeyID)
             guard !identities.isEmpty else { continue }   // nothing local to protect / re-upload
+            // Drop the dead server change tags BEFORE re-enqueueing. The zone is gone (or about
+            // to be recreated empty), so every record must go up as a FRESH insert. Rehydrating a
+            // tag for a record the server no longer has turns each save into a permanent
+            // `unknownItem` failure — the protective re-upload would silently never land, losing
+            // the journey's only cloud copy. (CRITICAL, review finding #1.)
+            store.purgeSystemFields(forJourneyID: journeyID)
             let zoneID = zoneID(forJourneyID: journeyID)
             engine.add(pendingDatabaseChanges: [.saveZone(CKRecordZone(zoneID: zoneID))])
             engine.add(pendingRecordZoneChanges: identities.map {
@@ -414,6 +426,9 @@ final class AkashicSyncEngine: NSObject, CKSyncEngineDelegate {
         store.recordsDidSave(saved)
         store.recordsDidDelete(deleted)
         var rebased: [CKSyncEngine.PendingRecordZoneChange] = []
+        var zonesToRecreate: Set<CKRecordZone.ID> = []
+        var journeysToPurge: Set<String> = []
+        var revokedDrops: [CKSyncEngine.PendingRecordZoneChange] = []
         for failure in failed {
             SyncLog.log("sendFailure \(failure.record.recordType)/\(failure.record.recordID.recordName) code=\(failure.error.code.rawValue) \(failure.error.localizedDescription)")
             switch failure.error.code {
@@ -424,9 +439,27 @@ final class AkashicSyncEngine: NSObject, CKSyncEngineDelegate {
                     rebased.append(.saveRecord(merged.recordID))
                 }
             case .zoneNotFound, .userDeletedZone:
-                // Zone missing server-side: recreate it and resend the record. Needs live-test.
                 let zoneID = failure.record.recordID.zoneID
-                engine?.add(pendingDatabaseChanges: [.saveZone(CKRecordZone(zoneID: zoneID))])
+                // In the SHARED database a vanished zone means the share was revoked. Recreating
+                // the zone there is owner-only and always rejected, so CKSyncEngine would retry
+                // forever (same reasoning `handleZoneDeletions` already applies to fetched zone
+                // deletions). Treat it as revocation: drop the pending change, keep the local
+                // copy, do not re-enqueue. (review finding #2.)
+                guard databaseScope == .private else {
+                    SyncLog.log("sendFailure zoneNotFound in shared scope — share revoked; dropping \(failure.record.recordID.recordName)")
+                    revokedDrops.append(.saveRecord(failure.record.recordID))
+                    continue
+                }
+                // Private scope: recreate the zone and resend as a FRESH insert. Purge the dead
+                // change tags for the whole journey first — the recreated zone is empty, so every
+                // record must upload as an insert; a rehydrated tag fails permanently with
+                // `unknownItem`. (CRITICAL, review finding #1 — the send-recovery half.)
+                zonesToRecreate.insert(zoneID)
+                if let journeyID = RecordCoder.journeyID(fromZoneID: zoneID) {
+                    journeysToPurge.insert(journeyID)
+                } else {
+                    store.purgeSystemFields(forRecordNames: [failure.record.recordID.recordName])
+                }
                 rebased.append(.saveRecord(failure.record.recordID))
             case .serverRejectedRequest, .invalidArguments, .unknownItem:
                 // Non-retryable for this record: surface, do not loop.
@@ -436,6 +469,13 @@ final class AkashicSyncEngine: NSObject, CKSyncEngineDelegate {
                 break
             }
         }
+        // Purge each affected journey's tags exactly once, then recreate its zone, before the
+        // records are re-enqueued.
+        for journeyID in journeysToPurge { store.purgeSystemFields(forJourneyID: journeyID) }
+        if !zonesToRecreate.isEmpty {
+            engine?.add(pendingDatabaseChanges: zonesToRecreate.map { .saveZone(CKRecordZone(zoneID: $0)) })
+        }
+        if !revokedDrops.isEmpty { engine?.remove(pendingRecordZoneChanges: revokedDrops) }
         if !rebased.isEmpty { engine?.add(pendingRecordZoneChanges: rebased) }
         if !saved.isEmpty || !deleted.isEmpty { status.markSynced() }
     }
@@ -522,6 +562,15 @@ final class AkashicSyncEngine: NSObject, CKSyncEngineDelegate {
         initialUploadEnqueued = false
         defaults.removeObject(forKey: Self.didInitialUploadKey)
         Self.discardState()
+        // The new account's databases contain NONE of the old account's records, so every persisted
+        // change tag is now a dead pointer. Rehydrating one on the re-upload sends an update against
+        // a record the server has never seen — `unknownItem` per record, and the whole archive never
+        // uploads. Drop them all so the initial upload sends fresh inserts. (review finding #3.)
+        store.purgeAllSystemFields()
+        // Drop the cached engine so the next `activate()` builds one bound to the new account.
+        // Keeping the old instance would let its next `.stateUpdate` re-persist the OLD account's
+        // serialization to the state file `discardState()` just deleted.
+        engine = nil
         status.set(.noAccount)
     }
 

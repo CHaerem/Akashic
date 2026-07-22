@@ -153,6 +153,16 @@ final class PersistenceController {
     /// update against a version the server no longer has.
     func resetJourneys() {
         let context = container.viewContext
+        // Suppress sync forwarding around the mass delete. Without this, a running sync engine
+        // sees the reset's save as a `deleteRecord` for EVERY record in the store: if the ensuing
+        // import throws (or simply omits natively-ingested photos / day comments), those deletes
+        // are sent to CloudKit and fetched as cascading deletions on every other family device —
+        // the exact distributed-wipe `handleZoneDeletions` was hardened against, reached through
+        // the reset flag. The local store is authoritative; a local reset must never emit remote
+        // deletes. (review finding #4.) Save/restore the flag so a nesting caller stays correct.
+        let wasSuppressing = syncIsApplyingRemoteChanges
+        syncIsApplyingRemoteChanges = true
+        defer { syncIsApplyingRemoteChanges = wasSuppressing }
         for entity in ["CDPhoto", "CDDayComment", "CDWaypoint", "CDJourney", "CDSyncRecordMeta"] {
             let request = NSFetchRequest<NSManagedObject>(entityName: entity)
             for object in (try? context.fetch(request)) ?? [] {

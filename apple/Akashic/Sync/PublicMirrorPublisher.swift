@@ -286,9 +286,20 @@ struct PublicMirrorReport: Equatable {
 
 // MARK: - Publisher
 
+/// The publish / unpublish surface the Showcase view model drives. A protocol so `ShowcaseViewModel`
+/// can be unit-tested against a fake that fails on demand — the concrete `PublicMirrorPublisher`
+/// talks to a real (or mock) `PublicMirrorDatabase`, but the view model's ordering + failure
+/// handling (flip the `isPublic` flag only AFTER the network op succeeds) is what needs coverage.
+protocol PublicMirrorPublishing {
+    func publish(journey: Journey, photos: [Photo],
+                 progress: ((PublicMirrorProgress) -> Void)?) async -> PublicMirrorReport
+    func unpublish(slug: String,
+                   progress: ((PublicMirrorProgress) -> Void)?) async -> PublicMirrorReport
+}
+
 /// Executes publish / unpublish against a `PublicMirrorDatabase`. Not main-actor: pure record
 /// building + async DB calls. The caller (a `@MainActor` view model) marshals `progress`.
-final class PublicMirrorPublisher {
+final class PublicMirrorPublisher: PublicMirrorPublishing {
 
     private let database: PublicMirrorDatabase
     private let config: PublicMirrorConfig
@@ -435,6 +446,26 @@ final class PublicMirrorPublisher {
         report.failures.append(contentsOf: metaOutcome.failures)
 
         progress?(PublicMirrorProgress(fraction: 1.0, phase: "Done"))
+        return report
+    }
+
+    // MARK: Best-effort targeted photo removal (finding #7)
+
+    /// Delete specific `PublicPhoto` records by id, without touching the journey metadata.
+    ///
+    /// Used when a photo is deleted locally from a still-published journey: its world-readable
+    /// thumbnail (with GPS + timestamp) must not linger in the mirror until the next manual
+    /// "Update showcase". Fire-and-forget — per-record failures are reported, never thrown; the
+    /// next full publish still reconciles anything this missed.
+    @discardableResult
+    func deletePublicPhotos(ids: [String]) async -> PublicMirrorReport {
+        var report = PublicMirrorReport()
+        let recordIDs = ids.map { CKRecord.ID(recordName: $0) }
+        for chunk in Self.chunked(recordIDs, size: config.maxRecordsPerBatch) {
+            let outcome = await delete(chunk)
+            report.deleted += outcome.deleted
+            report.failures.append(contentsOf: outcome.failures)
+        }
         return report
     }
 

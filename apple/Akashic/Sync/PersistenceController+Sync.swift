@@ -82,6 +82,34 @@ extension PersistenceController: SyncLocalStore {
         #endif
     }
 
+    // MARK: Public-mirror upkeep (finding #7)
+
+    /// Best-effort removal of a deleted photo's `PublicPhoto` mirror record.
+    ///
+    /// When a photo is deleted locally from a *published* journey, the private-DB sync path takes
+    /// care of the private copy — but the public showcase mirror is a separate database that
+    /// `CKSyncEngine` does not drive, so without this the world-readable thumbnail (GPS +
+    /// timestamp) keeps serving to signed-out visitors until the next manual "Update showcase".
+    /// Fire-and-forget, detached, logged; the next full publish reconciles anything this misses.
+    @MainActor
+    func removePublicMirrorPhotoIfPublished(photoID: String, journeyID: String) {
+        #if AKASHIC_CLOUDKIT_BUILD
+        guard mode == .cloudKit else { return }
+        // Only the owner may write the public records, and only a published journey has any.
+        guard let cd = syncFetchJourney(journeyID), cd.isPublic, cd.zoneOwnerName == nil else { return }
+        let container = CKContainer(identifier: Config.cloudKitContainerIdentifier)
+        let database = container.publicCloudDatabase
+        Task.detached {
+            let report = await PublicMirrorPublisher(database: database).deletePublicPhotos(ids: [photoID])
+            if report.failures.isEmpty {
+                SyncLog.log("removePublicMirrorPhoto: removed \(photoID) from the public showcase")
+            } else {
+                SyncLog.error("removePublicMirrorPhoto: \(photoID) not removed (\(report.failures.count) failure(s)) — reconciled on next publish")
+            }
+        }
+        #endif
+    }
+
     // MARK: Upload side
 
     func allLocalJourneyIDs() -> [String] {
@@ -189,6 +217,55 @@ extension PersistenceController: SyncLocalStore {
                 SyncLog.log("recordsDidDelete: dropped systemFields for \(recordIDs.count) record(s)")
             } catch {
                 SyncLog.error("recordsDidDelete: systemFields cleanup FAILED for \(recordIDs.count): \(error)")
+            }
+        }
+        syncIsApplyingRemoteChanges = wasApplying
+    }
+
+    // MARK: Zone-loss / account-switch meta purges (data-safety critical)
+
+    /// Purge the meta rows for a journey and all its children, so a zone-loss re-upload rebuilds
+    /// FRESH records (inserts) instead of rehydrating a dead server change tag that would fail
+    /// permanently with `unknownItem`. Never touches the domain rows — the local archive stays.
+    func purgeSystemFields(forJourneyID journeyID: String) {
+        // The journey normally still exists locally on a zone loss (we keep the archive), so its
+        // children are enumerable. If the row is already gone, fall back to at least its own name.
+        var names = [journeyID]
+        if let journey = syncFetchJourney(journeyID) {
+            names += childRecordNames(of: journey)
+        }
+        purgeSystemFields(forRecordNames: names)
+    }
+
+    func purgeSystemFields(forRecordNames names: [String]) {
+        guard !names.isEmpty else { return }
+        // Meta rows map to no `LocalChange`, but bracket the save with the remote-apply flag
+        // anyway so it is never misread as a fresh local edit (matches recordsDidSave/Delete).
+        let wasApplying = syncIsApplyingRemoteChanges
+        syncIsApplyingRemoteChanges = true
+        removeSystemFields(forRecordNames: names)
+        if viewContext.hasChanges {
+            do {
+                try viewContext.save()
+                SyncLog.log("purgeSystemFields: dropped meta for \(names.count) record(s)")
+            } catch {
+                SyncLog.error("purgeSystemFields: FAILED for \(names.count): \(error)")
+            }
+        }
+        syncIsApplyingRemoteChanges = wasApplying
+    }
+
+    func purgeAllSystemFields() {
+        let wasApplying = syncIsApplyingRemoteChanges
+        syncIsApplyingRemoteChanges = true
+        let request = NSFetchRequest<CDSyncRecordMeta>(entityName: "CDSyncRecordMeta")
+        for meta in (try? viewContext.fetch(request)) ?? [] { viewContext.delete(meta) }
+        if viewContext.hasChanges {
+            do {
+                try viewContext.save()
+                SyncLog.log("purgeAllSystemFields: cleared the meta side table")
+            } catch {
+                SyncLog.error("purgeAllSystemFields: FAILED: \(error)")
             }
         }
         syncIsApplyingRemoteChanges = wasApplying

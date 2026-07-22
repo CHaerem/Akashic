@@ -209,7 +209,13 @@ final class JourneyStore: ObservableObject {
     @discardableResult
     func deletePhoto(_ photo: Photo) -> Bool {
         let ok = persistence.deletePhoto(id: photo.id)
-        if ok { photoEditService.deleteFiles(for: photo) }
+        if ok {
+            photoEditService.deleteFiles(for: photo)
+            // If the journey is published to the world-readable showcase, take the deleted photo's
+            // thumbnail down from the public mirror too (best-effort). No-op outside CloudKit mode
+            // / the entitled build, and for a non-public or shared-in journey. (finding #7.)
+            persistence.removePublicMirrorPhotoIfPublished(photoID: photo.id, journeyID: photo.journeyId)
+        }
         reload()
         return ok
     }
@@ -259,5 +265,14 @@ final class JourneyStore: ObservableObject {
         let ok = persistence.setJourneyPublic(id: id, isPublic: isPublic)
         reload()
         return ok
+    }
+
+    /// True when this journey lives in our OWN (private) database — i.e. we may manage its public
+    /// showcase. A journey shared *into* this account has a non-nil `zoneOwnerName` and its mirror
+    /// is the owner's to control (only `_creator` can write the public records, and consenting to
+    /// world-readability on the owner's behalf is not ours to do). Fixtures / local-mode journeys
+    /// have no owner recorded and are ours by definition. (review finding #6.)
+    func isOwnedByCurrentUser(journeyID: String) -> Bool {
+        persistence.zoneOwnerName(forJourneyID: journeyID) == nil
     }
 }
