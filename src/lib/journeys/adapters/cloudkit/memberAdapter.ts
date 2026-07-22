@@ -11,6 +11,7 @@ import type { Profile, JourneyMember, JourneyRole } from '../../../../types/trek
 import { getSharedDatabase, getPrivateDatabase, getCloudKitSession } from '../../../cloudkit';
 import { participantToMember } from './records';
 import { CK_UNSUPPORTED } from './journeyAdapter';
+import { isSignedIn } from './publicAdapter';
 
 /**
  * List the members of a journey by reading its CKShare participants and mapping
@@ -18,6 +19,9 @@ import { CK_UNSUPPORTED } from './journeyAdapter';
  * identity — CloudKit has no server-side profile join).
  */
 export async function getJourneyMembers(journeyId: string): Promise<JourneyMember[]> {
+    // Membership is a CKShare concept that only exists for a signed-in participant.
+    // A public visitor has none — resolve empty without touching the private DBs.
+    if (!(await isSignedIn())) return [];
     try {
         // TODO(cloudkit): resolve the journey's CKShare and read its participants.
         // The share record name is derived from the Journey record's `share`

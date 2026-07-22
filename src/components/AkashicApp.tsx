@@ -4,6 +4,7 @@ import { useTrekData } from '../hooks/useTrekData';
 import { useIsMobile } from '../hooks/useMediaQuery';
 import { useMedia } from '../hooks/useMedia';
 import { useJourneys } from '../contexts/JourneysContext';
+import { useAuth } from '../contexts/AuthContext';
 import { fetchPhotos, getJourneyIdBySlug, updatePhoto } from '../lib/journeys';
 import { hasPendingShares } from '../lib/shareTarget';
 import type { Photo, Camp } from '../types/trek';
@@ -37,6 +38,8 @@ export default function AkashicApp() {
     const recenterRef = useRef<(() => void) | null>(null);
     const { getMediaUrl } = useMedia();
     const { treks, refetch: refetchJourneys } = useJourneys();
+    // Signed-out visitors get the read-only public showcase — no edit affordances.
+    const { signedIn } = useAuth();
     const stagingBranch = import.meta.env.VITE_STAGING_BRANCH;
     const deployTimeRaw = import.meta.env.VITE_DEPLOY_TIME;
 
@@ -329,7 +332,7 @@ export default function AkashicApp() {
                         onNextJourney={handleNextJourney}
                         totalJourneys={treks.length}
                         editMode={editMode}
-                        onToggleEditMode={toggleEditMode}
+                        onToggleEditMode={signedIn ? toggleEditMode : undefined}
                         isMobile={isMobile}
                     >
                         <BottomSheetContent
@@ -371,7 +374,7 @@ export default function AkashicApp() {
                         onNextJourney={handleNextJourney}
                         totalJourneys={treks.length}
                         editMode={editMode}
-                            onToggleEditMode={toggleEditMode}
+                            onToggleEditMode={signedIn ? toggleEditMode : undefined}
                     >
                         <BottomSheetContent
                             view={view}

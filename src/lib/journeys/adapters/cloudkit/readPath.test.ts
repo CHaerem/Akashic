@@ -16,6 +16,7 @@ vi.mock('../../../cloudkit', () => ({
 import { fetchJourneys } from './journeyAdapter';
 import { fetchPhotos, updatePhoto } from './photoAdapter';
 import { rememberJourneyZones, rememberRecordZone, clearJourneyZones } from './journeyZones';
+import { resetAuthCache } from './publicAdapter';
 
 const TEST_ZONE = {
     recordName: 'j-1',
@@ -39,6 +40,10 @@ function makeDb(handlers: {
 describe('cloudkit read path', () => {
     beforeEach(() => {
         vi.clearAllMocks();
+        // These exercise the SIGNED-IN path (shared + private zones). Establish a
+        // session so the public-mirror fallback added in T3.3 does not take over.
+        resetAuthCache();
+        getCloudKitSession.mockResolvedValue({ user: { userRecordName: 'owner' } });
     });
 
     describe('fetchJourneys', () => {

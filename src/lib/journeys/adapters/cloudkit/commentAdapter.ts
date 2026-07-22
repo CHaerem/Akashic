@@ -12,6 +12,7 @@ import { recordToDayComment, identityToProfile } from './records';
 import { getJourneyMembers } from './memberAdapter';
 import { performQueryAll } from './paginate';
 import { resolveJourneyZone, rememberRecordZone, resolveRecordZone } from './journeyZones';
+import { isSignedIn } from './publicAdapter';
 
 const COMMENT_TYPE = 'DayComment';
 
@@ -101,6 +102,9 @@ async function buildAuthorsMap(comments: CloudKitJS.Record[]): Promise<Map<strin
 }
 
 export async function getCommentsForWaypoint(waypointId: string): Promise<DayComment[]> {
+    // Comments live only in the private/shared DBs, which a signed-out visitor cannot
+    // reach. Resolve to empty without querying (no console noise on the showcase).
+    if (!(await isSignedIn())) return [];
     try {
         // The day's zone comes from the waypoint, remembered when the journey loaded.
         // Without it the query runs against the default zone and finds nothing —
@@ -135,6 +139,7 @@ export async function getCommentsForWaypoint(waypointId: string): Promise<DayCom
 }
 
 export async function getCommentsForJourney(journeyId: string): Promise<DayComment[]> {
+    if (!(await isSignedIn())) return [];
     try {
         const records = await queryCommentsInJourney(journeyId, [
             { fieldName: 'createdAt', ascending: false },
@@ -150,6 +155,7 @@ export async function getCommentsForJourney(journeyId: string): Promise<DayComme
 }
 
 export async function getCommentCountsForJourney(journeyId: string): Promise<Record<string, number>> {
+    if (!(await isSignedIn())) return {};
     try {
         const records = await queryCommentsInJourney(journeyId);
         const counts: Record<string, number> = {};

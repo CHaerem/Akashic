@@ -21,6 +21,7 @@ vi.mock('../../../cloudkit', () => ({
 import { fetchPhotos, getPhotosForWaypoint } from './photoAdapter';
 import { recordToPhoto, recordToDbJourney, snakeCaseKeys } from './records';
 import { rememberJourneyZones, resolveJourneyZone, clearJourneyZones } from './journeyZones';
+import { resetAuthCache } from './publicAdapter';
 
 const ZONE = { zoneName: 'journey-uuid-1', ownerRecordName: '_owner', zoneType: 'REGULAR_CUSTOM_ZONE' };
 
@@ -86,6 +87,9 @@ describe('photo reads are scoped to the journey zone', () => {
         vi.clearAllMocks();
         clearJourneyZones();
         rememberJourneyZones([journeyRecord as unknown as CloudKitJS.Record], 'private');
+        // Signed-in path: the public fallback (T3.3) must not intercept these.
+        resetAuthCache();
+        getCloudKitSession.mockResolvedValue({ user: { userRecordName: 'owner' } });
     });
 
     /**

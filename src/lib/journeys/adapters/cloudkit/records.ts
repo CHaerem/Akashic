@@ -46,11 +46,11 @@ export function fieldValue(record: CKRecordLike, name: string): unknown {
     return record.fields?.[name]?.value;
 }
 
-function stringOrNull(v: unknown): string | null {
+export function stringOrNull(v: unknown): string | null {
     return typeof v === 'string' ? v : null;
 }
 
-function numberOrNull(v: unknown): number | null {
+export function numberOrNull(v: unknown): number | null {
     return typeof v === 'number' && !Number.isNaN(v) ? v : null;
 }
 
@@ -211,7 +211,7 @@ function timestampToIso(ts?: number): string | null {
  *
  * Strings are still accepted, so records written by an older client keep working.
  */
-function isoDateOrNull(value: unknown): string | null {
+export function isoDateOrNull(value: unknown): string | null {
     if (typeof value === 'number') return timestampToIso(value);
     if (typeof value === 'string' && value) return value;
     return null;

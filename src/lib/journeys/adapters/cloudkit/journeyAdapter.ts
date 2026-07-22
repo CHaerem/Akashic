@@ -14,6 +14,7 @@ import { setJourneyCacheState } from '../../journeyCache';
 import { getSharedDatabase, getPrivateDatabase } from '../../../cloudkit';
 import { performQueryAll } from './paginate';
 import { rememberJourneyZones, rememberChildZones } from './journeyZones';
+import { isSignedIn, fetchPublicJourneys } from './publicAdapter';
 import {
     recordToDbJourney,
     recordToDbWaypoint,
@@ -77,6 +78,12 @@ export async function fetchJourneys(): Promise<{
     treks: TrekConfig[];
     trekDataMap: Record<string, TrekData>;
 }> {
+    // Signed-out visitors get the world-readable public mirror (T3.3) — same shape,
+    // same cache, no Apple ID required.
+    if (!(await isSignedIn())) {
+        return fetchPublicJourneys();
+    }
+
     let journeyRecords: CloudKitJS.Record[];
     let waypointRecords: CloudKitJS.Record[];
     try {
@@ -120,6 +127,12 @@ export async function fetchJourneys(): Promise<{
 
 /** Resolve a journey's CloudKit record name from its slug. */
 export async function getJourneyIdBySlug(slug: string): Promise<string | null> {
+    // The public mirror has no UUIDs — a PublicJourney's recordName IS the slug, and
+    // fetchPublicPhotos joins on `journeySlug`. So signed-out, the slug is the id, and
+    // the private-DB lookup below (which a public visitor cannot run) is skipped.
+    if (!(await isSignedIn())) {
+        return slug;
+    }
     try {
         const records = await queryAllZones({
             recordType: 'Journey',

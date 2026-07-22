@@ -12,6 +12,7 @@ import { recordToPhoto } from './records';
 import { CK_UNSUPPORTED } from './journeyAdapter';
 import { performQueryAll } from './paginate';
 import { resolveJourneyZone, rememberRecordZone, resolveRecordZone } from './journeyZones';
+import { isSignedIn, fetchPublicPhotos } from './publicAdapter';
 
 const PHOTO_TYPE = 'Photo';
 
@@ -60,6 +61,10 @@ function sortPhotos(photos: Photo[]): Photo[] {
  * zone already *is* the filter.
  */
 export async function fetchPhotos(journeyId: string): Promise<Photo[]> {
+    // Signed-out: the public mirror holds thumbnails only, queried by slug (T3.3).
+    if (!(await isSignedIn())) {
+        return fetchPublicPhotos(journeyId);
+    }
     try {
         const zone = await resolveJourneyZone(journeyId);
         if (!zone) {
@@ -86,6 +91,12 @@ export async function fetchPhotos(journeyId: string): Promise<Photo[]> {
  * nothing for imported data. It is correct for photos added since.
  */
 export async function getPhotosForWaypoint(waypointId: string): Promise<Photo[]> {
+    // The public mirror has no per-waypoint photo query (thumbs carry a dayNumber, not
+    // a waypointRef); day grouping is handled by the synthesized waypoint_id on
+    // fetchPublicPhotos + usePhotoDay. Signed-out this resolves to empty, quietly.
+    if (!(await isSignedIn())) {
+        return [];
+    }
     try {
         const records = await queryPhotos({
             recordType: PHOTO_TYPE,
