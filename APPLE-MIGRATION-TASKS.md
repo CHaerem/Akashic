@@ -129,8 +129,8 @@ graph TD
 
 ## W1 — Phase 0 gates (spikes → decisions)
 
-### T1.1 🧑 Container + tokens (RUNBOOK §1–3) — mostly ✅ (2026-07-22)
-✅ App ID `no.akashic.app` + `no.akashic.app.widgets`, container `iCloud.no.akashic`, App Group `group.no.akashic` registered (team 9LVCB72DT8, via Xcode automatic signing); ✅ cktool management token (was already saved). **Remaining 🧑:** the CloudKit JS web API token (CloudKit Console → Tokens & Keys; allowed origins: localhost:8000, localhost:5173, akashic.no) — needed for Spike A and the web adapter.
+### T1.1 ✅ Container + tokens (RUNBOOK §1–3) — done 2026-07-22
+✅ App ID `no.akashic.app` + `no.akashic.app.widgets`, container `iCloud.no.akashic`, App Group `group.no.akashic` registered (team 9LVCB72DT8, via Xcode automatic signing); ✅ cktool management token (was already saved); ✅ CloudKit JS web API token created and verified live (anonymous public-DB query succeeds; token stored only in gitignored files).
 
 ### T1.2 🤝 Execute Spike A (proves/disproves D6)
 - **Built tonight:** `spikes/cloudkit-js/index.html` + README (4 test panels: private DB, shared DB, share-accept, public DB; PASS/FAIL badges; full error surfacing). CloudKit JS confirmed to load and error-path verified with placeholder token.

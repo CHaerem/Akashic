@@ -162,7 +162,16 @@ The management token is stored by `cktool` on your machine — do **not** share 
 
 ---
 
-## 3. CloudKit JS web API token (Spike A)
+## 3. CloudKit JS web API token (Spike A) — ✅ TOKEN CREATED (2026-07-22)
+
+> **Outcome:** token created in CloudKit Console (Post Message callback, origin-locked) and stored
+> locally in `spikes/cloudkit-js/config.local.js` + `.env.local` (both gitignored — never commit
+> it; the public repo would expose it). Verified live: `setUpAuth()` accepts the token, and an
+> anonymous **public-DB query succeeds** end-to-end (empty container ⇒ `count: 0`, no errors) —
+> the anonymous-showcase half of D6 is proven. The web app in `VITE_DATA_BACKEND=cloudkit` mode
+> loads CloudKit JS and renders Apple's sign-in button. **Remaining (needs your Apple ID):** the
+> spike's signed-in panels — private-DB reads now, shared-DB reads + share-accept once shared
+> data exists (Phase 2/3).
 
 **Why:** The web thin-client (and Spike A) authenticates to CloudKit via a **CloudKit JS API token**
 with Apple ID sign-in. Only you can create it.

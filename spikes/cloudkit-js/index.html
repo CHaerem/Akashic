@@ -292,6 +292,9 @@
 <!-- Apple's official CloudKit JS SDK (v2). No other external dependency. -->
 <script src="https://cdn.apple-cloudkit.com/ck/2/cloudkit.js" async></script>
 
+<!-- Optional local override (gitignored): `window.AKASHIC_CK_TOKEN = '<token>';`
+     keeps the real token out of the public repo. 404 here is harmless. -->
+<script src="config.local.js"></script>
 <script>
 /* =============================================================================
  *  CONFIG  —  FILL IN
@@ -306,7 +309,8 @@
 var CONFIG = {
   containerIdentifier: 'iCloud.no.akashic',        // FILL IN (default is Akashic's container)
   environment:         'development',              // FILL IN: 'development' | 'production'
-  apiToken:            'PASTE_API_TOKEN_HERE'      // FILL IN  (apiTokenPlaceholder)
+  apiToken:            (typeof window !== 'undefined' && window.AKASHIC_CK_TOKEN) ||
+                       'PASTE_API_TOKEN_HERE'      // FILL IN — or set window.AKASHIC_CK_TOKEN in config.local.js
 };
 
 /* =============================================================================
