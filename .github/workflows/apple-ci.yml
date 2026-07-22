@@ -36,11 +36,9 @@ jobs:
       - name: Pick an available iPhone simulator
         id: sim
         run: |
-          UDID=$(xcrun simctl list devices available -j | python3 -c "import json,sys
-data = json.load(sys.stdin)['devices']
-ids = [d['udid'] for rt, devs in data.items() if 'iOS' in rt
-       for d in devs if d.get('isAvailable') and d['name'].startswith('iPhone')]
-print(ids[-1] if ids else '')")
+          # Keep the Python on ONE line: an unindented continuation line ends the
+          # YAML block scalar, which makes GitHub reject the whole workflow file.
+          UDID=$(xcrun simctl list devices available -j | python3 -c "import json,sys; data=json.load(sys.stdin)['devices']; ids=[d['udid'] for rt, devs in data.items() if 'iOS' in rt for d in devs if d.get('isAvailable') and d['name'].startswith('iPhone')]; print(ids[-1] if ids else '')")
           if [ -z "$UDID" ]; then echo "No iOS simulator available" >&2; exit 1; fi
           echo "udid=$UDID" >> "$GITHUB_OUTPUT"
           echo "Selected simulator: $UDID"
