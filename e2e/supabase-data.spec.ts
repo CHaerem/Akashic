@@ -62,8 +62,8 @@ test.describe('Supabase Data Loading', () => {
         // Wait for data to load
         await waitForMapReady(page);
 
-        // Hint appears only after data is available
-        await expect(page.getByText('Click a marker to explore')).toBeVisible({ timeout: DATA_TIMEOUT });
+        // Hint appears only after data is available (desktop shows "Click", mobile shows "Tap")
+        await expect(page.getByText(/(Click|Tap) a marker to explore/)).toBeVisible({ timeout: DATA_TIMEOUT });
 
         // No Supabase errors
         expect(errors).toHaveLength(0);

@@ -3,20 +3,12 @@
  */
 
 import { supabase } from '../supabase';
+import { isCloudKitBackend } from '../backend';
 import type { TrekConfig, TrekData, Route } from '../../types/trek';
 import type { DbJourney, DbWaypoint } from './types';
 import { toTrekConfig, toTrekData } from './transforms';
-
-// Cache for journey data
-let journeyCache: {
-    treks: TrekConfig[];
-    trekDataMap: Record<string, TrekData>;
-    loaded: boolean;
-} = {
-    treks: [],
-    trekDataMap: {},
-    loaded: false
-};
+import { getJourneyCacheState, setJourneyCacheState } from './journeyCache';
+import * as ckJourney from './adapters/cloudkit/journeyAdapter';
 
 /**
  * Fetch all public journeys from Supabase
@@ -25,6 +17,8 @@ export async function fetchJourneys(): Promise<{
     treks: TrekConfig[];
     trekDataMap: Record<string, TrekData>;
 }> {
+    if (isCloudKitBackend) return ckJourney.fetchJourneys();
+
     if (!supabase) {
         console.warn('Supabase not configured, using empty data');
         return { treks: [], trekDataMap: {} };
@@ -86,7 +80,7 @@ export async function fetchJourneys(): Promise<{
     });
 
     // Update cache
-    journeyCache = { treks, trekDataMap, loaded: true };
+    setJourneyCacheState({ treks, trekDataMap, loaded: true });
 
     return { treks, trekDataMap };
 }
@@ -95,34 +89,36 @@ export async function fetchJourneys(): Promise<{
  * Get cached journey data (call fetchJourneys first)
  */
 export function getJourneyCache() {
-    return journeyCache;
+    return getJourneyCacheState();
 }
 
 /**
  * Get trek data by ID from cache
  */
 export function getTrekData(id: string): TrekData | null {
-    return journeyCache.trekDataMap[id] || null;
+    return getJourneyCacheState().trekDataMap[id] || null;
 }
 
 /**
  * Get trek config by ID from cache
  */
 export function getTrekConfig(id: string): TrekConfig | null {
-    return journeyCache.treks.find(t => t.id === id) || null;
+    return getJourneyCacheState().treks.find(t => t.id === id) || null;
 }
 
 /**
  * Check if data is loaded
  */
 export function isDataLoaded(): boolean {
-    return journeyCache.loaded;
+    return getJourneyCacheState().loaded;
 }
 
 /**
  * Get the database journey ID from a slug
  */
 export async function getJourneyIdBySlug(slug: string): Promise<string | null> {
+    if (isCloudKitBackend) return ckJourney.getJourneyIdBySlug(slug);
+
     if (!supabase) return null;
 
     const { data, error } = await supabase
@@ -158,6 +154,8 @@ export interface JourneyUpdate {
  * Update a journey
  */
 export async function updateJourney(slug: string, updates: JourneyUpdate): Promise<boolean> {
+    if (isCloudKitBackend) return ckJourney.updateJourney(slug, updates);
+
     if (!supabase) {
         console.warn('Supabase not configured');
         return false;
@@ -174,6 +172,7 @@ export async function updateJourney(slug: string, updates: JourneyUpdate): Promi
     }
 
     // Update local cache if loaded
+    const journeyCache = getJourneyCacheState();
     if (journeyCache.loaded && journeyCache.trekDataMap[slug]) {
         const cached = journeyCache.trekDataMap[slug];
         if (updates.name !== undefined) cached.name = updates.name;
@@ -191,6 +190,8 @@ export async function updateJourney(slug: string, updates: JourneyUpdate): Promi
  * Recalculates total_distance based on new route
  */
 export async function updateJourneyRoute(slug: string, route: Route): Promise<boolean> {
+    if (isCloudKitBackend) return ckJourney.updateJourneyRoute(slug, route);
+
     if (!supabase) {
         console.warn('Supabase not configured');
         return false;
@@ -227,6 +228,7 @@ export async function updateJourneyRoute(slug: string, route: Route): Promise<bo
     }
 
     // Update local cache
+    const journeyCache = getJourneyCacheState();
     if (journeyCache.loaded && journeyCache.trekDataMap[slug]) {
         journeyCache.trekDataMap[slug].route = route;
         journeyCache.trekDataMap[slug].stats.totalDistance = Math.round(totalDistance * 10) / 10;
@@ -239,6 +241,8 @@ export async function updateJourneyRoute(slug: string, route: Route): Promise<bo
  * Get full journey details for editing
  */
 export async function getJourneyForEdit(slug: string): Promise<DbJourney | null> {
+    if (isCloudKitBackend) return ckJourney.getJourneyForEdit(slug);
+
     if (!supabase) return null;
 
     const { data, error } = await supabase

@@ -3,7 +3,9 @@
  */
 
 import { supabase } from '../supabase';
+import { isCloudKitBackend } from '../backend';
 import type { DbWaypoint } from './types';
+import * as ckWaypoint from './adapters/cloudkit/waypointAdapter';
 
 /**
  * Editable waypoint fields
@@ -23,6 +25,8 @@ export interface WaypointUpdate {
  * Update a waypoint
  */
 export async function updateWaypoint(waypointId: string, updates: WaypointUpdate): Promise<boolean> {
+    if (isCloudKitBackend) return ckWaypoint.updateWaypoint(waypointId, updates);
+
     if (!supabase) {
         console.warn('Supabase not configured');
         return false;
@@ -45,6 +49,8 @@ export async function updateWaypoint(waypointId: string, updates: WaypointUpdate
  * Get waypoint by ID
  */
 export async function getWaypoint(waypointId: string): Promise<DbWaypoint | null> {
+    if (isCloudKitBackend) return ckWaypoint.getWaypoint(waypointId);
+
     if (!supabase) return null;
 
     const { data, error } = await supabase
@@ -72,6 +78,16 @@ export async function updateWaypointPosition(
     routeDistanceKm: number | null,
     routePointIndex: number | null
 ): Promise<boolean> {
+    if (isCloudKitBackend) {
+        return ckWaypoint.updateWaypointPosition(
+            waypointId,
+            coordinates,
+            elevation,
+            routeDistanceKm,
+            routePointIndex
+        );
+    }
+
     if (!supabase) {
         console.warn('Supabase not configured');
         return false;
@@ -115,6 +131,8 @@ export interface NewWaypoint {
  * Create a new waypoint for a journey
  */
 export async function createWaypoint(waypoint: NewWaypoint): Promise<DbWaypoint | null> {
+    if (isCloudKitBackend) return ckWaypoint.createWaypoint(waypoint);
+
     if (!supabase) {
         console.warn('Supabase not configured');
         return null;
@@ -141,6 +159,8 @@ export async function createWaypoint(waypoint: NewWaypoint): Promise<DbWaypoint 
  * Delete a waypoint
  */
 export async function deleteWaypoint(waypointId: string): Promise<boolean> {
+    if (isCloudKitBackend) return ckWaypoint.deleteWaypoint(waypointId);
+
     if (!supabase) {
         console.warn('Supabase not configured');
         return false;
@@ -165,6 +185,8 @@ export async function deleteWaypoint(waypointId: string): Promise<boolean> {
 export async function updateWaypointOrder(
     updates: Array<{ id: string; sort_order: number; day_number: number }>
 ): Promise<boolean> {
+    if (isCloudKitBackend) return ckWaypoint.updateWaypointOrder(updates);
+
     if (!supabase) {
         console.warn('Supabase not configured');
         return false;

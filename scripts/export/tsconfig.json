@@ -1,0 +1,21 @@
+{
+  "//": "Local tsconfig so `tsc -p scripts/export/tsconfig.json` typechecks the export tooling in isolation (the root tsconfig only includes src/). Matches the `--strict` bar from the task; runtime is Node 23 type-stripping, hence allowImportingTsExtensions + noEmit.",
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2023"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "types": ["node"],
+    "allowImportingTsExtensions": true,
+    "resolveJsonModule": true,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "isolatedModules": true,
+    "moduleDetection": "force",
+    "skipLibCheck": true,
+    "noEmit": true,
+    "strict": true,
+    "forceConsistentCasingInFileNames": true
+  },
+  "include": ["*.ts"]
+}

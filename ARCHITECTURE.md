@@ -1,5 +1,9 @@
 # Akashic Architecture
 
+> **⚠️ Migration in progress (2026-07):** Akashic is moving to an Apple-platform architecture (CloudKit + native iOS app + GitHub Pages). See [APPLE-MIGRATION-PLAN.md](./APPLE-MIGRATION-PLAN.md) (target architecture & decisions), [APPLE-MIGRATION-TASKS.md](./APPLE-MIGRATION-TASKS.md) (task breakdown & status), and [APPLE-MIGRATION-RUNBOOK.md](./APPLE-MIGRATION-RUNBOOK.md) (manual/operator steps). Those documents supersede the "Target Architecture" here.
+>
+> **⚠️ Status caveat (updated 2026-07-22):** the Supabase project below had been **paused** (not deleted); it was **resumed on 2026-07-21** and the full data rescue is **complete** — Postgres export (3 journeys · 18 waypoints · 1538 photos) + a complete R2 archive (8 147 objects · 16.41 GB), verification passed, bundle at `/Users/cher/Privat/AkashicExport-20260722`; **akashic.no is live again**. Supabase + R2 are now treated **read-only until Phase 5**. Meanwhile the **native iOS app has moved well beyond the Phase-1 MVP** (globe/fly-in map, day content, photos, elevation/stats, a dormant widget, and live Spotlight indexing). The "Active"/"Target Architecture" sections in this file describe the *current* Supabase/Cloudflare stack, which is being replaced — for the authoritative target and status see [APPLE-MIGRATION-PLAN.md](./APPLE-MIGRATION-PLAN.md), [APPLE-MIGRATION-TASKS.md](./APPLE-MIGRATION-TASKS.md), and [APPLE-MIGRATION-RUNBOOK.md](./APPLE-MIGRATION-RUNBOOK.md).
+
 ## Vision
 
 An interactive platform to explore family travel journeys with photos, routes, and memories displayed on an immersive 3D globe. Designed to eventually support multiple users creating and sharing their own journeys.

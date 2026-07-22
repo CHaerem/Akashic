@@ -1,0 +1,67 @@
+name: apple-ci
+
+on:
+  push:
+    paths:
+      - "apple/**"
+      - ".github/workflows/apple-ci.yml"
+  pull_request:
+    paths:
+      - "apple/**"
+      - ".github/workflows/apple-ci.yml"
+
+concurrency:
+  group: apple-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-test:
+    name: Build & test (iOS Simulator)
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Show toolchain versions
+        run: |
+          xcodebuild -version
+          swift --version
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        working-directory: apple
+        run: xcodegen generate
+
+      - name: Pick an available iPhone simulator
+        id: sim
+        run: |
+          UDID=$(xcrun simctl list devices available -j | python3 -c "import json,sys
+data = json.load(sys.stdin)['devices']
+ids = [d['udid'] for rt, devs in data.items() if 'iOS' in rt
+       for d in devs if d.get('isAvailable') and d['name'].startswith('iPhone')]
+print(ids[-1] if ids else '')")
+          if [ -z "$UDID" ]; then echo "No iOS simulator available" >&2; exit 1; fi
+          echo "udid=$UDID" >> "$GITHUB_OUTPUT"
+          echo "Selected simulator: $UDID"
+
+      - name: Build
+        working-directory: apple
+        run: |
+          xcodebuild \
+            -project Akashic.xcodeproj \
+            -scheme Akashic \
+            -configuration Debug \
+            -destination "platform=iOS Simulator,id=${{ steps.sim.outputs.udid }}" \
+            CODE_SIGNING_ALLOWED=NO \
+            build
+
+      - name: Test
+        working-directory: apple
+        run: |
+          xcodebuild \
+            -project Akashic.xcodeproj \
+            -scheme Akashic \
+            -destination "platform=iOS Simulator,id=${{ steps.sim.outputs.udid }}" \
+            CODE_SIGNING_ALLOWED=NO \
+            test

@@ -1,0 +1,14 @@
+{
+  "id": "kilimanjaro",
+  "name": "Kilimanjaro",
+  "country": "Tanzania",
+  "flag": "🇹🇿",
+  "distanceKm": 70,
+  "days": 7,
+  "summitElevation": 5895,
+  "summitName": "Uhuru Peak",
+  "elevationSamples": [1800, 2100, 2650, 3050, 3500, 3900, 4600, 4050, 4700, 5895, 4200, 3100, 1800],
+  "distanceText": "70 km",
+  "daysText": "7 days",
+  "summitText": "5,895 m"
+}

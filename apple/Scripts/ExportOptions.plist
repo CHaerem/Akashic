@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- App Store Connect / TestFlight distribution. Used by Scripts/testflight-upload.sh. -->
+	<key>method</key>
+	<string>app-store-connect</string>
+	<key>teamID</key>
+	<string>9LVCB72DT8</string>
+	<key>signingStyle</key>
+	<string>automatic</string>
+	<!-- Symbols let App Store Connect symbolicate crash reports from family testers. -->
+	<key>uploadSymbols</key>
+	<true/>
+	<!-- Keep the binary as built: no App Store bitcode/thinning surprises for a family app. -->
+	<key>stripSwiftSymbols</key>
+	<true/>
+	<key>destination</key>
+	<string>export</string>
+</dict>
+</plist>

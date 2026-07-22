@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!--
+	  CloudKit + Push entitlements for the NSPersistentCloudKitContainer sync layer.
+	  Referenced ONLY by the `Release-CloudKit` build configuration (see project.yml),
+	  so the default Debug / Release simulator builds compile with no team and no signing.
+	  Container id matches Config.cloudKitContainerIdentifier.
+	-->
+	<key>com.apple.developer.icloud-container-identifiers</key>
+	<array>
+		<string>iCloud.no.akashic</string>
+	</array>
+	<key>com.apple.developer.icloud-services</key>
+	<array>
+		<string>CloudKit</string>
+	</array>
+	<key>com.apple.developer.ubiquity-kvstore-identifier</key>
+	<string>$(TeamIdentifierPrefix)$(CFBundleIdentifier)</string>
+	<key>aps-environment</key>
+	<string>development</string>
+	<!--
+	  App Group shared with the AkashicWidgets extension so the widget can read the
+	  WidgetSnapshot JSON the app writes (see AppGroup / WidgetDataStore / README "Widgets &
+	  Spotlight"). Like the CloudKit keys above, this only takes effect in the signed
+	  `Release-CloudKit` build.
+	  TODO(Christopher): to light up real widget data you must ALSO:
+	    1. Enable the "App Groups" capability (group.no.akashic) on BOTH the Akashic app target
+	       and the AkashicWidgets extension in the signing config, and
+	    2. give the widget extension its own entitlements file carrying the same group.
+	-->
+	<key>com.apple.security.application-groups</key>
+	<array>
+		<string>group.no.akashic</string>
+	</array>
+</dict>
+</plist>

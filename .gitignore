@@ -43,3 +43,6 @@ playwright-report/
 coverage/
 viaplay*/
 scripts/.upload-tracking.json
+
+# CloudKit spike local token override
+spikes/cloudkit-js/config.local.js

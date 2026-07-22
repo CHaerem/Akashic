@@ -1,0 +1,12 @@
+# XcodeGen generates the project — never commit it.
+Akashic.xcodeproj/
+
+# Xcode / build artifacts
+build/
+DerivedData/
+*.xcuserstate
+*.xcuserdatad/
+xcuserdata/
+.DS_Store
+
+# Screenshots are kept in Docs/ intentionally; ignore stray captures elsewhere.

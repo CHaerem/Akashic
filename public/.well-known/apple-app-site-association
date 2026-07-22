@@ -1,0 +1,16 @@
+{
+  "applinks": {
+    "details": [
+      {
+        "appIDs": ["9LVCB72DT8.no.akashic.app"],
+        "components": [
+          {
+            "/": "/",
+            "?": { "journey": "?*" },
+            "comment": "Journey deep link: https://akashic.no/?journey=<slug> opens that journey in the Akashic iOS app (globe fly-in). Requires a non-empty journey query value."
+          }
+        ]
+      }
+    ]
+  }
+}

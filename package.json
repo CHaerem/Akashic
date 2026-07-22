@@ -38,7 +38,6 @@
     "mapbox-gl": "^3.16.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
-    "react-router-dom": "^7.9.6",
     "tailwind-merge": "^3.4.0",
     "tailwindcss-animate": "^1.0.7",
     "vite-plugin-pwa": "^1.1.0",
@@ -72,10 +71,14 @@
     "jsdom": "^27.0.1",
     "lint-staged": "^16.2.7",
     "postcss": "^8.5.6",
-    "sharp": "^0.34.5",
+    "sharp": "^0.35.3",
     "tailwindcss": "^4.1.17",
     "typescript": "^5.9.3",
     "vite": "^7.2.4",
     "vitest": "^3.2.4"
+  },
+  "overrides": {
+    "brace-expansion@1": "^1.1.16",
+    "brace-expansion@2": "^2.1.2"
   }
 }

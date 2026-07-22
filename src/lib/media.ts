@@ -3,6 +3,7 @@
  */
 
 import { supabase } from './supabase';
+import { isCloudKitBackend } from './backend';
 
 // Thumbnail settings
 const THUMBNAIL_MAX_SIZE = 400; // Max width/height in pixels
@@ -14,6 +15,8 @@ const MEDIA_BASE_URL = import.meta.env.VITE_MEDIA_URL || 'https://akashic-media.
  * Get the current user's access token for authenticated media requests
  */
 export async function getAccessToken(): Promise<string | null> {
+    // CloudKit asset URLs are pre-authenticated, so there is no bearer token.
+    if (isCloudKitBackend) return null;
     if (!supabase) return null;
 
     const { data: { session } } = await supabase.auth.getSession();
@@ -40,6 +43,13 @@ export async function getAuthenticatedMediaUrl(path: string): Promise<string> {
  * Build a media URL synchronously (for use when token is already known)
  */
 export function buildMediaUrl(path: string, token?: string | null): string {
+    // Absolute URLs (e.g. CloudKit CKAsset download URLs) are already complete
+    // and pre-authenticated — pass them through untouched, ignoring any token.
+    // Safe for Supabase mode too, where paths are always relative.
+    if (/^https?:\/\//i.test(path)) {
+        return path;
+    }
+
     const baseUrl = `${MEDIA_BASE_URL}/${path}`;
 
     if (token) {
@@ -175,6 +185,10 @@ export async function uploadPhoto(
     file: File,
     generateThumbnail = true
 ): Promise<UploadResult & { thumbnailPath?: string }> {
+    if (isCloudKitBackend) {
+        throw new Error('[cloudkit] Photo upload is native-only — use the iOS app');
+    }
+
     const token = await getAccessToken();
 
     if (!token) {
@@ -214,6 +228,10 @@ export async function uploadPhoto(
  * @returns true if successful
  */
 export async function deletePhotoFiles(journeyId: string, photoId: string): Promise<boolean> {
+    if (isCloudKitBackend) {
+        throw new Error('[cloudkit] Photo deletion is native-only — use the iOS app');
+    }
+
     const token = await getAccessToken();
 
     if (!token) {

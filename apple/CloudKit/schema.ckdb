@@ -1,0 +1,123 @@
+DEFINE SCHEMA
+
+    RECORD TYPE Journey (
+        name                 STRING QUERYABLE SEARCHABLE SORTABLE,
+        slug                 STRING QUERYABLE SORTABLE,
+        description          STRING SEARCHABLE,
+        country              STRING QUERYABLE SEARCHABLE,
+        journeyType          STRING QUERYABLE,
+        summitElevation      INT64,
+        totalDistance        DOUBLE,
+        totalDays            INT64,
+        dateStarted          TIMESTAMP SORTABLE,
+        dateEnded            TIMESTAMP,
+        isPublic             INT64 QUERYABLE,
+        preferredBearing     DOUBLE,
+        preferredPitch       DOUBLE,
+        defaultZoom          DOUBLE,
+        centerLocation       LOCATION QUERYABLE,
+        routeJSON            ASSET,
+        statsJSON            STRING,
+        heroImage            ASSET,
+        heroThumb            ASSET,
+        "___recordID"        REFERENCE QUERYABLE,
+        GRANT WRITE TO "_creator",
+        GRANT CREATE TO "_icloud",
+        GRANT READ TO "_world"
+    );
+
+    RECORD TYPE Waypoint (
+        journeyRef           REFERENCE QUERYABLE,
+        name                 STRING QUERYABLE SEARCHABLE,
+        waypointType         STRING QUERYABLE,
+        dayNumber            INT64 SORTABLE,
+        coordinates          LOCATION QUERYABLE,
+        elevation            INT64,
+        description          STRING,
+        highlights           LIST<STRING>,
+        arrivalTime          STRING,
+        departureTime        STRING,
+        dateVisited          TIMESTAMP,
+        sortOrder            INT64 SORTABLE,
+        routeDistanceKm      DOUBLE,
+        routePointIndex      INT64,
+        weatherJSON          STRING,
+        funFactsJSON         STRING,
+        pointsOfInterestJSON STRING,
+        historicalSitesJSON  STRING,
+        "___recordID"        REFERENCE QUERYABLE,
+        GRANT WRITE TO "_creator",
+        GRANT CREATE TO "_icloud",
+        GRANT READ TO "_world"
+    );
+
+    RECORD TYPE Photo (
+        journeyRef           REFERENCE QUERYABLE,
+        waypointRef          REFERENCE QUERYABLE,
+        original             ASSET,
+        thumb                ASSET,
+        caption              STRING SEARCHABLE,
+        takenAt              TIMESTAMP QUERYABLE SORTABLE,
+        coordinates          LOCATION QUERYABLE,
+        isHero               INT64 QUERYABLE,
+        sortOrder            INT64 SORTABLE,
+        rotation             INT64,
+        mediaType            STRING QUERYABLE,
+        duration             DOUBLE,
+        locationSource       STRING,
+        "___recordID"        REFERENCE QUERYABLE,
+        GRANT WRITE TO "_creator",
+        GRANT CREATE TO "_icloud",
+        GRANT READ TO "_world"
+    );
+
+    RECORD TYPE DayComment (
+        journeyRef           REFERENCE QUERYABLE,
+        waypointRef          REFERENCE QUERYABLE,
+        content              STRING,
+        createdAt            TIMESTAMP QUERYABLE SORTABLE,
+        modifiedAt           TIMESTAMP,
+        authorDisplayName    STRING,
+        "___recordID"        REFERENCE QUERYABLE,
+        GRANT WRITE TO "_creator",
+        GRANT CREATE TO "_icloud",
+        GRANT READ TO "_world"
+    );
+
+    RECORD TYPE PublicJourney (
+        slug                 STRING QUERYABLE SORTABLE,
+        name                 STRING QUERYABLE SEARCHABLE SORTABLE,
+        description          STRING SEARCHABLE,
+        country              STRING QUERYABLE,
+        journeyType          STRING,
+        summitElevation      INT64,
+        totalDistance        DOUBLE,
+        totalDays            INT64,
+        dateStarted          TIMESTAMP SORTABLE,
+        dateEnded            TIMESTAMP,
+        centerLocation       LOCATION,
+        preferredBearing     DOUBLE,
+        preferredPitch       DOUBLE,
+        defaultZoom          DOUBLE,
+        routeJSON            ASSET,
+        statsJSON            STRING,
+        heroThumb            ASSET,
+        "___recordID"        REFERENCE QUERYABLE,
+        GRANT WRITE TO "_creator",
+        GRANT CREATE TO "_icloud",
+        GRANT READ TO "_world"
+    );
+
+    RECORD TYPE PublicPhoto (
+        journeySlug          STRING QUERYABLE SORTABLE,
+        thumb                ASSET,
+        caption              STRING,
+        takenAt              TIMESTAMP SORTABLE,
+        coordinates          LOCATION,
+        dayNumber            INT64 QUERYABLE SORTABLE,
+        sortOrder            INT64 SORTABLE,
+        "___recordID"        REFERENCE QUERYABLE,
+        GRANT WRITE TO "_creator",
+        GRANT CREATE TO "_icloud",
+        GRANT READ TO "_world"
+    );

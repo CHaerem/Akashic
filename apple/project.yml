@@ -1,0 +1,188 @@
+name: Akashic
+options:
+  bundleIdPrefix: no.akashic
+  deploymentTarget:
+    iOS: "17.0"
+  createIntermediateGroups: true
+  developmentLanguage: en
+  groupSortPosition: top
+
+# Build configurations.
+#   Debug / Release  -> no code signing, no team required (default simulator builds + CI).
+#   Debug-CloudKit   -> debug build WITH the CloudKit + Push entitlements, for running the
+#                       CKSyncEngine sync layer on a Simulator signed into iCloud (simulator
+#                       builds honor entitlements without provisioning). Launch it with
+#                       AKASHIC_CLOUDKIT=1 (see README "Activating CloudKit sync").
+#   Release-CloudKit -> release build with the same entitlements (device/TestFlight).
+#                       Both *-CloudKit configs need a DEVELOPMENT_TEAM (set below or via CLI).
+configs:
+  Debug: debug
+  Release: release
+  Debug-CloudKit: debug
+  Release-CloudKit: release
+
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    IPHONEOS_DEPLOYMENT_TARGET: "17.0"
+    # Simulator builds must succeed without a signing team on this machine.
+    CODE_SIGNING_ALLOWED: "NO"
+    CODE_SIGNING_REQUIRED: "NO"
+    CODE_SIGN_STYLE: Manual
+    CODE_SIGN_IDENTITY: ""
+    DEVELOPMENT_TEAM: ""
+    ENABLE_USER_SCRIPT_SANDBOXING: "YES"
+    SWIFT_STRICT_CONCURRENCY: minimal
+
+targets:
+  Akashic:
+    type: application
+    platform: iOS
+    deploymentTarget: "17.0"
+    sources:
+      - path: Akashic
+      # Fixture JSON recovered from git history — bundled so the app runs on
+      # fixtures by default (before CloudKit is wired up). Owned by another agent;
+      # referenced read-only here.
+      - path: Fixtures/recovered/kilimanjaro.json
+        buildPhase: resources
+      - path: Fixtures/recovered/mountKenya.json
+        buildPhase: resources
+      - path: Fixtures/recovered/incaTrail.json
+        buildPhase: resources
+    dependencies:
+      # WidgetKit extension, embedded in the app bundle. Builds unsigned for the simulator
+      # (inherits the project's CODE_SIGNING_ALLOWED=NO base), so CI stays team-free.
+      - target: AkashicWidgets
+        embed: true
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: no.akashic.app
+        PRODUCT_NAME: Akashic
+        MARKETING_VERSION: "0.1.0"
+        CURRENT_PROJECT_VERSION: "1"
+        TARGETED_DEVICE_FAMILY: "1,2"
+        GENERATE_INFOPLIST_FILE: "YES"
+        INFOPLIST_KEY_CFBundleDisplayName: Akashic
+        INFOPLIST_KEY_UIApplicationSceneManifest_Generation: "YES"
+        INFOPLIST_KEY_UILaunchScreen_Generation: "YES"
+        INFOPLIST_KEY_UISupportedInterfaceOrientations: "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
+        INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad: "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        SWIFT_EMIT_LOC_STRINGS: "YES"
+      configs:
+        # Opt-in CloudKit builds. Not used by the default `build`/`test` invocations,
+        # so the machine needs no signing team for CI. To run/ship CloudKit sync:
+        #   1. Set DEVELOPMENT_TEAM below (or pass DEVELOPMENT_TEAM=XXXX on the CLI).
+        #   2. Build `Debug-CloudKit` (simulator dev) or `Release-CloudKit` (device).
+        #   3. Sign the Simulator into iCloud, then launch with AKASHIC_CLOUDKIT=1.
+        # SWIFT_ACTIVE_COMPILATION_CONDITIONS gates every CKContainer/CKSyncEngine touchpoint
+        # behind `#if AKASHIC_CLOUDKIT_BUILD`. CRITICAL: instantiating a CKContainer in a binary
+        # WITHOUT the icloud-services entitlement TRAPS (SIGTRAP) — so the runtime accountStatus
+        # gate cannot be the first line of defense; the entitlement itself is. Only these signed
+        # configs define the flag, so the default Debug/Release builds compile the sync layer but
+        # never construct a CKContainer.
+        Debug-CloudKit:
+          CODE_SIGN_ENTITLEMENTS: Akashic/Support/Akashic.entitlements
+          CODE_SIGNING_ALLOWED: "YES"
+          CODE_SIGNING_REQUIRED: "YES"
+          CODE_SIGN_STYLE: Automatic
+          CODE_SIGN_IDENTITY: "Apple Development"
+          DEVELOPMENT_TEAM: 9LVCB72DT8
+          SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) AKASHIC_CLOUDKIT_BUILD"
+        Release-CloudKit:
+          CODE_SIGN_ENTITLEMENTS: Akashic/Support/Akashic.entitlements
+          CODE_SIGNING_ALLOWED: "YES"
+          CODE_SIGNING_REQUIRED: "YES"
+          CODE_SIGN_STYLE: Automatic
+          CODE_SIGN_IDENTITY: "Apple Development"
+          DEVELOPMENT_TEAM: 9LVCB72DT8
+          SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) AKASHIC_CLOUDKIT_BUILD"
+
+  AkashicTests:
+    type: bundle.unit-test
+    platform: iOS
+    deploymentTarget: "17.0"
+    sources:
+      - path: AkashicTests
+      # Bundle the fixtures into the test bundle too, so unit tests can decode
+      # them without relying on the host app bundle layout.
+      - path: Fixtures/recovered/kilimanjaro.json
+        buildPhase: resources
+      - path: Fixtures/recovered/mountKenya.json
+        buildPhase: resources
+      - path: Fixtures/recovered/incaTrail.json
+        buildPhase: resources
+    dependencies:
+      - target: Akashic
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: no.akashic.app.tests
+        GENERATE_INFOPLIST_FILE: "YES"
+
+  # WidgetKit extension. Data reaches it via a WidgetSnapshot JSON in the App-Group container
+  # (see AppGroup / WidgetDataStore); with no App Group configured (unsigned simulator build)
+  # the widget renders its bundled placeholder. The shared snapshot/view/data files live in the
+  # app tree and are referenced explicitly here so the widget compiles JUST those (never the
+  # whole app / Core Data / domain layer). Inherits the project's unsigned-simulator base.
+  AkashicWidgets:
+    type: app-extension
+    platform: iOS
+    deploymentTarget: "17.0"
+    sources:
+      - path: AkashicWidgets
+      # Shared (App-Group-free / domain-free) files compiled into both targets:
+      - path: Akashic/App/AppGroup.swift
+      - path: Akashic/Services/WidgetSnapshot.swift
+      - path: Akashic/Services/WidgetDataStore.swift
+      - path: Akashic/Services/JourneyStatsWidgetView.swift
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: no.akashic.app.widgets
+        PRODUCT_NAME: AkashicWidgets
+        MARKETING_VERSION: "0.1.0"
+        CURRENT_PROJECT_VERSION: "1"
+        TARGETED_DEVICE_FAMILY: "1,2"
+        INFOPLIST_FILE: AkashicWidgets/Info.plist
+        GENERATE_INFOPLIST_FILE: "NO"
+        # Extensions are packaged inside the host app, never installed on their own.
+        SKIP_INSTALL: "YES"
+        SWIFT_EMIT_LOC_STRINGS: "YES"
+      configs:
+        # Signed builds: the widget carries the shared App Group so it can read the
+        # WidgetSnapshot the app writes (mirrors the app target's *-CloudKit configs).
+        Debug-CloudKit:
+          CODE_SIGN_ENTITLEMENTS: AkashicWidgets/AkashicWidgets.entitlements
+          CODE_SIGNING_ALLOWED: "YES"
+          CODE_SIGNING_REQUIRED: "YES"
+          CODE_SIGN_STYLE: Automatic
+          CODE_SIGN_IDENTITY: "Apple Development"
+          DEVELOPMENT_TEAM: 9LVCB72DT8
+        Release-CloudKit:
+          CODE_SIGN_ENTITLEMENTS: AkashicWidgets/AkashicWidgets.entitlements
+          CODE_SIGNING_ALLOWED: "YES"
+          CODE_SIGNING_REQUIRED: "YES"
+          CODE_SIGN_STYLE: Automatic
+          CODE_SIGN_IDENTITY: "Apple Development"
+          DEVELOPMENT_TEAM: 9LVCB72DT8
+
+schemes:
+  Akashic:
+    build:
+      targets:
+        Akashic: all
+        AkashicTests: [test]
+    run:
+      config: Debug
+    test:
+      config: Debug
+      gatherCoverageData: false
+      targets:
+        - AkashicTests
+    profile:
+      config: Release
+    analyze:
+      config: Debug
+    archive:
+      config: Release
