@@ -14,14 +14,30 @@ import CoreData
 /// reliably filters that save.
 @MainActor
 final class SyncScheduler {
-    private weak var engine: AkashicSyncEngine?
+    /// One engine per database scope (private + shared). Every change is offered to both;
+    /// each ignores the journeys the other owns (`AkashicSyncEngine.handles(journeyID:)`), so
+    /// an edit to a journey shared with us routes to the shared database and ours do not.
+    private let engines: [WeakEngine]
     private let isApplyingRemoteChanges: () -> Bool
     private var observer: NSObjectProtocol?
 
+    /// Holder so the scheduler keeps the same non-owning reference semantics it had with a
+    /// single `weak var` — `PersistenceController` owns the engines.
+    private final class WeakEngine {
+        weak var engine: AkashicSyncEngine?
+        init(_ engine: AkashicSyncEngine) { self.engine = engine }
+    }
+
+    convenience init(context: NSManagedObjectContext,
+                     engine: AkashicSyncEngine,
+                     isApplyingRemoteChanges: @escaping () -> Bool) {
+        self.init(context: context, engines: [engine], isApplyingRemoteChanges: isApplyingRemoteChanges)
+    }
+
     init(context: NSManagedObjectContext,
-         engine: AkashicSyncEngine,
+         engines: [AkashicSyncEngine],
          isApplyingRemoteChanges: @escaping () -> Bool) {
-        self.engine = engine
+        self.engines = engines.map(WeakEngine.init)
         self.isApplyingRemoteChanges = isApplyingRemoteChanges
         observer = NotificationCenter.default.addObserver(
             forName: .NSManagedObjectContextDidSave,
@@ -50,7 +66,7 @@ final class SyncScheduler {
             if let change = Self.localChange(for: object, kind: .delete) { changes.append(change) }
         }
         guard !changes.isEmpty else { return }
-        engine?.localStoreDidChange(changes)
+        for holder in engines { holder.engine?.localStoreDidChange(changes) }
     }
 
     /// Map a managed object to a `LocalChange`.

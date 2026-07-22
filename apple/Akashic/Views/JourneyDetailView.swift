@@ -9,6 +9,7 @@ struct JourneyDetailView: View {
     @State private var selectedDayIndex: Int?
     @State private var showJourneyEdit = false
     @State private var showImport = false
+    @State private var showSharing = false
     @State private var editingCamp: Camp?
 
     /// The freshest copy of this journey from the store, so contextual edits reflect
@@ -54,6 +55,9 @@ struct JourneyDetailView: View {
                     Button { showImport = true } label: {
                         Label("Add photos", systemImage: "photo.badge.plus")
                     }
+                    Button { showSharing = true } label: {
+                        Label("Sharing", systemImage: "person.2")
+                    }
                 } label: {
                     Image(systemName: "ellipsis.circle")
                 }
@@ -82,6 +86,11 @@ struct JourneyDetailView: View {
         }
         .sheet(item: $editingCamp) { camp in
             WaypointEditSheet(journeyID: live.id, camp: camp).environmentObject(store)
+        }
+        .sheet(isPresented: $showSharing) {
+            JourneyShareView(journeyID: live.id,
+                             journeyTitle: live.name,
+                             service: PersistenceController.shared.sharingService)
         }
     }
 

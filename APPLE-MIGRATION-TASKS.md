@@ -56,7 +56,7 @@ graph TD
         T25["T2.5 🤖 Debug Import screen (real data)"]
         T26["T2.6 ✅ Real map experience (pending D5)"]
         T27["T2.7 ✅ Photo upload pipeline (local)"]
-        T28["T2.8 🤖 CKShare invitations UI"]
+        T28["T2.8 ✅ CKShare invitations UI"]
         T29["T2.9 ✅ App Intents layer"]
         T210["T2.10 🤖 Export function (D10)"]
         T211["T2.11 🧑 TestFlight + family onboard"]
@@ -175,8 +175,10 @@ The full **globe → fly-in → day-navigation** choreography now lives in the m
 ### T2.7 ✅ Photo upload pipeline (local half) + editing UI — done night 2
 PhotosPicker → EXIF (taken_at/GPS/orientation/make/model via ImageIO) → 400 px JPEG q0.8 thumbnail → local store under the R2 key scheme; HEIC kept as original with JPEG thumb; video import with AVAsset poster-frame + duration. Plus contextual editing: photo caption/rotation/hero/day-assignment/delete, waypoint and journey edit sheets. 20 new tests. **Remaining CloudKit half:** the CKAsset upload target activates with D4/T2.3 — the store write methods are the documented seam.
 
-### T2.8 🤖 CKShare invitations + participant management
-`ShareLink`/`UICloudSharingController` on the journey zone share; role mapping owner/editor/viewer; participant list UI (replaces `memberAPI`).
+### T2.8 ✅ CKShare invitations + participant management
+Zone-wide `CKShare` per journey (`apple/Akashic/Sync/JourneySharing.swift`, `CloudKitJourneySharing.swift`), a **second `CKSyncEngine` on the shared database** for journeys others share with us, `UICloudSharingController` invitations + participant list with owner/editor/viewer roles (`Views/Sharing/JourneyShareView.swift`), and share acceptance via the app delegate. Routing hangs off the new `CDJourney.zoneOwnerName` — which required a real Core Data **model version 2** (see `apple/Docs/sharing.md`).
+
+**Unit-tested, not proven:** sending/accepting an invitation, a participant reading or writing, and revocation all need a second iCloud account. First thing to test once the family is on TestFlight.
 
 ### T2.9 ✅ App Intents (D8) — done tonight
 The 5 MCP tools mirrored 1:1 as App Intents against the local store (`apple/Akashic/Intents/`): exact wire shapes/clamps, ported `ExtendedStats` math, `JourneyEntity` autocomplete, Siri/Shortcuts phrases (EN + NO), 21 new unit tests. Works on fixtures now; binds to CloudKit automatically via `PersistenceController` when T2.3 lands (photos intent lights up after T2.5 import).

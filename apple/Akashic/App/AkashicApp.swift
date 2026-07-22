@@ -1,8 +1,25 @@
 import SwiftUI
 import CoreSpotlight
+import CloudKit
+
+/// Receives CloudKit share invitations (T2.8).
+///
+/// When someone taps an Akashic share link, iOS launches the app and hands over the share
+/// metadata here — there is no SwiftUI equivalent, so an app-delegate adaptor is the only
+/// route. UIKit calls the scene variant first when a scene delegate implements it; SwiftUI's
+/// own scene delegate does not, so this app-level method is the one that fires.
+final class AkashicAppDelegate: NSObject, UIApplicationDelegate {
+    func application(_ application: UIApplication,
+                     userDidAcceptCloudKitShareWith metadata: CKShare.Metadata) {
+        Task { @MainActor in
+            await PersistenceController.shared.acceptShare(metadata)
+        }
+    }
+}
 
 @main
 struct AkashicApp: App {
+    @UIApplicationDelegateAdaptor(AkashicAppDelegate.self) private var appDelegate
     @StateObject private var store = JourneyStore()
 
     init() {

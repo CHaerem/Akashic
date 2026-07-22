@@ -91,6 +91,14 @@ protocol SyncLocalStore: AnyObject {
     /// Every journey id currently in the local store (for the initial upload + zone creation).
     func allLocalJourneyIDs() -> [String]
 
+    /// The CloudKit zone owner for a journey, or nil when we own it ourselves.
+    ///
+    /// This is what routes a journey to the right database (T2.8): ours live in the private
+    /// database under `CKCurrentUserDefaultName`, a journey shared with us lives in the shared
+    /// database under the *sharing owner's* record name, and its zone id must carry that name
+    /// or every read and write misses.
+    func zoneOwnerName(forJourneyID journeyID: String) -> String?
+
     /// All record identities for a journey in dependency order (journey root → waypoints →
     /// photos → comments) — used to enqueue a journey's initial upload.
     func recordIdentities(forJourneyID journeyID: String) -> [LocalChange]

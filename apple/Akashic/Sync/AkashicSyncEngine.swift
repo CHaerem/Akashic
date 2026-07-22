@@ -39,8 +39,20 @@ final class AkashicSyncEngine: NSObject, CKSyncEngineDelegate {
     let status: SyncStatus
     private let accountProvider: AccountStatusProviding
     private let containerIdentifier: String
-    private let ownerName: String
     private let defaults: UserDefaults
+
+    /// Which CloudKit database this engine drives.
+    ///
+    /// `.private` — journeys we own; `.shared` — journeys someone else shared with us
+    /// (T2.8). Two engines run side by side because a `CKSyncEngine` is bound to exactly one
+    /// database, and the two behave differently in three ways that matter:
+    ///   * only the private engine performs the initial upload (a participant must never try
+    ///     to push the owner's archive back up as if it were their own),
+    ///   * only the private engine recreates a vanished zone — in the shared database a zone
+    ///     disappearing means *the share was revoked*, and recreating it is both impossible
+    ///     and wrong,
+    ///   * each keeps its own state file and only handles journeys on its side of the fence.
+    let databaseScope: CKDatabase.Scope
 
     /// The underlying engine seam. `nil` until `activate()` builds it (production) or the test
     /// injects one. Only used to enqueue/flush once `isRunning` is true.
@@ -60,6 +72,14 @@ final class AkashicSyncEngine: NSObject, CKSyncEngineDelegate {
 
     /// Test/observation hook fired after fetched server changes are applied locally.
     var onRemoteChangesApplied: (() -> Void)?
+
+    /// Handle on the activation pull. Held so a test can await it instead of racing it — the
+    /// pull is deliberately detached (see `fetchOnActivation`), so without this a test that
+    /// checked "did activation fetch?" passed or failed on timing alone.
+    private(set) var activationFetch: Task<Void, Never>?
+
+    /// Await the activation pull, if one is in flight.
+    func awaitActivationFetch() async { await activationFetch?.value }
 
     /// OFF by design: a server-side zone deletion never destroys local data (see
     /// `handleZoneDeletions`). Nothing in the app sets this; it exists so that if honoring
@@ -81,17 +101,37 @@ final class AkashicSyncEngine: NSObject, CKSyncEngineDelegate {
          status: SyncStatus,
          accountProvider: AccountStatusProviding,
          containerIdentifier: String = Config.cloudKitContainerIdentifier,
-         ownerName: String = CKCurrentUserDefaultName,
+         databaseScope: CKDatabase.Scope = .private,
          defaults: UserDefaults = .standard,
          engine: SyncEngineProtocol? = nil) {
         self.store = store
         self.status = status
         self.accountProvider = accountProvider
         self.containerIdentifier = containerIdentifier
-        self.ownerName = ownerName
+        self.databaseScope = databaseScope
         self.defaults = defaults
         self.engine = engine
         super.init()
+    }
+
+    // MARK: - Zone routing (who owns which journey)
+
+    /// The zone owner for a journey: `CKCurrentUserDefaultName` for our own, the sharing
+    /// owner's record name for one shared with us. Journeys predating T2.8 have no stored
+    /// owner and are ours by definition.
+    private func ownerName(forJourneyID journeyID: String) -> String {
+        store.zoneOwnerName(forJourneyID: journeyID) ?? CKCurrentUserDefaultName
+    }
+
+    private func zoneID(forJourneyID journeyID: String) -> CKRecordZone.ID {
+        RecordCoder.zoneID(forJourneyID: journeyID, ownerName: ownerName(forJourneyID: journeyID))
+    }
+
+    /// Whether this engine's database is the one holding the journey. Every journey belongs to
+    /// exactly one of the two engines, so this is what keeps them from fighting over it.
+    func handles(journeyID: String) -> Bool {
+        let isMine = ownerName(forJourneyID: journeyID) == CKCurrentUserDefaultName
+        return databaseScope == .shared ? !isMine : isMine
     }
 
     // MARK: - Activation (account-gated)
@@ -143,7 +183,7 @@ final class AkashicSyncEngine: NSObject, CKSyncEngineDelegate {
         // clean install sat at 0 journeys while the container held 1559 records.
         //
         // `Task.detached`, NEVER `Task {}` — see `fetchOnActivation`.
-        Task.detached { [weak self] in await self?.fetchOnActivation() }
+        activationFetch = Task.detached { [weak self] in await self?.fetchOnActivation() }
     }
 
     /// The explicit activation pull, isolated in its own method so every caller reaches it the
@@ -177,9 +217,12 @@ final class AkashicSyncEngine: NSObject, CKSyncEngineDelegate {
         // already no-ops in non-CloudKit builds, and the account provider returns a sentinel.)
         #if AKASHIC_CLOUDKIT_BUILD
         let container = CKContainer(identifier: containerIdentifier)
+        let database = databaseScope == .shared
+            ? container.sharedCloudDatabase
+            : container.privateCloudDatabase
         var configuration = CKSyncEngine.Configuration(
-            database: container.privateCloudDatabase,
-            stateSerialization: Self.loadState(),
+            database: database,
+            stateSerialization: Self.loadState(scope: databaseScope),
             delegate: self)
         configuration.automaticallySync = true
         return CKSyncEngineAdapter(CKSyncEngine(configuration))
@@ -192,13 +235,17 @@ final class AkashicSyncEngine: NSObject, CKSyncEngineDelegate {
     /// relaunch — where `CKSyncEngine` restores its own pending state from disk — does not
     /// re-enqueue everything.
     private func enqueueInitialUploadIfNeeded() {
+        // Private database only. A participant's local copy of a shared journey arrived *from*
+        // the owner; pushing it back up as a fresh upload would be a no-op at best and, on a
+        // read-only share, a permanent stream of rejected writes.
+        guard databaseScope == .private else { return }
         guard !defaults.bool(forKey: Self.didInitialUploadKey) else { return }
         guard let engine else { return }
-        for journeyID in store.allLocalJourneyIDs() {
-            let zoneID = RecordCoder.zoneID(forJourneyID: journeyID, ownerName: ownerName)
+        for journeyID in store.allLocalJourneyIDs() where handles(journeyID: journeyID) {
+            let zoneID = zoneID(forJourneyID: journeyID)
             engine.add(pendingDatabaseChanges: [.saveZone(CKRecordZone(zoneID: zoneID))])
             let saves = store.recordIdentities(forJourneyID: journeyID)
-                .map { CKSyncEngine.PendingRecordZoneChange.saveRecord($0.recordID(ownerName: ownerName)) }
+                .map { CKSyncEngine.PendingRecordZoneChange.saveRecord($0.recordID(ownerName: zoneID.ownerName)) }
             if !saves.isEmpty { engine.add(pendingRecordZoneChanges: saves) }
         }
         // The flag is committed only once CKSyncEngine reports it persisted this pending state
@@ -215,9 +262,11 @@ final class AkashicSyncEngine: NSObject, CKSyncEngineDelegate {
         guard isRunning, let engine, !changes.isEmpty else { return }
         var databaseChanges: [CKSyncEngine.PendingDatabaseChange] = []
         var recordChanges: [CKSyncEngine.PendingRecordZoneChange] = []
-        for change in changes {
-            let recordID = change.recordID(ownerName: ownerName)
-            if change.isJourneyRoot, change.kind == .save {
+        for change in changes where handles(journeyID: change.journeyID) {
+            let recordID = change.recordID(ownerName: ownerName(forJourneyID: change.journeyID))
+            // Only the owner creates zones. In the shared database the zone already exists and
+            // is not ours to save; CloudKit rejects the attempt.
+            if change.isJourneyRoot, change.kind == .save, databaseScope == .private {
                 databaseChanges.append(.saveZone(CKRecordZone(zoneID: recordID.zoneID)))
             }
             switch change.kind {
@@ -238,7 +287,7 @@ final class AkashicSyncEngine: NSObject, CKSyncEngineDelegate {
             // Only now — once the engine's pending changes are durable — is it safe to record
             // that the initial upload happened. Committing the flag at enqueue time meant a
             // kill in between left the archive permanently un-uploaded with nothing retrying.
-            if Self.persistState(update.stateSerialization), initialUploadEnqueued {
+            if Self.persistState(update.stateSerialization, scope: databaseScope), initialUploadEnqueued {
                 defaults.set(true, forKey: Self.didInitialUploadKey)
                 initialUploadEnqueued = false
             }
@@ -333,14 +382,23 @@ final class AkashicSyncEngine: NSObject, CKSyncEngineDelegate {
             return
         }
 
+        // In the SHARED database a vanished zone means the owner stopped sharing the journey
+        // with us (or removed us as a participant). Keep the local copy — it is the family
+        // archive and losing access must not erase it — but do not try to re-create the zone:
+        // it is not ours, the write would be rejected, and CKSyncEngine would retry forever.
+        guard databaseScope == .private else {
+            SyncLog.log("handleZoneDeletions: shared scope, share revoked for \(journeyIDs) — keeping local copy")
+            return
+        }
+
         guard let engine else { return }
         for journeyID in journeyIDs {
             let identities = store.recordIdentities(forJourneyID: journeyID)
             guard !identities.isEmpty else { continue }   // nothing local to protect / re-upload
-            let zoneID = RecordCoder.zoneID(forJourneyID: journeyID, ownerName: ownerName)
+            let zoneID = zoneID(forJourneyID: journeyID)
             engine.add(pendingDatabaseChanges: [.saveZone(CKRecordZone(zoneID: zoneID))])
             engine.add(pendingRecordZoneChanges: identities.map {
-                .saveRecord($0.recordID(ownerName: ownerName))
+                .saveRecord($0.recordID(ownerName: zoneID.ownerName))
             })
         }
     }
@@ -514,8 +572,9 @@ final class AkashicSyncEngine: NSObject, CKSyncEngineDelegate {
     /// Returns true only when the serialization actually reached disk (the caller uses that to
     /// decide whether the initial-upload flag may be committed).
     @discardableResult
-    static func persistState(_ serialization: CKSyncEngine.State.Serialization) -> Bool {
-        guard let url = stateURL else { return false }
+    static func persistState(_ serialization: CKSyncEngine.State.Serialization,
+                             scope: CKDatabase.Scope = .private) -> Bool {
+        guard let url = stateURL(scope: scope) else { return false }
         do {
             let data = try JSONEncoder().encode(serialization)
             try data.write(to: url, options: .atomic)
@@ -526,23 +585,34 @@ final class AkashicSyncEngine: NSObject, CKSyncEngineDelegate {
         }
     }
 
-    /// Drop the persisted engine state (used when switching accounts).
+    /// Drop the persisted engine state (used when switching accounts). Clears **both** scopes:
+    /// a different account's shared-database state is just as meaningless as its private one.
     static func discardState() {
-        guard let url = stateURL else { return }
-        try? FileManager.default.removeItem(at: url)
+        for scope in [CKDatabase.Scope.private, .shared] {
+            guard let url = stateURL(scope: scope) else { continue }
+            try? FileManager.default.removeItem(at: url)
+        }
     }
 
-    static func loadState() -> CKSyncEngine.State.Serialization? {
-        guard let url = stateURL, let data = try? Data(contentsOf: url) else { return nil }
+    static func loadState(scope: CKDatabase.Scope = .private) -> CKSyncEngine.State.Serialization? {
+        guard let url = stateURL(scope: scope), let data = try? Data(contentsOf: url) else { return nil }
         return try? JSONDecoder().decode(CKSyncEngine.State.Serialization.self, from: data)
     }
 
-    /// `<Application Support>/Akashic/cksyncengine-state.json`.
-    static var stateURL: URL? {
+    /// `<Application Support>/Akashic/cksyncengine-state[-shared].json`.
+    ///
+    /// One file per database scope. The two engines hold entirely different change tokens and
+    /// pending-change sets; sharing a file would have them overwrite each other's state on every
+    /// update, and a restored engine would resume from the other database's token.
+    ///
+    /// The private scope keeps the original, un-suffixed filename so existing installs restore
+    /// their state instead of silently re-fetching the whole archive.
+    static func stateURL(scope: CKDatabase.Scope = .private) -> URL? {
         let fm = FileManager.default
         guard let base = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else { return nil }
         let dir = base.appendingPathComponent("Akashic", isDirectory: true)
         try? fm.createDirectory(at: dir, withIntermediateDirectories: true)
-        return dir.appendingPathComponent("cksyncengine-state.json")
+        let name = scope == .shared ? "cksyncengine-state-shared.json" : "cksyncengine-state.json"
+        return dir.appendingPathComponent(name)
     }
 }

@@ -25,8 +25,10 @@ final class PersistenceController {
 
     /// Observable sync status for the UI. Always present but `.disabled` outside `.cloudKit`.
     let syncStatus = SyncStatus()
-    /// The sync coordinator; nil unless `.cloudKit`.
+    /// The sync coordinator for our own journeys (private database); nil unless `.cloudKit`.
     var syncCoordinator: AkashicSyncEngine?
+    /// The coordinator for journeys shared with us (shared database, T2.8); nil unless `.cloudKit`.
+    var sharedSyncCoordinator: AkashicSyncEngine?
     /// Observes local Core Data saves and feeds them to the engine; nil unless `.cloudKit`.
     var syncScheduler: SyncScheduler?
     /// Set by the engine while applying fetched server records, so the scheduler ignores the

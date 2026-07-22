@@ -20,19 +20,65 @@ extension PersistenceController: SyncLocalStore {
         // CKContainer would TRAP, so the `.cloudKit` store simply runs locally and the status
         // row explains why — even if the user selected `.cloudKit` in Settings.
         #if AKASHIC_CLOUDKIT_BUILD
+        let accountProvider = CloudKitAccountStatusProvider(
+            containerIdentifier: Config.cloudKitContainerIdentifier)
         let coordinator = AkashicSyncEngine(
             store: self,
             status: syncStatus,
-            accountProvider: CloudKitAccountStatusProvider(
-                containerIdentifier: Config.cloudKitContainerIdentifier))
+            accountProvider: accountProvider,
+            databaseScope: .private)
+        // Second engine for journeys others shared with us (T2.8). A CKSyncEngine binds to one
+        // database, so participation needs its own — with its own state file and change tokens.
+        // It shares `syncStatus`: from the family's point of view there is one "is it syncing?"
+        // question, and two rows would only invite the wrong answer to be read.
+        let sharedCoordinator = AkashicSyncEngine(
+            store: self,
+            status: syncStatus,
+            accountProvider: accountProvider,
+            databaseScope: .shared)
         syncCoordinator = coordinator
+        sharedSyncCoordinator = sharedCoordinator
         syncScheduler = SyncScheduler(
             context: viewContext,
-            engine: coordinator,
+            engines: [coordinator, sharedCoordinator],
             isApplyingRemoteChanges: { [weak self] in self?.syncIsApplyingRemoteChanges ?? false })
-        Task { await coordinator.activate() }
+        Task {
+            await coordinator.activate()
+            await sharedCoordinator.activate()
+        }
         #else
         syncStatus.set(.notEntitled)
+        #endif
+    }
+
+    // MARK: Sharing (T2.8)
+
+    /// Sharing service for the UI, wired to this store's ownership data so a journey shared
+    /// *with* us is looked up in the shared database under its real owner.
+    @MainActor
+    var sharingService: JourneySharingService {
+        CloudKitJourneySharing(zoneOwnerProvider: { [weak self] journeyID in
+            self?.zoneOwnerName(forJourneyID: journeyID)
+        })
+    }
+
+    /// Accept an invitation and pull the newly shared journey down.
+    ///
+    /// Acceptance only grants access — it does not deliver any data. Without the explicit fetch
+    /// the journey would not appear until the next silent push, which the Simulator never gets
+    /// at all (the same trap that hid the whole archive in T2.4).
+    @MainActor
+    func acceptShare(_ metadata: CKShare.Metadata) async {
+        #if AKASHIC_CLOUDKIT_BUILD
+        do {
+            let container = CKContainer(identifier: Config.cloudKitContainerIdentifier)
+            _ = try await container.accept(metadata)
+            SyncLog.log("acceptShare: accepted \(metadata.share.recordID.recordName)")
+            await sharedSyncCoordinator?.fetchOnActivation()
+        } catch {
+            SyncLog.error("acceptShare: FAILED \(error)")
+            syncStatus.set(.error("Could not open the shared journey: \(error.localizedDescription)"))
+        }
         #endif
     }
 
@@ -41,6 +87,10 @@ extension PersistenceController: SyncLocalStore {
     func allLocalJourneyIDs() -> [String] {
         let request = NSFetchRequest<CDJourney>(entityName: "CDJourney")
         return ((try? viewContext.fetch(request)) ?? []).compactMap { $0.id }
+    }
+
+    func zoneOwnerName(forJourneyID journeyID: String) -> String? {
+        syncFetchJourney(journeyID)?.zoneOwnerName
     }
 
     func recordIdentities(forJourneyID journeyID: String) -> [LocalChange] {
@@ -120,7 +170,9 @@ extension PersistenceController: SyncLocalStore {
         case RecordCoder.RecordType.journey:
             if let journey = RecordCoder.journey(from: record) {
                 // route: nil means "present but unreadable" -> keep the local route.
-                applyJourneyScalars(journey, route: RecordCoder.route(from: record))
+                applyJourneyScalars(journey,
+                                    route: RecordCoder.route(from: record),
+                                    zoneOwnerName: record.recordID.zoneID.ownerName)
             }
         case RecordCoder.RecordType.waypoint:
             if let camp = RecordCoder.waypoint(from: record) {
@@ -153,9 +205,15 @@ extension PersistenceController: SyncLocalStore {
 
     /// `route` is the decode result of `RecordCoder.route(from:)`: nil means the record carried
     /// a `routeJSON` asset we could not read, in which case the local route is left untouched.
-    private func applyJourneyScalars(_ journey: Journey, route: Route?) {
+    private func applyJourneyScalars(_ journey: Journey, route: Route?, zoneOwnerName: String? = nil) {
         let cd = syncFetchJourney(journey.id) ?? CDJourney(context: viewContext)
         cd.id = journey.id
+        // Remember which database this journey came from, so later edits route back to the
+        // right zone. A private-database record carries CKCurrentUserDefaultName, which we
+        // store as nil ("mine") rather than as a literal owner name.
+        if let zoneOwnerName {
+            cd.zoneOwnerName = zoneOwnerName == CKCurrentUserDefaultName ? nil : zoneOwnerName
+        }
         cd.slug = journey.slug
         cd.name = journey.name
         cd.country = journey.country

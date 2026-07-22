@@ -11,6 +11,9 @@ enum Theme {
     static let textSecondary = Color.white.opacity(0.62)
     static let textTertiary = Color.white.opacity(0.4)
     static let hairline = Color.white.opacity(0.08)
+    /// Inline problem text (a failed sharing change, say) — readable on the dark surface
+    /// without the alarm of full red.
+    static let warning = Color(red: 1.0, green: 0.66, blue: 0.4)
 
     /// Subtle top-to-bottom gradient used behind hero areas.
     static let heroGradient = LinearGradient(

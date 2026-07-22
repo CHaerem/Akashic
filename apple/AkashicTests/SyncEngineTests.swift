@@ -207,7 +207,10 @@ final class SyncEngineTests: XCTestCase {
         let (engine, mock, _, _) = makeEngine(account: .available)
         await engine.activate()
 
-        await engine.fetchOnActivation()
+        // Await the pull rather than racing it: it runs in a detached task, so calling
+        // `fetchOnActivation()` again here counted either one fetch or two depending on
+        // scheduling — the test itself was the flake.
+        await engine.awaitActivationFetch()
 
         XCTAssertEqual(mock.fetchCount, 1, "activation must pull explicitly")
     }
@@ -221,6 +224,7 @@ final class SyncEngineTests: XCTestCase {
     func testSignInWhileAlreadyRunningDoesNotReactivate() async {
         let (engine, mock, _, _) = makeEngine(account: .available)
         await engine.activate()
+        await engine.awaitActivationFetch()
         let fetchesAfterActivation = mock.fetchCount
 
         engine.handleAccountSignIn()
@@ -491,6 +495,8 @@ final class FakeLocalStore: SyncLocalStore {
     var journeyIDs: [String] = []
     var identities: [String: [LocalChange]] = [:]
     var records: [String: CKRecord] = [:]
+    /// journeyID -> sharing owner. Absent means we own it (private database).
+    var zoneOwners: [String: String] = [:]
 
     private(set) var appliedRecords: [CKRecord] = []
     private(set) var deletedRecords: [(recordName: String, recordType: String)] = []
@@ -507,6 +513,7 @@ final class FakeLocalStore: SyncLocalStore {
         deletedRecords.append((recordName, recordType))
     }
     func allLocalJourneyIDs() -> [String] { journeyIDs }
+    func zoneOwnerName(forJourneyID journeyID: String) -> String? { zoneOwners[journeyID] }
     func recordIdentities(forJourneyID journeyID: String) -> [LocalChange] { identities[journeyID] ?? [] }
     func beginRemoteApply() { beginCount += 1 }
     func endRemoteApply() { endCount += 1 }

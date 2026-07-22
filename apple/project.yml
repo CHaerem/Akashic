@@ -73,6 +73,9 @@ targets:
         # 'remote-notification' background mode" without this. Harmless in non-CloudKit
         # configs (nothing registers for pushes there).
         INFOPLIST_KEY_UIBackgroundModes: remote-notification
+        # Required for CloudKit share invitations to open in the app (T2.8). Without it iOS
+        # opens the share link in Safari instead of handing the metadata to the app delegate.
+        INFOPLIST_KEY_CKSharingSupported: "YES"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
         SWIFT_EMIT_LOC_STRINGS: "YES"
