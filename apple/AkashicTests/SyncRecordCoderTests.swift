@@ -76,20 +76,29 @@ final class SyncRecordCoderTests: XCTestCase {
     func testReferenceActions() {
         let camp = makeCamp(id: "w1", coordinates: [1, 2])
         let waypointRecord = RecordCoder.record(forWaypoint: camp, journeyID: "j1", sortOrder: 0, in: zone)
-        XCTAssertEqual((waypointRecord["journeyRef"] as? CKRecord.Reference)?.action, .deleteSelf,
-                       "Waypoint.journeyRef cascades")
+        // journeyRef is deliberately NOT an owning reference: the journey's zone is the
+        // cascade boundary, and CloudKit caps owning references to a single record at
+        // ~750 — the real archive has 939 photos on one journey and the first import
+        // failed 197 of them with "Limit exceeded for number of owning references".
+        XCTAssertEqual((waypointRecord["journeyRef"] as? CKRecord.Reference)?.action,
+                       CKRecord.ReferenceAction.none,
+                       "Waypoint.journeyRef must not own — the zone cascades")
 
         let photo = makePhoto(id: "p1", waypointId: "w1", coordinates: [1, 2])
         let photoRecord = RecordCoder.record(for: photo, in: zone)
-        XCTAssertEqual((photoRecord["journeyRef"] as? CKRecord.Reference)?.action, .deleteSelf,
-                       "Photo.journeyRef cascades")
+        XCTAssertEqual((photoRecord["journeyRef"] as? CKRecord.Reference)?.action,
+                       CKRecord.ReferenceAction.none,
+                       "Photo.journeyRef must not own — hits the ~750 cap on big journeys")
         XCTAssertEqual((photoRecord["waypointRef"] as? CKRecord.Reference)?.action, CKRecord.ReferenceAction.none,
                        "Photo.waypointRef orphans (SET NULL -> .none)")
 
         let comment = makeComment(id: "c1")
         let commentRecord = RecordCoder.record(for: comment, in: zone)
-        XCTAssertEqual((commentRecord["journeyRef"] as? CKRecord.Reference)?.action, .deleteSelf)
-        XCTAssertEqual((commentRecord["waypointRef"] as? CKRecord.Reference)?.action, .deleteSelf)
+        XCTAssertEqual((commentRecord["journeyRef"] as? CKRecord.Reference)?.action,
+                       CKRecord.ReferenceAction.none,
+                       "DayComment.journeyRef must not own — the zone cascades")
+        XCTAssertEqual((commentRecord["waypointRef"] as? CKRecord.Reference)?.action, .deleteSelf,
+                       "Deleting one waypoint should still take its comments; fan-out stays tiny")
     }
 
     // MARK: - Heavy round-trips over the real fixtures

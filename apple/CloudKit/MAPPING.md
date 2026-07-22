@@ -82,7 +82,7 @@ stays valid through the cutover. Stable identity end-to-end.
 | Postgres column | Type | CloudKit field | CloudKit type | Notes |
 |---|---|---|---|---|
 | `id` | UUID | *(recordName)* | — | |
-| `journey_id` | UUID FK | `journeyRef` | REFERENCE | QUERYABLE. **cascade** (`CKReferenceAction.deleteSelf`) — set on the reference value at write time, not in schema (§9) |
+| `journey_id` | UUID FK | `journeyRef` | REFERENCE | QUERYABLE. `.none` — the journey zone is the cascade boundary; an owning ref hits CloudKit's ~750 cap (§9) |
 | `name` | TEXT | `name` | STRING | QUERYABLE SEARCHABLE |
 | `waypoint_type` | TEXT (def `camp`) | `waypointType` | STRING | QUERYABLE. Free text (`camp`/`summit`/…), no CHECK |
 | `day_number` | INTEGER | `dayNumber` | INT64 | SORTABLE |
@@ -111,7 +111,7 @@ Bytes live in R2 today; the importer fetches each object and attaches it as a CK
 | Postgres column | Type | CloudKit field | CloudKit type | Notes |
 |---|---|---|---|---|
 | `id` | UUID | *(recordName)* | — | = R2 `{photoId}` (§1) |
-| `journey_id` | UUID FK | `journeyRef` | REFERENCE | QUERYABLE. **cascade** (deleteSelf) |
+| `journey_id` | UUID FK | `journeyRef` | REFERENCE | QUERYABLE. `.none` — zone cascades (§9) |
 | `waypoint_id` | UUID FK (ON DELETE SET NULL) | `waypointRef` | REFERENCE | QUERYABLE. **action NONE** — deleting a waypoint must orphan the photo, not delete it. Note the behavioural gap: PG `SET NULL` clears the FK; CloudKit `NONE` leaves a **dangling** reference. App treats a reference whose target is missing as "unassigned"; ideally the waypoint-delete flow clears `waypointRef` explicitly to mirror SET NULL (§9) |
 | `url` | TEXT (R2 path) | `original` | ASSET | fetch bytes from `journeys/{jid}/photos/{pid}.{ext}`; path dropped |
 | `thumbnail_url` | TEXT (R2 path) | `thumb` | ASSET | fetch bytes from `..._thumb.jpg`; path dropped |
@@ -267,15 +267,27 @@ the `CKReference` **value** created at record-write/import time:
 
 | Reference | PG behaviour | CloudKit action (set on the value) |
 |---|---|---|
-| `Waypoint.journeyRef → Journey` | ON DELETE CASCADE | `.deleteSelf` (cascade) |
-| `Photo.journeyRef → Journey` | ON DELETE CASCADE | `.deleteSelf` (cascade) |
+| `Waypoint.journeyRef → Journey` | ON DELETE CASCADE | `.none` — the zone cascades (see below) |
+| `Photo.journeyRef → Journey` | ON DELETE CASCADE | `.none` — the zone cascades (see below) |
 | `Photo.waypointRef → Waypoint` | ON DELETE **SET NULL** | `.none` (orphan; see §4 dangling-ref note) |
-| `DayComment.journeyRef → Journey` | ON DELETE CASCADE | `.deleteSelf` (cascade) |
+| `DayComment.journeyRef → Journey` | ON DELETE CASCADE | `.none` — the zone cascades (see below) |
 | `DayComment.waypointRef → Waypoint` | ON DELETE CASCADE | `.deleteSelf` (cascade) |
 
-Because every child lives in the journey's zone, deleting a whole journey = deleting
-the zone (removes all children regardless of action). The `.deleteSelf` actions
-matter for the finer case: deleting a single `Waypoint` cascades its `DayComment`s.
+**The zone is the cascade boundary.** Every child lives in the journey's zone, so
+deleting a whole journey = deleting the zone, which removes all children regardless
+of reference action. `journeyRef` therefore uses `.none`.
+
+This is not merely a simplification — an owning (`.deleteSelf`) reference to the
+journey is actively **wrong at our scale**. CloudKit caps the number of owning
+references pointing at a single record at roughly **750**; the first real import hit
+`CKError "Limit Exceeded" (27/2023) — "Limit exceeded for number of owning references
+to single record"` on the Kilimanjaro zone, whose Journey record is the parent of 939
+photos. 197 photo records failed to save (939 − ~742). Using `.none` removes the cap
+entirely without losing any delete semantics.
+
+`.deleteSelf` survives only on `DayComment.waypointRef`, where it does real work
+(deleting one waypoint should take its comments with it) and the fan-out per waypoint
+stays far below the cap.
 
 ---
 
@@ -285,7 +297,7 @@ matter for the finer case: deleting a single `Waypoint` cascades its `DayComment
 |---|---|---|---|---|
 | `id` | UUID | *(recordName)* | — | |
 | `waypoint_id` | UUID FK CASCADE | `waypointRef` | REFERENCE | QUERYABLE. `.deleteSelf` (§9) |
-| `journey_id` | UUID FK CASCADE | `journeyRef` | REFERENCE | QUERYABLE. `.deleteSelf` |
+| `journey_id` | UUID FK CASCADE | `journeyRef` | REFERENCE | QUERYABLE. `.none` — zone cascades (§9) |
 | `user_id` | UUID FK → profiles | *(system `creatorUserRecordID`)* + `authorDisplayName` | — / STRING | author identity (§7); `authorDisplayName` preserves migrated attribution |
 | `content` | TEXT (CHECK 1–2000) | `content` | STRING | length CHECK not enforceable in CloudKit; validate in app |
 | `created_at` | TIMESTAMPTZ | `createdAt` | TIMESTAMP | QUERYABLE SORTABLE — **explicit field, not the system timestamp**: the app sorts comments by `created_at` and the import writes them all at once, which would collapse system `createdTimestamp` to migration time. The explicit field preserves original order |

@@ -143,8 +143,11 @@ enum RecordCoder {
                        existing: CKRecord? = nil) -> CKRecord {
         let record = existing ?? CKRecord(recordType: RecordType.waypoint,
                                           recordID: CKRecord.ID(recordName: camp.id, zoneID: zoneID))
-        // journeyRef: ON DELETE CASCADE -> .deleteSelf (child deleted with parent). MAPPING §9.
-        record["journeyRef"] = reference(toRecordName: journeyID, in: zoneID, action: .deleteSelf)
+        // journeyRef: plain `.none`. Deleting a journey means deleting its zone, which removes
+        // every record inside it — the zone IS the cascade (D3). An owning `.deleteSelf` ref
+        // would be redundant AND capped: CloudKit allows only ~750 owning references to a
+        // single record, which the real archive blows past (Kilimanjaro has 939 photos).
+        record["journeyRef"] = reference(toRecordName: journeyID, in: zoneID, action: .none)
         record["name"] = camp.name
         record["waypointType"] = "camp"
         record["dayNumber"] = camp.dayNumber
@@ -190,8 +193,9 @@ enum RecordCoder {
                        existing: CKRecord? = nil) -> CKRecord {
         let record = existing ?? CKRecord(recordType: RecordType.photo,
                                           recordID: CKRecord.ID(recordName: photo.id, zoneID: zoneID))
-        // journeyRef: CASCADE -> .deleteSelf. waypointRef: SET NULL -> .none (orphan on wp delete).
-        record["journeyRef"] = reference(toRecordName: photo.journeyId, in: zoneID, action: .deleteSelf)
+        // journeyRef: `.none` — the journey's zone is the cascade boundary (see `record(forWaypoint:)`).
+        // waypointRef: SET NULL -> .none (photo is orphaned, not deleted, when its waypoint goes).
+        record["journeyRef"] = reference(toRecordName: photo.journeyId, in: zoneID, action: .none)
         record["waypointRef"] = photo.waypointId.map { reference(toRecordName: $0, in: zoneID, action: .none) }
         record["caption"] = photo.caption
         record["coordinates"] = location(from: photo.coordinates)
@@ -250,8 +254,10 @@ enum RecordCoder {
                        existing: CKRecord? = nil) -> CKRecord {
         let record = existing ?? CKRecord(recordType: RecordType.dayComment,
                                           recordID: CKRecord.ID(recordName: comment.id, zoneID: zoneID))
-        // Both refs CASCADE -> .deleteSelf (MAPPING §9 / §10).
-        record["journeyRef"] = reference(toRecordName: comment.journeyId, in: zoneID, action: .deleteSelf)
+        // journeyRef: `.none` — the zone is the cascade boundary (see `record(forWaypoint:)`).
+        // waypointRef: `.deleteSelf` — deleting a single waypoint really should take its comments
+        // with it, and comments-per-waypoint stays far below the ~750 owning-reference cap.
+        record["journeyRef"] = reference(toRecordName: comment.journeyId, in: zoneID, action: .none)
         record["waypointRef"] = reference(toRecordName: comment.waypointId, in: zoneID, action: .deleteSelf)
         record["content"] = comment.content
         record["createdAt"] = comment.createdAt          // explicit field (order-preserving), not system ts
