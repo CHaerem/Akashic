@@ -31,7 +31,10 @@ struct SettingsView: View {
                 labelled("Journeys loaded", "\(store.journeys.count)")
                 labelled("Photos in store", "\(store.photoCount)")
                 labelled("CloudKit container", Config.cloudKitContainerIdentifier)
-                labelled("CloudKit enabled (build flag)", FeatureFlags.cloudKitEnabled ? "Yes" : "No")
+                // The build flag is a constant that is false in every configuration; what
+                // actually selects CloudKit is AKASHIC_CLOUDKIT=1 or the Settings override. The
+                // old row showed only the constant, so a CloudKit-mode run reported "No".
+                labelled("CloudKit environment", cloudKitEnvironmentLabel)
                 // Sync state was previously computed but never shown, so a stalled sync looked
                 // identical to a working one — from the outside and from inside the app.
                 labelled("Sync", syncStatus.summary)
@@ -87,15 +90,38 @@ struct SettingsView: View {
                 persistImportPaths()
             }
         }
-        .alert("Import to CloudKit?", isPresented: $showCloudKitConfirm) {
+        .alert(ckImport.environment == .production
+               ? "Import to PRODUCTION CloudKit?"
+               : "Import to CloudKit?",
+               isPresented: $showCloudKitConfirm) {
             Button("Cancel", role: .cancel) {}
             Button("Upload", role: .destructive) {
                 persistImportPaths()
                 ckImport.runRealImport(bundlePath: bundlePath, mediaRoot: mediaRoot)
             }
         } message: {
-            Text("This uploads the full export to \(ckImport.containerID) · \(ckImport.environment.rawValue) (the owner's private database). Production is never touched. CloudKit sync must be quiesced first — the importer writes the private database directly and must never run alongside the sync engine. Re-running is safe (idempotent, no duplicates) but restarts the upload from the beginning.")
+            Text(importConfirmationMessage)
         }
+    }
+
+    /// Which CloudKit database this build talks to, and how the mode was chosen — the two
+    /// facts you need before touching the import screen.
+    private var cloudKitEnvironmentLabel: String {
+        guard store.mode == .cloudKit else { return "not in CloudKit mode" }
+        let source = FeatureFlags.cloudKitEnvOverride ? "env" : "override"
+        return "\(CloudKitImportEnvironment.current.rawValue) (\(source))"
+    }
+
+    private var importConfirmationMessage: String {
+        let target = "\(ckImport.containerID) · \(ckImport.environment.rawValue)"
+        let scope = ckImport.environment == .production
+            ? "This writes the REAL production database — the one TestFlight and App Store "
+              + "builds read. Everything the family sees comes from here."
+            : "This writes the Development database. Production is not touched."
+        return "Uploads the full export to \(target) (the owner's private database). \(scope) "
+            + "CloudKit sync must be quiesced first — the importer writes the private database "
+            + "directly and must never run alongside the sync engine. Re-running is safe "
+            + "(idempotent, no duplicates) but restarts the upload from the beginning."
     }
 
     // MARK: - CloudKit import section (T2.5)
