@@ -244,15 +244,45 @@ data is not there yet.**
 
 To make TestFlight useful, two steps are needed, in order:
 
-1. **Promote the schema Development → Production.** In CloudKit Console: select the
-   container, *Deploy Schema Changes*. **This is irreversible** — a record type or
-   field that exists in Production can never be deleted, only added to. That is why
-   it has been deliberately deferred until the schema stopped changing.
-2. **Import the archive into Production.** Re-run the importer against the production
-   database (same flow as the Development import: 1559 records + ~5.4 GB of assets).
+### Step 1 — promote the schema (Christopher; ~1 min) 🧑
 
-Until both are done, keep the family off the tester list — an empty app teaches them
-the wrong thing about the migration.
+`cktool` cannot do this: `import-schema --environment production` is refused with
+*"endpoint not applicable in the environment 'production'"*. The Console is the only
+path.
+
+1. Open <https://icloud.developer.apple.com/dashboard/> and pick **iCloud.no.akashic**.
+2. Make sure the environment selector says **Development**.
+3. **Schema → Deploy Schema Changes…** → review → **Deploy**.
+
+**This is irreversible.** A record type or field that reaches Production can never be
+deleted, only added to — which is exactly why it waited until the schema stopped
+changing. Verified before deploying (2026-07-23): the deployed Development schema is
+field-for-field identical to `apple/CloudKit/schema.ckdb`, so nothing unintended gets
+frozen. The six types promoted are `Journey`, `Waypoint`, `Photo`, `DayComment`,
+`PublicJourney`, `PublicPhoto`.
+
+Confirm it landed:
+
+```bash
+xcrun cktool export-schema --team-id 9LVCB72DT8 --container-id iCloud.no.akashic --environment production | grep "RECORD TYPE"
+```
+
+### Step 2 — import the archive into Production (Claude; ~1–2 h) 🤖
+
+Runs from the **`Debug-Production`** build configuration, which is a
+development-signed build carrying `icloud-container-environment = Production`
+(`apple/Akashic/Support/Akashic-Production.entitlements`). That is the only way to
+write Production from the simulator — a TestFlight build reads Production but cannot
+be aimed anywhere else, and `Debug-CloudKit` always means Development.
+
+Source: `/Users/cher/Privat/AkashicExport-20260722` (16 GB on disk; ~5.4 GB reaches
+CloudKit as assets). Driven from the app's **Settings → CloudKit import** screen.
+The importer is idempotent (`.allKeys` overwrite keyed by the original UUIDs) so a
+re-run is safe, but it is **not resumable** — an interrupted run re-uploads
+everything.
+
+Until both steps are done, keep the family off the tester list — an empty app teaches
+them the wrong thing about the migration.
 
 ## 4. Xcode signing + TestFlight — ✅ CREDENTIALS IN PLACE (2026-07-22)
 
