@@ -20,6 +20,7 @@ configs:
   Release: release
   Debug-CloudKit: debug
   Release-CloudKit: release
+  Debug-Production: debug
 
 settings:
   base:
@@ -109,6 +110,18 @@ targets:
           CODE_SIGN_IDENTITY: "Apple Development"
           DEVELOPMENT_TEAM: 9LVCB72DT8
           SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) AKASHIC_CLOUDKIT_BUILD"
+        # Development-signed, but pointed at the PRODUCTION CloudKit database — the
+        # only way to run the migration import into Production (TestFlight builds
+        # read Production but cannot themselves be aimed elsewhere). Every write
+        # here is real. See Akashic-Production.entitlements.
+        Debug-Production:
+          CODE_SIGN_ENTITLEMENTS: Akashic/Support/Akashic-Production.entitlements
+          CODE_SIGNING_ALLOWED: "YES"
+          CODE_SIGNING_REQUIRED: "YES"
+          CODE_SIGN_STYLE: Automatic
+          CODE_SIGN_IDENTITY: "Apple Development"
+          DEVELOPMENT_TEAM: 9LVCB72DT8
+          SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) AKASHIC_CLOUDKIT_BUILD"
 
   AkashicTests:
     type: bundle.unit-test
@@ -181,6 +194,12 @@ targets:
           CODE_SIGN_IDENTITY: "Apple Development"
           DEVELOPMENT_TEAM: 9LVCB72DT8
         Release-CloudKit:
+          CODE_SIGNING_ALLOWED: "YES"
+          CODE_SIGNING_REQUIRED: "YES"
+          CODE_SIGN_STYLE: Automatic
+          CODE_SIGN_IDENTITY: "Apple Development"
+          DEVELOPMENT_TEAM: 9LVCB72DT8
+        Debug-Production:
           CODE_SIGNING_ALLOWED: "YES"
           CODE_SIGNING_REQUIRED: "YES"
           CODE_SIGN_STYLE: Automatic
