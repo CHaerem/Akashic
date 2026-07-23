@@ -220,6 +220,40 @@ with Apple ID sign-in. Only you can create it.
 
 ---
 
+## 4a. ⚠️ TestFlight talks to CloudKit **Production** — not Development
+
+Discovered while uploading build 2 (2026-07-23). This is the single fact that
+decides when the family can actually use the app.
+
+A TestFlight build is signed with an **App Store distribution profile**, and such a
+profile only ever carries the CloudKit **production** environment. The
+`com.apple.developer.icloud-container-environment` entitlement can point a
+*development* or *ad-hoc* build at either environment, but it cannot override this
+for App Store / TestFlight. There is no flag, no build setting, no workaround.
+
+Everything built and verified so far lives in **Development**:
+
+| | Development | Production |
+|---|---|---|
+| Schema | 7 record types (incl. PublicJourney/PublicPhoto) | only the default `Users` |
+| Records | 1559 (3 journeys / 18 days / 1538 photos), 5.41 GB | 0 |
+
+So build 2 installs and runs, but on a device it finds an empty container with no
+schema: no journeys, and sync errors surfaced in Settings. **The build is real; the
+data is not there yet.**
+
+To make TestFlight useful, two steps are needed, in order:
+
+1. **Promote the schema Development → Production.** In CloudKit Console: select the
+   container, *Deploy Schema Changes*. **This is irreversible** — a record type or
+   field that exists in Production can never be deleted, only added to. That is why
+   it has been deliberately deferred until the schema stopped changing.
+2. **Import the archive into Production.** Re-run the importer against the production
+   database (same flow as the Development import: 1559 records + ~5.4 GB of assets).
+
+Until both are done, keep the family off the tester list — an empty app teaches them
+the wrong thing about the migration.
+
 ## 4. Xcode signing + TestFlight — ✅ CREDENTIALS IN PLACE (2026-07-22)
 
 > **Outcome:** signing team `9LVCB72DT8` is pinned in `project.yml` (both `*-CloudKit` configs);

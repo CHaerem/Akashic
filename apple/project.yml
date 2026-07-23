@@ -60,7 +60,7 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: no.akashic.app
         PRODUCT_NAME: Akashic
         MARKETING_VERSION: "0.1.0"
-        CURRENT_PROJECT_VERSION: "1"
+        CURRENT_PROJECT_VERSION: "2"
         TARGETED_DEVICE_FAMILY: "1,2"
         GENERATE_INFOPLIST_FILE: "YES"
         INFOPLIST_KEY_CFBundleDisplayName: Akashic
@@ -100,7 +100,9 @@ targets:
           DEVELOPMENT_TEAM: 9LVCB72DT8
           SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) AKASHIC_CLOUDKIT_BUILD"
         Release-CloudKit:
-          CODE_SIGN_ENTITLEMENTS: Akashic/Support/Akashic.entitlements
+          # Separate file: aps-environment must be `production` for App Store /
+          # TestFlight distribution profiles (see the file's own comment).
+          CODE_SIGN_ENTITLEMENTS: Akashic/Support/Akashic-Release.entitlements
           CODE_SIGNING_ALLOWED: "YES"
           CODE_SIGNING_REQUIRED: "YES"
           CODE_SIGN_STYLE: Automatic
@@ -150,7 +152,7 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: no.akashic.app.widgets
         PRODUCT_NAME: AkashicWidgets
         MARKETING_VERSION: "0.1.0"
-        CURRENT_PROJECT_VERSION: "1"
+        CURRENT_PROJECT_VERSION: "2"
         TARGETED_DEVICE_FAMILY: "1,2"
         INFOPLIST_FILE: AkashicWidgets/Info.plist
         GENERATE_INFOPLIST_FILE: "NO"
