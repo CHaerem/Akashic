@@ -79,6 +79,13 @@ final class PersistenceController {
             assertionFailure("Core Data store load failed (\(mode)): \(loadError)")
         }
 
+        // Heal any child rows orphaned by a previous out-of-order sync (foreign-key string set,
+        // relationship nil). Prevention lives in the sync-apply path; this is the retroactive
+        // cure for a store that was already written wrong — e.g. an install that synced Mount
+        // Kenya's days before its journey and has shown zero days ever since. Cheap: the fetches
+        // are normally empty and it runs once at launch.
+        repairOrphanedRelationships()
+
         // Attach the CloudKit sync engine (account-gated inside `startSync`/`activate`). Built
         // on the main actor: `.shared`/`.cloudKit` is created on launch from `@MainActor`
         // `JourneyStore`. Tests never build a `.cloudKit` controller (they drive the engine and
@@ -124,6 +131,44 @@ final class PersistenceController {
     // MARK: - Reads
 
     /// All journeys currently in the store, mapped to the domain model, sorted by name.
+    /// Re-link child rows whose foreign-key string names a parent that exists locally but whose
+    /// relationship is nil — the residue of out-of-order CloudKit delivery (a day/photo/comment
+    /// applied before its journey, or a photo/comment before its waypoint). Idempotent; returns
+    /// the number of rows repaired (used by tests).
+    @discardableResult
+    func repairOrphanedRelationships() -> Int {
+        let context = container.viewContext
+        var repaired = 0
+
+        func relink<Child: NSManagedObject>(_ type: Child.Type, foreignKey: String,
+                                             parentEntity: String, relation: String) {
+            let request = NSFetchRequest<Child>(entityName: String(describing: type))
+            request.predicate = NSPredicate(format: "%K != nil AND %K == nil", foreignKey, relation)
+            guard let orphans = try? context.fetch(request), !orphans.isEmpty else { return }
+            for child in orphans {
+                guard let fkValue = child.value(forKey: foreignKey) as? String else { continue }
+                let parentRequest = NSFetchRequest<NSManagedObject>(entityName: parentEntity)
+                parentRequest.predicate = NSPredicate(format: "id == %@", fkValue)
+                parentRequest.fetchLimit = 1
+                if let parent = (try? context.fetch(parentRequest))?.first {
+                    child.setValue(parent, forKey: relation)
+                    repaired += 1
+                }
+            }
+        }
+
+        relink(CDWaypoint.self, foreignKey: "journeyId", parentEntity: "CDJourney", relation: "journey")
+        relink(CDPhoto.self, foreignKey: "journeyId", parentEntity: "CDJourney", relation: "journey")
+        relink(CDDayComment.self, foreignKey: "journeyId", parentEntity: "CDJourney", relation: "journey")
+        relink(CDPhoto.self, foreignKey: "waypointId", parentEntity: "CDWaypoint", relation: "waypoint")
+        relink(CDDayComment.self, foreignKey: "waypointId", parentEntity: "CDWaypoint", relation: "waypoint")
+
+        if repaired > 0, context.hasChanges {
+            try? context.save()
+        }
+        return repaired
+    }
+
     func loadJourneys() -> [Journey] {
         let request = NSFetchRequest<CDJourney>(entityName: "CDJourney")
         request.sortDescriptors = [NSSortDescriptor(key: "name", ascending: true)]

@@ -377,6 +377,16 @@ extension PersistenceController: SyncLocalStore {
         cd.stats = JSONCoding.encode(journey.stats)
         if cd.createdAt == nil { cd.createdAt = Date() }
         cd.updatedAt = Date()
+
+        // CloudKit does not order records within a zone, so a child (waypoint/photo/comment)
+        // can be applied *before* its journey exists — leaving `journey == nil` that nothing
+        // ever repairs, because the child's server change tag has already advanced and it is
+        // never re-fetched. Now that the journey is here, adopt every child already waiting on
+        // it. This is exactly the case that left Mount Kenya (whose days arrived first) showing
+        // zero days on a fresh install.
+        adoptOrphans(CDWaypoint.self, matching: "journeyId", equals: journey.id, into: cd, via: "journey")
+        adoptOrphans(CDPhoto.self, matching: "journeyId", equals: journey.id, into: cd, via: "journey")
+        adoptOrphans(CDDayComment.self, matching: "journeyId", equals: journey.id, into: cd, via: "journey")
     }
 
     private func applyWaypoint(_ camp: Camp, journeyID: String, sortOrder: Int) {
@@ -399,6 +409,25 @@ extension PersistenceController: SyncLocalStore {
         cd.pointsOfInterest = JSONCoding.encode(camp.pointsOfInterest)
         cd.historicalSites = JSONCoding.encode(camp.historicalSites)
         if cd.createdAt == nil { cd.createdAt = Date() }
+
+        // Same ordering hazard one level down: a photo or comment that named this waypoint may
+        // have been applied before the waypoint existed. Adopt them now. (No-op on the migrated
+        // archive — photos carry no waypointId and there are no comments — but it closes the
+        // same class of bug the journey adoption above fixes.)
+        adoptOrphans(CDPhoto.self, matching: "waypointId", equals: camp.id, into: cd, via: "waypoint")
+        adoptOrphans(CDDayComment.self, matching: "waypointId", equals: camp.id, into: cd, via: "waypoint")
+    }
+
+    /// Link every orphaned child of `parent` — rows whose foreign-key *string* names `parent`
+    /// but whose relationship is still nil, the residue of out-of-order CloudKit delivery.
+    private func adoptOrphans<Child: NSManagedObject>(_ type: Child.Type,
+                                                      matching key: String, equals id: String,
+                                                      into parent: NSManagedObject, via relation: String) {
+        let request = NSFetchRequest<Child>(entityName: String(describing: type))
+        request.predicate = NSPredicate(format: "%K == %@ AND %K == nil", key, id, relation)
+        for child in (try? viewContext.fetch(request)) ?? [] {
+            child.setValue(parent, forKey: relation)
+        }
     }
 
     /// Apply a fetched Photo record.

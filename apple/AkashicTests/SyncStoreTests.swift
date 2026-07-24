@@ -229,6 +229,60 @@ final class SyncStoreTests: XCTestCase {
                      "the cascade's child meta rows are removed too (no orphaned tags)")
     }
 
+    // MARK: - Out-of-order delivery (orphan adoption)
+
+    /// A waypoint applied BEFORE its journey (CloudKit does not order a zone's records) must not
+    /// be stranded: when the journey arrives it adopts the waiting day. This is the Mount Kenya
+    /// "zero days" bug.
+    func testWaypointAppliedBeforeJourneyIsAdoptedWhenJourneyArrives() throws {
+        let controller = PersistenceController(mode: .fixtures, seed: false, fixtureBundle: bundle)
+        let journey = try FixtureLoader.load(named: "kilimanjaro", bundle: bundle)
+        let zone = RecordCoder.zoneID(forJourneyID: journey.id)
+        let camp = journey.camps[0]
+
+        controller.beginRemoteApply()
+        // Day first — its journey does not exist yet, so the relationship is nil at this point.
+        let waypointRecord = RecordCoder.record(forWaypoint: camp, journeyID: journey.id,
+                                                sortOrder: 0, in: zone)
+        controller.applyFetchedRecord(waypointRecord)
+        let orphan = try XCTUnwrap(fetchWaypoint(controller, camp.id))
+        XCTAssertNil(orphan.journey, "precondition: the day is orphaned before its journey lands")
+
+        // Journey arrives second.
+        let journeyRecord = RecordCoder.record(for: journey, in: zone)
+        controller.applyFetchedRecord(journeyRecord)
+        controller.endRemoteApply()
+
+        XCTAssertEqual(try XCTUnwrap(fetchWaypoint(controller, camp.id)).journey?.id, journey.id,
+                       "the journey adopts the day that was waiting for it")
+    }
+
+    /// The retroactive cure: a store already written with orphans (an install that synced days
+    /// before their journey on the buggy build) is healed at launch, with no re-sync.
+    func testRepairOrphanedRelationshipsRelinksExistingOrphans() throws {
+        let (controller, journey) = try seededController()
+
+        // Sever every day's journey link to simulate the already-broken store.
+        for camp in journey.camps {
+            try XCTUnwrap(fetchWaypoint(controller, camp.id)).journey = nil
+        }
+        try controller.viewContext.save()
+
+        let repaired = controller.repairOrphanedRelationships()
+
+        XCTAssertEqual(repaired, journey.camps.count)
+        for camp in journey.camps {
+            XCTAssertEqual(try XCTUnwrap(fetchWaypoint(controller, camp.id)).journey?.id, journey.id)
+        }
+        XCTAssertEqual(controller.repairOrphanedRelationships(), 0, "idempotent: nothing left to repair")
+    }
+
+    private func fetchWaypoint(_ controller: PersistenceController, _ id: String) throws -> CDWaypoint? {
+        let request = NSFetchRequest<CDWaypoint>(entityName: "CDWaypoint")
+        request.predicate = NSPredicate(format: "id == %@", id)
+        return try controller.viewContext.fetch(request).first
+    }
+
     /// A confirmed server delete (local delete that landed) drops the meta row.
     func testRecordsDidDeleteRemovesSystemFields() throws {
         let (controller, journey) = try seededController()
