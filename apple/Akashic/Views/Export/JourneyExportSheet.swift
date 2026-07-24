@@ -125,7 +125,15 @@ struct JourneyExportSheet: View {
 
     private func runExport() async {
         phase = .working(0)
-        let photos = includePhotos ? store.photos(forJourneyID: journey.id) : []
+        var photos = includePhotos ? store.photos(forJourneyID: journey.id) : []
+        // v2: originals live on PhotoMedia records (excluded media zone), so an export must first
+        // stream any that are not on this device (MAPPING §13). Best-effort — whatever still can't
+        // be fetched stays in the honest `missingPhotos` list. Then re-read so the freshly stored
+        // local paths are picked up.
+        if includePhotos, let fetcher = store.mediaFetcher, !photos.isEmpty {
+            await fetcher.prefetchOriginals(for: photos)
+            photos = store.photos(forJourneyID: journey.id)
+        }
         // Comments are stored per day; the export wants the whole journey's worth.
         let comments = journey.camps.flatMap { store.commentService.comments(forWaypoint: $0.id) }
         let journey = self.journey

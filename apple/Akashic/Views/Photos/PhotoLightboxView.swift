@@ -92,10 +92,12 @@ struct PhotoLightboxView: View {
             ForEach(Array(photos.enumerated()), id: \.element.id) { i, photo in
                 Group {
                     if photo.isVideo {
-                        VideoPage(photo: photo)
+                        VideoPage(photo: photo, fetcher: store.mediaFetcher)
                     } else {
-                        ZoomableImage(url: photo.originalFileURL ?? photo.thumbnailFileURL,
-                                      rotation: photo.rotation)
+                        // v2: the original lives on a PhotoMedia record in the excluded media zone,
+                        // so it is streamed on demand. The thumbnail shows instantly; the full-res
+                        // swaps in when ready, with a retry affordance on failure (MAPPING §13).
+                        ResolvingImagePage(photo: photo, fetcher: store.mediaFetcher)
                     }
                 }
                 .tag(i)
@@ -224,6 +226,59 @@ struct PhotoLightboxView: View {
     }
 }
 
+// MARK: - On-demand original resolution (v2 media split)
+
+/// Wraps `ZoomableImage` with on-demand original fetching. Shows the thumbnail immediately, streams
+/// the full-resolution original via `MediaFetcher`, and swaps it in when ready. A fetch failure
+/// leaves the thumbnail visible and offers a retry — never a blocking error. With no fetcher
+/// (fixtures / non-CloudKit build) it simply uses whatever bytes are already on disk.
+private struct ResolvingImagePage: View {
+    let photo: Photo
+    var fetcher: MediaFetcher?
+
+    @State private var resolvedURL: URL?
+    @State private var isLoading = false
+    @State private var failed = false
+
+    var body: some View {
+        ZStack {
+            ZoomableImage(url: resolvedURL ?? photo.thumbnailFileURL, rotation: photo.rotation)
+            if isLoading {
+                ProgressView()
+                    .tint(.white)
+                    .padding(10)
+                    .background(.ultraThinMaterial, in: Circle())
+            } else if failed {
+                Button {
+                    Task { await resolve() }
+                } label: {
+                    Label("Retry", systemImage: "arrow.clockwise")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 14).padding(.vertical, 8)
+                        .background(.ultraThinMaterial, in: Capsule())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .task(id: photo.id) { await resolve() }
+    }
+
+    private func resolve() async {
+        failed = false
+        // Instant local hit, or no fetcher (fixtures) → use whatever is on disk.
+        if let local = photo.originalFileURL { resolvedURL = local; return }
+        guard let fetcher else { resolvedURL = photo.thumbnailFileURL; return }
+        isLoading = true
+        defer { isLoading = false }
+        do {
+            resolvedURL = try await fetcher.originalURL(for: photo)
+        } catch {
+            failed = true   // keep the thumbnail visible; the retry button is shown
+        }
+    }
+}
+
 // MARK: - Zoomable image
 
 /// A single pinch-zoomable, pannable image loaded from a local file URL. Applies the stored
@@ -321,7 +376,9 @@ private struct ZoomableImage: View {
 /// A video page backed by AVPlayer over the local file URL.
 private struct VideoPage: View {
     let photo: Photo
+    var fetcher: MediaFetcher?
     @State private var player: AVPlayer?
+    @State private var isLoading = false
 
     var body: some View {
         Group {
@@ -331,14 +388,28 @@ private struct VideoPage: View {
             } else {
                 ZStack {
                     Color.black
-                    Image(systemName: "play.slash")
-                        .font(.system(size: 40))
-                        .foregroundStyle(.white.opacity(0.4))
+                    if isLoading {
+                        ProgressView().tint(.white)
+                    } else {
+                        Image(systemName: "play.slash")
+                            .font(.system(size: 40))
+                            .foregroundStyle(.white.opacity(0.4))
+                    }
                 }
             }
         }
-        .onAppear {
-            if player == nil, let url = photo.originalFileURL {
+        // v2: the video original may live on a PhotoMedia record — resolve it on demand before
+        // building the player (a local hit returns immediately with no download).
+        .task(id: photo.id) {
+            guard player == nil else { return }
+            if let url = photo.originalFileURL {
+                player = AVPlayer(url: url)
+                return
+            }
+            guard let fetcher else { return }
+            isLoading = true
+            defer { isLoading = false }
+            if let url = try? await fetcher.originalURL(for: photo) {
                 player = AVPlayer(url: url)
             }
         }

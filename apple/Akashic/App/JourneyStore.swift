@@ -19,6 +19,11 @@ final class JourneyStore: ObservableObject {
 
     private let persistence: PersistenceController
 
+    /// Shared on-demand originals fetcher for the v2 media split (MAPPING §13). nil outside the
+    /// entitled CloudKit build / fixtures, where the UI falls back to whatever bytes are on disk.
+    /// One instance so its single-in-flight-per-photo coalescing spans the whole session.
+    lazy var mediaFetcher: MediaFetcher? = persistence.makeMediaFetcher()
+
     init(persistence: PersistenceController = .shared) {
         self.persistence = persistence
         reload()
@@ -215,6 +220,10 @@ final class JourneyStore: ObservableObject {
             // thumbnail down from the public mirror too (best-effort). No-op outside CloudKit mode
             // / the entitled build, and for a non-public or shared-in journey. (finding #7.)
             persistence.removePublicMirrorPhotoIfPublished(photoID: photo.id, journeyID: photo.journeyId)
+            // v2: remove the photo's PhotoMedia record (the original) from the media zone too. The
+            // Photo record deletion rides the engine; the media record lives in the excluded media
+            // zone and is deleted DIRECTLY. No-op outside the entitled CloudKit build. (MAPPING §13.)
+            persistence.deletePhotoMedia(photoID: photo.id, journeyID: photo.journeyId)
         }
         reload()
         return ok
@@ -224,10 +233,14 @@ final class JourneyStore: ObservableObject {
     /// Returns the number that landed (a photo whose journey is absent is skipped).
     @discardableResult
     func addIngestedPhotos(_ photos: [Photo]) -> Int {
-        var inserted = 0
-        for photo in photos where persistence.insertPhoto(photo) { inserted += 1 }
+        var insertedIDs: [String] = []
+        for photo in photos where persistence.insertPhoto(photo) { insertedIDs.append(photo.id) }
         reload()
-        return inserted
+        // v2: upload each new photo's original as a PhotoMedia record in the media zone (its Photo
+        // record carries only the thumbnail, enqueued through the engine by the save observer).
+        // User-initiated, so not Wi-Fi-gated. No-op outside the entitled CloudKit build. (MAPPING §13.)
+        if !insertedIDs.isEmpty { persistence.uploadPhotoMedia(forIngestedPhotoIDs: insertedIDs) }
+        return insertedIDs.count
     }
 
     /// Next free `sortOrder` for appending new photos to a journey.

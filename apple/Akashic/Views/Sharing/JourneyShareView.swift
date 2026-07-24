@@ -182,6 +182,10 @@ struct JourneyShareView: View {
         do {
             let share = try await service.prepareShare(forJourneyID: journeyID, title: journeyTitle)
             shareToPresent = PresentedShare(share: share)
+            // v2: also ensure the media-zone share and publish its URL onto the Journey record so
+            // participants auto-accept and can stream originals on demand (MAPPING §13). Best-effort
+            // and no-op outside the entitled build / for a journey we do not own.
+            await PersistenceController.shared.ensureMediaShare(forJourneyID: journeyID, title: journeyTitle)
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -197,6 +201,8 @@ struct JourneyShareView: View {
 
     private func stopSharing() async {
         await mutate { try await service.stopSharing(forJourneyID: journeyID) }
+        // v2: stop the media-zone share too and clear the published URL (MAPPING §13).
+        await PersistenceController.shared.stopMediaShare(forJourneyID: journeyID)
     }
 
     /// Run a mutation and re-read the truth from CloudKit afterwards. Deliberately no optimistic

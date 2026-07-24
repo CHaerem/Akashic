@@ -2,6 +2,7 @@ DEFINE SCHEMA
 
     RECORD TYPE Journey (
         name                 STRING QUERYABLE SEARCHABLE SORTABLE,
+        mediaShareURL        STRING,
         slug                 STRING QUERYABLE SORTABLE,
         description          STRING SEARCHABLE,
         country              STRING QUERYABLE SEARCHABLE,
@@ -82,6 +83,16 @@ DEFINE SCHEMA
         GRANT WRITE TO "_creator",
         GRANT CREATE TO "_icloud",
         GRANT READ TO "_world"
+    );
+
+    RECORD TYPE PhotoMedia (
+        photoId              STRING QUERYABLE,
+        journeyId            STRING QUERYABLE,
+        original             ASSET,
+        "___recordID"        REFERENCE QUERYABLE,
+        GRANT WRITE TO "_creator",
+        GRANT CREATE TO "_icloud",
+        GRANT READ TO "_icloud"
     );
 
     RECORD TYPE PublicJourney (

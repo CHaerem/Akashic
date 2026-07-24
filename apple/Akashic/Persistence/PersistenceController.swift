@@ -40,6 +40,9 @@ final class PersistenceController {
     var sharedSyncCoordinator: AkashicSyncEngine?
     /// Observes local Core Data saves and feeds them to the engine; nil unless `.cloudKit`.
     var syncScheduler: SyncScheduler?
+    /// The one-time v2 photo-storage repack (MAPPING §13). Held so a Wi-Fi path change can resume
+    /// it. nil unless `.cloudKit` on the owner's device.
+    var mediaRepackJob: MediaRepackJob?
     /// Set by the engine while applying fetched server records, so the scheduler ignores the
     /// echo save (see `SyncScheduler` / `PersistenceController+Sync`).
     var syncIsApplyingRemoteChanges = false

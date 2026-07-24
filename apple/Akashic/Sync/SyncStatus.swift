@@ -31,6 +31,18 @@ final class SyncStatus: ObservableObject {
     /// (incremental syncs, no estimate, or after the user answers). Only ever holds a `.prompt`.
     @Published var firstSyncPrompt: FirstSyncDownloadDecision?
 
+    /// Progress of the one-time v2 photo-storage repack (MAPPING §13), surfaced in consumer
+    /// Settings as e.g. "Optimizing photo storage · 412/1538". Nil when no repack is running or
+    /// pending (the common steady state, and on any non-owner / non-CloudKit device).
+    @Published var repackProgress: MediaRepackProgress?
+
+    /// One-line Settings string for an in-progress repack, or nil when there is nothing to show.
+    var repackSummary: String? {
+        guard let p = repackProgress, p.total > 0, p.done < p.total else { return nil }
+        let base = "Optimizing photo storage · \(p.done)/\(p.total)"
+        return p.isPaused ? base + " (waiting for Wi-Fi)" : base
+    }
+
     /// Human-readable one-liner for a Settings row.
     var summary: String {
         switch state {

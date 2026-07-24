@@ -107,6 +107,10 @@ struct SettingsView: View {
                         .foregroundStyle(Theme.accent)
                 }
             }
+            // v2 one-time photo-storage repack progress, while it runs (MAPPING §13).
+            if let repack = syncStatus.repackSummary {
+                labelled("Storage", repack)
+            }
             labelled("Library", Formatters.librarySummary(journeys: store.journeys.count,
                                                           photos: store.photoCount))
             Toggle("Download over Wi-Fi only", isOn: $networkPolicy.wifiOnlyDownloads)

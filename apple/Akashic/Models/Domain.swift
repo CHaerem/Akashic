@@ -146,6 +146,10 @@ struct Journey: Codable, Equatable, Identifiable {
     var country: String
     var description: String
     var heroImageURL: String?
+    /// CloudKit share URL for the journey's MEDIA zone (v2, MAPPING §13). Set by the owner when a
+    /// journey is shared so participants can auto-accept the media share and stream originals on
+    /// demand; nil for unshared or owner-local journeys. Synced on the Journey record.
+    var mediaShareURL: String? = nil
     var dateStarted: String?
     var dateEnded: String?
     var isPublic: Bool = false

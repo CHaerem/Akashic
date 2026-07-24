@@ -118,6 +118,19 @@ final class AkashicSyncEngine: NSObject, CKSyncEngineDelegate {
         activationFetch = Task.detached { [weak self] in await self?.fetchOnActivation() }
     }
 
+    /// Media zones discovered from server database-change events, so they are excluded from fetch
+    /// even before this device has the corresponding journey locally — the fresh-install / restore
+    /// case, where `mediaZoneIDsToExclude()` would otherwise be empty on the first pull and let the
+    /// engine materialize every original. Persisted per scope so a relaunch keeps excluding them.
+    private var discoveredMediaZoneKeys: Set<String> = []
+
+    /// Fired when a per-journey MEDIA zone (`journey-<uuid>-media`) vanishes server-side, with the
+    /// journey id. The media zone holds the v2 `PhotoMedia` originals; losing it server-side is the
+    /// same "iCloud lost it, this device still has the bytes" case as a data-zone loss, so the
+    /// owner re-uploads that journey's PhotoMedia from local bytes (see `MediaRepackJob`/
+    /// `PhotoMediaService`). Wired by `startSync`; nil in tests that only assert the hook fired.
+    var onMediaZoneLost: ((String) -> Void)?
+
     /// OFF by design: a server-side zone deletion never destroys local data (see
     /// `handleZoneDeletions`). Nothing in the app sets this; it exists so that if honoring
     /// genuine deletes is ever wanted, it must be turned on deliberately AND paired with
@@ -153,6 +166,32 @@ final class AkashicSyncEngine: NSObject, CKSyncEngineDelegate {
         self.networkPolicy = networkPolicy
         self.remotePhotoCounter = remotePhotoCounter
         super.init()
+        discoveredMediaZoneKeys = Set(defaults.stringArray(forKey: Self.discoveredMediaZonesKey(databaseScope)) ?? [])
+    }
+
+    private static func discoveredMediaZonesKey(_ scope: CKDatabase.Scope) -> String {
+        scope == .shared ? "akashic.sync.discoveredMediaZones.shared" : "akashic.sync.discoveredMediaZones"
+    }
+
+    /// Encode a media zone id (name + owner) to a persistable key and back.
+    private static func key(for zoneID: CKRecordZone.ID) -> String { zoneID.zoneName + "\t" + zoneID.ownerName }
+    private static func zoneID(fromKey key: String) -> CKRecordZone.ID? {
+        let parts = key.split(separator: "\t", maxSplits: 1, omittingEmptySubsequences: false)
+        guard parts.count == 2 else { return nil }
+        return CKRecordZone.ID(zoneName: String(parts[0]), ownerName: String(parts[1]))
+    }
+
+    /// Record media zones seen in a server database-change event so they are excluded from every
+    /// subsequent fetch (and after relaunch). Returns true if the known set changed.
+    @discardableResult
+    func recordDiscoveredMediaZones(_ zoneIDs: [CKRecordZone.ID]) -> Bool {
+        let keys = zoneIDs.filter(RecordCoder.isMediaZone).map(Self.key(for:))
+        guard !keys.isEmpty else { return false }
+        let before = discoveredMediaZoneKeys.count
+        discoveredMediaZoneKeys.formUnion(keys)
+        guard discoveredMediaZoneKeys.count != before else { return false }
+        defaults.set(Array(discoveredMediaZoneKeys), forKey: Self.discoveredMediaZonesKey(databaseScope))
+        return true
     }
 
     // MARK: - Zone routing (who owns which journey)
@@ -412,6 +451,9 @@ final class AkashicSyncEngine: NSObject, CKSyncEngineDelegate {
                 deletions: changes.deletions.map { (recordName: $0.recordID.recordName, recordType: $0.recordType) })
 
         case .fetchedDatabaseChanges(let changes):
+            // Remember any media zones the server just told us about, so they are excluded from the
+            // record-fetch phase and every future pull — even before we hold the journey locally.
+            recordDiscoveredMediaZones(changes.modifications.map { $0.zoneID })
             for deletion in changes.deletions {
                 handleZoneDeletions([deletion.zoneID], reason: Self.reason(for: deletion.reason))
             }
@@ -461,6 +503,12 @@ final class AkashicSyncEngine: NSObject, CKSyncEngineDelegate {
     func nextFetchChangesOptions(_ context: CKSyncEngine.FetchChangesContext,
                                  syncEngine: CKSyncEngine) async -> CKSyncEngine.FetchChangesOptions {
         var options = context.options
+        // v2: never fetch the per-journey MEDIA zones — that is the whole point of the split
+        // (first sync ≈ 75 MB, originals streamed on demand). Derived dynamically from the local
+        // journeys, so a journey created after the engine was built is covered without a rebuild.
+        // Composes with the cellular gate below (both mutate the same `options`).
+        let mediaZones = mediaZoneIDsToExclude()
+        if !mediaZones.isEmpty { options.scope = .allExcluding(mediaZones) }
         guard !networkPolicy.allowsHeavyTransfer else { return options }
         let group = options.operationGroup
         group.name = "AkashicWiFiOnlyFetch"
@@ -469,6 +517,21 @@ final class AkashicSyncEngine: NSObject, CKSyncEngineDelegate {
         group.defaultConfiguration = configuration
         options.operationGroup = group
         return options
+    }
+
+    /// The media zone ids this engine must exclude from every fetch: one per local journey it
+    /// handles, in that journey's owner/database. Derived at call time (not cached) so a
+    /// newly-created journey's media zone is excluded on the very next fetch. Testable without a
+    /// live engine (the untestable part is only handing the result to CloudKit's `Scope`).
+    func mediaZoneIDsToExclude() -> [CKRecordZone.ID] {
+        // Local journeys' media zones (covers new journeys without a rebuild) ...
+        var zones = Set(store.allLocalJourneyIDs()
+            .filter { handles(journeyID: $0) }
+            .map { RecordCoder.mediaZoneID(forJourneyID: $0, ownerName: ownerName(forJourneyID: $0)) })
+        // ... plus any discovered from server database-change events (the fresh-install / restore
+        // case, where the local store is empty on the first pull).
+        zones.formUnion(discoveredMediaZoneKeys.compactMap(Self.zoneID(fromKey:)))
+        return Array(zones)
     }
 
     // MARK: - Testable event handling (plain inputs, no live engine required)
@@ -505,6 +568,20 @@ final class AkashicSyncEngine: NSObject, CKSyncEngineDelegate {
     /// for that and deliberately has no code path that sets it to true.
     func handleZoneDeletions(_ zoneIDs: [CKRecordZone.ID],
                              reason: ZoneDeletionReason = .unknown) {
+        // v2: a lost MEDIA zone is handled separately — it holds no domain data (only PhotoMedia
+        // originals), so there is nothing to protect locally and nothing to re-create through this
+        // engine (media records go DIRECT via CKDatabase). The owner re-uploads that journey's
+        // PhotoMedia from local bytes via the hook; a participant (who has no local originals) does
+        // nothing and simply keeps streaming on demand from whatever remains. Handled BEFORE the
+        // data-zone path because `journeyID(fromZoneID:)` deliberately returns nil for media zones.
+        let mediaJourneyIDs = zoneIDs.compactMap(RecordCoder.journeyID(fromMediaZoneID:))
+        if !mediaJourneyIDs.isEmpty, databaseScope == .private {
+            for journeyID in mediaJourneyIDs {
+                SyncLog.log("handleZoneDeletions: media zone lost for \(journeyID) — re-uploading PhotoMedia from local bytes")
+                onMediaZoneLost?(journeyID)
+            }
+        }
+
         let journeyIDs = zoneIDs.compactMap(RecordCoder.journeyID(fromZoneID:))
         guard !journeyIDs.isEmpty else { return }
 

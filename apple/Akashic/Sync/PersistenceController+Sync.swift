@@ -49,19 +49,30 @@ extension PersistenceController: SyncLocalStore {
             networkPolicy: policy)
         syncCoordinator = coordinator
         sharedSyncCoordinator = sharedCoordinator
+        // v2: a lost media zone (owner side) re-uploads that journey's PhotoMedia from local bytes.
+        coordinator.onMediaZoneLost = { [weak self] journeyID in self?.healMediaZone(journeyID: journeyID) }
+        // v2 participant side: when the shared engine applies fetched changes (which may carry a
+        // newly-set Journey.mediaShareURL), auto-accept any media share not yet accepted.
+        sharedCoordinator.onRemoteChangesApplied = { [weak self] in self?.autoAcceptMediaSharesIfNeeded() }
         // When the path becomes cheap (or the user turns the setting off), release any deferred
-        // heavy fetch on BOTH engines immediately — the NWPathMonitor callback, not next launch.
-        policy.onAllowsHeavyTransferBecameTrue = { [weak coordinator, weak sharedCoordinator] in
+        // heavy fetch on BOTH engines immediately — the NWPathMonitor callback, not next launch —
+        // and resume the Wi-Fi-gated repack if one was paused.
+        policy.onAllowsHeavyTransferBecameTrue = { [weak self, weak coordinator, weak sharedCoordinator] in
             coordinator?.networkPolicyDidAllowHeavyTransfer()
             sharedCoordinator?.networkPolicyDidAllowHeavyTransfer()
+            self?.startMediaRepackIfNeeded()
         }
         syncScheduler = SyncScheduler(
             context: viewContext,
             engines: [coordinator, sharedCoordinator],
             isApplyingRemoteChanges: { [weak self] in self?.syncIsApplyingRemoteChanges ?? false })
-        Task {
+        Task { [weak self] in
             await coordinator.activate()
             await sharedCoordinator.activate()
+            // Owner-only one-time repack (MAPPING §13): move migrated originals onto PhotoMedia
+            // records and shrink the journey zones. Idempotent + resumable, so running it after
+            // every activation is safe — a completed archive finds nothing to do.
+            self?.startMediaRepackIfNeeded()
         }
         #else
         syncStatus.set(.notEntitled)
@@ -202,7 +213,16 @@ extension PersistenceController: SyncLocalStore {
                                       sortOrder: index, in: zoneID, existing: base)
         }
         if let cd = syncFetchPhoto(recordName) {
-            return RecordCoder.record(for: CoreDataMapping.photo(from: cd), in: zoneID, existing: base)
+            let record = RecordCoder.record(for: CoreDataMapping.photo(from: cd), in: zoneID, existing: base)
+            // v2: once the original is safely on this photo's PhotoMedia record (its `media-<id>`
+            // meta exists), drop `original` from the Photo record so the journey zone stops
+            // carrying the heavy asset. This is the repack's "clear via engine" step, and it stays
+            // in effect for any later edit of an already-repacked photo. Never fires until the media
+            // upload is confirmed, so it can never delete the only server copy.
+            if hasUploadedRecord(forRecordName: RecordCoder.mediaRecordName(forPhotoID: recordName)) {
+                RecordCoder.clearOriginalAsset(on: record)
+            }
+            return record
         }
         if let cd = syncFetchComment(recordName) {
             return RecordCoder.record(for: CoreDataMapping.dayComment(from: cd, currentUserId: nil),
@@ -396,6 +416,10 @@ extension PersistenceController: SyncLocalStore {
         // fetched journey always decodes heroImageURL == nil. Assigning that would erase the
         // path the local import stored — only ever overwrite with a real value.
         if let hero = journey.heroImageURL { cd.heroImageURL = hero }
+        // Media-zone share URL (v2): only ever overwrite with a real value so a partial fetch never
+        // blanks a known URL. A newly-arrived value is what triggers the participant's media-share
+        // auto-accept (see `MediaShareAutoAccepter`).
+        if let mediaShareURL = journey.mediaShareURL { cd.mediaShareURL = mediaShareURL }
         cd.dateStarted = DateOnly.date(from: journey.dateStarted)
         cd.dateEnded = DateOnly.date(from: journey.dateEnded)
         cd.isPublic = journey.isPublic

@@ -362,3 +362,93 @@ zones/record metadata itself).
 shipped tonight is Option-A-shaped; choosing B invalidates §§1–11's zone and
 naming guarantees and the web adapter's record queries. Do not flip the app's
 `.cloudKit` mode against the real container until this is decided.
+
+---
+
+## 13. Photo architecture v2 — thumbnails-first sync, originals on demand
+
+**Supersedes the §4 single-record design** (`original` + `thumb` both ASSETs on
+the one `Photo` record). That design made first sync ≈ 5.4 GB: `CKSyncEngine`
+materializes every asset in the zones it fetches, so pulling the journey zones
+pulled every full-resolution original. v2 keeps the product's real shape — a
+curated shared archive whose originals stream on demand — and brings first sync
+to ≈ 75 MB (metadata + thumbnails).
+
+### The split
+
+- **`Photo` record (journey zone, unchanged location):** metadata + `thumb`
+  ASSET only. `original` is **no longer written** by ingest or native edits
+  (`RecordCoder.record(for:)` defaults `includeOriginal: false`; the field stays
+  in the schema and is left untouched on edits — never nil-assigned — so a
+  momentary read failure can't delete a server copy). The migration importer is
+  the one exception (`includeOriginal: true`); the repack below clears those.
+- **New record type `PhotoMedia`:** fields `photoId` STRING QUERYABLE,
+  `journeyId` STRING QUERYABLE, `original` ASSET. `recordName = media-<photoId>`.
+- **Media zone:** `PhotoMedia` records live in a per-journey **media zone**,
+  `zoneName = journey-<uuid>-media` (the journey's zone name + `-media`), in the
+  same database/owner as the journey zone.
+- **`Journey.mediaShareURL` STRING:** the media zone's `CKShare` URL, set by the
+  owner when the journey is shared, so participants auto-accept the media share.
+
+### Engine fetch exclusion
+
+Both engines exclude every `-media` zone from their fetch scope
+(`nextFetchChangesOptions → .allExcluding(mediaZoneIDs)`), derived **dynamically**
+from the local journeys, so a journey created after the engine was built is
+covered without a rebuild. It composes with the Wi-Fi cellular gate (both mutate
+the same options). A media-zone deletion event is routed separately
+(`journeyID(fromZoneID:)` returns nil for media zones): the owner re-uploads that
+journey's `PhotoMedia` from local bytes (`onMediaZoneLost` → `healMediaZone`); a
+participant, holding no originals, just keeps streaming what remains.
+
+### Send path (the deliberate choice)
+
+`PhotoMedia` saves/deletes go **DIRECT via `CKDatabase`** (chunked `modifyRecords`,
+`.allKeys`), **not** through `CKSyncEngine`. Reason: the engines deliberately
+never *fetch* the media zones, so routing media *sends* through the engine would
+leave it tracking change tags for records it never fetches back, on every device
+— dead, asymmetric bookkeeping. Direct DB writes keep the engine's world purely
+metadata, mirror the importer's proven batching, and are the natural counterpart
+to the on-demand `records(for:)` read. See `MediaDatabase` / `PhotoMediaService`.
+User-initiated ingest media uploads are **not** Wi-Fi-gated (one ~4 MB original
+the user just added); the batch repack **is**.
+
+### On-demand originals
+
+`MediaFetcher.originalURL(for:)`: local hit first (the same stale-path-tolerant
+`resolveMedia`), else fetch `media-<id>` with `records(for:)` from the correct
+database (owner → private; shared-in → shared, routed via the stored zone owner),
+copy the bytes into the media root under the photo's canonical key (a local hit
+forever after), return the file URL. Single in-flight fetch per photo id. A single
+on-demand original is allowed on cellular (the user tapped it); batch
+prefetch/export goes through the same fetcher and can be Wi-Fi-gated at the call
+site.
+
+### The automatic one-time repack
+
+`MediaRepackJob` runs on launch in `.cloudKit` mode, **owner only**. It finds
+migrated photos that still carry `original` locally-known bytes but have no
+confirmed `PhotoMedia`, uploads each from **local bytes** (never downloaded,
+chunked like the importer), then clears `Photo.original` via the engine (a normal
+local edit whose encode omits the field once the `media-<id>` completion is
+recorded — see `makeRecord`). It is:
+
+- **resumable** — completion is a `CDSyncRecordMeta` row keyed `media-<photoId>`,
+  persisted per record; **no Core Data migration was needed** for progress. A
+  kill mid-run resumes from the remainder.
+- **idempotent** — a second run finds nothing pending.
+- **skip-when-bytes-missing** — a photo with no local original is never pending,
+  so a participant / partial store neither loops nor errors.
+- **Wi-Fi-gated + throttled** — pauses on cellular and resumes on a cheap path;
+  yields between batches so it never starves interactive use.
+- **surfaced** — `SyncStatus.repackSummary` → "Optimizing photo storage · 412/1538".
+
+### Sharing
+
+Creating a journey's data share also ensures its media zone + a `CKShare` on it and
+publishes the URL onto `Journey.mediaShareURL` (synced via the engine). On the
+participant, a shared journey arriving with a `mediaShareURL` it hasn't accepted
+triggers `MediaShareAutoAccepter` — a background `CKFetchShareMetadataOperation` →
+`container.accept`, silent and retry-tolerant; a failure **degrades to
+thumbnails** with a quiet log, never a dialog. Unshare stops the media share and
+clears the URL.

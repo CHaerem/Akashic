@@ -639,7 +639,10 @@ final class CloudKitImportSink: ImportSink {
             return RecordCoder.record(forWaypoint: camp, journeyID: journeyID, sortOrder: sortOrder,
                                       in: item.zoneID)
         case .photo(let p):
-            return RecordCoder.record(for: p, in: item.zoneID)
+            // The migration keeps attaching the original here (includeOriginal: true) — it is the
+            // one path exempt from the v2 media split. The one-time repack (MediaRepackJob) later
+            // moves those bytes onto PhotoMedia records and clears the Photo.original field.
+            return RecordCoder.record(for: p, in: item.zoneID, includeOriginal: true)
         case .comment(let c):
             return RecordCoder.record(for: c, in: item.zoneID)
         }

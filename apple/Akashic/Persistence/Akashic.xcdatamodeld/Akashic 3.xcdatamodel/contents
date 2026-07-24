@@ -16,6 +16,9 @@
         <attribute name="isPublic" optional="YES" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
         <attribute name="journeyDescription" optional="YES" attributeType="String"/>
         <attribute name="journeyType" optional="YES" attributeType="String" defaultValueString="trek"/>
+        <!-- v2 (MAPPING §13): CKShare URL for the journey's media zone, so participants can
+             auto-accept the media share and stream originals on demand. nil unless shared. -->
+        <attribute name="mediaShareURL" optional="YES" attributeType="String"/>
         <attribute name="name" optional="YES" attributeType="String"/>
         <attribute name="preferredBearing" optional="YES" attributeType="Double" defaultValueString="0" usesScalarValueType="YES"/>
         <attribute name="preferredPitch" optional="YES" attributeType="Double" defaultValueString="60" usesScalarValueType="YES"/>
