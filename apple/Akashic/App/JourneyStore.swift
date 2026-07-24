@@ -235,6 +235,19 @@ final class JourneyStore: ObservableObject {
         persistence.nextPhotoSortOrder(forJourneyID: id)
     }
 
+    // Journey creation ----------------------------------------------------------------------
+
+    /// Create a new journey from a draft (§4.1) and land it in the store. The slug is uniquified
+    /// against the journeys already present. Returns the created journey (with its final slug) so
+    /// the UI can navigate straight into it, or nil if the write failed.
+    @discardableResult
+    func createJourney(from draft: JourneyDraft) -> Journey? {
+        let newJourney = draft.makeJourney(existingSlugs: journeys.map(\.slug))
+        guard persistence.createJourney(newJourney) else { return nil }
+        reload()
+        return journey(withID: newJourney.id) ?? newJourney
+    }
+
     // Waypoint / journey edits --------------------------------------------------------------
 
     @discardableResult

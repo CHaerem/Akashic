@@ -3,35 +3,95 @@ import SwiftUI
 /// Scrollable list of journey cards.
 struct JourneyListView: View {
     @EnvironmentObject private var store: JourneyStore
+    @Environment(\.dismiss) private var dismiss
+    @State private var showingNewJourney = false
 
     var body: some View {
         ScrollView {
             LazyVStack(spacing: 16) {
-                ForEach(store.journeys) { journey in
-                    NavigationLink(value: journey.id) {
-                        JourneyCard(journey: journey)
-                    }
-                    .buttonStyle(.plain)
-                }
-
                 if store.journeys.isEmpty {
-                    ContentUnavailableView(
-                        "No journeys",
-                        systemImage: "moon.stars",
-                        description: Text(store.loadError ?? "Nothing to show yet.")
-                    )
-                    .padding(.top, 80)
+                    JourneyEmptyState { showingNewJourney = true }
+                        .padding(.top, 60)
+                } else {
+                    ForEach(store.journeys) { journey in
+                        NavigationLink(value: journey.id) {
+                            JourneyCard(journey: journey)
+                        }
+                        .buttonStyle(.plain)
+                    }
                 }
             }
             .padding(16)
         }
         .background(Theme.background.ignoresSafeArea())
         .navigationTitle("Journeys")
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Button {
+                    showingNewJourney = true
+                } label: {
+                    Image(systemName: "plus")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(Theme.accent)
+                }
+                .accessibilityLabel("New journey")
+            }
+        }
+        .sheet(isPresented: $showingNewJourney) {
+            // On create, close the list so the globe (which observes `pendingJourneySelection`)
+            // flies straight into the new journey.
+            NewJourneySheet(onCreated: { _ in dismiss() })
+                .environmentObject(store)
+        }
         .navigationDestination(for: String.self) { id in
             if let journey = store.journey(withID: id) {
                 JourneyDetailView(journey: journey)
             }
         }
+    }
+}
+
+/// First-run hero shown when there are no journeys yet — the front door for a new family.
+struct JourneyEmptyState: View {
+    var onCreate: () -> Void
+
+    var body: some View {
+        VStack(spacing: 20) {
+            ZStack {
+                Circle()
+                    .fill(Theme.accentSoft)
+                    .frame(width: 96, height: 96)
+                Image(systemName: "mountain.2.fill")
+                    .font(.system(size: 40, weight: .semibold))
+                    .foregroundStyle(Theme.accent)
+            }
+            VStack(spacing: 8) {
+                Text("Start your first journey")
+                    .font(.title2.weight(.bold))
+                    .foregroundStyle(Theme.textPrimary)
+                Text("Name a trek, drop in a GPX route, and let your photos fill the days.")
+                    .font(.subheadline)
+                    .foregroundStyle(Theme.textSecondary)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Button(action: onCreate) {
+                Label("Create a journey", systemImage: "plus")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(Theme.background)
+                    .padding(.vertical, 14)
+                    .padding(.horizontal, 24)
+                    .background(Theme.accent, in: Capsule())
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(28)
+        .frame(maxWidth: .infinity)
+        .background(Theme.surface, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .strokeBorder(Theme.hairline, lineWidth: 1)
+        )
     }
 }
 

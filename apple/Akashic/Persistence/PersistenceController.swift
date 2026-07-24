@@ -444,6 +444,28 @@ final class PersistenceController {
         }
     }
 
+    // MARK: Journey creation
+
+    /// Create a brand-new journey (with its camps as waypoints) from a draft-built domain value.
+    ///
+    /// Goes through the same `CoreDataMapping.upsertJourney` seam every import and edit uses, so
+    /// the resulting Core Data save is observed by `SyncScheduler` in `.cloudKit` mode — and the
+    /// new journey's CKRecord zone + records are enqueued for upload automatically (a journey-root
+    /// `.save` becomes a `.saveZone`; see `AkashicSyncEngine.localStoreDidChange`). No new engine
+    /// path is needed: a locally created journey is just another observed insert.
+    @discardableResult
+    func createJourney(_ journey: Journey) -> Bool {
+        let context = viewContext
+        CoreDataMapping.upsertJourney(journey, into: context)
+        do {
+            try context.save()
+            return true
+        } catch {
+            context.rollback()
+            return false
+        }
+    }
+
     // MARK: Journey edits
 
     /// Update a journey's editable fields (mirrors the web `JourneyEditModal` / `JourneyUpdate`).

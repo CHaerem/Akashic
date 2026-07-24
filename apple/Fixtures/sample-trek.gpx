@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" creator="Akashic sample"
+     xmlns="http://www.topografix.com/GPX/1/1"
+     xmlns:gpxtpx="http://www.garmin.com/xmlschemas/TrackPointExtension/v1"
+     xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+     xsi:schemaLocation="http://www.topografix.com/GPX/1/1 http://www.topografix.com/GPX/1/1/gpx.xsd">
+  <metadata>
+    <name>Besseggen Ridge</name>
+    <desc>A short sample trek for testing GPX import (Jotunheimen, Norway).</desc>
+    <time>2023-08-12T06:30:00Z</time>
+  </metadata>
+  <!-- Day markers: imported as one proposed day each, in order. -->
+  <wpt lat="61.4972" lon="8.8110">
+    <ele>995</ele>
+    <name><![CDATA[Gjendesheim]]></name>
+    <desc>Trailhead at Lake Gjende</desc>
+    <time>2023-08-12T06:30:00Z</time>
+  </wpt>
+  <wpt lat="61.5205" lon="8.7460">
+    <ele>1743</ele>
+    <name>Veslfjellet Summit</name>
+    <desc>High point of the ridge</desc>
+    <time>2023-08-12T10:15:00Z</time>
+  </wpt>
+  <wpt lat="61.5390" lon="8.6720">
+    <ele>1008</ele>
+    <name>Memurubu</name>
+    <desc>Lakeside lodge and ferry dock</desc>
+    <time>2023-08-12T14:40:00Z</time>
+  </wpt>
+  <trk>
+    <name>Besseggen Ridge</name>
+    <trkseg>
+      <trkpt lat="61.4972" lon="8.8110"><ele>995</ele><time>2023-08-12T06:30:00Z</time>
+        <extensions><gpxtpx:TrackPointExtension><gpxtpx:hr>96</gpxtpx:hr></gpxtpx:TrackPointExtension></extensions>
+      </trkpt>
+      <trkpt lat="61.5010" lon="8.7980"><ele>1180</ele></trkpt>
+      <trkpt lat="61.5075" lon="8.7790"><ele>1420</ele></trkpt>
+      <trkpt lat="61.5150" lon="8.7600"><ele>1610</ele></trkpt>
+      <trkpt lat="61.5205" lon="8.7460"><ele>1743</ele></trkpt>
+      <trkpt lat="61.5280" lon="8.7180"><ele>1520</ele></trkpt>
+      <trkpt lat="61.5340" lon="8.6940"><ele>1240</ele></trkpt>
+      <trkpt lat="61.5390" lon="8.6720"><ele>1008</ele></trkpt>
+    </trkseg>
+  </trk>
+</gpx>
