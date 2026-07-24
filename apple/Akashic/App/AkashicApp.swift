@@ -23,6 +23,9 @@ struct AkashicApp: App {
     @StateObject private var store = JourneyStore()
     @StateObject private var onboarding = OnboardingCoordinator()
     @StateObject private var entitlements = EntitlementStore()
+    // M6 — the on-device Intelligence gate (Foundation Models). Probes availability once at
+    // construction; the whole feature family is absent (not broken) when it reports unavailable.
+    @StateObject private var intelligence = Intelligence()
 
     init() {
         // Demo/screenshot hook: force the on-disk `.local` store before the store is first
@@ -42,6 +45,7 @@ struct AkashicApp: App {
                 .environmentObject(store)
                 .environmentObject(onboarding)
                 .environmentObject(entitlements)
+                .environmentObject(intelligence)
                 .preferredColorScheme(.dark)
                 .tint(Theme.accent)
                 // First-run onboarding (§4.2): a full-screen cover shown once. The coordinator

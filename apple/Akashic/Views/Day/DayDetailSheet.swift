@@ -10,6 +10,7 @@ import SwiftUI
 struct DayDetailSheet: View {
     @EnvironmentObject private var store: JourneyStore
     @EnvironmentObject private var entitlements: EntitlementStore
+    @EnvironmentObject private var intelligence: Intelligence
     let journey: Journey
     let dayIndex: Int
     var onSelectDay: (Int) -> Void
@@ -89,6 +90,8 @@ struct DayDetailSheet: View {
             if let camp {
                 WaypointEditSheet(journeyID: journey.id, camp: camp, onSave: loadPhotos)
                     .environmentObject(store)
+                    .environmentObject(entitlements)
+                    .environmentObject(intelligence)
             }
         }
         .sheet(isPresented: $showImport) {

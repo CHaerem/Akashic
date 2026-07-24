@@ -12,6 +12,7 @@ import SwiftUI
 struct EditScreenshotHarness: View {
     @EnvironmentObject private var store: JourneyStore
     @EnvironmentObject private var entitlements: EntitlementStore
+    @EnvironmentObject private var intelligence: Intelligence
     let kind: String
 
     var body: some View {
@@ -40,7 +41,10 @@ struct EditScreenshotHarness: View {
                 JourneyEditSheet(journey: journey).environmentObject(store)
             case "waypoint":
                 if let camp = journey.camps.first {
-                    WaypointEditSheet(journeyID: journey.id, camp: camp).environmentObject(store)
+                    WaypointEditSheet(journeyID: journey.id, camp: camp)
+                        .environmentObject(store)
+                        .environmentObject(entitlements)
+                        .environmentObject(intelligence)
                 }
             case "import":
                 PhotoImportSheet(journey: journey).environmentObject(store).environmentObject(entitlements)

@@ -4,6 +4,7 @@ import SwiftUI
 struct JourneyDetailView: View {
     @EnvironmentObject private var store: JourneyStore
     @EnvironmentObject private var entitlements: EntitlementStore
+    @EnvironmentObject private var intelligence: Intelligence
     let journey: Journey
 
     /// Which day (index into `camps`) is shown in the presented `DayDetailSheet`, if any.
@@ -94,7 +95,10 @@ struct JourneyDetailView: View {
             PhotoImportSheet(journey: live).environmentObject(store).environmentObject(entitlements)
         }
         .sheet(item: $editingCamp) { camp in
-            WaypointEditSheet(journeyID: live.id, camp: camp).environmentObject(store)
+            WaypointEditSheet(journeyID: live.id, camp: camp)
+                .environmentObject(store)
+                .environmentObject(entitlements)
+                .environmentObject(intelligence)
         }
         .sheet(isPresented: $showExport) {
             JourneyExportSheet(journey: live).environmentObject(store).environmentObject(entitlements)
@@ -293,5 +297,6 @@ struct FlowChips: View {
     }
     .environmentObject(JourneyStore(persistence: .preview))
     .environmentObject(EntitlementStore.previewFree)
+    .environmentObject(Intelligence.previewUnavailable)
     .preferredColorScheme(.dark)
 }

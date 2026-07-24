@@ -11,6 +11,7 @@ import UniformTypeIdentifiers
 struct NewJourneySheet: View {
     @EnvironmentObject private var store: JourneyStore
     @EnvironmentObject private var entitlements: EntitlementStore
+    @EnvironmentObject private var intelligence: Intelligence
     @Environment(\.dismiss) private var dismiss
 
     /// Called with the created journey after a successful save (so a presenter can dismiss its
@@ -36,6 +37,16 @@ struct NewJourneySheet: View {
     @State private var isSaving = false
     @State private var saveError: String?
     @State private var showPaywall = false
+
+    // M6 — on-device day-name suggestions (Apple Intelligence).
+    @State private var isSuggestingNames = false
+    @State private var suggestNamesFailed = false
+
+    /// "Suggest names" appears only with the on-device model available, Akashic Complete, and at
+    /// least one seeded day — otherwise the feature is simply absent.
+    private var showsSuggestNames: Bool {
+        intelligence.isAvailable && entitlements.isComplete && !draft.days.isEmpty
+    }
 
     private struct RouteSummary: Equatable {
         var pointCount: Int
@@ -291,6 +302,9 @@ struct NewJourneySheet: View {
                     Text("No days yet — import a GPX with waypoints, seed from photos, or add days below.")
                         .font(.caption).foregroundStyle(Theme.textTertiary)
                 }
+                if showsSuggestNames {
+                    suggestNamesButton
+                }
                 ForEach(Array(draft.days.enumerated()), id: \.element.id) { index, _ in
                     dayRow(index: index, day: $draft.days[index])
                 }
@@ -345,6 +359,63 @@ struct NewJourneySheet: View {
 
     private func addDay() {
         draft.days.append(DraftDay(name: "Day \(draft.days.count + 1)", source: .manual))
+    }
+
+    // MARK: Suggest names with Apple Intelligence (M6)
+
+    @ViewBuilder
+    private var suggestNamesButton: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Button(action: suggestNames) {
+                HStack(spacing: 8) {
+                    if isSuggestingNames {
+                        ProgressView().controlSize(.small).tint(Theme.accent)
+                    } else {
+                        Image(systemName: "apple.intelligence").foregroundStyle(Theme.accent)
+                    }
+                    Text(isSuggestingNames ? "Suggesting names…" : "Suggest names")
+                        .font(.subheadline.weight(.semibold)).foregroundStyle(Theme.accent)
+                    Spacer()
+                }
+                .padding(12)
+                .background(Theme.accentSoft, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            }
+            .buttonStyle(.plain)
+            .disabled(isSuggestingNames)
+            if suggestNamesFailed {
+                Text("Couldn't suggest names — try again")
+                    .font(.caption2).foregroundStyle(Theme.textTertiary)
+            }
+        }
+    }
+
+    /// Generate one name per day and apply the results ONLY to days still carrying their
+    /// auto-generated placeholder name — hand-edited days are never overwritten.
+    private func suggestNames() {
+        guard !isSuggestingNames, !draft.days.isEmpty else { return }
+        suggestNamesFailed = false
+        let facts = draft.days.enumerated().map { index, day in
+            DayNameFacts(index: index, day: day)
+        }
+        isSuggestingNames = true
+        Task {
+            defer { isSuggestingNames = false }
+            #if canImport(FoundationModels)
+            if #available(iOS 26.0, *) {
+                do {
+                    let suggestions = try await DayNamer.generate(for: facts)
+                    guard !suggestions.isEmpty else { suggestNamesFailed = true; return }
+                    draft.days = DayNamer.applying(suggestions: suggestions, to: draft.days)
+                } catch {
+                    suggestNamesFailed = true
+                }
+            } else {
+                suggestNamesFailed = true
+            }
+            #else
+            suggestNamesFailed = true
+            #endif
+        }
     }
 
     private func move(from index: Int, by offset: Int) {
