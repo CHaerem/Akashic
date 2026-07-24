@@ -1,5 +1,6 @@
 import { render, screen, waitFor } from '@testing-library/react';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { setSheetCoversChrome } from '../../lib/sheetOverlay';
 
 // Mirror AuthGuard.test.tsx: stub CloudKit so no CDN load / network happens, and
 // capture the auth-change handler. The attribution chip is a public-showcase
@@ -30,6 +31,11 @@ describe('Attribution — "Made with Akashic" chip (public showcase)', () => {
         vi.clearAllMocks();
     });
 
+    afterEach(() => {
+        // Reset the shared sheet-overlay signal so it can't leak between tests.
+        setSheetCoversChrome(false);
+    });
+
     it('renders for a signed-out visitor, pointing at the landing URL', async () => {
         getCloudKitSession.mockResolvedValue({ user: null });
 
@@ -48,6 +54,21 @@ describe('Attribution — "Made with Akashic" chip (public showcase)', () => {
         expect(await screen.findByRole('link', { name: 'Privacy' })).not.toBeNull();
         expect(screen.getByRole('link', { name: 'Terms' })).not.toBeNull();
         expect(screen.getByRole('link', { name: 'Support' })).not.toBeNull();
+    });
+
+    it('steps aside while the mobile bottom sheet covers it (no tap-stealing overlay)', async () => {
+        getCloudKitSession.mockResolvedValue({ user: null });
+        // AkashicApp raises this while the full-width sheet is open on mobile.
+        setSheetCoversChrome(true);
+
+        render(<AuthGuard><div>{CHILD}</div></AuthGuard>);
+
+        // The showcase child still renders; the chip + legal links step aside so
+        // the sheet owns every tap in the bottom-right region.
+        await waitFor(() => expect(getCloudKitSession).toHaveBeenCalled());
+        expect(screen.getByText(CHILD)).not.toBeNull();
+        expect(screen.queryByRole('link', { name: /Made with Akashic/i })).toBeNull();
+        expect(screen.queryByRole('link', { name: 'Privacy' })).toBeNull();
     });
 
     it('does NOT render once a session exists (signed-in family)', async () => {

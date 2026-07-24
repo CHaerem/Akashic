@@ -58,7 +58,7 @@
 
     <h2>What we collect</h2>
     <ul>
-      <li><strong>No analytics.</strong> There are no trackers, no advertising SDKs, and no behavioural profiling in the app or on this website.</li>
+      <li><strong>No analytics of our own.</strong> We run no trackers, no advertising SDKs, and no behavioural profiling in the app or on this website. The one thing we do not control is Mapbox, which powers the map &mdash; see &ldquo;Maps and photos&rdquo; below.</li>
       <li><strong>No accounts held by us.</strong> Sign-in uses your Apple ID directly with Apple; we never receive your password and keep no user database.</li>
       <li><strong>No third-party data sales.</strong> We have no data to sell.</li>
     </ul>
@@ -75,10 +75,13 @@
 
     <h2>Maps and photos</h2>
     <p>
-      The globe and maps are rendered using Mapbox; loading a map sends standard web
-      requests (such as your IP address) to Mapbox to fetch map tiles, subject to
-      Mapbox's own privacy terms. Published photo thumbnails are served from the
-      owner's iCloud.
+      The globe and maps are rendered using Mapbox GL. Loading a map sends standard
+      web requests (such as your IP address) to Mapbox to fetch map tiles. Mapbox GL
+      also sends its own anonymous usage and diagnostic events to Mapbox and stores a
+      randomly generated identifier in your browser to do so &mdash; this is Mapbox's
+      own telemetry, subject to Mapbox's privacy terms. It is not something we run,
+      receive, or use, and it is limited to pages that load the map. Published photo
+      thumbnails are served from the owner's iCloud.
     </p>
 
     <h2>Your rights</h2>

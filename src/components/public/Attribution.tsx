@@ -16,6 +16,7 @@
 
 import { colors, radius } from '../../styles/liquidGlass';
 import { APP_NAME, LANDING_URL, LEGAL_LINKS } from '../../lib/branding';
+import { useSheetCoversChrome } from '../../lib/sheetOverlay';
 
 const legalLinkStyle: React.CSSProperties = {
     color: colors.text.subtle,
@@ -24,6 +25,13 @@ const legalLinkStyle: React.CSSProperties = {
 };
 
 export function Attribution() {
+    // On mobile the full-width bottom sheet sits exactly over this chip. While
+    // it is open we step aside entirely so the chip never overlays — or steals
+    // taps from — the sheet's controls. On the plain globe this is false and the
+    // chip stays put.
+    const sheetCoversChrome = useSheetCoversChrome();
+    if (sheetCoversChrome) return null;
+
     return (
         <div
             style={{
@@ -50,11 +58,13 @@ export function Attribution() {
                     pointerEvents: 'auto',
                 }}
             >
-                <a href={LEGAL_LINKS.privacy} style={legalLinkStyle}>Privacy</a>
+                {/* Same new-tab behaviour as the chip: a stray tap opens the
+                    legal page without navigating away from the journey. */}
+                <a href={LEGAL_LINKS.privacy} target="_blank" rel="noopener noreferrer" style={legalLinkStyle}>Privacy</a>
                 <span aria-hidden="true" style={{ color: colors.text.disabled }}>·</span>
-                <a href={LEGAL_LINKS.terms} style={legalLinkStyle}>Terms</a>
+                <a href={LEGAL_LINKS.terms} target="_blank" rel="noopener noreferrer" style={legalLinkStyle}>Terms</a>
                 <span aria-hidden="true" style={{ color: colors.text.disabled }}>·</span>
-                <a href={LEGAL_LINKS.support} style={legalLinkStyle}>Support</a>
+                <a href={LEGAL_LINKS.support} target="_blank" rel="noopener noreferrer" style={legalLinkStyle}>Support</a>
             </nav>
 
             {/* "Made with Akashic" attribution chip. */}

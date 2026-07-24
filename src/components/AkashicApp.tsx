@@ -7,6 +7,7 @@ import { useJourneys } from '../contexts/JourneysContext';
 import { useAuth } from '../contexts/AuthContext';
 import { fetchPhotos, getJourneyIdBySlug, updatePhoto } from '../lib/journeys';
 import { hasPendingShares } from '../lib/shareTarget';
+import { setSheetCoversChrome } from '../lib/sheetOverlay';
 import type { Photo, Camp } from '../types/trek';
 import type mapboxgl from 'mapbox-gl';
 import { MapboxGlobe } from './MapboxGlobe';
@@ -203,6 +204,14 @@ export default function AkashicApp() {
     // Show bottom sheet when trek is selected (globe view) or in trek view
     const showSheet = (view === 'globe' && selectedTrek !== null) || view === 'trek';
 
+    // On mobile the full-width bottom sheet covers the bottom-right public chrome
+    // (the "Made with Akashic" chip + legal links, mounted by AuthGuard). Tell the
+    // chip to step aside while the sheet is open so it never overlays sheet controls.
+    useEffect(() => {
+        setSheetCoversChrome(isMobile && showSheet);
+        return () => setSheetCoversChrome(false);
+    }, [isMobile, showSheet]);
+
     // Filter photos with coordinates for map display
     // Use deferred photos to prevent map re-renders during camera animations
     // Memoized to prevent new array reference on every render (fixes React error #185)
@@ -233,7 +242,7 @@ export default function AkashicApp() {
 
     return (
         <ErrorBoundary>
-        <div style={{ position: 'fixed', inset: 0, background: colors.background.base }}>
+        <div className={signedIn ? undefined : 'public-chrome'} style={{ position: 'fixed', inset: 0, background: colors.background.base }}>
             {/* Mapbox Globe - Full screen hero */}
                     <div style={{ position: 'absolute', inset: 0 }}>
                         <MapboxGlobe
