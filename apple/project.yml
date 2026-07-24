@@ -65,6 +65,11 @@ targets:
         TARGETED_DEVICE_FAMILY: "1,2"
         GENERATE_INFOPLIST_FILE: "YES"
         INFOPLIST_KEY_CFBundleDisplayName: Akashic
+        # Export-compliance declaration, carried in every build so TestFlight never blocks on
+        # "Missing Compliance". Akashic uses only exempt encryption — HTTPS and CloudKit, no
+        # custom cryptography — which is the standard exemption. (Set once by hand on build 2
+        # via the ASC API before this key existed; from build 3 on it ships in the binary.)
+        INFOPLIST_KEY_ITSAppUsesNonExemptEncryption: "NO"
         INFOPLIST_KEY_UIApplicationSceneManifest_Generation: "YES"
         INFOPLIST_KEY_UILaunchScreen_Generation: "YES"
         INFOPLIST_KEY_UISupportedInterfaceOrientations: "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
