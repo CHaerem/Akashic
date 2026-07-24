@@ -377,6 +377,33 @@ final class JourneyStore: ObservableObject {
     /// is the owner's to control (only `_creator` can write the public records, and consenting to
     /// world-readability on the owner's behalf is not ours to do). Fixtures / local-mode journeys
     /// have no owner recorded and are ours by definition. (review finding #6.)
+    /// Why a journey cannot be deleted right now, or nil when deletion may proceed.
+    enum DeleteBlocker {
+        /// Shared-in journeys are the owner's to delete, not ours.
+        case notOwner
+        /// A published journey must leave the public showcase first — deleting around a live,
+        /// world-readable mirror would strand it with no owner able to remove it.
+        case stillPublished
+    }
+
+    func deleteBlocker(forJourneyID id: String) -> DeleteBlocker? {
+        guard isOwnedByCurrentUser(journeyID: id) else { return .notOwner }
+        if journey(withID: id)?.isPublic == true, persistence.mode == .cloudKit {
+            return .stillPublished
+        }
+        return nil
+    }
+
+    /// Delete an owned, unpublished journey everywhere. Returns false when blocked — callers
+    /// should have consulted `deleteBlocker` first and shown the reason.
+    @discardableResult
+    func deleteJourney(id: String) -> Bool {
+        guard deleteBlocker(forJourneyID: id) == nil else { return false }
+        persistence.deleteJourney(id: id)
+        reload()
+        return true
+    }
+
     func isOwnedByCurrentUser(journeyID: String) -> Bool {
         persistence.zoneOwnerName(forJourneyID: journeyID) == nil
     }

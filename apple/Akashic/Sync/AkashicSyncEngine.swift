@@ -404,6 +404,20 @@ final class AkashicSyncEngine: NSObject, CKSyncEngineDelegate {
         }
     }
 
+    /// Enqueue server-side deletion of a journey's zones (journey + media). The zone is the
+    /// cascade boundary by design (MAPPING §9), so this is THE delete path: two zone deletes
+    /// remove every record and asset, on every device, without ever enumerating 1500+ records.
+    /// Owner-only by construction — zone deletion in the shared database is not ours to do,
+    /// so this is a no-op outside the private scope.
+    func deleteZones(forJourneyID journeyID: String) {
+        guard isRunning, let engine, databaseScope == .private else { return }
+        engine.add(pendingDatabaseChanges: [
+            .deleteZone(RecordCoder.zoneID(forJourneyID: journeyID)),
+            .deleteZone(RecordCoder.mediaZoneID(forJourneyID: journeyID)),
+        ])
+        SyncLog.log("deleteZones: enqueued zone deletes for journey \(journeyID)")
+    }
+
     // MARK: - Local write intake (called by SyncScheduler)
 
     /// Translate observed local writes into pending record-zone changes (and a zone-save for a

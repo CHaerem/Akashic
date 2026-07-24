@@ -61,7 +61,12 @@ final class PersistenceController {
 
     var viewContext: NSManagedObjectContext { container.viewContext }
 
-    init(mode: PersistenceMode, seed: Bool = true, fixtureBundle: Bundle = .main) {
+    /// - Parameter storeURL: overrides the on-disk file for `.local`/`.cloudKit` (nil keeps the
+    ///   default Application Support location). Exists so a test that specifically needs
+    ///   `mode == .cloudKit` (e.g. to exercise a mode-gated branch like `deleteBlocker`'s
+    ///   still-published check) can point at a throwaway temp file instead of the app's real
+    ///   store — every other test drives the engine/store seam directly and stays on `.fixtures`.
+    init(mode: PersistenceMode, seed: Bool = true, fixtureBundle: Bundle = .main, storeURL: URL? = nil) {
         self.mode = mode
         let model = PersistenceController.managedObjectModel
 
@@ -73,6 +78,9 @@ final class PersistenceController {
             // schema; see CloudKit/MAPPING.md §12 + the D4 decision).
             container = NSPersistentContainer(name: Config.coreDataModelName,
                                               managedObjectModel: model)
+            if let storeURL {
+                container.persistentStoreDescriptions.first?.url = storeURL
+            }
 
         case .fixtures:
             container = NSPersistentContainer(name: Config.coreDataModelName,
@@ -100,8 +108,11 @@ final class PersistenceController {
 
         // Attach the CloudKit sync engine (account-gated inside `startSync`/`activate`). Built
         // on the main actor: `.shared`/`.cloudKit` is created on launch from `@MainActor`
-        // `JourneyStore`. Tests never build a `.cloudKit` controller (they drive the engine and
-        // store seam directly), so this main-actor assumption is not exercised off-main.
+        // `JourneyStore`. Nearly every test drives the engine/store seam directly and stays on
+        // `.fixtures`, so this main-actor assumption is mostly exercised on the app's own launch
+        // path; the rare test that does build `.cloudKit` (via the `storeURL` override above,
+        // to reach a mode-gated branch) runs on XCTest's main-thread test runner, so the
+        // assumption still holds there.
         if mode == .cloudKit {
             MainActor.assumeIsolated { startSync() }
         }
@@ -209,6 +220,49 @@ final class PersistenceController {
     /// the sync system-fields side table (`CDSyncRecordMeta`) — those change tags belong to the
     /// records being purged, and a stale tag rehydrated onto a re-imported record would send an
     /// update against a version the server no longer has.
+    /// Delete a journey everywhere: its CloudKit zones (journey + media — the zone is the
+    /// designed cascade boundary), its local rows (Core Data cascade takes the children), its
+    /// system-fields meta (including the media- rows), and its local media files.
+    ///
+    /// The local cascade is bracketed in remote-apply suppression for the same reason as
+    /// `resetJourneys`: without it the scheduler would forward a `deleteRecord` for every row
+    /// toward a zone that is already gone, and the zoneNotFound send-recovery would then
+    /// RECREATE the zone we just deleted. Two zone deletes are the entire remote story.
+    ///
+    /// Caller contract (enforced in `JourneyStore.deleteJourney`): owner-only, and never while
+    /// the journey is still published to the public showcase.
+    @MainActor
+    func deleteJourney(id: String) {
+        let context = container.viewContext
+
+        // 1. Remote: the two zone deletes, enqueued while we still know the journey exists.
+        syncCoordinator?.deleteZones(forJourneyID: id)
+
+        // 2. Local rows, suppressed so the cascade never reaches the scheduler.
+        let wasSuppressing = syncIsApplyingRemoteChanges
+        syncIsApplyingRemoteChanges = true
+        defer { syncIsApplyingRemoteChanges = wasSuppressing }
+
+        let request = NSFetchRequest<CDJourney>(entityName: "CDJourney")
+        request.predicate = NSPredicate(format: "id == %@", id)
+        guard let journey = (try? context.fetch(request))?.first else { return }
+        // Collect photo ids first — the meta purge and file cleanup need names the cascade
+        // is about to erase (purgeSystemFields(forJourneyID:) walks the journey's children,
+        // so it must run while the rows still exist).
+        let photoIDs = (journey.photos as? Set<CDPhoto> ?? []).compactMap(\.id)
+        purgeSystemFields(forJourneyID: id)
+        purgeSystemFields(forRecordNames: photoIDs.map { "media-\($0)" })
+
+        context.delete(journey)   // cascade: waypoints, photos, comments
+        if context.hasChanges { try? context.save() }
+
+        // 4. Local media files for this journey.
+        let mediaDir = MediaLibrary.shared.root
+            .appendingPathComponent("journeys", isDirectory: true)
+            .appendingPathComponent(id, isDirectory: true)
+        try? FileManager.default.removeItem(at: mediaDir)
+    }
+
     func resetJourneys() {
         let context = container.viewContext
         // Suppress sync forwarding around the mass delete. Without this, a running sync engine

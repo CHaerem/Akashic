@@ -5,6 +5,7 @@ struct JourneyDetailView: View {
     @EnvironmentObject private var store: JourneyStore
     @EnvironmentObject private var entitlements: EntitlementStore
     @EnvironmentObject private var intelligence: Intelligence
+    @Environment(\.dismiss) private var dismiss
     let journey: Journey
 
     /// Which day (index into `camps`) is shown in the presented `DayDetailSheet`, if any.
@@ -17,6 +18,11 @@ struct JourneyDetailView: View {
     @State private var showExport = false
     @State private var showShowcase = false
     @State private var editingCamp: Camp?
+    /// Delete-journey flow: tapping the menu entry routes to one of these depending on
+    /// `JourneyStore.deleteBlocker` — a still-published journey explains itself and offers the
+    /// Showcase sheet instead of the confirm dialog.
+    @State private var showDeleteConfirm = false
+    @State private var showDeleteBlockedAlert = false
 
     /// True when this journey lives in our own database (a shared-in journey is not ours to
     /// restructure or enrich). Fixtures / local-mode journeys are ours by definition.
@@ -82,6 +88,11 @@ struct JourneyDetailView: View {
                     Button { showExport = true } label: {
                         Label("Export journey", systemImage: "square.and.arrow.up")
                     }
+                    if isOwner {
+                        Button(role: .destructive) { handleDeleteTap() } label: {
+                            Label("Delete journey…", systemImage: "trash")
+                        }
+                    }
                 } label: {
                     Image(systemName: "ellipsis.circle")
                 }
@@ -134,6 +145,37 @@ struct JourneyDetailView: View {
                              journeyTitle: live.name,
                              service: PersistenceController.shared.sharingService)
         }
+        .confirmationDialog("Delete this journey?",
+                            isPresented: $showDeleteConfirm, titleVisibility: .visible) {
+            Button("Delete journey", role: .destructive) { deleteJourney() }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This deletes \"\(live.shortName)\" and its photos from your iCloud and every family device. Photos already saved in your Photos library are NOT affected. Consider using Export first to keep a copy.")
+        }
+        .alert("Remove from Showcase first", isPresented: $showDeleteBlockedAlert) {
+            Button("Open Showcase") { showShowcase = true }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("\"\(live.shortName)\" is on the public showcase. Remove it there before deleting the journey.")
+        }
+    }
+
+    /// Route the destructive menu tap through `deleteBlocker` — a published journey must come off
+    /// the showcase first (its mirror has no owner able to remove it once the source is gone).
+    private func handleDeleteTap() {
+        switch store.deleteBlocker(forJourneyID: live.id) {
+        case .stillPublished:
+            showDeleteBlockedAlert = true
+        case .notOwner:
+            break // menu entry is owner-gated; nothing to do if this is somehow reached.
+        case nil:
+            showDeleteConfirm = true
+        }
+    }
+
+    private func deleteJourney() {
+        guard store.deleteJourney(id: live.id) else { return }
+        dismiss()
     }
 
     private var daySheetPresented: Binding<Bool> {
