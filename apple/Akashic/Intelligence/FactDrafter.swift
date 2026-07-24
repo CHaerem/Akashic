@@ -33,9 +33,15 @@ struct DayFactInput: Equatable {
     var poiNames: [String]
     var dateLabel: String?
     var elevation: Int
+    /// **Retrieved reference text** (Wikipedia/Wikivoyage), if a geo-verified retrieval ran for this
+    /// day (see `KnowledgeRetrieval`). When present the prompt becomes strictly grounded in it —
+    /// the model may paraphrase these facts but must not add anything not stated here. Nil/empty
+    /// falls back to the ungrounded-but-name-constrained behaviour.
+    var referenceText: String?
 
     init(journeyName: String, country: String, dayNumber: Int, campName: String,
-         placeNames: [String] = [], poiNames: [String] = [], dateLabel: String? = nil, elevation: Int = 0) {
+         placeNames: [String] = [], poiNames: [String] = [], dateLabel: String? = nil, elevation: Int = 0,
+         referenceText: String? = nil) {
         self.journeyName = journeyName
         self.country = country
         self.dayNumber = dayNumber
@@ -44,6 +50,12 @@ struct DayFactInput: Equatable {
         self.poiNames = poiNames
         self.dateLabel = dateLabel
         self.elevation = elevation
+        self.referenceText = referenceText
+    }
+
+    /// Whether a geo-verified reference block is available to ground this day.
+    var hasReference: Bool {
+        !(referenceText?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true)
     }
 
     /// Every distinct, non-empty name the model is allowed to talk about (camp + places + POIs).
@@ -80,6 +92,24 @@ enum FactDrafter {
     each item to one plain sentence. No marketing tone.
     """
 
+    /// Stricter instructions used when a geo-verified REFERENCE TEXT block is supplied. The model is
+    /// told to draw ONLY from the reference and the facts we hold, preferring the reference for
+    /// names/history/nicknames, and to invent no number or claim that isn't written in the inputs.
+    static let groundedInstructions = """
+    You draft short factual notes for a travel journaling app. You are given REFERENCE TEXT from \
+    Wikipedia and Wikivoyage about the places listed, plus the facts we already hold. Absolute \
+    rules: draw ONLY from the reference text and those facts; prefer the reference for names, \
+    history, and nicknames; never add a place, date, number, statistic, or superlative that is not \
+    written in the inputs; if the reference does not support a statement, do not make it — return \
+    fewer items instead. Keep each fun fact to one short punchy sentence; keep each historical note \
+    to one plain sentence. No marketing tone.
+    """
+
+    /// The instructions to use for a given input — grounded when a reference block is present.
+    static func instructions(for input: DayFactInput) -> String {
+        input.hasReference ? groundedInstructions : instructions
+    }
+
     /// The deterministic prompt for one day. Lists the grounding names explicitly and asks for facts
     /// about THOSE names only. Contains no coordinates, no photo data.
     static func promptComponents(for input: DayFactInput) -> String {
@@ -99,7 +129,15 @@ enum FactDrafter {
         if !input.poiNames.isEmpty {
             lines.append("Nearby points of interest: \(input.poiNames.joined(separator: ", "))")
         }
-        lines.append("Return up to 3 fun facts and up to 3 short historical or cultural notes, each grounded only in the names above. Omit anything you are unsure is true.")
+        if input.hasReference, let reference = input.referenceText {
+            lines.append("")
+            lines.append("REFERENCE TEXT (from Wikipedia/Wikivoyage — draw ONLY from this and the facts above; add nothing not stated here):")
+            lines.append(reference.trimmingCharacters(in: .whitespacesAndNewlines))
+            lines.append("")
+            lines.append("Return up to 3 fun facts and up to 3 short historical or cultural notes, drawn only from the reference text and the facts above. Prefer the reference for names and history. Omit anything the reference does not support.")
+        } else {
+            lines.append("Return up to 3 fun facts and up to 3 short historical or cultural notes, each grounded only in the names above. Omit anything you are unsure is true.")
+        }
         return lines.joined(separator: "\n")
     }
 
@@ -169,7 +207,7 @@ extension FactDrafter {
     /// generation, maps the raw output into domain value types. Callers must have confirmed
     /// `Intelligence.isAvailable` and that `input.hasGrounding` first.
     static func generate(for input: DayFactInput) async throws -> DraftedFacts {
-        let session = LanguageModelSession(instructions: instructions)
+        let session = LanguageModelSession(instructions: instructions(for: input))
         let response = try await session.respond(
             to: promptComponents(for: input),
             generating: DayFactsSuggestion.self)

@@ -36,6 +36,10 @@ struct DayNoteInput: Equatable {
     var photoCount: Int
     /// Captions the user wrote on this day's photos (text only; empty captions omitted).
     var photoCaptions: [String]
+    /// **Retrieved reference text** (Wikipedia/Wikivoyage) for the day's places, if a geo-verified
+    /// retrieval ran (see `KnowledgeRetrieval`). When present the note is grounded strictly in it
+    /// plus the day's own facts; otherwise the existing facts-only behaviour applies.
+    var referenceText: String?
 
     /// Assemble the input from a day's `Camp`, the journey it belongs to, and the day's photos.
     /// Only photo *counts* and non-empty captions are read — the `Photo` values' paths/URLs never
@@ -57,12 +61,14 @@ struct DayNoteInput: Equatable {
             let trimmed = caption.caption?.trimmingCharacters(in: .whitespacesAndNewlines)
             return (trimmed?.isEmpty == false) ? trimmed : nil
         }
+        self.referenceText = nil
     }
 
     /// Memberwise init for tests / non-domain callers.
     init(journeyName: String, country: String, dayNumber: Int, campName: String, elevation: Int,
          dayDistanceKm: Double, elevationGain: Int, elevationLoss: Int, dateLabel: String?,
-         highlights: [String], weather: WeatherData?, photoCount: Int, photoCaptions: [String]) {
+         highlights: [String], weather: WeatherData?, photoCount: Int, photoCaptions: [String],
+         referenceText: String? = nil) {
         self.journeyName = journeyName
         self.country = country
         self.dayNumber = dayNumber
@@ -119,6 +125,24 @@ enum DayNoteDrafter {
     weave the day into a few natural sentences. Output only the entry text.
     """
 
+    /// Grounded variant, used when geo-verified reference text (Wikipedia/Wikivoyage) accompanies
+    /// the day's facts — the note may then also draw on the reference, and nothing else.
+    static let groundedInstructions = """
+    You write short journal entries for a travel journaling app. You are given the day's facts \
+    plus REFERENCE TEXT retrieved from Wikipedia and Wikivoyage about the day's places. Write ONLY \
+    from those two sources — never invent places, events, people, feelings, or details that appear \
+    in neither. The reference may lend a place's real name, nickname, or one piece of history; \
+    never copy its sentences verbatim. Write 2 to 4 sentences in the first person plural ("we"). \
+    Warm but plain; no superlatives the inputs do not support. Output only the entry text.
+    """
+
+    /// The instructions for a given input — grounded when a reference block is present.
+    static func instructions(for input: DayNoteInput) -> String {
+        let hasReference = !(input.referenceText?
+            .trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true)
+        return hasReference ? groundedInstructions : instructions
+    }
+
     /// The compact, structured prompt for one day. Deterministic: the same input always yields the
     /// same string, in a fixed field order, containing the facts and NEVER any photo path or byte.
     static func promptComponents(for input: DayNoteInput) -> String {
@@ -147,6 +171,12 @@ enum DayNoteDrafter {
         }
         if !input.photoCaptions.isEmpty {
             lines.append("Photo captions: \(input.photoCaptions.joined(separator: "; "))")
+        }
+        if let reference = input.referenceText?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !reference.isEmpty {
+            lines.append("")
+            lines.append("REFERENCE TEXT (from Wikipedia/Wikivoyage — you may draw on this and the facts above, nothing else; never copy sentences verbatim):")
+            lines.append(reference)
         }
         return lines.joined(separator: "\n")
     }
@@ -205,7 +235,7 @@ extension DayNoteDrafter {
     /// generation, returns the text. Callers must have confirmed `Intelligence.isAvailable` first —
     /// this never checks the gate itself (it can't see the env kill switch).
     static func generate(for input: DayNoteInput) async throws -> String {
-        let session = LanguageModelSession(instructions: instructions)
+        let session = LanguageModelSession(instructions: instructions(for: input))
         let response = try await session.respond(
             to: promptComponents(for: input),
             generating: DayNoteDraft.self)

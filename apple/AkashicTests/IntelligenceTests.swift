@@ -136,6 +136,26 @@ final class IntelligenceTests: XCTestCase {
         XCTAssertEqual(input.country, "Tanzania")
     }
 
+    func testDayNoteReferenceTextSwitchesInstructionsAndEntersPrompt() {
+        var input = DayNoteInput(journey: sampleJourney(), camp: sampleCamp(),
+                                 photos: [sampleCaptionedPhoto()])
+        XCTAssertEqual(DayNoteDrafter.instructions(for: input), DayNoteDrafter.instructions,
+                       "no reference -> facts-only instructions")
+        XCTAssertFalse(DayNoteDrafter.promptComponents(for: input).contains("REFERENCE TEXT"))
+
+        input.referenceText = "Barafu Camp is the final camp before the summit push."
+        XCTAssertEqual(DayNoteDrafter.instructions(for: input), DayNoteDrafter.groundedInstructions)
+        let prompt = DayNoteDrafter.promptComponents(for: input)
+        XCTAssertTrue(prompt.contains("REFERENCE TEXT"))
+        XCTAssertTrue(prompt.contains("final camp before the summit push"))
+
+        // Whitespace-only reference must NOT flip to grounded mode — that would claim a
+        // grounding that does not exist.
+        input.referenceText = "   \n  "
+        XCTAssertEqual(DayNoteDrafter.instructions(for: input), DayNoteDrafter.instructions)
+        XCTAssertFalse(DayNoteDrafter.promptComponents(for: input).contains("REFERENCE TEXT"))
+    }
+
     func testDayNotePromptContainsFactsAndIsDeterministic() {
         let input = DayNoteInput(journey: sampleJourney(), camp: sampleCamp(), photos: [sampleCaptionedPhoto()])
         let prompt = DayNoteDrafter.promptComponents(for: input)

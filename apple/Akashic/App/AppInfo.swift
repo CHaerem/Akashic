@@ -30,4 +30,12 @@ enum AppInfo {
     static var versionDisplay: String {
         "\(marketingVersion) (\(buildNumber))"
     }
+
+    /// The `User-Agent` sent on Wikipedia/Wikivoyage API requests (see `KnowledgeRetrieval`).
+    /// Wikimedia's REST API policy asks clients to identify themselves with an app name, version,
+    /// and a contact URL so operators can reach out about traffic — this is that string, e.g.
+    /// `"Akashic/0.1.0 (akashic.no; support@akashic.no)"`.
+    static var wikimediaUserAgent: String {
+        "Akashic/\(marketingVersion) (akashic.no; support@akashic.no)"
+    }
 }

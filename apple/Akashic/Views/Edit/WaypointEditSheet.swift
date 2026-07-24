@@ -154,7 +154,11 @@ struct WaypointEditSheet: View {
         draftFailed = false
         guard let journey = store.journey(withID: journeyID) else { return }
         let photos = store.photos(forDay: camp.dayNumber, journeyID: journeyID)
-        let input = DayNoteInput(journey: journey, camp: camp, photos: photos)
+        var input = DayNoteInput(journey: journey, camp: camp, photos: photos)
+        let retrievalRequest = RetrievalRequest(
+            placeNames: [name] + (camp.pointsOfInterest ?? []).map(\.name),
+            coordinate: camp.coordinates.count >= 2 ? camp.coordinates : nil,
+            regionHint: journey.country)
         // Capture the notes field as it is NOW, so the result can be compared against it: if the
         // user types during the multi-second generation, the stale draft is discarded rather than
         // wiping what they wrote. And existing notes are never silently replaced.
@@ -165,6 +169,11 @@ struct WaypointEditSheet: View {
             #if canImport(FoundationModels)
             if #available(iOS 26.0, *) {
                 do {
+                    // Geo-verified Wikipedia/Wikivoyage grounding — never throws, empty on any
+                    // failure, and the drafter falls back to facts-only instructions without it.
+                    let knowledge = await KnowledgeRetrieval(client: LiveWikimediaClient(userAgent: AppInfo.wikimediaUserAgent))
+                        .retrieve(retrievalRequest)
+                    if !knowledge.isEmpty { input.referenceText = knowledge.referenceText }
                     let draft = try await DayNoteDrafter.generate(for: input)
                     guard !draft.isEmpty else { draftFailed = true; return }
                     switch DayNoteDrafter.decision(fieldAtRequest: fieldAtRequest, fieldNow: description) {
@@ -250,16 +259,25 @@ struct WaypointEditSheet: View {
         let poiNames = (camp.pointsOfInterest ?? []).map(\.name)
         let journeyName = store.journey(withID: journeyID)?.shortName ?? ""
         let country = store.journey(withID: journeyID)?.country ?? ""
-        let input = DayFactInput(journeyName: journeyName, country: country,
+        var input = DayFactInput(journeyName: journeyName, country: country,
                                  dayNumber: camp.dayNumber, campName: name,
                                  placeNames: highlights, poiNames: poiNames,
                                  dateLabel: camp.dateLabel, elevation: Int(elevation) ?? camp.elevation)
         guard input.hasGrounding else { factsFailed = true; return }
+        let retrievalRequest = RetrievalRequest(
+            placeNames: [name] + poiNames + highlights,
+            coordinate: camp.coordinates.count >= 2 ? camp.coordinates : nil,
+            regionHint: country)
         isDraftingFacts = true
         Task {
             defer { isDraftingFacts = false }
             #if canImport(FoundationModels)
             if #available(iOS 26.0, *) {
+                // Retrieval first (never throws; empty context = ungrounded fallback), so the
+                // facts can carry real history instead of only rearranged names.
+                let knowledge = await KnowledgeRetrieval(client: LiveWikimediaClient(userAgent: AppInfo.wikimediaUserAgent))
+                    .retrieve(retrievalRequest)
+                if !knowledge.isEmpty { input.referenceText = knowledge.referenceText }
                 if let drafted = try? await FactDrafter.generate(for: input), !drafted.isEmpty {
                     pendingFacts = drafted
                 } else {

@@ -80,6 +80,57 @@ final class PlaceEnrichmentTests: XCTestCase {
         XCTAssertEqual(onlyLocality.bestLocalName, "Moshi")
     }
 
+    // MARK: Day names worth keeping (preference order · nearby feature · consecutive de-dupe)
+
+    /// Preference order: area of interest → nearby named feature → locality → region → name,
+    /// case-insensitively de-duplicated.
+    func testCampNameCandidatesPreferenceOrder() {
+        let place = GeocodedPlace(locality: "Cuzco", administrativeArea: "Cusco",
+                                  areaOfInterest: "Machu Picchu", name: "Cuzco")
+        // With an area of interest present, it leads; the feature slot still ranks above locality.
+        XCTAssertEqual(PlaceEnrichment.campNameCandidates(place: place, feature: "Wiñay Wayna"),
+                       ["Machu Picchu", "Wiñay Wayna", "Cuzco", "Cusco"])
+        // No area of interest: the nearby feature leads over the locality.
+        let bare = GeocodedPlace(locality: "Cuzco", name: "Cuzco")
+        XCTAssertEqual(PlaceEnrichment.campNameCandidates(place: bare, feature: "Sacsayhuamán"),
+                       ["Sacsayhuamán", "Cuzco"])
+        // No feature at all: locality is the honest fallback.
+        XCTAssertEqual(PlaceEnrichment.campNameCandidates(place: bare, feature: nil), ["Cuzco"])
+    }
+
+    /// When the reverse-geocode has no area of interest, a nearby named feature beats the locality.
+    func testCampNamesPreferNearbyFeatureOverLocality() async {
+        let geo = FakeGeocoder(fallback: GeocodedPlace(locality: "Cuzco"))
+        let search = FakeSearch(results: [
+            LocalSearchResult(name: "Machu Picchu", category: "summit", coordinate: [-72.5450, -13.1631]),
+        ])
+        let e = enrichment(geocoder: geo, search: search)
+        let days = [DayEnrichmentInput(dayID: "d1", name: "Day 1", coordinate: [-72.5450, -13.1631])]
+        let out = await e.suggestCampNames(for: days)
+        XCTAssertEqual(out.first?.name, "Machu Picchu")
+    }
+
+    /// Falls back to the locality when no named feature is nearby.
+    func testCampNamesFallBackToLocalityWithoutFeature() async {
+        let geo = FakeGeocoder(fallback: GeocodedPlace(locality: "Cuzco"))
+        let e = enrichment(geocoder: geo, search: FakeSearch(results: []))   // no features found
+        let days = [DayEnrichmentInput(dayID: "d1", name: "Day 1", coordinate: [-71.97, -13.53])]
+        let out = await e.suggestCampNames(for: days)
+        XCTAssertEqual(out.first?.name, "Cuzco")
+    }
+
+    /// The "Cuzco ×5" fix: consecutive auto-named days that all resolve to the same locality are not
+    /// offered the same name five times — repeats are skipped.
+    func testCampNamesDoNotRepeatPreviousDaysSuggestion() async {
+        let geo = FakeGeocoder(fallback: GeocodedPlace(locality: "Cuzco"))
+        let e = enrichment(geocoder: geo, search: FakeSearch(results: []))
+        let days = (1...5).map { DayEnrichmentInput(dayID: "d\($0)", name: "Day \($0)",
+                                                    coordinate: [-71.97, -13.53]) }
+        let out = await e.suggestCampNames(for: days)
+        XCTAssertEqual(out.count, 1, "only the first Cuzco is offered; the four repeats are skipped")
+        XCTAssertEqual(out.first?.dayID, "d1")
+    }
+
     // MARK: POIs
 
     func testPOIsDeduplicatedAndCapped() async {
