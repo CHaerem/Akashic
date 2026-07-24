@@ -12,6 +12,7 @@ import CoreLocation
 /// and `MapGeoMath` for the (unit-tested) geometry.
 struct GlobeExperienceView: View {
     @EnvironmentObject private var store: JourneyStore
+    @EnvironmentObject private var entitlements: EntitlementStore
 
     /// Optional photo thumbnail markers. Defaults to empty so trek mode renders without
     /// photos; the Import / photo agent can map their photos into `[MapPhoto]` and pass
@@ -34,6 +35,16 @@ struct GlobeExperienceView: View {
     @State private var sheetDetent: PresentationDetent = .medium
     @State private var showingPhotoGrid = false
     @State private var showingNewJourney = false
+    @State private var showingPaywall = false
+
+    /// Start a create attempt: below the free limit → open creation; at the limit → paywall.
+    private func startCreate() {
+        if entitlements.canCreateJourney(ownedCount: store.ownedJourneyCount) {
+            showingNewJourney = true
+        } else {
+            showingPaywall = true
+        }
+    }
 
     var body: some View {
         ZStack {
@@ -89,6 +100,11 @@ struct GlobeExperienceView: View {
         .sheet(isPresented: $showingNewJourney) {
             NewJourneySheet()
                 .environmentObject(store)
+                .environmentObject(entitlements)
+        }
+        .sheet(isPresented: $showingPaywall) {
+            PaywallView(reason: .journeyLimit)
+                .environmentObject(entitlements)
         }
     }
 
@@ -380,7 +396,7 @@ struct GlobeExperienceView: View {
                 .foregroundStyle(Theme.textPrimary)
                 .shadow(color: .black.opacity(0.5), radius: 4)
             Button {
-                showingNewJourney = true
+                startCreate()
             } label: {
                 Label("Start your first journey", systemImage: "plus")
                     .font(.subheadline.weight(.semibold))

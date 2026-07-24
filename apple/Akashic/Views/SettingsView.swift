@@ -16,8 +16,10 @@ import UniformTypeIdentifiers
 struct SettingsView: View {
     @EnvironmentObject private var store: JourneyStore
     @EnvironmentObject private var onboarding: OnboardingCoordinator
+    @EnvironmentObject private var entitlements: EntitlementStore
     @State private var override: PersistenceMode?
     @State private var showRelaunchNote = false
+    @State private var showPaywall = false
 
     /// Live sync state, so a stalled or erroring engine is visible instead of silent.
     @ObservedObject private var syncStatus = PersistenceController.shared.syncStatus
@@ -59,6 +61,9 @@ struct SettingsView: View {
             Button("OK", role: .cancel) {}
         } message: {
             Text("Quit and reopen Akashic for the new persistence mode to take effect.")
+        }
+        .sheet(isPresented: $showPaywall) {
+            PaywallView(reason: .settings).environmentObject(entitlements)
         }
         .fileImporter(isPresented: $showFolderPicker,
                       allowedContentTypes: [.folder]) { result in
@@ -125,6 +130,31 @@ struct SettingsView: View {
             }
         } header: {
             Text("Your journeys")
+        }
+
+        Section {
+            Button {
+                showPaywall = true
+            } label: {
+                HStack {
+                    Label("Akashic Complete", systemImage: "star.circle")
+                        .foregroundStyle(Theme.textPrimary)
+                    Spacer()
+                    Text(entitlements.isComplete ? "Complete ✓" : "Free")
+                        .foregroundStyle(entitlements.isComplete ? Theme.accent : Theme.textSecondary)
+                    if !entitlements.isComplete {
+                        Image(systemName: "chevron.right")
+                            .font(.caption)
+                            .foregroundStyle(Theme.textTertiary)
+                    }
+                }
+            }
+        } header: {
+            Text("Membership")
+        } footer: {
+            Text(entitlements.isComplete
+                 ? "Akashic Complete is active — unlimited journeys and photos, per-journey export, and showcase publishing. Shared with your Family Sharing group."
+                 : "The free tier includes one journey (up to 100 photos), the full experience, and sharing. Akashic Complete unlocks unlimited journeys and photos, per-journey export, and publishing — one purchase, shared with your family. Restore a previous purchase from inside.")
         }
 
         Section("About") {
@@ -226,6 +256,30 @@ struct SettingsView: View {
             Text("Override (debug)")
         } footer: {
             Text("CloudKit mode requires the Release-CloudKit build with entitlements and an iCloud account. Changes apply after relaunching the app.")
+        }
+
+        entitlementSection
+    }
+
+    /// Developer override for the paywall (M3): flip the app into "Akashic Complete" without a
+    /// real purchase, so we and App Review can exercise both entitlement states. It can only ever
+    /// GRANT Complete (never downgrade a real purchaser). The `AKASHIC_COMPLETE=1` environment
+    /// variable does the same for screenshots and takes precedence over this toggle.
+    @ViewBuilder
+    private var entitlementSection: some View {
+        Section {
+            labelled("Entitlement", entitlements.isComplete ? "Complete" : "Free")
+            Toggle("Simulate Akashic Complete", isOn: Binding(
+                get: { entitlements.simulateComplete },
+                set: { entitlements.setSimulateComplete($0) }
+            ))
+            .tint(Theme.accent)
+        } header: {
+            Text("Entitlement (debug)")
+        } footer: {
+            Text("Grants Akashic Complete locally without a purchase, for testing the paywall gates. "
+                 + "Honors AKASHIC_COMPLETE=1 in the environment (screenshots), which overrides this toggle. "
+                 + "Never downgrades a real purchase.")
         }
     }
 
@@ -484,5 +538,6 @@ struct SettingsView: View {
     NavigationStack { SettingsView() }
         .environmentObject(JourneyStore(persistence: .preview))
         .environmentObject(OnboardingCoordinator(isPresented: false))
+        .environmentObject(EntitlementStore.previewFree)
         .preferredColorScheme(.dark)
 }

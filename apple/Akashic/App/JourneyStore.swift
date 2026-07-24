@@ -288,4 +288,12 @@ final class JourneyStore: ObservableObject {
     func isOwnedByCurrentUser(journeyID: String) -> Bool {
         persistence.zoneOwnerName(forJourneyID: journeyID) == nil
     }
+
+    /// Number of journeys this user OWNS (`zoneOwnerName == nil`). Journeys shared *into* this
+    /// account are excluded, because the free-tier limits (M3 / COMMERCIALIZATION-PLAN §5) apply
+    /// only to what the user creates — never to shared content they view, comment on, or caption.
+    /// This is the count the create-journey paywall gate consults.
+    var ownedJourneyCount: Int {
+        journeys.filter { isOwnedByCurrentUser(journeyID: $0.id) }.count
+    }
 }

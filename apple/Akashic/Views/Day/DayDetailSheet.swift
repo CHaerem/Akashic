@@ -9,6 +9,7 @@ import SwiftUI
 /// list (`JourneyDetailView`).
 struct DayDetailSheet: View {
     @EnvironmentObject private var store: JourneyStore
+    @EnvironmentObject private var entitlements: EntitlementStore
     let journey: Journey
     let dayIndex: Int
     var onSelectDay: (Int) -> Void
@@ -94,6 +95,7 @@ struct DayDetailSheet: View {
             if let camp {
                 PhotoImportSheet(journey: journey, presetWaypointID: camp.id, onComplete: loadPhotos)
                     .environmentObject(store)
+                    .environmentObject(entitlements)
             }
         }
         .sheet(item: $editingPhoto) { photo in

@@ -10,9 +10,11 @@ struct JourneyShowcaseSheet: View {
     let journey: Journey
 
     @EnvironmentObject private var store: JourneyStore
+    @EnvironmentObject private var entitlements: EntitlementStore
     @Environment(\.dismiss) private var dismiss
 
     @StateObject private var model = ShowcaseViewModel()
+    @State private var showPaywall = false
     /// Explicit acknowledgement required before a *private* journey can be published
     /// world-readable (the consequence is spelled out in the warning above the toggle).
     @State private var acknowledgeWorldReadable = false
@@ -46,6 +48,26 @@ struct JourneyShowcaseSheet: View {
                     Button("Done") { dismiss() }.tint(Theme.accent)
                         .disabled(model.isWorking)
                 }
+            }
+            .sheet(isPresented: $showPaywall) {
+                PaywallView(reason: .publish).environmentObject(entitlements)
+            }
+        }
+    }
+
+    /// Inline upsell shown in place of the Publish control for a free user.
+    private var publishUpsellRow: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Label("Publishing is part of Akashic Complete", systemImage: "star.circle")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(Theme.textPrimary)
+            Text("Share this journey as a public web showcase anyone can view without signing in.")
+                .font(.caption)
+                .foregroundStyle(Theme.textSecondary)
+            Button { showPaywall = true } label: {
+                Text("Unlock with Akashic Complete")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(Theme.accent)
             }
         }
     }
@@ -101,17 +123,23 @@ struct JourneyShowcaseSheet: View {
         Section {
             switch model.phase {
             case .idle, .failed:
-                if !live.isPublic {
-                    worldReadableConsent
+                if entitlements.canPublish {
+                    if !live.isPublic {
+                        worldReadableConsent
+                    }
+                    Button {
+                        Task { await runPublish() }
+                    } label: {
+                        Label(live.isPublic ? "Update showcase" : "Publish to showcase",
+                              systemImage: "icloud.and.arrow.up")
+                    }
+                    .disabled(!canPublish)
+                    .foregroundStyle(canPublish ? Theme.accent : Theme.textTertiary)
+                } else {
+                    // Free tier: publishing is an Akashic Complete feature. A journey that is
+                    // ALREADY public keeps its Remove control below (we never trap published data).
+                    publishUpsellRow
                 }
-                Button {
-                    Task { await runPublish() }
-                } label: {
-                    Label(live.isPublic ? "Update showcase" : "Publish to showcase",
-                          systemImage: "icloud.and.arrow.up")
-                }
-                .disabled(!canPublish)
-                .foregroundStyle(canPublish ? Theme.accent : Theme.textTertiary)
 
                 if live.isPublic {
                     Button(role: .destructive) {

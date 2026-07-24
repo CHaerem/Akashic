@@ -11,6 +11,7 @@ import SwiftUI
 /// Combine with AKASHIC_FORCE_LOCAL=1 so it runs against the persisted `.local` store.
 struct EditScreenshotHarness: View {
     @EnvironmentObject private var store: JourneyStore
+    @EnvironmentObject private var entitlements: EntitlementStore
     let kind: String
 
     var body: some View {
@@ -42,7 +43,7 @@ struct EditScreenshotHarness: View {
                     WaypointEditSheet(journeyID: journey.id, camp: camp).environmentObject(store)
                 }
             case "import":
-                PhotoImportSheet(journey: journey).environmentObject(store)
+                PhotoImportSheet(journey: journey).environmentObject(store).environmentObject(entitlements)
             default: // "photo"
                 if let photo = firstPhotoWithMedia(in: journey) {
                     PhotoEditSheet(photo: photo, journey: journey).environmentObject(store)

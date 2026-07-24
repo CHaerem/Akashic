@@ -3,6 +3,7 @@ import SwiftUI
 /// Journey detail: header, inline route map, stats summary, and a per-day list.
 struct JourneyDetailView: View {
     @EnvironmentObject private var store: JourneyStore
+    @EnvironmentObject private var entitlements: EntitlementStore
     let journey: Journey
 
     /// Which day (index into `camps`) is shown in the presented `DayDetailSheet`, if any.
@@ -90,16 +91,16 @@ struct JourneyDetailView: View {
             JourneyEditSheet(journey: live).environmentObject(store)
         }
         .sheet(isPresented: $showImport) {
-            PhotoImportSheet(journey: live).environmentObject(store)
+            PhotoImportSheet(journey: live).environmentObject(store).environmentObject(entitlements)
         }
         .sheet(item: $editingCamp) { camp in
             WaypointEditSheet(journeyID: live.id, camp: camp).environmentObject(store)
         }
         .sheet(isPresented: $showExport) {
-            JourneyExportSheet(journey: live).environmentObject(store)
+            JourneyExportSheet(journey: live).environmentObject(store).environmentObject(entitlements)
         }
         .sheet(isPresented: $showShowcase) {
-            JourneyShowcaseSheet(journey: live).environmentObject(store)
+            JourneyShowcaseSheet(journey: live).environmentObject(store).environmentObject(entitlements)
         }
         .sheet(isPresented: $showSharing) {
             JourneyShareView(journeyID: live.id,
@@ -291,5 +292,6 @@ struct FlowChips: View {
         }
     }
     .environmentObject(JourneyStore(persistence: .preview))
+    .environmentObject(EntitlementStore.previewFree)
     .preferredColorScheme(.dark)
 }

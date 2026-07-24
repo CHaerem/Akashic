@@ -10,6 +10,7 @@ import UniformTypeIdentifiers
 /// (which routes through the same Core Data seam sync observes), then the app flies into it.
 struct NewJourneySheet: View {
     @EnvironmentObject private var store: JourneyStore
+    @EnvironmentObject private var entitlements: EntitlementStore
     @Environment(\.dismiss) private var dismiss
 
     /// Called with the created journey after a successful save (so a presenter can dismiss its
@@ -34,6 +35,7 @@ struct NewJourneySheet: View {
 
     @State private var isSaving = false
     @State private var saveError: String?
+    @State private var showPaywall = false
 
     private struct RouteSummary: Equatable {
         var pointCount: Int
@@ -61,6 +63,10 @@ struct NewJourneySheet: View {
             }
         }
         .interactiveDismissDisabled(isSaving)
+        .sheet(isPresented: $showPaywall) {
+            PaywallView(reason: .journeyLimit)
+                .environmentObject(entitlements)
+        }
         .fileImporter(isPresented: $showingImporter,
                       allowedContentTypes: gpxContentTypes,
                       allowsMultipleSelection: false,
@@ -351,6 +357,12 @@ struct NewJourneySheet: View {
 
     private func create() {
         guard draft.isValid, !isSaving else { return }
+        // Defense in depth: the entry points pre-gate, but if this sheet is ever open while the
+        // user is already at the free-journey limit, present the paywall instead of creating.
+        guard entitlements.canCreateJourney(ownedCount: store.ownedJourneyCount) else {
+            showPaywall = true
+            return
+        }
         isSaving = true
         saveError = nil
         syncDates()

@@ -22,6 +22,7 @@ struct AkashicApp: App {
     @UIApplicationDelegateAdaptor(AkashicAppDelegate.self) private var appDelegate
     @StateObject private var store = JourneyStore()
     @StateObject private var onboarding = OnboardingCoordinator()
+    @StateObject private var entitlements = EntitlementStore()
 
     init() {
         // Demo/screenshot hook: force the on-disk `.local` store before the store is first
@@ -40,6 +41,7 @@ struct AkashicApp: App {
             rootScreen
                 .environmentObject(store)
                 .environmentObject(onboarding)
+                .environmentObject(entitlements)
                 .preferredColorScheme(.dark)
                 .tint(Theme.accent)
                 // First-run onboarding (§4.2): a full-screen cover shown once. The coordinator

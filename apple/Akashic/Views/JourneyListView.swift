@@ -3,14 +3,26 @@ import SwiftUI
 /// Scrollable list of journey cards.
 struct JourneyListView: View {
     @EnvironmentObject private var store: JourneyStore
+    @EnvironmentObject private var entitlements: EntitlementStore
     @Environment(\.dismiss) private var dismiss
     @State private var showingNewJourney = false
+    @State private var showingPaywall = false
+
+    /// Start a create attempt: below the free limit → open the creation sheet; at the limit →
+    /// present the paywall instead (never silently blocked). See `EntitlementStore`.
+    private func startCreate() {
+        if entitlements.canCreateJourney(ownedCount: store.ownedJourneyCount) {
+            showingNewJourney = true
+        } else {
+            showingPaywall = true
+        }
+    }
 
     var body: some View {
         ScrollView {
             LazyVStack(spacing: 16) {
                 if store.journeys.isEmpty {
-                    JourneyEmptyState { showingNewJourney = true }
+                    JourneyEmptyState { startCreate() }
                         .padding(.top, 60)
                 } else {
                     ForEach(store.journeys) { journey in
@@ -28,7 +40,7 @@ struct JourneyListView: View {
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button {
-                    showingNewJourney = true
+                    startCreate()
                 } label: {
                     Image(systemName: "plus")
                         .font(.system(size: 16, weight: .semibold))
@@ -42,6 +54,11 @@ struct JourneyListView: View {
             // flies straight into the new journey.
             NewJourneySheet(onCreated: { _ in dismiss() })
                 .environmentObject(store)
+                .environmentObject(entitlements)
+        }
+        .sheet(isPresented: $showingPaywall) {
+            PaywallView(reason: .journeyLimit)
+                .environmentObject(entitlements)
         }
         .navigationDestination(for: String.self) { id in
             if let journey = store.journey(withID: id) {
@@ -152,5 +169,6 @@ struct JourneyCard: View {
 #Preview {
     NavigationStack { JourneyListView() }
         .environmentObject(JourneyStore(persistence: .preview))
+        .environmentObject(EntitlementStore.previewFree)
         .preferredColorScheme(.dark)
 }

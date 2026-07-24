@@ -9,6 +9,7 @@ import SwiftUI
 /// context menu offers the quick edits (cover / rotate / assign / delete) plus a full editor.
 struct PhotosGridView: View {
     @EnvironmentObject private var store: JourneyStore
+    @EnvironmentObject private var entitlements: EntitlementStore
     let journeyID: String
 
     @State private var lightbox: LightboxData?
@@ -64,7 +65,7 @@ struct PhotosGridView: View {
         }
         .sheet(isPresented: $showImport) {
             if let journey {
-                PhotoImportSheet(journey: journey).environmentObject(store)
+                PhotoImportSheet(journey: journey).environmentObject(store).environmentObject(entitlements)
             }
         }
         .confirmationDialog("Delete this photo?", isPresented: deleteDialogPresented,

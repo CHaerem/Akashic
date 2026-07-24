@@ -6,10 +6,12 @@ struct JourneyExportSheet: View {
     let journey: Journey
 
     @EnvironmentObject private var store: JourneyStore
+    @EnvironmentObject private var entitlements: EntitlementStore
     @Environment(\.dismiss) private var dismiss
 
     @State private var phase: Phase = .idle
     @State private var includePhotos = true
+    @State private var showPaywall = false
 
     private enum Phase: Equatable {
         case idle
@@ -33,10 +35,14 @@ struct JourneyExportSheet: View {
                 Section {
                     switch phase {
                     case .idle:
-                        Button {
-                            Task { await runExport() }
-                        } label: {
-                            Label("Create export", systemImage: "square.and.arrow.up.on.square")
+                        if entitlements.canExport {
+                            Button {
+                                Task { await runExport() }
+                            } label: {
+                                Label("Create export", systemImage: "square.and.arrow.up.on.square")
+                            }
+                        } else {
+                            exportUpsellRow
                         }
 
                     case .working(let fraction):
@@ -88,6 +94,27 @@ struct JourneyExportSheet: View {
                     Button("Done") { dismiss() }.tint(Theme.accent)
                         .disabled(isWorking)
                 }
+            }
+            .sheet(isPresented: $showPaywall) {
+                PaywallView(reason: .export).environmentObject(entitlements)
+            }
+        }
+    }
+
+    /// Inline upsell shown in place of the export action for a free user. Export (the "exit door")
+    /// is an Akashic Complete feature — the data stays fully visible in-app either way.
+    private var exportUpsellRow: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Label("Export is part of Akashic Complete", systemImage: "star.circle")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(Theme.textPrimary)
+            Text("Package this journey — route, photos and notes — as a portable archive you can save or share.")
+                .font(.caption)
+                .foregroundStyle(Theme.textSecondary)
+            Button { showPaywall = true } label: {
+                Text("Unlock with Akashic Complete")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(Theme.accent)
             }
         }
     }
