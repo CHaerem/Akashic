@@ -7,6 +7,7 @@ import {
 import { resetAuthCache } from '../lib/journeys/adapters/cloudkit/publicAdapter';
 import { AuthContext } from '../contexts/AuthContext';
 import { Card } from './ui/card';
+import { Attribution } from './public/Attribution';
 import { typography, colors, radius } from '../styles/liquidGlass';
 
 /** E2E runs need the app without an Apple ID prompt — treated as the full experience. */
@@ -134,6 +135,9 @@ export function AuthGuard({ children }: AuthGuardProps) {
                     Family sign-in
                 </button>
             )}
+
+            {/* Signed-out public showcase: attribution chip + legal/support links. */}
+            {showPill && <Attribution />}
 
             {showSignIn && (
                 <div

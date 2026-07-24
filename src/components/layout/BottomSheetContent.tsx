@@ -26,6 +26,7 @@ import { RouteEditor } from '../trek/RouteEditor';
 import { FunFactCard } from '../journey/FunFactCard';
 import { DayDiscoveries } from '../journey/DayDiscoveries';
 import { DayCommentsSection } from '../comments';
+import { ReportLink } from '../public/ReportLink';
 
 interface BottomSheetContentProps {
     view: ViewMode;
@@ -229,6 +230,11 @@ function JourneyOverviewContent({ trek, onExplore, isMobile, editMode, onJourney
                     Edit Journey Details
                 </motion.button>
             )}
+
+            {/* Report affordance — public showcase only, self-hides for signed-in family. */}
+            <div>
+                <ReportLink slug={trek.id} />
+            </div>
 
             {/* Journey Edit Modal */}
             <JourneyEditModal
