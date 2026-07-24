@@ -91,7 +91,11 @@ export const DayChapter = memo(function DayChapter({
                     }}
                 >
                     <img
-                        src={getMediaUrl(heroPhoto.url)}
+                        // A card cover only needs the thumb; preferring it keeps the cover
+                        // intact after a photo's original is repacked out of its record
+                        // (url becomes empty). Tapping opens the lightbox, which upgrades
+                        // to the full-size original.
+                        src={getMediaUrl(heroPhoto.thumbnail_url || heroPhoto.url)}
                         alt={heroPhoto.caption || `Day ${dayNumber}`}
                         loading="lazy"
                         style={{

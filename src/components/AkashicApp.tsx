@@ -420,6 +420,7 @@ export default function AkashicApp() {
                     initialDay={selectedCamp?.dayNumber ?? 1}
                     onDayChange={handleDaySelect}
                     onViewOnMap={handleViewOnMap}
+                    journeySlug={trekData.id}
                 />
             )}
 
@@ -433,6 +434,7 @@ export default function AkashicApp() {
                 onClose={handleCloseLightbox}
                 getMediaUrl={getMediaUrl}
                 onViewOnMap={handleViewOnMap}
+                journeySlug={trekData?.id}
             />
 
             {/* Share Target Modal - for photos shared from other apps */}

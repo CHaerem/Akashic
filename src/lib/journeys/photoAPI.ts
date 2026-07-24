@@ -13,3 +13,8 @@ export {
     deletePhoto,
     assignPhotoToWaypoint,
 } from './adapters/cloudkit/photoAdapter';
+
+// On-demand full-size originals (photo architecture v2): a repacked Photo record
+// keeps only its thumb; its original lives in a PhotoMedia record in the journey's
+// media zone, resolved lazily here.
+export { fetchOriginalUrl } from './adapters/cloudkit/mediaAdapter';
