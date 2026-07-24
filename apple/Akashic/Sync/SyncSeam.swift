@@ -121,6 +121,10 @@ protocol SyncLocalStore: AnyObject {
     /// Every journey id currently in the local store (for the initial upload + zone creation).
     func allLocalJourneyIDs() -> [String]
 
+    /// Count of photos currently in the local store. Drives the first-sync prompt's
+    /// fresh-install-vs-incremental classification (an empty/near-empty store == fresh install).
+    func localPhotoCount() -> Int
+
     /// Whether the store has ever seen a server copy of this record — i.e. persisted CloudKit
     /// system fields (a change tag) for it. False for a record created purely locally that has
     /// never been uploaded. Used by the activation heal to find owned journeys that never reached

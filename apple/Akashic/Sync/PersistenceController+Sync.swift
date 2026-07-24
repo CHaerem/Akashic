@@ -22,11 +22,21 @@ extension PersistenceController: SyncLocalStore {
         #if AKASHIC_CLOUDKIT_BUILD
         let accountProvider = CloudKitAccountStatusProvider(
             containerIdentifier: Config.cloudKitContainerIdentifier)
+        // Wi-Fi-only download policy (default on). Shared by both engines: the "is this an
+        // expensive path?" question and the user's setting are global, not per-database. Start
+        // monitoring now so the path is known before the first fetch.
+        let policy = NetworkPolicy.shared
+        policy.start()
+        // Best-effort pre-fetch size estimate for the first-sync prompt (private DB only, no asset
+        // bytes). On any failure it returns nil and the prompt falls back to the generic status.
+        let counter = CloudKitRemotePhotoCounter(containerIdentifier: Config.cloudKitContainerIdentifier)
         let coordinator = AkashicSyncEngine(
             store: self,
             status: syncStatus,
             accountProvider: accountProvider,
-            databaseScope: .private)
+            databaseScope: .private,
+            networkPolicy: policy,
+            remotePhotoCounter: counter)
         // Second engine for journeys others shared with us (T2.8). A CKSyncEngine binds to one
         // database, so participation needs its own — with its own state file and change tokens.
         // It shares `syncStatus`: from the family's point of view there is one "is it syncing?"
@@ -35,9 +45,16 @@ extension PersistenceController: SyncLocalStore {
             store: self,
             status: syncStatus,
             accountProvider: accountProvider,
-            databaseScope: .shared)
+            databaseScope: .shared,
+            networkPolicy: policy)
         syncCoordinator = coordinator
         sharedSyncCoordinator = sharedCoordinator
+        // When the path becomes cheap (or the user turns the setting off), release any deferred
+        // heavy fetch on BOTH engines immediately — the NWPathMonitor callback, not next launch.
+        policy.onAllowsHeavyTransferBecameTrue = { [weak coordinator, weak sharedCoordinator] in
+            coordinator?.networkPolicyDidAllowHeavyTransfer()
+            sharedCoordinator?.networkPolicyDidAllowHeavyTransfer()
+        }
         syncScheduler = SyncScheduler(
             context: viewContext,
             engines: [coordinator, sharedCoordinator],
@@ -115,6 +132,11 @@ extension PersistenceController: SyncLocalStore {
     func allLocalJourneyIDs() -> [String] {
         let request = NSFetchRequest<CDJourney>(entityName: "CDJourney")
         return ((try? viewContext.fetch(request)) ?? []).compactMap { $0.id }
+    }
+
+    func localPhotoCount() -> Int {
+        let request = NSFetchRequest<CDPhoto>(entityName: "CDPhoto")
+        return (try? viewContext.count(for: request)) ?? 0
     }
 
     /// True when a `CDSyncRecordMeta` row exists for this record — i.e. the server has accepted it
@@ -609,4 +631,63 @@ extension PersistenceController: SyncLocalStore {
         request.fetchLimit = 1
         return (try? viewContext.fetch(request))?.first
     }
+}
+
+// MARK: - First-sync size estimate (best-effort, pre-fetch)
+
+/// Counts downloadable `Photo` records across the private database's journey zones WITHOUT
+/// fetching any asset bytes (`desiredKeys: []`), to size the first-sync prompt honestly.
+///
+/// Best-effort by design: it enumerates the private zones and pages a `recordName`-only query per
+/// zone. Any failure (no queryable index for `Photo`, no account, a transient error) returns `nil`,
+/// and the prompt falls back to the generic "Waiting for Wi-Fi" status plus the inline "Download
+/// now" action. `CKContainer` is only constructed inside the entitled `*-CloudKit` build (it traps
+/// otherwise), exactly like `CloudKitAccountStatusProvider`.
+struct CloudKitRemotePhotoCounter: RemotePhotoCounting {
+    let containerIdentifier: String
+
+    func remotePhotoCount() async -> Int? {
+        #if AKASHIC_CLOUDKIT_BUILD
+        let database = CKContainer(identifier: containerIdentifier).privateCloudDatabase
+        do {
+            let zones = try await database.allRecordZones()
+            guard !zones.isEmpty else { return nil }
+            var total = 0
+            for zone in zones {
+                total += try await countPhotos(in: zone.zoneID, database: database)
+            }
+            SyncLog.log("remotePhotoCount: \(total) photo(s) across \(zones.count) zone(s)")
+            return total
+        } catch {
+            SyncLog.error("remotePhotoCount: estimate failed — \(error)")
+            return nil
+        }
+        #else
+        return nil
+        #endif
+    }
+
+    #if AKASHIC_CLOUDKIT_BUILD
+    private func countPhotos(in zoneID: CKRecordZone.ID, database: CKDatabase) async throws -> Int {
+        let query = CKQuery(recordType: RecordCoder.RecordType.photo, predicate: NSPredicate(value: true))
+        var count = 0
+        var cursor: CKQueryOperation.Cursor?
+        repeat {
+            let matches: [(CKRecord.ID, Result<CKRecord, Error>)]
+            if let current = cursor {
+                let page = try await database.records(continuingMatchFrom: current,
+                                                      desiredKeys: [],
+                                                      resultsLimit: CKQueryOperation.maximumResults)
+                matches = page.matchResults; cursor = page.queryCursor
+            } else {
+                let page = try await database.records(matching: query, inZoneWith: zoneID,
+                                                      desiredKeys: [],
+                                                      resultsLimit: CKQueryOperation.maximumResults)
+                matches = page.matchResults; cursor = page.queryCursor
+            }
+            count += matches.count
+        } while cursor != nil
+        return count
+    }
+    #endif
 }

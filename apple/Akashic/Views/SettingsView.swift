@@ -24,6 +24,9 @@ struct SettingsView: View {
     /// Live sync state, so a stalled or erroring engine is visible instead of silent.
     @ObservedObject private var syncStatus = PersistenceController.shared.syncStatus
 
+    /// Wi-Fi-only download policy — the toggle below binds to it.
+    @ObservedObject private var networkPolicy = NetworkPolicy.shared
+
     // "Your name" for comments — loaded from CommentService on appear, written back on change.
     @State private var authorName = ""
 
@@ -91,10 +94,28 @@ struct SettingsView: View {
 
     @ViewBuilder
     private var consumerSections: some View {
-        Section("iCloud sync") {
+        Section {
             labelled("Status", syncStatus.summary)
+            // While a heavy download is held back for Wi-Fi, offer an inline one-occasion cellular
+            // override right here, so the user never has to hunt for the global toggle to unblock
+            // one download. It does NOT change the "Wi-Fi only" setting below.
+            if syncStatus.state == .waitingForWiFi {
+                Button {
+                    networkPolicy.grantOneOccasionCellularDownload()
+                } label: {
+                    Label("Download now over cellular", systemImage: "arrow.down.circle")
+                        .foregroundStyle(Theme.accent)
+                }
+            }
             labelled("Library", Formatters.librarySummary(journeys: store.journeys.count,
                                                           photos: store.photoCount))
+            Toggle("Download over Wi-Fi only", isOn: $networkPolicy.wifiOnlyDownloads)
+                .tint(Theme.accent)
+                .foregroundStyle(Theme.textPrimary)
+        } header: {
+            Text("iCloud sync")
+        } footer: {
+            Text("Photo downloads can reach several GB on first sync.")
         }
 
         Section {

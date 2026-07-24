@@ -41,6 +41,20 @@ final class AkashicSyncEngine: NSObject, CKSyncEngineDelegate {
     private let containerIdentifier: String
     private let defaults: UserDefaults
 
+    /// Wi-Fi-only download policy. Read at our explicit fetch trigger (`fetchOnActivation`) and,
+    /// for the engine's own automatic fetches, applied natively via the `fetchChangesOptions`
+    /// delegate hook below. Defaults to an always-allow stand-in so the existing engine unit tests
+    /// (which never exercise the policy) are untouched; production injects the real `NetworkPolicy`.
+    private let networkPolicy: NetworkPolicyGate
+
+    /// Best-effort pre-fetch count of downloadable photos, used to turn the first-sync deferral's
+    /// generic status into an honest sized prompt. Nil (the default, and in non-CloudKit builds)
+    /// means "no estimate available" → the prompt is skipped and the generic status shown.
+    private let remotePhotoCounter: RemotePhotoCounting?
+
+    /// One-time guard so the first-sync prompt is evaluated at most once per engine lifetime.
+    private var hasEvaluatedFirstSyncPrompt = false
+
     /// Which CloudKit database this engine drives.
     ///
     /// `.private` — journeys we own; `.shared` — journeys someone else shared with us
@@ -87,6 +101,23 @@ final class AkashicSyncEngine: NSObject, CKSyncEngineDelegate {
     /// Await the activation pull, if one is in flight.
     func awaitActivationFetch() async { await activationFetch?.value }
 
+    /// True when the activation pull was deferred by the Wi-Fi-only policy and is waiting for an
+    /// eligible (cheap) path. Cleared once the pull actually runs. Test-visible.
+    private(set) var deferredHeavyFetch = false
+
+    /// Retry a heavy fetch that the Wi-Fi-only policy deferred, as soon as the path becomes
+    /// eligible (NWPathMonitor callback) or the user turns the setting off. Wired by `startSync`
+    /// to `NetworkPolicy.onAllowsHeavyTransferBecameTrue`. No-op unless a fetch is actually pending
+    /// and the engine is running — so a path flap without a deferred fetch costs nothing.
+    ///
+    /// Detached, like every other reach back into the engine (see `fetchOnActivation`): this fires
+    /// from the path-monitor callback, never from inside a CKSyncEngine delegate callback.
+    func networkPolicyDidAllowHeavyTransfer() {
+        guard isRunning, deferredHeavyFetch else { return }
+        SyncLog.log("networkPolicy: path now allows heavy transfer — running the deferred fetch")
+        activationFetch = Task.detached { [weak self] in await self?.fetchOnActivation() }
+    }
+
     /// OFF by design: a server-side zone deletion never destroys local data (see
     /// `handleZoneDeletions`). Nothing in the app sets this; it exists so that if honoring
     /// genuine deletes is ever wanted, it must be turned on deliberately AND paired with
@@ -109,7 +140,9 @@ final class AkashicSyncEngine: NSObject, CKSyncEngineDelegate {
          containerIdentifier: String = Config.cloudKitContainerIdentifier,
          databaseScope: CKDatabase.Scope = .private,
          defaults: UserDefaults = .standard,
-         engine: SyncEngineProtocol? = nil) {
+         engine: SyncEngineProtocol? = nil,
+         networkPolicy: NetworkPolicyGate = AlwaysAllowHeavyTransfer(),
+         remotePhotoCounter: RemotePhotoCounting? = nil) {
         self.store = store
         self.status = status
         self.accountProvider = accountProvider
@@ -117,6 +150,8 @@ final class AkashicSyncEngine: NSObject, CKSyncEngineDelegate {
         self.databaseScope = databaseScope
         self.defaults = defaults
         self.engine = engine
+        self.networkPolicy = networkPolicy
+        self.remotePhotoCounter = remotePhotoCounter
         super.init()
     }
 
@@ -207,15 +242,54 @@ final class AkashicSyncEngine: NSObject, CKSyncEngineDelegate {
     /// `.accountChange(.signIn)` event right after it starts — whose handler re-entered
     /// `activate()` from inside `handleEvent`, hitting the trap and killing the app mid-fetch.
     func fetchOnActivation() async {
+        // Wi-Fi-only download policy (default on). The activation pull is the multi-GB photo
+        // archive on a fresh install — the transfer we must never silently run up a cellular bill
+        // with. On an expensive path with the setting on, defer it and show an HONEST status
+        // instead of pulling. The retry is driven by the network path becoming cheap OR the user
+        // flipping the setting off (see `networkPolicyDidAllowHeavyTransfer`) — not the next launch.
+        //
+        // This only defers the *fetch*. Pending LOCAL changes keep queueing to the engine
+        // regardless (see `localStoreDidChange`, unaffected by this policy), so no edit made while
+        // a download is deferred is ever lost.
+        guard networkPolicy.allowsHeavyTransfer else {
+            deferredHeavyFetch = true
+            status.set(.waitingForWiFi)
+            SyncLog.log("activate: heavy fetch deferred — Wi-Fi-only policy on an expensive path")
+            await evaluateFirstSyncPromptIfNeeded()
+            return
+        }
+        deferredHeavyFetch = false
+        // The download is proceeding now, so any pending first-sync prompt is moot — clear it so a
+        // presented sheet dismisses instead of lingering behind the download.
+        status.firstSyncPrompt = nil
         do {
             SyncLog.log("activate: fetchChanges() starting")
             try await engine?.fetchChanges()
             SyncLog.log("activate: fetchChanges() returned")
             status.markSynced()
+            // The heavy fetch completed: spend any one-occasion cellular exemption so the next one
+            // re-evaluates the policy fresh.
+            networkPolicy.heavyTransferDidComplete()
         } catch {
             SyncLog.error("activate: fetchChanges() threw \(error)")
             status.set(.error("Initial fetch failed: \(error.localizedDescription)"))
         }
+    }
+
+    /// On a fresh install whose heavy download was just deferred, turn the generic status into an
+    /// honest sized prompt: classify fresh-install-vs-incremental from the local store size, get a
+    /// best-effort pre-fetch remote count (no asset bytes), and publish a `.prompt` decision for the
+    /// UI. Evaluated once, and only by the private engine (there is a single prompt, not one per
+    /// database). Any failure to estimate falls back to the plain "Waiting for Wi-Fi" status.
+    private func evaluateFirstSyncPromptIfNeeded() async {
+        guard databaseScope == .private, !hasEvaluatedFirstSyncPrompt else { return }
+        hasEvaluatedFirstSyncPrompt = true
+        let local = store.localPhotoCount()
+        // Only pay for the (network) remote count for a plausible fresh install.
+        guard local <= FirstSyncDownloadDecision.freshInstallPhotoCeiling else { return }
+        let remote = await remotePhotoCounter?.remotePhotoCount()
+        let decision = FirstSyncDownloadDecision.decide(localPhotoCount: local, remotePhotoCount: remote)
+        if case .prompt = decision { status.firstSyncPrompt = decision }
     }
 
     private func buildRealEngine() -> SyncEngineProtocol? {
@@ -367,6 +441,34 @@ final class AkashicSyncEngine: NSObject, CKSyncEngineDelegate {
         let batch = await nextBatch(for: pending)
         SyncLog.log("nextBatch: pending=\(pending.count) -> saves=\(batch?.recordsToSave.count ?? 0) deletes=\(batch?.recordIDsToDelete.count ?? 0)")
         return batch
+    }
+
+    /// Native cellular gate for the engine's OWN fetches — the automatic (push-triggered /
+    /// scheduled) pulls we do not otherwise control, AND any explicit `fetchChanges()`. CKSyncEngine
+    /// calls this before each server request while fetching (`context.reason` is `.scheduled` or
+    /// `.manual`), so it is the one hook that reaches the automatic pulls the trigger-point check in
+    /// `fetchOnActivation` cannot see.
+    ///
+    /// When the Wi-Fi-only policy forbids a heavy transfer on the current expensive path, we hand
+    /// CloudKit an operation group whose configuration disallows cellular access. CloudKit then
+    /// defers the fetch and retries it natively once Wi-Fi is available (a `networkUnavailable` the
+    /// engine handles for us — see the class docs). There is deliberately NO send-side equivalent:
+    /// uploads are the user's own edits and stay allowed.
+    ///
+    /// Only ever invoked by a real `CKSyncEngine` (the `*-CloudKit` builds); compiles everywhere
+    /// because these CloudKit types are always available — only `CKContainer` traps unentitled.
+    /// Async (the Swift refinement makes it so), which is what lets it read the main-actor policy.
+    func nextFetchChangesOptions(_ context: CKSyncEngine.FetchChangesContext,
+                                 syncEngine: CKSyncEngine) async -> CKSyncEngine.FetchChangesOptions {
+        var options = context.options
+        guard !networkPolicy.allowsHeavyTransfer else { return options }
+        let group = options.operationGroup
+        group.name = "AkashicWiFiOnlyFetch"
+        let configuration = group.defaultConfiguration ?? CKOperation.Configuration()
+        configuration.allowsCellularAccess = false
+        group.defaultConfiguration = configuration
+        options.operationGroup = group
+        return options
     }
 
     // MARK: - Testable event handling (plain inputs, no live engine required)

@@ -14,10 +14,14 @@ struct JourneyShowcaseSheet: View {
     @Environment(\.dismiss) private var dismiss
 
     @StateObject private var model = ShowcaseViewModel()
+    @ObservedObject private var networkPolicy = NetworkPolicy.shared
     @State private var showPaywall = false
     /// Explicit acknowledgement required before a *private* journey can be published
     /// world-readable (the consequence is spelled out in the warning above the toggle).
     @State private var acknowledgeWorldReadable = false
+    /// Set when the user taps Publish on an expensive path with Wi-Fi-only on — publishing tens of
+    /// MB over cellular warns (never blocks): the mirror is small enough to be a choice, not a bill.
+    @State private var showCellularPublishConfirm = false
 
     /// The freshest copy of this journey (its `isPublic` may flip during a publish).
     private var live: Journey { store.journey(withID: journey.id) ?? journey }
@@ -52,7 +56,24 @@ struct JourneyShowcaseSheet: View {
             .sheet(isPresented: $showPaywall) {
                 PaywallView(reason: .publish).environmentObject(entitlements)
             }
+            .confirmationDialog("Publish over cellular?",
+                                isPresented: $showCellularPublishConfirm,
+                                titleVisibility: .visible) {
+                Button("Publish anyway") { performPublish() }
+                Button("Wait for Wi-Fi", role: .cancel) {}
+            } message: {
+                Text("About \(ByteCount.string(estimatedPublishBytes)) of thumbnails and metadata "
+                     + "will upload over cellular. Full-resolution photos are never uploaded.")
+            }
         }
+    }
+
+    /// Order-of-magnitude estimate of a publish's upload payload: one thumbnail (~60 KB) per photo
+    /// plus the route/waypoints/hero metadata. Deliberately cheap — no per-file disk reads — so the
+    /// confirm dialog opens instantly even for a 900-photo journey.
+    private var estimatedPublishBytes: Int64 {
+        let photos = store.photos(forJourneyID: live.id)
+        return Int64(photos.count) * 60_000 + 300_000
     }
 
     /// Inline upsell shown in place of the Publish control for a free user.
@@ -229,6 +250,18 @@ struct JourneyShowcaseSheet: View {
     // MARK: - Drive the model
 
     private func runPublish() async {
+        // Publishing tens of MB over cellular with Wi-Fi-only downloads on: WARN, don't block. The
+        // mirror is small enough that publishing now can be a deliberate choice — unlike the
+        // multi-GB photo download, which the policy defers outright. Photo ingest uploads (the user
+        // just picked photos) are never gated: those are expected and user-initiated.
+        if networkPolicy.wifiOnlyDownloads && networkPolicy.isExpensivePath {
+            showCellularPublishConfirm = true
+            return
+        }
+        performPublish()
+    }
+
+    private func performPublish() {
         // The domain flag is flipped by the model AFTER the mirror write succeeds — never before,
         // so a failed publish can never leave the UI claiming the journey is world-readable when
         // nothing was written. (findings #5 / #9 / #10.)

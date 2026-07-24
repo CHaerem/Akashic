@@ -19,11 +19,17 @@ final class SyncStatus: ObservableObject {
         case restricted          // iCloud restricted by profile/parental controls
         case unavailable         // couldNotDetermine / temporarilyUnavailable
         case active              // engine running
+        case waitingForWiFi      // a heavy download is deferred by the Wi-Fi-only policy
         case error(String)
     }
 
     @Published private(set) var state: State = .disabled
     @Published private(set) var lastSyncDate: Date?
+
+    /// Set to a `.prompt` when a fresh install's heavy download is deferred and a size estimate is
+    /// available, so the UI can present the one-time first-sync sheet. Nil the rest of the time
+    /// (incremental syncs, no estimate, or after the user answers). Only ever holds a `.prompt`.
+    @Published var firstSyncPrompt: FirstSyncDownloadDecision?
 
     /// Human-readable one-liner for a Settings row.
     var summary: String {
@@ -39,6 +45,7 @@ final class SyncStatus: ObservableObject {
                 return "Syncing · last update \(Self.relative.localizedString(for: date, relativeTo: Date()))"
             }
             return "Syncing with iCloud"
+        case .waitingForWiFi:  return "Waiting for Wi-Fi to download"
         case .error(let message): return "Sync error: \(message)"
         }
     }

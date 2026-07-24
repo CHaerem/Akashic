@@ -766,6 +766,8 @@ final class FakeLocalStore: SyncLocalStore {
     func purgeSystemFields(forRecordNames names: [String]) { purgedRecordNames.append(contentsOf: names) }
     func purgeAllSystemFields() { purgedAllCount += 1 }
     func allLocalJourneyIDs() -> [String] { journeyIDs }
+    var photoCount = 0
+    func localPhotoCount() -> Int { photoCount }
     func hasUploadedRecord(forRecordName recordName: String) -> Bool {
         uploadedRecordNames.contains(recordName)
     }
