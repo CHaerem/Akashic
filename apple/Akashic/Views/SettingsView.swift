@@ -1,19 +1,33 @@
 import SwiftUI
 import UniformTypeIdentifiers
 
-/// Debug settings: inspect and override the persistence mode, and import the real family
-/// data from a Supabase export bundle (T2.4).
+/// The app's Settings screen, split into two audiences (COMMERCIALIZATION-PLAN §4.3):
 ///
-/// The store is built once at launch (`PersistenceController.shared`), so changing the
-/// override takes effect on the next launch. This is the manual escape hatch for flipping
-/// the app onto a real CloudKit / local store during bring-up.
+///   * **Consumer** (always visible): the honest sync status one-liner, a human storage summary,
+///     the "Your name" field used for comments, an export reminder, "Replay intro", the
+///     legal/support links, and the app version.
+///   * **Developer** (hidden): the migration workshop — active-store inspector, the T2.4 export
+///     bundle importer, the T2.5 CloudKit importer, and the persistence-mode override. Nothing is
+///     deleted; the runbook still needs these tools. The section is revealed by seven taps on the
+///     version row (see `DeveloperTools`) and is always visible in DEBUG builds.
+///
+/// The store is built once at launch (`PersistenceController.shared`), so changing the persistence
+/// override takes effect on the next launch.
 struct SettingsView: View {
     @EnvironmentObject private var store: JourneyStore
+    @EnvironmentObject private var onboarding: OnboardingCoordinator
     @State private var override: PersistenceMode?
     @State private var showRelaunchNote = false
 
     /// Live sync state, so a stalled or erroring engine is visible instead of silent.
     @ObservedObject private var syncStatus = PersistenceController.shared.syncStatus
+
+    // "Your name" for comments — loaded from CommentService on appear, written back on change.
+    @State private var authorName = ""
+
+    // Developer-gate state.
+    @State private var developerUnlocked = DeveloperTools.isUnlocked()
+    @State private var versionTapCount = 0
 
     // Import state.
     @State private var bundlePath = Config.importBundlePath
@@ -26,53 +40,17 @@ struct SettingsView: View {
 
     var body: some View {
         Form {
-            Section("Active store") {
-                labelled("Mode", store.mode.label)
-                labelled("Journeys loaded", "\(store.journeys.count)")
-                labelled("Photos in store", "\(store.photoCount)")
-                labelled("CloudKit container", Config.cloudKitContainerIdentifier)
-                // The build flag is a constant that is false in every configuration; what
-                // actually selects CloudKit is AKASHIC_CLOUDKIT=1 or the Settings override. The
-                // old row showed only the constant, so a CloudKit-mode run reported "No".
-                labelled("CloudKit environment", cloudKitEnvironmentLabel)
-                // Sync state was previously computed but never shown, so a stalled sync looked
-                // identical to a working one — from the outside and from inside the app.
-                labelled("Sync", syncStatus.summary)
-            }
+            consumerSections
 
-            importSection
-
-            cloudKitImportSection
-
-            Section {
-                Picker("Persistence mode", selection: Binding(
-                    get: { override ?? store.mode },
-                    set: { newValue in
-                        override = newValue
-                        Config.setPersistenceModeOverride(newValue)
-                        showRelaunchNote = true
-                    }
-                )) {
-                    ForEach(PersistenceMode.allCases) { Text($0.label).tag($0) }
-                }
-                .pickerStyle(.inline)
-
-                Button("Clear override (follow build flag)") {
-                    override = nil
-                    Config.setPersistenceModeOverride(nil)
-                    showRelaunchNote = true
-                }
-                .foregroundStyle(Theme.accent)
-            } header: {
-                Text("Override (debug)")
-            } footer: {
-                Text("CloudKit mode requires the Release-CloudKit build with entitlements and an iCloud account. Changes apply after relaunching the app.")
+            if developerUnlocked {
+                developerSections
             }
         }
         .scrollContentBackground(.hidden)
         .background(Theme.background.ignoresSafeArea())
         .navigationTitle("Settings")
         .onAppear {
+            authorName = store.commentService.authorName ?? ""
             if let raw = UserDefaults.standard.string(forKey: Config.persistenceModeOverrideKey) {
                 override = PersistenceMode(rawValue: raw)
             }
@@ -101,6 +79,153 @@ struct SettingsView: View {
             }
         } message: {
             Text(importConfirmationMessage)
+        }
+    }
+
+    // MARK: - Consumer
+
+    @ViewBuilder
+    private var consumerSections: some View {
+        Section("iCloud sync") {
+            labelled("Status", syncStatus.summary)
+            labelled("Library", Formatters.librarySummary(journeys: store.journeys.count,
+                                                          photos: store.photoCount))
+        }
+
+        Section {
+            TextField("Your name", text: $authorName)
+                .textFieldStyle(.plain)
+                .foregroundStyle(Theme.textPrimary)
+                .autocorrectionDisabled()
+                .onChange(of: authorName) { _, newValue in
+                    store.commentService.authorName = newValue
+                }
+        } header: {
+            Text("Your name")
+        } footer: {
+            Text("Shown next to the comments you leave on your journeys.")
+        }
+
+        Section {
+            Label {
+                Text("Export a journey from its ⋯ menu — it bundles the route, photos, and notes "
+                     + "into a file you can share or back up.")
+                    .font(.footnote)
+                    .foregroundStyle(Theme.textSecondary)
+            } icon: {
+                Image(systemName: "square.and.arrow.up")
+                    .foregroundStyle(Theme.accent)
+            }
+
+            Button {
+                onboarding.replay()
+            } label: {
+                Label("Replay intro", systemImage: "sparkles")
+                    .foregroundStyle(Theme.accent)
+            }
+        } header: {
+            Text("Your journeys")
+        }
+
+        Section("About") {
+            Link(destination: AppInfo.privacyURL) {
+                linkRow("Privacy Policy", systemImage: "hand.raised")
+            }
+            Link(destination: AppInfo.termsURL) {
+                linkRow("Terms of Use", systemImage: "doc.text")
+            }
+            Link(destination: AppInfo.supportURL) {
+                linkRow("Support", systemImage: "questionmark.circle")
+            }
+            // Version row doubles as the hidden developer-tools unlock (seven taps). Auto-unlocked
+            // in DEBUG, so the tap counter only matters in Release.
+            versionRow
+        }
+    }
+
+    /// Version row + the seven-tap unlock gesture for the developer section.
+    private var versionRow: some View {
+        labelled("Version", AppInfo.versionDisplay)
+            .contentShape(Rectangle())
+            .onTapGesture {
+                guard !developerUnlocked else { return }
+                versionTapCount += 1
+                if DeveloperTools.tapsReachUnlock(versionTapCount) {
+                    DeveloperTools.setUnlocked(true)
+                    developerUnlocked = true
+                }
+            }
+    }
+
+    private func linkRow(_ title: String, systemImage: String) -> some View {
+        HStack {
+            Label(title, systemImage: systemImage)
+                .foregroundStyle(Theme.textPrimary)
+            Spacer()
+            Image(systemName: "arrow.up.right")
+                .font(.caption)
+                .foregroundStyle(Theme.textTertiary)
+        }
+    }
+
+    // MARK: - Developer
+
+    @ViewBuilder
+    private var developerSections: some View {
+        Section {
+            labelled("Mode", store.mode.label)
+            labelled("Journeys loaded", "\(store.journeys.count)")
+            labelled("Photos in store", "\(store.photoCount)")
+            labelled("CloudKit container", Config.cloudKitContainerIdentifier)
+            // The build flag is a constant that is false in every configuration; what
+            // actually selects CloudKit is AKASHIC_CLOUDKIT=1 or the Settings override. The
+            // old row showed only the constant, so a CloudKit-mode run reported "No".
+            labelled("CloudKit environment", cloudKitEnvironmentLabel)
+            // Sync state was previously computed but never shown, so a stalled sync looked
+            // identical to a working one — from the outside and from inside the app.
+            labelled("Sync", syncStatus.summary)
+        } header: {
+            Text("Active store")
+        } footer: {
+            Text("Developer tools. Hidden from customers; revealed by seven taps on the version "
+                 + "row and always shown in DEBUG builds.")
+        }
+
+        importSection
+
+        cloudKitImportSection
+
+        Section {
+            Picker("Persistence mode", selection: Binding(
+                get: { override ?? store.mode },
+                set: { newValue in
+                    override = newValue
+                    Config.setPersistenceModeOverride(newValue)
+                    showRelaunchNote = true
+                }
+            )) {
+                ForEach(PersistenceMode.allCases) { Text($0.label).tag($0) }
+            }
+            .pickerStyle(.inline)
+
+            Button("Clear override (follow build flag)") {
+                override = nil
+                Config.setPersistenceModeOverride(nil)
+                showRelaunchNote = true
+            }
+            .foregroundStyle(Theme.accent)
+
+            Button(role: .destructive) {
+                DeveloperTools.setUnlocked(false)
+                versionTapCount = 0
+                developerUnlocked = DeveloperTools.isUnlocked()
+            } label: {
+                Label("Hide developer tools", systemImage: "eye.slash")
+            }
+        } header: {
+            Text("Override (debug)")
+        } footer: {
+            Text("CloudKit mode requires the Release-CloudKit build with entitlements and an iCloud account. Changes apply after relaunching the app.")
         }
     }
 
@@ -358,5 +483,6 @@ struct SettingsView: View {
 #Preview {
     NavigationStack { SettingsView() }
         .environmentObject(JourneyStore(persistence: .preview))
+        .environmentObject(OnboardingCoordinator(isPresented: false))
         .preferredColorScheme(.dark)
 }

@@ -24,6 +24,14 @@ enum Formatters {
 
     static func meters(_ m: Int) -> String { "\(number(m)) m" }
 
+    /// Human one-liner for the consumer Settings storage row, e.g. "3 journeys · 1,538 photos".
+    /// Singular is handled ("1 journey · 1 photo"); counts are grouped with thousands separators.
+    static func librarySummary(journeys: Int, photos: Int) -> String {
+        let j = "\(number(journeys)) journey\(journeys == 1 ? "" : "s")"
+        let p = "\(number(photos)) photo\(photos == 1 ? "" : "s")"
+        return "\(j) · \(p)"
+    }
+
     /// "29 Sep – 9 Oct 2023" from ISO `yyyy-MM-dd` bounds.
     static func dateRange(_ start: String?, _ end: String?) -> String? {
         let startDate = DateOnly.date(from: start)

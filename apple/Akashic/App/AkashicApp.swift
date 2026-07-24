@@ -21,6 +21,7 @@ final class AkashicAppDelegate: NSObject, UIApplicationDelegate {
 struct AkashicApp: App {
     @UIApplicationDelegateAdaptor(AkashicAppDelegate.self) private var appDelegate
     @StateObject private var store = JourneyStore()
+    @StateObject private var onboarding = OnboardingCoordinator()
 
     init() {
         // Demo/screenshot hook: force the on-disk `.local` store before the store is first
@@ -38,8 +39,17 @@ struct AkashicApp: App {
         WindowGroup {
             rootScreen
                 .environmentObject(store)
+                .environmentObject(onboarding)
                 .preferredColorScheme(.dark)
                 .tint(Theme.accent)
+                // First-run onboarding (§4.2): a full-screen cover shown once. The coordinator
+                // owns the "show once" state (seeded from OnboardingState.shouldShow, which
+                // honors AKASHIC_SKIP_ONBOARDING and no-ops under XCTest), and the "Replay intro"
+                // Settings row re-presents through the same coordinator.
+                .fullScreenCover(isPresented: $onboarding.isPresented) {
+                    OnboardingView(onFinish: { onboarding.finish() })
+                        .preferredColorScheme(.dark)
+                }
                 .task { await runLaunchImportIfRequested() }
                 // Spotlight deep-link: tapping an indexed journey/day records the target so the
                 // map can fly to it (see JourneyStore.pendingJourneySelection).
