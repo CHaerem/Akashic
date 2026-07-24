@@ -62,6 +62,19 @@ final class IntelligenceTests: XCTestCase {
         XCTAssertFalse(Intelligence(environment: ["AKASHIC_DISABLE_AI": "1"]).isAvailable)
     }
 
+    /// `refresh()` must actually re-probe — it was previously dead code with no caller, so the gate
+    /// went stale mid-session. Now the app calls it on scenePhase == .active. This pins that a
+    /// refresh re-evaluates availability rather than keeping the launch-time value.
+    /// (quality gate: Intelligence availability probed once at launch; refresh() dead code.)
+    @MainActor
+    func testRefreshReProbesAvailability() {
+        let ai = Intelligence(environment: ["AKASHIC_DISABLE_AI": "1"])
+        XCTAssertEqual(ai.availability, .disabledByEnv)
+        ai.refresh(environment: [:])   // kill switch cleared → must re-probe, not stay disabledByEnv
+        XCTAssertNotEqual(ai.availability, .disabledByEnv,
+                          "refresh() re-evaluated availability instead of keeping the stale value")
+    }
+
     // MARK: - Entry-point gating (Intelligence AND Akashic Complete)
 
     /// The entry points render only when the model is available AND the user has Complete — free
@@ -230,5 +243,61 @@ final class IntelligenceTests: XCTestCase {
                     DraftDay(name: "Summit", source: .manual),
                     DraftDay(name: "Day 3", source: .photoCluster)]
         XCTAssertEqual(DayNamer.renamableIndices(in: days), [0, 2])
+    }
+
+    // MARK: - DayNamer applies by day IDENTITY, not list position (quality gate)
+
+    /// The mid-generation mutation race: the user deletes day 1 while the model runs. Suggestions
+    /// were generated for the ORIGINAL list; applying by id means each surviving day still gets the
+    /// name from its own facts — never day 1's name landing on day 2.
+    func testApplyingByDayIDSurvivesDeletionMidGeneration() {
+        let d1 = DraftDay(name: "Day 1", source: .photoCluster)
+        let d2 = DraftDay(name: "Day 2", source: .photoCluster)
+        let d3 = DraftDay(name: "Day 3", source: .photoCluster)
+        let capturedIDs = [d1.id, d2.id, d3.id]
+        let suggestions = ["Summit push", "River camp", "Glacier crossing"]
+
+        // The user deleted d1 before the result landed — the current list is [d2, d3].
+        let renamed = DayNamer.applying(suggestions: suggestions, forDayIDs: capturedIDs, to: [d2, d3])
+
+        XCTAssertEqual(renamed[0].name, "River camp", "d2 keeps ITS suggestion, not d1's 'Summit push'")
+        XCTAssertEqual(renamed[1].name, "Glacier crossing")
+    }
+
+    func testApplyingByDayIDIgnoresDaysAddedAfterTheRequest() {
+        let d1 = DraftDay(name: "Day 1", source: .photoCluster)
+        let capturedIDs = [d1.id]
+        let added = DraftDay(name: "Day 2", source: .manual)   // added mid-generation
+
+        let renamed = DayNamer.applying(suggestions: ["Trailhead"], forDayIDs: capturedIDs, to: [d1, added])
+        XCTAssertEqual(renamed[0].name, "Trailhead")
+        XCTAssertEqual(renamed[1].name, "Day 2", "a day added since the request receives no suggestion")
+    }
+
+    func testApplyingByDayIDStillSkipsHandEditedDays() {
+        let d1 = DraftDay(name: "Day 1", source: .photoCluster)
+        var d2 = DraftDay(name: "Day 2", source: .photoCluster)
+        let ids = [d1.id, d2.id]
+        d2.name = "My own name"   // hand-edited after the request was captured
+
+        let renamed = DayNamer.applying(suggestions: ["A", "B"], forDayIDs: ids, to: [d1, d2])
+        XCTAssertEqual(renamed[0].name, "A")
+        XCTAssertEqual(renamed[1].name, "My own name", "hand-edited day is never overwritten")
+    }
+
+    // MARK: - DayNoteDrafter clobber guard (quality gate)
+
+    func testDayNoteDecisionNeverClobbersUserWork() {
+        // Empty field, unchanged → fill directly.
+        XCTAssertEqual(DayNoteDrafter.decision(fieldAtRequest: "", fieldNow: ""), .apply)
+        XCTAssertEqual(DayNoteDrafter.decision(fieldAtRequest: "  ", fieldNow: "  "), .apply)
+        // Non-empty field, unchanged → confirm before replacing.
+        XCTAssertEqual(DayNoteDrafter.decision(fieldAtRequest: "my notes", fieldNow: "my notes"),
+                       .confirmReplace)
+        // Field CHANGED during generation (user typed) → discard the stale draft.
+        XCTAssertEqual(DayNoteDrafter.decision(fieldAtRequest: "", fieldNow: "typed while waiting"),
+                       .discardStale)
+        XCTAssertEqual(DayNoteDrafter.decision(fieldAtRequest: "old", fieldNow: "old plus more"),
+                       .discardStale)
     }
 }

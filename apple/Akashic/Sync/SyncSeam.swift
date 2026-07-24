@@ -121,6 +121,12 @@ protocol SyncLocalStore: AnyObject {
     /// Every journey id currently in the local store (for the initial upload + zone creation).
     func allLocalJourneyIDs() -> [String]
 
+    /// Whether the store has ever seen a server copy of this record — i.e. persisted CloudKit
+    /// system fields (a change tag) for it. False for a record created purely locally that has
+    /// never been uploaded. Used by the activation heal to find owned journeys that never reached
+    /// CloudKit (e.g. created while the engine was stopped) and re-enqueue them.
+    func hasUploadedRecord(forRecordName recordName: String) -> Bool
+
     /// The CloudKit zone owner for a journey, or nil when we own it ourselves.
     ///
     /// This is what routes a journey to the right database (T2.8): ours live in the private

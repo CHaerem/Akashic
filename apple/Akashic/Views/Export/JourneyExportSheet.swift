@@ -35,7 +35,9 @@ struct JourneyExportSheet: View {
                 Section {
                     switch phase {
                     case .idle:
-                        if entitlements.canExport {
+                        // Shared-in journeys are never paywalled — exporting your copy of shared
+                        // content is a viewing-tier action. Only OWNED journeys require Complete.
+                        if entitlements.canExport(isOwned: store.isOwnedByCurrentUser(journeyID: journey.id)) {
                             Button {
                                 Task { await runExport() }
                             } label: {

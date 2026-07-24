@@ -143,8 +143,39 @@ struct PaywallView: View {
 
     // MARK: Price + purchase
 
+    /// Whether the priced purchase surface should be shown. NEVER for an already-entitled user —
+    /// presenting a live "Unlock for <price>" button for something already owned is a wrong-state
+    /// purchase surface (a reviewer red flag). (quality gate: paywall shown to existing owners.)
+    static func showsPurchaseSurface(isComplete: Bool) -> Bool { !isComplete }
+
     @ViewBuilder
     private var priceAndPurchase: some View {
+        VStack(spacing: 12) {
+            if !Self.showsPurchaseSurface(isComplete: entitlements.isComplete) {
+                alreadyCompleteRow
+            } else {
+                purchaseSurface
+            }
+        }
+    }
+
+    /// Shown when the viewer already owns Akashic Complete — a plain confirmation, never a buy button.
+    private var alreadyCompleteRow: some View {
+        VStack(spacing: 8) {
+            Label("You have Akashic Complete", systemImage: "checkmark.seal.fill")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(Theme.accent)
+            Text("Unlimited journeys and photos, export, and publishing — shared with your Family Sharing group.")
+                .font(.caption).foregroundStyle(Theme.textSecondary)
+                .multilineTextAlignment(.center)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(16)
+        .background(Theme.surface, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+    }
+
+    @ViewBuilder
+    private var purchaseSurface: some View {
         VStack(spacing: 12) {
             switch entitlements.loadState {
             case .idle, .loading:

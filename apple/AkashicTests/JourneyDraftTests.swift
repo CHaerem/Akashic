@@ -138,6 +138,32 @@ final class JourneyDraftTests: XCTestCase {
         XCTAssertEqual(journey.totalDays, 2, "duration derives from the day count")
     }
 
+    // MARK: - Replace-route: only untouched auto-seeds may be reseeded (quality gate)
+
+    func testDaysAreAllAutoSeededDistinguishesUntouchedFromEdited() {
+        // All GPX-seeded, unedited → safe to replace on a "Replace route".
+        XCTAssertTrue(JourneyDraft.daysAreAllAutoSeeded([
+            DraftDay(name: "Machame Gate", source: .gpxWaypoint),
+            DraftDay(name: "Shira Camp", source: .gpxWaypoint),
+        ]))
+        // Photo-seeded placeholders, unedited → safe.
+        XCTAssertTrue(JourneyDraft.daysAreAllAutoSeeded([
+            DraftDay(name: "Day 1", source: .photoCluster),
+            DraftDay(name: "Day 2", source: .photoCluster),
+        ]))
+        // A hand-added manual day means the user has started building → NOT safe to clobber.
+        XCTAssertFalse(JourneyDraft.daysAreAllAutoSeeded([
+            DraftDay(name: "Day 1", source: .photoCluster),
+            DraftDay(name: "My rest day", source: .manual),
+        ]))
+        // A renamed photo-cluster day (no longer the "Day N" placeholder) → NOT safe.
+        XCTAssertFalse(JourneyDraft.daysAreAllAutoSeeded([
+            DraftDay(name: "Summit push", source: .photoCluster),
+        ]))
+        // An empty list is not "all auto-seeded" (there is nothing seeded).
+        XCTAssertFalse(JourneyDraft.daysAreAllAutoSeeded([]))
+    }
+
     // MARK: - Helpers
 
     private func makePhoto(takenAt: String?, coordinates: [Double]?) -> Photo {

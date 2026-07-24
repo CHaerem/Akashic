@@ -11,7 +11,7 @@ struct JourneyListView: View {
     /// Start a create attempt: below the free limit → open the creation sheet; at the limit →
     /// present the paywall instead (never silently blocked). See `EntitlementStore`.
     private func startCreate() {
-        if entitlements.canCreateJourney(ownedCount: store.ownedJourneyCount) {
+        if entitlements.canCreateJourney(ownedCount: store.billableOwnedJourneyCount) {
             showingNewJourney = true
         } else {
             showingPaywall = true

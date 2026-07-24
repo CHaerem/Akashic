@@ -25,6 +25,9 @@ final class PublicMirrorTests: XCTestCase {
         /// Pages of `PublicPhoto` IDs to hand back, consumed in order (cursor = next page index).
         var photoIDPages: [[CKRecord.ID]] = []
 
+        /// slug -> creatorUserRecordID.recordName of an existing PublicJourney (for collision tests).
+        var existingJourneyCreators: [String: String] = [:]
+
         func ckModifyRecords(
             saving recordsToSave: [CKRecord],
             deleting recordIDsToDelete: [CKRecord.ID],
@@ -58,6 +61,10 @@ final class PublicMirrorTests: XCTestCase {
             let next: PublicMirrorCursor? = (page + 1 < photoIDPages.count)
                 ? PublicMirrorCursor(underlying: page + 1) : nil
             return (photoIDPages[page], next)
+        }
+
+        func ckExistingPublicJourneyCreator(slug: String) async throws -> String? {
+            existingJourneyCreators[slug]
         }
     }
 
@@ -374,6 +381,56 @@ final class PublicMirrorTests: XCTestCase {
         let report = await PublicMirrorPublisher(database: mock).unpublish(slug: "kilimanjaro")
         XCTAssertEqual(report.deleted, 1, "just the PublicJourney record")
         XCTAssertTrue(mock.deleted.contains(CKRecord.ID(recordName: "kilimanjaro")))
+    }
+
+    // MARK: - Cross-user slug collision in the global public keyspace (quality gate)
+
+    func testDisambiguatedSlugIsStableAndOwnerScoped() {
+        let a = PublicMirrorBuilder.disambiguatedSlug("kilimanjaro", ownerRecordName: "ownerA")
+        let b = PublicMirrorBuilder.disambiguatedSlug("kilimanjaro", ownerRecordName: "ownerB")
+        XCTAssertTrue(a.hasPrefix("kilimanjaro-"))
+        XCTAssertNotEqual(a, b, "different owners of the same pretty slug get different suffixes")
+        XCTAssertEqual(a, PublicMirrorBuilder.disambiguatedSlug("kilimanjaro", ownerRecordName: "ownerA"),
+                       "deterministic across calls, so re-publishing keeps the same recordName")
+    }
+
+    /// When someone ELSE already published under this slug, the second family must publish under a
+    /// disambiguated slug — never save a PublicJourney/PublicPhoto under the first family's slug.
+    func testPublishUnderColludingSlugUsesDisambiguatedSlug() async {
+        let mock = MockPublicDatabase()
+        mock.existingJourneyCreators = ["kilimanjaro": "some-other-family"]
+        let publisher = PublicMirrorPublisher(database: mock, ownerRecordName: "me")
+
+        let report = await publisher.publish(journey: makeJourney(), photos: makePhotos())
+
+        let expectedSlug = PublicMirrorBuilder.disambiguatedSlug("kilimanjaro", ownerRecordName: "me")
+        XCTAssertTrue(report.journeyPublished)
+        let names = Set(mock.saved.keys.map(\.recordName))
+        XCTAssertTrue(names.contains(expectedSlug), "published under the disambiguated slug")
+        XCTAssertFalse(names.contains("kilimanjaro"), "never writes under the other family's slug")
+        // The PublicPhoto records must carry the disambiguated journeySlug too, so the web (keyed on
+        // recordName == slug) stays consistent.
+        let photoSlugs = Set(mock.saved.values
+            .filter { $0.recordType == PublicMirrorBuilder.photoType }
+            .compactMap { $0["journeySlug"] as? String })
+        XCTAssertEqual(photoSlugs, [expectedSlug])
+    }
+
+    /// A slug already published by US (or free) is kept as-is — no needless suffix.
+    func testPublishKeepsPrettySlugWhenOwnedOrFree() async {
+        let mockFree = MockPublicDatabase()   // no existing record
+        let r1 = await PublicMirrorPublisher(database: mockFree, ownerRecordName: "me")
+            .publish(journey: makeJourney(), photos: makePhotos())
+        XCTAssertTrue(r1.journeyPublished)
+        XCTAssertTrue(Set(mockFree.saved.keys.map(\.recordName)).contains("kilimanjaro"))
+
+        let mockOwn = MockPublicDatabase()
+        mockOwn.existingJourneyCreators = ["kilimanjaro": "me"]   // already ours
+        let r2 = await PublicMirrorPublisher(database: mockOwn, ownerRecordName: "me")
+            .publish(journey: makeJourney(), photos: makePhotos())
+        XCTAssertTrue(r2.journeyPublished)
+        XCTAssertTrue(Set(mockOwn.saved.keys.map(\.recordName)).contains("kilimanjaro"),
+                      "re-publishing our own journey keeps its pretty slug")
     }
 
     // MARK: - Best-effort targeted photo removal (finding #7)

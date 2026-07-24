@@ -67,4 +67,17 @@ final class OnboardingStateTests: XCTestCase {
     func testCleanEnvironmentIsNotSuppressed() {
         XCTAssertFalse(OnboardingState.isSuppressed(environment: cleanEnv))
     }
+
+    /// A screenshot/demo harness screen must never be covered by the first-run onboarding, so the
+    /// harness no longer has to also set AKASHIC_SKIP_ONBOARDING. (quality gate: screenshot harness
+    /// screens can be covered by first-run onboarding.)
+    func testSuppressedWhenScreenshotHarnessScreenIsSet() {
+        let defaults = makeDefaults()
+        for screen in ["photos", "photogrid", "editsheet", "widgets"] {
+            let env = ["AKASHIC_SCREEN": screen]
+            XCTAssertTrue(OnboardingState.isSuppressed(environment: env), "AKASHIC_SCREEN=\(screen) suppresses onboarding")
+            XCTAssertFalse(OnboardingState.shouldShow(defaults: defaults, environment: env),
+                           "a fresh install with AKASHIC_SCREEN set never shows the cover")
+        }
+    }
 }

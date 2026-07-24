@@ -43,6 +43,8 @@ enum GPXParseError: Error, LocalizedError, Equatable {
     case malformed(String)
     /// The document parsed but carried neither track points nor waypoints.
     case noContent
+    /// The file is larger than the import cap (protects the UI from a multi-hundred-MB pick).
+    case tooLarge(maxBytes: Int)
 
     var errorDescription: String? {
         switch self {
@@ -52,6 +54,9 @@ enum GPXParseError: Error, LocalizedError, Equatable {
             return "This doesn't look like a valid GPX file — the XML couldn't be read."
         case .noContent:
             return "This GPX file has no track points or waypoints to import."
+        case let .tooLarge(maxBytes):
+            return "This GPX file is too large to import (over \(maxBytes / (1024 * 1024)) MB). "
+                 + "Try a simplified or trimmed track."
         }
     }
 }
@@ -64,13 +69,25 @@ enum GPXParseError: Error, LocalizedError, Equatable {
 /// `<ele>`/`<time>`. It is the exact inverse of `GPXBuilder` and round-trips its output.
 enum GPXParser {
 
+    /// Largest GPX/XML file the importer will read into memory. A multi-day, 1-second-sampled
+    /// track is a few MB; 25 MB covers real files while refusing a pick that would freeze the UI
+    /// (whole-file `Data` load + full XML pass) or risk a jetsam. `.xml` is an allowed content
+    /// type, so the user can pick any XML — the cap is the backstop. (quality gate: GPX import
+    /// parses arbitrarily large user-picked files synchronously on the main thread.)
+    static let maxFileBytes = 25 * 1024 * 1024
+
     static func parse(_ string: String) throws -> GPXFile {
         guard let data = string.data(using: .utf8) else { throw GPXParseError.empty }
         return try parse(data)
     }
 
-    static func parse(contentsOf url: URL) throws -> GPXFile {
+    static func parse(contentsOf url: URL, maxBytes: Int = maxFileBytes) throws -> GPXFile {
+        // Reject an over-cap file by its size before reading it into memory.
+        if let size = try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize, size > maxBytes {
+            throw GPXParseError.tooLarge(maxBytes: maxBytes)
+        }
         let data = try Data(contentsOf: url)
+        if data.count > maxBytes { throw GPXParseError.tooLarge(maxBytes: maxBytes) }
         return try parse(data)
     }
 
@@ -157,14 +174,16 @@ final class GPXParserDelegate: NSObject, XMLParserDelegate {
         guard extensionsDepth == 0 else { return }   // ignore everything inside <extensions>
 
         switch name {
-        case "trkpt", "wpt":
+        case "trkpt", "wpt", "rtept":
             let lat = doubleAttribute(attributeDict, key: "lat")
             let lon = doubleAttribute(attributeDict, key: "lon")
             var point = PendingPoint()
             point.latitude = lat
             point.longitude = lon
-            if name == "trkpt" { pendingTrackPoint = point } else { pendingWaypoint = point }
-        case "trkseg":
+            // A <rtept> is a route point — it contributes to the route line exactly like a <trkpt>.
+            if name == "wpt" { pendingWaypoint = point } else { pendingTrackPoint = point }
+        case "trkseg", "rte":
+            // A <rte> is a route (a LineString of <rtept>) with no <trkseg>; buffer it the same way.
             currentSegment = []
         default:
             break
@@ -217,13 +236,21 @@ final class GPXParserDelegate: NSObject, XMLParserDelegate {
         case "desc":
             if pendingWaypoint != nil { pendingWaypoint?.desc = text }
 
-        case "trkpt":
+        case "trkpt", "rtept":
             finishTrackPoint()
 
         case "wpt":
             finishWaypoint()
 
-        case "trkseg":
+        case "trkseg", "rte":
+            routeCoordinates.append(contentsOf: currentSegment)
+            currentSegment = []
+
+        case "trk":
+            // Flush any points that were emitted directly under <trk> without a wrapping <trkseg>
+            // (a schema-invalid but real producer quirk). Without this, those parsed points would
+            // be stranded in `currentSegment` and the file wrongly reported as having "no content".
+            // (quality gate: trkpt outside a trkseg is silently discarded.)
             routeCoordinates.append(contentsOf: currentSegment)
             currentSegment = []
 
@@ -296,8 +323,30 @@ final class GPXParserDelegate: NSObject, XMLParserDelegate {
         return f
     }()
 
+    /// Lenient fallback for GPX writers that emit a zone-less `<time>` ("2023-09-29T06:00:00" with
+    /// no Z/offset — nonconformant but real). `xsd:dateTime` allows the timezone to be absent, so
+    /// such files are arguably valid; we parse them as UTC rather than dropping every date label.
+    /// (quality gate: GPX <time> without a timezone designator parses to nil.)
+    private static let zonelessLocal: DateFormatter = {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.timeZone = TimeZone(identifier: "UTC")
+        f.dateFormat = "yyyy-MM-dd'T'HH:mm:ss"
+        return f
+    }()
+    private static let zonelessLocalFraction: DateFormatter = {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.timeZone = TimeZone(identifier: "UTC")
+        f.dateFormat = "yyyy-MM-dd'T'HH:mm:ss.SSS"
+        return f
+    }()
+
     static func parseTime(_ string: String) -> Date? {
         guard !string.isEmpty else { return nil }
-        return iso.date(from: string) ?? isoWithFraction.date(from: string)
+        return iso.date(from: string)
+            ?? isoWithFraction.date(from: string)
+            ?? zonelessLocal.date(from: string)
+            ?? zonelessLocalFraction.date(from: string)
     }
 }

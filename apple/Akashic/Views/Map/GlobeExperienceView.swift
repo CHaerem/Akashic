@@ -39,7 +39,7 @@ struct GlobeExperienceView: View {
 
     /// Start a create attempt: below the free limit → open creation; at the limit → paywall.
     private func startCreate() {
-        if entitlements.canCreateJourney(ownedCount: store.ownedJourneyCount) {
+        if entitlements.canCreateJourney(ownedCount: store.billableOwnedJourneyCount) {
             showingNewJourney = true
         } else {
             showingPaywall = true

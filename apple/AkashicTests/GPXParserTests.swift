@@ -190,5 +190,78 @@ final class GPXParserTests: XCTestCase {
         XCTAssertFalse((GPXParseError.empty.errorDescription ?? "").isEmpty)
         XCTAssertFalse((GPXParseError.noContent.errorDescription ?? "").isEmpty)
         XCTAssertFalse((GPXParseError.malformed("x").errorDescription ?? "").isEmpty)
+        XCTAssertFalse((GPXParseError.tooLarge(maxBytes: 25 * 1024 * 1024).errorDescription ?? "").isEmpty)
+    }
+
+    // MARK: - Route-only GPX (<rte>/<rtept>) — advertised Garmin/RideWithGPS/OsmAnd exports
+
+    func testRouteOnlyGPXIsAcceptedAsARoute() throws {
+        let gpx = """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <gpx version="1.1" creator="Garmin BaseCamp" xmlns="http://www.topografix.com/GPX/1/1">
+          <rte>
+            <name>Planned route</name>
+            <rtept lat="-3.0031" lon="37.1479"><ele>2404</ele></rtept>
+            <rtept lat="-3.0041" lon="37.1489"><ele>2410</ele></rtept>
+            <rtept lat="-3.0051" lon="37.1499"></rtept>
+          </rte>
+        </gpx>
+        """
+        let file = try GPXParser.parse(gpx)
+        XCTAssertFalse(file.isEmpty, "a route-only file is valid, not .noContent")
+        XCTAssertEqual(file.route.coordinates.count, 3, "<rtept> points become the route")
+        XCTAssertEqual(file.route.coordinates.first, [37.1479, -3.0031, 2404], "lat/lng swap applies to rtept")
+    }
+
+    // MARK: - trkpt directly under <trk> (no <trkseg>) must still be flushed
+
+    func testTrackPointsWithoutTrkSegAreFlushed() throws {
+        let gpx = """
+        <gpx version="1.1" xmlns="http://www.topografix.com/GPX/1/1">
+          <trk>
+            <trkpt lat="59.9" lon="10.7"><ele>10</ele></trkpt>
+            <trkpt lat="59.8" lon="10.6"><ele>12</ele></trkpt>
+          </trk>
+        </gpx>
+        """
+        let file = try GPXParser.parse(gpx)
+        XCTAssertEqual(file.route.coordinates.count, 2,
+                       "trkpt under <trk> without a <trkseg> is flushed on </trk>, not discarded")
+        XCTAssertEqual(file.droppedPointCount, 0)
+    }
+
+    // MARK: - Zone-less <time> parses (as UTC) instead of dropping the day label
+
+    func testZonelessTimeParsesAsUTC() throws {
+        let gpx = """
+        <gpx version="1.1" xmlns="http://www.topografix.com/GPX/1/1">
+          <wpt lat="-3.0764" lon="37.354">
+            <name>Camp</name>
+            <time>2023-09-29T06:00:00</time>
+          </wpt>
+        </gpx>
+        """
+        let file = try GPXParser.parse(gpx)
+        let wpt = try XCTUnwrap(file.waypoints.first)
+        let time = try XCTUnwrap(wpt.time, "a zone-less <time> must parse, not drop to nil")
+        var utc = Calendar(identifier: .gregorian)
+        utc.timeZone = TimeZone(identifier: "UTC")!
+        XCTAssertEqual(utc.component(.hour, from: time), 6, "parsed as UTC 06:00")
+        // Zone-suffixed forms still work.
+        XCTAssertNotNil(GPXParserDelegate.parseTime("2023-09-29T06:00:00Z"))
+    }
+
+    // MARK: - Oversized file is rejected before it can freeze the UI
+
+    func testOversizedFileThrowsTooLarge() throws {
+        let url = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("akashic-big-\(UUID().uuidString).gpx")
+        try Data(count: 40 * 1024 * 1024).write(to: url)   // 40 MB > 25 MB cap
+        defer { try? FileManager.default.removeItem(at: url) }
+        XCTAssertThrowsError(try GPXParser.parse(contentsOf: url)) { error in
+            guard case GPXParseError.tooLarge = error else {
+                return XCTFail("expected .tooLarge, got \(error)")
+            }
+        }
     }
 }

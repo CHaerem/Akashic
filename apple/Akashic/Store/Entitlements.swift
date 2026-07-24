@@ -97,22 +97,46 @@ struct EntitlementPolicy: Equatable {
         photosAllowed(currentCount: currentCount, adding: adding) >= adding
     }
 
+    /// Ownership-aware photo gate — the crown-jewel invariant, now inside the policy (and tested)
+    /// rather than living only in view code. A journey shared *into* this account is NEVER gated:
+    /// a free family member may add all their photos to it. Only OWNED journeys hit the free cap.
+    /// (quality gate: shared-content photo carve-out.)
+    func photosAllowed(currentCount: Int, adding: Int, isOwned: Bool) -> Int {
+        guard isOwned else { return max(0, adding) }   // shared-in content is never capped
+        return photosAllowed(currentCount: currentCount, adding: adding)
+    }
+
     // MARK: Export / publish
 
-    /// Per-journey export (the "exit door") is a Complete feature. Independent of ownership and of
-    /// how many journeys exist — so it never regresses under grandfathering.
+    /// Per-journey export (the "exit door") is a Complete feature for content the user OWNS.
+    /// Independent of how many journeys exist — so it never regresses under grandfathering.
     var canExport: Bool { isComplete }
+
+    /// Ownership-aware export gate. A journey shared *into* this account must never be paywalled:
+    /// exporting your copy of shared content is a viewing-tier action, never gated. Only OWNED
+    /// journeys require Complete to export. (quality gate: shared-content export/showcase.)
+    func canExport(isOwned: Bool) -> Bool { !isOwned || isComplete }
 
     /// Publishing to the public showcase is a Complete feature (and separately owner-only + gated
     /// behind the CloudKit build — see `JourneyShowcaseSheet`).
     var canPublish: Bool { isComplete }
+
+    /// Ownership-aware publish gate. Publishing requires Complete AND ownership: you can never
+    /// publish a journey shared *into* your account (only its owner controls world-readability).
+    func canPublish(isOwned: Bool) -> Bool { isOwned && isComplete }
 }
 
 // MARK: - Developer / screenshot override
 
 /// Lets us and App Review flip entitlement states without a real purchase (plan §4.4).
 ///
-/// Precedence, highest first:
+/// **Compiled out of Release — defense in depth against a paywall bypass.** Both overrides only
+/// exist in DEBUG builds. In a Release/TestFlight/App Store binary `resolvedOverride` always
+/// returns `nil`, so NEITHER the persisted `simulateComplete` UserDefaults key NOR the
+/// `AKASHIC_COMPLETE` environment variable can grant the paid tier — even if a key is hand-set on
+/// device. Screenshots run against DEBUG builds, so `AKASHIC_COMPLETE=1` still works there.
+///
+/// Precedence within a DEBUG build, highest first:
 ///   1. `AKASHIC_COMPLETE=1` in the environment — for deterministic screenshots.
 ///   2. The developer-tools "Simulate Akashic Complete" toggle (persisted in `UserDefaults`).
 ///   3. Otherwise: the real StoreKit entitlement.
@@ -127,6 +151,17 @@ enum EntitlementOverride {
     /// Environment variable honored for screenshots.
     static let completeEnvKey = "AKASHIC_COMPLETE"
 
+    /// Whether this binary was compiled with the DEBUG configuration. The real gate uses the
+    /// compile-time flag; exposed as a value so `resolvedOverride(debugBuild:)` is unit-testable
+    /// for BOTH configurations regardless of the config the tests run under.
+    static let isDebugBuild: Bool = {
+        #if DEBUG
+        return true
+        #else
+        return false
+        #endif
+    }()
+
     static func simulateComplete(defaults: UserDefaults = .standard) -> Bool {
         defaults.bool(forKey: simulateCompleteKey)
     }
@@ -140,10 +175,15 @@ enum EntitlementOverride {
     }
 
     /// The override entitlement, or `nil` to fall through to the real StoreKit entitlement.
-    /// `environment` is injectable so the env precedence is testable without mutating the process.
+    /// `environment` is injectable so the env precedence is testable without mutating the process;
+    /// `debugBuild` is injectable so a test can pin the Release compile-out directly.
     static func resolvedOverride(defaults: UserDefaults = .standard,
-                                 environment: [String: String] = ProcessInfo.processInfo.environment)
+                                 environment: [String: String] = ProcessInfo.processInfo.environment,
+                                 debugBuild: Bool = isDebugBuild)
         -> Entitlement? {
+        // Release builds honor NEITHER the env var NOR the persisted toggle: the paywall can never
+        // be bypassed by a UserDefaults key or an environment variable in a shipped binary.
+        guard debugBuild else { return nil }
         if environment[completeEnvKey] == "1" { return .complete }
         if simulateComplete(defaults: defaults) { return .complete }
         return nil
@@ -364,8 +404,19 @@ final class EntitlementStore: ObservableObject {
         policy.canAddPhotos(currentCount: currentCount, adding: adding)
     }
 
+    /// Ownership-aware photo gate; shared-in journeys are never capped. Callers pass whether the
+    /// target journey is owned (`store.isOwnedByCurrentUser`).
+    func photosAllowed(currentCount: Int, adding: Int, isOwned: Bool) -> Int {
+        policy.photosAllowed(currentCount: currentCount, adding: adding, isOwned: isOwned)
+    }
+
     var canExport: Bool { policy.canExport }
     var canPublish: Bool { policy.canPublish }
+
+    /// Ownership-aware export/publish gates. Export of a shared-in journey is never paywalled;
+    /// publishing always requires ownership. Views pass `store.isOwnedByCurrentUser`.
+    func canExport(isOwned: Bool) -> Bool { policy.canExport(isOwned: isOwned) }
+    func canPublish(isOwned: Bool) -> Bool { policy.canPublish(isOwned: isOwned) }
 
     // MARK: Lifecycle
 

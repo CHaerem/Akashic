@@ -224,9 +224,10 @@ struct PhotoImportSheet: View {
         // the cap entirely.
         let owned = store.isOwnedByCurrentUser(journeyID: journey.id)
         let existing = store.photos(forJourneyID: journey.id).count
-        let allowed = owned
-            ? entitlements.photosAllowed(currentCount: existing, adding: pending.count)
-            : pending.count
+        // The ownership carve-out now lives in EntitlementPolicy (pure + tested), not this view.
+        let allowed = entitlements.photosAllowed(currentCount: existing,
+                                                 adding: pending.count,
+                                                 isOwned: owned)
 
         guard allowed < pending.count else {
             // Everything fits — the original path.

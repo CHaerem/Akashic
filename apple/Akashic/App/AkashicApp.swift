@@ -27,6 +27,9 @@ struct AkashicApp: App {
     // construction; the whole feature family is absent (not broken) when it reports unavailable.
     @StateObject private var intelligence = Intelligence()
 
+    /// Drives the on-foreground availability re-probe (see `.onChange` below).
+    @Environment(\.scenePhase) private var scenePhase
+
     init() {
         // Demo/screenshot hook: force the on-disk `.local` store before the store is first
         // built (so the import persists and photos display). Gated on an env var, so normal
@@ -57,6 +60,14 @@ struct AkashicApp: App {
                         .preferredColorScheme(.dark)
                 }
                 .task { await runLaunchImportIfRequested() }
+                // Re-probe Intelligence availability on every return to the foreground: if the user
+                // toggled Apple Intelligence off mid-session the entry points must go absent (not
+                // become dead buttons that fail on tap), and if the model finished downloading the
+                // feature must appear. `refresh()` was previously dead code with no caller.
+                // (quality gate: Intelligence availability probed once at launch.)
+                .onChange(of: scenePhase) { _, phase in
+                    if phase == .active { intelligence.refresh() }
+                }
                 // Spotlight deep-link: tapping an indexed journey/day records the target so the
                 // map can fly to it (see JourneyStore.pendingJourneySelection).
                 .onContinueUserActivity(CSSearchableItemActionType) { activity in

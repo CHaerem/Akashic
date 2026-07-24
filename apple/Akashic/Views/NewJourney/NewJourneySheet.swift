@@ -211,24 +211,37 @@ struct NewJourneySheet: View {
             importError = error.localizedDescription
         case let .success(urls):
             guard let url = urls.first else { return }
-            let didAccess = url.startAccessingSecurityScopedResource()
-            defer { if didAccess { url.stopAccessingSecurityScopedResource() } }
-            do {
-                let file = try GPXParser.parse(contentsOf: url)
-                draft.route = file.route
-                routeSummary = RouteSummary(
-                    pointCount: file.trackPointCount,
-                    distanceKm: JourneyDraft.totalDistanceKm(route: file.route.coordinates),
-                    waypointCount: file.waypoints.count,
-                    droppedCount: file.droppedPointCount)
-                // Seed days from the route's waypoints, but only when the user hasn't built any
-                // days yet — never clobber a day list they've already edited.
-                if draft.days.isEmpty, !file.waypoints.isEmpty {
-                    draft.days = JourneyDraft.days(fromWaypoints: file.waypoints)
-                }
-            } catch {
-                importError = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+            importError = nil
+            Task { await parseRoute(from: url) }
+        }
+    }
+
+    /// Parse the picked GPX OFF the main actor (whole-file `Data` load + full XML pass), then apply
+    /// the result on the main actor. Keeping the parse off the main thread stops a large file from
+    /// freezing the UI. The security-scoped access is held across the `await`.
+    @MainActor
+    private func parseRoute(from url: URL) async {
+        let didAccess = url.startAccessingSecurityScopedResource()
+        defer { if didAccess { url.stopAccessingSecurityScopedResource() } }
+        do {
+            let file = try await Task.detached(priority: .userInitiated) {
+                try GPXParser.parse(contentsOf: url)
+            }.value
+            draft.route = file.route
+            routeSummary = RouteSummary(
+                pointCount: file.trackPointCount,
+                distanceKm: JourneyDraft.totalDistanceKm(route: file.route.coordinates),
+                waypointCount: file.waypoints.count,
+                droppedCount: file.droppedPointCount)
+            // Reseed days from the new file when the current list is still entirely auto-proposed
+            // (an unedited first import, e.g. the wrong file) — otherwise the previous file's days
+            // would linger while the summary advertised the new file's waypoints. A day list the
+            // user has actually worked on is never clobbered.
+            if draft.days.isEmpty || JourneyDraft.daysAreAllAutoSeeded(draft.days) {
+                draft.days = JourneyDraft.days(fromWaypoints: file.waypoints)
             }
+        } catch {
+            importError = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
         }
     }
 
@@ -289,8 +302,15 @@ struct NewJourneySheet: View {
                                 coordinates: meta.coordinates, takenAt: meta.takenAt))
         }
         let proposed = JourneyDraft.days(fromPhotos: probes)
-        photoDayCount = proposed.count
-        if draft.days.isEmpty { draft.days = proposed }
+        // Only claim "Grouped into N day(s)" when the proposal is actually applied — otherwise the
+        // caption advertised days that were discarded because the user had already built a list.
+        // (quality gate: replace route / photo-day-count shown even when discarded.)
+        if draft.days.isEmpty || JourneyDraft.daysAreAllAutoSeeded(draft.days) {
+            draft.days = proposed
+            photoDayCount = proposed.count
+        } else {
+            photoDayCount = 0
+        }
     }
 
     // MARK: Days
@@ -397,6 +417,10 @@ struct NewJourneySheet: View {
         let facts = draft.days.enumerated().map { index, day in
             DayNameFacts(index: index, day: day)
         }
+        // Capture the day IDENTITIES the facts were built from, so the results are applied by id —
+        // not by list position. If the user deletes/reorders/adds a day while the model runs, each
+        // surviving day still gets the name generated from its own facts.
+        let capturedIDs = draft.days.map(\.id)
         isSuggestingNames = true
         Task {
             defer { isSuggestingNames = false }
@@ -405,7 +429,8 @@ struct NewJourneySheet: View {
                 do {
                     let suggestions = try await DayNamer.generate(for: facts)
                     guard !suggestions.isEmpty else { suggestNamesFailed = true; return }
-                    draft.days = DayNamer.applying(suggestions: suggestions, to: draft.days)
+                    draft.days = DayNamer.applying(suggestions: suggestions,
+                                                   forDayIDs: capturedIDs, to: draft.days)
                 } catch {
                     suggestNamesFailed = true
                 }
@@ -430,7 +455,7 @@ struct NewJourneySheet: View {
         guard draft.isValid, !isSaving else { return }
         // Defense in depth: the entry points pre-gate, but if this sheet is ever open while the
         // user is already at the free-journey limit, present the paywall instead of creating.
-        guard entitlements.canCreateJourney(ownedCount: store.ownedJourneyCount) else {
+        guard entitlements.canCreateJourney(ownedCount: store.billableOwnedJourneyCount) else {
             showPaywall = true
             return
         }

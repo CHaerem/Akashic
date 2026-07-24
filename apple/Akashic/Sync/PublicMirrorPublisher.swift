@@ -58,6 +58,12 @@ protocol PublicMirrorDatabase {
         cursor: PublicMirrorCursor?,
         resultsLimit: Int
     ) async throws -> (ids: [CKRecord.ID], cursor: PublicMirrorCursor?)
+
+    /// The `creatorUserRecordID.recordName` of an existing `PublicJourney` whose recordName equals
+    /// `slug`, or nil when no such record exists. Used to detect a cross-user slug collision in the
+    /// global public keyspace before publishing. (quality gate: locally-minted slugs collide in the
+    /// global public showcase keyspace.)
+    func ckExistingPublicJourneyCreator(slug: String) async throws -> String?
 }
 
 // `CKDatabase` already satisfies `ckModifyRecords(...)` through the importer's
@@ -84,6 +90,15 @@ extension CKDatabase: PublicMirrorDatabase {
         let ids = results.matchResults.map(\.0)
         let next = results.queryCursor.map { PublicMirrorCursor(underlying: $0) }
         return (ids, next)
+    }
+
+    func ckExistingPublicJourneyCreator(slug: String) async throws -> String? {
+        do {
+            let record = try await record(for: PublicMirrorBuilder.journeyRecordID(slug: slug))
+            return record.creatorUserRecordID?.recordName
+        } catch let error as CKError where error.code == .unknownItem {
+            return nil   // no PublicJourney under this slug yet — the keyspace is free
+        }
     }
 }
 
@@ -178,6 +193,26 @@ enum PublicMirrorBuilder {
     /// The default-zone record ID for a `PublicJourney` (recordName == slug).
     static func journeyRecordID(slug: String) -> CKRecord.ID {
         CKRecord.ID(recordName: slug)
+    }
+
+    /// A collision-free public slug for an owner, formed by appending a short stable owner-scoped
+    /// hash: `kilimanjaro` → `kilimanjaro-a1b2c3`. Deterministic for a given (slug, owner) pair so
+    /// re-publishing keeps the same recordName; different owners of the same pretty slug get
+    /// different suffixes. (quality gate: locally-minted slugs collide in the global public
+    /// keyspace.)
+    static func disambiguatedSlug(_ slug: String, ownerRecordName: String) -> String {
+        "\(slug)-\(stableHash6("\(slug)|\(ownerRecordName)"))"
+    }
+
+    /// A stable, process-independent 6-character lowercase hex hash. Uses FNV-1a (not `Hasher`,
+    /// whose seed is randomized per launch) so the suffix is identical across runs and devices.
+    static func stableHash6(_ string: String) -> String {
+        var hash: UInt64 = 0xcbf29ce484222325
+        for byte in string.utf8 {
+            hash ^= UInt64(byte)
+            hash = hash &* 0x100000001b3
+        }
+        return String(format: "%06x", hash & 0xffffff)
     }
 
     // MARK: Field helpers
@@ -303,10 +338,29 @@ final class PublicMirrorPublisher: PublicMirrorPublishing {
 
     private let database: PublicMirrorDatabase
     private let config: PublicMirrorConfig
+    /// The current user's CloudKit record name, used to detect a cross-user slug collision before
+    /// publishing. Nil (the default, and in dev/test paths) skips the collision check.
+    private let ownerRecordName: String?
 
-    init(database: PublicMirrorDatabase, config: PublicMirrorConfig = .default) {
+    init(database: PublicMirrorDatabase, config: PublicMirrorConfig = .default,
+         ownerRecordName: String? = nil) {
         self.database = database
         self.config = config
+        self.ownerRecordName = ownerRecordName
+    }
+
+    /// Resolve the slug to publish under. If a `PublicJourney` already exists under `journey.slug`
+    /// owned by SOMEONE ELSE (the global public keyspace is shared across all iCloud users), publish
+    /// under an owner-scoped disambiguated slug so the second family's showcase never collides with —
+    /// or overwrites — the first family's. The local journey keeps its pretty slug; only the mirror's
+    /// recordName/slug field change. With no owner identity (dev/test), the pretty slug is used as-is.
+    func resolveEffectiveSlug(for journey: Journey) async -> String {
+        guard let ownerRecordName else { return journey.slug }
+        guard let existingCreator = try? await database.ckExistingPublicJourneyCreator(slug: journey.slug),
+              existingCreator != ownerRecordName else {
+            return journey.slug   // no record, or it is already ours — the pretty slug is free
+        }
+        return PublicMirrorBuilder.disambiguatedSlug(journey.slug, ownerRecordName: ownerRecordName)
     }
 
     // MARK: Chunking
@@ -334,6 +388,12 @@ final class PublicMirrorPublisher: PublicMirrorPublishing {
         var report = PublicMirrorReport()
         defer { PublicMirrorBuilder.purgeAssetScratch() }
 
+        // Resolve a collision-free slug in the shared public keyspace, then publish the whole
+        // journey (metadata + photos + reconcile) under it. The domain journey keeps its pretty slug.
+        let effectiveSlug = await resolveEffectiveSlug(for: journey)
+        var journey = journey
+        journey.slug = effectiveSlug
+
         let matcher = PhotoDayMatcher(journey: journey)
 
         // Build the desired PublicPhoto set (skipping thumbless photos), tracking their IDs for
@@ -342,7 +402,7 @@ final class PublicMirrorPublisher: PublicMirrorPublishing {
         var desiredPhotoNames: Set<String> = []
         for photo in photos {
             if let record = PublicMirrorBuilder.photoRecord(for: photo,
-                                                            journeySlug: journey.slug,
+                                                            journeySlug: effectiveSlug,
                                                             dayNumber: matcher.day(for: photo)) {
                 photoRecords.append(record)
                 desiredPhotoNames.insert(photo.id)

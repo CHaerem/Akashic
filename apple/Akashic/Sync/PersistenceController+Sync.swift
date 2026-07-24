@@ -117,6 +117,17 @@ extension PersistenceController: SyncLocalStore {
         return ((try? viewContext.fetch(request)) ?? []).compactMap { $0.id }
     }
 
+    /// True when a `CDSyncRecordMeta` row exists for this record — i.e. the server has accepted it
+    /// at least once and we hold its change tag. A locally created record that was never uploaded
+    /// (created while the engine was stopped, say) has no meta and returns false, so the activation
+    /// heal knows to enqueue it. (quality gate: journey created while sync stopped never uploaded.)
+    func hasUploadedRecord(forRecordName recordName: String) -> Bool {
+        let request = NSFetchRequest<CDSyncRecordMeta>(entityName: "CDSyncRecordMeta")
+        request.predicate = NSPredicate(format: "recordName == %@", recordName)
+        request.fetchLimit = 1
+        return ((try? viewContext.count(for: request)) ?? 0) > 0
+    }
+
     func zoneOwnerName(forJourneyID journeyID: String) -> String? {
         syncFetchJourney(journeyID)?.zoneOwnerName
     }

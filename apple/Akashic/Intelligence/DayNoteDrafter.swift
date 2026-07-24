@@ -79,11 +79,35 @@ struct DayNoteInput: Equatable {
     }
 }
 
+// MARK: - Clobber-guard decision (pure)
+
+/// What to do with a freshly generated day-note draft, given the notes field's state. Enforces the
+/// project's "never clobber the user's work" rule (the same rule `DayNamer` applies to day names).
+/// (quality gate: AI draft silently replaces existing notes / clobbers mid-flight typing.)
+enum DayNoteDraftDecision: Equatable {
+    /// The field was empty at request time and is unchanged — place the draft directly.
+    case apply
+    /// The field held user text at request time (and is unchanged) — confirm before replacing.
+    case confirmReplace
+    /// The field CHANGED while the model was running (the user typed) — discard the stale draft.
+    case discardStale
+}
+
 // MARK: - Prompt building (pure)
 
 /// Namespace for the day-note prompt. No FoundationModels dependency — everything here is a pure
 /// function over `DayNoteInput`, so the exact text handed to the model is deterministic and tested.
 enum DayNoteDrafter {
+
+    /// Decide what to do with a generated draft. `fieldAtRequest` is the notes field captured when
+    /// generation started; `fieldNow` is its value when the result landed. If they differ the user
+    /// typed during the multi-second generation and the draft is discarded (never overwrite live
+    /// typing). Otherwise: fill an empty field directly, or ask before replacing existing text.
+    static func decision(fieldAtRequest: String, fieldNow: String) -> DayNoteDraftDecision {
+        if fieldNow != fieldAtRequest { return .discardStale }
+        if fieldNow.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return .apply }
+        return .confirmReplace
+    }
 
     /// The system instructions — a hard anti-invention contract. Kept as a constant so it is shared
     /// between the live session and the tests.

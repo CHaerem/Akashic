@@ -22,6 +22,9 @@ struct WaypointEditSheet: View {
     // M6 — on-device day-note drafting (Apple Intelligence).
     @State private var isDrafting = false
     @State private var draftFailed = false
+    /// A generated draft awaiting the user's confirmation to replace existing notes.
+    @State private var pendingDraft: String?
+    @State private var showReplaceConfirm = false
 
     /// The Draft button appears only when the on-device model is available AND the user has Akashic
     /// Complete — otherwise the feature is simply absent (no dead button, no upsell in the editor).
@@ -66,6 +69,15 @@ struct WaypointEditSheet: View {
                 }
             }
         }
+        .alert("Replace your notes?", isPresented: $showReplaceConfirm) {
+            Button("Cancel", role: .cancel) { pendingDraft = nil }
+            Button("Replace") {
+                if let pendingDraft { description = pendingDraft }
+                pendingDraft = nil
+            }
+        } message: {
+            Text("This day already has notes. Replace them with the drafted version? Your current text will be lost.")
+        }
     }
 
     // MARK: - Draft with Apple Intelligence (M6)
@@ -104,6 +116,10 @@ struct WaypointEditSheet: View {
         guard let journey = store.journey(withID: journeyID) else { return }
         let photos = store.photos(forDay: camp.dayNumber, journeyID: journeyID)
         let input = DayNoteInput(journey: journey, camp: camp, photos: photos)
+        // Capture the notes field as it is NOW, so the result can be compared against it: if the
+        // user types during the multi-second generation, the stale draft is discarded rather than
+        // wiping what they wrote. And existing notes are never silently replaced.
+        let fieldAtRequest = description
         isDrafting = true
         Task {
             defer { isDrafting = false }
@@ -112,7 +128,15 @@ struct WaypointEditSheet: View {
                 do {
                     let draft = try await DayNoteDrafter.generate(for: input)
                     guard !draft.isEmpty else { draftFailed = true; return }
-                    description = draft
+                    switch DayNoteDrafter.decision(fieldAtRequest: fieldAtRequest, fieldNow: description) {
+                    case .apply:
+                        description = draft
+                    case .confirmReplace:
+                        pendingDraft = draft
+                        showReplaceConfirm = true
+                    case .discardStale:
+                        break   // the user edited the field mid-generation — never clobber it
+                    }
                 } catch {
                     draftFailed = true
                 }

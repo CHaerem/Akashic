@@ -286,8 +286,60 @@ final class EntitlementTests: XCTestCase {
         let defaults = makeDefaults()
         XCTAssertEqual(
             EntitlementOverride.resolvedOverride(defaults: defaults,
-                                                 environment: ["AKASHIC_COMPLETE": "1"]),
+                                                 environment: ["AKASHIC_COMPLETE": "1"],
+                                                 debugBuild: true),
             .complete)
+    }
+
+    /// The paywall-bypass guard: in a RELEASE build the override is compiled out — NEITHER the
+    /// persisted toggle NOR the env var can grant Complete, even both set at once. This is what
+    /// makes the seven-tap "Simulate Akashic Complete" toggle a non-bypass in a shipped binary.
+    /// (quality gate: paywall fully defeatable in Release.)
+    func testOverrideIsCompiledOutInReleaseBuild() {
+        let defaults = makeDefaults()
+        EntitlementOverride.setSimulateComplete(true, defaults: defaults)
+        XCTAssertNil(
+            EntitlementOverride.resolvedOverride(defaults: defaults,
+                                                 environment: ["AKASHIC_COMPLETE": "1"],
+                                                 debugBuild: false),
+            "Release honors neither the toggle nor AKASHIC_COMPLETE — no paywall bypass")
+        // …while a DEBUG build still honors both (screenshots + local testing).
+        XCTAssertEqual(
+            EntitlementOverride.resolvedOverride(defaults: defaults, environment: [:], debugBuild: true),
+            .complete, "DEBUG builds still honor the toggle")
+    }
+
+    // MARK: - Ownership-aware gates (crown-jewel: shared-in content is never gated)
+
+    func testPhotosAllowedNeverGatesSharedInJourneys() {
+        let free = EntitlementPolicy(entitlement: .free)
+        // An OWNED journey at the cap blocks new imports…
+        XCTAssertEqual(free.photosAllowed(currentCount: 150, adding: 10, isOwned: true), 0)
+        // …but the SAME over-cap counts on a shared-in journey are never gated: all 10 land.
+        XCTAssertEqual(free.photosAllowed(currentCount: 150, adding: 10, isOwned: false), 10,
+                       "a free family member adds photos to shared-in journeys freely")
+    }
+
+    func testExportAndPublishRespectOwnership() {
+        let free = EntitlementPolicy(entitlement: .free)
+        // Owned content: export/publish require Complete.
+        XCTAssertFalse(free.canExport(isOwned: true))
+        XCTAssertFalse(free.canPublish(isOwned: true))
+        // Shared-in content: export (a viewing-tier action) is never paywalled…
+        XCTAssertTrue(free.canExport(isOwned: false), "exporting your copy of shared content is never gated")
+        // …but you can never publish a journey you don't own, even with Complete.
+        let complete = EntitlementPolicy(entitlement: .complete)
+        XCTAssertFalse(complete.canPublish(isOwned: false), "publishing always requires ownership")
+        XCTAssertTrue(complete.canPublish(isOwned: true))
+        XCTAssertTrue(complete.canExport(isOwned: false))
+    }
+
+    // MARK: - Paywall never shows a buy button to an existing owner (quality gate)
+
+    func testPaywallHidesPurchaseSurfaceForCompleteUser() {
+        XCTAssertFalse(PaywallView.showsPurchaseSurface(isComplete: true),
+                       "an entitled user must never see a live 'Unlock for <price>' button")
+        XCTAssertTrue(PaywallView.showsPurchaseSurface(isComplete: false))
     }
 
     @MainActor

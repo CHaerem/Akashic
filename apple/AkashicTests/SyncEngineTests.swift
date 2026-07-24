@@ -502,6 +502,57 @@ final class SyncEngineTests: XCTestCase {
                        "flag stays unset until the engine persists its state")
     }
 
+    // MARK: - Activation heals a journey created while the engine was stopped (quality gate)
+
+    /// A journey created while signed out (engine stopped) is dropped by `localStoreDidChange` and
+    /// never re-enumerated. On the next activation — with the initial bulk upload already done — the
+    /// heal must re-enqueue that journey's zone + records so it finally reaches CloudKit.
+    func testActivationHealsUnuploadedJourneyCreatedWhileStopped() async {
+        let defaults = makeDefaults()
+        defaults.set(true, forKey: "akashic.sync.didInitialUpload")   // the first bulk upload happened
+        let store = FakeLocalStore()
+        store.journeyIDs = ["j1", "j2"]
+        store.identities["j1"] = [
+            LocalChange(kind: .save, recordType: RecordCoder.RecordType.journey, recordName: "j1", journeyID: "j1"),
+            LocalChange(kind: .save, recordType: RecordCoder.RecordType.waypoint, recordName: "w1", journeyID: "j1"),
+        ]
+        store.identities["j2"] = [
+            LocalChange(kind: .save, recordType: RecordCoder.RecordType.journey, recordName: "j2", journeyID: "j2"),
+        ]
+        // j2 already reached CloudKit (has system fields); j1 was created offline and never did.
+        store.uploadedRecordNames = ["j2"]
+
+        let mock = MockSyncEngine()
+        let engine = AkashicSyncEngine(store: store, status: SyncStatus(),
+                                       accountProvider: MockAccountProvider(status: .available),
+                                       defaults: defaults, engine: mock)
+        await engine.activate()
+
+        XCTAssertEqual(mock.savedZoneNames, ["journey-j1"], "only the un-uploaded journey's zone is recreated")
+        XCTAssertEqual(mock.savedRecordNames.sorted(), ["j1", "w1"],
+                       "the offline-created journey is re-enqueued in full; the already-synced one is left alone")
+    }
+
+    /// The heal must not run before the initial bulk upload has been confirmed — that first upload
+    /// owns the whole set, and re-enqueuing on top would be redundant.
+    func testActivationHealDoesNotRunBeforeInitialUpload() async {
+        let defaults = makeDefaults()   // didInitialUpload NOT set
+        let store = FakeLocalStore()
+        store.journeyIDs = ["j1"]
+        store.identities["j1"] = [
+            LocalChange(kind: .save, recordType: RecordCoder.RecordType.journey, recordName: "j1", journeyID: "j1"),
+        ]
+        let mock = MockSyncEngine()
+        let engine = AkashicSyncEngine(store: store, status: SyncStatus(),
+                                       accountProvider: MockAccountProvider(status: .available),
+                                       defaults: defaults, engine: mock)
+        await engine.activate()
+
+        // The initial upload enqueued j1 exactly once — the heal did not add a second copy.
+        XCTAssertEqual(mock.savedRecordNames, ["j1"])
+        XCTAssertEqual(mock.savedZoneNames, ["journey-j1"])
+    }
+
     // MARK: - Conflict resolution (serverRecordChanged -> rebase onto server record)
 
     func testServerRecordChangedRebasesAndReenqueues() async throws {
@@ -685,6 +736,9 @@ final class FakeLocalStore: SyncLocalStore {
     var records: [String: CKRecord] = [:]
     /// journeyID -> sharing owner. Absent means we own it (private database).
     var zoneOwners: [String: String] = [:]
+    /// Record names the store has "uploaded" (has persisted system fields for). Drives
+    /// `hasUploadedRecord` so the activation heal can find never-uploaded journeys.
+    var uploadedRecordNames: Set<String> = []
 
     private(set) var appliedRecords: [CKRecord] = []
     private(set) var deletedRecords: [(recordName: String, recordType: String)] = []
@@ -712,6 +766,9 @@ final class FakeLocalStore: SyncLocalStore {
     func purgeSystemFields(forRecordNames names: [String]) { purgedRecordNames.append(contentsOf: names) }
     func purgeAllSystemFields() { purgedAllCount += 1 }
     func allLocalJourneyIDs() -> [String] { journeyIDs }
+    func hasUploadedRecord(forRecordName recordName: String) -> Bool {
+        uploadedRecordNames.contains(recordName)
+    }
     func zoneOwnerName(forJourneyID journeyID: String) -> String? { zoneOwners[journeyID] }
     func recordIdentities(forJourneyID journeyID: String) -> [LocalChange] { identities[journeyID] ?? [] }
     func beginRemoteApply() { beginCount += 1 }

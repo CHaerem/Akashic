@@ -292,8 +292,18 @@ final class JourneyStore: ObservableObject {
     /// Number of journeys this user OWNS (`zoneOwnerName == nil`). Journeys shared *into* this
     /// account are excluded, because the free-tier limits (M3 / COMMERCIALIZATION-PLAN §5) apply
     /// only to what the user creates — never to shared content they view, comment on, or caption.
-    /// This is the count the create-journey paywall gate consults.
     var ownedJourneyCount: Int {
         journeys.filter { isOwnedByCurrentUser(journeyID: $0.id) }.count
+    }
+
+    /// The owned-journey count the create-journey paywall gate consults — owned journeys MINUS any
+    /// seeded from the bundled demo fixtures. In `.cloudKit` mode nothing is seeded, so this equals
+    /// `ownedJourneyCount`; in `.fixtures`/`.local` (dev/demo) modes the bundled demo journeys never
+    /// eat the family's one free slot. (quality gate: fixture-seeded demo journeys consume the free
+    /// tier.)
+    var billableOwnedJourneyCount: Int {
+        journeys.filter {
+            isOwnedByCurrentUser(journeyID: $0.id) && !persistence.isSeededFixture(journeyID: $0.id)
+        }.count
     }
 }

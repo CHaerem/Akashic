@@ -123,7 +123,7 @@ struct JourneyShowcaseSheet: View {
         Section {
             switch model.phase {
             case .idle, .failed:
-                if entitlements.canPublish {
+                if entitlements.canPublish(isOwned: isOwner) {
                     if !live.isPublic {
                         worldReadableConsent
                     }
@@ -391,7 +391,12 @@ final class ShowcaseViewModel: ObservableObject {
         guard status == .available else {
             return .unavailable("No iCloud account available. Sign in (Settings → iCloud) and try again.")
         }
-        return .ready(PublicMirrorPublisher(database: container.publicCloudDatabase))
+        // The current user's record name lets the publisher detect a cross-user slug collision in
+        // the global public keyspace and publish under a disambiguated slug. (quality gate: slug
+        // collision in the public showcase.)
+        let ownerRecordName = try? await container.userRecordID().recordName
+        return .ready(PublicMirrorPublisher(database: container.publicCloudDatabase,
+                                            ownerRecordName: ownerRecordName))
         #else
         return .unavailable("Publishing to the showcase requires the Debug-CloudKit / Release-CloudKit build.")
         #endif

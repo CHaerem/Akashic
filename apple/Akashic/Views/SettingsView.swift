@@ -134,6 +134,10 @@ struct SettingsView: View {
 
         Section {
             Button {
+                // An entitled user already owns Complete — never present a live "buy" surface for
+                // something they own (a wrong-state purchase UI). The row just shows their status.
+                // (quality gate: Settings Membership row opens purchase UI for owners.)
+                guard !entitlements.isComplete else { return }
                 showPaywall = true
             } label: {
                 HStack {
@@ -149,6 +153,7 @@ struct SettingsView: View {
                     }
                 }
             }
+            .disabled(entitlements.isComplete)
         } header: {
             Text("Membership")
         } footer: {
@@ -248,6 +253,10 @@ struct SettingsView: View {
             Button(role: .destructive) {
                 DeveloperTools.setUnlocked(false)
                 versionTapCount = 0
+                // Clearing the gate must also clear any simulated entitlement — otherwise the
+                // device would keep reporting "Complete ✓" with no visible cause or control.
+                // (quality gate: hide-developer-tools leaves Simulate Complete active.)
+                entitlements.setSimulateComplete(false)
                 developerUnlocked = DeveloperTools.isUnlocked()
             } label: {
                 Label("Hide developer tools", systemImage: "eye.slash")
@@ -258,13 +267,19 @@ struct SettingsView: View {
             Text("CloudKit mode requires the Release-CloudKit build with entitlements and an iCloud account. Changes apply after relaunching the app.")
         }
 
+        // The entitlement toggle is compiled out of Release: even a hand-set UserDefaults key does
+        // nothing there (see EntitlementOverride.resolvedOverride). (quality gate: paywall bypass.)
+        #if DEBUG
         entitlementSection
+        #endif
     }
 
     /// Developer override for the paywall (M3): flip the app into "Akashic Complete" without a
-    /// real purchase, so we and App Review can exercise both entitlement states. It can only ever
-    /// GRANT Complete (never downgrade a real purchaser). The `AKASHIC_COMPLETE=1` environment
-    /// variable does the same for screenshots and takes precedence over this toggle.
+    /// real purchase, so we can exercise both entitlement states in development. **DEBUG only** —
+    /// the whole toggle is compiled out of Release so it can never be a monetization bypass, and
+    /// `EntitlementOverride.resolvedOverride` independently ignores the flag in Release. The
+    /// `AKASHIC_COMPLETE=1` environment variable does the same for screenshots (also DEBUG-only).
+    #if DEBUG
     @ViewBuilder
     private var entitlementSection: some View {
         Section {
@@ -282,6 +297,7 @@ struct SettingsView: View {
                  + "Never downgrades a real purchase.")
         }
     }
+    #endif
 
     /// Which CloudKit database this build talks to, and how the mode was chosen — the two
     /// facts you need before touching the import screen.

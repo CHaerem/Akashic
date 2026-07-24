@@ -21,6 +21,15 @@ final class PersistenceController {
     let container: NSPersistentContainer
     let mode: PersistenceMode
 
+    /// IDs of journeys seeded from the bundled demo fixtures this session. These are never a
+    /// customer's real content, so the free-tier create gate excludes them — a fresh install (or a
+    /// dev/demo run) must never have its one free journey pre-consumed by the demo data.
+    /// (quality gate: fixture-seeded demo journeys consume the free tier.)
+    private(set) var seededJourneyIDs: Set<String> = []
+
+    /// Whether a journey was seeded from the bundled demo fixtures (see `seededJourneyIDs`).
+    func isSeededFixture(journeyID: String) -> Bool { seededJourneyIDs.contains(journeyID) }
+
     // MARK: - CloudKit sync stack (populated only in `.cloudKit` mode; see `Sync/`)
 
     /// Observable sync status for the UI. Always present but `.disabled` outside `.cloudKit`.
@@ -113,6 +122,7 @@ final class PersistenceController {
             let journeys = try FixtureLoader.loadAll(bundle: bundle)
             for journey in journeys {
                 CoreDataMapping.upsertJourney(journey, into: context)
+                seededJourneyIDs.insert(journey.id)
             }
             if context.hasChanges { try context.save() }
         } catch {

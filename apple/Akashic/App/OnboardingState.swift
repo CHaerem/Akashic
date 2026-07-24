@@ -30,6 +30,11 @@ enum OnboardingState {
     static func isSuppressed(environment: [String: String] = ProcessInfo.processInfo.environment) -> Bool {
         if environment["XCTestConfigurationFilePath"] != nil { return true }
         if environment["AKASHIC_SKIP_ONBOARDING"] == "1" { return true }
+        // A screenshot/demo harness screen (AKASHIC_SCREEN=photos/photogrid/editsheet/widgets) must
+        // never be covered by the first-run onboarding, so every ad-hoc harness launch no longer
+        // has to also remember AKASHIC_SKIP_ONBOARDING. (quality gate: screenshot harness screens
+        // can be covered by first-run onboarding.)
+        if environment["AKASHIC_SCREEN"] != nil { return true }
         return false
     }
 

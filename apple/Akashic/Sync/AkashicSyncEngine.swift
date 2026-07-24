@@ -173,6 +173,7 @@ final class AkashicSyncEngine: NSObject, CKSyncEngineDelegate {
         hasActivated = true
         isRunning = true
         enqueueInitialUploadIfNeeded()
+        enqueueUnsyncedJourneysIfNeeded()
         // Active as soon as the engine is running — the pull below refreshes the timestamp,
         // but the engine's state must not depend on an async task having finished.
         status.markSynced()
@@ -258,6 +259,36 @@ final class AkashicSyncEngine: NSObject, CKSyncEngineDelegate {
         // (see the `.stateUpdate` case). Until then every activate() re-runs the enqueue, which
         // is harmless: pending changes are keyed by record id.
         initialUploadEnqueued = true
+    }
+
+    /// Incremental heal at activation: re-enqueue any OWNED local journey that has never reached
+    /// CloudKit (no persisted system fields for its root record), mirroring the initial upload but
+    /// case-by-case. This is the recovery for a journey created — or edited — while the engine was
+    /// stopped (signed out of iCloud, launched offline): `localStoreDidChange` dropped those writes
+    /// behind `guard isRunning` and nothing re-enumerated them, so they lived on one device forever
+    /// while the UI claimed "synced". (quality gate: journey created while sync stopped never
+    /// uploaded.)
+    ///
+    /// Only runs AFTER the one-shot bulk upload has been confirmed (`didInitialUploadKey`), so it
+    /// never double-enqueues the first archive; before that, `enqueueInitialUploadIfNeeded` owns the
+    /// whole set. Private database only (a participant never re-uploads the owner's archive).
+    private func enqueueUnsyncedJourneysIfNeeded() {
+        guard databaseScope == .private else { return }
+        guard defaults.bool(forKey: Self.didInitialUploadKey) else { return }
+        guard let engine else { return }
+        for journeyID in store.allLocalJourneyIDs() where handles(journeyID: journeyID) {
+            // The journey root's presence in the meta table is the proxy for "this journey reached
+            // CloudKit". If it is there, the ordinary observe path keeps it current; if not, the
+            // whole journey (zone + records) must go up as a fresh incremental upload.
+            guard !store.hasUploadedRecord(forRecordName: journeyID) else { continue }
+            let identities = store.recordIdentities(forJourneyID: journeyID)
+            guard !identities.isEmpty else { continue }
+            let zoneID = zoneID(forJourneyID: journeyID)
+            engine.add(pendingDatabaseChanges: [.saveZone(CKRecordZone(zoneID: zoneID))])
+            engine.add(pendingRecordZoneChanges: identities.map {
+                .saveRecord($0.recordID(ownerName: zoneID.ownerName))
+            })
+        }
     }
 
     // MARK: - Local write intake (called by SyncScheduler)
