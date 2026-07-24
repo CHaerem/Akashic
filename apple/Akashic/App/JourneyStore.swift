@@ -273,6 +273,14 @@ final class JourneyStore: ObservableObject {
         return ok
     }
 
+    /// Append grounded facts / historical notes drafted for a day onto its waypoint.
+    @discardableResult
+    func addDayContent(funFacts: [FunFact], historicalSites: [HistoricalSite], toWaypoint id: String) -> Bool {
+        let ok = persistence.addDayContent(waypointID: id, funFacts: funFacts, historicalSites: historicalSites)
+        reload()
+        return ok
+    }
+
     @discardableResult
     func updateJourney(id: String, name: String, description: String, country: String,
                        dateStarted: String?, dateEnded: String?,

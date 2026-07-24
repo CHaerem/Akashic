@@ -26,6 +26,11 @@ struct WaypointEditSheet: View {
     @State private var pendingDraft: String?
     @State private var showReplaceConfirm = false
 
+    // Grounded fact drafting (FactDrafter) — draft, then Add-to-day accept.
+    @State private var isDraftingFacts = false
+    @State private var factsFailed = false
+    @State private var pendingFacts: DraftedFacts?
+
     /// The Draft button appears only when the on-device model is available AND the user has Akashic
     /// Complete — otherwise the feature is simply absent (no dead button, no upsell in the editor).
     private var showsDraftButton: Bool { intelligence.isAvailable && entitlements.isComplete }
@@ -59,6 +64,9 @@ struct WaypointEditSheet: View {
             }
             GlassField(label: "Highlights", systemImage: "sparkles") {
                 HighlightChipsEditor(items: $highlights)
+            }
+            if showsDraftButton {
+                factsField
             }
             HStack(spacing: 12) {
                 GlassField(label: "Elevation (m)", systemImage: "mountain.2") {
@@ -147,6 +155,101 @@ struct WaypointEditSheet: View {
             draftFailed = true
             #endif
         }
+    }
+
+    // MARK: - Draft facts with Apple Intelligence (grounded)
+
+    /// Facts drafting field: a "Draft facts" button, and once a draft lands, a small preview with
+    /// Add-to-day / discard — grounded strictly in the day's own name and highlights.
+    @ViewBuilder
+    private var factsField: some View {
+        GlassField(label: "Facts", systemImage: "lightbulb") {
+            VStack(alignment: .leading, spacing: 8) {
+                Button(action: draftFacts) {
+                    HStack(spacing: 6) {
+                        if isDraftingFacts {
+                            ProgressView().controlSize(.small).tint(Theme.accent)
+                        } else {
+                            Image(systemName: "apple.intelligence")
+                        }
+                        Text(isDraftingFacts ? "Drafting facts…" : "Draft facts")
+                            .font(.caption.weight(.semibold))
+                    }
+                    .foregroundStyle(Theme.accent)
+                }
+                .buttonStyle(.plain)
+                .disabled(isDraftingFacts)
+
+                if let facts = pendingFacts, !facts.isEmpty {
+                    ForEach(facts.funFacts) { fact in
+                        factPreview(icon: "lightbulb", text: fact.content)
+                    }
+                    ForEach(facts.historicalSites) { site in
+                        factPreview(icon: "building.columns", text: "\(site.name) — \(site.summary)")
+                    }
+                    HStack(spacing: 12) {
+                        Button("Add to day") { addPendingFacts() }
+                            .font(.caption.weight(.semibold)).foregroundStyle(Theme.accent)
+                        Button("Discard") { pendingFacts = nil }
+                            .font(.caption).foregroundStyle(Theme.textTertiary)
+                    }
+                }
+                if factsFailed {
+                    Text("Couldn't draft facts — try again")
+                        .font(.caption2).foregroundStyle(Theme.textTertiary)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private func factPreview(icon: String, text: String) -> some View {
+        HStack(alignment: .top, spacing: 6) {
+            Image(systemName: icon).font(.caption2).foregroundStyle(Theme.accent)
+            Text(text).font(.caption2).foregroundStyle(Theme.textSecondary)
+        }
+    }
+
+    /// Draft grounded facts from the day's own name + highlights + any existing POIs — nothing
+    /// invented. The result is previewed, never auto-saved; the user taps Add to day to persist.
+    private func draftFacts() {
+        guard !isDraftingFacts else { return }
+        factsFailed = false
+        pendingFacts = nil
+        let poiNames = (camp.pointsOfInterest ?? []).map(\.name)
+        let journeyName = store.journey(withID: journeyID)?.shortName ?? ""
+        let country = store.journey(withID: journeyID)?.country ?? ""
+        let input = DayFactInput(journeyName: journeyName, country: country,
+                                 dayNumber: camp.dayNumber, campName: name,
+                                 placeNames: highlights, poiNames: poiNames,
+                                 dateLabel: camp.dateLabel, elevation: Int(elevation) ?? camp.elevation)
+        guard input.hasGrounding else { factsFailed = true; return }
+        isDraftingFacts = true
+        Task {
+            defer { isDraftingFacts = false }
+            #if canImport(FoundationModels)
+            if #available(iOS 26.0, *) {
+                if let drafted = try? await FactDrafter.generate(for: input), !drafted.isEmpty {
+                    pendingFacts = drafted
+                } else {
+                    factsFailed = true
+                }
+            } else {
+                factsFailed = true
+            }
+            #else
+            factsFailed = true
+            #endif
+        }
+    }
+
+    /// Persist the previewed facts onto this day's waypoint (append, never replace) and refresh.
+    private func addPendingFacts() {
+        guard let facts = pendingFacts else { return }
+        store.addDayContent(funFacts: facts.funFacts, historicalSites: facts.historicalSites,
+                            toWaypoint: camp.id)
+        pendingFacts = nil
+        onSave()
     }
 
     private func save() {

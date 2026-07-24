@@ -457,6 +457,27 @@ final class PersistenceController {
         }
     }
 
+    /// Append drafted day content (fun facts + historical sites) to a waypoint, preserving any that
+    /// are already there. Used by the grounded-fact drafter's "Add to day" accept action.
+    @discardableResult
+    func addDayContent(waypointID: String, funFacts: [FunFact], historicalSites: [HistoricalSite]) -> Bool {
+        let context = viewContext
+        guard let cd = fetchOne(CDWaypoint.self, matching: "id == %@", waypointID) else { return false }
+        var facts = JSONCoding.decode([FunFact].self, from: cd.funFacts) ?? []
+        facts.append(contentsOf: funFacts)
+        var sites = JSONCoding.decode([HistoricalSite].self, from: cd.historicalSites) ?? []
+        sites.append(contentsOf: historicalSites)
+        cd.funFacts = JSONCoding.encode(facts)
+        cd.historicalSites = JSONCoding.encode(sites)
+        do {
+            try context.save()
+            return true
+        } catch {
+            context.rollback()
+            return false
+        }
+    }
+
     // MARK: Journey creation
 
     /// Create a brand-new journey (with its camps as waypoints) from a draft-built domain value.

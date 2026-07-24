@@ -27,6 +27,14 @@
 	<array>
 		<string>CloudKit</string>
 	</array>
+	<!--
+	  WeatherKit — historical daily weather for assisted journey creation (WeatherEnrichment).
+	  Only used by the signed Debug-Production config. Requires the WeatherKit service enabled on
+	  the App ID; until then device/archive signing fails on this key, and at runtime the weather
+	  suggestion is simply absent (WeatherEnrichment degrades to nil).
+	-->
+	<key>com.apple.developer.weatherkit</key>
+	<true/>
 	<key>com.apple.developer.ubiquity-kvstore-identifier</key>
 	<string>$(TeamIdentifierPrefix)$(CFBundleIdentifier)</string>
 	<!-- Development APS: this build is signed with a development profile. -->

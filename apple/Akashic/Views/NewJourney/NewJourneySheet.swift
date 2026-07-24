@@ -42,6 +42,13 @@ struct NewJourneySheet: View {
     @State private var isSuggestingNames = false
     @State private var suggestNamesFailed = false
 
+    // Assisted creation — the "Suggestions" layer (route-from-photos, country, camp names,
+    // weather, POIs, facts). The coordinator is created up front; its facts gate is configured
+    // once the environment resolves, and providers run only after photos/GPX land.
+    @StateObject private var suggestions = JourneySuggestionCoordinator.live(factsEnabled: false)
+    /// Geotagged photo observations from the last pick — the basis for route inference.
+    @State private var photoFixes: [PhotoFix] = []
+
     /// "Suggest names" appears only with the on-device model available, Akashic Complete, and at
     /// least one seeded day — otherwise the feature is simply absent.
     private var showsSuggestNames: Bool {
@@ -68,6 +75,7 @@ struct NewJourneySheet: View {
             datesSection
             routeSection
             photosSection
+            suggestionsSection
             daysSection
             if let saveError {
                 Text(saveError).font(.footnote).foregroundStyle(.red)
@@ -240,6 +248,8 @@ struct NewJourneySheet: View {
             if draft.days.isEmpty || JourneyDraft.daysAreAllAutoSeeded(draft.days) {
                 draft.days = JourneyDraft.days(fromWaypoints: file.waypoints)
             }
+            // A route + days now exist — offer country / camp names / weather / POIs / facts.
+            await runSuggestions()
         } catch {
             importError = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
         }
@@ -294,13 +304,20 @@ struct NewJourneySheet: View {
         defer { isReadingPhotos = false; photoSelection = [] }
 
         var probes: [Photo] = []
+        var fixes: [PhotoFix] = []
         for item in items {
             guard let data = try? await item.loadTransferable(type: Data.self), !data.isEmpty else { continue }
             let meta = ImageMetadata.extract(from: data)
             probes.append(Photo(id: UUID().uuidString, journeyId: draft.id, waypointId: nil,
                                 url: "", thumbnailURL: nil, caption: nil,
                                 coordinates: meta.coordinates, takenAt: meta.takenAt))
+            // A usable fix needs both a coordinate and a capture instant.
+            if let coords = meta.coordinates, coords.count >= 2,
+               let takenAt = meta.takenAt, let date = PhotoDayMatcher.parseDate(takenAt) {
+                fixes.append(PhotoFix(coordinate: coords, timestamp: date, altitude: meta.altitude))
+            }
         }
+        photoFixes = fixes
         let proposed = JourneyDraft.days(fromPhotos: probes)
         // Only claim "Grouped into N day(s)" when the proposal is actually applied — otherwise the
         // caption advertised days that were discarded because the user had already built a list.
@@ -311,6 +328,101 @@ struct NewJourneySheet: View {
         } else {
             photoDayCount = 0
         }
+        await runSuggestions()
+    }
+
+    // MARK: Suggestions orchestration
+
+    /// Kick off the suggestion providers for the current draft. Called only after the user has
+    /// provided photos or a route — never on appear — so there are no ambient network calls. When a
+    /// GPX route is present the photo fixes are not used for route inference (they'd duplicate it).
+    private func runSuggestions() async {
+        suggestions.factsEnabled = intelligence.isAvailable && entitlements.isComplete
+        let fixes = draft.hasRoute ? [] : photoFixes
+        await suggestions.run(fixes: fixes, draft: draft)
+    }
+
+    private func accept(_ key: SuggestionKey) {
+        suggestions.accept(key, into: &draft)
+        syncRouteSummaryFromDraft()
+    }
+
+    private func acceptAllSuggestions() {
+        suggestions.acceptAll(into: &draft)
+        syncRouteSummaryFromDraft()
+    }
+
+    /// Refresh the route summary card after a route-from-photos suggestion is accepted, so the
+    /// points/distance reflect the drafted route (there are no GPX waypoints in that case).
+    private func syncRouteSummaryFromDraft() {
+        guard routeSummary == nil, let route = draft.route, !route.coordinates.isEmpty else { return }
+        routeSummary = RouteSummary(
+            pointCount: route.coordinates.count,
+            distanceKm: JourneyDraft.totalDistanceKm(route: route.coordinates),
+            waypointCount: 0,
+            droppedCount: 0)
+    }
+
+    // MARK: Suggestions
+
+    /// The coherent "Suggestions" panel: rows appear as providers resolve, each with Accept /
+    /// dismiss, plus a batch Accept all. Hidden entirely until something is pending or running, so
+    /// it never shows an empty shell.
+    @ViewBuilder
+    private var suggestionsSection: some View {
+        let pending = suggestions.model.pending
+        if !pending.isEmpty || suggestions.isRunning {
+            GlassField(label: "Suggestions", systemImage: "wand.and.stars") {
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack(spacing: 8) {
+                        if suggestions.isRunning {
+                            ProgressView().controlSize(.small).tint(Theme.accent)
+                            Text("Looking for suggestions…")
+                                .font(.caption).foregroundStyle(Theme.textTertiary)
+                        }
+                        Spacer()
+                        if pending.count > 1 {
+                            Button("Accept all", action: acceptAllSuggestions)
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(Theme.accent)
+                        }
+                    }
+                    ForEach(pending, id: \.self) { key in
+                        suggestionRow(key)
+                    }
+                    if pending.isEmpty && suggestions.isRunning {
+                        Text("Reading photo locations, places and weather…")
+                            .font(.caption2).foregroundStyle(Theme.textTertiary)
+                    }
+                }
+            }
+        }
+    }
+
+    private func suggestionRow(_ key: SuggestionKey) -> some View {
+        HStack(spacing: 10) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(suggestions.title(for: key, in: draft))
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(Theme.textPrimary)
+                if let subtitle = suggestions.subtitle(for: key, in: draft), !subtitle.isEmpty {
+                    Text(subtitle)
+                        .font(.caption2).foregroundStyle(Theme.textTertiary)
+                        .lineLimit(2)
+                }
+            }
+            Spacer()
+            Button { suggestions.dismiss(key) } label: {
+                Image(systemName: "xmark.circle.fill").foregroundStyle(Theme.textTertiary)
+            }
+            .buttonStyle(.plain)
+            Button { accept(key) } label: {
+                Image(systemName: "checkmark.circle.fill").foregroundStyle(Theme.accent)
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(10)
+        .background(Theme.accentSoft, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 
     // MARK: Days

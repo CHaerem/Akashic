@@ -16,6 +16,14 @@ struct DraftDay: Identifiable, Equatable {
     var dateLabel: String?
     var notes: String = ""
     var source: Source = .manual
+
+    // Enrichment carried from accepted suggestions (weather / POIs / grounded facts). All optional
+    // so every existing call site and the memberwise initialiser are unaffected; `makeJourney`
+    // forwards them onto the created `Camp`.
+    var weather: WeatherData?
+    var pointsOfInterest: [PointOfInterest]?
+    var funFacts: [FunFact]?
+    var historicalSites: [HistoricalSite]?
 }
 
 // MARK: - Draft
@@ -190,7 +198,10 @@ struct JourneyDraft: Equatable {
                 dateLabel: day.dateLabel,
                 routePointIndex: nil,
                 routeDistanceKm: nil,
-                weather: nil)
+                weather: day.weather,
+                funFacts: day.funFacts,
+                pointsOfInterest: day.pointsOfInterest,
+                historicalSites: day.historicalSites)
         }
 
         let stats = Self.computeStats(route: route, days: days,
@@ -275,6 +286,22 @@ struct JourneyDraft: Equatable {
     /// Human date label for a day, e.g. "29 Sep 2023" (UTC).
     static func dateLabel(from date: Date) -> String {
         Self.labelFormatter.string(from: date)
+    }
+
+    /// Inverse of `dateLabel(from:)` — parse "29 Sep 2023" back to a UTC date (nil if it doesn't
+    /// match). Lets weather enrichment recover a real date from a photo-seeded day's label.
+    static func date(fromDayLabel label: String?) -> Date? {
+        guard let label, !label.isEmpty else { return nil }
+        return labelFormatter.date(from: label)
+    }
+
+    /// The best date for a draft day: the journey start plus the day offset when a start is set,
+    /// otherwise the day's own label. Used to fetch that day's historical weather.
+    static func weatherDate(dayIndex: Int, dateLabel: String?, dateStarted: Date?) -> Date? {
+        if let dateStarted {
+            return dateStarted.addingTimeInterval(Double(dayIndex) * 86_400)
+        }
+        return date(fromDayLabel: dateLabel)
     }
 
     private static func displayLabel(fromDayKey key: String) -> String? {

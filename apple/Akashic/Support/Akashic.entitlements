@@ -16,6 +16,16 @@
 	<array>
 		<string>CloudKit</string>
 	</array>
+	<!--
+	  WeatherKit — historical daily weather for assisted journey creation (WeatherEnrichment).
+	  Only used by signed configs (this file → Debug-CloudKit). Requires the WeatherKit service to
+	  be enabled on the App ID (iCloud.no.akashic → no.akashic.app) in the developer portal; until
+	  then DEVICE/archive signing for this config fails on this key, and at runtime the weather
+	  suggestion is simply absent (WeatherEnrichment degrades to nil). Simulator builds sign ad-hoc
+	  and are unaffected.
+	-->
+	<key>com.apple.developer.weatherkit</key>
+	<true/>
 	<key>com.apple.developer.ubiquity-kvstore-identifier</key>
 	<string>$(TeamIdentifierPrefix)$(CFBundleIdentifier)</string>
 	<key>aps-environment</key>

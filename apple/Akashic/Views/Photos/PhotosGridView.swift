@@ -14,6 +14,7 @@ struct PhotosGridView: View {
 
     @State private var lightbox: LightboxData?
     @State private var editingPhoto: Photo?
+    @State private var placingPhoto: Photo?
     @State private var showImport = false
     @State private var photoPendingDelete: Photo?
 
@@ -62,6 +63,12 @@ struct PhotosGridView: View {
             if let journey {
                 PhotoEditSheet(photo: photo, journey: journey).environmentObject(store)
             }
+        }
+        .sheet(item: $placingPhoto) { photo in
+            PhotoPlacementSheet(
+                startCoordinate: photo.coordinates,
+                fallbackCoordinate: placementFallback(for: photo, journey: journey),
+                onSave: { store.setPhotoLocation($0, source: "manual", forPhoto: photo.id) })
         }
         .sheet(isPresented: $showImport) {
             if let journey {
@@ -131,6 +138,10 @@ struct PhotosGridView: View {
             Label("Rotate right", systemImage: "rotate.right")
         }
 
+        Button { placingPhoto = photo } label: {
+            Label("Adjust location", systemImage: "mappin.and.ellipse")
+        }
+
         if let journey {
             Menu {
                 Button {
@@ -159,6 +170,15 @@ struct PhotosGridView: View {
 
     private func camp(in journey: Journey?, day: Int) -> Camp? {
         journey?.camps.first { $0.dayNumber == day }
+    }
+
+    /// Opening coordinate for a photo with no GPS: its assigned day's camp, else journey centre.
+    private func placementFallback(for photo: Photo, journey: Journey?) -> [Double]? {
+        if let journey, let wpID = photo.waypointId,
+           let camp = journey.camps.first(where: { $0.id == wpID }), camp.coordinates.count >= 2 {
+            return camp.coordinates
+        }
+        return journey?.center
     }
 }
 
