@@ -18,6 +18,7 @@ struct PaywallView: View {
         case photoLimit(remaining: Int)
         case export
         case publish
+        case enrich
         case settings
 
         var headline: String {
@@ -26,6 +27,7 @@ struct PaywallView: View {
             case .photoLimit: return "The free tier includes 100 photos per journey"
             case .export: return "Export is part of Akashic Complete"
             case .publish: return "Publishing is part of Akashic Complete"
+            case .enrich: return "Enrich journey is part of Akashic Complete"
             case .settings: return "Unlock everything, once"
             }
         }
@@ -43,6 +45,8 @@ struct PaywallView: View {
                 return "Package any journey as a portable archive — route, photos and notes — with Akashic Complete."
             case .publish:
                 return "Share a journey as a public web showcase with Akashic Complete."
+            case .enrich:
+                return "Let Akashic suggest weather, places and points of interest for an existing journey — with Akashic Complete. Correcting your own data is always free."
             case .settings:
                 return "One purchase, no subscription — and it's shared with your family."
             }

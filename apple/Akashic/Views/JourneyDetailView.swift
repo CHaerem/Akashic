@@ -10,11 +10,17 @@ struct JourneyDetailView: View {
     /// Which day (index into `camps`) is shown in the presented `DayDetailSheet`, if any.
     @State private var selectedDayIndex: Int?
     @State private var showJourneyEdit = false
+    @State private var showManageDays = false
+    @State private var showEnrich = false
     @State private var showImport = false
     @State private var showSharing = false
     @State private var showExport = false
     @State private var showShowcase = false
     @State private var editingCamp: Camp?
+
+    /// True when this journey lives in our own database (a shared-in journey is not ours to
+    /// restructure or enrich). Fixtures / local-mode journeys are ours by definition.
+    private var isOwner: Bool { store.isOwnedByCurrentUser(journeyID: journey.id) }
 
     /// The freshest copy of this journey from the store, so contextual edits reflect
     /// immediately after `store.reload()` (this view observes the store).
@@ -56,6 +62,14 @@ struct JourneyDetailView: View {
                     Button { showJourneyEdit = true } label: {
                         Label("Edit journey", systemImage: "square.and.pencil")
                     }
+                    if isOwner {
+                        Button { showManageDays = true } label: {
+                            Label("Manage days", systemImage: "calendar.day.timeline.left")
+                        }
+                        Button { showEnrich = true } label: {
+                            Label("Enrich journey", systemImage: "wand.and.stars")
+                        }
+                    }
                     Button { showImport = true } label: {
                         Label("Add photos", systemImage: "photo.badge.plus")
                     }
@@ -90,6 +104,15 @@ struct JourneyDetailView: View {
         }
         .sheet(isPresented: $showJourneyEdit) {
             JourneyEditSheet(journey: live).environmentObject(store)
+        }
+        .sheet(isPresented: $showManageDays) {
+            ManageDaysSheet(journeyID: live.id).environmentObject(store)
+        }
+        .sheet(isPresented: $showEnrich) {
+            EnrichJourneySheet(journey: live)
+                .environmentObject(store)
+                .environmentObject(entitlements)
+                .environmentObject(intelligence)
         }
         .sheet(isPresented: $showImport) {
             PhotoImportSheet(journey: live).environmentObject(store).environmentObject(entitlements)

@@ -165,7 +165,11 @@ final class JourneySuggestionCoordinator: ObservableObject {
             campNameByDay[suggestion.dayID] = suggestion.name
             model.register(.campName(dayID: suggestion.dayID))
         }
-        for input in dayInputs where input.hasCoordinate {
+        // POIs only for days that DON'T already have some — so enriching an existing journey never
+        // re-offers points of interest a day already carries (harmless for creation, where days are
+        // fresh and carry none). Keyed by identity against the draft's current day content.
+        let daysWithPOIs = Set(draft.days.filter { ($0.pointsOfInterest?.isEmpty == false) }.map(\.id))
+        for input in dayInputs where input.hasCoordinate && !daysWithPOIs.contains(input.dayID) {
             let result = await place.suggestPOIs(for: input)
             if !result.pois.isEmpty {
                 poisByDay[result.dayID] = result.pois
@@ -181,10 +185,12 @@ final class JourneySuggestionCoordinator: ObservableObject {
         }
     }
 
-    /// Historical weather per day (needs a real date + coordinate).
+    /// Historical weather per day (needs a real date + coordinate). Days that ALREADY carry weather
+    /// are skipped — so enriching an existing journey only fills the gaps and never re-offers weather
+    /// a day already has (harmless for creation, where days start empty).
     private func runWeather(draft: JourneyDraft) async {
         var inputs: [WeatherDayInput] = []
-        for (index, day) in draft.days.enumerated() where day.coordinates.count >= 2 {
+        for (index, day) in draft.days.enumerated() where day.coordinates.count >= 2 && day.weather == nil {
             guard let date = JourneyDraft.weatherDate(dayIndex: index, dateLabel: day.dateLabel,
                                                       dateStarted: draft.dateStarted) else { continue }
             inputs.append(WeatherDayInput(dayID: day.id, coordinate: day.coordinates, date: date))

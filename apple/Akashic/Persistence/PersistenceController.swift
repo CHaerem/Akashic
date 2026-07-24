@@ -543,6 +543,204 @@ final class PersistenceController {
         }
     }
 
+    /// Replace ALL of a day's content lists + weather in one save (the WaypointEditSheet content
+    /// editor and the enrich flow drive this). Unlike `addDayContent` (which appends the drafter's
+    /// output), this is an authoritative SET: the passed arrays/weather become the day's content,
+    /// so editing/deleting a single fact/POI/site round-trips. Correcting data is never blocked.
+    @discardableResult
+    func setDayContent(waypointID: String,
+                       funFacts: [FunFact],
+                       pointsOfInterest: [PointOfInterest],
+                       historicalSites: [HistoricalSite],
+                       weather: WeatherData?) -> Bool {
+        let context = viewContext
+        guard let cd = fetchOne(CDWaypoint.self, matching: "id == %@", waypointID) else { return false }
+        cd.funFacts = JSONCoding.encode(funFacts)
+        cd.pointsOfInterest = JSONCoding.encode(pointsOfInterest)
+        cd.historicalSites = JSONCoding.encode(historicalSites)
+        cd.weather = JSONCoding.encode(weather)
+        do {
+            try context.save()
+            return true
+        } catch {
+            context.rollback()
+            return false
+        }
+    }
+
+    // MARK: Route correction (existing journeys)
+
+    /// Replace a journey's route AND its recomputed stats in one save — the "everything is
+    /// correctable" route-fix path (replace-from-GPX, draft-from-photos, or recompute-stats). Days
+    /// are NEVER touched here (re-seeding is a separate opt-in), so a route correction never silently
+    /// disturbs the day list. Mirrors the numeric stats into the scalar columns like `updateJourney`.
+    @discardableResult
+    func updateJourneyRoute(id: String, route: Route, stats: TrekStats) -> Bool {
+        let context = viewContext
+        guard let cd = fetchOne(CDJourney.self, matching: "id == %@", id) else { return false }
+        cd.route = JSONCoding.encode(route)
+        cd.stats = JSONCoding.encode(stats)
+        cd.totalDistance = stats.totalDistance
+        cd.totalDays = Int64(stats.duration)
+        if let summit = stats.highestPoint?.elevation { cd.summitElevation = Int64(summit) }
+        cd.updatedAt = Date()
+        do {
+            try context.save()
+            return true
+        } catch {
+            context.rollback()
+            return false
+        }
+    }
+
+    /// Opt-in "Also update day positions" after a route replace: overwrite each day's coordinate
+    /// (and elevation, when > 0) from the new GPX waypoints, matched POSITIONALLY by day order. Days
+    /// beyond the waypoint count are left untouched; content/name/dayNumber are never changed. This
+    /// is the ONLY path that lets a route replace also move the days, and it is always the user's
+    /// explicit choice.
+    @discardableResult
+    func updateWaypointPositions(journeyID: String, coordinates: [[Double]], elevations: [Int]) -> Bool {
+        let context = viewContext
+        guard let cd = fetchOne(CDJourney.self, matching: "id == %@", journeyID) else { return false }
+        let ordered = (cd.waypoints as? Set<CDWaypoint> ?? []).sorted { $0.sortOrder < $1.sortOrder }
+        for (index, wp) in ordered.enumerated() where index < coordinates.count {
+            let coord = coordinates[index]
+            if coord.count >= 2 { wp.coordinates = JSONCoding.encode([coord[0], coord[1]]) }
+            if index < elevations.count, elevations[index] > 0 { wp.elevation = Int64(elevations[index]) }
+        }
+        do {
+            try context.save()
+            return true
+        } catch {
+            context.rollback()
+            return false
+        }
+    }
+
+    // MARK: Day management (add / delete / reorder)
+    //
+    // Structural day edits on an EXISTING journey. Every one renumbers the surviving days so
+    // `dayNumber` and `sortOrder` stay 1…N / 0…N-1 in a single consistent order (see
+    // `DayRenumbering`). Photos are keyed by the stable `waypointId`, so reordering never disturbs a
+    // photo's day linkage; deleting a day UNASSIGNS its photos/comments (never deletes them).
+
+    /// Renumber the journey's waypoints from an ordered id list: `sortOrder = index`,
+    /// `dayNumber = index + 1`. Ids not present in the journey are ignored; any waypoint missing from
+    /// `orderedIDs` is appended after, preserving its previous relative order (defensive).
+    private func applyDayOrder(_ orderedIDs: [String], to cd: CDJourney) {
+        let waypoints = (cd.waypoints as? Set<CDWaypoint> ?? [])
+        var byID: [String: CDWaypoint] = [:]
+        for wp in waypoints { if let id = wp.id { byID[id] = wp } }
+        var finalOrder: [CDWaypoint] = orderedIDs.compactMap { byID[$0] }
+        let placed = Set(finalOrder.compactMap { $0.id })
+        let leftovers = waypoints.filter { !($0.id.map(placed.contains) ?? false) }
+            .sorted { $0.sortOrder < $1.sortOrder }
+        finalOrder.append(contentsOf: leftovers)
+        for assignment in DayRenumbering.assignments(orderedIDs: finalOrder.compactMap { $0.id }) {
+            guard let wp = byID[assignment.id] else { continue }
+            wp.sortOrder = Int64(assignment.sortOrder)
+            wp.dayNumber = Int64(assignment.dayNumber)
+        }
+    }
+
+    /// Reorder a journey's days to `orderedIDs` and renumber. Photo assignments (by `waypointId`)
+    /// are untouched, so a photo stays with its day across a reorder.
+    @discardableResult
+    func reorderWaypoints(journeyID: String, orderedIDs: [String]) -> Bool {
+        let context = viewContext
+        guard let cd = fetchOne(CDJourney.self, matching: "id == %@", journeyID) else { return false }
+        applyDayOrder(orderedIDs, to: cd)
+        do {
+            try context.save()
+            return true
+        } catch {
+            context.rollback()
+            return false
+        }
+    }
+
+    /// Add a day to a journey. Inserted at the end, or immediately AFTER `afterDayNumber` when given;
+    /// all days renumber consistently. Returns the created day's stable id (nil on failure).
+    @discardableResult
+    func addWaypoint(journeyID: String, name: String, afterDayNumber: Int?) -> String? {
+        let context = viewContext
+        guard let cd = fetchOne(CDJourney.self, matching: "id == %@", journeyID) else { return nil }
+        let ordered = (cd.waypoints as? Set<CDWaypoint> ?? []).sorted { $0.sortOrder < $1.sortOrder }
+
+        let newID = UUID().uuidString
+        let wp = CDWaypoint(context: context)
+        wp.id = newID
+        wp.journeyId = journeyID
+        wp.waypointType = "camp"
+        wp.name = name
+        wp.elevation = 0
+        wp.coordinates = JSONCoding.encode([Double]())
+        wp.highlights = JSONCoding.encode([String]())
+        wp.waypointDescription = ""
+        wp.routeDistanceKm = -1
+        wp.createdAt = Date()
+        wp.journey = cd
+
+        // Compute the target order: existing ids, with the new id inserted after the requested day.
+        var orderedIDs = ordered.compactMap { $0.id }
+        if let afterDayNumber,
+           let anchor = ordered.first(where: { Int($0.dayNumber) == afterDayNumber })?.id,
+           let anchorIndex = orderedIDs.firstIndex(of: anchor) {
+            orderedIDs.insert(newID, at: anchorIndex + 1)
+        } else {
+            orderedIDs.append(newID)
+        }
+        applyDayOrder(orderedIDs, to: cd)
+        do {
+            try context.save()
+            return newID
+        } catch {
+            context.rollback()
+            return nil
+        }
+    }
+
+    /// Delete a day. Its photos and comments become UNASSIGNED (waypointId → nil) — never deleted —
+    /// and the surviving days renumber consistently. This is the safe day-delete semantics: no
+    /// media or memory is ever destroyed by removing a day.
+    @discardableResult
+    func deleteWaypoint(id: String) -> Bool {
+        let context = viewContext
+        guard let cd = fetchOne(CDWaypoint.self, matching: "id == %@", id),
+              let journey = cd.journey else { return false }
+
+        // Unassign photos on this day (keep the bytes + records; they land in "Unassigned").
+        let photoReq = NSFetchRequest<CDPhoto>(entityName: "CDPhoto")
+        photoReq.predicate = NSPredicate(format: "waypointId == %@", id)
+        for photo in (try? context.fetch(photoReq)) ?? [] {
+            photo.waypointId = nil
+            photo.waypoint = nil
+        }
+        // Unassign comments on this day (never delete a family member's words).
+        let commentReq = NSFetchRequest<CDDayComment>(entityName: "CDDayComment")
+        commentReq.predicate = NSPredicate(format: "waypointId == %@", id)
+        for comment in (try? context.fetch(commentReq)) ?? [] {
+            comment.waypointId = nil
+            comment.waypoint = nil
+        }
+
+        context.delete(cd)
+
+        // Renumber the remaining days.
+        let remaining = (journey.waypoints as? Set<CDWaypoint> ?? [])
+            .filter { $0.id != id }
+            .sorted { $0.sortOrder < $1.sortOrder }
+        applyDayOrder(remaining.compactMap { $0.id }, to: journey)
+
+        do {
+            try context.save()
+            return true
+        } catch {
+            context.rollback()
+            return false
+        }
+    }
+
     /// Set a journey's `isPublic` flag. Drives the public showcase mirror (MAPPING §8): flipping
     /// it true makes the journey's metadata + thumbnails eligible for the world-readable mirror.
     /// The mirror write itself is a separate step (`PublicMirrorPublisher`); this only records

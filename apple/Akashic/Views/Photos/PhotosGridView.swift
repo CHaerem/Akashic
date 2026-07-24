@@ -15,6 +15,7 @@ struct PhotosGridView: View {
     @State private var lightbox: LightboxData?
     @State private var editingPhoto: Photo?
     @State private var placingPhoto: Photo?
+    @State private var movingPhoto: Photo?
     @State private var showImport = false
     @State private var photoPendingDelete: Photo?
 
@@ -69,6 +70,11 @@ struct PhotosGridView: View {
                 startCoordinate: photo.coordinates,
                 fallbackCoordinate: placementFallback(for: photo, journey: journey),
                 onSave: { store.setPhotoLocation($0, source: "manual", forPhoto: photo.id) })
+        }
+        .sheet(item: $movingPhoto) { photo in
+            if let journey {
+                MovePhotoToDaySheet(photo: photo, journey: journey).environmentObject(store)
+            }
         }
         .sheet(isPresented: $showImport) {
             if let journey {
@@ -142,23 +148,9 @@ struct PhotosGridView: View {
             Label("Adjust location", systemImage: "mappin.and.ellipse")
         }
 
-        if let journey {
-            Menu {
-                Button {
-                    store.assignPhoto(photo.id, toWaypoint: nil)
-                } label: {
-                    Label("Unassigned", systemImage: photo.waypointId == nil ? "checkmark" : "")
-                }
-                ForEach(journey.camps) { camp in
-                    Button {
-                        store.assignPhoto(photo.id, toWaypoint: camp.id)
-                    } label: {
-                        Label("Day \(camp.dayNumber) — \(camp.name)",
-                              systemImage: photo.waypointId == camp.id ? "checkmark" : "")
-                    }
-                }
-            } label: {
-                Label("Assign to day", systemImage: "calendar")
+        if journey != nil {
+            Button { movingPhoto = photo } label: {
+                Label("Move to day…", systemImage: "calendar")
             }
         }
 

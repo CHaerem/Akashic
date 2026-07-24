@@ -293,6 +293,77 @@ final class JourneyStore: ObservableObject {
         return ok
     }
 
+    // Day content edits ---------------------------------------------------------------------
+
+    /// Authoritatively SET a day's content lists + weather (edit/delete/add of individual facts,
+    /// POIs, historical sites, and weather all round-trip through this). Correcting data is free.
+    @discardableResult
+    func setDayContent(id: String, funFacts: [FunFact], pointsOfInterest: [PointOfInterest],
+                       historicalSites: [HistoricalSite], weather: WeatherData?) -> Bool {
+        let ok = persistence.setDayContent(waypointID: id, funFacts: funFacts,
+                                           pointsOfInterest: pointsOfInterest,
+                                           historicalSites: historicalSites, weather: weather)
+        reload()
+        return ok
+    }
+
+    // Route correction ----------------------------------------------------------------------
+
+    /// Replace a journey's route and recompute its stats through the normal edit path (one engine
+    /// save). Days are NEVER re-seeded here. `positions`, when supplied, is the opt-in "also update
+    /// day positions" step — each is `(coordinate [lng,lat], elevation)` applied to days by order.
+    @discardableResult
+    func replaceRoute(journeyID: String, route: Route,
+                      positions: [(coordinate: [Double], elevation: Int)]? = nil) -> Bool {
+        guard let journey = journey(withID: journeyID) else { return false }
+        let stats = RouteCorrection.recomputedStats(
+            route: route, dayCount: journey.camps.count,
+            dateStarted: journey.dateStarted, dateEnded: journey.dateEnded, name: journey.shortName)
+        let ok = persistence.updateJourneyRoute(id: journeyID, route: route, stats: stats)
+        if ok, let positions {
+            persistence.updateWaypointPositions(journeyID: journeyID,
+                                                coordinates: positions.map(\.coordinate),
+                                                elevations: positions.map(\.elevation))
+        }
+        reload()
+        return ok
+    }
+
+    /// Recompute stats from the journey's CURRENT route (fixes stale stats after any edit), through
+    /// the same one-save path.
+    @discardableResult
+    func recomputeStats(journeyID: String) -> Bool {
+        guard let journey = journey(withID: journeyID) else { return false }
+        return replaceRoute(journeyID: journeyID, route: journey.route)
+    }
+
+    // Day management ------------------------------------------------------------------------
+
+    /// Add a day (at the end, or after `afterDayNumber`); days renumber consistently. Returns the
+    /// new day's id.
+    @discardableResult
+    func addDay(toJourney journeyID: String, name: String, afterDayNumber: Int? = nil) -> String? {
+        let id = persistence.addWaypoint(journeyID: journeyID, name: name, afterDayNumber: afterDayNumber)
+        reload()
+        return id
+    }
+
+    /// Delete a day: its photos/comments become unassigned (never deleted); survivors renumber.
+    @discardableResult
+    func deleteDay(_ waypointID: String) -> Bool {
+        let ok = persistence.deleteWaypoint(id: waypointID)
+        reload()
+        return ok
+    }
+
+    /// Reorder days to `orderedIDs` and renumber. Photo linkage (by waypointId) is preserved.
+    @discardableResult
+    func reorderDays(journeyID: String, orderedIDs: [String]) -> Bool {
+        let ok = persistence.reorderWaypoints(journeyID: journeyID, orderedIDs: orderedIDs)
+        reload()
+        return ok
+    }
+
     /// Mark a journey public/private (drives the public showcase mirror — T3.3 / MAPPING §8).
     @discardableResult
     func setJourneyPublic(_ isPublic: Bool, forJourney id: String) -> Bool {
