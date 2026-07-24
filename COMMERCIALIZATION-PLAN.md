@@ -192,24 +192,60 @@ this is a beautiful side business, not a startup, and the cost base agrees.
 - No AI features, no social graph, no feeds. The product is a family archive,
   not a network.
 
-## 10. Roadmap
+## 10. Apple Intelligence — the differentiation layer
+
+On-device AI fits this product unusually well, because it extends the core
+promise instead of breaking it: **AI features with zero cloud cost and zero
+data leaving the family's devices.** Competitors that bolt GPT onto a photo app
+must ship your memories to a third party; we never do. That sentence belongs in
+the App Store description.
+
+**The platform reality (honest version).** The integration point for
+third-party apps is the **Foundation Models framework** (iOS 26+): direct,
+free, offline access to the on-device model — structured/guided generation,
+tool calling, streaming. It is a ~3B-class model: excellent at summarizing,
+drafting, naming, extracting and classifying *over content we hand it*; not a
+world-knowledge oracle. **Private Cloud Compute is not directly exposed to
+third-party apps today** — it powers Apple's own features, which we inherit for
+free (Writing Tools appear automatically in our caption/notes/comment fields on
+AI-capable devices). If Apple opens PCC APIs at a future WWDC, heavier features
+(long-journey narratives) get an upgrade path with the same privacy story.
+Hardware gate: Apple-Intelligence-capable devices (iPhone 15 Pro and newer);
+the app targets iOS 17, so every AI feature is runtime-gated and simply absent
+on older devices — never a broken button.
+
+**Feature ladder** (each one = on-device model + data we already store):
+
+| Feature | Ingredients | Where |
+|---|---|---|
+| **Day-note drafting** — "write up this day" from the day's photos (Vision labels), route stats, weather + camp we already have; user edits, never auto-published | Vision + Foundation Models | v1.1 flagship |
+| **Smart day seeding** — in the §4.1 creation flow: cluster photos, then *name* the proposed days ("Summit night", "Rest day at Barranco") | Foundation Models | v1.1, extends creation |
+| **Hero & best-of curation** — suggest hero image and per-day highlights by aesthetic score | Vision (works on ALL devices, no AI gate) | v1.1 |
+| **Journey narrative** — showcase-ready summary from days+stats, one tap before publishing | Foundation Models | v1.1 |
+| **Natural-language search** — "the photo where we crossed the river", on-device embeddings over captions+labels | NLContextualEmbedding / FM tool-calling over our App Intents | v1.2 |
+| **Writing Tools** in captions/notes/comments | Free from the OS | Already inherited |
+
+**Positioning**: brand the bundle "Akashic Intelligence", included in the paid
+unlock — it fattens the paid tier without adding a krone of marginal cost.
+
+## 11. Roadmap
 
 | Phase | Content | Gate to proceed |
 |---|---|---|
 | **0 — now** | Family on TestFlight, 1 month of real use | It stays stable & family actually uses it |
-| **1 — v1.0 build** (~3–4 wks) | §4.1–4.6 | Christopher decides commercialization is on |
+| **1 — v1.0 build** (~3–4 wks) | §4.1–4.6 | **Green-lit 2026-07-24** — §4.1 build started |
 | **2 — closed beta** | ~10 external families create journeys from scratch | ≥7 complete a journey without help |
 | **3 — launch** | App Store + showcase funnel + communities | — |
-| **4 — iterate** | Draw-on-map, live activity, watch app, more import sources (Strava API) | Sales signal |
-| **5 — platform decision** | Android/web via real backend | Only on clear demand + revenue |
+| **4 — v1.1 "Akashic Intelligence"** | §10 ladder: day-note drafting, smart day naming, curation, narrative | Launch stable; AI-device share of user base worth it |
+| **5 — iterate** | Draw-on-map, NL search, live activity, watch app, Strava API import | Sales signal |
+| **6 — platform decision** | Android/web via real backend | Only on clear demand + revenue |
 
-## 11. Immediate next steps (if green-lit)
+## 12. Immediate next steps
 
-1. Finish the family month (phase 0) — it *is* the beta.
-2. I build §4.1 (journey creation + GPX import) first; it de-risks the whole
-   plan and is useful for the family regardless.
-3. Trademark/name sanity check.
-4. Then paywall + de-scaffolding + listing, beta, launch.
+1. ~~Green light~~ — given 2026-07-24; §4.1 (journey creation + GPX import) in
+   progress. Family month (phase 0) continues in parallel — it *is* the beta.
+2. Trademark/name sanity check.
+3. Then paywall + de-scaffolding + listing, beta, launch; Intelligence in v1.1.
 
 ---
 
