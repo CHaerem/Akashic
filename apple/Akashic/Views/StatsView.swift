@@ -167,9 +167,9 @@ struct StatsView: View {
     private var journeyStatsSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             sectionLabel("Journey Stats")
+            // D4: Total Distance and Duration used to repeat here — the header chips above
+            // already say them. Only figures the header doesn't carry belong in this grid.
             statGrid {
-                StatItem(label: "Total Distance", value: Formatters.distanceKm(journey.stats.totalDistance))
-                StatItem(label: "Duration", value: "\(journey.stats.duration) days")
                 StatItem(label: "Est. Hiking Time", value: extended.estimatedTotalTime, color: Self.violet)
                 StatItem(label: "Avg. Daily Distance", value: "\(extended.avgDailyDistance) km")
             }
@@ -317,6 +317,7 @@ struct StatItem: View {
 struct StatsTabView: View {
     @EnvironmentObject private var store: JourneyStore
     @State private var selectedID: String?
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
 
     private var selected: Journey? {
         store.journey(withID: selectedID ?? store.journeys.first?.id ?? "")
@@ -326,13 +327,7 @@ struct StatsTabView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 if store.journeys.count > 1 {
-                    Picker("Journey", selection: Binding(
-                        get: { selected?.id ?? "" },
-                        set: { selectedID = $0 }
-                    )) {
-                        ForEach(store.journeys) { Text($0.shortName).tag($0.id) }
-                    }
-                    .pickerStyle(.segmented)
+                    journeyChipRow
                 }
 
                 if let journey = selected {
@@ -350,6 +345,54 @@ struct StatsTabView: View {
         .background(Theme.background.ignoresSafeArea())
         .navigationTitle("Stats")
         .onAppear { if selectedID == nil { selectedID = resolveInitialJourneyID() } }
+    }
+
+    // MARK: - Journey picker (D4)
+    //
+    // Was a `.segmented` Picker — SwiftUI truncates segment titles once there isn't room
+    // ("Inca Trail to Mac…"), and the paid tier's entire promise is *unlimited* journeys, so
+    // the control broke precisely when someone paid. A horizontally scrolling chip row has no
+    // such ceiling: every journey gets its full name, and it borrows the same capsule
+    // selected/unselected language as the globe strip's day pills (`DayNavigationView`) rather
+    // than a `Menu`, so the picker stays visually consistent with the rest of the app's chrome
+    // instead of hiding the journey list behind a tap.
+    private var journeyChipRow: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(store.journeys) { journey in
+                    journeyChip(journey)
+                }
+            }
+            // Room for the selected chip's stroke/shadow at the scroll edges.
+            .padding(.horizontal, 2)
+        }
+    }
+
+    private func journeyChip(_ journey: Journey) -> some View {
+        let isSelected = journey.id == (selected?.id ?? "")
+        return Button {
+            withAnimation(.easeOut(duration: 0.2)) { selectedID = journey.id }
+        } label: {
+            Text(journey.name)
+                .font(.subheadline.weight(isSelected ? .semibold : .regular))
+                .lineLimit(1)
+                .foregroundStyle(isSelected ? Theme.onAccent : Theme.textPrimary)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 8)
+                .frame(minHeight: 44)
+                .background {
+                    if isSelected {
+                        Capsule().fill(Theme.accent)
+                    } else {
+                        Capsule().fill(reduceTransparency ? AnyShapeStyle(Theme.surface) : AnyShapeStyle(.ultraThinMaterial))
+                            .overlay(Capsule().strokeBorder(Theme.hairline, lineWidth: 1))
+                    }
+                }
+                .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(journey.name)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 
     /// Default to the first journey, or one named by `AKASHIC_STATS_JOURNEY` (id or name
