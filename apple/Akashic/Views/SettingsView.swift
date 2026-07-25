@@ -6,7 +6,7 @@ import UniformTypeIdentifiers
 ///   * **Consumer** (always visible): the honest sync status one-liner, a human storage summary,
 ///     the "Your name" field used for comments, an export reminder, "Replay intro", the
 ///     legal/support links, and the app version.
-///   * **Developer** (hidden): the migration workshop — active-store inspector, the T2.4 export
+///   * **Developer** (hidden): the migration workshop — active-store inspector, the T2.5 export
 ///     bundle importer, the T2.5 CloudKit importer, and the persistence-mode override. Nothing is
 ///     deleted; the runbook still needs these tools. The section is revealed by seven taps on the
 ///     version row (see `DeveloperTools`) and is always visible in DEBUG builds.
@@ -520,7 +520,7 @@ struct SettingsView: View {
                 }
             }
         } header: {
-            Text("Import from export bundle (T2.4)")
+            Text("Import from export bundle (T2.5)")
         } footer: {
             Text("The Simulator can read host paths directly. For results that persist across launches and show photos, switch the store to \(PersistenceMode.local.label) below, relaunch, then import. Re-importing preserves native edits — it only refreshes media paths and metadata.")
         }

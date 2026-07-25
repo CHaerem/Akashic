@@ -38,16 +38,22 @@ struct JourneyDetailView: View {
             VStack(alignment: .leading, spacing: 20) {
                 header
 
-                RouteMapView(journey: journey, interactive: false)
-                    .frame(height: 220)
-                    .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 18, style: .continuous)
-                            .strokeBorder(Theme.hairline, lineWidth: 1)
-                    )
+                if live.isEmptyShell {
+                    // Nothing to draw a map of and nothing to total up. Offer the ways in instead
+                    // of rendering the content screens over an empty journey.
+                    nextSteps
+                } else {
+                    RouteMapView(journey: journey, interactive: false)
+                        .frame(height: 220)
+                        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                                .strokeBorder(Theme.hairline, lineWidth: 1)
+                        )
 
-                statsSummary
-                photosLink
+                    statsSummary
+                    if photoCount > 0 { photosLink }
+                }
 
                 if !live.description.isEmpty {
                     Text(live.description)
@@ -55,7 +61,7 @@ struct JourneyDetailView: View {
                         .foregroundStyle(Theme.textSecondary)
                 }
 
-                daySection
+                if !live.isEmptyShell { daySection }
             }
             .padding(16)
         }
@@ -183,6 +189,35 @@ struct JourneyDetailView: View {
                 set: { if !$0 { selectedDayIndex = nil } })
     }
 
+    private var photoCount: Int { store.photos(forJourneyID: journey.id).count }
+
+    /// The ways into an empty journey. Owner-only: a shared-in journey is not ours to fill, so a
+    /// participant gets the explanation without buttons that would fail.
+    private var nextSteps: some View {
+        JourneyNextStepsCard(
+            title: "This journey is empty",
+            message: isOwner
+                ? "Add a route, days or photos and it comes to life on the globe."
+                : "Nothing has been added to this journey yet. Its owner can add a route, days and photos.",
+            steps: isOwner ? [
+                .init(icon: "point.topleft.down.to.point.bottomright.curvepath",
+                      title: "Add a route",
+                      subtitle: "Import a GPX from Strava, Garmin or komoot — or draw it by hand") {
+                          showJourneyEdit = true
+                      },
+                .init(icon: "calendar.badge.plus",
+                      title: "Add days",
+                      subtitle: "Build the day-by-day story, or seed days from your photo dates") {
+                          showManageDays = true
+                      },
+                .init(icon: "photo.badge.plus",
+                      title: "Add photos",
+                      subtitle: "Photos carry their own dates and locations") {
+                          showImport = true
+                      },
+            ] : [])
+    }
+
     private var photosLink: some View {
         NavigationLink {
             PhotosGridView(journeyID: journey.id)
@@ -252,11 +287,42 @@ struct JourneyDetailView: View {
         ])
     }
 
+    @ViewBuilder
     private var daySection: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Days")
                 .font(.title3.weight(.semibold))
                 .foregroundStyle(Theme.textPrimary)
+            // A route without days (a bare GPX import, or a drawn route) used to leave this heading
+            // standing over nothing.
+            if live.camps.isEmpty {
+                Button { showManageDays = true } label: {
+                    HStack(spacing: 10) {
+                        Image(systemName: "calendar.badge.plus")
+                            .font(.title3).foregroundStyle(Theme.accent).frame(width: 26)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(isOwner ? "No days yet" : "No days yet")
+                                .font(.subheadline.weight(.semibold)).foregroundStyle(Theme.textPrimary)
+                            Text(isOwner
+                                 ? "Add them one by one, or let your photo dates propose them"
+                                 : "The owner hasn't added days to this journey")
+                                .font(.caption2).foregroundStyle(Theme.textTertiary)
+                        }
+                        Spacer(minLength: 8)
+                        if isOwner {
+                            Image(systemName: "chevron.right")
+                                .font(.footnote).foregroundStyle(Theme.textTertiary)
+                        }
+                    }
+                    .padding(12)
+                    .frame(maxWidth: .infinity)
+                    .background(Theme.surface, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .strokeBorder(Theme.hairline, lineWidth: 1))
+                }
+                .buttonStyle(.plain)
+                .disabled(!isOwner)
+            }
             ForEach(Array(live.camps.enumerated()), id: \.element.id) { index, camp in
                 Button {
                     selectedDayIndex = index

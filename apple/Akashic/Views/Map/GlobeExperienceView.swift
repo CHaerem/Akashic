@@ -34,6 +34,8 @@ struct GlobeExperienceView: View {
     @State private var dayLightbox: LightboxData?
     @State private var sheetDetent: PresentationDetent = .medium
     @State private var showingPhotoGrid = false
+    /// The globe's route into a journey's own screen — the only place an empty journey can be filled.
+    @State private var showingJourneyDetail = false
     @State private var showingNewJourney = false
     @State private var showingPaywall = false
 
@@ -94,6 +96,14 @@ struct GlobeExperienceView: View {
             if let journey = controller.selectedJourney {
                 NavigationStack { PhotosGridView(journeyID: journey.id) }
                     .environmentObject(store)
+                    .preferredColorScheme(.dark)
+            }
+        }
+        .sheet(isPresented: $showingJourneyDetail) {
+            if let journey = controller.selectedJourney {
+                NavigationStack { JourneyDetailView(journey: journey) }
+                    .environmentObject(store)
+                    .environmentObject(entitlements)
                     .preferredColorScheme(.dark)
             }
         }
@@ -347,9 +357,17 @@ struct GlobeExperienceView: View {
                 }
             } else if let journey = controller.selectedJourney,
                       controller.selectedDayIndex == nil {
-                // In overview: the day navigator picks a starting day. Once a day is
-                // selected, the DayDetailSheet takes over (and covers this area).
-                DayNavigationView(journey: journey, controller: controller)
+                if journey.isEmptyShell {
+                    // Flying into a journey with no route and no days lands on empty ocean — the
+                    // camera has nothing to frame. Say so, and offer the one screen that can fix it.
+                    JourneyNothingToShowPill(journeyName: journey.shortName) {
+                        showingJourneyDetail = true
+                    }
+                } else {
+                    // In overview: the day navigator picks a starting day. Once a day is
+                    // selected, the DayDetailSheet takes over (and covers this area).
+                    DayNavigationView(journey: journey, controller: controller)
+                }
             }
         }
         .padding(.top, 8)
