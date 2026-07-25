@@ -261,7 +261,7 @@ struct JourneyDetailView: View {
                 Image(systemName: "arrow.right")
                     .font(.footnote.weight(.semibold))
             }
-            .foregroundStyle(Theme.background)
+            .foregroundStyle(Theme.onAccent)
             .padding(14)
             .background(Theme.accent, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
         }

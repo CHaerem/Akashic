@@ -49,7 +49,10 @@ struct AkashicApp: App {
                 .environmentObject(onboarding)
                 .environmentObject(entitlements)
                 .environmentObject(intelligence)
-                .preferredColorScheme(.dark)
+                // A3 (2026-07-25): the earlier "dark-only is deliberate" call is withdrawn — the
+                // app now follows the system appearance like any other iOS app. `Theme.swift`
+                // carries the light/dark adaptation, so removing this is safe rather than
+                // cosmetic: nothing here was still relying on a fixed dark canvas.
                 .tint(Theme.accent)
                 // First-run onboarding (§4.2): a full-screen cover shown once. The coordinator
                 // owns the "show once" state (seeded from OnboardingState.shouldShow, which
@@ -57,7 +60,6 @@ struct AkashicApp: App {
                 // Settings row re-presents through the same coordinator.
                 .fullScreenCover(isPresented: $onboarding.isPresented) {
                     OnboardingView(onFinish: { onboarding.finish() })
-                        .preferredColorScheme(.dark)
                 }
                 .task { await runLaunchImportIfRequested() }
                 // Re-probe Intelligence availability on every return to the foreground: if the user

@@ -95,7 +95,7 @@ struct JourneyEmptyState: View {
             Button(action: onCreate) {
                 Label("Create a journey", systemImage: "plus")
                     .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(Theme.background)
+                    .foregroundStyle(Theme.onAccent)
                     .padding(.vertical, 14)
                     .padding(.horizontal, 24)
                     .background(Theme.accent, in: Capsule())

@@ -13,6 +13,10 @@ import CoreLocation
 struct GlobeExperienceView: View {
     @EnvironmentObject private var store: JourneyStore
     @EnvironmentObject private var entitlements: EntitlementStore
+    /// A1: pushed into `TrekCameraController` (an `ObservableObject`, not a `View`, so it can't
+    /// read the environment itself) at launch and on every change, since the user can flip
+    /// Reduce Motion while the app is running.
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     /// Optional photo thumbnail markers. Defaults to empty so trek mode renders without
     /// photos; the Import / photo agent can map their photos into `[MapPhoto]` and pass
@@ -83,10 +87,27 @@ struct GlobeExperienceView: View {
                     PhotoLightboxView(data: data)
                 }
         }
-        .background(Theme.background.ignoresSafeArea())
+        // This screen is the immersive globe/trek map, not a page of chrome — it stays a fixed
+        // night-sky dark in both appearances (see `MapPalette.nightSky` and the note on
+        // `MapPalette` below), the same way Apple Maps and the Photos viewer stay dark behind
+        // their content regardless of the system appearance. `Theme.background` would flash
+        // system white behind the map in Light Mode before MapKit finishes drawing.
+        .background(MapPalette.nightSky.ignoresSafeArea())
+        // `.ultraThinMaterial` (used by `mapOverlayMaterial` above) doesn't just sample the
+        // backdrop — it also tints itself from the *inherited* `colorScheme`, so with A3's
+        // app-wide `.preferredColorScheme(.dark)` gone, flipping the system to Light Mode made
+        // every glass pill on this screen visibly lighter/greyer even though it still sits over
+        // the same dark satellite imagery (verified: compare a Light/Dark screenshot pair of
+        // this screen). That is precisely the map-stops-being-immersive failure A3 says not to
+        // introduce, so this screen — and only this screen — keeps a local forced-dark
+        // `colorScheme`; the sub-sheets it presents (journey list/detail, day sheet, new
+        // journey, paywall) already carry their own explicit `.preferredColorScheme(.dark)`
+        // and are unaffected either way.
+        .preferredColorScheme(.dark)
         .statusBarHidden(true)
         .onAppear {
             controller.configure(journeys: store.journeys)
+            controller.setReduceMotion(reduceMotion)
             guard !didApplyLaunch else { return }
             didApplyLaunch = true
             controller.applyLaunchScene()
@@ -95,6 +116,9 @@ struct GlobeExperienceView: View {
         }
         .onChange(of: store.journeys) { _, new in
             controller.configure(journeys: new)
+        }
+        .onChange(of: reduceMotion) { _, newValue in
+            controller.setReduceMotion(newValue)
         }
         .onChange(of: controller.selectedJourneyID) { _, _ in
             loadPhotos(for: controller.selectedJourney)
@@ -402,15 +426,19 @@ struct GlobeExperienceView: View {
         HStack {
             // 17/15 pt map to `.body`/`.subheadline` — the closest semantic styles, keeping
             // `.rounded` for the wordmark since that's a brand choice, not a size one.
+            // `MapPalette.label`, not `Theme.textPrimary`: this text sits on the immersive
+            // satellite map, which stays visually dark in both appearances, so its label needs
+            // to stay a fixed light colour too — `Theme.textPrimary` would go near-black in
+            // Light Mode and disappear into the imagery it's drawn over.
             if controller.isGlobe {
                 Text("Akashic")
                     .font(.system(.body, design: .rounded).weight(.bold))
-                    .foregroundStyle(Theme.textPrimary)
+                    .foregroundStyle(MapPalette.label)
                     .shadow(color: .black.opacity(0.5), radius: 4)
             } else {
                 Text(controller.selectedJourney?.shortName ?? "")
                     .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(Theme.textPrimary)
+                    .foregroundStyle(MapPalette.label)
                     .shadow(color: .black.opacity(0.5), radius: 4)
             }
             Spacer()
@@ -421,9 +449,9 @@ struct GlobeExperienceView: View {
                     .font(.footnote.weight(.semibold))
                     .padding(.horizontal, 14)
                     .padding(.vertical, 8)
-                    .foregroundStyle(Theme.textPrimary)
-                    .background(.ultraThinMaterial, in: Capsule())
-                    .overlay(Capsule().strokeBorder(Theme.hairline, lineWidth: 1))
+                    .foregroundStyle(MapPalette.label)
+                    .mapOverlayMaterial(Capsule())
+                    .overlay(Capsule().strokeBorder(MapPalette.hairline, lineWidth: 1))
                     .frame(minWidth: 44, minHeight: 44)
                     .contentShape(Rectangle())
             }
@@ -440,14 +468,14 @@ struct GlobeExperienceView: View {
         VStack(spacing: 12) {
             Text("Your journeys will live here")
                 .font(.subheadline.weight(.semibold))
-                .foregroundStyle(Theme.textPrimary)
+                .foregroundStyle(MapPalette.label)
                 .shadow(color: .black.opacity(0.5), radius: 4)
             Button {
                 startCreate()
             } label: {
                 Label("Start your first journey", systemImage: "plus")
                     .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(Theme.background)
+                    .foregroundStyle(Theme.onAccent)
                     .padding(.vertical, 14)
                     .padding(.horizontal, 22)
                     .background(Theme.accent, in: Capsule())
@@ -492,24 +520,27 @@ private struct JourneyGlobeCard: View {
         HStack(spacing: 10) {
             Text(journey.countryFlag)
                 .font(.system(size: flagSize))
+            // On-map card (see the note on `topBar`): fixed `MapPalette` labels, not the
+            // adaptive `Theme` ones, because this card floats over the immersive map in every
+            // appearance.
             VStack(alignment: .leading, spacing: 2) {
                 Text(journey.shortName)
                     .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(Theme.textPrimary)
+                    .foregroundStyle(MapPalette.label)
                     .lineLimit(1)
                 Text("\(journey.country) · \(journey.stats.duration) days")
                     .font(.caption2)
-                    .foregroundStyle(Theme.textSecondary)
+                    .foregroundStyle(MapPalette.labelSecondary)
                     .lineLimit(1)
             }
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
         .frame(width: 200, alignment: .leading)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .mapOverlayMaterial(RoundedRectangle(cornerRadius: 16, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .strokeBorder(Theme.hairline, lineWidth: 1)
+                .strokeBorder(MapPalette.hairline, lineWidth: 1)
         )
         .frame(minHeight: 44)
         .contentShape(Rectangle())

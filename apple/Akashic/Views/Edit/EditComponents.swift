@@ -154,7 +154,7 @@ struct HighlightChipsEditor: View {
                 Button(action: commit) {
                     Image(systemName: "plus")
                         .font(.system(size: 15, weight: .bold))
-                        .foregroundStyle(Theme.background)
+                        .foregroundStyle(Theme.onAccent)
                         .frame(width: 40, height: 40)
                         .background(Theme.accent, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
                 }

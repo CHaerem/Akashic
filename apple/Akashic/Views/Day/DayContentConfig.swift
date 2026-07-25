@@ -135,7 +135,10 @@ enum HistoricalSignificance {
         switch (significance ?? "minor").lowercased() {
         case "major":   return dayColor(0xF59E0B)
         case "notable": return dayColor(0x60A5FA)
-        default:        return Color.white.opacity(0.4)
+        // "minor" used to fall back to 40%-white — legible only against the fixed dark
+        // background this screen assumed. `.systemGray` is Apple's own answer for a muted,
+        // still-legible tone that adapts its exact brightness to the appearance.
+        default:        return Color(uiColor: .systemGray)
         }
     }
 

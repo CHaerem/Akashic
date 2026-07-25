@@ -288,7 +288,10 @@ private struct CommentRow: View {
                 .foregroundStyle(Theme.textPrimary)
                 .lineLimit(1...6)
                 .padding(8)
-                .background(Color.black.opacity(0.2), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                // A black-opacity "recessed field" tint only reads as recessed on the fixed
+                // dark background this sheet used to assume; `Theme.fillSubtle` is the
+                // system's own answer and adapts with appearance and contrast on its own.
+                .background(Theme.fillSubtle, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
                 .overlay(
                     RoundedRectangle(cornerRadius: 10, style: .continuous)
                         .strokeBorder(Theme.hairline, lineWidth: 1)

@@ -233,10 +233,10 @@ struct PaywallView: View {
             Task { await entitlements.purchase() }
         } label: {
             HStack(spacing: 8) {
-                if isBusy(.purchasing) { ProgressView().tint(Theme.background) }
+                if isBusy(.purchasing) { ProgressView().tint(Theme.onAccent) }
                 Text(isBusy(.purchasing) ? "Purchasing…" : "Unlock for \(price)")
                     .font(.headline)
-                    .foregroundStyle(Theme.background)
+                    .foregroundStyle(Theme.onAccent)
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 15)

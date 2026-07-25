@@ -61,7 +61,7 @@ struct OnboardingView: View {
                     }
                 }
                 .font(.headline)
-                .foregroundStyle(Theme.background)
+                .foregroundStyle(Theme.onAccent)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 16)
                 .background(Theme.accent, in: RoundedRectangle(cornerRadius: 14, style: .continuous))

@@ -32,6 +32,27 @@ final class TrekCameraController: ObservableObject {
     /// Journeys backing the globe pins and camera math (set via `configure`).
     private(set) var journeys: [Journey] = []
 
+    // MARK: Reduce Motion (A1)
+    //
+    // `TrekCameraController` is an `ObservableObject`, not a `View`, so it cannot read
+    // `@Environment(\.accessibilityReduceMotion)` itself — `GlobeExperienceView` reads it and
+    // pushes the value in via `setReduceMotion`, both at launch and on every change (the user
+    // can flip the setting while the app is running). This is the single flag every camera
+    // transition below checks: with it on, the idle globe spin never starts and every
+    // `withAnimation` fly-in/fly-out becomes an instant cut instead — the destination is
+    // always reached, just without the sweep, so the setting can never mean "stuck".
+    private(set) var reduceMotion = false
+
+    /// Called by the view whenever the environment's Reduce Motion value is known or changes.
+    func setReduceMotion(_ enabled: Bool) {
+        guard enabled != reduceMotion else { return }
+        reduceMotion = enabled
+        // Turning it on mid-spin must stop the spin immediately, not just suppress future
+        // starts — a nauseating rotation already in flight is exactly the failure this exists
+        // to prevent.
+        if enabled { stopRotation() }
+    }
+
     // MARK: Pitch clamp
     //
     // AMBITION: the Mapbox day legs and overview lean into the mountain at a 55–60°
@@ -129,14 +150,28 @@ final class TrekCameraController: ObservableObject {
 
     // MARK: - Transitions (map to Mapbox durations / easing, spec §1c–§1e)
 
+    /// Retarget the camera, animated normally or cut instantly under Reduce Motion (spec
+    /// §1c–§1e's cinematic durations vs. A1's accessibility floor). A cut is not a shorter
+    /// animation — it is no animation, so there is nothing for a vestibular-sensitive user to
+    /// track, and the destination (the whole point of the interaction) is reached in the same
+    /// gesture instead of after a multi-second sweep.
+    private func setCamera(_ camera: MKMapCamera, animation: Animation) {
+        let target = Self.mapCamera(from: camera)
+        if reduceMotion {
+            cameraPosition = .camera(target)
+        } else {
+            withAnimation(animation) {
+                cameraPosition = .camera(target)
+            }
+        }
+    }
+
     /// Globe → journey overview. Spec §1d: fit the route bbox, 2.5 s ease-in-out.
     func selectJourney(_ journey: Journey) {
         stopRotation()
         selectedJourneyID = journey.id
         stage = .overview
-        withAnimation(.easeInOut(duration: 2.5)) {
-            cameraPosition = .camera(Self.mapCamera(from: overviewCamera(for: journey)))
-        }
+        setCamera(overviewCamera(for: journey), animation: .easeInOut(duration: 2.5))
     }
 
     /// Re-frame the selected journey's overview (the "Overview" button).
@@ -144,9 +179,7 @@ final class TrekCameraController: ObservableObject {
         guard let journey = selectedJourney else { return }
         stopRotation()
         stage = .overview
-        withAnimation(.easeInOut(duration: 2.5)) {
-            cameraPosition = .camera(Self.mapCamera(from: overviewCamera(for: journey)))
-        }
+        setCamera(overviewCamera(for: journey), animation: .easeInOut(duration: 2.5))
     }
 
     /// Fly the cinematic day leg. Spec §1e: ~2.2 s. Re-selecting another day mid-flight
@@ -155,9 +188,7 @@ final class TrekCameraController: ObservableObject {
         guard let journey = selectedJourney, journey.camps.indices.contains(index) else { return }
         stopRotation()
         stage = .day(index)
-        withAnimation(.easeInOut(duration: 2.2)) {
-            cameraPosition = .camera(Self.mapCamera(from: dayCamera(for: journey, dayIndex: index)))
-        }
+        setCamera(dayCamera(for: journey, dayIndex: index), animation: .easeInOut(duration: 2.2))
     }
 
     func selectNextDay() {
@@ -171,26 +202,31 @@ final class TrekCameraController: ObservableObject {
         selectDay(current - 1)
     }
 
-    /// Return to the bare spinning globe. Spec §1c: 3 s ease-out, then re-arm the spin.
+    /// Return to the bare spinning globe. Spec §1c: 3 s ease-out, then re-arm the spin (which
+    /// `scheduleRotation` itself no-ops under Reduce Motion — see below).
     func returnToGlobe() {
         selectedJourneyID = nil
         stage = .globe
         currentLon = MapGeoMath.globeCenter.longitude
-        withAnimation(.easeOut(duration: 3.0)) {
-            cameraPosition = .camera(Self.mapCamera(from: globeCamera()))
-        }
+        setCamera(globeCamera(), animation: .easeOut(duration: 3.0))
         scheduleRotation()
     }
 
     // MARK: - Idle rotation (spec §1b)
 
     /// Arm the 3.5 s timer; the globe sits still first, then drifts west at 2°/s.
+    ///
+    /// Under Reduce Motion this is a deliberate no-op: the globe is the app's landing screen,
+    /// so a self-rotating planet is the single clearest "the app moved without being asked"
+    /// case in the whole surface, and the setting exists precisely to stop that — not just to
+    /// shorten it. There is no reduced-but-nonzero spin; the globe simply sits still.
     func scheduleRotation() {
         stopRotation()
+        guard !reduceMotion else { return }
         rotationToken += 1
         let token = rotationToken
         DispatchQueue.main.asyncAfter(deadline: .now() + rotationStartDelay) { [weak self] in
-            guard let self, token == self.rotationToken, self.isGlobe else { return }
+            guard let self, token == self.rotationToken, self.isGlobe, !self.reduceMotion else { return }
             self.startRotation()
         }
     }

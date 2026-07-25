@@ -101,8 +101,10 @@ private struct ExpandableCard<Content: View>: View {
                 .padding(.bottom, 12)
             }
         }
-        .background(Color.white.opacity(0.04),
-                    in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        // A barely-there white tint only read correctly on the fixed dark background this
+        // screen used to assume; `Theme.fillSubtle` (`.quaternarySystemFill`) is the system's
+        // own "a hair lighter than what's underneath" and adapts to light/dark on its own.
+        .background(Theme.fillSubtle, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 }
 

@@ -14,15 +14,20 @@ struct RootView: View {
     @ObservedObject private var networkPolicy = NetworkPolicy.shared
 
     init() {
-        // The app runs `.preferredColorScheme(.dark)`, so the system bars are already dark and
-        // already the right material. Below iOS 26 they are flat, and an opaque fill matching the
-        // night-sky palette reads better than the default grey; from iOS 26 the bars are Liquid
-        // Glass, and forcing an opaque background fights the system — it suppressed the large
-        // navigation title on the Settings screen (a blank band where the title belongs) and cost
-        // scroll views the inset the floating tab bar needs, so the last row of Settings sat
-        // half-hidden behind the tab pill. Leave the new bars alone.
+        // Below iOS 26 the bars are flat, and an opaque fill matching `Theme.background`
+        // reads better than the default grey; from iOS 26 the bars are Liquid Glass, and
+        // forcing an opaque background fights the system — it suppressed the large
+        // navigation title on the Settings screen (a blank band where the title belongs) and
+        // cost scroll views the inset the floating tab bar needs, so the last row of Settings
+        // sat half-hidden behind the tab pill. Leave the new bars alone.
         guard #unavailable(iOS 26) else { return }
 
+        // `UIColor(Theme.background)` round-trips the dynamic `.systemBackground` colour
+        // Theme now wraps (SwiftUI preserves the dynamic provider through the Color/UIColor
+        // conversion), so this bar already tracks light/dark on its own. The title colour
+        // used to be hardcoded `.white` — harmless while the app was forced dark, a
+        // vanishing-white-on-white bug the moment A3 let Light Mode happen. `.label` is the
+        // dynamic system equivalent of `Theme.textPrimary`.
         let appearance = UITabBarAppearance()
         appearance.configureWithOpaqueBackground()
         appearance.backgroundColor = UIColor(Theme.background)
@@ -32,8 +37,8 @@ struct RootView: View {
         let nav = UINavigationBarAppearance()
         nav.configureWithOpaqueBackground()
         nav.backgroundColor = UIColor(Theme.background)
-        nav.titleTextAttributes = [.foregroundColor: UIColor.white]
-        nav.largeTitleTextAttributes = [.foregroundColor: UIColor.white]
+        nav.titleTextAttributes = [.foregroundColor: UIColor.label]
+        nav.largeTitleTextAttributes = [.foregroundColor: UIColor.label]
         UINavigationBar.appearance().standardAppearance = nav
         UINavigationBar.appearance().scrollEdgeAppearance = nav
     }

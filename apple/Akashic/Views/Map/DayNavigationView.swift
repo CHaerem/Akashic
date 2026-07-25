@@ -11,13 +11,23 @@ import SwiftUI
 ///  - Overview + Globe buttons switch stage.
 ///
 /// Styling follows the app's dark liquid-glass language: `.ultraThinMaterial` over a
-/// #0B0B19 tint with a hairline border (matching `Theme`).
+/// #0B0B19 tint with a hairline border (matching `MapPalette`, not `Theme` — this chrome
+/// floats over the immersive map in both light and dark, so its text/hairlines stay the fixed
+/// `MapPalette` tones rather than following the system appearance; see the note on
+/// `MapPalette`'s on-map chrome colours in `GlobeMapComponents.swift`).
 struct DayNavigationView: View {
     let journey: Journey
     @ObservedObject var controller: TrekCameraController
 
     /// Swipe threshold (points) to advance a day — mirrors the web's 50 px threshold.
     private let swipeThreshold: CGFloat = 50
+
+    // A couple of pills fill a `Capsule` directly (`.fill`, not `.background(_, in:)`), so they
+    // can't ride `mapOverlayMaterial` — same Reduce Transparency swap, applied by hand below.
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    private var pillMaterial: AnyShapeStyle {
+        reduceTransparency ? AnyShapeStyle(MapPalette.overlaySurface) : AnyShapeStyle(.ultraThinMaterial)
+    }
 
     /// The chevrons were sized to fit a fixed 15 pt glyph; now that the glyph scales with
     /// Dynamic Type (`.subheadline`), the box around it needs to scale too or the glyph
@@ -55,10 +65,10 @@ struct DayNavigationView: View {
                 if let camp = selectedCamp {
                     Text("Day \(camp.dayNumber)")
                         .font(.footnote.weight(.bold))
-                        .foregroundStyle(Theme.textPrimary)
+                        .foregroundStyle(MapPalette.label)
                     Text(camp.name)
                         .font(.caption2)
-                        .foregroundStyle(Theme.textSecondary)
+                        .foregroundStyle(MapPalette.labelSecondary)
                         .lineLimit(1)
                 } else {
                     // "0 days" is what a journey with a route but no days used to announce.
@@ -67,7 +77,7 @@ struct DayNavigationView: View {
                         .foregroundStyle(MapPalette.cyan)
                     Text(journey.shortName)
                         .font(.footnote.weight(.semibold))
-                        .foregroundStyle(Theme.textPrimary)
+                        .foregroundStyle(MapPalette.label)
                         .lineLimit(1)
                 }
             }
@@ -83,10 +93,10 @@ struct DayNavigationView: View {
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
         .frame(maxWidth: .infinity)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .mapOverlayMaterial(RoundedRectangle(cornerRadius: 16, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .strokeBorder(Theme.hairline, lineWidth: 1)
+                .strokeBorder(MapPalette.hairline, lineWidth: 1)
         )
         .contentShape(Rectangle())
         .gesture(
@@ -139,13 +149,13 @@ struct DayNavigationView: View {
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 6)
-            .foregroundStyle(selected ? .black : Theme.textPrimary)
+            .foregroundStyle(selected ? .black : MapPalette.label)
             .background {
                 if selected {
                     Capsule().fill(MapPalette.cyan.opacity(0.9))
                 } else {
-                    Capsule().fill(.ultraThinMaterial)
-                        .overlay(Capsule().strokeBorder(Theme.hairline, lineWidth: 1))
+                    Capsule().fill(pillMaterial)
+                        .overlay(Capsule().strokeBorder(MapPalette.hairline, lineWidth: 1))
                 }
             }
             // The capsule stays its drawn size; this only widens the tappable box (~29 pt
@@ -178,13 +188,13 @@ struct DayNavigationView: View {
                 .font(.footnote.weight(.semibold))
                 .padding(.horizontal, 16)
                 .padding(.vertical, 9)
-                .foregroundStyle(active ? .black : Theme.textPrimary)
+                .foregroundStyle(active ? .black : MapPalette.label)
                 .background {
                     if active {
                         Capsule().fill(MapPalette.cyan.opacity(0.9))
                     } else {
-                        Capsule().fill(.ultraThinMaterial)
-                            .overlay(Capsule().strokeBorder(Theme.hairline, lineWidth: 1))
+                        Capsule().fill(pillMaterial)
+                            .overlay(Capsule().strokeBorder(MapPalette.hairline, lineWidth: 1))
                     }
                 }
                 .frame(minWidth: 44, minHeight: 44)
@@ -200,7 +210,7 @@ struct DayNavigationView: View {
         Button(action: action) {
             Image(systemName: system)
                 .font(.subheadline.weight(.semibold))
-                .foregroundStyle(enabled ? Theme.textPrimary : Theme.textTertiary)
+                .foregroundStyle(enabled ? MapPalette.label : MapPalette.labelSecondary)
                 .frame(width: chevronBoxSize, height: chevronBoxSize)
                 .frame(minWidth: 44, minHeight: 44)
                 .contentShape(Rectangle())

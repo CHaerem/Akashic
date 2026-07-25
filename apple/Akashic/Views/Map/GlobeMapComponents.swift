@@ -12,6 +12,32 @@ enum MapPalette {
     static let cyan = Color(red: 0, green: 1, blue: 1)                          // #00FFFF active segment
     static let routeWhite = Color.white
 
+    // MARK: On-map chrome (A1/A3)
+    //
+    // The globe and trek map stay visually immersive in BOTH appearances — bright satellite
+    // imagery with light glass overlays is exactly what Apple Maps and the Photos viewer do,
+    // not a light-mode bug to fix. So the map's own chrome (top bar, journey strip, day
+    // navigator) reads its text/hairlines from here, fixed-light, instead of from `Theme`'s
+    // adaptive `textPrimary`/`textSecondary`/`hairline` — those would go near-black in Light
+    // Mode and disappear into the imagery they're drawn over.
+    //
+    // Increase Contrast still applies (unlike the light/dark swap, which deliberately does
+    // not): these use the same dynamic-`UIColor` trick as `Theme` so the map's overlays answer
+    // that setting too, exactly as A1 requires.
+    static let label = Color.white
+    static let labelSecondary = Color(uiColor: UIColor { traits in
+        traits.accessibilityContrast == .high ? .white : UIColor.white.withAlphaComponent(0.7)
+    })
+    static let hairline = Color(uiColor: UIColor { traits in
+        traits.accessibilityContrast == .high
+            ? UIColor.white.withAlphaComponent(0.6)
+            : UIColor.white.withAlphaComponent(0.18)
+    })
+    /// Opaque fallback for map-overlay glass under Reduce Transparency — stays night-sky dark
+    /// in every appearance (matching the map itself) rather than following `Theme.surface`,
+    /// which would go pale in Light Mode and stop reading as "glass over a dark map".
+    static let overlaySurface = Color(.sRGB, red: 26 / 255, green: 28 / 255, blue: 52 / 255, opacity: 0.96)
+
     // Amber camp family (spec §2d).
     static let campFillDefault = Color(.sRGB, red: 254 / 255, green: 249 / 255, blue: 235 / 255, opacity: 0.95)
     static let campFillSelected = Color(.sRGB, red: 254 / 255, green: 243 / 255, blue: 199 / 255, opacity: 1)
@@ -23,6 +49,16 @@ enum MapPalette {
 
     // Photo thumbnail marker (spec §2e — cool blue-white).
     static let photoStroke = Color(.sRGB, red: 96 / 255, green: 165 / 255, blue: 250 / 255, opacity: 0.9)
+}
+
+extension View {
+    /// The map's own answer to Reduce Transparency: `.ultraThinMaterial` normally, an opaque
+    /// `MapPalette.overlaySurface` fill when the setting is on. A parallel to `Theme`'s
+    /// `themedMaterial` with a fixed dark fallback instead of an appearance-adaptive one — see
+    /// the note on `MapPalette`'s on-map chrome colours for why.
+    func mapOverlayMaterial<S: Shape>(_ shape: S) -> some View {
+        themedMaterial(shape, opaqueFill: MapPalette.overlaySurface)
+    }
 }
 
 // MARK: - Photo marker hook
@@ -185,11 +221,14 @@ struct PhotoMarker: View {
     // placeholder icon/thumbnail isn't left cramped in an undersized frame.
     @ScaledMetric(relativeTo: .caption) private var markerSize: CGFloat = 30
     @ScaledMetric(relativeTo: .caption) private var thumbnailSize: CGFloat = 24
+    // This card fills a shape directly (`.fill`, not `.background(_, in:)`), so it can't ride
+    // `mapOverlayMaterial` — same Reduce Transparency swap, applied by hand.
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
 
     var body: some View {
         ZStack {
             RoundedRectangle(cornerRadius: 6, style: .continuous)
-                .fill(.ultraThinMaterial)
+                .fill(reduceTransparency ? AnyShapeStyle(MapPalette.overlaySurface) : AnyShapeStyle(.ultraThinMaterial))
                 .frame(width: markerSize, height: markerSize)
                 .overlay(
                     RoundedRectangle(cornerRadius: 6, style: .continuous)

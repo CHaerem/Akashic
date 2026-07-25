@@ -42,11 +42,10 @@ struct FunFactCardView: View {
         }
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            LinearGradient(colors: [Color.white.opacity(0.06), Color.white.opacity(0.02)],
-                           startPoint: .topLeading, endPoint: .bottomTrailing),
-            in: RoundedRectangle(cornerRadius: 16, style: .continuous)
-        )
+        // Was a two-stop white-opacity gradient tuned for the fixed dark background this card
+        // used to sit on; `Theme.fillSubtle` reads correctly in both appearances, and a flat
+        // fill reads just as "barely raised" as the gradient did at these opacities.
+        .background(Theme.fillSubtle, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
                 .strokeBorder(Theme.hairline, lineWidth: 1)

@@ -118,7 +118,7 @@ struct EnrichJourneySheet: View {
                 .font(.callout).foregroundStyle(Theme.textSecondary)
             Button { showPaywall = true } label: {
                 Text("Unlock Akashic Complete")
-                    .font(.subheadline.weight(.semibold)).foregroundStyle(Theme.background)
+                    .font(.subheadline.weight(.semibold)).foregroundStyle(Theme.onAccent)
                     .frame(maxWidth: .infinity).padding(.vertical, 14)
                     .background(Theme.accent, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
             }
