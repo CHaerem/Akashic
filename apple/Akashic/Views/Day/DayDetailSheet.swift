@@ -31,6 +31,10 @@ struct DayDetailSheet: View {
         journey.camps.indices.contains(dayIndex) ? journey.camps[dayIndex] : nil
     }
 
+    /// True when this journey lives in our own database — gates the notes field's write
+    /// affordance (S3), same rule `JourneyDetailView.isOwner` already applies to editing.
+    private var isOwner: Bool { store.isOwnedByCurrentUser(journeyID: journey.id) }
+
     var body: some View {
         ScrollViewReader { proxy in
         ScrollView {
@@ -38,41 +42,19 @@ struct DayDetailSheet: View {
                 VStack(alignment: .leading, spacing: 20) {
                     header(camp)
                     editBar(camp)
-                    dayStats(camp)
 
-                    if !camp.notes.isEmpty {
-                        Text(camp.notes)
-                            .font(.subheadline)
-                            .foregroundStyle(Theme.textSecondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-
-                    if !camp.highlights.isEmpty {
-                        highlights(camp.highlights)
-                    }
-
-                    if let weather = camp.weather {
-                        WeatherRow(weather: weather)
-                    }
-
-                    if let facts = camp.funFacts, !facts.isEmpty {
-                        FunFactsCarousel(facts: facts)
-                    }
-
-                    DayDiscoveriesView(
-                        pointsOfInterest: camp.pointsOfInterest ?? [],
-                        historicalSites: camp.historicalSites ?? []
-                    )
-
-                    DayPhotoStrip(
+                    DayChapterSections(
+                        camp: camp,
                         photos: dayPhotos,
-                        onTap: { index in
+                        isOwner: isOwner,
+                        onNotesSave: { saveNotes($0, camp: camp) },
+                        onPhotoTap: { index in
                             lightbox = LightboxData(
                                 photos: dayPhotos, startIndex: index,
                                 dayLabel: "Day \(camp.dayNumber)", dateLabel: dateLabel(camp)
                             )
                         },
-                        onAdd: { showImport = true },
+                        onAddPhoto: { showImport = true },
                         onEditPhoto: { editingPhoto = $0 }
                     )
 
@@ -198,38 +180,6 @@ struct DayDetailSheet: View {
         .disabled(!enabled)
     }
 
-    // MARK: - Day stats
-
-    private func dayStats(_ camp: Camp) -> some View {
-        HStack(spacing: 10) {
-            StatChip(icon: "figure.walk", value: Formatters.distanceKm(camp.dayDistance), caption: "Distance")
-            StatChip(icon: "arrow.up.forward", value: Formatters.meters(camp.elevationGainFromPrevious), caption: "Ascent")
-            if camp.elevationLossFromPrevious > 0 {
-                StatChip(icon: "arrow.down.forward", value: Formatters.meters(camp.elevationLossFromPrevious), caption: "Descent")
-            }
-            StatChip(icon: "mountain.2", value: Formatters.meters(camp.elevation), caption: "Elevation")
-        }
-    }
-
-    // MARK: - Highlights
-
-    private func highlights(_ items: [String]) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            SectionLabel(icon: "✨", title: "Highlights")
-            VStack(alignment: .leading, spacing: 6) {
-                ForEach(items, id: \.self) { item in
-                    HStack(alignment: .top, spacing: 8) {
-                        Circle().fill(Theme.accent).frame(width: 5, height: 5).padding(.top, 6)
-                        Text(item)
-                            .font(.footnote)
-                            .foregroundStyle(Theme.textSecondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                }
-            }
-        }
-    }
-
     // MARK: - Helpers
 
     private func loadPhotos() {
@@ -237,27 +187,16 @@ struct DayDetailSheet: View {
         dayPhotos = store.photos(forDay: camp.dayNumber, journeyID: journey.id)
     }
 
-    private func dateLabel(_ camp: Camp) -> String? {
-        guard let start = DateOnly.date(from: journey.dateStarted) else { return nil }
-        guard let date = Calendar.dayCalendar.date(byAdding: .day, value: camp.dayNumber - 1, to: start)
-        else { return nil }
-        return DayDetailSheet.dayFormatter.string(from: date)
+    /// S3's write path: the same `JourneyStore.updateWaypoint` call `WaypointEditSheet` uses,
+    /// touching only `description` (the notes) so an inline save never clobbers a field the user
+    /// isn't looking at.
+    private func saveNotes(_ text: String, camp: Camp) {
+        store.updateWaypoint(id: camp.id, name: camp.name, description: text,
+                             highlights: camp.highlights, elevation: camp.elevation,
+                             dayNumber: camp.dayNumber)
     }
 
-    private static let dayFormatter: DateFormatter = {
-        let f = DateFormatter()
-        f.locale = Locale(identifier: "en_US_POSIX")
-        f.timeZone = TimeZone(identifier: "UTC")
-        f.dateFormat = "MMM d, yyyy"
-        return f
-    }()
-}
-
-private extension Calendar {
-    /// UTC calendar so per-day date arithmetic matches the `DateOnly` (UTC) day boundaries.
-    static let dayCalendar: Calendar = {
-        var c = Calendar(identifier: .gregorian)
-        c.timeZone = TimeZone(identifier: "UTC")!
-        return c
-    }()
+    private func dateLabel(_ camp: Camp) -> String? {
+        Formatters.dayDate(dateStarted: journey.dateStarted, dayNumber: camp.dayNumber)
+    }
 }

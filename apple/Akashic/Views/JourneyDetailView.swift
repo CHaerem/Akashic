@@ -23,6 +23,13 @@ struct JourneyDetailView: View {
     /// Showcase sheet instead of the confirm dialog.
     @State private var showDeleteConfirm = false
     @State private var showDeleteBlockedAlert = false
+    /// S1's story view — pushed via `navigationDestination` rather than a `NavigationLink` so the
+    /// same state can also drive the shared-in auto-open below.
+    @State private var showStory = false
+    /// Guards the auto-open below to a single push per presentation — `.onAppear` fires again on
+    /// returning from the story (this view becomes visible again), and without the guard that
+    /// would push right back into it, trapping a shared-in viewer in a forward-only loop.
+    @State private var hasAutoOpenedStory = false
 
     /// True when this journey lives in our own database (a shared-in journey is not ours to
     /// restructure or enrich). Fixtures / local-mode journeys are ours by definition.
@@ -47,6 +54,11 @@ struct JourneyDetailView: View {
                     // of rendering the content screens over an empty journey.
                     nextSteps
                 } else {
+                    // S1's clear entry point into the finished thing — placed above the map,
+                    // not tucked into the overflow menu, because reading the story is meant to
+                    // be the obvious next thing to do with a journey that has content.
+                    readJourneyLink
+
                     RouteMapView(journey: journey, interactive: false)
                         .frame(height: 220)
                         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
@@ -155,6 +167,19 @@ struct JourneyDetailView: View {
                              journeyTitle: live.name,
                              service: PersistenceController.shared.sharingService)
         }
+        .navigationDestination(isPresented: $showStory) {
+            JourneyStoryView(journey: live).environmentObject(store)
+        }
+        .onAppear {
+            // S1: "it should be what a shared-in viewer naturally lands on." A participant has no
+            // reason to want the map-and-stats screen first — the story is the point of opening a
+            // shared journey at all. Gated on `isEmptyShell` because an owner-only journey with
+            // nothing in it yet has no story to auto-open, and `hasAutoOpenedStory` because this
+            // fires again when returning from the pushed story (the view re-appears).
+            guard !isOwner, !live.isEmptyShell, !hasAutoOpenedStory else { return }
+            hasAutoOpenedStory = true
+            showStory = true
+        }
         .confirmationDialog("Delete this journey?",
                             isPresented: $showDeleteConfirm, titleVisibility: .visible) {
             Button("Delete journey", role: .destructive) { deleteJourney() }
@@ -220,6 +245,27 @@ struct JourneyDetailView: View {
                           showImport = true
                       },
             ] : [])
+    }
+
+    /// S1's clear entry point into `JourneyStoryView` — solid-fill rather than `photosLink`'s
+    /// outline treatment, so it reads as the primary way to experience a finished journey rather
+    /// than one link among several.
+    private var readJourneyLink: some View {
+        Button { showStory = true } label: {
+            HStack(spacing: 10) {
+                Image(systemName: "book.pages")
+                    .font(.subheadline)
+                Text("Read this journey")
+                    .font(.subheadline.weight(.semibold))
+                Spacer()
+                Image(systemName: "arrow.right")
+                    .font(.footnote.weight(.semibold))
+            }
+            .foregroundStyle(Theme.background)
+            .padding(14)
+            .background(Theme.accent, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        }
+        .buttonStyle(.plain)
     }
 
     private var photosLink: some View {

@@ -45,15 +45,32 @@ struct NewJourneySheet: View {
     @State private var phase: Phase = .chooser
 
     @State private var draft = JourneyDraft()
+
+    // C4: dates row. `hasStart`/`startDate`/`hasEnd`/`endDate` back the EXPANDED editor only
+    // (seeded from `draft.dateStarted`/`dateEnded` when the user taps Edit — see
+    // `beginEditingDates()`); the collapsed row reads `draft.dateStarted`/`dateEnded` directly, since
+    // those may have arrived by auto-derivation and never gone through the editor at all.
+    @State private var isEditingDates = false
     @State private var hasStart = false
     @State private var startDate = Date()
     @State private var hasEnd = false
     @State private var endDate = Date()
+    /// True the moment the user commits an edit in the expanded date pickers. Mirrors the
+    /// route/country "structural but reversible" rule: dates are derived and re-derived automatically
+    /// as more photos/GPX data arrive, right up until the user's own edit — which always wins, forever.
+    @State private var datesTouched = false
+    /// Caption under the collapsed dates row ("from your photos" / "from your GPX file") — nil once
+    /// nothing was derived, or once the user has taken over via `datesTouched`.
+    @State private var datesProvenance: String?
 
     // Route import (review screen's own re-import / replace).
     @State private var showingImporter = false
     @State private var routeSummary: RouteSummary?
     @State private var importError: String?
+    /// C3: whether the route currently on the draft is the one applied automatically from photo
+    /// inference (vs. GPX/hand-drawn) — drives which of the two route displays `routeSection` shows.
+    /// Cleared the moment a GPX import or a drawn route replaces it.
+    @State private var routeAppliedFromPhotos = false
 
     // Draw-on-map. The drawing is stashed and applied on the sheet's dismissal, so the
     // suggestion pass never runs while a sheet is still on screen.
@@ -108,6 +125,10 @@ struct NewJourneySheet: View {
     @StateObject private var suggestions = JourneySuggestionCoordinator.live(factsEnabled: false)
     /// Geotagged photo observations from the last pick — the basis for route inference.
     @State private var photoFixes: [PhotoFix] = []
+    /// C3: true once a suggested country has actually been written into `draft.country` — drives the
+    /// "suggested" caption under the field. Cleared the instant the user edits the field themselves
+    /// (via `countryBinding` below), regardless of what they type.
+    @State private var countrySuggested = false
 
     /// "Suggest names" appears only with the on-device model available, Akashic Complete, and at
     /// least one seeded day — otherwise the feature is simply absent.
@@ -144,8 +165,17 @@ struct NewJourneySheet: View {
         let applied = Self.applying(file, toDays: draft.days)
         draft.route = applied.route
         draft.days = applied.days
+        // C4: the file's own waypoint/metadata times are as good a date signal as a GPX picked from
+        // the review screen's own importer — no reason this entry point should land without them.
+        var provenance: String?
+        if let range = JourneyDraft.dateRange(fromGPX: file) {
+            draft.dateStarted = range.start
+            draft.dateEnded = range.end
+            provenance = "from your GPX file"
+        }
         _draft = State(initialValue: draft)
         _routeSummary = State(initialValue: applied.summary)
+        _datesProvenance = State(initialValue: provenance)
         _phase = State(initialValue: .review(origin: .openedFile))
         _needsInitialSuggestionsRun = State(initialValue: true)
     }
@@ -233,6 +263,8 @@ struct NewJourneySheet: View {
 
     // MARK: Name
 
+    /// C4: the Description section that used to sit here is gone from creation — it's the classic
+    /// field that stalls completion, and `JourneyEditSheet` already edits description after the fact.
     private var nameSection: some View {
         VStack(alignment: .leading, spacing: 16) {
             GlassField(label: "Name", systemImage: "flag") {
@@ -251,32 +283,109 @@ struct NewJourneySheet: View {
                         }
                     }
             }
-            GlassField(label: "Description", systemImage: "text.alignleft") {
-                GlassTextEditor(text: $draft.description, minHeight: 90)
+            // C3: a one-tap name suggestion once we know the country and the trip's first dated day
+            // — "Use \"Tanzania, September 2023\"". `JourneyDraft.nameSuggestion` itself guards on the
+            // name being empty, so this chip is simply absent (never fires) once the user has typed
+            // anything, without this call site needing to duplicate that check.
+            if let suggestion = nameSuggestion {
+                Button {
+                    draft.name = suggestion
+                } label: {
+                    Label("Use \"\(suggestion)\"", systemImage: "sparkles")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(Theme.accent)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(12)
+                        .background(Theme.accentSoft, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                }
+                .buttonStyle(.plain)
             }
         }
+    }
+
+    private var nameSuggestion: String? {
+        JourneyDraft.nameSuggestion(currentName: draft.name, country: draft.country,
+                                    firstDayDateLabel: draft.days.first?.dateLabel)
     }
 
     // MARK: Country
 
     private var countrySection: some View {
         GlassField(label: "Country", systemImage: "globe") {
-            GlassTextField(placeholder: "Country", text: $draft.country)
+            VStack(alignment: .leading, spacing: 4) {
+                GlassTextField(placeholder: "Country", text: countryBinding)
+                // C3: country is structural (from the route/photo centroid) and applied directly —
+                // this caption is the "visibly" half of "applied by default, visibly, reversibly".
+                // Reversal is just editing the field, which is why there's no separate Remove here
+                // (unlike the route, which has no in-place editable representation).
+                if countrySuggested {
+                    Text("Suggested from your route")
+                        .font(.caption2).foregroundStyle(Theme.textTertiary)
+                }
+            }
         }
     }
 
-    // MARK: Dates
+    /// Intercepts every WRITE the text field makes (but not our own `draft.country = ...` assignments,
+    /// which bypass this binding entirely) so a real keystroke — even one that leaves the field
+    /// looking unchanged — retires the "suggested" caption immediately.
+    private var countryBinding: Binding<String> {
+        Binding(
+            get: { draft.country },
+            set: { newValue in
+                draft.country = newValue
+                countrySuggested = false
+            })
+    }
+
+    // MARK: Dates (C4 — one derived row + an Edit affordance, replacing the two toggle+picker rows)
 
     private var datesSection: some View {
         GlassField(label: "Dates", systemImage: "calendar.badge.clock") {
-            VStack(spacing: 10) {
-                dateRow(label: "Start", isOn: $hasStart, date: $startDate)
-                dateRow(label: "End", isOn: $hasEnd, date: $endDate)
+            VStack(alignment: .leading, spacing: 10) {
+                if isEditingDates {
+                    VStack(spacing: 10) {
+                        dateRow(label: "Start", isOn: $hasStart, date: $startDate)
+                        dateRow(label: "End", isOn: $hasEnd, date: $endDate)
+                    }
+                    .padding(12)
+                    .background(Theme.surface, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Theme.hairline, lineWidth: 1))
+                    Button("Done") { isEditingDates = false }
+                        .font(.caption.weight(.semibold)).foregroundStyle(Theme.accent)
+                } else {
+                    HStack(alignment: .top) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(datesSummary)
+                                .font(.subheadline.weight(.semibold)).foregroundStyle(Theme.textPrimary)
+                            if let datesProvenance {
+                                Text(datesProvenance).font(.caption2).foregroundStyle(Theme.textTertiary)
+                            }
+                        }
+                        Spacer()
+                        Button("Edit", action: beginEditingDates)
+                            .font(.caption.weight(.semibold)).foregroundStyle(Theme.accent)
+                    }
+                }
             }
-            .padding(12)
-            .background(Theme.surface, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Theme.hairline, lineWidth: 1))
         }
+    }
+
+    /// "29 Sep – 9 Oct 2023", a single date, or "Add dates" when neither end is set — same wording
+    /// `Formatters.dateRange` already uses elsewhere for a journey's dates.
+    private var datesSummary: String {
+        Formatters.dateRange(DateOnly.string(from: draft.dateStarted), DateOnly.string(from: draft.dateEnded))
+            ?? "Add dates"
+    }
+
+    /// Seed the expanded editor from whatever the draft currently holds — including a derived range
+    /// the user never touched — so "Edit" refines a starting point instead of opening blank.
+    private func beginEditingDates() {
+        hasStart = draft.dateStarted != nil
+        startDate = draft.dateStarted ?? Date()
+        hasEnd = draft.dateEnded != nil
+        endDate = draft.dateEnded ?? Date()
+        isEditingDates = true
     }
 
     private func dateRow(label: String, isOn: Binding<Bool>, date: Binding<Date>) -> some View {
@@ -293,11 +402,17 @@ struct NewJourneySheet: View {
                     .environment(\.timeZone, TimeZone(identifier: "UTC")!)
             }
         }
-        .onChange(of: isOn.wrappedValue) { _, _ in syncDates() }
-        .onChange(of: date.wrappedValue) { _, _ in syncDates() }
+        .onChange(of: isOn.wrappedValue) { _, _ in userEditedDates() }
+        .onChange(of: date.wrappedValue) { _, _ in userEditedDates() }
     }
 
-    private func syncDates() {
+    /// The ONLY path that writes `draft.dateStarted`/`dateEnded` from the expanded editor — and the
+    /// one that permanently stops auto-derivation from overwriting them (`datesTouched`), same
+    /// discipline as `countryBinding`. The provenance caption goes with it: once the user is the
+    /// author, "from your photos" is no longer true.
+    private func userEditedDates() {
+        datesTouched = true
+        datesProvenance = nil
         draft.dateStarted = hasStart ? startDate : nil
         draft.dateEnded = hasEnd ? endDate : nil
     }
@@ -308,7 +423,7 @@ struct NewJourneySheet: View {
         GlassField(label: "Route", systemImage: "point.topleft.down.to.point.bottomright.curvepath") {
             VStack(alignment: .leading, spacing: 10) {
                 routeButton(icon: "arrow.down.doc",
-                            title: routeSummary == nil ? "Import route (GPX)" : "Replace route") {
+                            title: draft.hasRoute ? "Replace route" : "Import route (GPX)") {
                     importError = nil
                     showingImporter = true
                 }
@@ -318,7 +433,20 @@ struct NewJourneySheet: View {
                     showingDrawing = true
                 }
 
-                if let summary = routeSummary {
+                // C3: a route drafted from the user's OWN photo locations is applied directly — no
+                // Accept row — so what shows here is the honest confidence line `RouteConfidence`
+                // was built to state, plus a way to undo it. Route has no in-place editable
+                // representation in this form the way country does, hence the explicit Remove.
+                if routeAppliedFromPhotos, let confidence = suggestions.routeResult?.confidence {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(confidence.summary).font(.caption).foregroundStyle(Theme.textSecondary)
+                        Button("Remove", role: .destructive, action: removeRouteFromPhotos)
+                            .font(.caption.weight(.semibold))
+                    }
+                    .padding(12)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Theme.surface, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                } else if let summary = routeSummary {
                     HStack(spacing: 14) {
                         summaryStat("\(summary.pointCount)", "points")
                         summaryStat(Formatters.distanceKm(summary.distanceKm), "distance")
@@ -443,6 +571,21 @@ struct NewJourneySheet: View {
         draft.route = applied.route
         routeSummary = applied.summary
         draft.days = applied.days
+        // The route's provenance is GPX now, not photo inference — even if a prior photo-drafted
+        // route is what's being replaced.
+        routeAppliedFromPhotos = false
+        applyDatesFromGPXIfUntouched(file)
+    }
+
+    /// C4: the file's own waypoint/metadata times, while the user hasn't taken over the dates row
+    /// (`datesTouched`) — independent of whether `applyImportedGPX` actually reseeded the day list
+    /// above, since a file's dates are honest information about the trip even when the user's own
+    /// day list is kept as-is.
+    private func applyDatesFromGPXIfUntouched(_ file: GPXFile) {
+        guard !datesTouched, let range = JourneyDraft.dateRange(fromGPX: file) else { return }
+        draft.dateStarted = range.start
+        draft.dateEnded = range.end
+        datesProvenance = "from your GPX file"
     }
 
     // MARK: Draw on map
@@ -470,9 +613,19 @@ struct NewJourneySheet: View {
             drawnNote: drawn.bridgedGaps > 0
                 ? "\(drawn.summary). \(RouteDrawing.elevationNote)"
                 : RouteDrawing.elevationNote)
+        // A hand-drawn route carries no dates or capture times — only its provenance changes here.
+        routeAppliedFromPhotos = false
         // A route now exists — offer country / camp names / weather / POIs / facts, exactly as an
         // imported GPX does.
         Task { await runSuggestions() }
+    }
+
+    /// C3: "Remove" on the route drafted from photos. There's no in-place editable representation of
+    /// a route the way there is for country, so this button is the reversible half of "applied by
+    /// default, visibly, reversibly".
+    private func removeRouteFromPhotos() {
+        suggestions.removeRouteFromPhotos(from: &draft)
+        routeAppliedFromPhotos = false
     }
 
     // MARK: Photos (stage via PhotoIngestService, cluster from the SAME ingested photos)
@@ -622,10 +775,24 @@ struct NewJourneySheet: View {
             for index in stagedPhotos.indices {
                 stagedPhotos[index].waypointId = assignments[stagedPhotos[index].id]
             }
+            // C4: the trip's own capture dates, from the SAME clusters that just seeded the days —
+            // before `runSuggestions()`, so a fresh `dateStarted` is already there to feed the
+            // weather providers it's about to kick off.
+            applyDatesFromPhotosIfUntouched()
         } else {
             photoDayCount = 0
         }
         await runSuggestions()
+    }
+
+    /// C4: fill dates from the day list just clustered from photos, while the user hasn't touched
+    /// the dates row (`datesTouched`) — runs on every re-seed, so picking MORE photos can extend an
+    /// already-derived range, right up until the user edits it (permanent, via `userEditedDates`).
+    private func applyDatesFromPhotosIfUntouched() {
+        guard !datesTouched, let range = JourneyDraft.dateRange(fromDays: draft.days) else { return }
+        draft.dateStarted = range.start
+        draft.dateEnded = range.end
+        datesProvenance = "from your photos"
     }
 
     // MARK: Suggestions orchestration
@@ -637,6 +804,24 @@ struct NewJourneySheet: View {
         suggestions.factsEnabled = intelligence.isAvailable && entitlements.isComplete
         let fixes = draft.hasRoute ? [] : photoFixes
         await suggestions.run(fixes: fixes, draft: draft)
+        applyStructuralSuggestions()
+    }
+
+    /// C3: the suggestions that are STRUCTURAL facts about the user's OWN data — applied here,
+    /// directly, every time the providers run, rather than waiting for a tap on an Accept row (that
+    /// row still exists, and is still how ENRICHMENT — weather/POIs/facts/camp names — works, in
+    /// `suggestionsSection` below). Route and country each guard themselves against re-applying
+    /// (route via `routeFromPhotosState`'s pending/dismissed idempotence; country via `model`'s own
+    /// accept-once idempotence plus its empty-field check), so calling this after every run is safe.
+    private func applyStructuralSuggestions() {
+        if suggestions.applyRouteFromPhotos(into: &draft) {
+            routeAppliedFromPhotos = true
+        }
+        if suggestions.model.isPending(.country) {
+            let before = draft.country
+            accept(.country)
+            if draft.country != before { countrySuggested = true }
+        }
     }
 
     private func accept(_ key: SuggestionKey) {
@@ -674,7 +859,12 @@ struct NewJourneySheet: View {
     /// it never shows an empty shell.
     @ViewBuilder
     private var suggestionsSection: some View {
-        let pending = suggestions.model.pending
+        // C3: `.country` is excluded here even though it still lives in the shared `model` (unlike
+        // route) — `applyStructuralSuggestions()` auto-accepts it the instant `run()` finishes, but
+        // for the brief window while OTHER providers are still resolving it could otherwise flash
+        // into view as a pending Accept row. Filtering defends against that without changing what
+        // `model` itself records.
+        let pending = suggestions.model.pending.filter { $0 != .country }
         if !pending.isEmpty || suggestions.isRunning {
             GlassField(label: "Suggestions", systemImage: "wand.and.stars") {
                 VStack(alignment: .leading, spacing: 10) {
@@ -885,7 +1075,8 @@ struct NewJourneySheet: View {
         }
         isSaving = true
         saveError = nil
-        syncDates()
+        // No `syncDates()` here (C4 removed it): `draft.dateStarted`/`dateEnded` are already live —
+        // either derived automatically or kept current by `userEditedDates()` on every picker change.
         guard let created = store.createJourney(from: draft) else {
             isSaving = false
             saveError = "Could not save the journey. Please try again."

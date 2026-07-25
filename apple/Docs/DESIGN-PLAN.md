@@ -103,11 +103,11 @@ One structural gap goes on the §8 risk register rather than into v1.0: **there 
 ### Revised sequencing
 
 ```
-C2 (shipped) → C3–C7 → S1 + S2 + S3 → external beta (rewritten gate)
+C2, C3, C4 (shipped) → C5–C7 → S1 + S2 + S3 → external beta (rewritten gate)
                      ↘ D1, D3 (shipped) → D2, D4, D5, D6, D9 → submission
 ```
 
-S1 is parallelisable with C3–C6 (it touches no creation code). If the date compresses, the existing cut rule still applies first (C5 to a static snapshot, drop C6's GPX-no-waypoints copy); **S1 should not be the casualty — D9 slips back to v1.1 before S1 does.**
+S1 is parallelisable with C5–C6 (it touches no creation code). If the date compresses, the existing cut rule still applies first (C5 to a static snapshot, drop C6's GPX-no-waypoints copy); **S1 should not be the casualty — D9 slips back to v1.1 before S1 does.**
 
 **The biggest risk of this repositioning** is that it re-opens product scope three weeks from submission. The book frame seduces toward covers, page layout, print partners, people tagging and AI interviews — all v1.1+. The discipline that keeps it safe: v1.0's delta is exactly S1, S2, S3 and a gate rewrite.
 

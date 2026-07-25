@@ -89,8 +89,18 @@ struct SuggestionModel: Equatable {
 @MainActor
 final class JourneySuggestionCoordinator: ObservableObject {
 
-    /// The pure state machine the UI renders from.
+    /// The pure state machine the UI renders from — ENRICHMENT suggestions only (camp names,
+    /// weather, POIs, facts, and the "just a name"/GPX country case handled below): each stays a
+    /// visible Accept/dismiss row, per the policy in `apple/Docs/DESIGN-PLAN.md`'s C-series intro.
     @Published private(set) var model = SuggestionModel()
+    /// C3: route-from-photos is a STRUCTURAL fact (derived from the user's OWN photo locations), so
+    /// it is applied to the draft directly rather than offered as a row in `model` — but "Remove"
+    /// still needs somewhere to pin "never come back", and `SuggestionModel` already has exactly
+    /// that idempotence (register once; dismiss is a one-way pending→dismissed transition; a later
+    /// `register` on an already-dismissed key is a no-op). A SEPARATE instance, not a case inside
+    /// `model`, so the enrichment panel's "Accept all" can never sweep this hidden key up as a side
+    /// effect of accepting the other rows.
+    @Published private(set) var routeFromPhotosState = SuggestionModel()
     /// True while providers are in flight (drives the header spinner).
     @Published private(set) var isRunning = false
 
@@ -133,11 +143,13 @@ final class JourneySuggestionCoordinator: ObservableObject {
         defer { isRunning = false }
 
         // 1. Route from photos — only when there is no route yet and we have photo locations.
+        // Registered into `routeFromPhotosState`, NOT `model` (see the property's doc comment):
+        // C3 applies this directly rather than waiting for an Accept tap.
         if !draft.hasRoute, !fixes.isEmpty {
             let result = RouteInference.infer(from: fixes)
             if !result.isEmpty {
                 routeResult = result
-                model.register(.routeFromPhotos)
+                routeFromPhotosState.register(.routeFromPhotos)
             }
         }
 
@@ -226,6 +238,33 @@ final class JourneySuggestionCoordinator: ObservableObject {
         }
     }
 
+    // MARK: C3 — route from photos (applied directly, not an Accept row)
+
+    /// Apply the drafted route directly to `draft.route` — no Accept tap required, since a route
+    /// inferred from the user's OWN photo locations is a structural fact, not enrichment (the C-series
+    /// policy in `apple/Docs/DESIGN-PLAN.md`). Safe to call after every `run()`: a no-op once nothing
+    /// is pending (either it was already applied — `routeFromPhotosState` only ever REGISTERS once —
+    /// or it was removed, which is exactly what must stay a no-op forever), and guarded against
+    /// clobbering a route that arrived some other way since (GPX import, hand-drawn) by only writing
+    /// when the draft doesn't already have one. Returns whether it actually applied, so the caller can
+    /// show the confidence line only once there is something to show.
+    @discardableResult
+    func applyRouteFromPhotos(into draft: inout JourneyDraft) -> Bool {
+        guard draft.route == nil || draft.route!.coordinates.isEmpty else { return false }
+        guard routeFromPhotosState.isPending(.routeFromPhotos), let result = routeResult else { return false }
+        draft.route = result.route
+        return true
+    }
+
+    /// "Remove": clear the applied route and pin the removal via `SuggestionModel`'s dismiss
+    /// idempotence (dismiss only ever transitions pending → dismissed; a later `register` for an
+    /// already-dismissed key is a no-op) — so a later suggestion re-run, e.g. after picking more
+    /// photos, can never bring it back.
+    func removeRouteFromPhotos(from draft: inout JourneyDraft) {
+        draft.route = nil
+        routeFromPhotosState.dismiss(.routeFromPhotos)
+    }
+
     // MARK: Accept / dismiss
 
     /// Accept a suggestion: mutate the draft with its payload, then mark it accepted (idempotent).
@@ -251,6 +290,8 @@ final class JourneySuggestionCoordinator: ObservableObject {
     private func apply(_ key: SuggestionKey, into draft: inout JourneyDraft) {
         switch key {
         case .routeFromPhotos:
+            // Unreachable via `model` since C3 (`routeFromPhotosState` above is where this key
+            // actually lives now) — kept only so this switch stays exhaustive over `SuggestionKey`.
             if let route = routeResult?.route { draft.route = route }
         case .country:
             if let countryName, draft.country.trimmingCharacters(in: .whitespaces).isEmpty {
