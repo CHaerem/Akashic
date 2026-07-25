@@ -71,6 +71,9 @@ struct NewJourneySheet: View {
     /// inference (vs. GPX/hand-drawn) — drives which of the two route displays `routeSection` shows.
     /// Cleared the moment a GPX import or a drawn route replaces it.
     @State private var routeAppliedFromPhotos = false
+    /// C6: the user tapped "Skip" on `DraftMapCard`'s photos-lacked-GPS nudge — stays quiet for the
+    /// rest of this sheet's lifetime rather than repeating the same nudge on every scroll back up.
+    @State private var routeNudgeDismissed = false
 
     // Draw-on-map. The drawing is stashed and applied on the sheet's dismissal, so the
     // suggestion pass never runs while a sheet is still on screen.
@@ -145,6 +148,22 @@ struct NewJourneySheet: View {
         /// carries no elevation, and may contain straight legs between detached strokes). Carrying
         /// the sentence rather than a flag means the caller that knows the provenance writes it once.
         var drawnNote: String?
+
+        /// C5: `DraftMapCard`'s single provenance line for a GPX/drawn route. A drawn route's own
+        /// `drawnNote` already carries `RouteDrawing.DrawnRoute.summary` plus
+        /// `RouteDrawing.elevationNote` (built once, where the provenance is known — see
+        /// `applyDrawnRoute` — rather than re-derived here); otherwise this is the GPX
+        /// points/distance/waypoints/dropped stats, in the same house style as
+        /// `RouteConfidence.summary` and `RouteDrawing.DrawnRoute.summary`.
+        var provenanceLine: String {
+            if let drawnNote { return drawnNote }
+            var s = "\(pointCount) point\(pointCount == 1 ? "" : "s") · \(Formatters.distanceKm(distanceKm))"
+                  + " · \(waypointCount) waypoint\(waypointCount == 1 ? "" : "s")"
+            if droppedCount > 0 {
+                s += " · \(droppedCount) skipped"
+            }
+            return s
+        }
     }
 
     // MARK: Init
@@ -417,97 +436,66 @@ struct NewJourneySheet: View {
         draft.dateEnded = hasEnd ? endDate : nil
     }
 
-    // MARK: Route (GPX import / draw on map)
+    // MARK: Route (C5 — map preview card; GPX import / draw on map live in its Route options menu)
 
+    /// C5/C6: `DraftMapCard` is the entire "Route" field now — the map, the honest provenance line
+    /// (whichever source produced the route), the Route options menu, and (when nothing has been
+    /// drafted yet) either the quiet placeholder or C6's photos-lacked-GPS nudge. `importError`
+    /// stays outside the card because it can arrive from EITHER the menu's "Replace with GPX" or
+    /// the nudge's "Import GPX" — one place to show a typed `GPXParseError`, not two.
     private var routeSection: some View {
-        GlassField(label: "Route", systemImage: "point.topleft.down.to.point.bottomright.curvepath") {
-            VStack(alignment: .leading, spacing: 10) {
-                routeButton(icon: "arrow.down.doc",
-                            title: draft.hasRoute ? "Replace route" : "Import route (GPX)") {
+        VStack(alignment: .leading, spacing: 10) {
+            DraftMapCard(
+                route: draft.route,
+                days: draft.days,
+                provenance: routeProvenanceText,
+                photosLackedGPS: photosLackedGPSForRoute,
+                nudgeDismissed: routeNudgeDismissed,
+                onImportGPX: {
                     importError = nil
                     showingImporter = true
-                }
-                routeButton(icon: "scribble",
-                            title: draft.hasRoute ? "Redraw route on map" : "Draw route on map") {
+                },
+                onDrawOnMap: {
                     importError = nil
                     showingDrawing = true
-                }
-
-                // C3: a route drafted from the user's OWN photo locations is applied directly — no
-                // Accept row — so what shows here is the honest confidence line `RouteConfidence`
-                // was built to state, plus a way to undo it. Route has no in-place editable
-                // representation in this form the way country does, hence the explicit Remove.
-                if routeAppliedFromPhotos, let confidence = suggestions.routeResult?.confidence {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text(confidence.summary).font(.caption).foregroundStyle(Theme.textSecondary)
-                        Button("Remove", role: .destructive, action: removeRouteFromPhotos)
-                            .font(.caption.weight(.semibold))
-                    }
-                    .padding(12)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Theme.surface, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                } else if let summary = routeSummary {
-                    HStack(spacing: 14) {
-                        summaryStat("\(summary.pointCount)", "points")
-                        summaryStat(Formatters.distanceKm(summary.distanceKm), "distance")
-                        summaryStat("\(summary.waypointCount)", "waypoints")
-                    }
-                    if summary.droppedCount > 0 {
-                        Text("\(summary.droppedCount) out-of-range point(s) skipped")
-                            .font(.caption2).foregroundStyle(Theme.textTertiary)
-                    }
-                    if let drawnNote = summary.drawnNote {
-                        Text(drawnNote)
-                            .font(.caption2).foregroundStyle(Theme.textTertiary)
-                    }
-                }
-                if let importError {
-                    Text(importError).font(.footnote).foregroundStyle(Theme.warning)
-                }
-                Text("GPX from Strava, Garmin, AllTrails or komoot — or draw it yourself. No route is fine too.")
-                    .font(.caption2).foregroundStyle(Theme.textTertiary)
-            }
-            // The drawing sheet is applied on DISMISSAL (`onDismiss: applyDrawnRoute`), never from
-            // inside its own Done: the suggestion pass it kicks off must not start while a sheet is
-            // still on screen.
-            .sheet(isPresented: $showingDrawing, onDismiss: applyDrawnRoute) {
-                RouteDrawingSheet(title: draft.hasRoute ? "Redraw route" : "Draw route",
-                                  referenceRoute: draft.route,
-                                  fallbackRegion: drawingRegion) { drawn in
-                    drawnRoute = drawn
-                }
-            }
-        }
-    }
-
-    private func routeButton(icon: String, title: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            HStack(spacing: 10) {
-                Image(systemName: icon).font(.title3).foregroundStyle(Theme.accent)
-                Text(title)
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(Theme.textPrimary)
-                Spacer()
-            }
-            .padding(14)
-            .frame(maxWidth: .infinity)
-            .background(Theme.surface, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .strokeBorder(Theme.accent.opacity(0.4), style: StrokeStyle(lineWidth: 1, dash: [5, 4]))
+                },
+                onRemoveRoute: removeRoute,
+                onSkipRouteNudge: { routeNudgeDismissed = true }
             )
+            if let importError {
+                Text(importError).font(.footnote).foregroundStyle(Theme.warning)
+            }
         }
-        .buttonStyle(.plain)
+        // The drawing sheet is applied on DISMISSAL (`onDismiss: applyDrawnRoute`), never from
+        // inside its own Done: the suggestion pass it kicks off must not start while a sheet is
+        // still on screen.
+        .sheet(isPresented: $showingDrawing, onDismiss: applyDrawnRoute) {
+            RouteDrawingSheet(title: draft.hasRoute ? "Redraw route" : "Draw route",
+                              referenceRoute: draft.route,
+                              fallbackRegion: drawingRegion) { drawn in
+                drawnRoute = drawn
+            }
+        }
     }
 
-    private func summaryStat(_ value: String, _ caption: String) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(value).font(.subheadline.weight(.semibold)).foregroundStyle(Theme.textPrimary)
-            Text(caption).font(.caption2).foregroundStyle(Theme.textTertiary)
+    /// C5: the map card's single provenance line — the photo-inference confidence line takes
+    /// priority (it is the one provenance the card cannot derive from `routeSummary` alone, since
+    /// C3 applies it without ever populating a GPX/drawn `RouteSummary`); otherwise whatever
+    /// `routeSummary` itself carries (GPX stats, or a drawn route's own note).
+    private var routeProvenanceText: String? {
+        if routeAppliedFromPhotos, let confidence = suggestions.routeResult?.confidence {
+            return confidence.summary
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.vertical, 8).padding(.horizontal, 12)
-        .background(Theme.accentSoft, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        return routeSummary?.provenanceLine
+    }
+
+    /// C6: photos were picked and days were proposed from their capture dates, but not one of them
+    /// carried a usable GPS fix — distinct from a route that arrived and was then explicitly
+    /// removed, and from a photo pick that seeded no days at all (that's `photosHadNoReadableDates`
+    /// below, a different failure with different copy). Turns off the moment any route lands
+    /// (GPX/drawn), which is exactly the "fully creatable, never a dead end" contract.
+    private var photosLackedGPSForRoute: Bool {
+        !draft.hasRoute && !stagedPhotos.isEmpty && photoDayCount > 0 && photoFixes.isEmpty
     }
 
     private var gpxContentTypes: [UTType] {
@@ -626,6 +614,19 @@ struct NewJourneySheet: View {
     private func removeRouteFromPhotos() {
         suggestions.removeRouteFromPhotos(from: &draft)
         routeAppliedFromPhotos = false
+    }
+
+    /// C5: `DraftMapCard`'s "Remove route" menu item — reachable regardless of provenance. A
+    /// photo-inferred route has its own idempotent removal (so a later suggestion re-run, e.g. after
+    /// picking more photos, can never bring it back); a GPX/drawn route has no such state to retire,
+    /// so clearing the draft and its summary directly is enough.
+    private func removeRoute() {
+        if routeAppliedFromPhotos {
+            removeRouteFromPhotos()
+        } else {
+            draft.route = nil
+            routeSummary = nil
+        }
     }
 
     // MARK: Photos (stage via PhotoIngestService, cluster from the SAME ingested photos)
@@ -921,11 +922,42 @@ struct NewJourneySheet: View {
 
     // MARK: Days
 
+    /// C6: the empty-days caption is context-specific where the reason is knowable, rather than one
+    /// generic sentence for every "no days" cause.
+    private var daysEmptyMessage: String {
+        if gpxHadNoWaypoints {
+            return "This file had no waypoints, so no days were proposed — add days, or pick photos "
+                 + "to propose them."
+        }
+        if photosHadNoReadableDates {
+            return "We couldn't read dates from these photos. They'll be added to the journey; you "
+                 + "can build days later."
+        }
+        return "No days yet — import a GPX with waypoints, seed from photos, or add days below."
+    }
+
+    /// C6: a GPX file contributed a track (so `draft.hasRoute`) but no waypoints — the specific
+    /// reason no days were proposed from it, as opposed to a drawn route (which never carries
+    /// waypoints and isn't this failure) or a photo-inferred one (`routeAppliedFromPhotos`, excluded
+    /// so this can't misfire while that route's own days — or lack of them — are the real story).
+    private var gpxHadNoWaypoints: Bool {
+        draft.hasRoute && draft.days.isEmpty && !routeAppliedFromPhotos
+            && routeSummary?.drawnNote == nil && routeSummary?.waypointCount == 0
+    }
+
+    /// C6: photos were staged but none carried a readable capture date, so `seedDaysFromPhotos`
+    /// clustered zero days — as opposed to a day list the user had already built, which that same
+    /// pass deliberately leaves alone (see `seedDaysFromPhotos`'s doc comment). Distinguishable
+    /// because THAT case never leaves `draft.days` empty in the first place.
+    private var photosHadNoReadableDates: Bool {
+        !stagedPhotos.isEmpty && draft.days.isEmpty && photoDayCount == 0
+    }
+
     private var daysSection: some View {
         GlassField(label: "Days (\(draft.days.count))", systemImage: "list.bullet.rectangle") {
             VStack(alignment: .leading, spacing: 10) {
                 if draft.days.isEmpty {
-                    Text("No days yet — import a GPX with waypoints, seed from photos, or add days below.")
+                    Text(daysEmptyMessage)
                         .font(.caption).foregroundStyle(Theme.textTertiary)
                 }
                 if showsSuggestNames {
