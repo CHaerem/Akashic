@@ -116,6 +116,44 @@ extension View {
     }
 }
 
+// MARK: - iPad reading width (D2)
+
+/// Caps a screen's content to a comfortable reading width and centres it on iPad's regular
+/// width class — a no-op in `.compact` (phone), where the screen is already narrower than the
+/// cap, so the phone layout is unaffected by construction, not just by convention.
+///
+/// A 13" iPad is ~1000+ pt wide in portrait; letting a `Form` or a `ScrollView` of body text
+/// stretch edge-to-edge across that is the single loudest "this is a stretched phone" signal in
+/// the app, per D2's brief. Five screens share this one modifier (Stats, Settings, Paywall,
+/// Onboarding, the journey story) instead of five hand-rolled `HStack { Spacer(); ...; Spacer() }`
+/// blocks that would drift out of sync with each other over time.
+private struct RegularWidthReadingPane: ViewModifier {
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    let maxWidth: CGFloat
+
+    func body(content: Content) -> some View {
+        if horizontalSizeClass == .regular {
+            HStack(spacing: 0) {
+                Spacer(minLength: 0)
+                content.frame(maxWidth: maxWidth)
+                Spacer(minLength: 0)
+            }
+        } else {
+            content
+        }
+    }
+}
+
+extension View {
+    /// See `RegularWidthReadingPane`. Apply to the screen's top-level content container (the
+    /// `Form`, or the `VStack`/`ScrollView` content) — not to its background, so an immersive
+    /// full-bleed background (a hero image, `Theme.background.ignoresSafeArea()`) stays edge to
+    /// edge while the readable content centres over it.
+    func constrainedReadingWidth(_ maxWidth: CGFloat = 640) -> some View {
+        modifier(RegularWidthReadingPane(maxWidth: maxWidth))
+    }
+}
+
 /// A rounded "surface" card container.
 struct Card<Content: View>: View {
     var padding: CGFloat = 16
@@ -138,8 +176,14 @@ struct Card<Content: View>: View {
 ///
 /// Four chips side by side on a 402 pt phone leaves ~45 pt for the number, and `Formatters.meters`
 /// on a real summit is "5,895 m" — so Kilimanjaro's Summit chip rendered as "5,89…" even with
-/// `minimumScaleFactor`. Two columns on a compact width give every number its full width; a regular
-/// width (iPad, landscape) still gets the single row it has room for.
+/// `minimumScaleFactor`.
+///
+/// The rule is **available width, not size class**. An earlier version keyed off
+/// `horizontalSizeClass == .compact`, which is the same mistake in a different costume: the iPad's
+/// day panel is a 400 pt column inside a *regular* width environment, so the row went back to one
+/// line and truncated "3,963 m" to "3,9…" — the exact bug this type exists to prevent, now on the
+/// device with the most room. `ViewThatFits` asks the only question that matters: does the single
+/// row actually fit here?
 struct StatChipRow: View {
     struct Item: Identifiable {
         var icon: String
@@ -148,25 +192,28 @@ struct StatChipRow: View {
         var id: String { caption }
     }
 
-    @Environment(\.horizontalSizeClass) private var sizeClass
     let items: [Item]
     var spacing: CGFloat = 10
 
-    /// Three or fewer chips already fit a phone row; only the four-chip case needs wrapping.
-    private var wraps: Bool { sizeClass == .compact && items.count > 3 }
-
     var body: some View {
-        if wraps {
-            LazyVGrid(columns: [GridItem(spacing: spacing), GridItem(spacing: spacing)], spacing: spacing) {
-                ForEach(items) { chip in
-                    StatChip(icon: chip.icon, value: chip.value, caption: chip.caption)
-                }
+        ViewThatFits(in: .horizontal) {
+            singleRow
+            twoColumns
+        }
+    }
+
+    private var singleRow: some View {
+        HStack(spacing: spacing) {
+            ForEach(items) { chip in
+                StatChip(icon: chip.icon, value: chip.value, caption: chip.caption)
             }
-        } else {
-            HStack(spacing: spacing) {
-                ForEach(items) { chip in
-                    StatChip(icon: chip.icon, value: chip.value, caption: chip.caption)
-                }
+        }
+    }
+
+    private var twoColumns: some View {
+        LazyVGrid(columns: [GridItem(spacing: spacing), GridItem(spacing: spacing)], spacing: spacing) {
+            ForEach(items) { chip in
+                StatChip(icon: chip.icon, value: chip.value, caption: chip.caption)
             }
         }
     }
@@ -195,7 +242,13 @@ struct StatChip: View {
         }
         .padding(.vertical, 8)
         .padding(.horizontal, 12)
-        .frame(maxWidth: .infinity, alignment: .leading)
+        // `minWidth` is what makes `StatChipRow`'s `ViewThatFits` work at all: with only
+        // `maxWidth: .infinity` the single row is infinitely compressible, so it always "fits" and
+        // the wrapping branch is never chosen — it just squeezes until the number truncates. The
+        // minimum is the width a real value needs ("5,895 m" at `.subheadline`, plus the icon and
+        // this padding), so "does one row fit?" becomes a question about the number rather than
+        // about the container.
+        .frame(minWidth: 96, maxWidth: .infinity, alignment: .leading)
         .background(Theme.accentSoft, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 }

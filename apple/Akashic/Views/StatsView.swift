@@ -343,6 +343,9 @@ struct StatsTabView: View {
                 }
             }
             .padding(16)
+            // D2: full-width stat grids and a full-width elevation chart across a 13" iPad read
+            // as a stretched phone screen; cap and centre instead.
+            .constrainedReadingWidth()
         }
         .background(Theme.background.ignoresSafeArea())
         .navigationTitle("Stats")

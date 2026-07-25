@@ -61,6 +61,10 @@ struct JourneyStoryView: View {
             }
             .padding(16)
             .padding(.bottom, 40)
+            // D2: this is the "finished thing" a family hands to a grandparent (S1) and the
+            // screenshot that sells the book-alternative thesis — a chapter's photo-plus-prose
+            // stretched across 13" of iPad is the opposite of a book page, so cap it like one.
+            .constrainedReadingWidth()
         }
         .background(Theme.background.ignoresSafeArea())
         .navigationTitle(live.shortName)

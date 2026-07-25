@@ -55,6 +55,10 @@ struct SettingsView: View {
             }
         }
         .scrollContentBackground(.hidden)
+        // D2: a `Form` has no natural width cap of its own and otherwise runs the full width of
+        // a 13" iPad — the developer sections in particular (dense key/value rows) read as
+        // stretched-phone at that width more than any other screen in the app.
+        .constrainedReadingWidth()
         .background(Theme.background.ignoresSafeArea())
         .navigationTitle("Settings")
         .onAppear {

@@ -17,6 +17,16 @@ struct GlobeExperienceView: View {
     /// read the environment itself) at launch and on every change, since the user can flip
     /// Reduce Motion while the app is running.
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// D2: `presentationDetents` and `presentationBackgroundInteraction` — the two modifiers
+    /// that make the day sheet sit at `.medium` over a still-interactive map — do not exist on
+    /// iPad. Left alone, the exact same modifiers on `.regular` width still compile and still
+    /// run, but silently become a form sheet that *occludes* the map, breaking the app's
+    /// signature loop precisely where the product is most itself. Reading the size class here
+    /// lets `.regular` route to a floating panel instead (`regularDayPanel`) while `.compact`
+    /// (iPhone, and iPad Slide Over/narrow Split View) keeps the sheet byte-for-byte unchanged.
+    /// This can change live: iPad multitasking (Split View resize, Slide Over) changes size
+    /// class without relaunching the app, so this is read as a `@Environment`, not cached once.
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
     /// Optional photo thumbnail markers. Defaults to empty so trek mode renders without
     /// photos; the Import / photo agent can map their photos into `[MapPhoto]` and pass
@@ -78,7 +88,9 @@ struct GlobeExperienceView: View {
 
             map
                 .ignoresSafeArea()
-                .sheet(isPresented: daySheetPresented) {
+                // D2: only presents as an actual sheet in compact width — see
+                // `compactDaySheetPresented` and `regularDayPanel` below.
+                .sheet(isPresented: compactDaySheetPresented) {
                     daySheet
                 }
 
@@ -86,6 +98,13 @@ struct GlobeExperienceView: View {
                 .fullScreenCover(item: $overviewLightbox) { data in
                     PhotoLightboxView(data: data)
                 }
+
+            // D2: the regular-width counterpart to the `.sheet` above — same content
+            // (`daySheet`), different container, so the map stays visible and interactive
+            // beside it instead of being covered. See `regularDayPanel`.
+            if isRegularWidth {
+                regularDayPanel
+            }
         }
         // This screen is the immersive globe/trek map, not a page of chrome — it stays a fixed
         // night-sky dark in both appearances (see `MapPalette.nightSky` and the note on
@@ -173,6 +192,21 @@ struct GlobeExperienceView: View {
         )
     }
 
+    private var isRegularWidth: Bool { horizontalSizeClass == .regular }
+
+    /// Gates the ACTUAL `.sheet` presentation to compact width, reusing `daySheetPresented`'s own
+    /// get/set rather than duplicating its logic. On `.regular` this always reports "not
+    /// presented" so the system never mounts the sheet — `regularDayPanel` shows the same content
+    /// (`daySheet`) as a floating panel instead. Doing this as a binding wrapper, instead of an
+    /// `if isRegularWidth { }` around the `.sheet` modifier, keeps the modifier itself — and so the
+    /// compact-width behaviour — textually identical to before this task.
+    private var compactDaySheetPresented: Binding<Bool> {
+        Binding(
+            get: { daySheetPresented.wrappedValue && !isRegularWidth },
+            set: { daySheetPresented.wrappedValue = $0 }
+        )
+    }
+
     @ViewBuilder
     private var daySheet: some View {
         if let journey = controller.selectedJourney, let dayIndex = controller.selectedDayIndex {
@@ -200,6 +234,68 @@ struct GlobeExperienceView: View {
             .fullScreenCover(item: $dayLightbox) { data in
                 PhotoLightboxView(data: data, journey: journey).environmentObject(store)
             }
+        }
+    }
+
+    /// D2's iPad counterpart to `daySheet`: same content (`daySheet` itself, not a fork of it —
+    /// `DayChapterSections` was extracted precisely so both hosts render identical section
+    /// stacks), a different container. ~380–420 pt (D2's own brief), `Theme.surface` fill, and the
+    /// corner-radius/hairline pairing the app's other floating surface cards use
+    /// (`JourneyStoryView`'s cover/chapter cards, `PaywallView`'s benefits card) — 20 pt
+    /// continuous, `Theme.hairline` stroke — so this reads as the same design language, not a
+    /// one-off. `DayDetailSheet`'s own `.background(Theme.background)` paints over most of the
+    /// interior (it's a full ScrollView), which is fine: `background` and `surface` are adjacent
+    /// system-fill tiers, and the outer `surface` still shows through at the rounded corners the
+    /// inner flat-cornered fill doesn't reach.
+    ///
+    /// A sheet gets swipe-to-dismiss for free; a plain floating panel does not, so this adds an
+    /// explicit close control wired to the same `controller.showOverview()` the phone sheet's
+    /// dismissal calls — without it, `.regular` width would have no way back to the journey
+    /// overview once a day is selected.
+    private let regularDayPanelWidth: CGFloat = 400
+
+    @ViewBuilder
+    private var regularDayPanel: some View {
+        if daySheetPresented.wrappedValue {
+            HStack(spacing: 0) {
+                ZStack(alignment: .topTrailing) {
+                    daySheet
+
+                    Button {
+                        controller.showOverview()
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.title3)
+                            .foregroundStyle(Theme.textSecondary)
+                            .frame(minWidth: 44, minHeight: 44)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Close day")
+                    .padding(4)
+                }
+                .frame(width: regularDayPanelWidth)
+                .background(Theme.surface, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 20, style: .continuous)
+                        .strokeBorder(Theme.hairline, lineWidth: 1)
+                )
+                .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+                // Clears the topBar (Journeys button / journey title) above rather than sitting
+                // under it — `overlays` isn't `.ignoresSafeArea()`, so it already starts below the
+                // notch/Dynamic Island; this only needs to additionally clear the bar's own height.
+                .padding(.top, 64)
+                .padding(.leading, 16)
+                .padding(.bottom, 16)
+                // Reduce Motion (A1): a slide-in is exactly the kind of self-initiated motion the
+                // setting exists to remove — the panel still appears/disappears, just as a
+                // cross-fade instead of a directional move, mirroring the globe fly-in's own
+                // reduced-motion fallback in `TrekCameraController`.
+                .transition(reduceMotion ? .opacity : .move(edge: .leading).combined(with: .opacity))
+
+                Spacer(minLength: 0)
+            }
+            .animation(reduceMotion ? nil : .easeOut(duration: 0.25), value: controller.selectedDayIndex)
         }
     }
 

@@ -69,6 +69,10 @@ struct PaywallView: View {
                     legalRow
                 }
                 .padding(20)
+                // D2: the benefit card and purchase button otherwise stretch full-width in the
+                // iPad form sheet this presents in — this is a purchase surface, so an inflated,
+                // unfamiliar layout is exactly the wrong place to look "off".
+                .constrainedReadingWidth()
             }
             .scrollContentBackground(.hidden)
             .background(Theme.background.ignoresSafeArea())
