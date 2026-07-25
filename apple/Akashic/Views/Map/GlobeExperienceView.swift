@@ -20,7 +20,6 @@ struct GlobeExperienceView: View {
     var photos: [MapPhoto] = []
 
     @StateObject private var controller = TrekCameraController()
-    @State private var showingJourneyList = false
     @State private var didApplyLaunch = false
 
     // Photos for the selected journey (loaded from the store) + the day each resolves to,
@@ -34,17 +33,38 @@ struct GlobeExperienceView: View {
     @State private var dayLightbox: LightboxData?
     @State private var sheetDetent: PresentationDetent = .medium
     @State private var showingPhotoGrid = false
-    /// The globe's route into a journey's own screen — the only place an empty journey can be filled.
-    @State private var showingJourneyDetail = false
-    @State private var showingNewJourney = false
-    @State private var showingPaywall = false
+
+    /// Everything this screen can present as a sheet, in ONE piece of state.
+    ///
+    /// Defensive, not a bug fix — all four destinations did work as separate
+    /// `.sheet(isPresented:)` modifiers. But a view can only present one thing at a time, and four
+    /// stacked presentation modifiers on one view is a documented way to lose one silently; this
+    /// screen had grown to four and was the most likely place in the app to hit it. One
+    /// `.sheet(item:)` over an enum cannot regress that way, and a fifth destination stays safe.
+    private enum GlobeSheet: Identifiable {
+        case journeyList
+        case journeyDetail(String)   // journey id — the only route into an empty journey
+        case newJourney
+        case paywall
+
+        var id: String {
+            switch self {
+            case .journeyList: return "list"
+            case let .journeyDetail(id): return "detail-\(id)"
+            case .newJourney: return "new"
+            case .paywall: return "paywall"
+            }
+        }
+    }
+
+    @State private var sheet: GlobeSheet?
 
     /// Start a create attempt: below the free limit → open creation; at the limit → paywall.
     private func startCreate() {
         if entitlements.canCreateJourney(ownedCount: store.billableOwnedJourneyCount) {
-            showingNewJourney = true
+            sheet = .newJourney
         } else {
-            showingPaywall = true
+            sheet = .paywall
         }
     }
 
@@ -87,11 +107,6 @@ struct GlobeExperienceView: View {
                 store.pendingJourneySelection = nil
             }
         }
-        .sheet(isPresented: $showingJourneyList) {
-            NavigationStack { JourneyListView() }
-                .environmentObject(store)
-                .preferredColorScheme(.dark)
-        }
         .fullScreenCover(isPresented: $showingPhotoGrid) {
             if let journey = controller.selectedJourney {
                 NavigationStack { PhotosGridView(journeyID: journey.id) }
@@ -99,22 +114,27 @@ struct GlobeExperienceView: View {
                     .preferredColorScheme(.dark)
             }
         }
-        .sheet(isPresented: $showingJourneyDetail) {
-            if let journey = controller.selectedJourney {
-                NavigationStack { JourneyDetailView(journey: journey) }
+        .sheet(item: $sheet) { destination in
+            switch destination {
+            case .journeyList:
+                NavigationStack { JourneyListView() }
+                    .environmentObject(store)
+                    .preferredColorScheme(.dark)
+            case let .journeyDetail(id):
+                if let journey = store.journey(withID: id) {
+                    NavigationStack { JourneyDetailView(journey: journey) }
+                        .environmentObject(store)
+                        .environmentObject(entitlements)
+                        .preferredColorScheme(.dark)
+                }
+            case .newJourney:
+                NewJourneySheet()
                     .environmentObject(store)
                     .environmentObject(entitlements)
-                    .preferredColorScheme(.dark)
+            case .paywall:
+                PaywallView(reason: .journeyLimit)
+                    .environmentObject(entitlements)
             }
-        }
-        .sheet(isPresented: $showingNewJourney) {
-            NewJourneySheet()
-                .environmentObject(store)
-                .environmentObject(entitlements)
-        }
-        .sheet(isPresented: $showingPaywall) {
-            PaywallView(reason: .journeyLimit)
-                .environmentObject(entitlements)
         }
     }
 
@@ -184,7 +204,9 @@ struct GlobeExperienceView: View {
         ForEach(store.journeys) { journey in
             if let coord = journey.pinCoordinate {
                 Annotation(journey.shortName, coordinate: coord, anchor: .center) {
-                    JourneyPin()
+                    // Named after the journey (D1) — VoiceOver used to hear "Journey pin" for
+                    // every pin on the globe, indistinguishable once there's more than one.
+                    JourneyPin(name: journey.shortName)
                         .onTapGesture { controller.selectJourney(journey) }
                 }
                 .annotationTitles(.hidden)
@@ -361,7 +383,7 @@ struct GlobeExperienceView: View {
                     // Flying into a journey with no route and no days lands on empty ocean — the
                     // camera has nothing to frame. Say so, and offer the one screen that can fix it.
                     JourneyNothingToShowPill(journeyName: journey.shortName) {
-                        showingJourneyDetail = true
+                        sheet = .journeyDetail(journey.id)
                     }
                 } else {
                     // In overview: the day navigator picks a starting day. Once a day is
@@ -371,32 +393,39 @@ struct GlobeExperienceView: View {
             }
         }
         .padding(.top, 8)
+        // The map itself is the point of this screen; past xxLarge the chrome would keep
+        // growing until it drowns it. Cap it here rather than in the map/day-sheet content.
+        .dynamicTypeSize(...DynamicTypeSize.xxLarge)
     }
 
     private var topBar: some View {
         HStack {
+            // 17/15 pt map to `.body`/`.subheadline` — the closest semantic styles, keeping
+            // `.rounded` for the wordmark since that's a brand choice, not a size one.
             if controller.isGlobe {
                 Text("Akashic")
-                    .font(.system(size: 17, weight: .bold, design: .rounded))
+                    .font(.system(.body, design: .rounded).weight(.bold))
                     .foregroundStyle(Theme.textPrimary)
                     .shadow(color: .black.opacity(0.5), radius: 4)
             } else {
                 Text(controller.selectedJourney?.shortName ?? "")
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(.subheadline.weight(.semibold))
                     .foregroundStyle(Theme.textPrimary)
                     .shadow(color: .black.opacity(0.5), radius: 4)
             }
             Spacer()
             Button {
-                showingJourneyList = true
+                sheet = .journeyList
             } label: {
                 Label("Journeys", systemImage: "list.bullet")
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.footnote.weight(.semibold))
                     .padding(.horizontal, 14)
                     .padding(.vertical, 8)
                     .foregroundStyle(Theme.textPrimary)
                     .background(.ultraThinMaterial, in: Capsule())
                     .overlay(Capsule().strokeBorder(Theme.hairline, lineWidth: 1))
+                    .frame(minWidth: 44, minHeight: 44)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
         }
@@ -410,7 +439,7 @@ struct GlobeExperienceView: View {
     private var globeEmptyState: some View {
         VStack(spacing: 12) {
             Text("Your journeys will live here")
-                .font(.system(size: 15, weight: .semibold))
+                .font(.subheadline.weight(.semibold))
                 .foregroundStyle(Theme.textPrimary)
                 .shadow(color: .black.opacity(0.5), radius: 4)
             Button {
@@ -422,6 +451,8 @@ struct GlobeExperienceView: View {
                     .padding(.vertical, 14)
                     .padding(.horizontal, 22)
                     .background(Theme.accent, in: Capsule())
+                    .frame(minHeight: 44)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
         }
@@ -453,17 +484,21 @@ struct GlobeExperienceView: View {
 private struct JourneyGlobeCard: View {
     let journey: Journey
 
+    // The flag glyph was a fixed 26 pt icon, not body text; scale it like one so it stays
+    // in proportion with the title next to it instead of going stale at larger sizes.
+    @ScaledMetric(relativeTo: .title2) private var flagSize: CGFloat = 26
+
     var body: some View {
         HStack(spacing: 10) {
             Text(journey.countryFlag)
-                .font(.system(size: 26))
+                .font(.system(size: flagSize))
             VStack(alignment: .leading, spacing: 2) {
                 Text(journey.shortName)
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(.subheadline.weight(.semibold))
                     .foregroundStyle(Theme.textPrimary)
                     .lineLimit(1)
                 Text("\(journey.country) · \(journey.stats.duration) days")
-                    .font(.system(size: 11))
+                    .font(.caption2)
                     .foregroundStyle(Theme.textSecondary)
                     .lineLimit(1)
             }
@@ -476,6 +511,8 @@ private struct JourneyGlobeCard: View {
             RoundedRectangle(cornerRadius: 16, style: .continuous)
                 .strokeBorder(Theme.hairline, lineWidth: 1)
         )
+        .frame(minHeight: 44)
+        .contentShape(Rectangle())
     }
 }
 

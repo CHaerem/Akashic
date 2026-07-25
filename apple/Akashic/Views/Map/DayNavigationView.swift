@@ -19,6 +19,12 @@ struct DayNavigationView: View {
     /// Swipe threshold (points) to advance a day — mirrors the web's 50 px threshold.
     private let swipeThreshold: CGFloat = 50
 
+    /// The chevrons were sized to fit a fixed 15 pt glyph; now that the glyph scales with
+    /// Dynamic Type (`.subheadline`), the box around it needs to scale too or the glyph
+    /// outgrows its layout slot and misaligns with the header text next to it. The tap
+    /// target itself is handled separately below (44 pt minimum, invisible padding).
+    @ScaledMetric(relativeTo: .subheadline) private var chevronBoxSize: CGFloat = 32
+
     private var selectedIndex: Int? { controller.selectedDayIndex }
     private var camps: [Camp] { journey.camps }
     private var selectedCamp: Camp? { selectedIndex.flatMap { camps.indices.contains($0) ? camps[$0] : nil } }
@@ -38,35 +44,38 @@ struct DayNavigationView: View {
     private var header: some View {
         HStack(spacing: 10) {
             if selectedIndex != nil {
-                chevron("chevron.left", enabled: (selectedIndex ?? 0) > 0) {
+                chevron("chevron.left", label: "Previous day", enabled: (selectedIndex ?? 0) > 0) {
                     controller.selectPrevDay()
                 }
             }
 
+            // 13/11 pt map to `.footnote`/`.caption2` — the closest semantic styles to the
+            // original fixed sizes, keeping the same primary/secondary hierarchy.
             VStack(spacing: 1) {
                 if let camp = selectedCamp {
                     Text("Day \(camp.dayNumber)")
-                        .font(.system(size: 13, weight: .bold))
+                        .font(.footnote.weight(.bold))
                         .foregroundStyle(Theme.textPrimary)
                     Text(camp.name)
-                        .font(.system(size: 11))
+                        .font(.caption2)
                         .foregroundStyle(Theme.textSecondary)
                         .lineLimit(1)
                 } else {
                     // "0 days" is what a journey with a route but no days used to announce.
                     Text(camps.isEmpty ? "No days yet" : "\(camps.count) days")
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(.caption2.weight(.semibold))
                         .foregroundStyle(MapPalette.cyan)
                     Text(journey.shortName)
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(.footnote.weight(.semibold))
                         .foregroundStyle(Theme.textPrimary)
                         .lineLimit(1)
                 }
             }
+            .accessibilityElement(children: .combine)
             .frame(maxWidth: .infinity)
 
             if selectedIndex != nil {
-                chevron("chevron.right", enabled: (selectedIndex ?? 0) < camps.count - 1) {
+                chevron("chevron.right", label: "Next day", enabled: (selectedIndex ?? 0) < camps.count - 1) {
                     controller.selectNextDay()
                 }
             }
@@ -116,14 +125,16 @@ struct DayNavigationView: View {
 
     private func dayPill(index: Int, camp: Camp) -> some View {
         let selected = selectedIndex == index
+        // `.caption`/`.caption2` keeps the selected pill's "bigger + brighter" documented
+        // emphasis; the camp short-name was 9 pt (below the `.caption2` floor) either way.
         return Button {
             controller.selectDay(index)
         } label: {
             VStack(spacing: 1) {
                 Text("Day \(camp.dayNumber)")
-                    .font(.system(size: selected ? 12 : 11, weight: .bold))
+                    .font(selected ? .caption.weight(.bold) : .caption2.weight(.bold))
                 Text(camp.name.split(separator: " ").first.map(String.init) ?? camp.name)
-                    .font(.system(size: 9))
+                    .font(.caption2)
                     .lineLimit(1)
             }
             .padding(.horizontal, 10)
@@ -137,8 +148,15 @@ struct DayNavigationView: View {
                         .overlay(Capsule().strokeBorder(Theme.hairline, lineWidth: 1))
                 }
             }
+            // The capsule stays its drawn size; this only widens the tappable box (~29 pt
+            // tall today) to the 44 pt HIG minimum, centred around the same visual pill.
+            .frame(minWidth: 44, minHeight: 44)
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Day \(camp.dayNumber), \(camp.name)")
+        .accessibilityAddTraits(selected ? .isSelected : [])
     }
 
     // MARK: - Control row
@@ -157,7 +175,7 @@ struct DayNavigationView: View {
     private func controlButton(_ title: String, system: String, active: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Label(title, systemImage: system)
-                .font(.system(size: 13, weight: .semibold))
+                .font(.footnote.weight(.semibold))
                 .padding(.horizontal, 16)
                 .padding(.vertical, 9)
                 .foregroundStyle(active ? .black : Theme.textPrimary)
@@ -169,20 +187,26 @@ struct DayNavigationView: View {
                             .overlay(Capsule().strokeBorder(Theme.hairline, lineWidth: 1))
                     }
                 }
+                .frame(minWidth: 44, minHeight: 44)
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .accessibilityAddTraits(active ? .isSelected : [])
     }
 
     // MARK: - Bits
 
-    private func chevron(_ system: String, enabled: Bool, action: @escaping () -> Void) -> some View {
+    private func chevron(_ system: String, label: String, enabled: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: system)
-                .font(.system(size: 15, weight: .semibold))
+                .font(.subheadline.weight(.semibold))
                 .foregroundStyle(enabled ? Theme.textPrimary : Theme.textTertiary)
-                .frame(width: 32, height: 32)
+                .frame(width: chevronBoxSize, height: chevronBoxSize)
+                .frame(minWidth: 44, minHeight: 44)
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .disabled(!enabled)
+        .accessibilityLabel(label)
     }
 }

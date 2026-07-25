@@ -107,6 +107,11 @@ struct SeededRNG: RandomNumberGenerator {
 
 /// White glassy dot + glow used for each journey on the globe.
 struct JourneyPin: View {
+    /// Announced name — VoiceOver used to hear "Journey pin" for every pin on the globe,
+    /// indistinguishable with more than one journey. Defaults for callers that don't (yet)
+    /// thread a name through.
+    var name: String = "Journey"
+
     var body: some View {
         ZStack {
             Circle()
@@ -119,7 +124,11 @@ struct JourneyPin: View {
                 .overlay(Circle().stroke(Color.white.opacity(0.35), lineWidth: 1))
                 .shadow(color: .white.opacity(0.8), radius: 6)
         }
-        .accessibilityLabel("Journey pin")
+        // The drawn dot is 24 pt; this only widens the tappable box to the 44 pt minimum.
+        .frame(minWidth: 44, minHeight: 44)
+        .contentShape(Rectangle())
+        .accessibilityLabel(name)
+        .accessibilityAddTraits(.isButton)
     }
 }
 
@@ -130,24 +139,38 @@ struct CampBadge: View {
     let day: Int
     let selected: Bool
 
+    // The circles were sized to fit fixed 10/13 pt digits; scale them with the text so a
+    // two-digit day number (day 10+) doesn't outgrow its badge at larger text sizes.
+    @ScaledMetric(relativeTo: .caption2) private var glowDiameter: CGFloat = 26
+    @ScaledMetric(relativeTo: .caption2) private var glowDiameterSelected: CGFloat = 34
+    @ScaledMetric(relativeTo: .caption2) private var fillDiameter: CGFloat = 20
+    @ScaledMetric(relativeTo: .caption2) private var fillDiameterSelected: CGFloat = 26
+
     var body: some View {
         ZStack {
             Circle()
                 .fill(MapPalette.campGlow.opacity(selected ? 0.8 : 0.45))
-                .frame(width: selected ? 34 : 26, height: selected ? 34 : 26)
+                .frame(width: selected ? glowDiameterSelected : glowDiameter,
+                       height: selected ? glowDiameterSelected : glowDiameter)
                 .blur(radius: 4)
             Circle()
                 .fill(selected ? MapPalette.campFillSelected : MapPalette.campFillDefault)
-                .frame(width: selected ? 26 : 20, height: selected ? 26 : 20)
+                .frame(width: selected ? fillDiameterSelected : fillDiameter,
+                       height: selected ? fillDiameterSelected : fillDiameter)
                 .overlay(
                     Circle().stroke(selected ? MapPalette.campStrokeSelected : MapPalette.campStrokeDefault,
                                     lineWidth: selected ? 2 : 1.5)
                 )
+            // 13/10 pt map to `.caption`/`.caption2` — `.caption` keeps the selected badge's
+            // documented "bigger and brighter" emphasis without dropping below the floor.
             Text("\(day)")
-                .font(.system(size: selected ? 13 : 10, weight: .bold, design: .rounded))
+                .font(.system(selected ? .caption : .caption2, design: .rounded).weight(.bold))
                 .foregroundStyle(selected ? MapPalette.campTextSelected : MapPalette.campTextDefault)
         }
+        .frame(minWidth: 44, minHeight: 44)
+        .contentShape(Rectangle())
         .accessibilityLabel("Day \(day) camp")
+        .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
     }
 }
 
@@ -158,11 +181,16 @@ struct CampBadge: View {
 struct PhotoMarker: View {
     let photo: MapPhoto
 
+    // The card was sized to fit a fixed 12 pt glyph; scale it with `.caption` so the
+    // placeholder icon/thumbnail isn't left cramped in an undersized frame.
+    @ScaledMetric(relativeTo: .caption) private var markerSize: CGFloat = 30
+    @ScaledMetric(relativeTo: .caption) private var thumbnailSize: CGFloat = 24
+
     var body: some View {
         ZStack {
             RoundedRectangle(cornerRadius: 6, style: .continuous)
                 .fill(.ultraThinMaterial)
-                .frame(width: 30, height: 30)
+                .frame(width: markerSize, height: markerSize)
                 .overlay(
                     RoundedRectangle(cornerRadius: 6, style: .continuous)
                         .strokeBorder(MapPalette.photoStroke, lineWidth: 1.5)
@@ -173,16 +201,19 @@ struct PhotoMarker: View {
                 AsyncImage(url: url) { image in
                     image.resizable().scaledToFill()
                 } placeholder: {
-                    Image(systemName: "photo").font(.system(size: 12)).foregroundStyle(.white.opacity(0.7))
+                    Image(systemName: "photo").font(.caption).foregroundStyle(.white.opacity(0.7))
                 }
-                .frame(width: 24, height: 24)
+                .frame(width: thumbnailSize, height: thumbnailSize)
                 .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
             } else {
                 Image(systemName: "camera.fill")
-                    .font(.system(size: 12))
+                    .font(.caption)
                     .foregroundStyle(MapPalette.photoStroke)
             }
         }
-        .accessibilityLabel("Photo")
+        .frame(minWidth: 44, minHeight: 44)
+        .contentShape(Rectangle())
+        .accessibilityLabel(photo.dayNumber.map { "Photo, day \($0)" } ?? "Photo")
+        .accessibilityAddTraits(.isButton)
     }
 }
