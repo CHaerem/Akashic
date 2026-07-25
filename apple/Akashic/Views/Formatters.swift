@@ -48,6 +48,32 @@ enum Formatters {
             return nil
         }
     }
+
+    /// The calendar date for a 1-based day number within a journey ("MMM d, yyyy"), or nil when
+    /// the journey has no start date. UTC throughout (both the calendar doing the day-arithmetic
+    /// and the formatter reading it back) to match `DateOnly`'s UTC day boundaries — a device west
+    /// of Greenwich must not roll Day 1 back to the previous calendar date. Shared by
+    /// `DayDetailSheet` and `JourneyStoryView` so both name a day's date identically.
+    static func dayDate(dateStarted: String?, dayNumber: Int) -> String? {
+        guard let start = DateOnly.date(from: dateStarted),
+              let date = utcDayCalendar.date(byAdding: .day, value: dayNumber - 1, to: start)
+        else { return nil }
+        return dayDateFormatter.string(from: date)
+    }
+
+    private static let utcDayCalendar: Calendar = {
+        var c = Calendar(identifier: .gregorian)
+        c.timeZone = TimeZone(identifier: "UTC")!
+        return c
+    }()
+
+    private static let dayDateFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.timeZone = TimeZone(identifier: "UTC")
+        f.dateFormat = "MMM d, yyyy"
+        return f
+    }()
 }
 
 private extension DateFormatter {

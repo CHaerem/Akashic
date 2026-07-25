@@ -71,6 +71,9 @@ enum ExportMapper {
             dateStarted: row.dateStarted,
             dateEnded: row.dateEnded,
             isPublic: row.isPublic ?? false,
+            // S2: the Supabase export already carries `journey_type` (`JourneyRow.journeyType`)
+            // — it was just being dropped on the floor here instead of reaching the domain model.
+            journeyType: row.journeyType ?? "trek",
             summitElevation: row.summitElevation ?? stats.highestPoint?.elevation,
             totalDistance: row.totalDistance,
             totalDays: row.totalDays,

@@ -207,6 +207,53 @@ final class PhotoIngestTests: XCTestCase {
         try? FileManager.default.removeItem(at: root)
     }
 
+    // MARK: - Cancel cleanup (C2: staged-then-cancelled photos leave no files behind)
+
+    /// Mirrors what `NewJourneySheet.cancel()` does in the photos-first creation flow: ingest a
+    /// batch keyed to the draft's (pre-create) journey id, then run every one of them through
+    /// `PhotoEditService.deleteFiles` without ever creating the journey. No file under that
+    /// journey id's media directory may survive — a cancelled pick must never leak bytes.
+    func testCancellingAfterStagingLeavesNoFilesUnderTheDraftJourneyID() async throws {
+        let root = tempMediaRoot()
+        let draftJourneyId = UUID().uuidString.lowercased()
+        let service = PhotoIngestService(media: MediaLibrary(root: root))
+
+        var staged: [Photo] = []
+        for i in 0..<3 {
+            let jpeg = makeJPEG(width: 200, height: 150, lat: 59.9 + Double(i) * 0.01, lng: 10.7,
+                                dateOriginal: "2024:06:1\(i) 09:00:00")
+            let photo = try await service.ingest(data: jpeg, type: .jpeg,
+                                                 journeyId: draftJourneyId, sortOrder: i)
+            staged.append(photo)
+        }
+
+        // Sanity: the files really landed under the draft's journey id before we "cancel".
+        let photoDir = root.appendingPathComponent("journeys/\(draftJourneyId)/photos", isDirectory: true)
+        let beforeCancel = try FileManager.default.contentsOfDirectory(atPath: photoDir.path)
+        XCTAssertEqual(beforeCancel.count, staged.count * 2, "original + thumbnail per staged photo")
+
+        // Cancel: delete every staged file (`PhotoEditService.deleteFiles`), exactly as
+        // `NewJourneySheet.cleanupStagedPhotos()` does — no journey is ever created.
+        let editService = PhotoEditService(media: MediaLibrary(root: root))
+        for photo in staged {
+            let removed = editService.deleteFiles(for: photo)
+            XCTAssertEqual(removed.count, 2, "original + thumbnail both removed")
+        }
+
+        // The directory itself may still exist (deleteFiles removes files, not folders), but it
+        // must be empty — no file under the draft's journey id survives the cancel.
+        let afterCancel = try FileManager.default.contentsOfDirectory(atPath: photoDir.path)
+        XCTAssertTrue(afterCancel.isEmpty, "no files remain under the draft's journey id after cancel")
+        for photo in staged {
+            XCTAssertNotNil(photo.localOriginalPath)
+            XCTAssertFalse(FileManager.default.fileExists(atPath: photo.localOriginalPath!))
+            XCTAssertNotNil(photo.localThumbPath)
+            XCTAssertFalse(FileManager.default.fileExists(atPath: photo.localThumbPath!))
+        }
+
+        try? FileManager.default.removeItem(at: root)
+    }
+
     // MARK: - ISO-6709 (video location)
 
     func testParseISO6709() throws {

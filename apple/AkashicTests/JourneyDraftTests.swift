@@ -53,6 +53,53 @@ final class JourneyDraftTests: XCTestCase {
         XCTAssertTrue(days[2].coordinates.isEmpty)
     }
 
+    // MARK: - Photo → day assignment (C2: photos are staged/ingested once, not re-picked)
+
+    func testDaysWithAssignmentsMapsEachPhotoToItsClusteredDay() {
+        let sameDayA = makePhoto(takenAt: "2023-09-30T09:00:00Z", coordinates: [37.0, -3.0])
+        let sameDayB = makePhoto(takenAt: "2023-09-30T18:00:00Z", coordinates: [37.2, -3.2])
+        let earlierDay = makePhoto(takenAt: "2023-09-29T08:00:00Z", coordinates: [36.9, -2.9])
+        let dateless = makePhoto(takenAt: nil, coordinates: [1, 1])
+        let photos = [sameDayA, sameDayB, earlierDay, dateless]
+
+        let (days, assignments) = JourneyDraft.daysWithAssignments(fromPhotos: photos)
+
+        XCTAssertEqual(days.count, 2, "two calendar days; the dateless photo can't seed one")
+        // Day 1 = 2023-09-29 (chronological) → earlierDay only.
+        XCTAssertEqual(assignments[earlierDay.id], days[0].id)
+        // Day 2 = 2023-09-30 → both same-day photos land on the SAME day id.
+        XCTAssertEqual(assignments[sameDayA.id], days[1].id)
+        XCTAssertEqual(assignments[sameDayB.id], days[1].id)
+        // A photo with no capture date was never clustered, so it has no assignment — unassigned,
+        // not dropped.
+        XCTAssertNil(assignments[dateless.id])
+        XCTAssertEqual(assignments.count, 3)
+
+        // The thin `days(fromPhotos:)` wrapper must keep proposing the same days (names/sources),
+        // just without the mapping.
+        XCTAssertEqual(JourneyDraft.days(fromPhotos: photos).map(\.name), days.map(\.name))
+        XCTAssertEqual(JourneyDraft.days(fromPhotos: photos).map(\.source), days.map(\.source))
+    }
+
+    func testUnassignPhotosClearsWaypointOnlyForRemovedDays() {
+        var kept = makePhoto(takenAt: "2023-09-29T08:00:00Z", coordinates: [36.9, -2.9])
+        var removed = makePhoto(takenAt: "2023-09-30T08:00:00Z", coordinates: [37.0, -3.0])
+        let untouched = makePhoto(takenAt: nil, coordinates: nil)   // already unassigned
+
+        let keptDay = DraftDay(name: "Day 1", source: .photoCluster)
+        let removedDay = DraftDay(name: "Day 2", source: .photoCluster)
+        kept.waypointId = keptDay.id
+        removed.waypointId = removedDay.id
+
+        // The user deleted "Day 2" — only `keptDay` survives.
+        let result = JourneyDraft.unassignPhotos([kept, removed, untouched], keeping: [keptDay])
+
+        XCTAssertEqual(result[0].waypointId, keptDay.id, "still-existing day assignment is untouched")
+        XCTAssertNil(result[1].waypointId, "removed day's photo is unassigned, not deleted")
+        XCTAssertEqual(result.count, 3, "no photo is ever dropped by this helper")
+        XCTAssertNil(result[2].waypointId)
+    }
+
     // MARK: - Stats from the route (Kilimanjaro fixture)
 
     func testComputeStatsAgainstKilimanjaroRoute() throws {
@@ -162,6 +209,99 @@ final class JourneyDraftTests: XCTestCase {
         ]))
         // An empty list is not "all auto-seeded" (there is nothing seeded).
         XCTAssertFalse(JourneyDraft.daysAreAllAutoSeeded([]))
+    }
+
+    // MARK: - C4: auto dates from photo clusters (UTC)
+
+    func testDateRangeFromDaysUsesFirstAndLastDatedDay() throws {
+        let photos = [
+            makePhoto(takenAt: "2023-09-30T09:00:00Z", coordinates: [37.0, -3.0]),
+            makePhoto(takenAt: "2023-09-29T08:00:00Z", coordinates: [36.9, -2.9]),
+            makePhoto(takenAt: "2023-10-01T12:00:00Z", coordinates: [37.1, -3.1]),
+        ]
+        let days = JourneyDraft.days(fromPhotos: photos)   // 3 chronological days: 29/30 Sep, 1 Oct
+        let range = try XCTUnwrap(JourneyDraft.dateRange(fromDays: days))
+
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "UTC")!
+        XCTAssertEqual(calendar.component(.day, from: range.start), 29)
+        XCTAssertEqual(calendar.component(.month, from: range.start), 9)
+        XCTAssertEqual(calendar.component(.day, from: range.end), 1)
+        XCTAssertEqual(calendar.component(.month, from: range.end), 10)
+    }
+
+    func testDateRangeFromDaysIsNilWhenNoDayCarriesADate() {
+        let days = [
+            DraftDay(name: "Day 1", source: .manual),
+            DraftDay(name: "Rest day", source: .manual),
+        ]
+        XCTAssertNil(JourneyDraft.dateRange(fromDays: days))
+    }
+
+    // MARK: - C4: auto dates from GPX waypoint / file times (UTC)
+
+    func testDateRangeFromGPXUsesEarliestAndLatestWaypointTime() throws {
+        let iso = ISO8601DateFormatter()
+        let file = GPXFile(
+            route: Route(type: "LineString", coordinates: []),
+            waypoints: [
+                GPXWaypoint(name: "Shira Camp", coordinates: [37.30, -3.10],
+                            elevation: nil, desc: nil, time: iso.date(from: "2023-09-30T06:00:00Z")),
+                GPXWaypoint(name: "Machame Gate", coordinates: [37.25, -3.10],
+                            elevation: nil, desc: nil, time: iso.date(from: "2023-09-29T06:00:00Z")),
+                GPXWaypoint(name: "No time", coordinates: [37.20, -3.05], elevation: nil, desc: nil, time: nil),
+            ],
+            name: nil, time: iso.date(from: "2023-01-01T00:00:00Z"), droppedPointCount: 0)
+
+        let range = try XCTUnwrap(JourneyDraft.dateRange(fromGPX: file))
+        XCTAssertEqual(range.start, iso.date(from: "2023-09-29T06:00:00Z"),
+                       "earliest waypoint time wins, ignoring metadata time")
+        XCTAssertEqual(range.end, iso.date(from: "2023-09-30T06:00:00Z"))
+    }
+
+    func testDateRangeFromGPXFallsBackToFileTimeWhenNoWaypointHasATime() throws {
+        let iso = ISO8601DateFormatter()
+        let file = GPXFile(
+            route: Route(type: "LineString", coordinates: []),
+            waypoints: [GPXWaypoint(name: "Point", coordinates: [37.20, -3.05], elevation: nil, desc: nil, time: nil)],
+            name: nil, time: iso.date(from: "2023-09-29T06:00:00Z"), droppedPointCount: 0)
+
+        let range = try XCTUnwrap(JourneyDraft.dateRange(fromGPX: file))
+        XCTAssertEqual(range.start, range.end, "the single metadata time stands in for both ends")
+        XCTAssertEqual(range.start, iso.date(from: "2023-09-29T06:00:00Z"))
+    }
+
+    func testDateRangeFromGPXIsNilWithNoTimeInformationAtAll() {
+        let file = GPXFile(route: Route(type: "LineString", coordinates: []),
+                           waypoints: [GPXWaypoint(name: "Point", coordinates: [37.20, -3.05],
+                                                    elevation: nil, desc: nil, time: nil)],
+                           name: nil, time: nil, droppedPointCount: 0)
+        XCTAssertNil(JourneyDraft.dateRange(fromGPX: file))
+    }
+
+    // MARK: - C3: name-suggestion chip ("Use \"Tanzania, September 2023\"")
+
+    func testNameSuggestionCombinesCountryAndFirstDatedDayMonth() {
+        let suggestion = JourneyDraft.nameSuggestion(currentName: "", country: "Tanzania",
+                                                      firstDayDateLabel: "29 Sep 2023")
+        XCTAssertEqual(suggestion, "Tanzania, September 2023")
+    }
+
+    func testNameSuggestionNeverFiresWhenNameIsAlreadyNonEmpty() {
+        XCTAssertNil(JourneyDraft.nameSuggestion(currentName: "My Kilimanjaro trek", country: "Tanzania",
+                                                 firstDayDateLabel: "29 Sep 2023"),
+                     "the chip must never appear — let alone fire — once the user has typed a name")
+        // Even whitespace-only doesn't count as "empty" carelessly — trimmed, so it still counts as
+        // empty and IS eligible (guards against a stray space blocking the chip forever).
+        XCTAssertNotNil(JourneyDraft.nameSuggestion(currentName: "   ", country: "Tanzania",
+                                                    firstDayDateLabel: "29 Sep 2023"))
+    }
+
+    func testNameSuggestionIsNilWithoutCountryOrWithoutADatedDay() {
+        XCTAssertNil(JourneyDraft.nameSuggestion(currentName: "", country: "", firstDayDateLabel: "29 Sep 2023"),
+                     "no country to build the suggestion from")
+        XCTAssertNil(JourneyDraft.nameSuggestion(currentName: "", country: "Tanzania", firstDayDateLabel: nil),
+                     "no dated day to build the suggestion from")
     }
 
     // MARK: - Helpers

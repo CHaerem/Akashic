@@ -1,10 +1,11 @@
 import SwiftUI
 
 // Shared building blocks for the native, contextual editing sheets (photo / waypoint /
-// journey / import). Dark "liquid-glass" language: translucent surfaces on the night-sky
-// background, hairline strokes, periwinkle accent — consistent with `Theme` and the day sheet.
+// journey / import). "Liquid-glass" language: translucent surfaces, hairline strokes,
+// periwinkle accent — consistent with `Theme`, which now adapts with the system appearance
+// instead of being fixed dark, so these sheets do too.
 
-/// Standard sheet scaffold: dark background, inline title, Cancel + a primary action button.
+/// Standard sheet scaffold: adaptive background, inline title, Cancel + a primary action button.
 /// `isSaving` swaps the action for a spinner; `saveDisabled` gates it.
 struct EditSheetScaffold<Content: View>: View {
     let title: String
@@ -44,7 +45,6 @@ struct EditSheetScaffold<Content: View>: View {
                 }
             }
         }
-        .preferredColorScheme(.dark)
         .presentationBackground(Theme.background)
     }
 }
@@ -154,7 +154,7 @@ struct HighlightChipsEditor: View {
                 Button(action: commit) {
                     Image(systemName: "plus")
                         .font(.system(size: 15, weight: .bold))
-                        .foregroundStyle(Theme.background)
+                        .foregroundStyle(Theme.onAccent)
                         .frame(width: 40, height: 40)
                         .background(Theme.accent, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
                 }

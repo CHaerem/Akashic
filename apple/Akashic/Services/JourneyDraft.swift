@@ -43,6 +43,12 @@ struct JourneyDraft: Equatable {
     var route: Route?
     var days: [DraftDay] = []
 
+    /// S2: carried straight through to the created `Journey` rather than left for `makeJourney`
+    /// to hardcode. Every draft today is a "trek" — C1 asks one creation question, not a
+    /// taxonomy pick — but the field is honest all the way from here, so S4's inference has
+    /// somewhere real to write.
+    var journeyType: String = "trek"
+
     /// A journey needs at least a name; everything else (route, days, dates) is optional.
     var isValid: Bool { !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
 
@@ -86,20 +92,48 @@ struct JourneyDraft: Equatable {
     /// PhotoDayMatcher in reverse: cluster photos by calendar day (UTC), then propose Day 1…N in
     /// chronological order. Each day's coordinates are the median of that day's geotagged photos
     /// (empty when none carry GPS). Photos with no `takenAt` are ignored (they can't seed a day).
+    /// Thin wrapper over `daysWithAssignments(fromPhotos:)` for callers that don't need the mapping.
     static func days(fromPhotos photos: [Photo]) -> [DraftDay] {
+        daysWithAssignments(fromPhotos: photos).days
+    }
+
+    /// Sibling of `days(fromPhotos:)` that also reports which day each photo landed in (photo id →
+    /// `DraftDay.id`). `makeJourney` carries a `DraftDay`'s `id` onto its `Camp` unchanged, so this
+    /// mapping is still a valid `waypointId` once the journey is created — no id-translation step
+    /// needed at create time. (C2: stamping this straight onto each staged `Photo.waypointId` is
+    /// what lets photos land on the right day the moment the journey is made.)
+    static func daysWithAssignments(fromPhotos photos: [Photo])
+        -> (days: [DraftDay], assignments: [String: String]) {
         var buckets: [String: [Photo]] = [:]
         for photo in photos {
             guard let date = PhotoDayMatcher.parseDate(photo.takenAt) else { continue }
             buckets[dayKey(from: date), default: []].append(photo)
         }
-        return buckets.keys.sorted().enumerated().map { index, key in
+        var assignments: [String: String] = [:]
+        let days: [DraftDay] = buckets.keys.sorted().enumerated().map { index, key in
             let bucket = buckets[key] ?? []
             let coords = medianCoordinate(bucket.compactMap { $0.coordinates })
-            return DraftDay(
+            let day = DraftDay(
                 name: "Day \(index + 1)",
                 coordinates: coords ?? [],
                 dateLabel: displayLabel(fromDayKey: key),
                 source: .photoCluster)
+            for photo in bucket { assignments[photo.id] = day.id }
+            return day
+        }
+        return (days, assignments)
+    }
+
+    /// Clear `waypointId` on any photo pointing at a day no longer present in `days` — used when
+    /// the user deletes a proposed day in the review screen: its photos stay staged, just
+    /// unassigned, never deleted. Pure/testable so the view's day-removal action is a one-liner.
+    static func unassignPhotos(_ photos: [Photo], keeping days: [DraftDay]) -> [Photo] {
+        let survivingIDs = Set(days.map(\.id))
+        return photos.map { photo in
+            guard let waypointId = photo.waypointId, !survivingIDs.contains(waypointId) else { return photo }
+            var photo = photo
+            photo.waypointId = nil
+            return photo
         }
     }
 
@@ -218,6 +252,7 @@ struct JourneyDraft: Equatable {
             dateStarted: DateOnly.string(from: dateStarted),
             dateEnded: DateOnly.string(from: dateEnded),
             isPublic: false,
+            journeyType: journeyType,
             summitElevation: stats.highestPoint?.elevation,
             totalDistance: stats.totalDistance,
             totalDays: stats.duration,
@@ -304,6 +339,51 @@ struct JourneyDraft: Equatable {
         return date(fromDayLabel: dateLabel)
     }
 
+    // MARK: - C4: auto dates (from photo clusters / GPX times)
+
+    /// `dateStarted`/`dateEnded` from an already-clustered day list — the first/last dated day, in
+    /// UTC (via `date(fromDayLabel:)`, so this stays in lockstep with the label the Days section
+    /// itself shows). Works for both photo-clustered days (`daysWithAssignments`) and GPX-waypoint
+    /// days, since both carry a `dateLabel`; a manual day or a photo-cluster day with no readable
+    /// capture date (never happens today, but is a valid `DraftDay`) simply doesn't contribute an
+    /// endpoint. Nil when nothing in the list carries a date — the review screen then reads
+    /// "Add dates" instead of a derived range.
+    static func dateRange(fromDays days: [DraftDay]) -> (start: Date, end: Date)? {
+        let dated = days.compactMap { date(fromDayLabel: $0.dateLabel) }
+        guard let start = dated.min(), let end = dated.max() else { return nil }
+        return (start, end)
+    }
+
+    /// `dateStarted`/`dateEnded` straight from a parsed GPX file's own time signals, independent of
+    /// whether its waypoints were actually seeded into the day list (a user who already built a day
+    /// list keeps it on "Replace route" — see `applying(_:toDays:)` — but the file's dates are still
+    /// honest information about when the trip happened). Prefers the earliest/latest `<wpt><time>`;
+    /// falls back to the single `<metadata><time>` (same instant for both ends) for a track that
+    /// carries no per-waypoint times — including a trackpoint-only file, since `GPXParser` doesn't
+    /// retain per-point times yet (C9). Nil when the file carries no time information at all.
+    static func dateRange(fromGPX file: GPXFile) -> (start: Date, end: Date)? {
+        let waypointTimes = file.waypoints.compactMap(\.time)
+        if let start = waypointTimes.min(), let end = waypointTimes.max() {
+            return (start, end)
+        }
+        if let time = file.time { return (time, time) }
+        return nil
+    }
+
+    // MARK: - C3: name-suggestion chip
+
+    /// The review screen's "Use \"Tanzania, September 2023\"" chip — country plus the month/year of
+    /// the earliest dated day. Nil whenever there's nothing worth suggesting, which INCLUDES the
+    /// name field already carrying something: the chip must never appear (let alone fire) once the
+    /// user has typed a name, so that guard lives here rather than only at the call site, keeping the
+    /// whole rule in one testable place.
+    static func nameSuggestion(currentName: String, country: String, firstDayDateLabel: String?) -> String? {
+        guard currentName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
+        let trimmedCountry = country.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedCountry.isEmpty, let date = date(fromDayLabel: firstDayDateLabel) else { return nil }
+        return "\(trimmedCountry), \(monthYearFormatter.string(from: date))"
+    }
+
     private static func displayLabel(fromDayKey key: String) -> String? {
         guard let date = keyFormatter.date(from: key) else { return nil }
         return labelFormatter.string(from: date)
@@ -322,6 +402,14 @@ struct JourneyDraft: Equatable {
         f.locale = Locale(identifier: "en_US_POSIX")
         f.timeZone = TimeZone(identifier: "UTC")
         f.dateFormat = "d MMM yyyy"
+        return f
+    }()
+
+    private static let monthYearFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.timeZone = TimeZone(identifier: "UTC")
+        f.dateFormat = "MMMM yyyy"
         return f
     }()
 }

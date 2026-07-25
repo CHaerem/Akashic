@@ -23,14 +23,29 @@ struct JourneyDetailView: View {
     /// Showcase sheet instead of the confirm dialog.
     @State private var showDeleteConfirm = false
     @State private var showDeleteBlockedAlert = false
+    /// S1's story view — pushed via `navigationDestination` rather than a `NavigationLink` so the
+    /// same state can also drive the shared-in auto-open below.
+    @State private var showStory = false
+    /// Guards the auto-open below to a single push per presentation — `.onAppear` fires again on
+    /// returning from the story (this view becomes visible again), and without the guard that
+    /// would push right back into it, trapping a shared-in viewer in a forward-only loop.
+    @State private var hasAutoOpenedStory = false
 
     /// True when this journey lives in our own database (a shared-in journey is not ours to
     /// restructure or enrich). Fixtures / local-mode journeys are ours by definition.
     private var isOwner: Bool { store.isOwnedByCurrentUser(journeyID: journey.id) }
 
+    /// D9: true for the bundled demo journey — drives the header badge and honest delete copy
+    /// (it never touched iCloud, so the usual "deletes from your iCloud" wording would be false).
+    private var isSample: Bool { store.isSampleJourney(journey.id) }
+
     /// The freshest copy of this journey from the store, so contextual edits reflect
     /// immediately after `store.reload()` (this view observes the store).
     private var live: Journey { store.journey(withID: journey.id) ?? journey }
+
+    /// The flag glyph was a fixed 40 pt icon, not body text; scale it like one (same treatment
+    /// as `JourneyGlobeCard.flagSize` in D1) so it stays in proportion with the title beside it.
+    @ScaledMetric(relativeTo: .largeTitle) private var flagSize: CGFloat = 40
 
     var body: some View {
         let live = self.live
@@ -43,6 +58,11 @@ struct JourneyDetailView: View {
                     // of rendering the content screens over an empty journey.
                     nextSteps
                 } else {
+                    // S1's clear entry point into the finished thing — placed above the map,
+                    // not tucked into the overflow menu, because reading the story is meant to
+                    // be the obvious next thing to do with a journey that has content.
+                    readJourneyLink
+
                     RouteMapView(journey: journey, interactive: false)
                         .frame(height: 220)
                         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
@@ -114,7 +134,6 @@ struct JourneyDetailView: View {
                     onClose: { selectedDayIndex = nil }
                 )
                 .environmentObject(store)
-                .preferredColorScheme(.dark)
                 .presentationDetents([.medium, .large])
                 .presentationBackground(Theme.background)
             }
@@ -151,12 +170,31 @@ struct JourneyDetailView: View {
                              journeyTitle: live.name,
                              service: PersistenceController.shared.sharingService)
         }
+        .navigationDestination(isPresented: $showStory) {
+            JourneyStoryView(journey: live).environmentObject(store)
+        }
+        .onAppear {
+            // S1: "it should be what a shared-in viewer naturally lands on." A participant has no
+            // reason to want the map-and-stats screen first — the story is the point of opening a
+            // shared journey at all. Gated on `isEmptyShell` because an owner-only journey with
+            // nothing in it yet has no story to auto-open, and `hasAutoOpenedStory` because this
+            // fires again when returning from the pushed story (the view re-appears).
+            guard !isOwner, !live.isEmptyShell, !hasAutoOpenedStory else { return }
+            hasAutoOpenedStory = true
+            showStory = true
+        }
         .confirmationDialog("Delete this journey?",
                             isPresented: $showDeleteConfirm, titleVisibility: .visible) {
             Button("Delete journey", role: .destructive) { deleteJourney() }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("This deletes \"\(live.shortName)\" and its photos from your iCloud and every family device. Photos already saved in your Photos library are NOT affected. Consider using Export first to keep a copy.")
+            // Honest copy (the design verdict's own bar, D9): the sample never touched iCloud, so
+            // the ordinary "from your iCloud and every family device" wording would be a lie here.
+            if isSample {
+                Text("This removes the sample \"\(live.shortName)\" journey from this device. It's bundled with the app, never synced — deleting it is permanent, but you can always start your own journey.")
+            } else {
+                Text("This deletes \"\(live.shortName)\" and its photos from your iCloud and every family device. Photos already saved in your Photos library are NOT affected. Consider using Export first to keep a copy.")
+            }
         }
         .alert("Remove from Showcase first", isPresented: $showDeleteBlockedAlert) {
             Button("Open Showcase") { showShowcase = true }
@@ -218,6 +256,27 @@ struct JourneyDetailView: View {
             ] : [])
     }
 
+    /// S1's clear entry point into `JourneyStoryView` — solid-fill rather than `photosLink`'s
+    /// outline treatment, so it reads as the primary way to experience a finished journey rather
+    /// than one link among several.
+    private var readJourneyLink: some View {
+        Button { showStory = true } label: {
+            HStack(spacing: 10) {
+                Image(systemName: "book.pages")
+                    .font(.subheadline)
+                Text("Read this journey")
+                    .font(.subheadline.weight(.semibold))
+                Spacer()
+                Image(systemName: "arrow.right")
+                    .font(.footnote.weight(.semibold))
+            }
+            .foregroundStyle(Theme.onAccent)
+            .padding(14)
+            .background(Theme.accent, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        }
+        .buttonStyle(.plain)
+    }
+
     private var photosLink: some View {
         NavigationLink {
             PhotosGridView(journeyID: journey.id)
@@ -252,13 +311,17 @@ struct JourneyDetailView: View {
                     .font(.largeTitle.weight(.bold))
                     .foregroundStyle(Theme.textPrimary)
                 Spacer()
-                Text(live.countryFlag).font(.system(size: 40))
+                Text(live.countryFlag).font(.system(size: flagSize))
             }
             HStack(spacing: 8) {
                 Text(live.country).foregroundStyle(Theme.textSecondary)
                 if let dates = Formatters.dateRange(live.dateStarted, live.dateEnded) {
                     Text("·").foregroundStyle(Theme.textTertiary)
                     Text(dates).foregroundStyle(Theme.textSecondary)
+                }
+                if isSample {
+                    Text("·").foregroundStyle(Theme.textTertiary)
+                    SampleBadge()
                 }
             }
             .font(.subheadline)
@@ -344,6 +407,10 @@ struct JourneyDetailView: View {
 struct DayRow: View {
     let camp: Camp
 
+    /// The day badge was sized to fit a fixed 46 pt square around a `.title3` digit; scale the
+    /// square with that digit so a two-digit day number doesn't outgrow it at larger text sizes.
+    @ScaledMetric(relativeTo: .title3) private var dayBadgeSize: CGFloat = 46
+
     var body: some View {
         Card(padding: 14) {
             VStack(alignment: .leading, spacing: 10) {
@@ -396,10 +463,11 @@ struct DayRow: View {
 
     private var dayBadge: some View {
         VStack(spacing: 0) {
-            Text("DAY").font(.system(size: 8, weight: .bold)).foregroundStyle(Theme.textTertiary)
+            // Was 8 pt — below the `.caption2` floor; `.caption2` is the smallest this can go.
+            Text("DAY").font(.caption2.weight(.bold)).foregroundStyle(Theme.textTertiary)
             Text("\(camp.dayNumber)").font(.title3.weight(.bold)).foregroundStyle(Theme.accent)
         }
-        .frame(width: 46, height: 46)
+        .frame(width: dayBadgeSize, height: dayBadgeSize)
         .background(Theme.accentSoft, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 
@@ -409,7 +477,7 @@ struct DayRow: View {
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(Theme.textPrimary)
             Text(label)
-                .font(.system(size: 10))
+                .font(.caption2)
                 .foregroundStyle(Theme.textTertiary)
         }
     }

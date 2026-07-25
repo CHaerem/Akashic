@@ -5,12 +5,42 @@ import CoreLocation
 //
 // The map's own colour language, distinct from `Theme` (which styles the surrounding
 // chrome). Kept local to the map so the signature route/segment/camp colours stay in
-// one place. Space colour matches `Theme.background` (#0B0B19 / rgb(11,11,25)).
+// one place. `nightSky` is fixed at #0B0B19 (rgb(11,11,25)) in every appearance — it is
+// deliberately NOT the same as `Theme.background` (now adaptive, `.systemBackground`):
+// the whole point of a dedicated map palette is that the globe/trek map stays immersive
+// night-sky dark regardless of Light/Dark Mode (see the A1/A3 note below), so this colour
+// must NOT track `Theme.background` as it changes with the system appearance.
 
 enum MapPalette {
     static let nightSky = Color(red: 11 / 255, green: 11 / 255, blue: 25 / 255) // #0B0B19
     static let cyan = Color(red: 0, green: 1, blue: 1)                          // #00FFFF active segment
     static let routeWhite = Color.white
+
+    // MARK: On-map chrome (A1/A3)
+    //
+    // The globe and trek map stay visually immersive in BOTH appearances — bright satellite
+    // imagery with light glass overlays is exactly what Apple Maps and the Photos viewer do,
+    // not a light-mode bug to fix. So the map's own chrome (top bar, journey strip, day
+    // navigator) reads its text/hairlines from here, fixed-light, instead of from `Theme`'s
+    // adaptive `textPrimary`/`textSecondary`/`hairline` — those would go near-black in Light
+    // Mode and disappear into the imagery they're drawn over.
+    //
+    // Increase Contrast still applies (unlike the light/dark swap, which deliberately does
+    // not): these use the same dynamic-`UIColor` trick as `Theme` so the map's overlays answer
+    // that setting too, exactly as A1 requires.
+    static let label = Color.white
+    static let labelSecondary = Color(uiColor: UIColor { traits in
+        traits.accessibilityContrast == .high ? .white : UIColor.white.withAlphaComponent(0.7)
+    })
+    static let hairline = Color(uiColor: UIColor { traits in
+        traits.accessibilityContrast == .high
+            ? UIColor.white.withAlphaComponent(0.6)
+            : UIColor.white.withAlphaComponent(0.18)
+    })
+    /// Opaque fallback for map-overlay glass under Reduce Transparency — stays night-sky dark
+    /// in every appearance (matching the map itself) rather than following `Theme.surface`,
+    /// which would go pale in Light Mode and stop reading as "glass over a dark map".
+    static let overlaySurface = Color(.sRGB, red: 26 / 255, green: 28 / 255, blue: 52 / 255, opacity: 0.96)
 
     // Amber camp family (spec §2d).
     static let campFillDefault = Color(.sRGB, red: 254 / 255, green: 249 / 255, blue: 235 / 255, opacity: 0.95)
@@ -23,6 +53,16 @@ enum MapPalette {
 
     // Photo thumbnail marker (spec §2e — cool blue-white).
     static let photoStroke = Color(.sRGB, red: 96 / 255, green: 165 / 255, blue: 250 / 255, opacity: 0.9)
+}
+
+extension View {
+    /// The map's own answer to Reduce Transparency: `.ultraThinMaterial` normally, an opaque
+    /// `MapPalette.overlaySurface` fill when the setting is on. A parallel to `Theme`'s
+    /// `themedMaterial` with a fixed dark fallback instead of an appearance-adaptive one — see
+    /// the note on `MapPalette`'s on-map chrome colours for why.
+    func mapOverlayMaterial<S: Shape>(_ shape: S) -> some View {
+        themedMaterial(shape, opaqueFill: MapPalette.overlaySurface)
+    }
 }
 
 // MARK: - Photo marker hook
@@ -107,6 +147,11 @@ struct SeededRNG: RandomNumberGenerator {
 
 /// White glassy dot + glow used for each journey on the globe.
 struct JourneyPin: View {
+    /// Announced name — VoiceOver used to hear "Journey pin" for every pin on the globe,
+    /// indistinguishable with more than one journey. Defaults for callers that don't (yet)
+    /// thread a name through.
+    var name: String = "Journey"
+
     var body: some View {
         ZStack {
             Circle()
@@ -119,7 +164,11 @@ struct JourneyPin: View {
                 .overlay(Circle().stroke(Color.white.opacity(0.35), lineWidth: 1))
                 .shadow(color: .white.opacity(0.8), radius: 6)
         }
-        .accessibilityLabel("Journey pin")
+        // The drawn dot is 24 pt; this only widens the tappable box to the 44 pt minimum.
+        .frame(minWidth: 44, minHeight: 44)
+        .contentShape(Rectangle())
+        .accessibilityLabel(name)
+        .accessibilityAddTraits(.isButton)
     }
 }
 
@@ -130,24 +179,38 @@ struct CampBadge: View {
     let day: Int
     let selected: Bool
 
+    // The circles were sized to fit fixed 10/13 pt digits; scale them with the text so a
+    // two-digit day number (day 10+) doesn't outgrow its badge at larger text sizes.
+    @ScaledMetric(relativeTo: .caption2) private var glowDiameter: CGFloat = 26
+    @ScaledMetric(relativeTo: .caption2) private var glowDiameterSelected: CGFloat = 34
+    @ScaledMetric(relativeTo: .caption2) private var fillDiameter: CGFloat = 20
+    @ScaledMetric(relativeTo: .caption2) private var fillDiameterSelected: CGFloat = 26
+
     var body: some View {
         ZStack {
             Circle()
                 .fill(MapPalette.campGlow.opacity(selected ? 0.8 : 0.45))
-                .frame(width: selected ? 34 : 26, height: selected ? 34 : 26)
+                .frame(width: selected ? glowDiameterSelected : glowDiameter,
+                       height: selected ? glowDiameterSelected : glowDiameter)
                 .blur(radius: 4)
             Circle()
                 .fill(selected ? MapPalette.campFillSelected : MapPalette.campFillDefault)
-                .frame(width: selected ? 26 : 20, height: selected ? 26 : 20)
+                .frame(width: selected ? fillDiameterSelected : fillDiameter,
+                       height: selected ? fillDiameterSelected : fillDiameter)
                 .overlay(
                     Circle().stroke(selected ? MapPalette.campStrokeSelected : MapPalette.campStrokeDefault,
                                     lineWidth: selected ? 2 : 1.5)
                 )
+            // 13/10 pt map to `.caption`/`.caption2` — `.caption` keeps the selected badge's
+            // documented "bigger and brighter" emphasis without dropping below the floor.
             Text("\(day)")
-                .font(.system(size: selected ? 13 : 10, weight: .bold, design: .rounded))
+                .font(.system(selected ? .caption : .caption2, design: .rounded).weight(.bold))
                 .foregroundStyle(selected ? MapPalette.campTextSelected : MapPalette.campTextDefault)
         }
+        .frame(minWidth: 44, minHeight: 44)
+        .contentShape(Rectangle())
         .accessibilityLabel("Day \(day) camp")
+        .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
     }
 }
 
@@ -158,11 +221,19 @@ struct CampBadge: View {
 struct PhotoMarker: View {
     let photo: MapPhoto
 
+    // The card was sized to fit a fixed 12 pt glyph; scale it with `.caption` so the
+    // placeholder icon/thumbnail isn't left cramped in an undersized frame.
+    @ScaledMetric(relativeTo: .caption) private var markerSize: CGFloat = 30
+    @ScaledMetric(relativeTo: .caption) private var thumbnailSize: CGFloat = 24
+    // This card fills a shape directly (`.fill`, not `.background(_, in:)`), so it can't ride
+    // `mapOverlayMaterial` — same Reduce Transparency swap, applied by hand.
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+
     var body: some View {
         ZStack {
             RoundedRectangle(cornerRadius: 6, style: .continuous)
-                .fill(.ultraThinMaterial)
-                .frame(width: 30, height: 30)
+                .fill(reduceTransparency ? AnyShapeStyle(MapPalette.overlaySurface) : AnyShapeStyle(.ultraThinMaterial))
+                .frame(width: markerSize, height: markerSize)
                 .overlay(
                     RoundedRectangle(cornerRadius: 6, style: .continuous)
                         .strokeBorder(MapPalette.photoStroke, lineWidth: 1.5)
@@ -173,16 +244,19 @@ struct PhotoMarker: View {
                 AsyncImage(url: url) { image in
                     image.resizable().scaledToFill()
                 } placeholder: {
-                    Image(systemName: "photo").font(.system(size: 12)).foregroundStyle(.white.opacity(0.7))
+                    Image(systemName: "photo").font(.caption).foregroundStyle(.white.opacity(0.7))
                 }
-                .frame(width: 24, height: 24)
+                .frame(width: thumbnailSize, height: thumbnailSize)
                 .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
             } else {
                 Image(systemName: "camera.fill")
-                    .font(.system(size: 12))
+                    .font(.caption)
                     .foregroundStyle(MapPalette.photoStroke)
             }
         }
-        .accessibilityLabel("Photo")
+        .frame(minWidth: 44, minHeight: 44)
+        .contentShape(Rectangle())
+        .accessibilityLabel(photo.dayNumber.map { "Photo, day \($0)" } ?? "Photo")
+        .accessibilityAddTraits(.isButton)
     }
 }

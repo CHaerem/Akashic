@@ -132,23 +132,115 @@ akashic.no, age rating, the review process itself.
 
 ## 5. Business model
 
-### Recommended: free core + one-time unlock ("Akashic Complete")
+### Decided (revised 2026-07-25): free core + one-time unlock ("Akashic Complete") at **kr 149**
 
-- **Free**: 1 journey, full experience, sharing included, small photo cap
-  (e.g. 100/journey). Enough to fall in love; enough for a one-trip user, which
-  is fine — they become showcase marketing.
-- **One-time IAP ~79–129 kr**: unlimited journeys/photos, export, publishing.
-  Supports Apple **Family Sharing of the purchase** — one buy covers the family,
-  which matches the product's soul (and its sharing model).
+- **Free**: 1 journey, full experience, sharing included, 100-photo cap — and
+  **that journey is fully finishable: publishing and export included.**
+- **One-time IAP kr 149** (`no.akashic.app.complete`, non-consumable): unlimited
+  journeys and photos, plus Akashic Intelligence in v1.1. **Family Sharing ON** —
+  one purchase covers the household, which matches the product's soul.
 
-Why not subscription: we have no recurring cost to justify it; the category
-(personal memories) punishes rent-seeking; churn support burden lands on a
-solo maintainer. A future "Pro" tier (§9) can introduce subscription *if* real
-recurring costs (backend, Android) ever appear.
+**Why the free tier now includes finishing.** The old line put the wall on the
+*finish* ("publishing is part of Complete"), which withheld the exact moment that
+creates the desire to pay — and strangled §6, where the showcase *is* the funnel:
+gating publishing meant only people who had already paid could market the app. The
+wall now falls purely on **"your second journey"**, which is also the photo-book
+unit of value. Accepted trade: free publishing means the public database can be
+written to without payment, so the report/takedown machinery (§4.5) carries the
+abuse load alone. It is capped at one journey per Apple ID, and re-gating is an
+app update if abuse appears.
 
-Revenue sanity check (not a projection): at 99 kr / 15 % cut ≈ 84 kr net.
-1 000 lifetime buyers ≈ 84 000 kr; 10 000 ≈ 840 000 kr. Niche-app numbers —
-this is a beautiful side business, not a startup, and the cost base agrees.
+**Why the price moved from 99 to 149.** kr 99 was anchored against *apps*. The
+buyer's real alternative is a photo book: kr 400–1200, per trip. kr 149 once, for
+every trip the family ever takes, for everyone in the family, is under half of one
+book — and that sentence belongs in the paywall. kr 179 is defensible; kr 99 is
+now under-priced against the product's own positioning. Price is changeable in
+App Store Connect at any time, but raising it later looks worse than launching
+there, so launch at the price we believe in.
+
+**Why not subscription** — better reasons than the old cost argument (which priced
+by *our* costs, and at zero marginal cost would argue for zero): lapse semantics
+collide with "memories are never hostages" — either a lapsed user keeps everything
+(so why subscribe?) or loses access to their own memories, which is this
+category's cardinal sin. Churn and billing support land on a solo maintainer, and
+the shipped paywall already promises "one-time purchase, no subscription".
+
+**Why not per-journey (consumable), despite it matching the unit of value best:**
+consumables **cannot be Family-Shared**, which is fatal when the payer is often
+not the author (Dad pays, Mum builds the journey). They also don't appear in
+`Transaction.currentEntitlements`, so "which journeys are unlocked" becomes state
+*we* must persist and restore — precisely the vendor-side liability this whole
+architecture exists to avoid. Per-trip value is captured in the price level, not
+the purchase unit.
+
+### Revenue arithmetic (corrected — the old numbers ignored VAT)
+
+Apple takes its commission **after** VAT is removed, and Norway charges 25 % VAT
+on digital services. So the old "99 kr → ≈ 84 kr net" was wrong:
+
+| Price | Net per household (÷1.25 VAT, ×0.85) |
+|---|---|
+| kr 99 | ≈ **kr 67** (not 84) |
+| **kr 149** | ≈ **kr 101** |
+| kr 179 | ≈ kr 122 |
+
+Family Sharing means one household is one sale, so that is net *per household* —
+and the counterfactual where a spouse buys a second copy of a family archive is
+fiction, which is why Family Sharing costs approximately nothing real.
+
+1 000 buying households ≈ **kr 101 000 lifetime**, against ~$99/yr plus a domain.
+To be a side business rather than a hobby — say kr 100 000/year sustained — needs
+~1 000 *new* buying households every year, i.e. ~15 000–35 000 downloads/year at a
+plausible 3–7 % conversion. A Norwegian-language trekking-family niche does not
+get there by default. **The honest framing is: a hobby with revenue.** What makes
+launching rational anyway is that the marginal cost of selling is zero, the family
+product exists regardless, and the downside is close to nothing. What the repositioning
+buys is +50 % net per household for identical effort, and a far better subtitle.
+
+## 5b. Polarsteps — the competitor we converge on (added 2026-07-25)
+
+The reframe toward "the story of your trip, told" lands us next to **Polarsteps**,
+not away from it. They are the incumbent for this exact job and they are good. Facts
+as of July 2026: the app is free (trip planning, automatic GPS logging, sharing,
+following other people's trips); **Polarsteps Plus** is a subscription that unlocks
+3D maps, advanced trip statistics and extra map styles, plus 20 % off books; and
+**Travel Books cost €36–150** (24 pages minimum, free worldwide shipping).
+
+**The striking data point: their paid upsell is our baseline.** 3D maps and advanced
+trip statistics are what Plus sells. The globe, the elevation profiles, the per-day
+and extended stats are what Akashic opens with, for free, in the free tier.
+
+### Three claims they structurally cannot make
+
+1. **Your trips live in your own iCloud. We run no servers and never see them.**
+   Polarsteps is a server product — it has to be, because following other travellers
+   and rendering print books both need the data on their side. They cannot copy this
+   without abandoning their business.
+2. **There is no account to create.** Your Apple ID is the account.
+3. **One price, once.** kr 149 forever against a recurring subscription — and the
+   things their subscription unlocks are in our free tier.
+
+That is the subtitle and the first three lines of the store description. (Don't name
+them in store copy; make the claims, let the reader do the comparison.)
+
+### Where they beat us, honestly
+
+| Their strength | Our position |
+|---|---|
+| **Android + iOS** | Apple-only, forever (§1). For a *family* product this is the sharpest loss — their followers can be anyone. State it plainly in the store description; a family that discovers it after paying is a refund and a one-star. |
+| **Live tracking while travelling** — automatic background GPS, offline logging, real-time location for worried relatives | We do none of it, and **we should not build it.** It is their moat, it is expensive (background location, battery, server sync), and it belongs to a different job: they own *during* the trip, we own *after*. Added to the §9 not-building list. |
+| **Printed books with worldwide shipping** | We cannot print, and print-with-logistics is a business we should not enter. S5 (PDF/printable export of the story view) is the closest honest answer, and it is v1.1. |
+| **A social graph** — following other travellers compounds growth | Our equivalent is the public showcase page (§6), which is weaker as a loop but needs no servers of ours. |
+| Years of polish, millions of users, a brand | A solo maintainer and a better architecture. |
+
+### What their existence tells us
+
+It validates the market twice over: people **do** pay for a book made from a trip
+(€36–150, repeatedly), and people **do** pay a subscription for 3D maps and stats.
+The threat is real, but the read is encouraging — the job exists and is monetisable,
+and our version of it costs us nothing per user.
+
+---
 
 ## 6. Go-to-market
 
@@ -193,8 +285,14 @@ this is a beautiful side business, not a startup, and the cost base agrees.
   decommissioned). It becomes worth revisiting only on strong traction, and it
   can then *coexist*: CloudKit stays the free family tier, backend powers a paid
   cross-platform tier. Decision gate, not a plan.
-- No AI features, no social graph, no feeds. The product is a family archive,
-  not a network.
+- No AI features beyond §10's on-device/PCC ladder, no social graph, no feeds. The
+  product is a family archive, not a network.
+- **No live tracking while travelling** — no background GPS, no "follow my trip",
+  no real-time location for relatives. That is Polarsteps' moat (§5b), it costs
+  battery and servers, and it belongs to *during* the trip while this product is
+  about *after*. Deciding this explicitly is what keeps the scope honest.
+- **No print pipeline.** A PDF the user can print or hand over (S5) is the answer;
+  paper, binding and worldwide shipping is a different company.
 
 ## 10. Apple Intelligence — the differentiation layer
 
@@ -209,11 +307,35 @@ third-party apps is the **Foundation Models framework** (iOS 26+): direct,
 free, offline access to the on-device model — structured/guided generation,
 tool calling, streaming. It is a ~3B-class model: excellent at summarizing,
 drafting, naming, extracting and classifying *over content we hand it*; not a
-world-knowledge oracle. **Private Cloud Compute is not directly exposed to
-third-party apps today** — it powers Apple's own features, which we inherit for
-free (Writing Tools appear automatically in our caption/notes/comment fields on
-AI-capable devices). If Apple opens PCC APIs at a future WWDC, heavier features
-(long-journey narratives) get an upgrade path with the same privacy story.
+world-knowledge oracle. We also inherit Apple's own features for free (Writing
+Tools appear automatically in our caption/notes/comment fields on AI-capable
+devices).
+
+> **CORRECTION (2026-07-25).** This section previously said Private Cloud Compute
+> was not exposed to third-party apps. **That changed at WWDC26.** The Foundation
+> Models framework now reaches PCC, gained vision capabilities, and gained a model
+> abstraction so a session can run against Apple's on-device model, Apple's
+> frontier model on PCC, or a third-party package (Anthropic and Google both ship
+> Swift packages).
+>
+> **We qualify for it free.** Apple gives PCC access at **no cloud API cost** to
+> developers who are (a) enrolled in the App Store Small Business Program — which
+> we are doing anyway for the 15 % rate — and (b) under **2 million first-time
+> downloads**, with (c) a **PCC entitlement requested** from Apple. TestFlight and
+> ad-hoc installs don't count toward the threshold. If we ever cross 2 M or leave
+> the Small Business Program, Apple gives 6 months to migrate off.
+>
+> What this changes: the §10 ladder was scoped around a ~3B on-device model, which
+> is why the drafters are locked to rearranging facts and retrieving from
+> Wikipedia. A frontier model on PCC lifts that ceiling **without breaking the
+> privacy story** — still no servers of ours, still nothing we can see. It does not
+> change the gating discipline: PCC is available only where Apple Intelligence is,
+> so every AI feature stays runtime-gated and simply absent elsewhere, never a
+> broken button.
+>
+> **Action:** request the entitlement (developer.apple.com/contact/request/private-cloud-compute/)
+> — it is free, and the request should go in early since it is a review by Apple,
+> not a toggle.
 Hardware gate: Apple-Intelligence-capable devices (iPhone 15 Pro and newer);
 the app targets iOS 17, so every AI feature is runtime-gated and simply absent
 on older devices — never a broken button.
@@ -238,9 +360,9 @@ unlock — it fattens the paid tier without adding a krone of marginal cost.
 |---|---|---|
 | **0 — now** | Family on TestFlight, 1 month of real use | It stays stable & family actually uses it |
 | **1 — v1.0 build** (~3–4 wks) | §4.1–4.6 | **Green-lit 2026-07-24** — §4.1 build started |
-| **2 — closed beta** | ~10 external families create journeys from scratch | ≥7 complete a journey without help |
+| **2 — closed beta** | ~10 external households create journeys from their own photos | **(a)** ≥7 create one unaided · **(b)** ≥5 *finish and hand one over* — user-written words on ≥3 days, and actually shared outside the household (CKShare accepted, showcase link sent, or export delivered) · **(c)** ≥5 answer yes to "would you send this instead of making a photo book?" |
 | **3 — launch** | App Store + showcase funnel + communities | — |
-| **4 — v1.1 "Akashic Intelligence"** | §10 ladder: day-note drafting, smart day naming, curation, narrative | Launch stable; AI-device share of user base worth it |
+| **4 — v1.1 "the finished story"** | PDF/printable book export of the story view, people/companions, hero + best-of curation, interview-mode drafting (the model asks two grounded questions, then weaves the answers in). "Akashic Intelligence" demotes from headline to ingredient | Launch stable |
 | **5 — iterate** | ~~Draw-on-map~~ (shipped in v1.0), NL search, live activity, watch app, Strava API import | Sales signal |
 | **6 — platform decision** | Android/web via real backend | Only on clear demand + revenue |
 

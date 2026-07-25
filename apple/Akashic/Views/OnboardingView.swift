@@ -61,13 +61,18 @@ struct OnboardingView: View {
                     }
                 }
                 .font(.headline)
-                .foregroundStyle(Theme.background)
+                .foregroundStyle(Theme.onAccent)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 16)
                 .background(Theme.accent, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
                 .padding(.horizontal, 24)
                 .padding(.bottom, 20)
             }
+            // D2: this is a `fullScreenCover`, so it gets the iPad's full 13" width with nothing
+            // to cap it — a single sentence of body text spanning that width is the most extreme
+            // version of the "stretched phone" problem this task exists to fix, and it is the
+            // very first screen a new iPad owner sees.
+            .constrainedReadingWidth()
         }
         .task(id: page) {
             // Only query iCloud when the user actually reaches the last card, and only once.

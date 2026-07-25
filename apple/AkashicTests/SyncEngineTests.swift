@@ -553,6 +553,162 @@ final class SyncEngineTests: XCTestCase {
         XCTAssertEqual(mock.savedZoneNames, ["journey-j1"])
     }
 
+    // MARK: - D9: the bundled demo journey must never sync
+
+    /// The activation heal, the initial bulk upload, and every observed local write all funnel
+    /// through `handles(journeyID:)` — so excluding a seeded-fixture id there is what makes "never
+    /// syncs" hold everywhere at once. This is the direct unit: a journey marked as seeded is
+    /// "not handled" even though it is otherwise perfectly ordinary owned (private-database)
+    /// content.
+    func testHandlesExcludesSeededFixture() async {
+        let store = FakeLocalStore()
+        store.seededFixtureIDs = ["demo-kilimanjaro"]
+        let (engine, _, _, _) = makeEngine(account: .available, store: store)
+        await engine.activate()
+
+        XCTAssertFalse(engine.handles(journeyID: "demo-kilimanjaro"),
+                       "a seeded-fixture journey is never handled, even though it is owned/private")
+        XCTAssertTrue(engine.handles(journeyID: "real-journey"),
+                      "precondition: an ordinary owned journey is still handled")
+    }
+
+    /// End-to-end through activation: with one real journey and one seeded-fixture journey both
+    /// present locally and never uploaded, only the real one is enqueued — the demo is invisible
+    /// to both the initial bulk upload and the never-uploaded heal.
+    func testActivationNeverUploadsASeededFixtureJourney() async {
+        let store = FakeLocalStore()
+        store.journeyIDs = ["real1", "demo-kilimanjaro"]
+        store.seededFixtureIDs = ["demo-kilimanjaro"]
+        store.identities["real1"] = [
+            LocalChange(kind: .save, recordType: RecordCoder.RecordType.journey, recordName: "real1", journeyID: "real1"),
+        ]
+        store.identities["demo-kilimanjaro"] = [
+            LocalChange(kind: .save, recordType: RecordCoder.RecordType.journey,
+                       recordName: "demo-kilimanjaro", journeyID: "demo-kilimanjaro"),
+        ]
+        let (engine, mock, _, _) = makeEngine(account: .available, store: store)
+
+        await engine.activate()
+
+        XCTAssertEqual(mock.savedRecordNames, ["real1"], "only the real journey is uploaded")
+        XCTAssertEqual(mock.savedZoneNames, ["journey-real1"], "no zone is ever created for the sample")
+    }
+
+    /// A local edit to the seeded-fixture journey (its own creation, in production — see
+    /// `PersistenceController.seedDemoJourneyIfFreshInstall`) must not enqueue anything, exactly
+    /// as if the scheduler had never observed it.
+    func testLocalWriteIgnoredForSeededFixture() async {
+        let store = FakeLocalStore()
+        store.seededFixtureIDs = ["demo-kilimanjaro"]
+        let (engine, mock, _, _) = makeEngine(account: .available, store: store)
+        await engine.activate()
+        mock.reset()
+
+        engine.localStoreDidChange([
+            LocalChange(kind: .save, recordType: RecordCoder.RecordType.journey,
+                       recordName: "demo-kilimanjaro", journeyID: "demo-kilimanjaro"),
+            LocalChange(kind: .save, recordType: RecordCoder.RecordType.waypoint,
+                       recordName: "demo-day-1", journeyID: "demo-kilimanjaro"),
+        ])
+
+        XCTAssertTrue(mock.pendingRecordZoneChanges.isEmpty, "the sample's own creation enqueues nothing")
+        XCTAssertTrue(mock.pendingDatabaseChanges.isEmpty, "no zone is created for the sample")
+    }
+
+    /// Deleting the sample must not even try to delete a (never-created) CloudKit zone.
+    func testDeleteZonesNoOpsForSeededFixture() async {
+        let store = FakeLocalStore()
+        store.seededFixtureIDs = ["demo-kilimanjaro"]
+        let (engine, mock, _, _) = makeEngine(account: .available, store: store)
+        await engine.activate()
+        mock.reset()
+
+        engine.deleteZones(forJourneyID: "demo-kilimanjaro")
+
+        XCTAssertTrue(mock.pendingDatabaseChanges.isEmpty, "no zone-delete is enqueued for a journey that never had one")
+    }
+
+    // MARK: - D9: when it becomes safe to decide the demo-seed question
+
+    /// No account => sync can never deliver anything this session, so the hook fires immediately,
+    /// synchronously within `activate()` — `PersistenceController` uses this to seed the demo
+    /// right away rather than waiting on a fetch that will never happen.
+    func testOnFreshInstallDeterminedFiresImmediatelyWithNoAccount() async {
+        let (engine, _, _, _) = makeEngine(account: .noAccount)
+        var fired = 0
+        engine.onFreshInstallDetermined = { fired += 1 }
+
+        await engine.activate()
+
+        XCTAssertEqual(fired, 1)
+    }
+
+    /// An available account defers the decision until the first fetch actually completes — the
+    /// local store only reflects the account's real contents once that returns.
+    func testOnFreshInstallDeterminedFiresAfterSuccessfulFetch() async {
+        let (engine, _, _, _) = makeEngine(account: .available)
+        var fired = 0
+        engine.onFreshInstallDetermined = { fired += 1 }
+
+        await engine.activate()
+        XCTAssertEqual(fired, 0, "not yet — the fetch hasn't completed")
+
+        await engine.awaitActivationFetch()
+        XCTAssertEqual(fired, 1, "fires once the first fetch succeeds")
+    }
+
+    /// A fetch deferred by the Wi-Fi-only policy leaves the question genuinely open (real data
+    /// might be waiting) — the hook must not fire, or a cellular-constrained fresh install would
+    /// seed the demo right before the family's own archive arrives.
+    @MainActor
+    func testOnFreshInstallDeterminedDoesNotFireWhenFetchDeferred() async {
+        let mock = MockSyncEngine()
+        let engine = AkashicSyncEngine(store: FakeLocalStore(), status: SyncStatus(),
+                                       accountProvider: MockAccountProvider(status: .available),
+                                       defaults: makeDefaults(), engine: mock,
+                                       networkPolicy: ToggleGate(allows: false))
+        var fired = 0
+        engine.onFreshInstallDetermined = { fired += 1 }
+
+        await engine.activate()
+        await engine.awaitActivationFetch()
+
+        XCTAssertEqual(fired, 0, "a deferred fetch leaves the fresh-install question unanswered")
+    }
+
+    /// A thrown fetch is just as inconclusive as a deferred one — still no answer to "is real data
+    /// about to land?" — so it must not fire either.
+    func testOnFreshInstallDeterminedDoesNotFireWhenFetchThrows() async {
+        let mock = MockSyncEngine()
+        mock.shouldThrowOnFetch = true
+        let (engine, _, _, _) = makeEngine(account: .available, mock: mock)
+        var fired = 0
+        engine.onFreshInstallDetermined = { fired += 1 }
+
+        await engine.activate()
+        await engine.awaitActivationFetch()
+
+        XCTAssertEqual(fired, 0)
+    }
+
+    /// The shared engine (journeys others shared with us) is not wired to fire this at all in
+    /// production (`PersistenceController.startSync` only sets it on the private coordinator) —
+    /// but even if something did wire it, a participant's account status has nothing to do with
+    /// seeding the OWNER's local sample, so the engine itself gates on `databaseScope == .private`.
+    func testOnFreshInstallDeterminedNeverFiresOnSharedEngine() async {
+        let mock = MockSyncEngine()
+        let engine = AkashicSyncEngine(store: FakeLocalStore(), status: SyncStatus(),
+                                       accountProvider: MockAccountProvider(status: .noAccount),
+                                       databaseScope: .shared,
+                                       defaults: makeDefaults(), engine: mock)
+        var fired = 0
+        engine.onFreshInstallDetermined = { fired += 1 }
+
+        await engine.activate()
+
+        XCTAssertEqual(fired, 0, "the shared engine never decides the demo-seed question")
+    }
+
     // MARK: - Conflict resolution (serverRecordChanged -> rebase onto server record)
 
     func testServerRecordChangedRebasesAndReenqueues() async throws {
@@ -709,8 +865,16 @@ final class MockSyncEngine: SyncEngineProtocol {
     func remove(pendingRecordZoneChanges changes: [CKSyncEngine.PendingRecordZoneChange]) {
         pendingRecordZoneChanges.removeAll { changes.contains($0) }
     }
+    /// Lets a test exercise the "first fetch attempt threw" path — D9's `onFreshInstallDetermined`
+    /// must NOT fire there (whether real data is about to land is still unknown on a failed pull).
+    var shouldThrowOnFetch = false
+    struct FetchFailed: Error {}
+
     func sendChanges() async throws { sendCount += 1 }
-    func fetchChanges() async throws { fetchCount += 1 }
+    func fetchChanges() async throws {
+        fetchCount += 1
+        if shouldThrowOnFetch { throw FetchFailed() }
+    }
 
     func reset() {
         pendingRecordZoneChanges = []
@@ -739,6 +903,9 @@ final class FakeLocalStore: SyncLocalStore {
     /// Record names the store has "uploaded" (has persisted system fields for). Drives
     /// `hasUploadedRecord` so the activation heal can find never-uploaded journeys.
     var uploadedRecordNames: Set<String> = []
+    /// Journey ids the demo/dev-fixture seed marked (D9) — drives `isSeededFixture`, which
+    /// `handles(journeyID:)` consults to keep sample content out of every sync path.
+    var seededFixtureIDs: Set<String> = []
 
     private(set) var appliedRecords: [CKRecord] = []
     private(set) var deletedRecords: [(recordName: String, recordType: String)] = []
@@ -775,6 +942,7 @@ final class FakeLocalStore: SyncLocalStore {
     func recordIdentities(forJourneyID journeyID: String) -> [LocalChange] { identities[journeyID] ?? [] }
     func beginRemoteApply() { beginCount += 1 }
     func endRemoteApply() { endCount += 1 }
+    func isSeededFixture(journeyID: String) -> Bool { seededFixtureIDs.contains(journeyID) }
 }
 
 /// Injectable account status.

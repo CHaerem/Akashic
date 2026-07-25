@@ -13,6 +13,20 @@ import CoreLocation
 struct GlobeExperienceView: View {
     @EnvironmentObject private var store: JourneyStore
     @EnvironmentObject private var entitlements: EntitlementStore
+    /// A1: pushed into `TrekCameraController` (an `ObservableObject`, not a `View`, so it can't
+    /// read the environment itself) at launch and on every change, since the user can flip
+    /// Reduce Motion while the app is running.
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// D2: `presentationDetents` and `presentationBackgroundInteraction` — the two modifiers
+    /// that make the day sheet sit at `.medium` over a still-interactive map — do not exist on
+    /// iPad. Left alone, the exact same modifiers on `.regular` width still compile and still
+    /// run, but silently become a form sheet that *occludes* the map, breaking the app's
+    /// signature loop precisely where the product is most itself. Reading the size class here
+    /// lets `.regular` route to a floating panel instead (`regularDayPanel`) while `.compact`
+    /// (iPhone, and iPad Slide Over/narrow Split View) keeps the sheet byte-for-byte unchanged.
+    /// This can change live: iPad multitasking (Split View resize, Slide Over) changes size
+    /// class without relaunching the app, so this is read as a `@Environment`, not cached once.
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
     /// Optional photo thumbnail markers. Defaults to empty so trek mode renders without
     /// photos; the Import / photo agent can map their photos into `[MapPhoto]` and pass
@@ -20,7 +34,6 @@ struct GlobeExperienceView: View {
     var photos: [MapPhoto] = []
 
     @StateObject private var controller = TrekCameraController()
-    @State private var showingJourneyList = false
     @State private var didApplyLaunch = false
 
     // Photos for the selected journey (loaded from the store) + the day each resolves to,
@@ -34,17 +47,38 @@ struct GlobeExperienceView: View {
     @State private var dayLightbox: LightboxData?
     @State private var sheetDetent: PresentationDetent = .medium
     @State private var showingPhotoGrid = false
-    /// The globe's route into a journey's own screen — the only place an empty journey can be filled.
-    @State private var showingJourneyDetail = false
-    @State private var showingNewJourney = false
-    @State private var showingPaywall = false
+
+    /// Everything this screen can present as a sheet, in ONE piece of state.
+    ///
+    /// Defensive, not a bug fix — all four destinations did work as separate
+    /// `.sheet(isPresented:)` modifiers. But a view can only present one thing at a time, and four
+    /// stacked presentation modifiers on one view is a documented way to lose one silently; this
+    /// screen had grown to four and was the most likely place in the app to hit it. One
+    /// `.sheet(item:)` over an enum cannot regress that way, and a fifth destination stays safe.
+    private enum GlobeSheet: Identifiable {
+        case journeyList
+        case journeyDetail(String)   // journey id — the only route into an empty journey
+        case newJourney
+        case paywall
+
+        var id: String {
+            switch self {
+            case .journeyList: return "list"
+            case let .journeyDetail(id): return "detail-\(id)"
+            case .newJourney: return "new"
+            case .paywall: return "paywall"
+            }
+        }
+    }
+
+    @State private var sheet: GlobeSheet?
 
     /// Start a create attempt: below the free limit → open creation; at the limit → paywall.
     private func startCreate() {
         if entitlements.canCreateJourney(ownedCount: store.billableOwnedJourneyCount) {
-            showingNewJourney = true
+            sheet = .newJourney
         } else {
-            showingPaywall = true
+            sheet = .paywall
         }
     }
 
@@ -54,7 +88,9 @@ struct GlobeExperienceView: View {
 
             map
                 .ignoresSafeArea()
-                .sheet(isPresented: daySheetPresented) {
+                // D2: only presents as an actual sheet in compact width — see
+                // `compactDaySheetPresented` and `regularDayPanel` below.
+                .sheet(isPresented: compactDaySheetPresented) {
                     daySheet
                 }
 
@@ -62,11 +98,37 @@ struct GlobeExperienceView: View {
                 .fullScreenCover(item: $overviewLightbox) { data in
                     PhotoLightboxView(data: data)
                 }
+
+            // D2: the regular-width counterpart to the `.sheet` above — same content
+            // (`daySheet`), different container, so the map stays visible and interactive
+            // beside it instead of being covered. See `regularDayPanel`.
+            if isRegularWidth {
+                regularDayPanel
+            }
         }
-        .background(Theme.background.ignoresSafeArea())
+        // This screen is the immersive globe/trek map, not a page of chrome — it stays a fixed
+        // night-sky dark in both appearances (see `MapPalette.nightSky` and the note on
+        // `MapPalette` below), the same way Apple Maps and the Photos viewer stay dark behind
+        // their content regardless of the system appearance. `Theme.background` would flash
+        // system white behind the map in Light Mode before MapKit finishes drawing.
+        .background(MapPalette.nightSky.ignoresSafeArea())
+        // `.ultraThinMaterial` (used by `mapOverlayMaterial` above) doesn't just sample the
+        // backdrop — it also tints itself from the *inherited* `colorScheme`, so with A3's
+        // app-wide `.preferredColorScheme(.dark)` gone, flipping the system to Light Mode made
+        // every glass pill on this screen visibly lighter/greyer even though it still sits over
+        // the same dark satellite imagery (verified: compare a Light/Dark screenshot pair of
+        // this screen). That is precisely the map-stops-being-immersive failure A3 says not to
+        // introduce, so this screen — and only this screen — keeps a local forced-dark
+        // `colorScheme`. A `.sheet` does not inherit the presenting view's `preferredColorScheme`,
+        // so each sub-sheet this screen presents needs its own if it wants dark: only the day
+        // sheet (`daySheet` below) still sets one, deliberately, to stay paired with this screen's
+        // fixed-dark chrome (see the comment there). Journey list/detail, the photo grid, and the
+        // paywall set none and are adaptive, following the system appearance like everywhere else.
+        .preferredColorScheme(.dark)
         .statusBarHidden(true)
         .onAppear {
             controller.configure(journeys: store.journeys)
+            controller.setReduceMotion(reduceMotion)
             guard !didApplyLaunch else { return }
             didApplyLaunch = true
             controller.applyLaunchScene()
@@ -75,6 +137,9 @@ struct GlobeExperienceView: View {
         }
         .onChange(of: store.journeys) { _, new in
             controller.configure(journeys: new)
+        }
+        .onChange(of: reduceMotion) { _, newValue in
+            controller.setReduceMotion(newValue)
         }
         .onChange(of: controller.selectedJourneyID) { _, _ in
             loadPhotos(for: controller.selectedJourney)
@@ -87,34 +152,34 @@ struct GlobeExperienceView: View {
                 store.pendingJourneySelection = nil
             }
         }
-        .sheet(isPresented: $showingJourneyList) {
-            NavigationStack { JourneyListView() }
-                .environmentObject(store)
-                .preferredColorScheme(.dark)
-        }
         .fullScreenCover(isPresented: $showingPhotoGrid) {
             if let journey = controller.selectedJourney {
+                // Unlike the globe screen itself, this is an ordinary page of chrome (not the
+                // immersive map), so it follows the system appearance like everywhere else —
+                // it no longer needs its own forced-dark override.
                 NavigationStack { PhotosGridView(journeyID: journey.id) }
                     .environmentObject(store)
-                    .preferredColorScheme(.dark)
             }
         }
-        .sheet(isPresented: $showingJourneyDetail) {
-            if let journey = controller.selectedJourney {
-                NavigationStack { JourneyDetailView(journey: journey) }
+        .sheet(item: $sheet) { destination in
+            switch destination {
+            case .journeyList:
+                NavigationStack { JourneyListView() }
+                    .environmentObject(store)
+            case let .journeyDetail(id):
+                if let journey = store.journey(withID: id) {
+                    NavigationStack { JourneyDetailView(journey: journey) }
+                        .environmentObject(store)
+                        .environmentObject(entitlements)
+                }
+            case .newJourney:
+                NewJourneySheet()
                     .environmentObject(store)
                     .environmentObject(entitlements)
-                    .preferredColorScheme(.dark)
+            case .paywall:
+                PaywallView(reason: .journeyLimit)
+                    .environmentObject(entitlements)
             }
-        }
-        .sheet(isPresented: $showingNewJourney) {
-            NewJourneySheet()
-                .environmentObject(store)
-                .environmentObject(entitlements)
-        }
-        .sheet(isPresented: $showingPaywall) {
-            PaywallView(reason: .journeyLimit)
-                .environmentObject(entitlements)
         }
     }
 
@@ -129,6 +194,21 @@ struct GlobeExperienceView: View {
         )
     }
 
+    private var isRegularWidth: Bool { horizontalSizeClass == .regular }
+
+    /// Gates the ACTUAL `.sheet` presentation to compact width, reusing `daySheetPresented`'s own
+    /// get/set rather than duplicating its logic. On `.regular` this always reports "not
+    /// presented" so the system never mounts the sheet — `regularDayPanel` shows the same content
+    /// (`daySheet`) as a floating panel instead. Doing this as a binding wrapper, instead of an
+    /// `if isRegularWidth { }` around the `.sheet` modifier, keeps the modifier itself — and so the
+    /// compact-width behaviour — textually identical to before this task.
+    private var compactDaySheetPresented: Binding<Bool> {
+        Binding(
+            get: { daySheetPresented.wrappedValue && !isRegularWidth },
+            set: { daySheetPresented.wrappedValue = $0 }
+        )
+    }
+
     @ViewBuilder
     private var daySheet: some View {
         if let journey = controller.selectedJourney, let dayIndex = controller.selectedDayIndex {
@@ -139,6 +219,14 @@ struct GlobeExperienceView: View {
                 onClose: { controller.showOverview() }
             )
             .environmentObject(store)
+            // Unlike the journey list/detail/photo-grid presentations above (now adaptive),
+            // this sheet keeps `.presentationBackgroundInteraction(.enabled(upThrough: .medium))`
+            // — the immersive map is still visible and interactive behind it, not occluded. A
+            // light sheet over the forced-dark globe would be the exact "map stops being
+            // immersive" seam A3 says not to introduce, so this one deliberately stays paired
+            // with the map's fixed-dark chrome. `DayDetailSheet` itself is the SAME view
+            // presented (adaptively) from `JourneyDetailView` — it isn't hardcoded dark, this
+            // sheet's forced scheme is what's pinning it here.
             .preferredColorScheme(.dark)
             .presentationDetents([.medium, .large], selection: $sheetDetent)
             .presentationBackgroundInteraction(.enabled(upThrough: .medium))
@@ -148,6 +236,68 @@ struct GlobeExperienceView: View {
             .fullScreenCover(item: $dayLightbox) { data in
                 PhotoLightboxView(data: data, journey: journey).environmentObject(store)
             }
+        }
+    }
+
+    /// D2's iPad counterpart to `daySheet`: same content (`daySheet` itself, not a fork of it —
+    /// `DayChapterSections` was extracted precisely so both hosts render identical section
+    /// stacks), a different container. ~380–420 pt (D2's own brief), `Theme.surface` fill, and the
+    /// corner-radius/hairline pairing the app's other floating surface cards use
+    /// (`JourneyStoryView`'s cover/chapter cards, `PaywallView`'s benefits card) — 20 pt
+    /// continuous, `Theme.hairline` stroke — so this reads as the same design language, not a
+    /// one-off. `DayDetailSheet`'s own `.background(Theme.background)` paints over most of the
+    /// interior (it's a full ScrollView), which is fine: `background` and `surface` are adjacent
+    /// system-fill tiers, and the outer `surface` still shows through at the rounded corners the
+    /// inner flat-cornered fill doesn't reach.
+    ///
+    /// A sheet gets swipe-to-dismiss for free; a plain floating panel does not, so this adds an
+    /// explicit close control wired to the same `controller.showOverview()` the phone sheet's
+    /// dismissal calls — without it, `.regular` width would have no way back to the journey
+    /// overview once a day is selected.
+    private let regularDayPanelWidth: CGFloat = 400
+
+    @ViewBuilder
+    private var regularDayPanel: some View {
+        if daySheetPresented.wrappedValue {
+            HStack(spacing: 0) {
+                ZStack(alignment: .topTrailing) {
+                    daySheet
+
+                    Button {
+                        controller.showOverview()
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.title3)
+                            .foregroundStyle(Theme.textSecondary)
+                            .frame(minWidth: 44, minHeight: 44)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Close day")
+                    .padding(4)
+                }
+                .frame(width: regularDayPanelWidth)
+                .background(Theme.surface, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 20, style: .continuous)
+                        .strokeBorder(Theme.hairline, lineWidth: 1)
+                )
+                .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+                // Clears the topBar (Journeys button / journey title) above rather than sitting
+                // under it — `overlays` isn't `.ignoresSafeArea()`, so it already starts below the
+                // notch/Dynamic Island; this only needs to additionally clear the bar's own height.
+                .padding(.top, 64)
+                .padding(.leading, 16)
+                .padding(.bottom, 16)
+                // Reduce Motion (A1): a slide-in is exactly the kind of self-initiated motion the
+                // setting exists to remove — the panel still appears/disappears, just as a
+                // cross-fade instead of a directional move, mirroring the globe fly-in's own
+                // reduced-motion fallback in `TrekCameraController`.
+                .transition(reduceMotion ? .opacity : .move(edge: .leading).combined(with: .opacity))
+
+                Spacer(minLength: 0)
+            }
+            .animation(reduceMotion ? nil : .easeOut(duration: 0.25), value: controller.selectedDayIndex)
         }
     }
 
@@ -184,7 +334,9 @@ struct GlobeExperienceView: View {
         ForEach(store.journeys) { journey in
             if let coord = journey.pinCoordinate {
                 Annotation(journey.shortName, coordinate: coord, anchor: .center) {
-                    JourneyPin()
+                    // Named after the journey (D1) — VoiceOver used to hear "Journey pin" for
+                    // every pin on the globe, indistinguishable once there's more than one.
+                    JourneyPin(name: journey.shortName)
                         .onTapGesture { controller.selectJourney(journey) }
                 }
                 .annotationTitles(.hidden)
@@ -361,7 +513,7 @@ struct GlobeExperienceView: View {
                     // Flying into a journey with no route and no days lands on empty ocean — the
                     // camera has nothing to frame. Say so, and offer the one screen that can fix it.
                     JourneyNothingToShowPill(journeyName: journey.shortName) {
-                        showingJourneyDetail = true
+                        sheet = .journeyDetail(journey.id)
                     }
                 } else {
                     // In overview: the day navigator picks a starting day. Once a day is
@@ -371,32 +523,43 @@ struct GlobeExperienceView: View {
             }
         }
         .padding(.top, 8)
+        // The map itself is the point of this screen; past xxLarge the chrome would keep
+        // growing until it drowns it. Cap it here rather than in the map/day-sheet content.
+        .dynamicTypeSize(...DynamicTypeSize.xxLarge)
     }
 
     private var topBar: some View {
         HStack {
+            // 17/15 pt map to `.body`/`.subheadline` — the closest semantic styles, keeping
+            // `.rounded` for the wordmark since that's a brand choice, not a size one.
+            // `MapPalette.label`, not `Theme.textPrimary`: this text sits on the immersive
+            // satellite map, which stays visually dark in both appearances, so its label needs
+            // to stay a fixed light colour too — `Theme.textPrimary` would go near-black in
+            // Light Mode and disappear into the imagery it's drawn over.
             if controller.isGlobe {
                 Text("Akashic")
-                    .font(.system(size: 17, weight: .bold, design: .rounded))
-                    .foregroundStyle(Theme.textPrimary)
+                    .font(.system(.body, design: .rounded).weight(.bold))
+                    .foregroundStyle(MapPalette.label)
                     .shadow(color: .black.opacity(0.5), radius: 4)
             } else {
                 Text(controller.selectedJourney?.shortName ?? "")
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(Theme.textPrimary)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(MapPalette.label)
                     .shadow(color: .black.opacity(0.5), radius: 4)
             }
             Spacer()
             Button {
-                showingJourneyList = true
+                sheet = .journeyList
             } label: {
                 Label("Journeys", systemImage: "list.bullet")
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.footnote.weight(.semibold))
                     .padding(.horizontal, 14)
                     .padding(.vertical, 8)
-                    .foregroundStyle(Theme.textPrimary)
-                    .background(.ultraThinMaterial, in: Capsule())
-                    .overlay(Capsule().strokeBorder(Theme.hairline, lineWidth: 1))
+                    .foregroundStyle(MapPalette.label)
+                    .mapOverlayMaterial(Capsule())
+                    .overlay(Capsule().strokeBorder(MapPalette.hairline, lineWidth: 1))
+                    .frame(minWidth: 44, minHeight: 44)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
         }
@@ -410,18 +573,20 @@ struct GlobeExperienceView: View {
     private var globeEmptyState: some View {
         VStack(spacing: 12) {
             Text("Your journeys will live here")
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(Theme.textPrimary)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(MapPalette.label)
                 .shadow(color: .black.opacity(0.5), radius: 4)
             Button {
                 startCreate()
             } label: {
                 Label("Start your first journey", systemImage: "plus")
                     .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(Theme.background)
+                    .foregroundStyle(Theme.onAccent)
                     .padding(.vertical, 14)
                     .padding(.horizontal, 22)
                     .background(Theme.accent, in: Capsule())
+                    .frame(minHeight: 44)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
         }
@@ -438,7 +603,7 @@ struct GlobeExperienceView: View {
                     Button {
                         controller.selectJourney(journey)
                     } label: {
-                        JourneyGlobeCard(journey: journey)
+                        JourneyGlobeCard(journey: journey, isSample: store.isSampleJourney(journey.id))
                     }
                     .buttonStyle(.plain)
                 }
@@ -452,30 +617,47 @@ struct GlobeExperienceView: View {
 /// journey overview (mirrors tapping the journey's globe pin).
 private struct JourneyGlobeCard: View {
     let journey: Journey
+    /// D9: badges the bundled demo journey right on the landing screen — the surface the whole
+    /// feature exists for ("an empty globe sells nothing").
+    var isSample: Bool = false
+
+    // The flag glyph was a fixed 26 pt icon, not body text; scale it like one so it stays
+    // in proportion with the title next to it instead of going stale at larger sizes.
+    @ScaledMetric(relativeTo: .title2) private var flagSize: CGFloat = 26
 
     var body: some View {
         HStack(spacing: 10) {
             Text(journey.countryFlag)
-                .font(.system(size: 26))
+                .font(.system(size: flagSize))
+            // On-map card (see the note on `topBar`): fixed `MapPalette` labels, not the
+            // adaptive `Theme` ones, because this card floats over the immersive map in every
+            // appearance. The SAMPLE badge is the one exception — `Theme.accent`/`.onAccent`
+            // already sit on the map elsewhere (the "Start your first journey" CTA), so reusing
+            // them here doesn't add a second on-map palette.
             VStack(alignment: .leading, spacing: 2) {
-                Text(journey.shortName)
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(Theme.textPrimary)
-                    .lineLimit(1)
+                HStack(spacing: 6) {
+                    Text(journey.shortName)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(MapPalette.label)
+                        .lineLimit(1)
+                    if isSample { SampleBadge() }
+                }
                 Text("\(journey.country) · \(journey.stats.duration) days")
-                    .font(.system(size: 11))
-                    .foregroundStyle(Theme.textSecondary)
+                    .font(.caption2)
+                    .foregroundStyle(MapPalette.labelSecondary)
                     .lineLimit(1)
             }
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
         .frame(width: 200, alignment: .leading)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .mapOverlayMaterial(RoundedRectangle(cornerRadius: 16, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .strokeBorder(Theme.hairline, lineWidth: 1)
+                .strokeBorder(MapPalette.hairline, lineWidth: 1)
         )
+        .frame(minHeight: 44)
+        .contentShape(Rectangle())
     }
 }
 

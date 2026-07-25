@@ -1,6 +1,14 @@
 import SwiftUI
 import AVKit
 
+/// Reduce Transparency fallback for the lightbox's glass chrome buttons (both here and in
+/// `ResolvingImagePage`'s loading/retry pills below). Fixed dark, not `Theme.surface` — the
+/// backdrop underneath is fixed black in every appearance (see `PhotoLightboxView`'s doc
+/// comment on why this viewer deliberately doesn't adapt to light/dark). Parallels
+/// `MapPalette.overlaySurface` / `mapOverlayMaterial`, the map's own fixed-dark answer to the
+/// same setting.
+private let lightboxChromeOpaqueFill = Color.black.opacity(0.55)
+
 /// Everything the lightbox needs, wrapped so it can drive `.fullScreenCover(item:)`.
 struct LightboxData: Identifiable, Equatable {
     let id = UUID()
@@ -18,6 +26,15 @@ struct LightboxData: Identifiable, Equatable {
 /// When a `journey` is supplied the top bar gains an edit affordance (pencil) that opens the
 /// contextual `PhotoEditSheet`; edits update the pager's local copy in place. Passing `nil`
 /// (e.g. a read-only public context) hides all editing.
+///
+/// **Deliberately stays a fixed-dark viewer in both system appearances** — the black backdrop
+/// and white chrome text/icons here are not routed through `Theme`, on purpose. This is the same
+/// call A3 already made for the map and the globe: a full-screen photo/video pager is an
+/// immersive viewer, not a page of chrome, and that's what Apple's own Photos app does too (its
+/// lightbox stays black regardless of the system's light/dark setting). Making it "adapt" would
+/// mean a white background flashing behind photos while they decode/load, which is worse, not
+/// more correct. Reduce Transparency is a separate axis from light/dark, though, and still
+/// applies here — see `lightboxChromeOpaqueFill` above.
 struct PhotoLightboxView: View {
     let data: LightboxData
     var journey: Journey?
@@ -31,6 +48,11 @@ struct PhotoLightboxView: View {
     @State private var dragOffset: CGFloat = 0
     @State private var editingPhoto: Photo?
     @State private var editingIndex: Int = 0
+
+    /// The chrome's circular icon buttons (edit / close / share) were sized to fit a fixed
+    /// 40 pt glyph; scale the circle with the glyph (`.callout`, the old 16 pt) so it doesn't
+    /// outgrow it — same reasoning as `DayDetailSheet.chevronBoxSize`.
+    @ScaledMetric(relativeTo: .callout) private var iconButtonSize: CGFloat = 40
 
     init(data: LightboxData, journey: Journey? = nil) {
         self.data = data
@@ -126,14 +148,14 @@ struct PhotoLightboxView: View {
             VStack(alignment: .leading, spacing: 4) {
                 if let dayLabel = data.dayLabel {
                     Text(dayLabel)
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(.caption.weight(.semibold))
                         .foregroundStyle(.white)
                         .padding(.horizontal, 10).padding(.vertical, 4)
                         .background(MapPalette.cyan.opacity(0.25), in: Capsule())
                 }
                 if let dateLabel = data.dateLabel {
                     Text(dateLabel)
-                        .font(.system(size: 13))
+                        .font(.footnote)
                         .foregroundStyle(.white.opacity(0.75))
                 }
             }
@@ -145,21 +167,23 @@ struct PhotoLightboxView: View {
                         editingPhoto = photo
                     } label: {
                         Image(systemName: "slider.horizontal.3")
-                            .font(.system(size: 16, weight: .bold))
+                            .font(.callout.weight(.bold))
                             .foregroundStyle(.white)
-                            .frame(width: 40, height: 40)
-                            .background(.ultraThinMaterial, in: Circle())
+                            .frame(width: iconButtonSize, height: iconButtonSize)
+                            .themedMaterial(Circle(), opaqueFill: lightboxChromeOpaqueFill)
                     }
                     .buttonStyle(.plain)
+                    .accessibilityLabel("Edit photo")
                 }
                 Button { dismiss() } label: {
                     Image(systemName: "xmark")
-                        .font(.system(size: 16, weight: .bold))
+                        .font(.callout.weight(.bold))
                         .foregroundStyle(.white)
-                        .frame(width: 40, height: 40)
-                        .background(.ultraThinMaterial, in: Circle())
+                        .frame(width: iconButtonSize, height: iconButtonSize)
+                        .themedMaterial(Circle(), opaqueFill: lightboxChromeOpaqueFill)
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("Close")
             }
         }
         .padding(.horizontal, 16)
@@ -175,24 +199,25 @@ struct PhotoLightboxView: View {
         VStack(spacing: 12) {
             if let caption = current?.caption, !caption.isEmpty {
                 Text(caption)
-                    .font(.system(size: 14))
+                    .font(.subheadline)
                     .foregroundStyle(.white)
                     .multilineTextAlignment(.center)
                     .frame(maxWidth: 520)
             }
             HStack {
                 Text("\(index + 1) / \(photos.count)")
-                    .font(.system(size: 13, weight: .medium))
+                    .font(.footnote.weight(.medium))
                     .foregroundStyle(.white.opacity(0.8))
                 Spacer()
                 if let url = current?.originalFileURL ?? current?.thumbnailFileURL {
                     ShareLink(item: url) {
                         Image(systemName: "square.and.arrow.up")
-                            .font(.system(size: 16, weight: .semibold))
+                            .font(.callout.weight(.semibold))
                             .foregroundStyle(.white)
-                            .frame(width: 40, height: 40)
-                            .background(.ultraThinMaterial, in: Circle())
+                            .frame(width: iconButtonSize, height: iconButtonSize)
+                            .themedMaterial(Circle(), opaqueFill: lightboxChromeOpaqueFill)
                     }
+                    .accessibilityLabel("Share")
                 }
             }
         }
@@ -247,16 +272,16 @@ private struct ResolvingImagePage: View {
                 ProgressView()
                     .tint(.white)
                     .padding(10)
-                    .background(.ultraThinMaterial, in: Circle())
+                    .themedMaterial(Circle(), opaqueFill: lightboxChromeOpaqueFill)
             } else if failed {
                 Button {
                     Task { await resolve() }
                 } label: {
                     Label("Retry", systemImage: "arrow.clockwise")
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(.footnote.weight(.semibold))
                         .foregroundStyle(.white)
                         .padding(.horizontal, 14).padding(.vertical, 8)
-                        .background(.ultraThinMaterial, in: Capsule())
+                        .themedMaterial(Capsule(), opaqueFill: lightboxChromeOpaqueFill)
                 }
                 .buttonStyle(.plain)
             }
@@ -333,7 +358,7 @@ private struct ZoomableImage: View {
 
     private func fallback(icon: String) -> some View {
         Image(systemName: icon)
-            .font(.system(size: 40))
+            .font(.largeTitle)
             .foregroundStyle(.white.opacity(0.4))
             .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -392,7 +417,7 @@ private struct VideoPage: View {
                         ProgressView().tint(.white)
                     } else {
                         Image(systemName: "play.slash")
-                            .font(.system(size: 40))
+                            .font(.largeTitle)
                             .foregroundStyle(.white.opacity(0.4))
                     }
                 }

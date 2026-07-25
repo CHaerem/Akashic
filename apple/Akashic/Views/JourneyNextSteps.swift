@@ -85,6 +85,11 @@ struct JourneyNextStepsCard: View {
 
 /// The globe's version of the same message: one line and one way out, because the globe has no
 /// editing surface of its own. Sized to sit where `DayNavigationView` would.
+///
+/// Unlike `JourneyNextStepsCard` above, this one only ever renders as a map overlay (see
+/// `GlobeExperienceView`), so its text/hairline use the fixed-light `MapPalette` tones, not the
+/// appearance-adaptive `Theme` ones — it sits on the immersive satellite map in both light and
+/// dark, same as the rest of that screen's chrome.
 struct JourneyNothingToShowPill: View {
     let journeyName: String
     var onOpen: () -> Void
@@ -94,17 +99,17 @@ struct JourneyNothingToShowPill: View {
             VStack(spacing: 2) {
                 Text("Nothing to show yet")
                     .font(.system(size: 13, weight: .bold))
-                    .foregroundStyle(Theme.textPrimary)
+                    .foregroundStyle(MapPalette.label)
                 Text("\(journeyName) has no route, days or photos")
                     .font(.system(size: 11))
-                    .foregroundStyle(Theme.textSecondary)
+                    .foregroundStyle(MapPalette.labelSecondary)
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
             }
             Button(action: onOpen) {
                 Label("Open journey", systemImage: "arrow.up.forward.app")
                     .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(Theme.background)
+                    .foregroundStyle(Theme.onAccent)
                     .padding(.vertical, 10)
                     .padding(.horizontal, 18)
                     .background(Theme.accent, in: Capsule())
@@ -114,9 +119,9 @@ struct JourneyNothingToShowPill: View {
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
         .frame(maxWidth: .infinity)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .mapOverlayMaterial(RoundedRectangle(cornerRadius: 16, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous)
-            .strokeBorder(Theme.hairline, lineWidth: 1))
+            .strokeBorder(MapPalette.hairline, lineWidth: 1))
         .padding(.horizontal, 12)
     }
 }

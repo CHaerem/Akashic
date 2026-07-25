@@ -93,6 +93,18 @@ final class AkashicSyncEngine: NSObject, CKSyncEngineDelegate {
     /// Test/observation hook fired after fetched server changes are applied locally.
     var onRemoteChangesApplied: (() -> Void)?
 
+    /// D9: fired the ONE time it becomes safe to decide whether to seed the bundled demo journey
+    /// — either there is no iCloud account (sync can never deliver anything, so seeding right now
+    /// can never collide with real data), or the FIRST fetch attempt just SUCCEEDED (the local
+    /// store now reflects whatever the account actually holds, so "is it still empty?" is a real
+    /// answer). Deliberately NOT fired when the fetch is deferred (Wi-Fi-only policy) or throws —
+    /// in both cases whether the family's own journeys are about to land is still unknown, and
+    /// seeding a sample into an account about to receive real data is worse than not shipping the
+    /// feature. Wired by `PersistenceController.startSync()`; only meaningful on the private
+    /// engine (a shared-in participant's account status has nothing to do with seeding a LOCAL
+    /// sample of the owner's own journeys — `startSync` never wires this on `sharedCoordinator`).
+    var onFreshInstallDetermined: (() -> Void)?
+
     /// Handle on the activation pull. Held so a test can await it instead of racing it — the
     /// pull is deliberately detached (see `fetchOnActivation`), so without this a test that
     /// checked "did activation fetch?" passed or failed on timing alone.
@@ -209,7 +221,14 @@ final class AkashicSyncEngine: NSObject, CKSyncEngineDelegate {
 
     /// Whether this engine's database is the one holding the journey. Every journey belongs to
     /// exactly one of the two engines, so this is what keeps them from fighting over it.
+    ///
+    /// D9: the bundled demo journey is local sample content, never the family's real data, and
+    /// must never reach CloudKit — on the owner's device or any other. Excluding it here, the one
+    /// gate every upload path already funnels through (the initial bulk upload, the activation
+    /// heal, and every observed local write), is what makes "never syncs" hold everywhere instead
+    /// of needing a matching guard at each call site.
     func handles(journeyID: String) -> Bool {
+        guard !store.isSeededFixture(journeyID: journeyID) else { return false }
         let isMine = ownerName(forJourneyID: journeyID) == CKCurrentUserDefaultName
         return databaseScope == .shared ? !isMine : isMine
     }
@@ -235,6 +254,9 @@ final class AkashicSyncEngine: NSObject, CKSyncEngineDelegate {
         SyncLog.log("activate: accountStatus=\(account.rawValue) state=\(String(describing: Self.loadState() != nil))")
         if let blocked = SyncStatus.state(for: account) {
             status.set(blocked)          // .noAccount / .restricted / .unavailable -> engine OFF
+            // No account => sync can never deliver anything this session. Safe to decide the
+            // demo-seed question right now (see `onFreshInstallDetermined`'s doc comment).
+            if databaseScope == .private { onFreshInstallDetermined?() }
             return
         }
 
@@ -309,6 +331,11 @@ final class AkashicSyncEngine: NSObject, CKSyncEngineDelegate {
             // The heavy fetch completed: spend any one-occasion cellular exemption so the next one
             // re-evaluates the policy fresh.
             networkPolicy.heavyTransferDidComplete()
+            // The FIRST successful fetch is the earliest point the local store can be trusted to
+            // reflect the account's real contents — safe to decide the demo-seed question now (see
+            // `onFreshInstallDetermined`'s doc comment). Deliberately not fired on the deferred or
+            // error paths below: both leave "is real data about to land?" still unanswered.
+            if databaseScope == .private { onFreshInstallDetermined?() }
         } catch {
             SyncLog.error("activate: fetchChanges() threw \(error)")
             status.set(.error("Initial fetch failed: \(error.localizedDescription)"))
@@ -411,6 +438,9 @@ final class AkashicSyncEngine: NSObject, CKSyncEngineDelegate {
     /// so this is a no-op outside the private scope.
     func deleteZones(forJourneyID journeyID: String) {
         guard isRunning, let engine, databaseScope == .private else { return }
+        // Never had a zone in the first place (`handles(journeyID:)` excludes it from every
+        // upload path) — skip the wasted round trip when the demo journey is deleted.
+        guard !store.isSeededFixture(journeyID: journeyID) else { return }
         engine.add(pendingDatabaseChanges: [
             .deleteZone(RecordCoder.zoneID(forJourneyID: journeyID)),
             .deleteZone(RecordCoder.mediaZoneID(forJourneyID: journeyID)),

@@ -94,7 +94,7 @@ private struct StripThumbnail: View {
         .overlay(alignment: .topLeading) {
             if photo.isHero {
                 Image(systemName: "star.fill")
-                    .font(.system(size: 12))
+                    .font(.caption)
                     .foregroundStyle(.yellow)
                     .padding(6)
                     .shadow(radius: 2)
@@ -103,7 +103,7 @@ private struct StripThumbnail: View {
         .overlay(alignment: .bottomTrailing) {
             if photo.isVideo {
                 Image(systemName: "play.circle.fill")
-                    .font(.system(size: 16))
+                    .font(.callout)
                     .foregroundStyle(.white)
                     .padding(6)
                     .shadow(radius: 2)

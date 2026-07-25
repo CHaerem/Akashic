@@ -39,7 +39,6 @@ struct MovePhotoToDaySheet: View {
                 }
             }
         }
-        .preferredColorScheme(.dark)
         .presentationBackground(Theme.background)
         .presentationDetents([.medium, .large])
     }

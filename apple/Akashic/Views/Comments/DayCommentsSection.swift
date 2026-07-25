@@ -36,7 +36,7 @@ struct DayCommentsSection: View {
 
             if comments.isEmpty {
                 Text("No comments yet")
-                    .font(.system(size: 13))
+                    .font(.footnote)
                     .foregroundStyle(Theme.textTertiary)
                     .frame(maxWidth: .infinity, alignment: .center)
                     .padding(.vertical, 14)
@@ -66,7 +66,7 @@ struct DayCommentsSection: View {
             HStack(alignment: .bottom, spacing: 8) {
                 ZStack(alignment: .bottomTrailing) {
                     TextField("Comment on Day \(camp.dayNumber)…", text: $draft, axis: .vertical)
-                        .font(.system(size: 14))
+                        .font(.subheadline)
                         .foregroundStyle(Theme.textPrimary)
                         .lineLimit(1...5)
                         .padding(.horizontal, 12)
@@ -81,7 +81,7 @@ struct DayCommentsSection: View {
 
                     if isNearLimit {
                         Text("\(draft.count)/\(CommentService.maxLength)")
-                            .font(.system(size: 10, weight: .medium))
+                            .font(.caption2.weight(.medium))
                             .foregroundStyle(isOverLimit ? commentDanger : Theme.textTertiary)
                             .padding(.trailing, 10)
                             .padding(.bottom, 8)
@@ -90,7 +90,7 @@ struct DayCommentsSection: View {
 
                 Button(action: send) {
                     Image(systemName: "arrow.up.circle.fill")
-                        .font(.system(size: 30))
+                        .font(.title)
                         .symbolRenderingMode(.hierarchical)
                         .foregroundStyle(canSend ? Theme.accent : Theme.textTertiary)
                 }
@@ -102,11 +102,11 @@ struct DayCommentsSection: View {
             // Inline first-comment identity prompt (no Settings screen tonight).
             VStack(alignment: .leading, spacing: 8) {
                 Text("Add your name to comment")
-                    .font(.system(size: 12, weight: .medium))
+                    .font(.caption.weight(.medium))
                     .foregroundStyle(Theme.textSecondary)
                 HStack(spacing: 8) {
                     TextField("Your name", text: $pendingName)
-                        .font(.system(size: 14))
+                        .font(.subheadline)
                         .foregroundStyle(Theme.textPrimary)
                         .textInputAutocapitalization(.words)
                         .padding(.horizontal, 12)
@@ -119,7 +119,7 @@ struct DayCommentsSection: View {
                         .onSubmit(saveName)
 
                     Button("Continue", action: saveName)
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(.footnote.weight(.semibold))
                         .foregroundStyle(canSaveName ? Theme.accent : Theme.textTertiary)
                         .disabled(!canSaveName)
                 }
@@ -194,6 +194,14 @@ private struct CommentRow: View {
 
     private let actionsWidth: CGFloat = 108
 
+    /// The avatar initial was sized to fit a fixed 26 pt circle; scale the circle with the
+    /// glyph (`.caption`, matching the old 12 pt) so a growing letter doesn't outgrow it.
+    @ScaledMetric(relativeTo: .caption) private var avatarSize: CGFloat = 26
+
+    /// The swipe-action icons were sized to fit a fixed 46 pt square; scale the square with the
+    /// glyph (`.subheadline`, the old 15 pt) for the same reason as `DayDetailSheet.chevronBoxSize`.
+    @ScaledMetric(relativeTo: .subheadline) private var actionButtonSize: CGFloat = 46
+
     private var swipeEnabled: Bool { comment.isMine && !isEditing }
 
     var body: some View {
@@ -230,14 +238,14 @@ private struct CommentRow: View {
             HStack(spacing: 8) {
                 avatar
                 Text(comment.authorName)
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.footnote.weight(.semibold))
                     .foregroundStyle(Theme.textPrimary)
                 Text(CommentTime.relative(comment.createdAt))
-                    .font(.system(size: 11))
+                    .font(.caption2)
                     .foregroundStyle(Theme.textTertiary)
                 if comment.wasEdited {
                     Text("(edited)")
-                        .font(.system(size: 11))
+                        .font(.caption2)
                         .italic()
                         .foregroundStyle(Theme.textTertiary)
                 }
@@ -248,7 +256,7 @@ private struct CommentRow: View {
                 editor
             } else {
                 Text(comment.content)
-                    .font(.system(size: 13))
+                    .font(.footnote)
                     .foregroundStyle(Theme.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -265,9 +273,9 @@ private struct CommentRow: View {
 
     private var avatar: some View {
         Text(String(comment.authorName.first ?? "?").uppercased())
-            .font(.system(size: 12, weight: .semibold))
+            .font(.caption.weight(.semibold))
             .foregroundStyle(Theme.textSecondary)
-            .frame(width: 26, height: 26)
+            .frame(width: avatarSize, height: avatarSize)
             .background(Theme.accentSoft, in: Circle())
     }
 
@@ -276,11 +284,14 @@ private struct CommentRow: View {
     private var editor: some View {
         VStack(alignment: .leading, spacing: 8) {
             TextField("Edit comment", text: $editText, axis: .vertical)
-                .font(.system(size: 13))
+                .font(.footnote)
                 .foregroundStyle(Theme.textPrimary)
                 .lineLimit(1...6)
                 .padding(8)
-                .background(Color.black.opacity(0.2), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                // A black-opacity "recessed field" tint only reads as recessed on the fixed
+                // dark background this sheet used to assume; `Theme.fillSubtle` is the
+                // system's own answer and adapts with appearance and contrast on its own.
+                .background(Theme.fillSubtle, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
                 .overlay(
                     RoundedRectangle(cornerRadius: 10, style: .continuous)
                         .strokeBorder(Theme.hairline, lineWidth: 1)
@@ -292,12 +303,12 @@ private struct CommentRow: View {
                     if !trimmed.isEmpty { onUpdate(trimmed) }
                     isEditing = false
                 }
-                .font(.system(size: 12, weight: .semibold))
+                .font(.caption.weight(.semibold))
                 .foregroundStyle(Theme.accent)
                 .disabled(editText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
 
                 Button("Cancel") { isEditing = false }
-                    .font(.system(size: 12, weight: .medium))
+                    .font(.caption.weight(.medium))
                     .foregroundStyle(Theme.textTertiary)
             }
         }
@@ -322,9 +333,9 @@ private struct CommentRow: View {
     private func actionButton(system: String, tint: Color, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: system)
-                .font(.system(size: 15, weight: .semibold))
+                .font(.subheadline.weight(.semibold))
                 .foregroundStyle(tint)
-                .frame(width: 46, height: 46)
+                .frame(width: actionButtonSize, height: actionButtonSize)
                 .background(tint.opacity(0.16), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
         }
         .buttonStyle(.plain)

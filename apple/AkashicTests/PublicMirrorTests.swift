@@ -180,6 +180,16 @@ final class PublicMirrorTests: XCTestCase {
         XCTAssertEqual(record["dateEnded"] as? Date, DateOnly.date(from: "2024-01-07"))
     }
 
+    /// S2: the public mirror must carry the owner's actual `journeyType`, not a hardcoded
+    /// "trek" — this record is world-readable, so a fossilised wrong value here is exactly as
+    /// permanent as on the private Journey record.
+    func testJourneyTypeMirrorsNonDefaultValue() {
+        var j = makeJourney()
+        j.journeyType = "diary"
+        let record = PublicMirrorBuilder.journeyRecord(for: j, photos: makePhotos())
+        XCTAssertEqual(record["journeyType"] as? String, "diary")
+    }
+
     func testJourneyCenterLocationSwap() {
         // Domain [lng, lat] = [37.35, -3.07] must become CLLocation(latitude: -3.07, longitude: 37.35).
         let record = PublicMirrorBuilder.journeyRecord(for: makeJourney(), photos: makePhotos())

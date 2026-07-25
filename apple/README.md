@@ -9,11 +9,20 @@ full stats, day comments, App Intents (D8), live Spotlight indexing, a stats wid
 
 **Journeys can be created here**, from four route sources: GPX import (Strava/Garmin/
 AllTrails/komoot), inference from photo GPS, **drawn by hand on the map**, or no route at
-all. Days seed from GPX waypoints or photo-date clusters; place names, POIs and historical
-weather are suggested and accepted one by one; **Akashic Intelligence** (on-device
+all. Days seed from GPX waypoints or photo-date clusters; structural facts derived from your own
+photos — route, country, dates — are applied by default and reversibly, while enrichment
+(place names, POIs, historical weather, grounded facts) stays accept-per-row; **Akashic Intelligence** (on-device
 Foundation Models, iOS 26 + Apple Intelligence + Complete) drafts day notes and day names
 without a byte leaving the device. Everything is correctable after the fact — route, days,
 day content, photo↔day assignment, and deletion.
+
+A journey can be **read as a story** — cover, one chapter per day, photos inline, with the
+day's own notes first-class — which is the thing you hand to someone. A `.gpx` shared from
+Files, Mail or Strava opens straight into creation. A fresh install ships one **sample
+journey** so the app is never empty. The app follows the **system appearance** (light, dark,
+or an Appearance picker in Settings), honours Reduce Motion, Reduce Transparency and Increase
+Contrast, and lays out properly on iPad — where the day panel floats beside a live map rather
+than covering it.
 
 > **Status (2026-07-25):** the migration is done. **D4: custom `CKRecord` sync via
 > `CKSyncEngine`, one custom zone per journey, Core Data as the local store** (Option A in
@@ -26,7 +35,7 @@ day content, photo↔day assignment, and deletion.
 >
 > Product work is now v1.0 commercialization: free tier + one-time unlock (StoreKit 2),
 > consumer onboarding, store assets. See [`COMMERCIALIZATION-PLAN.md`](../COMMERCIALIZATION-PLAN.md)
-> and W7 in [`APPLE-MIGRATION-TASKS.md`](../APPLE-MIGRATION-TASKS.md). **560 unit tests, CI green.**
+> and W7 in [`APPLE-MIGRATION-TASKS.md`](../APPLE-MIGRATION-TASKS.md). **599 unit tests, CI green.**
 
 ---
 

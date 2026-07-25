@@ -154,6 +154,11 @@ struct Journey: Codable, Equatable, Identifiable {
     var dateEnded: String?
     var isPublic: Bool = false
 
+    /// "trek" | "diary" (S4) — carried, not computed, so every write path (Core Data, CKRecord,
+    /// the public mirror, the export bundle) round-trips the same value instead of each one
+    /// silently re-defaulting to "trek". Nothing reads this yet; S4 is what gives it meaning.
+    var journeyType: String = "trek"
+
     var summitElevation: Int?
     var totalDistance: Double?
     var totalDays: Int?

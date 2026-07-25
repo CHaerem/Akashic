@@ -60,6 +60,20 @@ final class SyncRecordCoderTests: XCTestCase {
         XCTAssertTrue(record["centerLocation"] is CLLocation)
     }
 
+    /// S2: a non-default `journeyType` must survive `RecordCoder`'s encode/decode unchanged.
+    /// Before the fix, `record(for:)` stamped every Journey record "trek" regardless of the
+    /// domain value, so this would have come back "trek" instead of "diary".
+    func testJourneyTypeSurvivesRecordCoderRoundTrip() throws {
+        var journey = try FixtureLoader.load(named: "kilimanjaro", bundle: bundle)
+        journey.journeyType = "diary"
+
+        let record = RecordCoder.record(for: journey, in: zone)
+        XCTAssertEqual(record["journeyType"] as? String, "diary")
+
+        let decoded = try XCTUnwrap(RecordCoder.journey(from: record))
+        XCTAssertEqual(decoded.journeyType, "diary")
+    }
+
     func testWaypointJSONStringAndListFields() {
         // Kilimanjaro camps carry weather/fun-facts/etc. + highlights.
         let journey = try! FixtureLoader.load(named: "kilimanjaro", bundle: bundle)

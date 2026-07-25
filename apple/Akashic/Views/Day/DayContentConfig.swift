@@ -15,6 +15,21 @@ private func dayColor(_ hex: UInt32) -> Color {
     )
 }
 
+/// A colour that's the web's original hex under Dark Mode and a darker, more saturated shade of
+/// the SAME hue under Light Mode — built from `dayColor` above and handed off to
+/// `Color.adaptive(dark:light:)`, the shared helper in `Theme.swift` (the same technique
+/// `StatsView.adaptiveHue` uses for its difficulty badge — both now call through to one place).
+///
+/// Unlike `dayColor` above (used for icon-tile *backgrounds* at ~16% opacity — where none of
+/// these hues have a legibility problem, verified by inspection), `FunFactStyle.color` is also
+/// drawn as small (`.caption2`) TEXT in `FunFactCardView`. Checked against the web's original
+/// hex values on a white page: several dropped under a 2:1 contrast ratio (`wildlife`'s
+/// `#FBBF24` ~1.7:1, `flora`'s `#34D399` ~1.9:1) — nowhere near WCAG's 4.5:1 floor for text this
+/// size. Every `light` value below was chosen to clear 4.5:1 with margin.
+private func dayColorAdaptive(dark: UInt32, light: UInt32) -> Color {
+    Color.adaptive(dark: dayColor(dark), light: dayColor(light))
+}
+
 // MARK: - Weather
 
 /// WMO weather-code → SF Symbol + human label. Ported to cover the full open-meteo table
@@ -91,17 +106,17 @@ enum FunFactStyle {
 
     static func config(for category: String) -> Config {
         switch category.lowercased() {
-        case "geology":   return Config(icon: "🪨", color: dayColor(0xA78BFA), label: "Geology")
-        case "wildlife":  return Config(icon: "🦁", color: dayColor(0xFBBF24), label: "Wildlife")
-        case "flora":     return Config(icon: "🌿", color: dayColor(0x34D399), label: "Flora")
-        case "history":   return Config(icon: "📜", color: dayColor(0xF59E0B), label: "History")
-        case "culture":   return Config(icon: "🎭", color: dayColor(0xF472B6), label: "Culture")
-        case "climate":   return Config(icon: "🌤", color: dayColor(0x60A5FA), label: "Climate")
-        case "adventure": return Config(icon: "⛰️", color: dayColor(0xEF4444), label: "Adventure")
-        case "science":   return Config(icon: "🔬", color: dayColor(0x8B5CF6), label: "Science")
-        case "geography": return Config(icon: "🗺️", color: dayColor(0x14B8A6), label: "Geography")
-        case "survival":  return Config(icon: "🧭", color: dayColor(0xF97316), label: "Survival")
-        default:          return Config(icon: "🗺️", color: dayColor(0x14B8A6), label: category.capitalized)
+        case "geology":   return Config(icon: "🪨", color: dayColorAdaptive(dark: 0xA78BFA, light: 0x6D28D9), label: "Geology")
+        case "wildlife":  return Config(icon: "🦁", color: dayColorAdaptive(dark: 0xFBBF24, light: 0xB45309), label: "Wildlife")
+        case "flora":     return Config(icon: "🌿", color: dayColorAdaptive(dark: 0x34D399, light: 0x047857), label: "Flora")
+        case "history":   return Config(icon: "📜", color: dayColorAdaptive(dark: 0xF59E0B, light: 0x92400E), label: "History")
+        case "culture":   return Config(icon: "🎭", color: dayColorAdaptive(dark: 0xF472B6, light: 0xBE185D), label: "Culture")
+        case "climate":   return Config(icon: "🌤", color: dayColorAdaptive(dark: 0x60A5FA, light: 0x1D4ED8), label: "Climate")
+        case "adventure": return Config(icon: "⛰️", color: dayColorAdaptive(dark: 0xEF4444, light: 0xB91C1C), label: "Adventure")
+        case "science":   return Config(icon: "🔬", color: dayColorAdaptive(dark: 0x8B5CF6, light: 0x6D28D9), label: "Science")
+        case "geography": return Config(icon: "🗺️", color: dayColorAdaptive(dark: 0x14B8A6, light: 0x0F766E), label: "Geography")
+        case "survival":  return Config(icon: "🧭", color: dayColorAdaptive(dark: 0xF97316, light: 0xC2410C), label: "Survival")
+        default:          return Config(icon: "🗺️", color: dayColorAdaptive(dark: 0x14B8A6, light: 0x0F766E), label: category.capitalized)
         }
     }
 }
@@ -135,7 +150,10 @@ enum HistoricalSignificance {
         switch (significance ?? "minor").lowercased() {
         case "major":   return dayColor(0xF59E0B)
         case "notable": return dayColor(0x60A5FA)
-        default:        return Color.white.opacity(0.4)
+        // "minor" used to fall back to 40%-white — legible only against the fixed dark
+        // background this screen assumed. `.systemGray` is Apple's own answer for a muted,
+        // still-legible tone that adapts its exact brightness to the appearance.
+        default:        return Color(uiColor: .systemGray)
         }
     }
 

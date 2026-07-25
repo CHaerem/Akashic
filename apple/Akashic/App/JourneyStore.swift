@@ -17,6 +17,16 @@ final class JourneyStore: ObservableObject {
     /// Set by `AkashicApp`'s `onContinueUserActivity` handler; a view observes it and clears it.
     @Published var pendingJourneySelection: String?
 
+    /// True while a `NewJourneySheet` is on screen, from ANY of its three entry points (the list's
+    /// "+", the globe's "+", or a `.gpx` opened from outside the app) — set/cleared by
+    /// `NewJourneySheet` itself in `onAppear`/`onDisappear`. Each entry point owns its own private
+    /// `@State` for whether ITS sheet is presented, so none of them can see whether a DIFFERENT
+    /// entry point already has one up; this shared, observable flag is the one place that is
+    /// visible everywhere. `AkashicApp.handleOpenedGPX` reads it so a `.gpx` opened while a
+    /// creation flow is already in progress (started from the list, the globe, or an earlier GPX
+    /// still being reviewed) never silently replaces that in-progress draft.
+    @Published var isPresentingJourneyCreation = false
+
     private let persistence: PersistenceController
 
     /// Shared on-demand originals fetcher for the v2 media split (MAPPING §13). nil outside the
@@ -416,13 +426,21 @@ final class JourneyStore: ObservableObject {
     }
 
     /// The owned-journey count the create-journey paywall gate consults — owned journeys MINUS any
-    /// seeded from the bundled demo fixtures. In `.cloudKit` mode nothing is seeded, so this equals
-    /// `ownedJourneyCount`; in `.fixtures`/`.local` (dev/demo) modes the bundled demo journeys never
-    /// eat the family's one free slot. (quality gate: fixture-seeded demo journeys consume the free
-    /// tier.)
+    /// seeded from the bundled demo fixtures: `.fixtures`/`.local` mode's dev fixtures, and (D9)
+    /// the single demo journey `.local`/`.cloudKit` may seed on a fresh install. None of these ever
+    /// eat the family's one free slot — a brand-new customer who has never created a journey must
+    /// still see "create your first journey" as available, not a paywall the demo silently filled.
+    /// (quality gate: fixture-seeded demo journeys consume the free tier.)
     var billableOwnedJourneyCount: Int {
         journeys.filter {
             isOwnedByCurrentUser(journeyID: $0.id) && !persistence.isSeededFixture(journeyID: $0.id)
         }.count
+    }
+
+    /// Whether a journey is the bundled demo sample (D9) rather than the family's own content.
+    /// Views read this to badge the demo distinctly and to word its delete confirmation honestly
+    /// (it never touched iCloud, so the usual "deletes from your iCloud" copy would be false).
+    func isSampleJourney(_ id: String) -> Bool {
+        persistence.isSeededFixture(journeyID: id)
     }
 }

@@ -1,5 +1,38 @@
 # App Store Listing — Akashic Journeys
 
+> ## ⚠️ REVISION REQUIRED before this copy is entered (2026-07-25)
+>
+> Two decisions landed after this file was written, and one of them makes the
+> current description **factually wrong**:
+>
+> 1. **The free tier now includes finishing** (COMMERCIALIZATION-PLAN §5). Publishing
+>    and export are no longer paywalled. Every place this copy says Complete unlocks
+>    "unlimited journeys, publishing and export" must become **"unlimited journeys and
+>    photos"** — otherwise the store description advertises a paywall that doesn't
+>    exist, which App Review can falsify against the build.
+> 2. **Price is kr 149**, not kr 99.
+>
+> And the positioning sharpened (§5b): the product is now framed as *the story of your
+> trip, told — without the work*. Three claims belong high in the description because
+> **Polarsteps structurally cannot make them**, and their paid tier sells what our free
+> tier opens with (3D maps, advanced stats):
+>
+> - your trips live in **your own iCloud** — we run no servers and never see them;
+> - there is **no account to create** (your Apple ID is the account);
+> - **one price, once** — not a subscription.
+>
+> Two hard rules for the copy: **never write "photo book"** (it promises print, and the
+> app cannot print — that is a guaranteed one-star), and **never name a competitor**.
+> Make the claims and let the reader do the comparison. Also state the Apple-only
+> constraint plainly — a family that discovers it after paying is a refund and a
+> one-star, and it is cheaper to say it up front.
+>
+> The subtitle ("Your treks on a living globe") still reads trek-only. It is a good
+> line; decide deliberately whether the wedge audience (trekkers) or the wider job
+> (any trip worth remembering) should own 30 characters, and remember the demo journey
+> and screenshots should show **both** a trek and a photos-only trip (DESIGN-PLAN D9).
+
+
 Draft metadata for App Store Connect. Paste-ready. Every feature claim below is
 true of the app **today** unless tagged `[v1.0 — in progress]` (journey creation
 from scratch, the paywall/IAP, and onboarding are being built in parallel — do

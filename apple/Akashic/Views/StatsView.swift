@@ -70,7 +70,7 @@ struct StatsView: View {
                 VStack(alignment: .leading, spacing: 4) {
                     sectionLabel("Summit")
                     Text(Formatters.meters(hp.elevation))
-                        .font(.system(size: 34, weight: .light))
+                        .font(.largeTitle.weight(.light))
                         .foregroundStyle(Theme.textPrimary)
                     Text(hp.name)
                         .font(.subheadline)
@@ -166,9 +166,9 @@ struct StatsView: View {
     private var journeyStatsSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             sectionLabel("Journey Stats")
+            // D4: Total Distance and Duration used to repeat here — the header chips above
+            // already say them. Only figures the header doesn't carry belong in this grid.
             statGrid {
-                StatItem(label: "Total Distance", value: Formatters.distanceKm(journey.stats.totalDistance))
-                StatItem(label: "Duration", value: "\(journey.stats.duration) days")
                 StatItem(label: "Est. Hiking Time", value: extended.estimatedTotalTime, color: Self.violet)
                 StatItem(label: "Avg. Daily Distance", value: "\(extended.avgDailyDistance) km")
             }
@@ -225,10 +225,14 @@ struct StatsView: View {
     // MARK: - Building blocks
 
     private func sectionLabel(_ text: String) -> some View {
+        // Was a fixed 10 pt at `Theme.textTertiary` (40% white) — small size and low contrast
+        // compounded into the least readable text in the tab. `.caption2` is the size floor;
+        // `textSecondary` (62% white) is the fix for a *label*, as opposed to a de-emphasised
+        // value, sitting at that size.
         Text(text.uppercased())
-            .font(.system(size: 10, weight: .medium))
+            .font(.caption2.weight(.medium))
             .tracking(1.4)
-            .foregroundStyle(Theme.textTertiary)
+            .foregroundStyle(Theme.textSecondary)
     }
 
     @ViewBuilder
@@ -239,18 +243,37 @@ struct StatsView: View {
     }
 
     // MARK: - Palette
-
+    //
+    // Verified on screen (Kilimanjaro, Stats tab, both appearances): `violet` and `red` read
+    // fine against a white page — 3.7:1 and 4.2:1, both above the 3:1 floor for text this size
+    // (`.title3`, which clears WCAG's "large text" threshold). `green` and the difficulty
+    // badge's orange/amber did NOT — the "Hard" badge visibly washed out at ~2.8:1 and ~1.9:1
+    // (green ~2.3:1), all mirroring the web's hex 1:1 with no allowance for a light background.
+    // Rather than replace the hue family, `adaptiveHue` keeps the original (dark-mode-proven)
+    // value for dark and swaps in a darker, more saturated shade of the SAME hue for light —
+    // the same "the trait picks the value" technique `Theme` already uses for Increase
+    // Contrast, applied here to light/dark instead.
     private static let violet = Color(red: 139 / 255, green: 92 / 255, blue: 246 / 255)   // #8b5cf6
-    private static let green = Color(red: 34 / 255, green: 197 / 255, blue: 94 / 255)      // #22c55e
+    private static let green = adaptiveHue(dark: (34, 197, 94), light: (21, 128, 61))      // #22c55e / #15803d
     private static let red = Color(red: 239 / 255, green: 68 / 255, blue: 68 / 255)        // #ef4444
 
     static func difficultyColor(_ difficulty: String) -> Color {
         switch difficulty {
         case "Extreme": return Color(red: 239 / 255, green: 68 / 255, blue: 68 / 255)   // red
-        case "Hard": return Color(red: 249 / 255, green: 115 / 255, blue: 22 / 255)     // orange
-        case "Moderate": return Color(red: 234 / 255, green: 179 / 255, blue: 8 / 255)  // amber
-        default: return Color(red: 34 / 255, green: 197 / 255, blue: 94 / 255)          // green (Easy)
+        case "Hard": return adaptiveHue(dark: (249, 115, 22), light: (194, 65, 12))      // orange / dark orange
+        case "Moderate": return adaptiveHue(dark: (234, 179, 8), light: (180, 83, 9))    // amber / dark amber
+        default: return Self.green                                                       // green (Easy)
         }
+    }
+
+    /// A colour that's `dark` (0–255 RGB) under Dark Mode and `light` under Light Mode. Builds the
+    /// two plain `Color`s from their RGB tuples and hands off to `Color.adaptive(dark:light:)` —
+    /// the shared helper in `Theme.swift`, which is the one place this technique now lives.
+    private static func adaptiveHue(dark: (Int, Int, Int), light: (Int, Int, Int)) -> Color {
+        func color(_ rgb: (Int, Int, Int)) -> Color {
+            Color(red: Double(rgb.0) / 255, green: Double(rgb.1) / 255, blue: Double(rgb.2) / 255)
+        }
+        return Color.adaptive(dark: color(dark), light: color(light))
     }
 }
 
@@ -265,12 +288,15 @@ struct StatItem: View {
     var body: some View {
         Card(padding: 14) {
             VStack(alignment: .leading, spacing: 4) {
+                // Same fix as `StatsView.sectionLabel`: a 10 pt label at `textTertiary` is small
+                // and low-contrast together. `value` below keeps `textTertiary` as its fallback —
+                // it's a de-emphasised number, not a label, so out of scope for the lift.
                 Text(label.uppercased())
-                    .font(.system(size: 10, weight: .medium))
+                    .font(.caption2.weight(.medium))
                     .tracking(1.0)
-                    .foregroundStyle(Theme.textTertiary)
+                    .foregroundStyle(Theme.textSecondary)
                 Text(value)
-                    .font(.system(size: 20, weight: .light))
+                    .font(.title3.weight(.light))
                     .foregroundStyle(color ?? Theme.textPrimary)
                     .lineLimit(1).minimumScaleFactor(0.7)
                 if let sublabel {
@@ -288,6 +314,7 @@ struct StatItem: View {
 struct StatsTabView: View {
     @EnvironmentObject private var store: JourneyStore
     @State private var selectedID: String?
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
 
     private var selected: Journey? {
         store.journey(withID: selectedID ?? store.journeys.first?.id ?? "")
@@ -297,13 +324,7 @@ struct StatsTabView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 if store.journeys.count > 1 {
-                    Picker("Journey", selection: Binding(
-                        get: { selected?.id ?? "" },
-                        set: { selectedID = $0 }
-                    )) {
-                        ForEach(store.journeys) { Text($0.shortName).tag($0.id) }
-                    }
-                    .pickerStyle(.segmented)
+                    journeyChipRow
                 }
 
                 if let journey = selected {
@@ -314,10 +335,61 @@ struct StatsTabView: View {
                 }
             }
             .padding(16)
+            // D2: full-width stat grids and a full-width elevation chart across a 13" iPad read
+            // as a stretched phone screen; cap and centre instead.
+            .constrainedReadingWidth()
         }
         .background(Theme.background.ignoresSafeArea())
         .navigationTitle("Stats")
         .onAppear { if selectedID == nil { selectedID = resolveInitialJourneyID() } }
+    }
+
+    // MARK: - Journey picker (D4)
+    //
+    // Was a `.segmented` Picker — SwiftUI truncates segment titles once there isn't room
+    // ("Inca Trail to Mac…"), and the paid tier's entire promise is *unlimited* journeys, so
+    // the control broke precisely when someone paid. A horizontally scrolling chip row has no
+    // such ceiling: every journey gets its full name, and it borrows the same capsule
+    // selected/unselected language as the globe strip's day pills (`DayNavigationView`) rather
+    // than a `Menu`, so the picker stays visually consistent with the rest of the app's chrome
+    // instead of hiding the journey list behind a tap.
+    private var journeyChipRow: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(store.journeys) { journey in
+                    journeyChip(journey)
+                }
+            }
+            // Room for the selected chip's stroke/shadow at the scroll edges.
+            .padding(.horizontal, 2)
+        }
+    }
+
+    private func journeyChip(_ journey: Journey) -> some View {
+        let isSelected = journey.id == (selected?.id ?? "")
+        return Button {
+            withAnimation(.easeOut(duration: 0.2)) { selectedID = journey.id }
+        } label: {
+            Text(journey.name)
+                .font(.subheadline.weight(isSelected ? .semibold : .regular))
+                .lineLimit(1)
+                .foregroundStyle(isSelected ? Theme.onAccent : Theme.textPrimary)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 8)
+                .frame(minHeight: 44)
+                .background {
+                    if isSelected {
+                        Capsule().fill(Theme.accent)
+                    } else {
+                        Capsule().fill(reduceTransparency ? AnyShapeStyle(Theme.surface) : AnyShapeStyle(.ultraThinMaterial))
+                            .overlay(Capsule().strokeBorder(Theme.hairline, lineWidth: 1))
+                    }
+                }
+                .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(journey.name)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 
     /// Default to the first journey, or one named by `AKASHIC_STATS_JOURNEY` (id or name

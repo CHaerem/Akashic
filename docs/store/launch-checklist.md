@@ -65,15 +65,21 @@ parallel:
   - **Family Sharing: ON** — required; one purchase covering the family is core to
     the product (§5). Toggle it before first submission (turning it on later is
     fine, but set it now).
-- [ ] **Price:** tier ~**kr 99** (the plan's 79–129 kr range; §5 uses 99 kr for the
-      revenue sanity check ≈ 84 kr net after the 15% Small Business rate). Pick the
-      Norwegian **kr 99** tier and let Apple auto-set worldwide equivalents; review
+- [ ] **Price:** the Norwegian **kr 149** tier (revised 2026-07-25 — see
+      COMMERCIALIZATION-PLAN §5: kr 99 was anchored against apps, not against the
+      kr 400–1200 photo book the buyer is actually choosing between). **Net is
+      ≈ kr 101, not kr 127** — Apple's commission applies after 25 % Norwegian VAT
+      is removed (149 ÷ 1.25 × 0.85), an arithmetic error that was in this file and
+      in §5 until today. Let Apple auto-set worldwide equivalents; review
       the US/EUR equivalents look sane (~$9–10 / €9–10). One-time, not subscription.
 - [ ] **Enrol in the Apple Small Business Program** (< $1M/yr → **15%** commission
       instead of 30%). This roughly doubles net margin; do it before first sale.
-- [ ] **Free tier is enforced locally** (1 journey, photo cap) — no server receipt
-      check needed (§4.4). Confirm the paywall gates unlimited journeys/publishing/
-      export behind the `no.akashic.app.complete` entitlement.
+- [ ] **Free tier is enforced locally** (1 journey, 100-photo cap) — no server
+      receipt check needed (§4.4). **Revised 2026-07-25: the free journey is fully
+      finishable — publishing and export are NOT paywalled.** The wall falls only on
+      the *second* journey. Confirm `EntitlementPolicy`, the paywall benefit list and
+      the IAP description in Connect all agree on that, or the paywall makes a claim
+      App Review can falsify.
 - [ ] **The IAP must be submitted for review WITH the first app version** — a new
       app's first IAP is reviewed alongside the binary. If it isn't attached to the
       version and reachable by the reviewer, it won't be approved. (See
@@ -151,7 +157,7 @@ aren't the developer. Gate to proceed: **≥7 complete a journey without help.**
 | IAP product ID | `no.akashic.app.complete` |
 | IAP type | Non-consumable, one-time |
 | Family Sharing | **ON** |
-| Price | kr 99 tier (~84 kr net at 15% Small Business rate) |
+| Price | **kr 149** tier (≈ kr 101 net: ÷1.25 VAT, ×0.85 Small Business) |
 | Commission program | Apple Small Business (15%) — enrol before first sale |
 | Beta | External TestFlight, ~10 families, Beta App Review required, gate ≥7/10 |
 | First release | Manual release (control go-live); phased rollout for later updates |

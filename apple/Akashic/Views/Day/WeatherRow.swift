@@ -6,6 +6,10 @@ import SwiftUI
 struct WeatherRow: View {
     let weather: WeatherData
 
+    /// The weather glyph was a fixed 26 pt icon, not body text; scale it like one (same
+    /// treatment as `JourneyGlobeCard.flagSize` in D1) so it stays in proportion as text grows.
+    @ScaledMetric(relativeTo: .title2) private var symbolSize: CGFloat = 26
+
     private var hasAnyMetric: Bool {
         weather.temperatureMax != nil || weather.temperatureMin != nil
             || weather.precipitationSum != nil || weather.windSpeedMax != nil
@@ -15,11 +19,11 @@ struct WeatherRow: View {
         HStack(spacing: 14) {
             VStack(spacing: 4) {
                 Image(systemName: WeatherPresentation.symbol(for: weather.weatherCode))
-                    .font(.system(size: 26))
+                    .font(.system(size: symbolSize))
                     .symbolRenderingMode(.multicolor)
                     .foregroundStyle(WeatherPresentation.tint(for: weather.weatherCode))
                 Text(WeatherPresentation.label(for: weather.weatherCode))
-                    .font(.system(size: 10, weight: .medium))
+                    .font(.caption2.weight(.medium))
                     .foregroundStyle(Theme.textSecondary)
                     .multilineTextAlignment(.center)
                     .lineLimit(2)
@@ -64,15 +68,15 @@ struct WeatherRow: View {
     private func metric(icon: String, value: String, label: String, tint: Color) -> some View {
         VStack(alignment: .leading, spacing: 3) {
             Image(systemName: icon)
-                .font(.system(size: 13))
+                .font(.footnote)
                 .foregroundStyle(tint)
             Text(value)
-                .font(.system(size: 13, weight: .semibold))
+                .font(.footnote.weight(.semibold))
                 .foregroundStyle(Theme.textPrimary)
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
             Text(label)
-                .font(.system(size: 9))
+                .font(.caption2)
                 .foregroundStyle(Theme.textTertiary)
         }
     }

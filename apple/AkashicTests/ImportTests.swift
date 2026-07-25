@@ -36,6 +36,7 @@ final class ImportTests: XCTestCase {
         let json = #"""
         [{"id":"J1","slug":"j1","name":"Test","country":"Norway","description":"d",
           "date_started":"2024-01-01","is_public":true,"total_days":2,"total_distance":10,
+          "journey_type":"trek",
           "center_coordinates":[10.0,60.0],"unknown_future_column":"ignored",
           "route":{"type":"LineString","coordinates":[[10.0,60.0,100],[10.02,60.0,150]]},
           "stats":{"duration":2,"totalDistance":10,"totalElevationGain":100,
@@ -46,6 +47,7 @@ final class ImportTests: XCTestCase {
         let row = try XCTUnwrap(rows.first)
         XCTAssertEqual(row.id, "J1")
         XCTAssertEqual(row.isPublic, true)
+        XCTAssertEqual(row.journeyType, "trek")
         XCTAssertEqual(row.centerCoordinates?.lngLat, [10.0, 60.0])
         XCTAssertEqual(row.route?.coordinates.count, 2)
         XCTAssertEqual(row.stats?.duration, 2)
@@ -89,6 +91,7 @@ final class ImportTests: XCTestCase {
         let journeys = #"""
         [{"id":"J1","slug":"j1","name":"Test Journey","country":"Norway","description":"d",
           "date_started":"2024-01-01","is_public":true,"total_days":2,"total_distance":10,
+          "journey_type":"diary",
           "center_coordinates":[10.0,60.0],
           "route":{"type":"LineString","coordinates":[[10.0,60.0,100],[10.01,60.0,200],[10.02,60.0,150]]},
           "stats":{"duration":2,"totalDistance":10,"totalElevationGain":100,"totalElevationLoss":50,
@@ -229,6 +232,9 @@ final class ImportTests: XCTestCase {
         let j = try XCTUnwrap(journeys.first)
         XCTAssertEqual(j.id, "J1")
         XCTAssertEqual(j.slug, "j1")
+        // S2: `journey_type` from the Supabase row must reach the domain model, not just the
+        // Core Data default — this was silently dropped by `ExportMapper` before the fix.
+        XCTAssertEqual(j.journeyType, "diary")
         XCTAssertEqual(j.camps.count, 2)
         XCTAssertEqual(j.camps.map(\.dayNumber), [1, 2])
         // Per-day stats were recomputed from the route (day 2 has a positive distance).
