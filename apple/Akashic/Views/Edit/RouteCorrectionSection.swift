@@ -157,7 +157,7 @@ struct RouteCorrectionSection: View {
 
     private func makePreview(newRoute: Route, gpxWaypoints: [GPXWaypoint], note: String?) -> RoutePreview {
         let newStats = RouteCorrection.recomputedStats(
-            route: newRoute, dayCount: journey.camps.count,
+            route: newRoute, currentDuration: journey.stats.duration, dayCount: journey.camps.count,
             dateStarted: journey.dateStarted, dateEnded: journey.dateEnded, name: journey.shortName)
         return RoutePreview(oldRoute: journey.route, newRoute: newRoute,
                             oldStats: journey.stats, newStats: newStats,

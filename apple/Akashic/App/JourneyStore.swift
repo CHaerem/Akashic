@@ -317,7 +317,7 @@ final class JourneyStore: ObservableObject {
                       positions: [(coordinate: [Double], elevation: Int)]? = nil) -> Bool {
         guard let journey = journey(withID: journeyID) else { return false }
         let stats = RouteCorrection.recomputedStats(
-            route: route, dayCount: journey.camps.count,
+            route: route, currentDuration: journey.stats.duration, dayCount: journey.camps.count,
             dateStarted: journey.dateStarted, dateEnded: journey.dateEnded, name: journey.shortName)
         let ok = persistence.updateJourneyRoute(id: journeyID, route: route, stats: stats)
         if ok, let positions {

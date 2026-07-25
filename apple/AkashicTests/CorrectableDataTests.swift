@@ -24,12 +24,30 @@ final class CorrectableDataTests: XCTestCase {
     func testRecomputedStatsFromRouteMatchesEngine() {
         // A three-point climb: 0 → 100 → 250 m elevation.
         let route = Route(type: "LineString", coordinates: [[10, 60, 0], [10.1, 60, 100], [10.2, 60, 250]])
-        let stats = RouteCorrection.recomputedStats(route: route, dayCount: 3,
+        let stats = RouteCorrection.recomputedStats(route: route, currentDuration: 7, dayCount: 3,
                                                     dateStarted: nil, dateEnded: nil, name: "Test")
         XCTAssertEqual(stats.totalElevationGain, 250)
-        XCTAssertEqual(stats.duration, 3, "dayCount drives duration")
         XCTAssertEqual(stats.highestPoint?.elevation, 250)
         XCTAssertGreaterThan(stats.totalDistance, 0)
+    }
+
+    /// A route correction must not redefine how long the trek took. Deriving duration from
+    /// `camps.count` reported and persisted "Days 7 → 8" for Kilimanjaro, whose eight camps include
+    /// a summit and a finish gate that are waypoints rather than days.
+    func testRecomputedStatsCarriesDurationOverInsteadOfCountingCamps() {
+        let route = Route(type: "LineString", coordinates: [[10, 60, 0], [10.2, 60, 250]])
+        let stats = RouteCorrection.recomputedStats(route: route, currentDuration: 7, dayCount: 8,
+                                                    dateStarted: "2023-09-29", dateEnded: "2023-10-09",
+                                                    name: "Kilimanjaro")
+        XCTAssertEqual(stats.duration, 7, "the authored duration survives a route replacement")
+    }
+
+    /// With no duration on record, deriving one is a heal rather than an overwrite.
+    func testRecomputedStatsDerivesDurationOnlyWhenThereIsNone() {
+        let route = Route(type: "LineString", coordinates: [[10, 60, 0], [10.2, 60, 250]])
+        let stats = RouteCorrection.recomputedStats(route: route, currentDuration: 0, dayCount: 4,
+                                                    dateStarted: nil, dateEnded: nil, name: "New")
+        XCTAssertEqual(stats.duration, 4)
     }
 
     func testRouteDiffMarksOnlyChangedFields() {
@@ -50,7 +68,7 @@ final class CorrectableDataTests: XCTestCase {
     func testReplaceRouteWritesThroughEditPathWithoutReseedingDays() throws {
         let pc = controller(Self.journey(dayCount: 3))
         let newRoute = Route(type: "LineString", coordinates: [[10, 60, 0], [10.5, 60.5, 900]])
-        let stats = RouteCorrection.recomputedStats(route: newRoute, dayCount: 3,
+        let stats = RouteCorrection.recomputedStats(route: newRoute, currentDuration: 3, dayCount: 3,
                                                     dateStarted: nil, dateEnded: nil, name: "J")
         XCTAssertTrue(pc.updateJourneyRoute(id: "J1", route: newRoute, stats: stats))
 

@@ -1,10 +1,12 @@
 # Akashic Roadmap
 
-> **⚠️ Status update (2026-07-22): Akashic is mid-migration to an Apple-platform stack** (CloudKit + native iOS app + GitHub Pages). This roadmap documents the **current Supabase/Cloudflare web app**, which is being replaced — treat it as historical for the parts that overlap the migration. Recent state:
-> - The Supabase project (paused for ~7 months) was **resumed 2026-07-21**; a full data rescue completed (export + R2 archive + verification), **akashic.no is live again**, and both are now **read-only until the migration's Phase 5**.
-> - A **native iOS app** now exists well beyond MVP (globe/fly-in map, day content, photos, elevation/stats, a dormant widget, live Spotlight).
+> **⚠️ HISTORICAL (updated 2026-07-25).** This roadmap documents the **Supabase/Cloudflare web app**, which no longer exists in that form. Read it for the product history and for feature intent — not for status.
+> - **The migration to the Apple stack is complete.** CloudKit is the only backend; `supabase-js` is gone from the web client (T3.4); the family archive lives in CloudKit **Production**; the web app is a deliberately frozen read-mostly client plus the public showcase (decision D6).
+> - **The native iOS app is now the primary client**, and it can do the things this roadmap lists as missing — notably "Create new journey" (❌ below), which exists natively with four route sources: GPX import, inference from photo GPS, hand-drawn on the map, or none. GPX import (Phase D below) also landed there rather than on the web.
+> - Supabase and Cloudflare (Worker, R2, Pages, DNS) are **read-only until the Phase 5 gate** — nothing is deleted until the family has used the native app ≥1 month.
+> - Product work has moved to **commercializing the iOS app**: [COMMERCIALIZATION-PLAN.md](./COMMERCIALIZATION-PLAN.md) is the forward-looking document.
 >
-> For the authoritative forward plan and status see [APPLE-MIGRATION-PLAN.md](./APPLE-MIGRATION-PLAN.md), [APPLE-MIGRATION-TASKS.md](./APPLE-MIGRATION-TASKS.md), [APPLE-MIGRATION-RUNBOOK.md](./APPLE-MIGRATION-RUNBOOK.md), and [ARCHITECTURE.md](./ARCHITECTURE.md).
+> For current status see [COMMERCIALIZATION-PLAN.md](./COMMERCIALIZATION-PLAN.md), [APPLE-MIGRATION-TASKS.md](./APPLE-MIGRATION-TASKS.md) (W7), [APPLE-MIGRATION-RUNBOOK.md](./APPLE-MIGRATION-RUNBOOK.md) for the operator steps, and [apple/README.md](./apple/README.md) for the app itself.
 
 ## Overview
 

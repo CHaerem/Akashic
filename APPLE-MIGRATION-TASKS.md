@@ -3,7 +3,11 @@
 **Companion to:** [APPLE-MIGRATION-PLAN.md](./APPLE-MIGRATION-PLAN.md) (the *what/why*) and [APPLE-MIGRATION-RUNBOOK.md](./APPLE-MIGRATION-RUNBOOK.md) (the *manual steps only Christopher can do*).
 **Purpose:** the plan broken into self-contained subtasks sized for delegation to coding agents (Opus 4.8 class). Each task lists its inputs, file scope, acceptance criteria, and a prompt seed. Tasks marked 🧑 need Christopher personally (credentials/accounts); tasks marked 🤖 are agent-executable; 🤝 = agent does the work, Christopher supplies a token/click first.
 
-**Status legend:** ✅ done · 🔄 in flight · ⬜ open · ⛔ blocked (see `needs:`) — most ✅ items landed across **two build nights** (2026-07-21 and 2026-07-21 → 22). **W0 data rescue completed night 2** and the native app is now well beyond the Phase-1 MVP (see the "Delivered ahead of schedule" block under W2).
+**Status legend:** ✅ done · 🔄 in flight · ⬜ open · ⛔ blocked (see `needs:`).
+
+> **Where the migration actually stands (updated 2026-07-25).** The migration itself is **finished**: CloudKit sync is live (D4 = custom `CKRecord` sync via `CKSyncEngine`, zone-per-journey), the family archive is imported into **Production** (1559 records / 3070 assets), the schema is promoted, the web client is CloudKit-only with Supabase retired, and the showcase publishes. D5 (MapKit) and D6 (frozen read-mostly web) are both decided. What remains here is **operator work only** — TestFlight testers, Pages/DNS cutover, Phase-5 decommission — all marked 🧑 below.
+>
+> Product work has moved on to commercialization: see **[COMMERCIALIZATION-PLAN.md](./COMMERCIALIZATION-PLAN.md)** for the forward plan and **W7** at the bottom of this file for milestone status (M1–M10 + draw-on-map). The nightly build log ran 2026-07-21 → 24 across five nights; test suite is **560 native + ~402 web, CI green**.
 
 ---
 
@@ -41,20 +45,20 @@ graph TD
 
     subgraph W1["W1 — Phase 0 gates"]
         T11["T1.1 🧑 Create container + tokens"]
-        T12["T1.2 🤝 Execute Spike A checklist (D6)"]
-        T13["T1.3 🤖 Evaluate Spike B screenshots (D5)"]
-        T14["T1.4 🤖 Decision gate D4/D5/D6 write-up"]
+        T12["T1.2 ✅ Spike A (D6 confirmed)"]
+        T13["T1.3 ✅ Spike B (D5 = MapKit)"]
+        T14["T1.4 ✅ Decision gate D4/D5/D6"]
         T11 --> T12 --> T14
         T13 --> T14
     end
 
     subgraph W2["W2 — Native app"]
         T21["T2.1 ✅ apple/ scaffold + CI"]
-        T22["T2.2 🤝 Import CloudKit schema"]
-        T23["T2.3 🤝 Activate NSPCKC + signing"]
-        T24["T2.4 🤖 Sync round-trip proof"]
-        T25["T2.5 🤖 Debug Import screen (real data)"]
-        T26["T2.6 ✅ Real map experience (pending D5)"]
+        T22["T2.2 ✅ Import CloudKit schema"]
+        T23["T2.3 ✅ CKSyncEngine + signing"]
+        T24["T2.4 ✅ Sync round-trip proof"]
+        T25["T2.5 ✅ Import screen (Dev + Production)"]
+        T26["T2.6 ✅ Real map experience (D5 = MapKit)"]
         T27["T2.7 ✅ Photo upload pipeline (local)"]
         T28["T2.8 ✅ CKShare invitations UI"]
         T29["T2.9 ✅ App Intents layer"]
@@ -87,7 +91,7 @@ graph TD
     end
 
     subgraph W5["W5 — Decommission (≥1 month stable)"]
-        T51["T5.1 🤖 Final archival export"]
+        T51["T5.1 ⬜ Final archival export"]
         T52["T5.2 🧑 Delete Cloudflare + Supabase + OAuth"]
         T53["T5.3 🤖 Repo cleanup + docs rewrite"]
         T43 --> T51 --> T52 --> T53
@@ -132,18 +136,18 @@ graph TD
 ### T1.1 ✅ Container + tokens (RUNBOOK §1–3) — done 2026-07-22
 ✅ App ID `no.akashic.app` + `no.akashic.app.widgets`, container `iCloud.no.akashic`, App Group `group.no.akashic` registered (team 9LVCB72DT8, via Xcode automatic signing); ✅ cktool management token (was already saved); ✅ CloudKit JS web API token created and verified live (anonymous public-DB query succeeds; token stored only in gitignored files).
 
-### T1.2 🤝 Execute Spike A (proves/disproves D6)
+### T1.2 ✅ Execute Spike A — done 2026-07-22 (D6 confirmed)
 - **Built tonight:** `spikes/cloudkit-js/index.html` + README (4 test panels: private DB, shared DB, share-accept, public DB; PASS/FAIL badges; full error surfacing). CloudKit JS confirmed to load and error-path verified with placeholder token.
 - **Do:** paste the API token, serve `python3 -m http.server 8000`, click through the checklist with a real share from a second Apple ID (needs T2.2 toy data or any test records).
 - **Accept:** panels 1–4 each PASS/FAIL recorded in the README's matrix; especially **shared-DB read** and **share accept** — if those fail, D6 falls back to "public showcase only" web (plan risk table row 1).
 - **Watch:** the spike hedges on share-acceptance API variants (CloudKit JS is thin there — an "Inspect share API surface" button dumps what the build exposes). A red badge may mean "API too thin", not "impossible" — check the dumped surface before concluding.
 
-### T1.3 🤖 Evaluate Spike B (decides D5)
+### T1.3 ✅ Evaluate Spike B — done 2026-07-22 (D5 = MapKit)
 - **Built tonight:** `apple/Spikes/MapKitGlobe/` — standalone SwiftUI app; globe with idle rotation (3.5 s delay, ~2°/s westward), fly-in choreography (globe → route overview pitch 60/bearing −20 → per-day legs pitch 55 with route-derived heading), white route polyline + glow, cyan day segment, amber camp badges; hybrid/imagery toggle; screenshots in `Screenshots/`.
 - **Do (Christopher, 10 min):** run it in the simulator (`cd apple/Spikes/MapKitGlobe && xcodegen && open`), judge the globe against Mapbox side by side (akashic.no won't load data now — use the recorded look or local dev with `VITE_E2E_TEST_MODE`).
 - **Accept:** D5 verdict written into APPLE-MIGRATION-PLAN.md: MapKit / Mapbox-iOS-SDK fallback. The spike README contains the agent's technical assessment of gaps (fog/exaggeration/easing control).
 
-### T1.4 🤖 Decision-gate write-up
+### T1.4 ✅ Decision-gate write-up — done 2026-07-22
 Consolidate D4 (NSPCKC vs CKSyncEngine — informed by how the scaffold's Core Data layer feels), D5 (T1.3), D6 (T1.2) into the plan; unblocks T2.6.
 
 ---
@@ -156,18 +160,18 @@ XcodeGen project (iOS 17, Swift lang mode 5), Core Data model mirroring the REAL
 ### T2.2 ✅ Import the CloudKit schema (RUNBOOK §2) — done 2026-07-22
 Schema validated and imported to **Development**; round-trip export confirms all six record types live. One syntax fix applied to `schema.ckdb`: `LIST<STRING>` (not `STRING LIST`). Remaining for Spike A: a toy record set (create in CloudKit Console, or wait for the T2.5 importer).
 
-### T2.3 🤝 Activate CloudKit sync + signing
+### T2.3 ✅ Activate CloudKit sync + signing — done 2026-07-22 (**D4 = custom `CKRecord` sync via `CKSyncEngine`**, option (a) below)
 - **Needs:** T2.2 + Xcode Team set (RUNBOOK §4).
 - **Do (agent, after Christopher sets the team):** flip `PersistenceController` to `.cloudKit`, enable the entitlements config, run on device/simulator with an iCloud account, confirm records appear in CloudKit Console Development.
 - **Accept:** creating a Journey in-app produces a `Journey` record in a `journey-<uuid>` custom zone (zone-per-journey per D3). **This is the single biggest technical decision left**, and it is wider than zones: the scaffold's placeholder NSPersistentCloudKitContainer would generate its *own* schema (`CD_CDJourney`/`CD_CDWaypoint`/… record types with `CD_`-prefixed fields, all in `com.apple.coredata.cloudkit.zone`) — which would invalidate both `apple/CloudKit/schema.ckdb` *and* the web adapter's queries (they expect `Journey`/`Waypoint`/`Photo`/`DayComment` with the MAPPING.md field names). The realistic options: (a) custom CKRecord sync (CKSyncEngine or hand-rolled) honoring schema.ckdb + per-journey zones + CKShare — matches everything built tonight; (b) accept NSPCKC's generated schema — then schema.ckdb and the web adapter must be rewritten to the `CD_` shapes and D3's zone-per-journey sharing model changes (NSPCKC *does* support share-per-object via `share(_:to:)`, but zones are managed for you). See MAPPING.md "Zone & sync-strategy trade-off" for the full analysis. Decide here (this is D4), then implement.
 
-### T2.4 🤖 Sync round-trip proof
+### T2.4 ✅ Sync round-trip proof — done 2026-07-22, written up in `apple/Docs/sync-verification.md`
 Two simulators/devices, one journey, edit on A → appears on B; offline edit → reconciles. Accept: written proof in `apple/Docs/sync-verification.md`.
 
-### T2.5 🤖 Debug Import screen (plan §6.2)
+### T2.5 ✅ Debug Import screen — done; Development first, then **Production** (1559 records / 3070 assets / 0 failures)
 SwiftUI debug-only screen: point at the export bundle (T0.2/T0.4 output) → creates zones/records/CKAssets in the owner's private DB preserving original UUIDs (critical: photo/journey UUIDs are the R2 path keys and future recordNames), re-links waypointRefs, uploads originals+thumbs as assets, idempotent (re-run = upsert), progress + failure log. Accept: all 3 journeys + all media imported to Dev env; counts match manifest; then re-run against Production before T2.11.
 
-### T2.6 ✅ Real map experience — built night 2 (**pending D5 confirmation**)
+### T2.6 ✅ Real map experience — built night 2; **D5 ratified (MapKit)** 2026-07-22
 The full **globe → fly-in → day-navigation** choreography now lives in the main app: `apple/Akashic/Views/Map/` (`GlobeExperienceView`, `DayNavigationView`, `TrekCameraController`, `GlobeMapComponents`, `MapGeoMath`). MapKit only.
 - **Pitch caveat (the D5 trade-off, in code):** MapKit hard-clamps oblique camera pitch to ~30–35° — the app requests `TrekCameraController.maxObliquePitch = 35` for day framing rather than fighting the silent clamp, so the tilt is shallower than Mapbox's 55–60°. The globe idle-rotation and fly-in read well regardless. **This is exactly the trade-off D5 must still ratify.** If D5 says "Mapbox iOS SDK", only the camera layer is swapped; the surrounding day-navigation UI stays. Marked ✅ for *built + working on real data*, **pending the D5 verdict**.
 - Elevation profile shipped separately under `Views/Charts/` (see the "Delivered ahead of schedule" block).
@@ -252,6 +256,28 @@ T5.1 🤖 final archival export → T5.2 🧑 delete Cloudflare (Worker, R2, Pag
 
 ## W6 — Polish (ongoing, post-launch)
 **Delivered early (night 2):** journey-stats **widget** ✅ (dormant until the `group.no.akashic` App Group is enabled — runbook §4) and **Spotlight indexing** ✅ (live). **Still open:** Siri suggestion phrases; **Universal Links** — the `apple-app-site-association` file is now scaffolded at `public/.well-known/apple-app-site-association` (TEAMID placeholder; serving notes in `docs/github-pages-cutover.md` and runbook §4) — plan Open Q5; unlisted App Store release; watch SwiftData-sharing / system-MCP / MapKit-globe evolution (plan Phase 6).
+
+---
+
+## W7 — Commercialization (v1.0 build; plan: [COMMERCIALIZATION-PLAN.md](./COMMERCIALIZATION-PLAN.md))
+
+Green-lit 2026-07-24. Milestone numbering is the plan's §4 gaps; everything here is **built and tested** unless marked otherwise.
+
+| # | Milestone | Status |
+|---|---|---|
+| M1 | **Journeys can be born, not just arrive** — GPX 1.0/1.1 parser (Strava/Garmin/komoot), `JourneyDraft` day proposal, `NewJourneySheet`, empty states | ✅ |
+| M2 | **Consumer onboarding + Settings split** — 3-card first run (where the data lives, whose iCloud quota), migration tooling behind a 7-tap developer gate | ✅ |
+| M3 | **Free tier + Akashic Complete** — StoreKit 2 behind a protocol seam; 1 owned journey / 100 photos free; the family is the customer (shared-in content never hits a paywall) and over-limit content stays visible and editable | ✅ |
+| M4 | **Store documentation** — listing (EN + NB), screenshots plan, review notes, launch checklist under `docs/store/` | ✅ |
+| M5 | **Commercial funnel on the web showcase** — "Made with Akashic" chip, report-content affordance, privacy/terms/support pages | ✅ (pages ship on merge; App Review opens them, so verify they serve before submitting) |
+| M6 | **Akashic Intelligence** — on-device Foundation Models day-note drafting + day naming; gated on iOS 26 + Apple Intelligence + Complete; photo bytes never reach the model | ✅ |
+| M9 | **Assisted creation** — route from photo GPS, country/camp names by reverse geocoding, POIs via MKLocalSearch, historical weather via WeatherKit, grounded facts, manual photo placement. Everything is a suggestion with Accept / dismiss | ✅ |
+| M10 | **Everything is correctable** — route correction (GPX, re-draft, redraw), day add/delete/reorder, photo↔day moves, editable day content, "Enrich journey" gap-only, delete journey (two zone deletes) | ✅ |
+| — | **Draw-on-map** (plan §4.1's fourth route source) — `RouteDrawing` + `RouteDrawingSheet`, in creation and correction; drawn routes carry no elevation and the UI says so before Apply | ✅ 2026-07-25 |
+| — | Photo architecture v2, Wi-Fi gating, Wikipedia/Wikivoyage grounding, three adversarial review rounds | ✅ |
+| — | **Trademark check, IAP creation, Small Business Program, screenshots, external beta** | 🧑 — see `docs/store/launch-checklist.md` |
+
+**The gate that matters:** COMMERCIALIZATION-PLAN §11 phase 2 — ~10 external families create a journey from scratch, ≥7 without help. Nothing about creation is proven until people who aren't the author try it.
 
 ---
 

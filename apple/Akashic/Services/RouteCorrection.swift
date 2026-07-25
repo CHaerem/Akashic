@@ -27,16 +27,25 @@ enum DayRenumbering {
 /// produces exactly the stats a freshly created one would — no second implementation to drift.
 enum RouteCorrection {
 
-    /// Recompute a journey's `TrekStats` from a (new) route, preserving the day count and dates that
-    /// drive duration. `name` names the highest point.
-    static func recomputedStats(route: Route, dayCount: Int,
+    /// Recompute a journey's `TrekStats` from a (new) route. Only the route-derived numbers move:
+    /// distance, ascent, descent and summit. `name` names the highest point.
+    ///
+    /// **Duration is carried over, not recomputed.** How many days a trek took is authored, not a
+    /// property of its geometry, and deriving it from `camps.count` rewrote it on every correction:
+    /// Kilimanjaro has eight camps for a seven-day trek (the summit and the finish gate are
+    /// waypoints, not days), so replacing its route silently reported and persisted "Days 7 → 8".
+    /// `currentDuration` of 0 means the journey never had one, and only then is it derived from the
+    /// day count or the date span — a heal for unset data rather than an overwrite of good data.
+    static func recomputedStats(route: Route, currentDuration: Int, dayCount: Int,
                                 dateStarted: String?, dateEnded: String?, name: String) -> TrekStats {
         let coords = route.coordinates
         let distance = (JourneyDraft.totalDistanceKm(route: coords) * 10).rounded() / 10
         let (gain, loss) = JourneyDraft.elevationGainLoss(route: coords)
-        let duration = JourneyDraft.duration(dayCount: dayCount,
-                                             dateStarted: DateOnly.date(from: dateStarted),
-                                             dateEnded: DateOnly.date(from: dateEnded))
+        let duration = currentDuration > 0
+            ? currentDuration
+            : JourneyDraft.duration(dayCount: dayCount,
+                                    dateStarted: DateOnly.date(from: dateStarted),
+                                    dateEnded: DateOnly.date(from: dateEnded))
         return TrekStats(
             duration: duration,
             totalDistance: distance,
