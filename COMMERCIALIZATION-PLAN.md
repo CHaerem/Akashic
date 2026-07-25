@@ -132,23 +132,70 @@ akashic.no, age rating, the review process itself.
 
 ## 5. Business model
 
-### Recommended: free core + one-time unlock ("Akashic Complete")
+### Decided (revised 2026-07-25): free core + one-time unlock ("Akashic Complete") at **kr 149**
 
-- **Free**: 1 journey, full experience, sharing included, small photo cap
-  (e.g. 100/journey). Enough to fall in love; enough for a one-trip user, which
-  is fine — they become showcase marketing.
-- **One-time IAP ~79–129 kr**: unlimited journeys/photos, export, publishing.
-  Supports Apple **Family Sharing of the purchase** — one buy covers the family,
-  which matches the product's soul (and its sharing model).
+- **Free**: 1 journey, full experience, sharing included, 100-photo cap — and
+  **that journey is fully finishable: publishing and export included.**
+- **One-time IAP kr 149** (`no.akashic.app.complete`, non-consumable): unlimited
+  journeys and photos, plus Akashic Intelligence in v1.1. **Family Sharing ON** —
+  one purchase covers the household, which matches the product's soul.
 
-Why not subscription: we have no recurring cost to justify it; the category
-(personal memories) punishes rent-seeking; churn support burden lands on a
-solo maintainer. A future "Pro" tier (§9) can introduce subscription *if* real
-recurring costs (backend, Android) ever appear.
+**Why the free tier now includes finishing.** The old line put the wall on the
+*finish* ("publishing is part of Complete"), which withheld the exact moment that
+creates the desire to pay — and strangled §6, where the showcase *is* the funnel:
+gating publishing meant only people who had already paid could market the app. The
+wall now falls purely on **"your second journey"**, which is also the photo-book
+unit of value. Accepted trade: free publishing means the public database can be
+written to without payment, so the report/takedown machinery (§4.5) carries the
+abuse load alone. It is capped at one journey per Apple ID, and re-gating is an
+app update if abuse appears.
 
-Revenue sanity check (not a projection): at 99 kr / 15 % cut ≈ 84 kr net.
-1 000 lifetime buyers ≈ 84 000 kr; 10 000 ≈ 840 000 kr. Niche-app numbers —
-this is a beautiful side business, not a startup, and the cost base agrees.
+**Why the price moved from 99 to 149.** kr 99 was anchored against *apps*. The
+buyer's real alternative is a photo book: kr 400–1200, per trip. kr 149 once, for
+every trip the family ever takes, for everyone in the family, is under half of one
+book — and that sentence belongs in the paywall. kr 179 is defensible; kr 99 is
+now under-priced against the product's own positioning. Price is changeable in
+App Store Connect at any time, but raising it later looks worse than launching
+there, so launch at the price we believe in.
+
+**Why not subscription** — better reasons than the old cost argument (which priced
+by *our* costs, and at zero marginal cost would argue for zero): lapse semantics
+collide with "memories are never hostages" — either a lapsed user keeps everything
+(so why subscribe?) or loses access to their own memories, which is this
+category's cardinal sin. Churn and billing support land on a solo maintainer, and
+the shipped paywall already promises "one-time purchase, no subscription".
+
+**Why not per-journey (consumable), despite it matching the unit of value best:**
+consumables **cannot be Family-Shared**, which is fatal when the payer is often
+not the author (Dad pays, Mum builds the journey). They also don't appear in
+`Transaction.currentEntitlements`, so "which journeys are unlocked" becomes state
+*we* must persist and restore — precisely the vendor-side liability this whole
+architecture exists to avoid. Per-trip value is captured in the price level, not
+the purchase unit.
+
+### Revenue arithmetic (corrected — the old numbers ignored VAT)
+
+Apple takes its commission **after** VAT is removed, and Norway charges 25 % VAT
+on digital services. So the old "99 kr → ≈ 84 kr net" was wrong:
+
+| Price | Net per household (÷1.25 VAT, ×0.85) |
+|---|---|
+| kr 99 | ≈ **kr 67** (not 84) |
+| **kr 149** | ≈ **kr 101** |
+| kr 179 | ≈ kr 122 |
+
+Family Sharing means one household is one sale, so that is net *per household* —
+and the counterfactual where a spouse buys a second copy of a family archive is
+fiction, which is why Family Sharing costs approximately nothing real.
+
+1 000 buying households ≈ **kr 101 000 lifetime**, against ~$99/yr plus a domain.
+To be a side business rather than a hobby — say kr 100 000/year sustained — needs
+~1 000 *new* buying households every year, i.e. ~15 000–35 000 downloads/year at a
+plausible 3–7 % conversion. A Norwegian-language trekking-family niche does not
+get there by default. **The honest framing is: a hobby with revenue.** What makes
+launching rational anyway is that the marginal cost of selling is zero, the family
+product exists regardless, and the downside is close to nothing. What the repositioning
+buys is +50 % net per household for identical effort, and a far better subtitle.
 
 ## 6. Go-to-market
 
@@ -262,9 +309,9 @@ unlock — it fattens the paid tier without adding a krone of marginal cost.
 |---|---|---|
 | **0 — now** | Family on TestFlight, 1 month of real use | It stays stable & family actually uses it |
 | **1 — v1.0 build** (~3–4 wks) | §4.1–4.6 | **Green-lit 2026-07-24** — §4.1 build started |
-| **2 — closed beta** | ~10 external families create journeys from scratch | ≥7 complete a journey without help |
+| **2 — closed beta** | ~10 external households create journeys from their own photos | **(a)** ≥7 create one unaided · **(b)** ≥5 *finish and hand one over* — user-written words on ≥3 days, and actually shared outside the household (CKShare accepted, showcase link sent, or export delivered) · **(c)** ≥5 answer yes to "would you send this instead of making a photo book?" |
 | **3 — launch** | App Store + showcase funnel + communities | — |
-| **4 — v1.1 "Akashic Intelligence"** | §10 ladder: day-note drafting, smart day naming, curation, narrative | Launch stable; AI-device share of user base worth it |
+| **4 — v1.1 "the finished story"** | PDF/printable book export of the story view, people/companions, hero + best-of curation, interview-mode drafting (the model asks two grounded questions, then weaves the answers in). "Akashic Intelligence" demotes from headline to ingredient | Launch stable |
 | **5 — iterate** | ~~Draw-on-map~~ (shipped in v1.0), NL search, live activity, watch app, Strava API import | Sales signal |
 | **6 — platform decision** | Android/web via real backend | Only on clear demand + revenue |
 
