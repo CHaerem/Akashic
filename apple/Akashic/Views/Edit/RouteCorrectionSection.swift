@@ -22,10 +22,10 @@ struct RouteCorrectionSection: View {
     @State private var preview: RoutePreview?
     @State private var message: String?
 
-    // Draw-on-map. The drawn route is stashed and turned into a preview once the drawing sheet has
+    // Draw-on-map. The drawing is stashed and turned into a preview once the drawing sheet has
     // dismissed — presenting the preview while that sheet is still on screen would be dropped.
     @State private var showingDrawing = false
-    @State private var drawnRoute: Route?
+    @State private var drawnRoute: RouteDrawing.DrawnRoute?
 
     var body: some View {
         GlassField(label: "Route", systemImage: "point.topleft.down.to.point.bottomright.curvepath") {
@@ -55,8 +55,8 @@ struct RouteCorrectionSection: View {
             .sheet(isPresented: $showingDrawing, onDismiss: previewDrawnRoute) {
                 RouteDrawingSheet(title: journey.route.coordinates.isEmpty ? "Draw route" : "Redraw route",
                                   referenceRoute: journey.route,
-                                  fallbackCenter: drawingCenter) { route in
-                    drawnRoute = route
+                                  fallbackRegion: journey.mapRegion) { drawn in
+                    drawnRoute = drawn
                 }
             }
         }
@@ -108,26 +108,15 @@ struct RouteCorrectionSection: View {
         preview = makePreview(newRoute: result.route, gpxWaypoints: [], note: result.confidence.summary)
     }
 
-    /// Where the drawing map opens when the journey has no route: its first placed day.
-    private var drawingCenter: [Double]? {
-        journey.camps.first(where: { $0.coordinates.count >= 2 })?.coordinates
-    }
-
     /// Turn the drawn route into the same Apply preview every other correction goes through, so a
     /// hand-drawn replacement is reviewed (old vs new polyline + stats diff) exactly like a GPX one.
+    /// The summary comes from the drawing itself, so the bridged-gap count the sheet showed survives
+    /// into the preview instead of being re-derived (and lost) here.
     private func previewDrawnRoute() {
-        guard let route = drawnRoute else { return }
+        guard let drawn = drawnRoute else { return }
         drawnRoute = nil
-        guard route.coordinates.count >= 2 else {
-            message = "Nothing was drawn."
-            return
-        }
-        let summary = RouteDrawing.summary(
-            pointCount: route.coordinates.count,
-            distanceKm: JourneyDraft.totalDistanceKm(route: route.coordinates),
-            bridgedGaps: 0)
-        preview = makePreview(newRoute: route, gpxWaypoints: [],
-                              note: "\(summary). \(RouteDrawing.elevationNote)")
+        preview = makePreview(newRoute: drawn.route, gpxWaypoints: [],
+                              note: "\(drawn.summary). \(RouteDrawing.elevationNote)")
     }
 
     private func recomputeStats() {
@@ -318,20 +307,6 @@ struct RoutePreviewSheet: View {
 
     /// A region covering both routes so the diff is visible at a glance.
     static func region(old: Route, new: Route) -> MKCoordinateRegion {
-        let points = (old.clCoordinates + new.clCoordinates)
-        guard let first = points.first else {
-            return MKCoordinateRegion(center: CLLocationCoordinate2D(latitude: 0, longitude: 0),
-                                      span: MKCoordinateSpan(latitudeDelta: 90, longitudeDelta: 180))
-        }
-        var minLat = first.latitude, maxLat = first.latitude
-        var minLon = first.longitude, maxLon = first.longitude
-        for p in points {
-            minLat = min(minLat, p.latitude); maxLat = max(maxLat, p.latitude)
-            minLon = min(minLon, p.longitude); maxLon = max(maxLon, p.longitude)
-        }
-        let center = CLLocationCoordinate2D(latitude: (minLat + maxLat) / 2, longitude: (minLon + maxLon) / 2)
-        let span = MKCoordinateSpan(latitudeDelta: max((maxLat - minLat) * 1.4, 0.05),
-                                    longitudeDelta: max((maxLon - minLon) * 1.4, 0.05))
-        return MKCoordinateRegion(center: center, span: span)
+        .fitting(old.clCoordinates + new.clCoordinates)
     }
 }

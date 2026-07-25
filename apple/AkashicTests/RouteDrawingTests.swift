@@ -13,6 +13,13 @@ final class RouteDrawingTests: XCTestCase {
         return [37.0 + metersEast * degreesPerMeter, lat]
     }
 
+    /// The two fixtures the join tests build on: an existing 0→100 m leg, and one 100→200 m further on.
+    private var firstLeg: [[Double]] { [point(east: 0), point(east: 100)] }
+    private var secondLeg: [[Double]] { [point(east: 100), point(east: 200)] }
+
+    /// Longitudes only — the axis these fixtures vary, so assertions read as an order.
+    private func longitudes(_ points: [[Double]]) -> [Double] { points.map { $0[0] } }
+
     // MARK: Capture thinning
 
     func testFirstPointOfAStrokeIsAlwaysKept() {
@@ -80,88 +87,83 @@ final class RouteDrawingTests: XCTestCase {
     }
 
     // MARK: Joining
+    //
+    // These assert on the resulting GEOMETRY — the order points end up in and whether a gap was
+    // bridged — because that is the contract callers depend on. How `join` classified the seam is
+    // its own business.
 
     func testFirstStrokeStartsThePolyline() {
-        let stroke = [point(east: 0), point(east: 100)]
-        let result = RouteDrawing.join(existing: [], stroke: stroke)
-        XCTAssertEqual(result.join.kind, .started)
-        XCTAssertEqual(result.points, stroke)
+        let result = RouteDrawing.join(existing: [], stroke: firstLeg)
+        XCTAssertEqual(result.points, firstLeg)
+        XCTAssertEqual(result.bridgeMeters, 0)
     }
 
     func testStrokeStartingAtTheEndIsAppendedWithoutDuplicatingTheSeam() {
-        let existing = [point(east: 0), point(east: 100)]
-        let stroke = [point(east: 100), point(east: 200)]   // starts exactly where we left off
-        let result = RouteDrawing.join(existing: existing, stroke: stroke)
-        XCTAssertEqual(result.join, RouteDrawing.Join(kind: .appended, bridgeMeters: 0))
+        let result = RouteDrawing.join(existing: firstLeg, stroke: secondLeg)
+        XCTAssertEqual(result.bridgeMeters, 0)
         XCTAssertEqual(result.points.count, 3)             // seam point counted once
         XCTAssertEqual(result.points.last, point(east: 200))
     }
 
     func testStrokeDrawnBackwardsFromTheEndIsReversed() {
-        let existing = [point(east: 0), point(east: 100)]
         // Drawn from far away back towards the current end — the user traced it the other way.
         let stroke = [point(east: 300), point(east: 200), point(east: 100)]
-        let result = RouteDrawing.join(existing: existing, stroke: stroke)
-        XCTAssertEqual(result.join.kind, .appendedReversed)
-        XCTAssertEqual(result.points.map { $0[0] },
-                       [point(east: 0), point(east: 100), point(east: 200), point(east: 300)].map { $0[0] })
+        let result = RouteDrawing.join(existing: firstLeg, stroke: stroke)
+        XCTAssertEqual(longitudes(result.points),
+                       longitudes([point(east: 0), point(east: 100), point(east: 200), point(east: 300)]))
     }
 
     func testStrokeMeetingTheStartIsPrepended() {
-        let existing = [point(east: 100), point(east: 200)]
         let stroke = [point(east: 0), point(east: 100)]     // ends where the route begins
-        let result = RouteDrawing.join(existing: existing, stroke: stroke)
-        XCTAssertEqual(result.join.kind, .prepended)
-        XCTAssertEqual(result.points.first, point(east: 0))
-        XCTAssertEqual(result.points.count, 3)
+        let result = RouteDrawing.join(existing: secondLeg, stroke: stroke)
+        XCTAssertEqual(longitudes(result.points),
+                       longitudes([point(east: 0), point(east: 100), point(east: 200)]))
     }
 
     func testStrokeDrawnOutwardsFromTheStartIsReversedAndPrepended() {
-        let existing = [point(east: 100), point(east: 200)]
         // Started at the route's head and drew away from it.
         let stroke = [point(east: 100), point(east: 0)]
-        let result = RouteDrawing.join(existing: existing, stroke: stroke)
-        XCTAssertEqual(result.join.kind, .prependedReversed)
-        XCTAssertEqual(result.points.first, point(east: 0))
-        XCTAssertEqual(result.points.count, 3)
+        let result = RouteDrawing.join(existing: secondLeg, stroke: stroke)
+        XCTAssertEqual(longitudes(result.points),
+                       longitudes([point(east: 0), point(east: 100), point(east: 200)]))
     }
 
     func testDetachedStrokeIsBridgedAndReported() {
-        let existing = [point(east: 0), point(east: 100)]
         let stroke = [point(east: 5_000), point(east: 5_100)]   // 4.9 km away — a separate leg
-        let result = RouteDrawing.join(existing: existing, stroke: stroke)
-        XCTAssertEqual(result.join.kind, .appended)
-        XCTAssertGreaterThan(result.join.bridgeMeters, 1_000)   // the UI says "straight leg"
+        let result = RouteDrawing.join(existing: firstLeg, stroke: stroke)
+        XCTAssertGreaterThan(result.bridgeMeters, 1_000)        // the UI says "straight leg"
         XCTAssertEqual(result.points.count, 4)                  // nothing dropped
     }
 
     func testStrokeTooShortToBeALegLeavesThePolylineAlone() {
-        let existing = [point(east: 0), point(east: 100)]
-        XCTAssertEqual(RouteDrawing.join(existing: existing, stroke: [point(east: 100)]).points, existing)
+        XCTAssertEqual(RouteDrawing.join(existing: firstLeg, stroke: [point(east: 100)]).points, firstLeg)
     }
 
     // MARK: Folding / undo
 
-    func testFoldingStrokesEqualsSequentialJoining() {
-        let a = [point(east: 0), point(east: 100)]
-        let b = [point(east: 100), point(east: 200)]
-        let c = [point(east: 200), point(east: 300)]
-        let folded = RouteDrawing.fold(strokes: [a, b, c])
-        XCTAssertEqual(folded.points.count, 4)
-        XCTAssertEqual(folded.joins.map(\.kind), [.started, .appended, .appended])
+    func testFoldingStrokesJoinsEachToTheResultSoFar() {
+        let third = [point(east: 200), point(east: 300)]
+        let folded = RouteDrawing.fold(strokes: [firstLeg, secondLeg, third])
+        XCTAssertEqual(longitudes(folded.points),
+                       longitudes([point(east: 0), point(east: 100), point(east: 200), point(east: 300)]))
+        XCTAssertEqual(folded.bridgedGaps, 0)
+    }
+
+    func testFoldCountsOneBridgedGapPerDetachedStroke() {
+        let far = [point(east: 5_000), point(east: 5_100)]
+        let further = [point(east: 20_000), point(east: 20_100)]
+        XCTAssertEqual(RouteDrawing.fold(strokes: [firstLeg, far, further]).bridgedGaps, 2)
     }
 
     func testUndoIsExactBecauseFoldingIsPure() {
-        let a = [point(east: 0), point(east: 100)]
-        let b = [point(east: 100), point(east: 200)]
-        let before = RouteDrawing.polyline(strokes: [a])
-        var strokes = [a, b]
+        let before = RouteDrawing.fold(strokes: [firstLeg]).points
+        var strokes = [firstLeg, secondLeg]
         strokes.removeLast()                                   // what Undo does
-        XCTAssertEqual(RouteDrawing.polyline(strokes: strokes), before)
+        XCTAssertEqual(RouteDrawing.fold(strokes: strokes).points, before)
     }
 
     func testEmptyStrokeListFoldsToNothing() {
-        XCTAssertTrue(RouteDrawing.polyline(strokes: []).isEmpty)
+        XCTAssertTrue(RouteDrawing.fold(strokes: []).points.isEmpty)
     }
 
     // MARK: Route + stats contract
@@ -194,29 +196,68 @@ final class RouteDrawingTests: XCTestCase {
 
     func testOpeningRegionFollowsTheReferenceRoute() {
         let route = Route(type: "LineString", coordinates: [[37.0, -3.1], [37.2, -3.0]])
-        let region = RouteDrawingSheet.initialRegion(referenceRoute: route, fallbackCenter: nil)
+        let region = RouteDrawingSheet.initialRegion(referenceRoute: route, fallbackRegion: nil)
         XCTAssertEqual(region.center.longitude, 37.1, accuracy: 0.001)
         XCTAssertEqual(region.center.latitude, -3.05, accuracy: 0.001)
     }
 
-    func testOpeningRegionFallsBackToTheGivenCentre() {
-        let region = RouteDrawingSheet.initialRegion(referenceRoute: nil, fallbackCenter: [11.0, 60.0])
-        XCTAssertEqual(region.center.longitude, 11.0, accuracy: 0.001)
-        XCTAssertEqual(region.center.latitude, 60.0, accuracy: 0.001)
+    func testOpeningRegionFallsBackToTheGivenRegion() {
+        let fallback = MKCoordinateRegion.fitting([[11.0, 60.0], [11.4, 60.2]].clCoordinates)
+        let region = RouteDrawingSheet.initialRegion(referenceRoute: nil, fallbackRegion: fallback)
+        XCTAssertEqual(region.center.longitude, 11.2, accuracy: 0.001)
+        XCTAssertEqual(region.center.latitude, 60.1, accuracy: 0.001)
         XCTAssertLessThan(region.span.latitudeDelta, 1)          // a trek-sized view, not the world
     }
 
     func testOpeningRegionWithNoHintsIsAWideButConcreteView() {
-        let region = RouteDrawingSheet.initialRegion(referenceRoute: nil, fallbackCenter: nil)
+        let region = RouteDrawingSheet.initialRegion(referenceRoute: nil, fallbackRegion: nil)
         XCTAssertGreaterThan(region.span.latitudeDelta, 10)
         XCTAssertLessThanOrEqual(region.span.latitudeDelta, 180)
     }
 
+    /// A single placed day must not open at street level — `fitting` floors the span.
+    func testRegionForOneKnownPointHasAUsableFloor() {
+        let region = MKCoordinateRegion.fitting([[11.0, 60.0]].clCoordinates)
+        XCTAssertEqual(region.span.latitudeDelta, 0.05, accuracy: 0.0001)
+    }
+
     func testSummaryIsHonestAboutBridgedLegs() {
-        XCTAssertFalse(RouteDrawing.summary(pointCount: 12, distanceKm: 4.2, bridgedGaps: 0)
-            .contains("straight leg"))
-        let bridged = RouteDrawing.summary(pointCount: 12, distanceKm: 4.2, bridgedGaps: 2)
-        XCTAssertTrue(bridged.contains("2 straight legs"))
-        XCTAssertTrue(bridged.contains("12 points"))
+        let clean = RouteDrawing.drawnRoute(strokes: [firstLeg, secondLeg])
+        XCTAssertFalse(clean.summary.contains("straight leg"))
+        XCTAssertTrue(clean.summary.contains("3 points"))
+
+        let detached = RouteDrawing.drawnRoute(
+            strokes: [firstLeg, [point(east: 5_000), point(east: 5_100)]])
+        XCTAssertEqual(detached.bridgedGaps, 1)
+        XCTAssertTrue(detached.summary.contains("1 straight leg"))
+    }
+
+    /// The bridged-gap count must survive from the drawing to whatever consumes it — it was lost at
+    /// this seam before `DrawnRoute` existed, so the Apply preview claimed a clean route.
+    func testDrawnRouteCarriesItsProvenanceToTheCaller() {
+        let drawn = RouteDrawing.drawnRoute(
+            strokes: [firstLeg, [point(east: 9_000), point(east: 9_100)]])
+        XCTAssertTrue(drawn.isUsable)
+        XCTAssertEqual(drawn.bridgedGaps, 1)
+        XCTAssertEqual(drawn.pointCount, 4)
+        XCTAssertGreaterThan(drawn.distanceKm, 8)
+    }
+
+    func testDrawnRouteFromNothingIsNotUsable() {
+        let drawn = RouteDrawing.drawnRoute(strokes: [])
+        XCTAssertFalse(drawn.isUsable)
+        XCTAssertEqual(drawn.route, .empty)
+    }
+
+    // MARK: The elevation contract, as a domain fact
+
+    func testDrawnRoutesReportNoElevationAndGPXStyleRoutesDo() {
+        // `Route.hasElevation` is what gates the elevation profile: without it, StatsView renders a
+        // drawn route's profile pinned flat at 0 m as though sea level had been measured.
+        let drawn = RouteDrawing.drawnRoute(strokes: [firstLeg, secondLeg]).route
+        XCTAssertFalse(drawn.hasElevation)
+        XCTAssertTrue(Route(type: "LineString", coordinates: [[37.0, -3.1, 1800], [37.2, -3.0, 2100]])
+            .hasElevation)
+        XCTAssertFalse(Route.empty.hasElevation)
     }
 }

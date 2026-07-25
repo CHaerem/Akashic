@@ -1,4 +1,5 @@
 import SwiftUI
+import MapKit
 import PhotosUI
 import UniformTypeIdentifiers
 
@@ -29,10 +30,10 @@ struct NewJourneySheet: View {
     @State private var routeSummary: RouteSummary?
     @State private var importError: String?
 
-    // Draw-on-map. The drawn route is stashed and applied on the sheet's dismissal, so the
+    // Draw-on-map. The drawing is stashed and applied on the sheet's dismissal, so the
     // suggestion pass never runs while a sheet is still on screen.
     @State private var showingDrawing = false
-    @State private var drawnRoute: Route?
+    @State private var drawnRoute: RouteDrawing.DrawnRoute?
 
     // Photo day-seeding.
     @State private var photoSelection: [PhotosPickerItem] = []
@@ -65,9 +66,10 @@ struct NewJourneySheet: View {
         var distanceKm: Double
         var waypointCount: Int
         var droppedCount: Int
-        /// Hand-drawn routes carry no elevation — the summary says so instead of letting the user
-        /// find out from empty ascent/summit stats later.
-        var isDrawn: Bool = false
+        /// Provenance the card must state in words — today only a hand-drawn route has one (it
+        /// carries no elevation, and may contain straight legs between detached strokes). Carrying
+        /// the sentence rather than a flag means the caller that knows the provenance writes it once.
+        var drawnNote: String?
     }
 
     var body: some View {
@@ -183,8 +185,8 @@ struct NewJourneySheet: View {
                         Text("\(summary.droppedCount) out-of-range point(s) skipped")
                             .font(.caption2).foregroundStyle(Theme.textTertiary)
                     }
-                    if summary.isDrawn {
-                        Text(RouteDrawing.elevationNote)
+                    if let drawnNote = summary.drawnNote {
+                        Text(drawnNote)
                             .font(.caption2).foregroundStyle(Theme.textTertiary)
                     }
                 }
@@ -200,8 +202,8 @@ struct NewJourneySheet: View {
             .sheet(isPresented: $showingDrawing, onDismiss: applyDrawnRoute) {
                 RouteDrawingSheet(title: draft.hasRoute ? "Redraw route" : "Draw route",
                                   referenceRoute: draft.route,
-                                  fallbackCenter: drawingCenter) { route in
-                    drawnRoute = route
+                                  fallbackRegion: drawingRegion) { drawn in
+                    drawnRoute = drawn
                 }
             }
         }
@@ -289,27 +291,29 @@ struct NewJourneySheet: View {
 
     // MARK: Draw on map
 
-    /// Where the drawing map opens when there is no route yet: the first placed day, else the first
-    /// geotagged photo from the pick. Nil opens on the world.
-    private var drawingCenter: [Double]? {
-        if let placed = draft.days.first(where: { $0.coordinates.count >= 2 })?.coordinates {
-            return placed
-        }
-        return photoFixes.first?.coordinate
+    /// Where the drawing map opens when there is no route yet: the region framing every day we have
+    /// placed, else the geotagged photos from the pick. Nil opens on a wide view.
+    private var drawingRegion: MKCoordinateRegion? {
+        let dayPoints = draft.days.map(\.coordinates).clCoordinates
+        if !dayPoints.isEmpty { return .fitting(dayPoints) }
+        let photoPoints = photoFixes.map(\.coordinate).clCoordinates
+        return photoPoints.isEmpty ? nil : .fitting(photoPoints)
     }
 
     /// Apply a route drawn in the sheet, once that sheet is gone. Days are untouched — a drawn route
     /// carries no waypoints, so there is nothing to seed from and nothing to clobber.
     private func applyDrawnRoute() {
-        guard let route = drawnRoute else { return }
+        guard let drawn = drawnRoute else { return }
         drawnRoute = nil
-        draft.route = route
+        draft.route = drawn.route
         routeSummary = RouteSummary(
-            pointCount: route.coordinates.count,
-            distanceKm: JourneyDraft.totalDistanceKm(route: route.coordinates),
+            pointCount: drawn.pointCount,
+            distanceKm: drawn.distanceKm,
             waypointCount: 0,
             droppedCount: 0,
-            isDrawn: true)
+            drawnNote: drawn.bridgedGaps > 0
+                ? "\(drawn.summary). \(RouteDrawing.elevationNote)"
+                : RouteDrawing.elevationNote)
         // A route now exists — offer country / camp names / weather / POIs / facts, exactly as an
         // imported GPX does.
         Task { await runSuggestions() }
@@ -404,27 +408,30 @@ struct NewJourneySheet: View {
 
     private func accept(_ key: SuggestionKey) {
         suggestions.accept(key, into: &draft)
-        // A route suggestion accepted on top of a drawn route replaces it, so the summary must be
-        // rebuilt (its point count, distance and no-elevation note all belonged to the old route).
-        syncRouteSummaryFromDraft(force: key == .routeFromPhotos)
+        syncRouteSummaryFromDraft()
     }
 
     private func acceptAllSuggestions() {
-        let replacesRoute = suggestions.model.pending.contains(.routeFromPhotos)
         suggestions.acceptAll(into: &draft)
-        syncRouteSummaryFromDraft(force: replacesRoute)
+        syncRouteSummaryFromDraft()
     }
 
-    /// Refresh the route summary card after a route-from-photos suggestion is accepted, so the
-    /// points/distance reflect the drafted route (there are no GPX waypoints in that case).
-    private func syncRouteSummaryFromDraft(force: Bool = false) {
-        guard force || routeSummary == nil,
-              let route = draft.route, !route.coordinates.isEmpty else { return }
+    /// Refresh the route summary card when the draft's route no longer matches it — after a
+    /// route-from-photos suggestion is accepted, the points/distance must reflect the drafted route
+    /// (and there are no GPX waypoints in that case).
+    ///
+    /// Keyed on the ROUTE having changed, not on which suggestion was accepted: `accept` is a no-op
+    /// for a key that is no longer pending, and rebuilding on the key alone would drop a drawn
+    /// route's provenance note while the drawn route was still there.
+    private func syncRouteSummaryFromDraft() {
+        guard let route = draft.route, !route.coordinates.isEmpty else { return }
+        guard routeSummary?.pointCount != route.coordinates.count else { return }
         routeSummary = RouteSummary(
             pointCount: route.coordinates.count,
             distanceKm: JourneyDraft.totalDistanceKm(route: route.coordinates),
             waypointCount: 0,
-            droppedCount: 0)
+            droppedCount: 0,
+            drawnNote: nil)
     }
 
     // MARK: Suggestions

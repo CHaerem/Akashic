@@ -33,7 +33,12 @@ struct StatsView: View {
     private var extended: ExtendedStats {
         ExtendedStatsCalculator.calculate(route: journey.route, stats: journey.stats, camps: journey.camps)
     }
-    private var profile: ElevationProfileModel? { ElevationProfileModel(journey: journey) }
+    /// Nil when the route carries no elevation at all — a hand-drawn route never does, and
+    /// `ElevationProfileModel` reads a missing third coordinate as sea level, so without this gate a
+    /// drawn journey renders a profile pinned flat at 0 m as if that were measured.
+    private var profile: ElevationProfileModel? {
+        journey.route.hasElevation ? ElevationProfileModel(journey: journey) : nil
+    }
     private var selectedCamp: Camp? {
         guard let id = selectedCampID else { return nil }
         return journey.camps.first { $0.id == id }
@@ -101,9 +106,14 @@ struct StatsView: View {
                     initialZoom: debugZoom,
                     initialCrosshairLogicalX: debugCrosshairLogicalX(in: profile)
                 )
-            } else {
+            } else if journey.route.coordinates.isEmpty {
                 ContentUnavailableView("No route", systemImage: "mountain.2")
                     .frame(height: 120)
+            } else {
+                ContentUnavailableView(
+                    "No elevation data", systemImage: "mountain.2",
+                    description: Text("This route has no elevation — a route drawn by hand never does. Replace it from a GPX to get a profile."))
+                    .frame(height: 150)
             }
             if let camp = selectedCamp { selectedDayRow(camp) }
         }

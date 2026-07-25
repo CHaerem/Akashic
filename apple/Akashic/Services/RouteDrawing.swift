@@ -31,9 +31,10 @@ enum RouteDrawing {
     /// tracing a valley without rounding off real switchbacks.
     static let simplifyToleranceMeters: Double = 8
 
-    /// Ceiling for the whole drawn polyline. Matches `RouteInference.maxRoutePoints`' intent: a
-    /// route the app can draw and sync comfortably.
-    static let maxRoutePoints: Int = 500
+    /// Ceiling for the whole drawn polyline. The same route-size limit inference uses — it is a
+    /// property of what the app can draw and sync, not of how the route was authored, so it is read
+    /// from there rather than restated with a second value.
+    static let maxRoutePoints: Int = RouteInference.maxRoutePoints
 
     /// How close a new stroke's endpoint must come to an existing endpoint to be treated as a
     /// continuation of it rather than a detached second leg.
@@ -55,7 +56,7 @@ enum RouteDrawing {
     }
 
     /// A coordinate is usable only when it is finite and inside the world.
-    static func isValid(_ coordinate: [Double]) -> Bool {
+    static func isValid(_ coordinate: RouteCoordinate) -> Bool {
         guard coordinate.count >= 2 else { return false }
         let lng = coordinate[0], lat = coordinate[1]
         guard lng.isFinite, lat.isFinite else { return false }
@@ -92,39 +93,35 @@ enum RouteDrawing {
 
     // MARK: Joining strokes
 
-    /// How a new stroke attached to the polyline that already existed.
-    struct Join: Equatable {
-        enum Kind: Equatable {
-            case started              // first stroke — nothing to attach to
-            case appended             // stroke start met the polyline's end
-            case appendedReversed     // stroke was drawn backwards from the polyline's end
-            case prepended            // stroke end met the polyline's start
-            case prependedReversed    // stroke was drawn outwards from the polyline's start
-        }
-        var kind: Kind
-        /// Straight-line distance bridged when no endpoint was within `snapMeters` (0 when it
-        /// snapped). A non-zero bridge is a deliberate straight leg, and the UI says so.
-        var bridgeMeters: Double = 0
+    /// Which orientation makes the shortest seam between a new stroke and the existing polyline.
+    /// Private on purpose: it is how `join` decides, not something callers act on — they need the
+    /// resulting points and whether a gap had to be bridged.
+    private enum Orientation {
+        case appendStroke           // stroke start met the polyline's end
+        case appendReversed         // stroke was drawn backwards from the polyline's end
+        case prependStroke          // stroke end met the polyline's start
+        case prependReversed        // stroke was drawn outwards from the polyline's start
     }
 
     /// Attach `stroke` to `existing`, choosing the orientation that makes the shortest seam. When no
     /// endpoint pair falls within `snapMeters` the stroke becomes a straight-line continuation from
     /// the end — the user drew a detached leg, and a route is a single LineString, so the gap is
-    /// bridged rather than silently dropped.
+    /// bridged rather than silently dropped. `bridgeMeters` is 0 when the stroke snapped; non-zero
+    /// means a deliberate straight leg, which the UI reports.
     static func join(existing: [[Double]], stroke: [[Double]],
-                     snapMeters: Double = snapMeters) -> (points: [[Double]], join: Join) {
+                     snapMeters: Double = snapMeters) -> (points: [[Double]], bridgeMeters: Double) {
         let stroke = stroke.filter(isValid)
-        guard stroke.count >= 2 else { return (existing, Join(kind: .started)) }
+        guard stroke.count >= 2 else { return (existing, 0) }
         guard let head = existing.first, let tail = existing.last, existing.count >= 2 else {
-            return (stroke, Join(kind: .started))
+            return (stroke, 0)
         }
 
         let strokeStart = stroke[0], strokeEnd = stroke[stroke.count - 1]
-        let candidates: [(kind: Join.Kind, distance: Double)] = [
-            (.appended, distanceMeters(tail, strokeStart)),
-            (.appendedReversed, distanceMeters(tail, strokeEnd)),
-            (.prepended, distanceMeters(head, strokeEnd)),
-            (.prependedReversed, distanceMeters(head, strokeStart)),
+        let candidates: [(orientation: Orientation, distance: Double)] = [
+            (.appendStroke, distanceMeters(tail, strokeStart)),
+            (.appendReversed, distanceMeters(tail, strokeEnd)),
+            (.prependStroke, distanceMeters(head, strokeEnd)),
+            (.prependReversed, distanceMeters(head, strokeStart)),
         ]
         // Ties resolve in the listed order, which prefers growing forwards — the overwhelmingly
         // common intent when someone keeps drawing.
@@ -132,45 +129,58 @@ enum RouteDrawing {
 
         guard best.distance <= snapMeters else {
             // Detached leg: bridge from the end, the direction the route reads in.
-            return (existing + stroke, Join(kind: .appended, bridgeMeters: best.distance))
+            return (existing + stroke, best.distance)
         }
 
-        switch best.kind {
-        case .appended:
-            return (existing + stroke.dropFirst(), Join(kind: .appended))
-        case .appendedReversed:
-            return (existing + stroke.reversed().dropFirst(), Join(kind: .appendedReversed))
-        case .prepended:
-            return (stroke.dropLast() + existing, Join(kind: .prepended))
-        case .prependedReversed:
-            return (stroke.reversed().dropLast() + existing, Join(kind: .prependedReversed))
-        case .started:
-            return (stroke, Join(kind: .started))
+        switch best.orientation {
+        case .appendStroke:   return (existing + stroke.dropFirst(), 0)
+        case .appendReversed: return (existing + stroke.reversed().dropFirst(), 0)
+        case .prependStroke:  return (stroke.dropLast() + existing, 0)
+        case .prependReversed: return (stroke.reversed().dropLast() + existing, 0)
         }
     }
 
-    /// Fold a stroke list into one polyline by joining each stroke to the result so far, keeping the
-    /// join decisions. This is the single definition of "what has been drawn": the view keeps only
-    /// the stroke list, so Undo is a `removeLast()` plus a refold — never a subtraction from a
-    /// merged polyline, which is how drawing tools end up with points nobody can account for.
+    /// Fold a stroke list into one polyline, counting the gaps that had to be bridged. This is the
+    /// single definition of "what has been drawn": the view keeps only the stroke list, so Undo is a
+    /// `removeLast()` plus a refold — never a subtraction from a merged polyline, which is how
+    /// drawing tools end up with points nobody can account for.
     static func fold(strokes: [[[Double]]],
-                     snapMeters: Double = snapMeters) -> (points: [[Double]], joins: [Join]) {
+                     snapMeters: Double = snapMeters) -> (points: [[Double]], bridgedGaps: Int) {
         var points: [[Double]] = []
-        var joins: [Join] = []
+        var bridged = 0
         for stroke in strokes {
             let result = join(existing: points, stroke: stroke, snapMeters: snapMeters)
             points = result.points
-            joins.append(result.join)
+            if result.bridgeMeters > 0 { bridged += 1 }
         }
-        return (points, joins)
-    }
-
-    /// The folded polyline alone.
-    static func polyline(strokes: [[[Double]]], snapMeters: Double = snapMeters) -> [[Double]] {
-        fold(strokes: strokes, snapMeters: snapMeters).points
+        return (points, bridged)
     }
 
     // MARK: Result
+
+    /// A finished hand-drawn route and the provenance that goes with it — the drawing counterpart to
+    /// `GPXFile` (route + waypoints + dropped points) and `RouteInferenceResult` (route + segments +
+    /// confidence). It exists so the honesty computed here survives the trip to the UI: without it,
+    /// each call site re-derived its own description and the bridged-gap count was lost at the seam.
+    struct DrawnRoute: Equatable {
+        var route: Route
+        /// Straight legs inserted between strokes the user drew detached from each other.
+        var bridgedGaps: Int
+
+        var pointCount: Int { route.coordinates.count }
+        var distanceKm: Double { JourneyDraft.totalDistanceKm(route: route.coordinates) }
+        var isUsable: Bool { route.coordinates.count >= 2 }
+
+        /// One-line, plain-language summary, in the house style of `RouteConfidence.summary`.
+        var summary: String {
+            var s = "Route drawn by hand · \(pointCount) point\(pointCount == 1 ? "" : "s")"
+            s += " · \(Formatters.distanceKm(distanceKm))"
+            if bridgedGaps > 0 {
+                s += " · \(bridgedGaps) straight leg\(bridgedGaps == 1 ? "" : "s") between detached strokes"
+            }
+            return s
+        }
+    }
 
     /// The drawn polyline as a `Route`. Coordinates stay 2-element — see the type's note on
     /// elevation. An under-two-point polyline is not a line, and yields the empty route.
@@ -180,27 +190,23 @@ enum RouteDrawing {
         return Route(type: "LineString", coordinates: coordinates)
     }
 
-    /// One-line, plain-language summary for the sheet and the Apply preview, in the house style of
-    /// `RouteConfidence.summary`.
-    static func summary(pointCount: Int, distanceKm: Double, bridgedGaps: Int) -> String {
-        var s = "Route drawn by hand · \(pointCount) point\(pointCount == 1 ? "" : "s")"
-        s += " · \(Formatters.distanceKm(distanceKm))"
-        if bridgedGaps > 0 {
-            s += " · \(bridgedGaps) straight leg\(bridgedGaps == 1 ? "" : "s") between detached strokes"
-        }
-        return s
+    /// The finished result for a stroke list: the folded polyline as a `Route`, with its bridged-gap
+    /// count. What the drawing sheet hands its caller.
+    static func drawnRoute(strokes: [[[Double]]]) -> DrawnRoute {
+        let folded = fold(strokes: strokes)
+        return DrawnRoute(route: route(from: folded.points), bridgedGaps: folded.bridgedGaps)
     }
 
     // MARK: Geometry helpers
 
     /// Great-circle distance in metres (`PhotoDayMatcher.distanceKm` is the single haversine).
-    static func distanceMeters(_ a: [Double], _ b: [Double]) -> Double {
+    private static func distanceMeters(_ a: [Double], _ b: [Double]) -> Double {
         guard a.count >= 2, b.count >= 2 else { return 0 }
         return PhotoDayMatcher.distanceKm(a[1], a[0], b[1], b[0]) * 1000
     }
 
     /// Mean metres per degree of latitude — the constant that makes the projected plane metric.
-    static let metersPerDegreeLatitude: Double = 111_320
+    private static let metersPerDegreeLatitude: Double = 111_320
 
     /// Degrees of **longitude** per metre at a given latitude. Used to place and reason about
     /// east-west distances; latitude is clamped so cos never reaches 0 at the poles.

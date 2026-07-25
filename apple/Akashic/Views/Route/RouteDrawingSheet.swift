@@ -12,7 +12,8 @@ import MapKit
 ///
 /// The view owns only the gesture and the camera. Which samples survive, how each stroke attaches to
 /// what is already drawn, and the final polyline all come from `RouteDrawing` (pure, unit-tested).
-/// Strokes are kept individually so **Undo** is exact: drop the last stroke and refold.
+/// Strokes are kept individually so **Undo** is exact: drop the last stroke and refold. The fold is
+/// cached in `drawn` rather than recomputed per body evaluation — body runs on every captured sample.
 ///
 /// Elevation is deliberately absent (`RouteDrawing.elevationNote`) — the note is on screen before
 /// the user commits, never discovered afterwards in wrong stats.
@@ -22,38 +23,32 @@ struct RouteDrawingSheet: View {
     var title: String = "Draw route"
     /// The journey's current route, drawn dashed underneath as a reference when replacing.
     var referenceRoute: Route?
-    /// Where to open when there is no reference route (day median / journey centre), `[lng, lat]`.
-    var fallbackCenter: [Double]?
-    /// Called with the drawn route on Done. Never called with fewer than two points.
-    var onDone: (Route) -> Void
+    /// Where to open when there is no reference route — the region framing the days/photos we know
+    /// about. Nil opens on a wide view the user can pan from.
+    var fallbackRegion: MKCoordinateRegion?
+    /// Called with the finished drawing on Done, carrying its own provenance (bridged gaps). Never
+    /// called with fewer than two points.
+    var onDone: (RouteDrawing.DrawnRoute) -> Void
 
-    private enum Mode: String, CaseIterable, Identifiable {
-        case draw, pan
-        var id: String { rawValue }
-        var label: String { self == .draw ? "Draw" : "Move map" }
-        var icon: String { self == .draw ? "scribble" : "hand.draw" }
-    }
+    private enum Mode { case draw, pan }
 
     @State private var mode: Mode = .draw
     /// Committed strokes, each already simplified. The source of truth for what has been drawn.
     @State private var strokes: [[[Double]]] = []
     /// The stroke currently under the finger.
     @State private var current: [[Double]] = []
+    /// Cached fold of `strokes` — refreshed only where `strokes` changes (commit / undo / clear).
+    @State private var drawn = Drawn()
     @State private var camera: MapCameraPosition = .automatic
+    /// The reference route's MapKit coordinates, projected once instead of per body evaluation.
+    @State private var referenceCoordinates: [CLLocationCoordinate2D] = []
 
-    // MARK: Derived
-
-    private var folded: (points: [[Double]], joins: [RouteDrawing.Join]) {
-        RouteDrawing.fold(strokes: strokes)
+    /// Everything the view needs about the committed strokes, computed once per change.
+    private struct Drawn {
+        var result = RouteDrawing.DrawnRoute(route: .empty, bridgedGaps: 0)
+        var coordinates: [CLLocationCoordinate2D] = []
+        var summary: String = "Nothing drawn yet"
     }
-
-    private var drawnPoints: [[Double]] { folded.points }
-
-    private var bridgedGaps: Int {
-        folded.joins.filter { $0.bridgeMeters > 0 }.count
-    }
-
-    private var canFinish: Bool { drawnPoints.count >= 2 }
 
     var body: some View {
         NavigationStack {
@@ -73,15 +68,15 @@ struct RouteDrawingSheet: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") {
-                        onDone(RouteDrawing.route(from: drawnPoints))
+                        onDone(drawn.result)
                         dismiss()
                     }
                     .fontWeight(.semibold)
                     .tint(Theme.accent)
-                    .disabled(!canFinish)
+                    .disabled(!drawn.result.isUsable)
                 }
             }
-            .onAppear(perform: positionCamera)
+            .onAppear(perform: prepare)
         }
     }
 
@@ -91,18 +86,18 @@ struct RouteDrawingSheet: View {
         MapReader { proxy in
             ZStack {
                 Map(position: $camera, interactionModes: mode == .pan ? .all : []) {
-                    if let referenceRoute, referenceRoute.clCoordinates.count > 1 {
-                        MapPolyline(coordinates: referenceRoute.clCoordinates)
+                    if referenceCoordinates.count > 1 {
+                        MapPolyline(coordinates: referenceCoordinates)
                             .stroke(Theme.textTertiary,
                                     style: StrokeStyle(lineWidth: 2, lineCap: .round, dash: [4, 4]))
                     }
-                    if drawnPoints.count > 1 {
-                        MapPolyline(coordinates: Self.clCoordinates(drawnPoints))
+                    if drawn.coordinates.count > 1 {
+                        MapPolyline(coordinates: drawn.coordinates)
                             .stroke(Theme.accent,
                                     style: StrokeStyle(lineWidth: 4, lineCap: .round, lineJoin: .round))
                     }
                     if current.count > 1 {
-                        MapPolyline(coordinates: Self.clCoordinates(current))
+                        MapPolyline(coordinates: current.clCoordinates)
                             .stroke(Theme.accent.opacity(0.7),
                                     style: StrokeStyle(lineWidth: 3, lineCap: .round, dash: [6, 5]))
                     }
@@ -139,6 +134,15 @@ struct RouteDrawingSheet: View {
         current = []
         guard simplified.count >= 2 else { return }
         strokes.append(simplified)
+        refold()
+    }
+
+    /// The only place the cache is built, so it cannot drift from `strokes`.
+    private func refold() {
+        let result = RouteDrawing.drawnRoute(strokes: strokes)
+        drawn = Drawn(result: result,
+                      coordinates: result.route.clCoordinates,
+                      summary: result.isUsable ? result.summary : "Nothing drawn yet")
     }
 
     // MARK: Overlays
@@ -156,19 +160,19 @@ struct RouteDrawingSheet: View {
     private var controls: some View {
         VStack(spacing: 10) {
             Picker("Mode", selection: $mode) {
-                ForEach(Mode.allCases) { mode in
-                    Label(mode.label, systemImage: mode.icon).tag(mode)
-                }
+                Label("Draw", systemImage: "scribble").tag(Mode.draw)
+                Label("Move map", systemImage: "hand.draw").tag(Mode.pan)
             }
             .pickerStyle(.segmented)
 
             HStack(spacing: 10) {
-                Text(readout)
+                Text(drawn.summary)
                     .font(.caption)
                     .foregroundStyle(Theme.textSecondary)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 Button {
                     strokes.removeLast()
+                    refold()
                 } label: {
                     Image(systemName: "arrow.uturn.backward")
                 }
@@ -176,6 +180,7 @@ struct RouteDrawingSheet: View {
                 Button {
                     strokes = []
                     current = []
+                    refold()
                 } label: {
                     Image(systemName: "trash")
                 }
@@ -196,45 +201,27 @@ struct RouteDrawingSheet: View {
         .padding(.bottom, 14)
     }
 
-    private var readout: String {
-        guard canFinish else { return "Nothing drawn yet" }
-        return RouteDrawing.summary(pointCount: drawnPoints.count,
-                                    distanceKm: JourneyDraft.totalDistanceKm(route: drawnPoints),
-                                    bridgedGaps: bridgedGaps)
-    }
+    // MARK: Setup
 
-    // MARK: Camera
-
-    /// Pin the camera to a concrete region before the user can draw.
+    /// Project the reference route once and pin the camera before the user can draw.
     ///
-    /// This is load-bearing, not cosmetic: `.automatic` re-frames itself to fit the map's content,
+    /// Pinning is load-bearing, not cosmetic: `.automatic` re-frames itself to fit the map's content,
     /// and the drawn polyline *is* content — so an automatic camera zooms and pans **while the finger
     /// is down**, and every subsequent screen point converts against a different projection. The
     /// stroke comes out kinked and the map lurches (caught in the simulator; the drawn line diverged
     /// from the traced one). A concrete region never moves unless the user moves it in Move-map mode.
-    private func positionCamera() {
-        camera = .region(Self.initialRegion(referenceRoute: referenceRoute, fallbackCenter: fallbackCenter))
+    private func prepare() {
+        referenceCoordinates = referenceRoute?.clCoordinates ?? []
+        camera = .region(Self.initialRegion(referenceRoute: referenceRoute, fallbackRegion: fallbackRegion))
     }
 
-    /// The region to open on: the reference route's extent, else the caller's centre, else a wide
-    /// view the user can pan and zoom from. Never `.automatic` — see `positionCamera()`.
-    static func initialRegion(referenceRoute: Route?, fallbackCenter: [Double]?) -> MKCoordinateRegion {
-        if let referenceRoute, referenceRoute.clCoordinates.count > 1 {
-            return RoutePreviewSheet.region(old: referenceRoute, new: .empty)
-        }
-        if let fallbackCenter, fallbackCenter.count >= 2 {
-            return MKCoordinateRegion(
-                center: CLLocationCoordinate2D(latitude: fallbackCenter[1], longitude: fallbackCenter[0]),
-                span: MKCoordinateSpan(latitudeDelta: 0.2, longitudeDelta: 0.2))
-        }
+    /// The region to open on: the reference route's extent, else the caller's region, else a wide
+    /// view the user can pan and zoom from. Never `.automatic` — see `prepare()`.
+    static func initialRegion(referenceRoute: Route?, fallbackRegion: MKCoordinateRegion?) -> MKCoordinateRegion {
+        let routePoints = referenceRoute?.clCoordinates ?? []
+        if routePoints.count > 1 { return .fitting(routePoints) }
+        if let fallbackRegion { return fallbackRegion }
         return MKCoordinateRegion(center: CLLocationCoordinate2D(latitude: 20, longitude: 0),
                                   span: MKCoordinateSpan(latitudeDelta: 120, longitudeDelta: 240))
-    }
-
-    static func clCoordinates(_ points: [[Double]]) -> [CLLocationCoordinate2D] {
-        points.compactMap { point in
-            guard point.count >= 2 else { return nil }
-            return CLLocationCoordinate2D(latitude: point[1], longitude: point[0])
-        }
     }
 }
