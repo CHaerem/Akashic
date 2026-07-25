@@ -4,9 +4,11 @@ import UniformTypeIdentifiers
 
 /// The "Route" block inside `JourneyEditSheet` — the route is no longer frozen after creation.
 ///
-/// Three corrections, each showing a PREVIEW (old vs new polyline + a stats diff) before Apply:
+/// Four corrections, each showing a PREVIEW (old vs new polyline + a stats diff) before Apply:
 ///   * Replace route from GPX (same parser/limits as creation),
 ///   * Draft route from the journey's geotagged photos (reuses `RouteInference`),
+///   * Draw the route by hand on a map (reuses `RouteDrawing` — for journeys with neither a track
+///     nor geotagged photos, and for fixing a stretch the other two got wrong),
 ///   * Recompute stats from the current route (fixes stale stats after any edit).
 ///
 /// Apply writes route + recomputed stats through the normal edit path (`JourneyStore.replaceRoute`).
@@ -20,6 +22,11 @@ struct RouteCorrectionSection: View {
     @State private var preview: RoutePreview?
     @State private var message: String?
 
+    // Draw-on-map. The drawn route is stashed and turned into a preview once the drawing sheet has
+    // dismissed — presenting the preview while that sheet is still on screen would be dropped.
+    @State private var showingDrawing = false
+    @State private var drawnRoute: Route?
+
     var body: some View {
         GlassField(label: "Route", systemImage: "point.topleft.down.to.point.bottomright.curvepath") {
             VStack(alignment: .leading, spacing: 10) {
@@ -32,12 +39,24 @@ struct RouteCorrectionSection: View {
                     subtitle: "Build a route from this journey's geotagged photos") {
                     draftFromPhotos()
                 }
+                row(icon: "scribble", title: "Draw route on map",
+                    subtitle: "Trace the route by hand — no track or geotags needed") {
+                    message = nil
+                    showingDrawing = true
+                }
                 row(icon: "function", title: "Recompute stats from route",
                     subtitle: "Refresh distance, ascent and summit from the current route") {
                     recomputeStats()
                 }
                 if let message {
                     Text(message).font(.caption2).foregroundStyle(Theme.textTertiary)
+                }
+            }
+            .sheet(isPresented: $showingDrawing, onDismiss: previewDrawnRoute) {
+                RouteDrawingSheet(title: journey.route.coordinates.isEmpty ? "Draw route" : "Redraw route",
+                                  referenceRoute: journey.route,
+                                  fallbackCenter: drawingCenter) { route in
+                    drawnRoute = route
                 }
             }
         }
@@ -87,6 +106,28 @@ struct RouteCorrectionSection: View {
             return
         }
         preview = makePreview(newRoute: result.route, gpxWaypoints: [], note: result.confidence.summary)
+    }
+
+    /// Where the drawing map opens when the journey has no route: its first placed day.
+    private var drawingCenter: [Double]? {
+        journey.camps.first(where: { $0.coordinates.count >= 2 })?.coordinates
+    }
+
+    /// Turn the drawn route into the same Apply preview every other correction goes through, so a
+    /// hand-drawn replacement is reviewed (old vs new polyline + stats diff) exactly like a GPX one.
+    private func previewDrawnRoute() {
+        guard let route = drawnRoute else { return }
+        drawnRoute = nil
+        guard route.coordinates.count >= 2 else {
+            message = "Nothing was drawn."
+            return
+        }
+        let summary = RouteDrawing.summary(
+            pointCount: route.coordinates.count,
+            distanceKm: JourneyDraft.totalDistanceKm(route: route.coordinates),
+            bridgedGaps: 0)
+        preview = makePreview(newRoute: route, gpxWaypoints: [],
+                              note: "\(summary). \(RouteDrawing.elevationNote)")
     }
 
     private func recomputeStats() {

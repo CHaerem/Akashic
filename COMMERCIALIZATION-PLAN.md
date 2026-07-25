@@ -86,6 +86,10 @@ an empty app and cannot make anything. v1.0 needs:
 - **Route ingestion**: GPX *import* (we already export GPX; parse the same format
   — from Strava, Garmin, AllTrails, komoot) + a simple "draw on map" fallback +
   "no route yet" as a valid state (photos-only journeys must work).
+  **Done** — all four sources now exist: GPX import (M1), inference from photo GPS
+  (M9), **draw-on-map** (`RouteDrawing` + `RouteDrawingSheet`, in both creation and
+  the M10 correction path), and no route at all. Drawn routes carry no elevation, and
+  the UI says so before the user commits rather than showing wrong ascent numbers.
 - Day/camp builder: add days manually, or seed them from photo dates (the
   PhotoDayMatcher logic in reverse — cluster photos by day, propose camps).
 - Auto-computed stats where possible (distance/elevation from route).
@@ -175,7 +179,7 @@ this is a beautiful side business, not a startup, and the cost base agrees.
 | Risk | Severity | Mitigation |
 |---|---|---|
 | **Apple-only ceiling** — mixed-platform families bounce | High, structural | Accept for v1; web showcase gives read access; revisit §9 if traction |
-| Journey creation UX misses (route drawing is hard to get right) | Medium | GPX import first (most trekkers have a track); draw-on-map can be v1.1 |
+| Journey creation UX misses (route drawing is hard to get right) | Medium | GPX import first (most trekkers have a track); ~~draw-on-map can be v1.1~~ — draw-on-map shipped for v1.0 (explicit Draw/Move-map modes, per-stroke undo); the beta (§11 phase 2) is what tests whether the interaction reads |
 | Users blame *us* for iCloud storage costs | Medium | Onboarding honesty (§4.2); storage meter in Settings |
 | Public-DB abuse / moderation burden | Medium | Gated publishing, report/takedown, thumbnails only |
 | Apple account loss = data loss (we cannot restore) | Low freq / high pain | Export prompts ("archive your journey"), clear docs |
@@ -237,7 +241,7 @@ unlock — it fattens the paid tier without adding a krone of marginal cost.
 | **2 — closed beta** | ~10 external families create journeys from scratch | ≥7 complete a journey without help |
 | **3 — launch** | App Store + showcase funnel + communities | — |
 | **4 — v1.1 "Akashic Intelligence"** | §10 ladder: day-note drafting, smart day naming, curation, narrative | Launch stable; AI-device share of user base worth it |
-| **5 — iterate** | Draw-on-map, NL search, live activity, watch app, Strava API import | Sales signal |
+| **5 — iterate** | ~~Draw-on-map~~ (shipped in v1.0), NL search, live activity, watch app, Strava API import | Sales signal |
 | **6 — platform decision** | Android/web via real backend | Only on clear demand + revenue |
 
 ## 12. Immediate next steps

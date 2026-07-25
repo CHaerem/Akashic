@@ -29,6 +29,11 @@ struct NewJourneySheet: View {
     @State private var routeSummary: RouteSummary?
     @State private var importError: String?
 
+    // Draw-on-map. The drawn route is stashed and applied on the sheet's dismissal, so the
+    // suggestion pass never runs while a sheet is still on screen.
+    @State private var showingDrawing = false
+    @State private var drawnRoute: Route?
+
     // Photo day-seeding.
     @State private var photoSelection: [PhotosPickerItem] = []
     @State private var isReadingPhotos = false
@@ -60,6 +65,9 @@ struct NewJourneySheet: View {
         var distanceKm: Double
         var waypointCount: Int
         var droppedCount: Int
+        /// Hand-drawn routes carry no elevation — the summary says so instead of letting the user
+        /// find out from empty ascent/summit stats later.
+        var isDrawn: Bool = false
     }
 
     var body: some View {
@@ -149,31 +157,21 @@ struct NewJourneySheet: View {
         draft.dateEnded = hasEnd ? endDate : nil
     }
 
-    // MARK: Route (GPX import)
+    // MARK: Route (GPX import / draw on map)
 
     private var routeSection: some View {
         GlassField(label: "Route", systemImage: "point.topleft.down.to.point.bottomright.curvepath") {
             VStack(alignment: .leading, spacing: 10) {
-                Button {
+                routeButton(icon: "arrow.down.doc",
+                            title: routeSummary == nil ? "Import route (GPX)" : "Replace route") {
                     importError = nil
                     showingImporter = true
-                } label: {
-                    HStack(spacing: 10) {
-                        Image(systemName: "arrow.down.doc").font(.title3).foregroundStyle(Theme.accent)
-                        Text(routeSummary == nil ? "Import route (GPX)" : "Replace route")
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(Theme.textPrimary)
-                        Spacer()
-                    }
-                    .padding(14)
-                    .frame(maxWidth: .infinity)
-                    .background(Theme.surface, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 14, style: .continuous)
-                            .strokeBorder(Theme.accent.opacity(0.4), style: StrokeStyle(lineWidth: 1, dash: [5, 4]))
-                    )
                 }
-                .buttonStyle(.plain)
+                routeButton(icon: "scribble",
+                            title: draft.hasRoute ? "Redraw route on map" : "Draw route on map") {
+                    importError = nil
+                    showingDrawing = true
+                }
 
                 if let summary = routeSummary {
                     HStack(spacing: 14) {
@@ -185,14 +183,48 @@ struct NewJourneySheet: View {
                         Text("\(summary.droppedCount) out-of-range point(s) skipped")
                             .font(.caption2).foregroundStyle(Theme.textTertiary)
                     }
+                    if summary.isDrawn {
+                        Text(RouteDrawing.elevationNote)
+                            .font(.caption2).foregroundStyle(Theme.textTertiary)
+                    }
                 }
                 if let importError {
                     Text(importError).font(.footnote).foregroundStyle(Theme.warning)
                 }
-                Text("GPX from Strava, Garmin, AllTrails or komoot. No route is fine too.")
+                Text("GPX from Strava, Garmin, AllTrails or komoot — or draw it yourself. No route is fine too.")
                     .font(.caption2).foregroundStyle(Theme.textTertiary)
             }
+            // The drawing sheet is applied on DISMISSAL (`onDismiss: applyDrawnRoute`), never from
+            // inside its own Done: the suggestion pass it kicks off must not start while a sheet is
+            // still on screen.
+            .sheet(isPresented: $showingDrawing, onDismiss: applyDrawnRoute) {
+                RouteDrawingSheet(title: draft.hasRoute ? "Redraw route" : "Draw route",
+                                  referenceRoute: draft.route,
+                                  fallbackCenter: drawingCenter) { route in
+                    drawnRoute = route
+                }
+            }
         }
+    }
+
+    private func routeButton(icon: String, title: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 10) {
+                Image(systemName: icon).font(.title3).foregroundStyle(Theme.accent)
+                Text(title)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(Theme.textPrimary)
+                Spacer()
+            }
+            .padding(14)
+            .frame(maxWidth: .infinity)
+            .background(Theme.surface, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .strokeBorder(Theme.accent.opacity(0.4), style: StrokeStyle(lineWidth: 1, dash: [5, 4]))
+            )
+        }
+        .buttonStyle(.plain)
     }
 
     private func summaryStat(_ value: String, _ caption: String) -> some View {
@@ -253,6 +285,34 @@ struct NewJourneySheet: View {
         } catch {
             importError = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
         }
+    }
+
+    // MARK: Draw on map
+
+    /// Where the drawing map opens when there is no route yet: the first placed day, else the first
+    /// geotagged photo from the pick. Nil opens on the world.
+    private var drawingCenter: [Double]? {
+        if let placed = draft.days.first(where: { $0.coordinates.count >= 2 })?.coordinates {
+            return placed
+        }
+        return photoFixes.first?.coordinate
+    }
+
+    /// Apply a route drawn in the sheet, once that sheet is gone. Days are untouched — a drawn route
+    /// carries no waypoints, so there is nothing to seed from and nothing to clobber.
+    private func applyDrawnRoute() {
+        guard let route = drawnRoute else { return }
+        drawnRoute = nil
+        draft.route = route
+        routeSummary = RouteSummary(
+            pointCount: route.coordinates.count,
+            distanceKm: JourneyDraft.totalDistanceKm(route: route.coordinates),
+            waypointCount: 0,
+            droppedCount: 0,
+            isDrawn: true)
+        // A route now exists — offer country / camp names / weather / POIs / facts, exactly as an
+        // imported GPX does.
+        Task { await runSuggestions() }
     }
 
     // MARK: Photos (seed days from photo dates)
@@ -344,18 +404,22 @@ struct NewJourneySheet: View {
 
     private func accept(_ key: SuggestionKey) {
         suggestions.accept(key, into: &draft)
-        syncRouteSummaryFromDraft()
+        // A route suggestion accepted on top of a drawn route replaces it, so the summary must be
+        // rebuilt (its point count, distance and no-elevation note all belonged to the old route).
+        syncRouteSummaryFromDraft(force: key == .routeFromPhotos)
     }
 
     private func acceptAllSuggestions() {
+        let replacesRoute = suggestions.model.pending.contains(.routeFromPhotos)
         suggestions.acceptAll(into: &draft)
-        syncRouteSummaryFromDraft()
+        syncRouteSummaryFromDraft(force: replacesRoute)
     }
 
     /// Refresh the route summary card after a route-from-photos suggestion is accepted, so the
     /// points/distance reflect the drafted route (there are no GPX waypoints in that case).
-    private func syncRouteSummaryFromDraft() {
-        guard routeSummary == nil, let route = draft.route, !route.coordinates.isEmpty else { return }
+    private func syncRouteSummaryFromDraft(force: Bool = false) {
+        guard force || routeSummary == nil,
+              let route = draft.route, !route.coordinates.isEmpty else { return }
         routeSummary = RouteSummary(
             pointCount: route.coordinates.count,
             distanceKm: JourneyDraft.totalDistanceKm(route: route.coordinates),
