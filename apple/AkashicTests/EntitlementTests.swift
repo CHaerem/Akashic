@@ -73,8 +73,9 @@ final class EntitlementTests: XCTestCase {
         let free = EntitlementPolicy(entitlement: .free)
         XCTAssertTrue(free.canCreateJourney(ownedCount: 0), "first owned journey is free")
         XCTAssertFalse(free.canCreateJourney(ownedCount: 1), "second owned journey needs Complete")
-        XCTAssertFalse(free.canExport)
-        XCTAssertFalse(free.canPublish)
+        // §5 (revised): the one free journey is fully finishable — export/publish are NOT gated.
+        XCTAssertTrue(free.canExport, "the free tier's one journey can still be exported")
+        XCTAssertTrue(free.canPublish, "the free tier's one journey can still be published")
         XCTAssertTrue(free.canAddPhotos(currentCount: 0, adding: 100), "100 fits")
         XCTAssertFalse(free.canAddPhotos(currentCount: 0, adding: 101), "101 does not")
     }
@@ -109,8 +110,8 @@ final class EntitlementTests: XCTestCase {
         // cases): no NEW journeys, but export/publish are unchanged and existing photos untouched.
         let free = EntitlementPolicy(entitlement: .free)
         XCTAssertFalse(free.canCreateJourney(ownedCount: 3), "no new journeys past the limit")
-        XCTAssertFalse(free.canExport, "export capability does not depend on journey count")
-        XCTAssertFalse(free.canPublish, "publish capability does not depend on journey count")
+        XCTAssertTrue(free.canExport, "export capability does not depend on journey count")
+        XCTAssertTrue(free.canPublish, "publish capability does not depend on journey count")
 
         // Completing the purchase lifts the create block for the same grandfathered count.
         let complete = EntitlementPolicy(entitlement: .complete)
@@ -156,8 +157,8 @@ final class EntitlementTests: XCTestCase {
         XCTAssertFalse(store.isComplete)
         XCTAssertTrue(store.canCreateJourney(ownedCount: 0))
         XCTAssertFalse(store.canCreateJourney(ownedCount: 1))
-        XCTAssertFalse(store.canExport)
-        XCTAssertFalse(store.canPublish)
+        XCTAssertTrue(store.canExport, "free tier can still export its one journey")
+        XCTAssertTrue(store.canPublish, "free tier can still publish its one journey")
         XCTAssertEqual(store.photosAllowed(currentCount: 95, adding: 10), 5)
     }
 
@@ -321,13 +322,15 @@ final class EntitlementTests: XCTestCase {
     }
 
     func testExportAndPublishRespectOwnership() {
+        // §5 (revised): export/publish are no longer entitlement-gated at all — for owned OR
+        // shared-in content, on the free tier or Complete.
         let free = EntitlementPolicy(entitlement: .free)
-        // Owned content: export/publish require Complete.
-        XCTAssertFalse(free.canExport(isOwned: true))
-        XCTAssertFalse(free.canPublish(isOwned: true))
-        // Shared-in content: export (a viewing-tier action) is never paywalled…
+        XCTAssertTrue(free.canExport(isOwned: true), "the free tier's own journey can be exported")
         XCTAssertTrue(free.canExport(isOwned: false), "exporting your copy of shared content is never gated")
-        // …but you can never publish a journey you don't own, even with Complete.
+        XCTAssertTrue(free.canPublish(isOwned: true), "the free tier's own journey can be published")
+        // …but you can never publish a journey you don't own, free or Complete — ownership is the
+        // only rule left standing.
+        XCTAssertFalse(free.canPublish(isOwned: false), "publishing always requires ownership")
         let complete = EntitlementPolicy(entitlement: .complete)
         XCTAssertFalse(complete.canPublish(isOwned: false), "publishing always requires ownership")
         XCTAssertTrue(complete.canPublish(isOwned: true))

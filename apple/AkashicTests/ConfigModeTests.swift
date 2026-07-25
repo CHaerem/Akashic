@@ -97,8 +97,38 @@ final class DemoJourneyTests: XCTestCase {
                                                 storeURL: storeURL, defaults: defaults)
 
         let journeys = controller.loadJourneys()
-        XCTAssertEqual(journeys.map(\.id), ["kilimanjaro"], "the ONE demo journey lands, not all three dev fixtures")
-        XCTAssertTrue(controller.isSeededFixture(journeyID: "kilimanjaro"))
+        XCTAssertEqual(journeys.map(\.id), ["demo-kilimanjaro"], "the ONE demo journey lands, not all three dev fixtures")
+        XCTAssertTrue(controller.isSeededFixture(journeyID: "demo-kilimanjaro"))
+    }
+
+    /// The ship-blocker this whole file guards against: `kilimanjaro.json` was recovered from the
+    /// real family archive and carries the SAME id the real Kilimanjaro uses in CloudKit
+    /// Production (MAPPING.md: `Journey.recordName = journeys.id`). If the demo ever seeded with
+    /// that raw id, a later sign-in would upsert the real journey into the row already branded
+    /// "sample" — see `PersistenceController.remapToDemoIdentity`'s doc comment.
+    func testSeededDemoIdIsNotTheFixturesRawId() throws {
+        let storeURL = makeTempStoreURL()
+        let defaults = makeTempDefaults()
+        let controller = PersistenceController(mode: .local, seed: true, fixtureBundle: bundle,
+                                                storeURL: storeURL, defaults: defaults)
+
+        let ids = controller.loadJourneys().map(\.id)
+        XCTAssertFalse(ids.contains("kilimanjaro"), "the demo must never carry the fixture's raw (real-archive) id")
+        XCTAssertEqual(ids, ["demo-kilimanjaro"])
+    }
+
+    /// The other half of the same guarantee: even after the demo has seeded, a journey that later
+    /// arrives by sync (or share) using the fixture's RAW id must not be mistaken for the sample —
+    /// otherwise the real Kilimanjaro would silently inherit the demo's free-tier exemption and
+    /// sync exclusion the moment it landed.
+    func testAJourneyArrivingWithTheFixturesRawIdIsNotTreatedAsTheSample() throws {
+        let storeURL = makeTempStoreURL()
+        let defaults = makeTempDefaults()
+        let controller = PersistenceController(mode: .local, seed: true, fixtureBundle: bundle,
+                                                storeURL: storeURL, defaults: defaults)
+
+        XCTAssertFalse(controller.isSeededFixture(journeyID: "kilimanjaro"),
+                       "the real archive's raw id must never be recognised as the demo/sample")
     }
 
     // MARK: - Never eats the free tier's one journey
@@ -127,11 +157,11 @@ final class DemoJourneyTests: XCTestCase {
         // "Launch 1": fresh install, empty store -> the demo seeds.
         let firstLaunch = PersistenceController(mode: .local, seed: true, fixtureBundle: bundle,
                                                 storeURL: storeURL, defaults: defaults)
-        XCTAssertEqual(firstLaunch.loadJourneys().map(\.id), ["kilimanjaro"], "precondition: seeded")
+        XCTAssertEqual(firstLaunch.loadJourneys().map(\.id), ["demo-kilimanjaro"], "precondition: seeded")
 
         // The user deletes it, leaving the store looking EXACTLY like a fresh install would
         // (zero journeys) — the case a naive "seed when empty" check cannot tell apart.
-        firstLaunch.deleteJourney(id: "kilimanjaro")
+        firstLaunch.deleteJourney(id: "demo-kilimanjaro")
         XCTAssertTrue(firstLaunch.loadJourneys().isEmpty, "precondition: deleted")
 
         // "Launch 2": a NEW controller instance over the SAME on-disk store + the SAME persisted
@@ -153,15 +183,15 @@ final class DemoJourneyTests: XCTestCase {
 
         let firstLaunch = PersistenceController(mode: .local, seed: true, fixtureBundle: bundle,
                                                 storeURL: storeURL, defaults: defaults)
-        XCTAssertTrue(firstLaunch.isSeededFixture(journeyID: "kilimanjaro"))
+        XCTAssertTrue(firstLaunch.isSeededFixture(journeyID: "demo-kilimanjaro"))
 
         let secondLaunch = PersistenceController(mode: .local, seed: true, fixtureBundle: bundle,
                                                  storeURL: storeURL, defaults: defaults)
         // Nothing reseeded (still exactly the one demo journey)...
-        XCTAssertEqual(secondLaunch.loadJourneys().map(\.id), ["kilimanjaro"])
+        XCTAssertEqual(secondLaunch.loadJourneys().map(\.id), ["demo-kilimanjaro"])
         // ...but the row that survived from launch 1 is STILL recognised as the sample, even
         // though `secondLaunch.seededJourneyIDs` (in-memory) was never populated this launch.
-        XCTAssertTrue(secondLaunch.isSeededFixture(journeyID: "kilimanjaro"),
+        XCTAssertTrue(secondLaunch.isSeededFixture(journeyID: "demo-kilimanjaro"),
                      "the persisted decision must survive a relaunch, not just the in-memory set")
 
         let store = JourneyStore(persistence: secondLaunch)
@@ -188,7 +218,7 @@ final class DemoJourneyTests: XCTestCase {
 
         XCTAssertEqual(controller.loadJourneys().map(\.id), ["mount-kenya"],
                       "the demo must not be seeded next to already-present real content")
-        XCTAssertFalse(controller.isSeededFixture(journeyID: "kilimanjaro"))
+        XCTAssertFalse(controller.isSeededFixture(journeyID: "demo-kilimanjaro"))
     }
 
     /// A second call within the same process (defensive — production only calls this once per
@@ -200,7 +230,7 @@ final class DemoJourneyTests: XCTestCase {
                                                 storeURL: storeURL, defaults: defaults)
 
         controller.seedDemoJourneyIfFreshInstall(bundle: bundle)
-        controller.deleteJourney(id: "kilimanjaro")
+        controller.deleteJourney(id: "demo-kilimanjaro")
         controller.seedDemoJourneyIfFreshInstall(bundle: bundle)
 
         XCTAssertTrue(controller.loadJourneys().isEmpty,

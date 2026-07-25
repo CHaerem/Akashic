@@ -19,7 +19,12 @@ import UIKit
 ///  - **Reduce Transparency** (`accessibilityReduceTransparency`) has no trait-collection
 ///    analogue — it is a standalone `UIAccessibility` flag surfaced to SwiftUI only via the
 ///    environment — so it can't ride the same dynamic-colour trick. `themedMaterial` below is
-///    the one place that reads it, swapping `.ultraThinMaterial` for an opaque fill.
+///    ONE of four places that read it, not the only one: `GlobeMapComponents`'s
+///    `mapOverlayMaterial` and `DayNavigationView` hand-roll the same
+///    `reduceTransparency ? opaque : .ultraThinMaterial` swap against `MapPalette.overlaySurface`
+///    (the map's own fixed-dark fill, not `Theme.surface`), and `StatsView`'s capsule needs a
+///    `Shape.fill(_:)` call `themedMaterial`'s `.background(_:in:)` shape doesn't offer. All three
+///    are documented at their own call sites; `themedMaterial` is just the one reusable modifier.
 ///  - **Reduce Motion** has no colour to swap and isn't handled here — see
 ///    `TrekCameraController` and `GlobeExperienceView`, where the motion actually lives.
 enum Theme {
@@ -84,6 +89,23 @@ enum Theme {
         startPoint: .top,
         endPoint: .bottom
     )
+}
+
+// MARK: - Adaptive colour (light/dark, same hue)
+
+extension Color {
+    /// The one place a colour that needs a DIFFERENT (not just system-provided) value between
+    /// Light and Dark Mode gets resolved — same technique `Theme.textSecondary`/`hairline` above
+    /// use for Increase Contrast (a dynamic `UIColor` closure the system re-resolves on every
+    /// appearance change, no view code involved), just keyed on `userInterfaceStyle` instead of
+    /// `accessibilityContrast`. Was written twice, independently, as private `UIColor { traits in
+    /// … }` helpers in `StatsView` (`adaptiveHue`) and `DayContentConfig` (`dayColorAdaptive`) —
+    /// both call through to this now instead.
+    static func adaptive(dark: Color, light: Color) -> Color {
+        Color(uiColor: UIColor { traits in
+            traits.userInterfaceStyle == .dark ? UIColor(dark) : UIColor(light)
+        })
+    }
 }
 
 // MARK: - Adaptive material

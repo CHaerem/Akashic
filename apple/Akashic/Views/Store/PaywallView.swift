@@ -13,11 +13,14 @@ import SwiftUI
 struct PaywallView: View {
 
     /// Why the paywall came up, so the header can be specific and kind.
+    ///
+    /// No `.export` / `.publish` case: plan §5 (revised) made both free-tier features — the one
+    /// free journey is fully finishable, so neither action ever routes here anymore (see
+    /// `JourneyExportSheet` / `JourneyShowcaseSheet`, which no longer gate on entitlement at all).
+    /// The only wall left is unlimited journeys/photos.
     enum Reason: Equatable {
         case journeyLimit
         case photoLimit(remaining: Int)
-        case export
-        case publish
         case enrich
         case settings
 
@@ -25,8 +28,6 @@ struct PaywallView: View {
             switch self {
             case .journeyLimit: return "The free tier includes one journey"
             case .photoLimit: return "The free tier includes 100 photos per journey"
-            case .export: return "Export is part of Akashic Complete"
-            case .publish: return "Publishing is part of Akashic Complete"
             case .enrich: return "Enrich journey is part of Akashic Complete"
             case .settings: return "Unlock everything, once"
             }
@@ -41,10 +42,6 @@ struct PaywallView: View {
                     return "We added the photos that fit. Akashic Complete lifts the 100-photo cap so the rest can come too."
                 }
                 return "This journey is at the free 100-photo cap. Akashic Complete lifts it — for your whole family."
-            case .export:
-                return "Package any journey as a portable archive — route, photos and notes — with Akashic Complete."
-            case .publish:
-                return "Share a journey as a public web showcase with Akashic Complete."
             case .enrich:
                 return "Let Akashic suggest weather, places and points of interest for an existing journey — with Akashic Complete. Correcting your own data is always free."
             case .settings:
@@ -118,13 +115,12 @@ struct PaywallView: View {
     // MARK: Benefits
 
     private var benefits: some View {
+        // Export and showcase publishing are NOT listed here — plan §5 (revised) made both part
+        // of the free tier (the one free journey is fully finishable). The only thing Akashic
+        // Complete still unlocks is more journeys and more photos, for the whole family.
         VStack(alignment: .leading, spacing: 14) {
             benefitRow("infinity", "Unlimited journeys & photos",
                        "Create and keep as many trips as you like, with no photo cap.")
-            benefitRow("square.and.arrow.up", "Per-journey export",
-                       "Archive any journey as route + photos + notes — your data, portable.")
-            benefitRow("globe", "Showcase publishing",
-                       "Publish a journey as a public web page anyone can view.")
             benefitRow("person.2.fill", "Family Sharing",
                        "One purchase covers everyone in your Family Sharing group.")
         }
@@ -173,7 +169,7 @@ struct PaywallView: View {
             Label("You have Akashic Complete", systemImage: "checkmark.seal.fill")
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(Theme.accent)
-            Text("Unlimited journeys and photos, export, and publishing — shared with your Family Sharing group.")
+            Text("Unlimited journeys and photos — shared with your Family Sharing group.")
                 .font(.caption).foregroundStyle(Theme.textSecondary)
                 .multilineTextAlignment(.center)
         }

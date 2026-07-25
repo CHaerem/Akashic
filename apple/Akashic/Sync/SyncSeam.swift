@@ -144,10 +144,12 @@ protocol SyncLocalStore: AnyObject {
     func recordIdentities(forJourneyID journeyID: String) -> [LocalChange]
 
     /// Whether this journey is the bundled demo sample (D9) — or, in `.fixtures` dev mode, one of
-    /// the bundled dev fixtures — rather than the family's own content. `handles(journeyID:)` is
-    /// the ONE place this is consulted, and every sync path (the initial bulk upload, the
-    /// activation heal for a never-uploaded journey, and every observed local write) already
+    /// the bundled dev fixtures — rather than the family's own content. Consulted at TWO places in
+    /// `AkashicSyncEngine`: `handles(journeyID:)` (every sync path — the initial bulk upload, the
+    /// activation heal for a never-uploaded journey, and every observed local write — already
     /// funnels through `handles`, so gating there is what makes "never syncs" hold everywhere at
-    /// once instead of needing a matching guard at each call site.
+    /// once instead of needing a matching guard at each upload call site) and, separately,
+    /// `deleteZones(forJourneyID:)` (so deleting the sample never sends a real zone-delete for a
+    /// zone that was never created remotely in the first place).
     func isSeededFixture(journeyID: String) -> Bool
 }

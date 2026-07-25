@@ -47,7 +47,6 @@ struct NewJourneyChooser: View {
                 }
             }
         }
-        .preferredColorScheme(.dark)
         .presentationBackground(Theme.background)
         .fileImporter(isPresented: $showingImporter,
                       allowedContentTypes: gpxContentTypes,
@@ -117,11 +116,16 @@ struct NewJourneyChooser: View {
                     .fill(promoted ? Theme.accent : Theme.accentSoft)
                     .frame(width: 48, height: 48)
                 if isLoading {
-                    ProgressView().tint(promoted ? Theme.background : Theme.accent)
+                    // `promoted`'s circle is filled with the accent colour, so its foreground
+                    // needs `Theme.onAccent` (fixed, always contrasts with `accent`) — not
+                    // `Theme.background`, which now follows the system appearance and would
+                    // render pale-on-pale in Light Mode exactly like the CTA buttons `onAccent`
+                    // was introduced for.
+                    ProgressView().tint(promoted ? Theme.onAccent : Theme.accent)
                 } else {
                     Image(systemName: icon)
                         .font(.title3)
-                        .foregroundStyle(promoted ? Theme.background : Theme.accent)
+                        .foregroundStyle(promoted ? Theme.onAccent : Theme.accent)
                 }
             }
             VStack(alignment: .leading, spacing: 4) {

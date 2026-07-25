@@ -197,8 +197,11 @@ struct SettingsView: View {
             Text("Membership")
         } footer: {
             Text(entitlements.isComplete
-                 ? "Akashic Complete is active — unlimited journeys and photos, per-journey export, and showcase publishing. Shared with your Family Sharing group."
-                 : "The free tier includes one journey (up to 100 photos), the full experience, and sharing. Akashic Complete unlocks unlimited journeys and photos, per-journey export, and publishing — one purchase, shared with your family. Restore a previous purchase from inside.")
+                 ? "Akashic Complete is active — unlimited journeys and photos. Shared with your Family Sharing group."
+                 // §5 (revised): the free tier's one journey is fully finishable — export and
+                 // showcase publishing are NOT part of what Complete adds; only the journey/photo
+                 // limits are.
+                 : "The free tier includes one journey (up to 100 photos), the full experience, sharing, export and publishing. Akashic Complete unlocks unlimited journeys and photos — one purchase, shared with your family. Restore a previous purchase from inside.")
         }
 
         Section("About") {

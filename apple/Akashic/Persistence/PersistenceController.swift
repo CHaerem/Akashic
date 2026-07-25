@@ -220,14 +220,18 @@ final class PersistenceController {
     ///    empty by the time this runs and the demo is skipped for good.
     func seedDemoJourneyIfFreshInstall(bundle: Bundle) {
         guard !defaults.bool(forKey: Self.demoSeedDecidedKey) else { return }
-        // Decided either way, the moment this runs past the guard above — seeded or skipped, this
+
+        // `AKASHIC_EMPTY=1` must mean empty, full stop — the screenshot/empty-state seam takes
+        // precedence over the demo. Checked BEFORE the once-ever decision is marked below: a
+        // screenshot run must never permanently burn the real decision it deliberately isn't
+        // making, or the demo would silently never seed on that install again (quality gate:
+        // `AKASHIC_EMPTY=1` does not consume the demo-seed decision).
+        guard !Config.startEmpty else { return }
+
+        // Decided either way, the moment this runs past the guards above — seeded or skipped, this
         // must never be reconsidered on a later launch (or a later call this same launch, e.g. a
         // sign-out/sign-in cycle re-running `activate()`).
         defer { defaults.set(true, forKey: Self.demoSeedDecidedKey) }
-
-        // `AKASHIC_EMPTY=1` must mean empty, full stop — the screenshot/empty-state seam takes
-        // precedence over the demo.
-        guard !Config.startEmpty else { return }
 
         let context = container.viewContext
         let request = NSFetchRequest<CDJourney>(entityName: "CDJourney")
@@ -236,7 +240,10 @@ final class PersistenceController {
         guard existing == 0 else { return }   // not a fresh install, or real data already landed
 
         do {
-            let journey = try FixtureLoader.load(named: "kilimanjaro", bundle: bundle)
+            let fixture = try FixtureLoader.load(named: "kilimanjaro", bundle: bundle)
+            // Re-mint every stable id the fixture carries — see `remapToDemoIdentity`'s doc
+            // comment for why this is a ship-blocker, not a nicety.
+            let journey = Self.remapToDemoIdentity(fixture)
             CoreDataMapping.upsertJourney(journey, into: context)
             // Recorded BEFORE `save()`: the Core Data save notification `SyncScheduler` observes
             // fires synchronously, on this thread, from inside `save()` — so `isSeededFixture` must
@@ -250,6 +257,38 @@ final class PersistenceController {
         } catch {
             assertionFailure("Demo journey seeding failed: \(error)")
         }
+    }
+
+    /// Re-mint every stable identity the bundled demo fixture carries — the journey id AND every
+    /// waypoint (`Camp`) id — before it ever touches a real store.
+    ///
+    /// `kilimanjaro.json` was recovered from the real family archive, so it carries the SAME
+    /// `id`s the real records use — and MAPPING.md's contract is `Journey.recordName =
+    /// journeys.id`, `Waypoint.recordName = waypoints.id`. Seeding the fixture verbatim means the
+    /// demo and the real Kilimanjaro share a record identity: a later iCloud sign-in (or, over the
+    /// SHARED database, a participant whose own device seeded the demo) upserts the real record
+    /// into the row this device already branded "sample" — silently excluding the family's real
+    /// journey from sync forever (`isSeededFixture`), lying in its delete confirmation ("never
+    /// synced"), and cascading a real delete onto real local rows and the real media directory if
+    /// the "sample" is ever removed. A demo id must be constructible in a way that can NEVER
+    /// collide with anything that could arrive by sync or share, so every id is prefixed rather
+    /// than kept verbatim. `journey.slug`, day content (funFacts/pointsOfInterest/historicalSites)
+    /// and route geometry are untouched — they carry no record identity of their own (MAPPING.md
+    /// §1) and reference camps only by array position, never by id, so remapping camp ids alone
+    /// keeps day/camp references internally consistent.
+    ///
+    /// Applied ONLY on this path — never `.fixtures` mode's `seedFixtures`, which is an in-memory
+    /// dev convenience that never touches a real (on-disk, syncable) store and must keep using the
+    /// fixtures' raw ids exactly as before.
+    static func remapToDemoIdentity(_ journey: Journey) -> Journey {
+        var demo = journey
+        demo.id = "demo-\(journey.id)"
+        demo.camps = journey.camps.map { camp in
+            var remapped = camp
+            remapped.id = "demo-\(camp.id)"
+            return remapped
+        }
+        return demo
     }
 
     // MARK: - Reads

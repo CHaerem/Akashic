@@ -5,7 +5,11 @@ import CoreLocation
 //
 // The map's own colour language, distinct from `Theme` (which styles the surrounding
 // chrome). Kept local to the map so the signature route/segment/camp colours stay in
-// one place. Space colour matches `Theme.background` (#0B0B19 / rgb(11,11,25)).
+// one place. `nightSky` is fixed at #0B0B19 (rgb(11,11,25)) in every appearance — it is
+// deliberately NOT the same as `Theme.background` (now adaptive, `.systemBackground`):
+// the whole point of a dedicated map palette is that the globe/trek map stays immersive
+// night-sky dark regardless of Light/Dark Mode (see the A1/A3 note below), so this colour
+// must NOT track `Theme.background` as it changes with the system appearance.
 
 enum MapPalette {
     static let nightSky = Color(red: 11 / 255, green: 11 / 255, blue: 25 / 255) // #0B0B19

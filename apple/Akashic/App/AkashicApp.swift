@@ -140,10 +140,24 @@ struct AkashicApp: App {
     /// checked before anything is presented, not discovered after the user has already reviewed a
     /// draft. A malformed file always surfaces as an alert and presents nothing — never a silent
     /// no-op that leaves the user wondering whether the share worked.
+    ///
+    /// Ignores the file entirely (rather than presenting anything) if a creation flow is already
+    /// in progress — checked TWO ways: `openedGPX != nil` catches a second file arriving while
+    /// THIS handler's own review sheet is still up (the `.sheet(item:)` below would otherwise just
+    /// swap its item and silently discard whatever the user had already edited); `isPresentingJourneyCreation`
+    /// catches the cross-view case, where `NewJourneySheet` is up because the user tapped "+" on
+    /// the journey list or the globe instead — a sheet this view has no other way to see. Losing a
+    /// user's in-progress draft to an incoming file neither queued nor merged with it would be
+    /// worse than ignoring the file; the Share Sheet / Mail attachment that triggered this is still
+    /// sitting right there for the user to reopen once they finish or cancel.
     @MainActor
     private func handleOpenedGPX(_ url: URL) async {
+        guard openedGPX == nil, !store.isPresentingJourneyCreation else { return }
         do {
             let file = try await GPXParser.parseSecurityScoped(url)
+            // Re-checked after the (async) parse: a creation flow could have started WHILE this
+            // file was being parsed, and the same silent-discard risk applies just as much then.
+            guard openedGPX == nil, !store.isPresentingJourneyCreation else { return }
             guard entitlements.canCreateJourney(ownedCount: store.billableOwnedJourneyCount) else {
                 showOpenedGPXPaywall = true
                 return

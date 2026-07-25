@@ -8,11 +8,15 @@ import StoreKit
 /// directly — it asks `EntitlementStore` the capability questions below, and every number lives
 /// here as a constant in `EntitlementPolicy`.
 ///
-/// ## The product model (plan §5)
+/// ## The product model (plan §5, revised 2026-07-25)
 ///   * **Free**: 1 OWNED journey, full experience, sharing included, up to 100 photos per OWNED
-///     journey.
+///     journey — and that ONE journey is fully finishable: publishing to the showcase and
+///     exporting it are both included, not gated. Withholding the finish is what the old model
+///     got wrong (it strangled the showcase-as-funnel in §6: only people who had already paid
+///     could market the app).
 ///   * **Akashic Complete**: a one-time non-consumable IAP (`no.akashic.app.complete`), Family
-///     Sharing enabled — unlimited journeys/photos, per-journey export, showcase publishing.
+///     Sharing enabled — unlimited journeys/photos. Export and publishing are NOT part of what
+///     Complete unlocks; they were never behind this wall to begin with.
 ///
 /// ## The hard nuances baked into the policy
 ///   * **The family is the customer, and shared content is NEVER gated.** Every limit here is
@@ -108,22 +112,28 @@ struct EntitlementPolicy: Equatable {
 
     // MARK: Export / publish
 
-    /// Per-journey export (the "exit door") is a Complete feature for content the user OWNS.
-    /// Independent of how many journeys exist — so it never regresses under grandfathering.
-    var canExport: Bool { isComplete }
+    /// Per-journey export (the "exit door") is available on EVERY tier, including free — plan §5:
+    /// the one free journey is fully finishable. Independent of entitlement and of how many
+    /// journeys exist, so it never regresses under grandfathering either.
+    var canExport: Bool { true }
 
-    /// Ownership-aware export gate. A journey shared *into* this account must never be paywalled:
-    /// exporting your copy of shared content is a viewing-tier action, never gated. Only OWNED
-    /// journeys require Complete to export. (quality gate: shared-content export/showcase.)
-    func canExport(isOwned: Bool) -> Bool { !isOwned || isComplete }
+    /// Ownership-aware export gate. Export is never paywalled (see `canExport` above) for either
+    /// an owned journey or one shared *into* this account — exporting your copy of shared content
+    /// was always a viewing-tier action, and the free tier's own journey is no different now.
+    /// Kept `isOwned`-shaped (rather than a bare `true`) for call-site symmetry with
+    /// `canPublish(isOwned:)` and so a future re-gate has exactly one seam to change.
+    /// (quality gate: shared-content export/showcase; §5: free-tier export/publish.)
+    func canExport(isOwned: Bool) -> Bool { true }
 
-    /// Publishing to the public showcase is a Complete feature (and separately owner-only + gated
-    /// behind the CloudKit build — see `JourneyShowcaseSheet`).
-    var canPublish: Bool { isComplete }
+    /// Publishing to the public showcase is available on EVERY tier (plan §5) — Akashic Complete
+    /// no longer factors in here at all; the only remaining gate is ownership (see below) and,
+    /// separately, the CloudKit build/account check `JourneyShowcaseSheet` performs.
+    var canPublish: Bool { true }
 
-    /// Ownership-aware publish gate. Publishing requires Complete AND ownership: you can never
-    /// publish a journey shared *into* your account (only its owner controls world-readability).
-    func canPublish(isOwned: Bool) -> Bool { isOwned && isComplete }
+    /// Ownership-aware publish gate. Entitlement no longer factors in (§5) — the only rule left is
+    /// that you can never publish a journey shared *into* your account; only its owner controls
+    /// world-readability.
+    func canPublish(isOwned: Bool) -> Bool { isOwned }
 }
 
 // MARK: - Developer / screenshot override

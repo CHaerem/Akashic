@@ -1,5 +1,4 @@
 import SwiftUI
-import UIKit
 
 /// Full stats experience for a single journey — the SwiftUI port of the web's `StatsTab.tsx`.
 ///
@@ -267,16 +266,14 @@ struct StatsView: View {
         }
     }
 
-    /// A colour that's `dark` (0–255 RGB) under Dark Mode and `light` under Light Mode —
-    /// the system re-resolves it automatically, exactly like `Theme`'s Increase-Contrast
-    /// `UIColor`s, just keyed on `userInterfaceStyle` instead of `accessibilityContrast`.
+    /// A colour that's `dark` (0–255 RGB) under Dark Mode and `light` under Light Mode. Builds the
+    /// two plain `Color`s from their RGB tuples and hands off to `Color.adaptive(dark:light:)` —
+    /// the shared helper in `Theme.swift`, which is the one place this technique now lives.
     private static func adaptiveHue(dark: (Int, Int, Int), light: (Int, Int, Int)) -> Color {
-        func uiColor(_ rgb: (Int, Int, Int)) -> UIColor {
-            UIColor(red: CGFloat(rgb.0) / 255, green: CGFloat(rgb.1) / 255, blue: CGFloat(rgb.2) / 255, alpha: 1)
+        func color(_ rgb: (Int, Int, Int)) -> Color {
+            Color(red: Double(rgb.0) / 255, green: Double(rgb.1) / 255, blue: Double(rgb.2) / 255)
         }
-        return Color(uiColor: UIColor { traits in
-            traits.userInterfaceStyle == .dark ? uiColor(dark) : uiColor(light)
-        })
+        return Color.adaptive(dark: color(dark), light: color(light))
     }
 }
 

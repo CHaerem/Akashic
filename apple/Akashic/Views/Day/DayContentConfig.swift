@@ -1,5 +1,4 @@
 import SwiftUI
-import UIKit
 
 // MARK: - Hex helper
 //
@@ -16,18 +15,10 @@ private func dayColor(_ hex: UInt32) -> Color {
     )
 }
 
-private func dayUIColor(_ hex: UInt32) -> UIColor {
-    UIColor(
-        red: CGFloat((hex >> 16) & 0xFF) / 255,
-        green: CGFloat((hex >> 8) & 0xFF) / 255,
-        blue: CGFloat(hex & 0xFF) / 255,
-        alpha: 1
-    )
-}
-
 /// A colour that's the web's original hex under Dark Mode and a darker, more saturated shade of
-/// the SAME hue under Light Mode — the same technique `StatsView.adaptiveHue` uses for its
-/// difficulty badge, applied here for `FunFactStyle`'s category label.
+/// the SAME hue under Light Mode — built from `dayColor` above and handed off to
+/// `Color.adaptive(dark:light:)`, the shared helper in `Theme.swift` (the same technique
+/// `StatsView.adaptiveHue` uses for its difficulty badge — both now call through to one place).
 ///
 /// Unlike `dayColor` above (used for icon-tile *backgrounds* at ~16% opacity — where none of
 /// these hues have a legibility problem, verified by inspection), `FunFactStyle.color` is also
@@ -36,9 +27,7 @@ private func dayUIColor(_ hex: UInt32) -> UIColor {
 /// `#FBBF24` ~1.7:1, `flora`'s `#34D399` ~1.9:1) — nowhere near WCAG's 4.5:1 floor for text this
 /// size. Every `light` value below was chosen to clear 4.5:1 with margin.
 private func dayColorAdaptive(dark: UInt32, light: UInt32) -> Color {
-    Color(uiColor: UIColor { traits in
-        traits.userInterfaceStyle == .dark ? dayUIColor(dark) : dayUIColor(light)
-    })
+    Color.adaptive(dark: dayColor(dark), light: dayColor(light))
 }
 
 // MARK: - Weather

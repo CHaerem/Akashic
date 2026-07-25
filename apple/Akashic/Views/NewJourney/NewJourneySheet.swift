@@ -229,9 +229,18 @@ struct NewJourneySheet: View {
         // to-dismiss, the presenting view tearing down) — same `committed` guard as `cancel()` so
         // a successful create is never undone.
         .onDisappear {
+            store.isPresentingJourneyCreation = false
             guard !committed else { return }
             stagingCancelled = true
             cleanupStagedPhotos()
+        }
+        // Marks the shared "a creation flow is up" flag every one of the three entry points (list
+        // "+", globe "+", opened `.gpx`) shares — each entry point only knows about its OWN sheet
+        // presentation state, so this is the one place visible to all three. `AkashicApp` reads it
+        // before presenting the review sheet for a newly-opened `.gpx`, so a second file opened
+        // while any of them is already up can never silently swap out and discard the user's draft.
+        .onAppear {
+            store.isPresentingJourneyCreation = true
         }
         .task {
             guard needsInitialSuggestionsRun else { return }

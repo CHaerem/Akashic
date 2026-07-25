@@ -119,9 +119,11 @@ struct GlobeExperienceView: View {
         // the same dark satellite imagery (verified: compare a Light/Dark screenshot pair of
         // this screen). That is precisely the map-stops-being-immersive failure A3 says not to
         // introduce, so this screen — and only this screen — keeps a local forced-dark
-        // `colorScheme`; the sub-sheets it presents (journey list/detail, day sheet, new
-        // journey, paywall) already carry their own explicit `.preferredColorScheme(.dark)`
-        // and are unaffected either way.
+        // `colorScheme`. A `.sheet` does not inherit the presenting view's `preferredColorScheme`,
+        // so each sub-sheet this screen presents needs its own if it wants dark: only the day
+        // sheet (`daySheet` below) still sets one, deliberately, to stay paired with this screen's
+        // fixed-dark chrome (see the comment there). Journey list/detail, the photo grid, and the
+        // paywall set none and are adaptive, following the system appearance like everywhere else.
         .preferredColorScheme(.dark)
         .statusBarHidden(true)
         .onAppear {
