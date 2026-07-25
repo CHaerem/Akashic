@@ -197,6 +197,51 @@ launching rational anyway is that the marginal cost of selling is zero, the fami
 product exists regardless, and the downside is close to nothing. What the repositioning
 buys is +50 % net per household for identical effort, and a far better subtitle.
 
+## 5b. Polarsteps — the competitor we converge on (added 2026-07-25)
+
+The reframe toward "the story of your trip, told" lands us next to **Polarsteps**,
+not away from it. They are the incumbent for this exact job and they are good. Facts
+as of July 2026: the app is free (trip planning, automatic GPS logging, sharing,
+following other people's trips); **Polarsteps Plus** is a subscription that unlocks
+3D maps, advanced trip statistics and extra map styles, plus 20 % off books; and
+**Travel Books cost €36–150** (24 pages minimum, free worldwide shipping).
+
+**The striking data point: their paid upsell is our baseline.** 3D maps and advanced
+trip statistics are what Plus sells. The globe, the elevation profiles, the per-day
+and extended stats are what Akashic opens with, for free, in the free tier.
+
+### Three claims they structurally cannot make
+
+1. **Your trips live in your own iCloud. We run no servers and never see them.**
+   Polarsteps is a server product — it has to be, because following other travellers
+   and rendering print books both need the data on their side. They cannot copy this
+   without abandoning their business.
+2. **There is no account to create.** Your Apple ID is the account.
+3. **One price, once.** kr 149 forever against a recurring subscription — and the
+   things their subscription unlocks are in our free tier.
+
+That is the subtitle and the first three lines of the store description. (Don't name
+them in store copy; make the claims, let the reader do the comparison.)
+
+### Where they beat us, honestly
+
+| Their strength | Our position |
+|---|---|
+| **Android + iOS** | Apple-only, forever (§1). For a *family* product this is the sharpest loss — their followers can be anyone. State it plainly in the store description; a family that discovers it after paying is a refund and a one-star. |
+| **Live tracking while travelling** — automatic background GPS, offline logging, real-time location for worried relatives | We do none of it, and **we should not build it.** It is their moat, it is expensive (background location, battery, server sync), and it belongs to a different job: they own *during* the trip, we own *after*. Added to the §9 not-building list. |
+| **Printed books with worldwide shipping** | We cannot print, and print-with-logistics is a business we should not enter. S5 (PDF/printable export of the story view) is the closest honest answer, and it is v1.1. |
+| **A social graph** — following other travellers compounds growth | Our equivalent is the public showcase page (§6), which is weaker as a loop but needs no servers of ours. |
+| Years of polish, millions of users, a brand | A solo maintainer and a better architecture. |
+
+### What their existence tells us
+
+It validates the market twice over: people **do** pay for a book made from a trip
+(€36–150, repeatedly), and people **do** pay a subscription for 3D maps and stats.
+The threat is real, but the read is encouraging — the job exists and is monetisable,
+and our version of it costs us nothing per user.
+
+---
+
 ## 6. Go-to-market
 
 - **The showcase is the funnel**: every published journey is a public page on
@@ -240,8 +285,14 @@ buys is +50 % net per household for identical effort, and a far better subtitle.
   decommissioned). It becomes worth revisiting only on strong traction, and it
   can then *coexist*: CloudKit stays the free family tier, backend powers a paid
   cross-platform tier. Decision gate, not a plan.
-- No AI features, no social graph, no feeds. The product is a family archive,
-  not a network.
+- No AI features beyond §10's on-device/PCC ladder, no social graph, no feeds. The
+  product is a family archive, not a network.
+- **No live tracking while travelling** — no background GPS, no "follow my trip",
+  no real-time location for relatives. That is Polarsteps' moat (§5b), it costs
+  battery and servers, and it belongs to *during* the trip while this product is
+  about *after*. Deciding this explicitly is what keeps the scope honest.
+- **No print pipeline.** A PDF the user can print or hand over (S5) is the answer;
+  paper, binding and worldwide shipping is a different company.
 
 ## 10. Apple Intelligence — the differentiation layer
 
