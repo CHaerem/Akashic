@@ -64,8 +64,11 @@ final class RouteDrawingTests: XCTestCase {
 
     func testSimplificationRespectsThePointCap() {
         // A zig-zag that Douglas–Peucker cannot thin on shape alone — the cap must still hold.
-        let zigzag = (0..<900).map { i -> [Double] in
-            [37.0 + Double(i) * 0.001, -3.07 + (i % 2 == 0 ? 0.001 : -0.001)]
+        var zigzag: [[Double]] = []
+        for i in 0..<900 {
+            let lng: Double = 37.0 + Double(i) * 0.001
+            let lat: Double = -3.07 + (i % 2 == 0 ? 0.001 : -0.001)
+            zigzag.append([lng, lat])
         }
         let simplified = RouteDrawing.simplify(zigzag, maxPoints: 100)
         XCTAssertLessThanOrEqual(simplified.count, 100)
@@ -75,12 +78,19 @@ final class RouteDrawingTests: XCTestCase {
     func testToleranceIsMetricAcrossLatitudes() {
         // The same shape near the equator and at 80°N must simplify to the same point count: a
         // degree of longitude is ~6x shorter up there, and a degrees-only tolerance would butcher it.
+        // Every sub-expression is annotated and pulled apart deliberately: Xcode 16.4 (the CI
+        // runner's default) gives up type-checking this as one literal expression, while Xcode 26
+        // resolves it — so the terse version passes locally and fails in CI.
         func wobble(lat: Double) -> [[Double]] {
-            let dpm = RouteDrawing.degreesPerMeter(atLatitude: lat)
-            return (0...40).map { i in
+            let degreesPerMeter: Double = RouteDrawing.degreesPerMeter(atLatitude: lat)
+            var points: [[Double]] = []
+            for i in 0...40 {
                 // 40 m steps east with a 30 m north-south wobble — well above the 8 m tolerance.
-                [10.0 + Double(i) * 40 * dpm, lat + (i % 2 == 0 ? 0.00027 : -0.00027)]
+                let east: Double = Double(i) * 40 * degreesPerMeter
+                let offset: Double = i % 2 == 0 ? 0.00027 : -0.00027
+                points.append([10.0 + east, lat + offset])
             }
+            return points
         }
         XCTAssertEqual(RouteDrawing.simplify(wobble(lat: 0.5)).count,
                        RouteDrawing.simplify(wobble(lat: 80)).count)
@@ -202,7 +212,8 @@ final class RouteDrawingTests: XCTestCase {
     }
 
     func testOpeningRegionFallsBackToTheGivenRegion() {
-        let fallback = MKCoordinateRegion.fitting([[11.0, 60.0], [11.4, 60.2]].clCoordinates)
+        let days: [RouteCoordinate] = [[11.0, 60.0], [11.4, 60.2]]
+        let fallback = MKCoordinateRegion.fitting(days.clCoordinates)
         let region = RouteDrawingSheet.initialRegion(referenceRoute: nil, fallbackRegion: fallback)
         XCTAssertEqual(region.center.longitude, 11.2, accuracy: 0.001)
         XCTAssertEqual(region.center.latitude, 60.1, accuracy: 0.001)
@@ -217,7 +228,8 @@ final class RouteDrawingTests: XCTestCase {
 
     /// A single placed day must not open at street level — `fitting` floors the span.
     func testRegionForOneKnownPointHasAUsableFloor() {
-        let region = MKCoordinateRegion.fitting([[11.0, 60.0]].clCoordinates)
+        let onePlacedDay: [RouteCoordinate] = [[11.0, 60.0]]
+        let region = MKCoordinateRegion.fitting(onePlacedDay.clCoordinates)
         XCTAssertEqual(region.span.latitudeDelta, 0.05, accuracy: 0.0001)
     }
 
@@ -256,8 +268,8 @@ final class RouteDrawingTests: XCTestCase {
         // drawn route's profile pinned flat at 0 m as though sea level had been measured.
         let drawn = RouteDrawing.drawnRoute(strokes: [firstLeg, secondLeg]).route
         XCTAssertFalse(drawn.hasElevation)
-        XCTAssertTrue(Route(type: "LineString", coordinates: [[37.0, -3.1, 1800], [37.2, -3.0, 2100]])
-            .hasElevation)
+        let withEle: [RouteCoordinate] = [[37.0, -3.1, 1800], [37.2, -3.0, 2100]]
+        XCTAssertTrue(Route(type: "LineString", coordinates: withEle).hasElevation)
         XCTAssertFalse(Route.empty.hasElevation)
     }
 }
