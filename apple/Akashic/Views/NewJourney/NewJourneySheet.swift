@@ -5,10 +5,13 @@ import UniformTypeIdentifiers
 
 /// Create a journey from scratch (§4.1) — the counterpart to the arrive-only import/sync paths.
 ///
-/// One sheet with sections (basics → dates → route → photos → days), not a wizard. Route import
-/// and photo-day-seeding are both optional: a journey with no route and no days is valid (a
-/// photos-only trip). On create the journey is persisted through `JourneyStore.createJourney`
-/// (which routes through the same Core Data seam sync observes), then the app flies into it.
+/// A two-phase sheet (C1 — see `apple/Docs/DESIGN-PLAN.md`): Phase 1 (`NewJourneyChooser`) asks
+/// "what do you have?" — photos, a GPX file, or just a name — and Phase 2 (`reviewBody`, below) is
+/// a single review screen every path converges on. The user makes one decision, then reviews a
+/// proposal instead of filling a form. Route import and photo-day-seeding are both optional: a
+/// journey with no route and no days is valid (a photos-only trip). On create the journey is
+/// persisted through `JourneyStore.createJourney` (which routes through the same Core Data seam
+/// sync observes), then the app flies into it.
 struct NewJourneySheet: View {
     @EnvironmentObject private var store: JourneyStore
     @EnvironmentObject private var entitlements: EntitlementStore
@@ -17,7 +20,29 @@ struct NewJourneySheet: View {
 
     /// Called with the created journey after a successful save (so a presenter can dismiss its
     /// own container — e.g. the Journeys list sheet — and let the globe fly to it).
-    var onCreated: (Journey) -> Void = { _ in }
+    var onCreated: (Journey) -> Void
+
+    // MARK: Phase
+
+    /// Where the review phase's draft came from. Carried alongside `.review` (rather than tracked
+    /// separately) so it can never go stale relative to which screen is actually on screen; later
+    /// tasks (C3–C6) branch on it to decide what to apply by default and which caption to show —
+    /// C1 itself changes no behaviour based on it.
+    enum ReviewOrigin: Equatable {
+        case photos
+        case gpx
+        case nameOnly
+        /// The sheet was created via `init(preloadedGPX:...)` (C7: opening a `.gpx` from Files or
+        /// Mail) — the chooser never appeared.
+        case openedFile
+    }
+
+    enum Phase: Equatable {
+        case chooser
+        case review(origin: ReviewOrigin)
+    }
+
+    @State private var phase: Phase = .chooser
 
     @State private var draft = JourneyDraft()
     @State private var hasStart = false
@@ -25,7 +50,7 @@ struct NewJourneySheet: View {
     @State private var hasEnd = false
     @State private var endDate = Date()
 
-    // Route import.
+    // Route import (review screen's own re-import / replace).
     @State private var showingImporter = false
     @State private var routeSummary: RouteSummary?
     @State private var importError: String?
@@ -43,6 +68,15 @@ struct NewJourneySheet: View {
     @State private var isSaving = false
     @State private var saveError: String?
     @State private var showPaywall = false
+
+    /// Set only by `init(preloadedGPX:...)`: the suggestion pass needs `entitlements`/
+    /// `intelligence` from the environment, which aren't available at init time, so it is deferred
+    /// to a `.task` on first appearance and then cleared.
+    @State private var needsInitialSuggestionsRun = false
+
+    /// Keyboard focus for the name field — set the moment "Start with just a name" is chosen, so
+    /// the user lands in review with the keyboard already up instead of having to tap in.
+    @FocusState private var isNameFieldFocused: Bool
 
     // M6 — on-device day-name suggestions (Apple Intelligence).
     @State private var isSuggestingNames = false
@@ -72,7 +106,64 @@ struct NewJourneySheet: View {
         var drawnNote: String?
     }
 
+    // MARK: Init
+
+    init(onCreated: @escaping (Journey) -> Void = { _ in }) {
+        self.onCreated = onCreated
+    }
+
+    /// Entry point for C7 (registering Akashic as a GPX document handler / `onOpenURL`): skips the
+    /// chooser entirely and starts directly in review with `file`'s route — and its waypoint days,
+    /// when it has any — already applied. The user already told the system which file to open, so
+    /// asking "what do you have?" again would be backwards.
+    init(preloadedGPX file: GPXFile, suggestedName: String = "",
+         onCreated: @escaping (Journey) -> Void = { _ in }) {
+        self.onCreated = onCreated
+        var draft = JourneyDraft()
+        draft.name = suggestedName
+        let applied = Self.applying(file, toDays: draft.days)
+        draft.route = applied.route
+        draft.days = applied.days
+        _draft = State(initialValue: draft)
+        _routeSummary = State(initialValue: applied.summary)
+        _phase = State(initialValue: .review(origin: .openedFile))
+        _needsInitialSuggestionsRun = State(initialValue: true)
+    }
+
     var body: some View {
+        Group {
+            switch phase {
+            case .chooser:
+                NewJourneyChooser(
+                    photoSelection: $photoSelection,
+                    onGPXImported: { file in
+                        applyImportedGPX(file)
+                        phase = .review(origin: .gpx)
+                        Task { await runSuggestions() }
+                    },
+                    onNameOnly: { phase = .review(origin: .nameOnly) },
+                    onCancel: { dismiss() })
+            case .review:
+                reviewBody
+            }
+        }
+        // Lives above the phase switch because the photo picker itself is presented from the
+        // chooser card, but its result must be handled the same way regardless of which phase is
+        // on screen (the review screen's own "Days from photos" section reuses this exact binding
+        // to seed MORE days later).
+        .onChange(of: photoSelection) { _, items in
+            guard !items.isEmpty else { return }
+            if case .chooser = phase { phase = .review(origin: .photos) }
+            Task { await seedDaysFromPhotos(items) }
+        }
+        .task {
+            guard needsInitialSuggestionsRun else { return }
+            needsInitialSuggestionsRun = false
+            await runSuggestions()
+        }
+    }
+
+    private var reviewBody: some View {
         EditSheetScaffold(
             title: "New Journey",
             saveTitle: "Create",
@@ -81,12 +172,16 @@ struct NewJourneySheet: View {
             onCancel: { dismiss() },
             onSave: create
         ) {
-            basicsSection
-            datesSection
+            // Order per the design review: name, route summary, country, dates, days, suggestions.
+            // "Days from photos" isn't in that list — it seeds Days, so it stays immediately
+            // before it, same adjacency it had before this restructuring.
+            nameSection
             routeSection
+            countrySection
+            datesSection
             photosSection
-            suggestionsSection
             daysSection
+            suggestionsSection
             if let saveError {
                 Text(saveError).font(.footnote).foregroundStyle(.red)
             }
@@ -100,25 +195,39 @@ struct NewJourneySheet: View {
                       allowedContentTypes: gpxContentTypes,
                       allowsMultipleSelection: false,
                       onCompletion: handleImport)
-        .onChange(of: photoSelection) { _, items in
-            guard !items.isEmpty else { return }
-            Task { await seedDaysFromPhotos(items) }
-        }
     }
 
-    // MARK: Basics
+    // MARK: Name
 
-    private var basicsSection: some View {
+    private var nameSection: some View {
         VStack(alignment: .leading, spacing: 16) {
             GlassField(label: "Name", systemImage: "flag") {
                 GlassTextField(placeholder: "e.g. Kilimanjaro — Lemosho Route", text: $draft.name)
-            }
-            GlassField(label: "Country", systemImage: "globe") {
-                GlassTextField(placeholder: "Country", text: $draft.country)
+                    .focused($isNameFieldFocused)
+                    // Set just after APPEARANCE, not at the moment the chooser hands off: the
+                    // field doesn't exist yet when "Start with just a name" is tapped (review is
+                    // a whole different branch of the phase switch), and even on `onAppear`
+                    // itself the responder chain isn't settled enough for `@FocusState` to take —
+                    // one run-loop turn later it reliably does.
+                    .onAppear {
+                        guard case .review(.nameOnly) = phase else { return }
+                        Task { @MainActor in
+                            try? await Task.sleep(nanoseconds: 150_000_000)
+                            isNameFieldFocused = true
+                        }
+                    }
             }
             GlassField(label: "Description", systemImage: "text.alignleft") {
                 GlassTextEditor(text: $draft.description, minHeight: 90)
             }
+        }
+    }
+
+    // MARK: Country
+
+    private var countrySection: some View {
+        GlassField(label: "Country", systemImage: "globe") {
+            GlassTextField(placeholder: "Country", text: $draft.country)
         }
     }
 
@@ -258,35 +367,48 @@ struct NewJourneySheet: View {
         }
     }
 
-    /// Parse the picked GPX OFF the main actor (whole-file `Data` load + full XML pass), then apply
-    /// the result on the main actor. Keeping the parse off the main thread stops a large file from
-    /// freezing the UI. The security-scoped access is held across the `await`.
+    /// Parse the picked GPX and apply it to the draft, then run suggestions — the review screen's
+    /// own "Replace route" path. Off the main actor via `GPXParser.parseSecurityScoped`, so a large
+    /// file never freezes the UI.
     @MainActor
     private func parseRoute(from url: URL) async {
-        let didAccess = url.startAccessingSecurityScopedResource()
-        defer { if didAccess { url.stopAccessingSecurityScopedResource() } }
         do {
-            let file = try await Task.detached(priority: .userInitiated) {
-                try GPXParser.parse(contentsOf: url)
-            }.value
-            draft.route = file.route
-            routeSummary = RouteSummary(
-                pointCount: file.trackPointCount,
-                distanceKm: JourneyDraft.totalDistanceKm(route: file.route.coordinates),
-                waypointCount: file.waypoints.count,
-                droppedCount: file.droppedPointCount)
-            // Reseed days from the new file when the current list is still entirely auto-proposed
-            // (an unedited first import, e.g. the wrong file) — otherwise the previous file's days
-            // would linger while the summary advertised the new file's waypoints. A day list the
-            // user has actually worked on is never clobbered.
-            if draft.days.isEmpty || JourneyDraft.daysAreAllAutoSeeded(draft.days) {
-                draft.days = JourneyDraft.days(fromWaypoints: file.waypoints)
-            }
+            let file = try await GPXParser.parseSecurityScoped(url)
+            applyImportedGPX(file)
             // A route + days now exist — offer country / camp names / weather / POIs / facts.
             await runSuggestions()
         } catch {
             importError = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
         }
+    }
+
+    /// Pure combination of a parsed GPX file with the current day list: refreshed route + summary
+    /// unconditionally, and days reseeded from the file's waypoints ONLY when the current list is
+    /// still entirely auto-proposed (an unedited first import, e.g. the wrong file) — otherwise the
+    /// previous file's days would linger while the summary advertised the new file's waypoints. A
+    /// day list the user has actually worked on is never clobbered.
+    ///
+    /// Static and side-effect-free so the phase-1 chooser's import, the review screen's re-import,
+    /// and the C7 preload initialiser can all share it without any of them touching instance state
+    /// they don't own. (quality gate: replace route keeps stale auto-seeded days.)
+    private static func applying(_ file: GPXFile, toDays currentDays: [DraftDay])
+        -> (route: Route, summary: RouteSummary, days: [DraftDay]) {
+        let summary = RouteSummary(
+            pointCount: file.trackPointCount,
+            distanceKm: JourneyDraft.totalDistanceKm(route: file.route.coordinates),
+            waypointCount: file.waypoints.count,
+            droppedCount: file.droppedPointCount)
+        let days = (currentDays.isEmpty || JourneyDraft.daysAreAllAutoSeeded(currentDays))
+            ? JourneyDraft.days(fromWaypoints: file.waypoints)
+            : currentDays
+        return (file.route, summary, days)
+    }
+
+    private func applyImportedGPX(_ file: GPXFile) {
+        let applied = Self.applying(file, toDays: draft.days)
+        draft.route = applied.route
+        routeSummary = applied.summary
+        draft.days = applied.days
     }
 
     // MARK: Draw on map

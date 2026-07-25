@@ -91,6 +91,19 @@ enum GPXParser {
         return try parse(data)
     }
 
+    /// Parse a user-picked, security-scoped GPX URL: hold the scope across the `await`, and do the
+    /// actual parse (whole-file `Data` load + full XML pass) off the main actor so a large file
+    /// never freezes the UI. Shared by every entry point that hands the user a system file picker
+    /// or document — the phase-1 chooser card and the review screen's re-import today (C7's
+    /// "open a .gpx from Files/Mail" will use it too).
+    static func parseSecurityScoped(_ url: URL) async throws -> GPXFile {
+        let didAccess = url.startAccessingSecurityScopedResource()
+        defer { if didAccess { url.stopAccessingSecurityScopedResource() } }
+        return try await Task.detached(priority: .userInitiated) {
+            try GPXParser.parse(contentsOf: url)
+        }.value
+    }
+
     static func parse(_ data: Data) throws -> GPXFile {
         // Reject a truly empty / whitespace-only file before invoking XMLParser (which would
         // otherwise report a generic "no element found" error for the same case).
