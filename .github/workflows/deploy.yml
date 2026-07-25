@@ -32,8 +32,8 @@ jobs:
       - name: Build
         env:
           VITE_MAPBOX_TOKEN: ${{ secrets.VITE_MAPBOX_TOKEN }}
-          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
-          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          VITE_CLOUDKIT_ENV: ${{ vars.VITE_CLOUDKIT_ENV || 'development' }}
+          VITE_CLOUDKIT_API_TOKEN: ${{ vars.VITE_CLOUDKIT_API_TOKEN || '' }}
           # Only set for PRs - shows branch indicator on staging
           VITE_STAGING_BRANCH: ${{ github.event_name == 'pull_request' && github.head_ref || '' }}
         run: npm run build

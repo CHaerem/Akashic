@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="robots" content="index, follow" />
+<title>Privacy — Akashic</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: #0a0a0f;
+    color: rgba(255,255,255,0.82);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 720px; margin: 0 auto; padding: 64px 24px 96px; }
+  .brand {
+    font-size: 12px; letter-spacing: 0.25em; text-transform: uppercase;
+    color: rgba(255,255,255,0.5); text-decoration: none; font-weight: 500;
+  }
+  h1 { font-size: 30px; font-weight: 600; letter-spacing: -0.02em; color: #fff; margin: 28px 0 6px; }
+  .updated { font-size: 13px; color: rgba(255,255,255,0.4); margin: 0 0 40px; }
+  h2 { font-size: 18px; font-weight: 600; color: rgba(255,255,255,0.95); margin: 40px 0 10px; }
+  p, li { font-size: 15px; color: rgba(255,255,255,0.75); }
+  a { color: #7cb0f9; text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  ul { padding-left: 20px; }
+  li { margin-bottom: 8px; }
+  strong { color: rgba(255,255,255,0.92); font-weight: 600; }
+  hr { border: none; border-top: 1px solid rgba(255,255,255,0.08); margin: 48px 0 24px; }
+  footer { font-size: 13px; color: rgba(255,255,255,0.4); }
+  footer a { color: rgba(255,255,255,0.6); }
+  nav.pages { margin-top: 10px; display: flex; gap: 14px; flex-wrap: wrap; }
+</style>
+</head>
+<body>
+  <main class="wrap">
+    <a class="brand" href="/">Akashic</a>
+    <h1>Privacy</h1>
+    <p class="updated">Last updated 24 July 2026</p>
+
+    <p>
+      Akashic is a personal journey album. Its architecture is deliberately light,
+      and so is this policy: <strong>we operate no servers of our own and we hold
+      no accounts for you.</strong>
+    </p>
+
+    <h2>Where your data lives</h2>
+    <p>
+      Your journeys, days, and photos are stored in <strong>your own iCloud
+      account</strong> using Apple's CloudKit. Akashic reads and writes that data
+      on your device with your Apple ID; it does not pass through any server we run.
+      We cannot see your private journeys or your original photos.
+    </p>
+
+    <h2>What we collect</h2>
+    <ul>
+      <li><strong>No analytics of our own.</strong> We run no trackers, no advertising SDKs, and no behavioural profiling in the app or on this website. The one thing we do not control is Mapbox, which powers the map &mdash; see &ldquo;Maps and photos&rdquo; below.</li>
+      <li><strong>No accounts held by us.</strong> Sign-in uses your Apple ID directly with Apple; we never receive your password and keep no user database.</li>
+      <li><strong>No third-party data sales.</strong> We have no data to sell.</li>
+    </ul>
+
+    <h2>Public journeys</h2>
+    <p>
+      When an owner explicitly <strong>publishes</strong> a journey, a copy of that
+      journey's details and photo <em>thumbnails</em> is written to a world-readable
+      area of iCloud so it can be viewed as a public page. This only happens by the
+      owner's deliberate action, and only the published content is visible — never
+      private journeys and never full-resolution originals. An owner can unpublish
+      at any time from the app.
+    </p>
+
+    <h2>Maps and photos</h2>
+    <p>
+      The globe and maps are rendered using Mapbox GL. Loading a map sends standard
+      web requests (such as your IP address) to Mapbox to fetch map tiles. Mapbox GL
+      also sends its own anonymous usage and diagnostic events to Mapbox and stores a
+      randomly generated identifier in your browser to do so &mdash; this is Mapbox's
+      own telemetry, subject to Mapbox's privacy terms. It is not something we run,
+      receive, or use, and it is limited to pages that load the map. Published photo
+      thumbnails are served from the owner's iCloud.
+    </p>
+
+    <h2>Place lookups (iOS app)</h2>
+    <p>
+      When you use the app's assisted features (suggested day names, points of
+      interest, weather, or AI-drafted facts and notes), the app looks up
+      <em>place names and coordinates</em> against Apple services (geocoding,
+      local search, WeatherKit) and, for drafted facts and descriptions, against
+      the public Wikipedia and Wikivoyage APIs. Only the place being looked up is
+      sent &mdash; never your photos, and never anything identifying you beyond a
+      standard web request. These lookups happen only when you tap the feature,
+      not in the background.
+    </p>
+
+    <h2>Your rights</h2>
+    <p>
+      Because your data lives in your iCloud, you remain in control of it: export or
+      delete it from within the app at any time. To report or request takedown of a
+      published public journey, email
+      <a href="mailto:report@akashic.no">report@akashic.no</a>.
+    </p>
+
+    <h2>Contact</h2>
+    <p>
+      Questions about privacy: <a href="mailto:support@akashic.no">support@akashic.no</a>.
+    </p>
+
+    <hr />
+    <footer>
+      Akashic is operated by its developer in Norway.
+      <nav class="pages">
+        <a href="/privacy.html">Privacy</a>
+        <a href="/terms.html">Terms</a>
+        <a href="/support.html">Support</a>
+      </nav>
+    </footer>
+  </main>
+</body>
+</html>

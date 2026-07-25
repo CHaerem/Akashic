@@ -24,6 +24,11 @@ struct PhotoEditSheet: View {
     @State private var clearLocation = false
     @State private var confirmingDelete = false
     @State private var isSaving = false
+    // Manual placement — local mirror of the coordinate so the readout updates in place after the
+    // placement sheet writes through the store.
+    @State private var currentCoordinates: [Double]?
+    @State private var currentSource: String?
+    @State private var showPlacement = false
 
     init(photo: Photo, journey: Journey, onChange: @escaping (Photo?) -> Void = { _ in }) {
         self.photo = photo
@@ -33,6 +38,8 @@ struct PhotoEditSheet: View {
         _isHero = State(initialValue: photo.isHero)
         _rotation = State(initialValue: photo.rotation)
         _waypointID = State(initialValue: photo.waypointId)
+        _currentCoordinates = State(initialValue: photo.coordinates)
+        _currentSource = State(initialValue: photo.locationSource)
     }
 
     var body: some View {
@@ -47,8 +54,14 @@ struct PhotoEditSheet: View {
             captionSection
             assignmentSection
             heroSection
-            if photo.coordinates != nil { locationSection }
+            locationSection
             deleteSection
+        }
+        .sheet(isPresented: $showPlacement) {
+            PhotoPlacementSheet(
+                startCoordinate: currentCoordinates,
+                fallbackCoordinate: placementFallback,
+                onSave: applyManualLocation)
         }
     }
 
@@ -172,22 +185,58 @@ struct PhotoEditSheet: View {
 
     private var locationSection: some View {
         GlassField(label: "Location", systemImage: "mappin.and.ellipse") {
-            VStack(alignment: .leading, spacing: 8) {
-                if let coords = photo.coordinates, coords.count >= 2 {
+            VStack(alignment: .leading, spacing: 10) {
+                if let coords = currentCoordinates, coords.count >= 2 {
                     Text(String(format: "%.5f, %.5f  ·  %@", coords[1], coords[0],
-                                (photo.locationSource ?? "unknown").capitalized))
+                                (currentSource ?? "unknown").capitalized))
                         .font(.footnote.monospaced())
                         .foregroundStyle(Theme.textSecondary)
+                } else {
+                    Text("No location").font(.footnote).foregroundStyle(Theme.textTertiary)
                 }
-                Toggle(isOn: $clearLocation) {
-                    Text("Clear location").font(.subheadline).foregroundStyle(Theme.textPrimary)
+                Button {
+                    clearLocation = false
+                    showPlacement = true
+                } label: {
+                    Label(currentCoordinates == nil ? "Place on map" : "Adjust location",
+                          systemImage: "mappin.and.ellipse")
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(Theme.accent)
                 }
-                .tint(Theme.accent)
+                .buttonStyle(.plain)
+                if currentCoordinates != nil {
+                    Toggle(isOn: $clearLocation) {
+                        Text("Clear location").font(.subheadline).foregroundStyle(Theme.textPrimary)
+                    }
+                    .tint(Theme.accent)
+                }
             }
             .padding(12)
             .background(Theme.surface, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Theme.hairline, lineWidth: 1))
         }
+    }
+
+    /// Where the placement map opens when the photo has no coordinate: the assigned day's camp
+    /// coordinate, else the journey's centre.
+    private var placementFallback: [Double]? {
+        if let waypointID, let camp = journey.camps.first(where: { $0.id == waypointID }),
+           camp.coordinates.count >= 2 {
+            return camp.coordinates
+        }
+        return journey.center
+    }
+
+    /// Write a manually placed coordinate straight through the store (records `locationSource =
+    /// "manual"`), mirror it locally for the readout, and report the fresh photo to the presenter.
+    private func applyManualLocation(_ coordinate: [Double]) {
+        guard coordinate.count >= 2 else { return }
+        clearLocation = false
+        _ = store.setPhotoLocation(coordinate, source: "manual", forPhoto: photo.id)
+        currentCoordinates = coordinate
+        currentSource = "manual"
+        let updated = store.photos(forJourneyID: journey.id).first { $0.id == photo.id }
+        onChange(updated)
     }
 
     // MARK: Delete

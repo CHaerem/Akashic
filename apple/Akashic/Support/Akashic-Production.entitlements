@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!--
+	  A DEVELOPMENT-signed build that talks to the CloudKit PRODUCTION database.
+
+	  Why this exists: TestFlight and App Store builds always use the production
+	  CloudKit environment and cannot be pointed anywhere else, but the migration
+	  import has to be *run* from somewhere. A development-signed build can choose
+	  either environment via `icloud-container-environment` — so this config is how
+	  the archive gets into Production in the first place, and how Production is
+	  inspected afterwards from the simulator.
+
+	  DANGER: with this configuration every write goes to the REAL production
+	  database the family's TestFlight builds read. Do not use it for casual
+	  development — use `Debug-CloudKit`, which is identical minus this one key.
+	-->
+	<key>com.apple.developer.icloud-container-environment</key>
+	<string>Production</string>
+
+	<key>com.apple.developer.icloud-container-identifiers</key>
+	<array>
+		<string>iCloud.no.akashic</string>
+	</array>
+	<key>com.apple.developer.icloud-services</key>
+	<array>
+		<string>CloudKit</string>
+	</array>
+	<!--
+	  WeatherKit — historical daily weather for assisted journey creation (WeatherEnrichment).
+	  Only used by the signed Debug-Production config. Requires the WeatherKit service enabled on
+	  the App ID; until then device/archive signing fails on this key, and at runtime the weather
+	  suggestion is simply absent (WeatherEnrichment degrades to nil).
+	-->
+	<key>com.apple.developer.weatherkit</key>
+	<true/>
+	<key>com.apple.developer.ubiquity-kvstore-identifier</key>
+	<string>$(TeamIdentifierPrefix)$(CFBundleIdentifier)</string>
+	<!-- Development APS: this build is signed with a development profile. -->
+	<key>aps-environment</key>
+	<string>development</string>
+	<key>com.apple.security.application-groups</key>
+	<array>
+		<string>group.no.akashic</string>
+	</array>
+</dict>
+</plist>

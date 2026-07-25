@@ -11,12 +11,33 @@ import Combine
 // See CloudKit/MAPPING.md for the field mapping and §11 import order these describe, and
 // `CloudKitImportSink.swift` for the sink that produces them.
 
-/// Which CloudKit environment the run targets. **Development is implied by the build**
-/// (the `Release-CloudKit` config + Development container); Production is never written by
-/// this importer. Surfaced purely as a label so the confirmation dialog can state the target.
+/// Which CloudKit environment the run targets.
+///
+/// This is NOT decoration. The environment is chosen by the `icloud-container-environment`
+/// entitlement at signing time, which no runtime API on iOS will tell you — so it has to be
+/// mirrored by a build flag, and the two must be kept in step in `project.yml`:
+///
+/// | Configuration      | Entitlement | `AKASHIC_CLOUDKIT_PRODUCTION` |
+/// |--------------------|-------------|-------------------------------|
+/// | `Debug-CloudKit`   | (unset ⇒ Development) | not defined         |
+/// | `Debug-Production` | Production  | defined                       |
+/// | `Release-CloudKit` | (unset, but TestFlight/App Store builds are ALWAYS Production) | defined |
+///
+/// This label was hardcoded to `.development` until 2026-07-23, while the build that ran the
+/// Production migration wrote Production — the confirmation dialog would have named the wrong
+/// database on the single most destructive screen in the app.
 enum CloudKitImportEnvironment: String, Equatable {
     case development = "Development"
     case production = "Production"
+
+    /// The environment this binary actually talks to.
+    static var current: CloudKitImportEnvironment {
+        #if AKASHIC_CLOUDKIT_PRODUCTION
+        return .production
+        #else
+        return .development
+        #endif
+    }
 }
 
 /// A photo that cannot be uploaded because it has NO local bytes on disk (neither the
@@ -44,7 +65,7 @@ struct PlannedBatch: Equatable {
 /// call. `CloudKitImportSink.makePlan()` returns this; the Settings screen renders it; the real
 /// run executes it.
 struct CloudKitImportPlan: Equatable {
-    var environment: CloudKitImportEnvironment = .development
+    var environment: CloudKitImportEnvironment = .current
     var containerID: String = "iCloud.no.akashic"
 
     /// `journey-<uuid>` zone names, one per journey, in import order.
@@ -107,7 +128,7 @@ struct RecordFailure: Equatable, Identifiable {
 /// Outcome of a run (dry-run or real). Idempotent re-runs produce the same numbers.
 struct CloudKitImportReport: Equatable {
     var dryRun: Bool = false
-    var environment: CloudKitImportEnvironment = .development
+    var environment: CloudKitImportEnvironment = .current
     var containerID: String = "iCloud.no.akashic"
 
     var zonesCreated = 0
@@ -181,8 +202,8 @@ struct CloudKitImportProgress: Equatable {
 /// Drives the "Import to CloudKit" Settings section. The **dry-run** path (compute + show the
 /// plan) is runnable tonight against the real export with no account. The **real** run is
 /// hard-gated behind the `Release-CloudKit` build (entitlements) AND an available iCloud account
-/// AND an explicit confirmation dialog — and only ever targets Development (implied by the build).
-/// Production is never written.
+/// AND an explicit confirmation dialog, which names the environment the build actually writes
+/// (`CloudKitImportEnvironment.current`).
 @MainActor
 final class CloudKitImportViewModel: ObservableObject {
     @Published var plan: CloudKitImportPlan?
@@ -192,9 +213,9 @@ final class CloudKitImportViewModel: ObservableObject {
     @Published var statusMessage: String?
 
     let containerID = Config.cloudKitContainerIdentifier
-    /// Development is implied by the build config (the `Release-CloudKit` target uses the
-    /// Development container + `aps-environment: development`). Surfaced as a label only.
-    let environment: CloudKitImportEnvironment = .development
+    /// Derived from the build flag that mirrors the signing entitlement — see
+    /// `CloudKitImportEnvironment.current`.
+    let environment: CloudKitImportEnvironment = .current
 
     private var task: Task<Void, Never>?
 

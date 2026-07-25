@@ -46,11 +46,11 @@ export function fieldValue(record: CKRecordLike, name: string): unknown {
     return record.fields?.[name]?.value;
 }
 
-function stringOrNull(v: unknown): string | null {
+export function stringOrNull(v: unknown): string | null {
     return typeof v === 'string' ? v : null;
 }
 
-function numberOrNull(v: unknown): number | null {
+export function numberOrNull(v: unknown): number | null {
     return typeof v === 'number' && !Number.isNaN(v) ? v : null;
 }
 
@@ -113,6 +113,31 @@ export function assetUrl(value: unknown): string | null {
 }
 
 /**
+ * Rewrite object keys from camelCase to snake_case, recursively.
+ *
+ * The day-content payloads (weather, fun facts, POIs, historical sites) are written by
+ * the iOS app, where Swift's `Codable` emits camelCase — but the web's `Db*` shapes and
+ * `transforms.ts` were built on the Postgres column names, which are snake_case. So
+ * `temperatureMax` arrived where `temperature_max` was expected, the transform read
+ * undefined, and the day header rendered "NaN°C" over a weather record that was
+ * perfectly intact.
+ *
+ * Keys already in snake_case pass through untouched, so this is safe on both the
+ * migrated payloads and anything the app writes later.
+ */
+export function snakeCaseKeys<T>(value: unknown): T {
+    if (Array.isArray(value)) return value.map((v) => snakeCaseKeys(v)) as T;
+    if (value === null || typeof value !== 'object') return value as T;
+
+    const out: Record<string, unknown> = {};
+    for (const [key, val] of Object.entries(value as Record<string, unknown>)) {
+        const snake = key.replace(/([a-z0-9])([A-Z])/g, '$1_$2').toLowerCase();
+        out[snake] = snakeCaseKeys(val);
+    }
+    return out as T;
+}
+
+/**
  * Parse a JSON-backed field. Handles the inline STRING encoding; an
  * already-structured value passes through.
  */
@@ -171,7 +196,25 @@ export async function resolveJsonField<T>(value: unknown): Promise<T | null> {
 }
 
 function timestampToIso(ts?: number): string | null {
-    return typeof ts === 'number' ? new Date(ts).toISOString() : null;
+    return typeof ts === 'number' && Number.isFinite(ts) ? new Date(ts).toISOString() : null;
+}
+
+/**
+ * Read a date field as an ISO string, whatever CloudKit hands back.
+ *
+ * Every date in the schema is a CloudKit `TIMESTAMP`, i.e. epoch **milliseconds as a
+ * number** — not the ISO strings Postgres returned. Reading them with `stringOrNull`
+ * yielded null for all of them, and nothing failed loudly: journeys simply had no date
+ * range, and all 939 Kilimanjaro photos had no `taken_at`. That last one is not
+ * cosmetic — `usePhotoDay` matches a photo to its day from `taken_at`, so every photo
+ * silently fell through to the coarser route-proximity tiers.
+ *
+ * Strings are still accepted, so records written by an older client keep working.
+ */
+export function isoDateOrNull(value: unknown): string | null {
+    if (typeof value === 'number') return timestampToIso(value);
+    if (typeof value === 'string' && value) return value;
+    return null;
 }
 
 /** Map a `Journey` record to a `DbJourney` row. */
@@ -186,8 +229,8 @@ export function recordToDbJourney(record: CKRecordLike): DbJourney {
         summit_elevation: numberOrNull(f('summitElevation')),
         total_distance: numberOrNull(f('totalDistance')),
         total_days: numberOrNull(f('totalDays')),
-        date_started: stringOrNull(f('dateStarted')),
-        date_ended: stringOrNull(f('dateEnded')),
+        date_started: isoDateOrNull(f('dateStarted')),
+        date_ended: isoDateOrNull(f('dateEnded')),
         hero_image_url: assetUrl(f('heroImage')) ?? stringOrNull(f('heroImageURL')),
         // Schema field is `centerLocation` (LOCATION); `centerCoordinates` kept as a defensive fallback.
         center_coordinates: toLngLat(f('centerLocation')) ?? toLngLat(f('centerCoordinates')),
@@ -215,10 +258,16 @@ export function recordToDbWaypoint(record: CKRecordLike): DbWaypoint {
         sort_order: numberOrNull(f('sortOrder')),
         route_distance_km: numberOrNull(f('routeDistanceKm')),
         route_point_index: numberOrNull(f('routePointIndex')),
-        weather: parseJsonField<WeatherData>(f('weatherJSON')),
-        fun_facts: parseJsonField<DbFunFact[]>(f('funFactsJSON')),
-        points_of_interest: parseJsonField<DbPointOfInterest[]>(f('pointsOfInterestJSON')),
-        historical_sites: parseJsonField<DbHistoricalSite[]>(f('historicalSitesJSON')),
+        // Day content is written by the iOS app in camelCase; the shapes below are
+        // the Postgres-derived snake_case ones. See `snakeCaseKeys`.
+        weather: snakeCaseKeys<WeatherData | null>(parseJsonField<WeatherData>(f('weatherJSON'))),
+        fun_facts: snakeCaseKeys<DbFunFact[] | null>(parseJsonField<DbFunFact[]>(f('funFactsJSON'))),
+        points_of_interest: snakeCaseKeys<DbPointOfInterest[] | null>(
+            parseJsonField<DbPointOfInterest[]>(f('pointsOfInterestJSON'))
+        ),
+        historical_sites: snakeCaseKeys<DbHistoricalSite[] | null>(
+            parseJsonField<DbHistoricalSite[]>(f('historicalSitesJSON'))
+        ),
     };
 }
 
@@ -248,11 +297,11 @@ export function recordToPhoto(record: CKRecordLike): Photo {
             stringOrNull(f('thumbnailUrl')),
         caption: stringOrNull(f('caption')),
         coordinates: toLngLat(f('coordinates')),
-        taken_at: stringOrNull(f('takenAt')),
+        taken_at: isoDateOrNull(f('takenAt')),
         is_hero: boolFromCK(f('isHero')),
         sort_order: numberOrNull(f('sortOrder')) ?? undefined,
         created_at:
-            stringOrNull(f('createdAt')) ?? timestampToIso(record.created?.timestamp) ?? undefined,
+            isoDateOrNull(f('createdAt')) ?? timestampToIso(record.created?.timestamp) ?? undefined,
         uploaded_by: referenceName(f('uploadedBy')) ?? record.created?.userRecordName ?? null,
         rotation: numberOrNull(f('rotation')),
         media_type: (stringOrNull(f('mediaType')) as MediaType | null) ?? undefined,
@@ -299,12 +348,16 @@ export function recordToDayComment(
         journey_id: referenceName(f('journeyRef')) ?? stringOrNull(f('journeyId')) ?? '',
         user_id: userId,
         content: stringOrNull(f('content')) ?? '',
-        created_at: stringOrNull(f('createdAt')) ?? timestampToIso(record.created?.timestamp) ?? '',
+        created_at: isoDateOrNull(f('createdAt')) ?? timestampToIso(record.created?.timestamp) ?? '',
         // Schema field is `modifiedAt` (explicit, survives migration); system
-        // modification timestamp is the fallback.
+        // modification timestamp is the fallback. `modifiedAt` is a CloudKit TIMESTAMP
+        // (epoch millis), so it must be read through isoDateOrNull like every other
+        // date — reading it as a string yielded null for every migrated comment, so
+        // updated_at fell back to the migration-run timestamp and CommentItem showed a
+        // spurious "(edited)" badge (updated_at !== created_at) on comments never edited.
         updated_at:
-            stringOrNull(f('modifiedAt')) ??
-            stringOrNull(f('updatedAt')) ??
+            isoDateOrNull(f('modifiedAt')) ??
+            isoDateOrNull(f('updatedAt')) ??
             timestampToIso(record.modified?.timestamp) ??
             '',
         author,

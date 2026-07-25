@@ -21,14 +21,28 @@ final class PersistenceController {
     let container: NSPersistentContainer
     let mode: PersistenceMode
 
+    /// IDs of journeys seeded from the bundled demo fixtures this session. These are never a
+    /// customer's real content, so the free-tier create gate excludes them — a fresh install (or a
+    /// dev/demo run) must never have its one free journey pre-consumed by the demo data.
+    /// (quality gate: fixture-seeded demo journeys consume the free tier.)
+    private(set) var seededJourneyIDs: Set<String> = []
+
+    /// Whether a journey was seeded from the bundled demo fixtures (see `seededJourneyIDs`).
+    func isSeededFixture(journeyID: String) -> Bool { seededJourneyIDs.contains(journeyID) }
+
     // MARK: - CloudKit sync stack (populated only in `.cloudKit` mode; see `Sync/`)
 
     /// Observable sync status for the UI. Always present but `.disabled` outside `.cloudKit`.
     let syncStatus = SyncStatus()
-    /// The sync coordinator; nil unless `.cloudKit`.
+    /// The sync coordinator for our own journeys (private database); nil unless `.cloudKit`.
     var syncCoordinator: AkashicSyncEngine?
+    /// The coordinator for journeys shared with us (shared database, T2.8); nil unless `.cloudKit`.
+    var sharedSyncCoordinator: AkashicSyncEngine?
     /// Observes local Core Data saves and feeds them to the engine; nil unless `.cloudKit`.
     var syncScheduler: SyncScheduler?
+    /// The one-time v2 photo-storage repack (MAPPING §13). Held so a Wi-Fi path change can resume
+    /// it. nil unless `.cloudKit` on the owner's device.
+    var mediaRepackJob: MediaRepackJob?
     /// Set by the engine while applying fetched server records, so the scheduler ignores the
     /// echo save (see `SyncScheduler` / `PersistenceController+Sync`).
     var syncIsApplyingRemoteChanges = false
@@ -47,7 +61,12 @@ final class PersistenceController {
 
     var viewContext: NSManagedObjectContext { container.viewContext }
 
-    init(mode: PersistenceMode, seed: Bool = true, fixtureBundle: Bundle = .main) {
+    /// - Parameter storeURL: overrides the on-disk file for `.local`/`.cloudKit` (nil keeps the
+    ///   default Application Support location). Exists so a test that specifically needs
+    ///   `mode == .cloudKit` (e.g. to exercise a mode-gated branch like `deleteBlocker`'s
+    ///   still-published check) can point at a throwaway temp file instead of the app's real
+    ///   store — every other test drives the engine/store seam directly and stays on `.fixtures`.
+    init(mode: PersistenceMode, seed: Bool = true, fixtureBundle: Bundle = .main, storeURL: URL? = nil) {
         self.mode = mode
         let model = PersistenceController.managedObjectModel
 
@@ -59,6 +78,9 @@ final class PersistenceController {
             // schema; see CloudKit/MAPPING.md §12 + the D4 decision).
             container = NSPersistentContainer(name: Config.coreDataModelName,
                                               managedObjectModel: model)
+            if let storeURL {
+                container.persistentStoreDescriptions.first?.url = storeURL
+            }
 
         case .fixtures:
             container = NSPersistentContainer(name: Config.coreDataModelName,
@@ -77,10 +99,20 @@ final class PersistenceController {
             assertionFailure("Core Data store load failed (\(mode)): \(loadError)")
         }
 
+        // Heal any child rows orphaned by a previous out-of-order sync (foreign-key string set,
+        // relationship nil). Prevention lives in the sync-apply path; this is the retroactive
+        // cure for a store that was already written wrong — e.g. an install that synced Mount
+        // Kenya's days before its journey and has shown zero days ever since. Cheap: the fetches
+        // are normally empty and it runs once at launch.
+        repairOrphanedRelationships()
+
         // Attach the CloudKit sync engine (account-gated inside `startSync`/`activate`). Built
         // on the main actor: `.shared`/`.cloudKit` is created on launch from `@MainActor`
-        // `JourneyStore`. Tests never build a `.cloudKit` controller (they drive the engine and
-        // store seam directly), so this main-actor assumption is not exercised off-main.
+        // `JourneyStore`. Nearly every test drives the engine/store seam directly and stays on
+        // `.fixtures`, so this main-actor assumption is mostly exercised on the app's own launch
+        // path; the rare test that does build `.cloudKit` (via the `storeURL` override above,
+        // to reach a mode-gated branch) runs on XCTest's main-thread test runner, so the
+        // assumption still holds there.
         if mode == .cloudKit {
             MainActor.assumeIsolated { startSync() }
         }
@@ -104,6 +136,7 @@ final class PersistenceController {
             let journeys = try FixtureLoader.loadAll(bundle: bundle)
             for journey in journeys {
                 CoreDataMapping.upsertJourney(journey, into: context)
+                seededJourneyIDs.insert(journey.id)
             }
             if context.hasChanges { try context.save() }
         } catch {
@@ -122,6 +155,44 @@ final class PersistenceController {
     // MARK: - Reads
 
     /// All journeys currently in the store, mapped to the domain model, sorted by name.
+    /// Re-link child rows whose foreign-key string names a parent that exists locally but whose
+    /// relationship is nil — the residue of out-of-order CloudKit delivery (a day/photo/comment
+    /// applied before its journey, or a photo/comment before its waypoint). Idempotent; returns
+    /// the number of rows repaired (used by tests).
+    @discardableResult
+    func repairOrphanedRelationships() -> Int {
+        let context = container.viewContext
+        var repaired = 0
+
+        func relink<Child: NSManagedObject>(_ type: Child.Type, foreignKey: String,
+                                             parentEntity: String, relation: String) {
+            let request = NSFetchRequest<Child>(entityName: String(describing: type))
+            request.predicate = NSPredicate(format: "%K != nil AND %K == nil", foreignKey, relation)
+            guard let orphans = try? context.fetch(request), !orphans.isEmpty else { return }
+            for child in orphans {
+                guard let fkValue = child.value(forKey: foreignKey) as? String else { continue }
+                let parentRequest = NSFetchRequest<NSManagedObject>(entityName: parentEntity)
+                parentRequest.predicate = NSPredicate(format: "id == %@", fkValue)
+                parentRequest.fetchLimit = 1
+                if let parent = (try? context.fetch(parentRequest))?.first {
+                    child.setValue(parent, forKey: relation)
+                    repaired += 1
+                }
+            }
+        }
+
+        relink(CDWaypoint.self, foreignKey: "journeyId", parentEntity: "CDJourney", relation: "journey")
+        relink(CDPhoto.self, foreignKey: "journeyId", parentEntity: "CDJourney", relation: "journey")
+        relink(CDDayComment.self, foreignKey: "journeyId", parentEntity: "CDJourney", relation: "journey")
+        relink(CDPhoto.self, foreignKey: "waypointId", parentEntity: "CDWaypoint", relation: "waypoint")
+        relink(CDDayComment.self, foreignKey: "waypointId", parentEntity: "CDWaypoint", relation: "waypoint")
+
+        if repaired > 0, context.hasChanges {
+            try? context.save()
+        }
+        return repaired
+    }
+
     func loadJourneys() -> [Journey] {
         let request = NSFetchRequest<CDJourney>(entityName: "CDJourney")
         request.sortDescriptors = [NSSortDescriptor(key: "name", ascending: true)]
@@ -145,10 +216,66 @@ final class PersistenceController {
     }
 
     /// Delete everything (journeys cascade to waypoints/photos/comments). Used to clear the
-    /// fixture seed before a fresh import so the store shows only the imported data.
+    /// fixture seed before a fresh import so the store shows only the imported data. Also clears
+    /// the sync system-fields side table (`CDSyncRecordMeta`) — those change tags belong to the
+    /// records being purged, and a stale tag rehydrated onto a re-imported record would send an
+    /// update against a version the server no longer has.
+    /// Delete a journey everywhere: its CloudKit zones (journey + media — the zone is the
+    /// designed cascade boundary), its local rows (Core Data cascade takes the children), its
+    /// system-fields meta (including the media- rows), and its local media files.
+    ///
+    /// The local cascade is bracketed in remote-apply suppression for the same reason as
+    /// `resetJourneys`: without it the scheduler would forward a `deleteRecord` for every row
+    /// toward a zone that is already gone, and the zoneNotFound send-recovery would then
+    /// RECREATE the zone we just deleted. Two zone deletes are the entire remote story.
+    ///
+    /// Caller contract (enforced in `JourneyStore.deleteJourney`): owner-only, and never while
+    /// the journey is still published to the public showcase.
+    @MainActor
+    func deleteJourney(id: String) {
+        let context = container.viewContext
+
+        // 1. Remote: the two zone deletes, enqueued while we still know the journey exists.
+        syncCoordinator?.deleteZones(forJourneyID: id)
+
+        // 2. Local rows, suppressed so the cascade never reaches the scheduler.
+        let wasSuppressing = syncIsApplyingRemoteChanges
+        syncIsApplyingRemoteChanges = true
+        defer { syncIsApplyingRemoteChanges = wasSuppressing }
+
+        let request = NSFetchRequest<CDJourney>(entityName: "CDJourney")
+        request.predicate = NSPredicate(format: "id == %@", id)
+        guard let journey = (try? context.fetch(request))?.first else { return }
+        // Collect photo ids first — the meta purge and file cleanup need names the cascade
+        // is about to erase (purgeSystemFields(forJourneyID:) walks the journey's children,
+        // so it must run while the rows still exist).
+        let photoIDs = (journey.photos as? Set<CDPhoto> ?? []).compactMap(\.id)
+        purgeSystemFields(forJourneyID: id)
+        purgeSystemFields(forRecordNames: photoIDs.map { "media-\($0)" })
+
+        context.delete(journey)   // cascade: waypoints, photos, comments
+        if context.hasChanges { try? context.save() }
+
+        // 4. Local media files for this journey.
+        let mediaDir = MediaLibrary.shared.root
+            .appendingPathComponent("journeys", isDirectory: true)
+            .appendingPathComponent(id, isDirectory: true)
+        try? FileManager.default.removeItem(at: mediaDir)
+    }
+
     func resetJourneys() {
         let context = container.viewContext
-        for entity in ["CDPhoto", "CDDayComment", "CDWaypoint", "CDJourney"] {
+        // Suppress sync forwarding around the mass delete. Without this, a running sync engine
+        // sees the reset's save as a `deleteRecord` for EVERY record in the store: if the ensuing
+        // import throws (or simply omits natively-ingested photos / day comments), those deletes
+        // are sent to CloudKit and fetched as cascading deletions on every other family device —
+        // the exact distributed-wipe `handleZoneDeletions` was hardened against, reached through
+        // the reset flag. The local store is authoritative; a local reset must never emit remote
+        // deletes. (review finding #4.) Save/restore the flag so a nesting caller stays correct.
+        let wasSuppressing = syncIsApplyingRemoteChanges
+        syncIsApplyingRemoteChanges = true
+        defer { syncIsApplyingRemoteChanges = wasSuppressing }
+        for entity in ["CDPhoto", "CDDayComment", "CDWaypoint", "CDJourney", "CDSyncRecordMeta"] {
             let request = NSFetchRequest<NSManagedObject>(entityName: entity)
             for object in (try? context.fetch(request)) ?? [] {
                 context.delete(object)
@@ -384,6 +511,49 @@ final class PersistenceController {
         }
     }
 
+    /// Append drafted day content (fun facts + historical sites) to a waypoint, preserving any that
+    /// are already there. Used by the grounded-fact drafter's "Add to day" accept action.
+    @discardableResult
+    func addDayContent(waypointID: String, funFacts: [FunFact], historicalSites: [HistoricalSite]) -> Bool {
+        let context = viewContext
+        guard let cd = fetchOne(CDWaypoint.self, matching: "id == %@", waypointID) else { return false }
+        var facts = JSONCoding.decode([FunFact].self, from: cd.funFacts) ?? []
+        facts.append(contentsOf: funFacts)
+        var sites = JSONCoding.decode([HistoricalSite].self, from: cd.historicalSites) ?? []
+        sites.append(contentsOf: historicalSites)
+        cd.funFacts = JSONCoding.encode(facts)
+        cd.historicalSites = JSONCoding.encode(sites)
+        do {
+            try context.save()
+            return true
+        } catch {
+            context.rollback()
+            return false
+        }
+    }
+
+    // MARK: Journey creation
+
+    /// Create a brand-new journey (with its camps as waypoints) from a draft-built domain value.
+    ///
+    /// Goes through the same `CoreDataMapping.upsertJourney` seam every import and edit uses, so
+    /// the resulting Core Data save is observed by `SyncScheduler` in `.cloudKit` mode — and the
+    /// new journey's CKRecord zone + records are enqueued for upload automatically (a journey-root
+    /// `.save` becomes a `.saveZone`; see `AkashicSyncEngine.localStoreDidChange`). No new engine
+    /// path is needed: a locally created journey is just another observed insert.
+    @discardableResult
+    func createJourney(_ journey: Journey) -> Bool {
+        let context = viewContext
+        CoreDataMapping.upsertJourney(journey, into: context)
+        do {
+            try context.save()
+            return true
+        } catch {
+            context.rollback()
+            return false
+        }
+    }
+
     // MARK: Journey edits
 
     /// Update a journey's editable fields (mirrors the web `JourneyEditModal` / `JourneyUpdate`).
@@ -417,6 +587,223 @@ final class PersistenceController {
             }
         }
         cd.stats = JSONCoding.encode(stats)
+        cd.updatedAt = Date()
+        do {
+            try context.save()
+            return true
+        } catch {
+            context.rollback()
+            return false
+        }
+    }
+
+    /// Replace ALL of a day's content lists + weather in one save (the WaypointEditSheet content
+    /// editor and the enrich flow drive this). Unlike `addDayContent` (which appends the drafter's
+    /// output), this is an authoritative SET: the passed arrays/weather become the day's content,
+    /// so editing/deleting a single fact/POI/site round-trips. Correcting data is never blocked.
+    @discardableResult
+    func setDayContent(waypointID: String,
+                       funFacts: [FunFact],
+                       pointsOfInterest: [PointOfInterest],
+                       historicalSites: [HistoricalSite],
+                       weather: WeatherData?) -> Bool {
+        let context = viewContext
+        guard let cd = fetchOne(CDWaypoint.self, matching: "id == %@", waypointID) else { return false }
+        cd.funFacts = JSONCoding.encode(funFacts)
+        cd.pointsOfInterest = JSONCoding.encode(pointsOfInterest)
+        cd.historicalSites = JSONCoding.encode(historicalSites)
+        cd.weather = JSONCoding.encode(weather)
+        do {
+            try context.save()
+            return true
+        } catch {
+            context.rollback()
+            return false
+        }
+    }
+
+    // MARK: Route correction (existing journeys)
+
+    /// Replace a journey's route AND its recomputed stats in one save — the "everything is
+    /// correctable" route-fix path (replace-from-GPX, draft-from-photos, or recompute-stats). Days
+    /// are NEVER touched here (re-seeding is a separate opt-in), so a route correction never silently
+    /// disturbs the day list. Mirrors the numeric stats into the scalar columns like `updateJourney`.
+    @discardableResult
+    func updateJourneyRoute(id: String, route: Route, stats: TrekStats) -> Bool {
+        let context = viewContext
+        guard let cd = fetchOne(CDJourney.self, matching: "id == %@", id) else { return false }
+        cd.route = JSONCoding.encode(route)
+        cd.stats = JSONCoding.encode(stats)
+        cd.totalDistance = stats.totalDistance
+        cd.totalDays = Int64(stats.duration)
+        if let summit = stats.highestPoint?.elevation { cd.summitElevation = Int64(summit) }
+        cd.updatedAt = Date()
+        do {
+            try context.save()
+            return true
+        } catch {
+            context.rollback()
+            return false
+        }
+    }
+
+    /// Opt-in "Also update day positions" after a route replace: overwrite each day's coordinate
+    /// (and elevation, when > 0) from the new GPX waypoints, matched POSITIONALLY by day order. Days
+    /// beyond the waypoint count are left untouched; content/name/dayNumber are never changed. This
+    /// is the ONLY path that lets a route replace also move the days, and it is always the user's
+    /// explicit choice.
+    @discardableResult
+    func updateWaypointPositions(journeyID: String, coordinates: [[Double]], elevations: [Int]) -> Bool {
+        let context = viewContext
+        guard let cd = fetchOne(CDJourney.self, matching: "id == %@", journeyID) else { return false }
+        let ordered = (cd.waypoints as? Set<CDWaypoint> ?? []).sorted { $0.sortOrder < $1.sortOrder }
+        for (index, wp) in ordered.enumerated() where index < coordinates.count {
+            let coord = coordinates[index]
+            if coord.count >= 2 { wp.coordinates = JSONCoding.encode([coord[0], coord[1]]) }
+            if index < elevations.count, elevations[index] > 0 { wp.elevation = Int64(elevations[index]) }
+        }
+        do {
+            try context.save()
+            return true
+        } catch {
+            context.rollback()
+            return false
+        }
+    }
+
+    // MARK: Day management (add / delete / reorder)
+    //
+    // Structural day edits on an EXISTING journey. Every one renumbers the surviving days so
+    // `dayNumber` and `sortOrder` stay 1…N / 0…N-1 in a single consistent order (see
+    // `DayRenumbering`). Photos are keyed by the stable `waypointId`, so reordering never disturbs a
+    // photo's day linkage; deleting a day UNASSIGNS its photos/comments (never deletes them).
+
+    /// Renumber the journey's waypoints from an ordered id list: `sortOrder = index`,
+    /// `dayNumber = index + 1`. Ids not present in the journey are ignored; any waypoint missing from
+    /// `orderedIDs` is appended after, preserving its previous relative order (defensive).
+    private func applyDayOrder(_ orderedIDs: [String], to cd: CDJourney) {
+        let waypoints = (cd.waypoints as? Set<CDWaypoint> ?? [])
+        var byID: [String: CDWaypoint] = [:]
+        for wp in waypoints { if let id = wp.id { byID[id] = wp } }
+        var finalOrder: [CDWaypoint] = orderedIDs.compactMap { byID[$0] }
+        let placed = Set(finalOrder.compactMap { $0.id })
+        let leftovers = waypoints.filter { !($0.id.map(placed.contains) ?? false) }
+            .sorted { $0.sortOrder < $1.sortOrder }
+        finalOrder.append(contentsOf: leftovers)
+        for assignment in DayRenumbering.assignments(orderedIDs: finalOrder.compactMap { $0.id }) {
+            guard let wp = byID[assignment.id] else { continue }
+            wp.sortOrder = Int64(assignment.sortOrder)
+            wp.dayNumber = Int64(assignment.dayNumber)
+        }
+    }
+
+    /// Reorder a journey's days to `orderedIDs` and renumber. Photo assignments (by `waypointId`)
+    /// are untouched, so a photo stays with its day across a reorder.
+    @discardableResult
+    func reorderWaypoints(journeyID: String, orderedIDs: [String]) -> Bool {
+        let context = viewContext
+        guard let cd = fetchOne(CDJourney.self, matching: "id == %@", journeyID) else { return false }
+        applyDayOrder(orderedIDs, to: cd)
+        do {
+            try context.save()
+            return true
+        } catch {
+            context.rollback()
+            return false
+        }
+    }
+
+    /// Add a day to a journey. Inserted at the end, or immediately AFTER `afterDayNumber` when given;
+    /// all days renumber consistently. Returns the created day's stable id (nil on failure).
+    @discardableResult
+    func addWaypoint(journeyID: String, name: String, afterDayNumber: Int?) -> String? {
+        let context = viewContext
+        guard let cd = fetchOne(CDJourney.self, matching: "id == %@", journeyID) else { return nil }
+        let ordered = (cd.waypoints as? Set<CDWaypoint> ?? []).sorted { $0.sortOrder < $1.sortOrder }
+
+        let newID = UUID().uuidString
+        let wp = CDWaypoint(context: context)
+        wp.id = newID
+        wp.journeyId = journeyID
+        wp.waypointType = "camp"
+        wp.name = name
+        wp.elevation = 0
+        wp.coordinates = JSONCoding.encode([Double]())
+        wp.highlights = JSONCoding.encode([String]())
+        wp.waypointDescription = ""
+        wp.routeDistanceKm = -1
+        wp.createdAt = Date()
+        wp.journey = cd
+
+        // Compute the target order: existing ids, with the new id inserted after the requested day.
+        var orderedIDs = ordered.compactMap { $0.id }
+        if let afterDayNumber,
+           let anchor = ordered.first(where: { Int($0.dayNumber) == afterDayNumber })?.id,
+           let anchorIndex = orderedIDs.firstIndex(of: anchor) {
+            orderedIDs.insert(newID, at: anchorIndex + 1)
+        } else {
+            orderedIDs.append(newID)
+        }
+        applyDayOrder(orderedIDs, to: cd)
+        do {
+            try context.save()
+            return newID
+        } catch {
+            context.rollback()
+            return nil
+        }
+    }
+
+    /// Delete a day. Its photos and comments become UNASSIGNED (waypointId → nil) — never deleted —
+    /// and the surviving days renumber consistently. This is the safe day-delete semantics: no
+    /// media or memory is ever destroyed by removing a day.
+    @discardableResult
+    func deleteWaypoint(id: String) -> Bool {
+        let context = viewContext
+        guard let cd = fetchOne(CDWaypoint.self, matching: "id == %@", id),
+              let journey = cd.journey else { return false }
+
+        // Unassign photos on this day (keep the bytes + records; they land in "Unassigned").
+        let photoReq = NSFetchRequest<CDPhoto>(entityName: "CDPhoto")
+        photoReq.predicate = NSPredicate(format: "waypointId == %@", id)
+        for photo in (try? context.fetch(photoReq)) ?? [] {
+            photo.waypointId = nil
+            photo.waypoint = nil
+        }
+        // Unassign comments on this day (never delete a family member's words).
+        let commentReq = NSFetchRequest<CDDayComment>(entityName: "CDDayComment")
+        commentReq.predicate = NSPredicate(format: "waypointId == %@", id)
+        for comment in (try? context.fetch(commentReq)) ?? [] {
+            comment.waypointId = nil
+            comment.waypoint = nil
+        }
+
+        context.delete(cd)
+
+        // Renumber the remaining days.
+        let remaining = (journey.waypoints as? Set<CDWaypoint> ?? [])
+            .filter { $0.id != id }
+            .sorted { $0.sortOrder < $1.sortOrder }
+        applyDayOrder(remaining.compactMap { $0.id }, to: journey)
+
+        do {
+            try context.save()
+            return true
+        } catch {
+            context.rollback()
+            return false
+        }
+    }
+
+    /// Set a journey's `isPublic` flag. Drives the public showcase mirror (MAPPING §8): flipping
+    /// it true makes the journey's metadata + thumbnails eligible for the world-readable mirror.
+    /// The mirror write itself is a separate step (`PublicMirrorPublisher`); this only records
+    /// intent on the journey and lets the sync engine carry the flag to the private DB.
+    @discardableResult
+    func setJourneyPublic(id: String, isPublic: Bool) -> Bool {
+        let context = viewContext
+        guard let cd = fetchOne(CDJourney.self, matching: "id == %@", id) else { return false }
+        cd.isPublic = isPublic
         cd.updatedAt = Date()
         do {
             try context.save()

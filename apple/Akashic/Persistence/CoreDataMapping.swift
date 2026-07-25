@@ -117,6 +117,7 @@ enum CoreDataMapping {
             country: cd.country ?? "",
             description: cd.journeyDescription ?? "",
             heroImageURL: cd.heroImageURL,
+            mediaShareURL: cd.mediaShareURL,
             dateStarted: DateOnly.string(from: cd.dateStarted),
             dateEnded: DateOnly.string(from: cd.dateEnded),
             isPublic: cd.isPublic,

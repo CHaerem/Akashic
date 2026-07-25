@@ -1,9 +1,34 @@
 import SwiftUI
 import CoreSpotlight
+import CloudKit
+
+/// Receives CloudKit share invitations (T2.8).
+///
+/// When someone taps an Akashic share link, iOS launches the app and hands over the share
+/// metadata here — there is no SwiftUI equivalent, so an app-delegate adaptor is the only
+/// route. UIKit calls the scene variant first when a scene delegate implements it; SwiftUI's
+/// own scene delegate does not, so this app-level method is the one that fires.
+final class AkashicAppDelegate: NSObject, UIApplicationDelegate {
+    func application(_ application: UIApplication,
+                     userDidAcceptCloudKitShareWith metadata: CKShare.Metadata) {
+        Task { @MainActor in
+            await PersistenceController.shared.acceptShare(metadata)
+        }
+    }
+}
 
 @main
 struct AkashicApp: App {
+    @UIApplicationDelegateAdaptor(AkashicAppDelegate.self) private var appDelegate
     @StateObject private var store = JourneyStore()
+    @StateObject private var onboarding = OnboardingCoordinator()
+    @StateObject private var entitlements = EntitlementStore()
+    // M6 — the on-device Intelligence gate (Foundation Models). Probes availability once at
+    // construction; the whole feature family is absent (not broken) when it reports unavailable.
+    @StateObject private var intelligence = Intelligence()
+
+    /// Drives the on-foreground availability re-probe (see `.onChange` below).
+    @Environment(\.scenePhase) private var scenePhase
 
     init() {
         // Demo/screenshot hook: force the on-disk `.local` store before the store is first
@@ -12,15 +37,37 @@ struct AkashicApp: App {
         if ProcessInfo.processInfo.environment["AKASHIC_FORCE_LOCAL"] != nil {
             Config.setPersistenceModeOverride(.local)
         }
+        // Exports are transient: the file matters until it has been shared, and an archive of
+        // a photo-heavy journey is gigabytes. Clearing at launch keeps them from accumulating.
+        ExportWorkspace.purge()
     }
 
     var body: some Scene {
         WindowGroup {
             rootScreen
                 .environmentObject(store)
+                .environmentObject(onboarding)
+                .environmentObject(entitlements)
+                .environmentObject(intelligence)
                 .preferredColorScheme(.dark)
                 .tint(Theme.accent)
+                // First-run onboarding (§4.2): a full-screen cover shown once. The coordinator
+                // owns the "show once" state (seeded from OnboardingState.shouldShow, which
+                // honors AKASHIC_SKIP_ONBOARDING and no-ops under XCTest), and the "Replay intro"
+                // Settings row re-presents through the same coordinator.
+                .fullScreenCover(isPresented: $onboarding.isPresented) {
+                    OnboardingView(onFinish: { onboarding.finish() })
+                        .preferredColorScheme(.dark)
+                }
                 .task { await runLaunchImportIfRequested() }
+                // Re-probe Intelligence availability on every return to the foreground: if the user
+                // toggled Apple Intelligence off mid-session the entry points must go absent (not
+                // become dead buttons that fail on tap), and if the model finished downloading the
+                // feature must appear. `refresh()` was previously dead code with no caller.
+                // (quality gate: Intelligence availability probed once at launch.)
+                .onChange(of: scenePhase) { _, phase in
+                    if phase == .active { intelligence.refresh() }
+                }
                 // Spotlight deep-link: tapping an indexed journey/day records the target so the
                 // map can fly to it (see JourneyStore.pendingJourneySelection).
                 .onContinueUserActivity(CSSearchableItemActionType) { activity in

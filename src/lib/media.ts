@@ -1,9 +1,13 @@
 /**
- * Media utilities for loading images from authenticated R2 storage
+ * Media URLs.
+ *
+ * CloudKit hands back full, pre-authenticated `CKAsset` download URLs, so there is
+ * nothing to sign or proxy — the token plumbing this module used to carry (a Supabase
+ * JWT appended as `?token=`) went away with Supabase itself (T3.4).
+ *
+ * The relative-path fallback still resolves against the media Worker, which stays up
+ * until the Phase 5 decommission; nothing written since the migration uses it.
  */
-
-import { supabase } from './supabase';
-import { isCloudKitBackend } from './backend';
 
 // Thumbnail settings
 const THUMBNAIL_MAX_SIZE = 400; // Max width/height in pixels
@@ -12,51 +16,16 @@ const THUMBNAIL_QUALITY = 0.8; // JPEG quality (0-1)
 const MEDIA_BASE_URL = import.meta.env.VITE_MEDIA_URL || 'https://akashic-media.chris-haerem.workers.dev';
 
 /**
- * Get the current user's access token for authenticated media requests
+ * Resolve a media reference to a loadable URL.
+ *
+ * An absolute URL — every CloudKit asset — is already complete and passes through
+ * untouched. Anything else is treated as a legacy relative object path.
  */
-export async function getAccessToken(): Promise<string | null> {
-    // CloudKit asset URLs are pre-authenticated, so there is no bearer token.
-    if (isCloudKitBackend) return null;
-    if (!supabase) return null;
-
-    const { data: { session } } = await supabase.auth.getSession();
-    return session?.access_token ?? null;
-}
-
-/**
- * Build an authenticated URL for a media resource
- * Appends the JWT token as a query parameter for <img> tag usage
- */
-export async function getAuthenticatedMediaUrl(path: string): Promise<string> {
-    const token = await getAccessToken();
-    const baseUrl = `${MEDIA_BASE_URL}/${path}`;
-
-    if (token) {
-        return `${baseUrl}?token=${encodeURIComponent(token)}`;
-    }
-
-    // Return URL without token (will fail auth if journey is not public)
-    return baseUrl;
-}
-
-/**
- * Build a media URL synchronously (for use when token is already known)
- */
-export function buildMediaUrl(path: string, token?: string | null): string {
-    // Absolute URLs (e.g. CloudKit CKAsset download URLs) are already complete
-    // and pre-authenticated — pass them through untouched, ignoring any token.
-    // Safe for Supabase mode too, where paths are always relative.
+export function buildMediaUrl(path: string): string {
     if (/^https?:\/\//i.test(path)) {
         return path;
     }
-
-    const baseUrl = `${MEDIA_BASE_URL}/${path}`;
-
-    if (token) {
-        return `${baseUrl}?token=${encodeURIComponent(token)}`;
-    }
-
-    return baseUrl;
+    return `${MEDIA_BASE_URL}/${path}`;
 }
 
 /**
@@ -147,33 +116,6 @@ export async function createThumbnail(file: File, maxSize = THUMBNAIL_MAX_SIZE):
 }
 
 /**
- * Upload a file to R2 storage (internal helper)
- */
-async function uploadFile(journeyId: string, file: File | Blob, token: string, filename?: string): Promise<UploadResult> {
-    const formData = new FormData();
-    if (file instanceof File) {
-        formData.append('file', file);
-    } else {
-        formData.append('file', file, filename || 'thumbnail.jpg');
-    }
-
-    const response = await fetch(`${MEDIA_BASE_URL}/upload/journeys/${journeyId}/photos`, {
-        method: 'POST',
-        headers: {
-            'Authorization': `Bearer ${token}`,
-        },
-        body: formData,
-    });
-
-    if (!response.ok) {
-        const error = await response.json().catch(() => ({ error: 'Upload failed' }));
-        throw new Error(error.error || 'Upload failed');
-    }
-
-    return response.json();
-}
-
-/**
  * Upload a photo to R2 storage with automatic thumbnail generation
  * @param journeyId - The journey UUID to upload to
  * @param file - The file to upload
@@ -181,44 +123,11 @@ async function uploadFile(journeyId: string, file: File | Blob, token: string, f
  * @returns Upload result with photo ID, path, and optional thumbnail path
  */
 export async function uploadPhoto(
-    journeyId: string,
-    file: File,
-    generateThumbnail = true
+    _journeyId: string,
+    _file: File,
+    _generateThumbnail = true
 ): Promise<UploadResult & { thumbnailPath?: string }> {
-    if (isCloudKitBackend) {
-        throw new Error('[cloudkit] Photo upload is native-only — use the iOS app');
-    }
-
-    const token = await getAccessToken();
-
-    if (!token) {
-        throw new Error('Authentication required');
-    }
-
-    // Upload original photo
-    const result = await uploadFile(journeyId, file, token);
-
-    // Generate and upload thumbnail if requested
-    if (generateThumbnail) {
-        try {
-            const thumbnailBlob = await createThumbnail(file);
-            const thumbnailResult = await uploadFile(
-                journeyId,
-                thumbnailBlob,
-                token,
-                `${result.photoId}_thumb.jpg`
-            );
-            return {
-                ...result,
-                thumbnailPath: thumbnailResult.path,
-            };
-        } catch (err) {
-            console.warn('Failed to generate thumbnail, continuing without:', err);
-            // Continue without thumbnail if generation fails
-        }
-    }
-
-    return result;
+    throw new Error('[cloudkit] Photo upload is native-only — use the iOS app');
 }
 
 /**
@@ -227,28 +136,6 @@ export async function uploadPhoto(
  * @param photoId - The photo UUID (without extension)
  * @returns true if successful
  */
-export async function deletePhotoFiles(journeyId: string, photoId: string): Promise<boolean> {
-    if (isCloudKitBackend) {
-        throw new Error('[cloudkit] Photo deletion is native-only — use the iOS app');
-    }
-
-    const token = await getAccessToken();
-
-    if (!token) {
-        throw new Error('Authentication required');
-    }
-
-    const response = await fetch(`${MEDIA_BASE_URL}/journeys/${journeyId}/photos/${photoId}`, {
-        method: 'DELETE',
-        headers: {
-            'Authorization': `Bearer ${token}`,
-        },
-    });
-
-    if (!response.ok) {
-        const error = await response.json().catch(() => ({ error: 'Delete failed' }));
-        throw new Error(error.error || 'Failed to delete photo files');
-    }
-
-    return true;
+export async function deletePhotoFiles(_journeyId: string, _photoId: string): Promise<boolean> {
+    throw new Error('[cloudkit] Photo deletion is native-only — use the iOS app');
 }

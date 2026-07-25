@@ -942,6 +942,7 @@ export function PhotosTab({ trekData, isMobile, editMode = false, onViewPhotoOnM
                 editMode={editMode}
                 onViewOnMap={onViewPhotoOnMap}
                 onEdit={editMode ? handleEditPhoto : undefined}
+                journeySlug={trekData.id}
             />
 
             {/* Photo edit modal */}

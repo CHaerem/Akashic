@@ -91,6 +91,28 @@ describe('cloudkit bootstrap (global fixture)', () => {
         expect(fixture.container.setUpAuth).toHaveBeenCalled();
     });
 
+    it('clears the memo when the CDN load fails, so a later call retries', async () => {
+        // No global yet: loadCloudKit injects a <script> and waits for load/error.
+        delete (window as Window).CloudKit;
+        const ck = await loadFresh();
+
+        // First attempt: force the injected script to error (a transient CDN failure).
+        const appendSpy = vi.spyOn(document.head, 'appendChild').mockImplementation(((
+            node: Node
+        ) => {
+            queueMicrotask(() => (node as HTMLScriptElement).dispatchEvent(new Event('error')));
+            return node;
+        }) as typeof document.head.appendChild);
+
+        await expect(ck.loadCloudKit()).rejects.toThrow(/Failed to load CloudKit JS/);
+        appendSpy.mockRestore();
+
+        // Connectivity restored: the global is present now. Because the rejected promise
+        // was NOT left memoized, the retry resolves instead of replaying the failure.
+        installFixture({ userRecordName: 'u' });
+        await expect(ck.loadCloudKit()).resolves.toBe((window as Window).CloudKit);
+    });
+
     it('onCloudKitAuthChange registers listeners and returns an unsubscribe fn', async () => {
         const fixture = installFixture({ userRecordName: 'user-1' });
         const ck = await loadFresh();

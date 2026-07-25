@@ -23,12 +23,29 @@ enum PersistenceMode: String, CaseIterable, Identifiable {
     }
 }
 
-/// Static build-time feature flags. Flip `cloudKitEnabled` once the CloudKit container +
-/// entitlements are configured (and build the `Debug-CloudKit` / `Release-CloudKit`
-/// configuration). Even when true, the sync engine only *starts* if an iCloud account is
-/// available — otherwise the app runs on the local store (see `AkashicSyncEngine.activate`).
+/// Static build-time feature flags.
+///
+/// `cloudKitEnabled` is derived from the compile-time `AKASHIC_CLOUDKIT_BUILD` flag, which the
+/// `Debug-CloudKit` / `Release-CloudKit` configurations define. That is the ONLY build that can
+/// construct a CloudKit container, so it is exactly the build that should default to `.cloudKit`
+/// mode. The default Debug/Release build (no flag) has no entitlement and defaults to `.fixtures`.
+///
+/// This closes the fresh-install trap: before, `cloudKitEnabled` was a hard `false`, so EVERY
+/// build — including the entitled TestFlight binary — resolved `.fixtures` and seeded demo
+/// journeys unless `AKASHIC_CLOUDKIT=1` was set by hand. A customer's fresh install landed in demo
+/// mode. Now the CloudKit build defaults to sync; the env var + Settings override remain, as
+/// overrides rather than the only lifeline. (quality gate: fresh installs run fixtures.)
+///
+/// Even when true, the sync engine only *starts* if an iCloud account is available — otherwise the
+/// app runs on the local store (see `AkashicSyncEngine.activate`).
 enum FeatureFlags {
-    static let cloudKitEnabled = false
+    static var cloudKitEnabled: Bool {
+        #if AKASHIC_CLOUDKIT_BUILD
+        return true
+        #else
+        return false
+        #endif
+    }
 
     /// Launch-time seam: `AKASHIC_CLOUDKIT=1` selects `.cloudKit` mode for a single run without
     /// flipping the build flag — the activation path for a simulator signed into iCloud
@@ -76,15 +93,25 @@ enum Config {
     }
 
     static var resolvedPersistenceMode: PersistenceMode {
-        // 1. An explicit in-app override (Settings) always wins.
-        if let raw = UserDefaults.standard.string(forKey: persistenceModeOverrideKey),
-           let mode = PersistenceMode(rawValue: raw) {
-            return mode
-        }
-        // 2. The launch-time env seam selects CloudKit for one run.
-        if FeatureFlags.cloudKitEnvOverride { return .cloudKit }
-        // 3. Otherwise the build flag.
-        return FeatureFlags.cloudKitEnabled ? .cloudKit : .fixtures
+        let override = UserDefaults.standard.string(forKey: persistenceModeOverrideKey)
+            .flatMap(PersistenceMode.init(rawValue:))
+        return resolvePersistenceMode(override: override,
+                                      envCloudKit: FeatureFlags.cloudKitEnvOverride,
+                                      cloudKitBuild: FeatureFlags.cloudKitEnabled)
+    }
+
+    /// Pure resolver — the whole persistence-mode decision as data, so every branch is unit-tested
+    /// per build flag without touching UserDefaults or the process environment.
+    ///
+    /// Precedence: an explicit Settings override always wins; then the launch-time `AKASHIC_CLOUDKIT`
+    /// env seam; then the build flag — a CloudKit-entitled build defaults to `.cloudKit`, everything
+    /// else to `.fixtures`. (quality gate: fresh installs run fixtures.)
+    static func resolvePersistenceMode(override: PersistenceMode?,
+                                       envCloudKit: Bool,
+                                       cloudKitBuild: Bool) -> PersistenceMode {
+        if let override { return override }
+        if envCloudKit { return .cloudKit }
+        return cloudKitBuild ? .cloudKit : .fixtures
     }
 
     static func setPersistenceModeOverride(_ mode: PersistenceMode?) {

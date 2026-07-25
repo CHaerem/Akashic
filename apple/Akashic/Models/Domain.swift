@@ -146,6 +146,10 @@ struct Journey: Codable, Equatable, Identifiable {
     var country: String
     var description: String
     var heroImageURL: String?
+    /// CloudKit share URL for the journey's MEDIA zone (v2, MAPPING §13). Set by the owner when a
+    /// journey is shared so participants can auto-accept the media share and stream originals on
+    /// demand; nil for unshared or owner-local journeys. Synced on the Journey record.
+    var mediaShareURL: String? = nil
     var dateStarted: String?
     var dateEnded: String?
     var isPublic: Bool = false
@@ -209,19 +213,43 @@ struct Photo: Codable, Equatable, Identifiable {
     /// File URL for the thumbnail, preferring the resolved thumb, falling back to the
     /// original (so a photo with only its full-res downloaded still shows something).
     var thumbnailFileURL: URL? {
-        if let localThumbPath { return URL(fileURLWithPath: localThumbPath) }
-        if let localOriginalPath { return URL(fileURLWithPath: localOriginalPath) }
-        return nil
+        Self.resolveMedia(absolutePath: localThumbPath, relativeKey: thumbnailURL)
+            ?? originalFileURL
     }
 
     /// File URL for the full-resolution original, if the bytes are on disk.
     var originalFileURL: URL? {
-        if let localOriginalPath { return URL(fileURLWithPath: localOriginalPath) }
-        return nil
+        Self.resolveMedia(absolutePath: localOriginalPath, relativeKey: url)
     }
 
     /// Any displayable bytes on disk (thumb or original).
-    var hasLocalMedia: Bool { localThumbPath != nil || localOriginalPath != nil }
+    var hasLocalMedia: Bool { thumbnailFileURL != nil || originalFileURL != nil }
+
+    /// Resolve photo bytes, tolerating a **stale absolute path**.
+    ///
+    /// `localOriginalPath` / `localThumbPath` are absolute, and an iOS app's data container is
+    /// re-created with a fresh UUID on reinstall, device restore and migration — so every stored
+    /// absolute path under it dies, while the files themselves are carried across intact. That
+    /// is not a corner case for this app: it is exactly what happens when the family archive is
+    /// restored from CloudKit onto a new phone, and it showed up the first time a synced install
+    /// was reinstalled (1538 photos on disk, every thumbnail a broken-image placeholder).
+    ///
+    /// So the absolute path is treated as a *hint*: used when it still resolves, otherwise the
+    /// canonical R2-style relative key (`url` / `thumbnailURL`) is re-resolved against the
+    /// current media root — the two layouts are identical by construction (see `MediaLibrary`).
+    /// The absolute path must stay first: after a local import it legitimately points outside
+    /// the media root (into the export bundle), where the key would not resolve.
+    static func resolveMedia(absolutePath: String?, relativeKey: String?) -> URL? {
+        let fileManager = FileManager.default
+        if let absolutePath, !absolutePath.isEmpty, fileManager.fileExists(atPath: absolutePath) {
+            return URL(fileURLWithPath: absolutePath)
+        }
+        if let relativeKey, !relativeKey.isEmpty {
+            let candidate = MediaLibrary.shared.absoluteURL(forRelative: relativeKey)
+            if fileManager.fileExists(atPath: candidate.path) { return candidate }
+        }
+        return nil
+    }
 }
 
 // MARK: - Day comments

@@ -1,16 +1,38 @@
 import SwiftUI
 import UniformTypeIdentifiers
 
-/// Debug settings: inspect and override the persistence mode, and import the real family
-/// data from a Supabase export bundle (T2.4).
+/// The app's Settings screen, split into two audiences (COMMERCIALIZATION-PLAN §4.3):
 ///
-/// The store is built once at launch (`PersistenceController.shared`), so changing the
-/// override takes effect on the next launch. This is the manual escape hatch for flipping
-/// the app onto a real CloudKit / local store during bring-up.
+///   * **Consumer** (always visible): the honest sync status one-liner, a human storage summary,
+///     the "Your name" field used for comments, an export reminder, "Replay intro", the
+///     legal/support links, and the app version.
+///   * **Developer** (hidden): the migration workshop — active-store inspector, the T2.4 export
+///     bundle importer, the T2.5 CloudKit importer, and the persistence-mode override. Nothing is
+///     deleted; the runbook still needs these tools. The section is revealed by seven taps on the
+///     version row (see `DeveloperTools`) and is always visible in DEBUG builds.
+///
+/// The store is built once at launch (`PersistenceController.shared`), so changing the persistence
+/// override takes effect on the next launch.
 struct SettingsView: View {
     @EnvironmentObject private var store: JourneyStore
+    @EnvironmentObject private var onboarding: OnboardingCoordinator
+    @EnvironmentObject private var entitlements: EntitlementStore
     @State private var override: PersistenceMode?
     @State private var showRelaunchNote = false
+    @State private var showPaywall = false
+
+    /// Live sync state, so a stalled or erroring engine is visible instead of silent.
+    @ObservedObject private var syncStatus = PersistenceController.shared.syncStatus
+
+    /// Wi-Fi-only download policy — the toggle below binds to it.
+    @ObservedObject private var networkPolicy = NetworkPolicy.shared
+
+    // "Your name" for comments — loaded from CommentService on appear, written back on change.
+    @State private var authorName = ""
+
+    // Developer-gate state.
+    @State private var developerUnlocked = DeveloperTools.isUnlocked()
+    @State private var versionTapCount = 0
 
     // Import state.
     @State private var bundlePath = Config.importBundlePath
@@ -23,47 +45,17 @@ struct SettingsView: View {
 
     var body: some View {
         Form {
-            Section("Active store") {
-                labelled("Mode", store.mode.label)
-                labelled("Journeys loaded", "\(store.journeys.count)")
-                labelled("Photos in store", "\(store.photoCount)")
-                labelled("CloudKit container", Config.cloudKitContainerIdentifier)
-                labelled("CloudKit enabled (build flag)", FeatureFlags.cloudKitEnabled ? "Yes" : "No")
-            }
+            consumerSections
 
-            importSection
-
-            cloudKitImportSection
-
-            Section {
-                Picker("Persistence mode", selection: Binding(
-                    get: { override ?? store.mode },
-                    set: { newValue in
-                        override = newValue
-                        Config.setPersistenceModeOverride(newValue)
-                        showRelaunchNote = true
-                    }
-                )) {
-                    ForEach(PersistenceMode.allCases) { Text($0.label).tag($0) }
-                }
-                .pickerStyle(.inline)
-
-                Button("Clear override (follow build flag)") {
-                    override = nil
-                    Config.setPersistenceModeOverride(nil)
-                    showRelaunchNote = true
-                }
-                .foregroundStyle(Theme.accent)
-            } header: {
-                Text("Override (debug)")
-            } footer: {
-                Text("CloudKit mode requires the Release-CloudKit build with entitlements and an iCloud account. Changes apply after relaunching the app.")
+            if developerUnlocked {
+                developerSections
             }
         }
         .scrollContentBackground(.hidden)
         .background(Theme.background.ignoresSafeArea())
         .navigationTitle("Settings")
         .onAppear {
+            authorName = store.commentService.authorName ?? ""
             if let raw = UserDefaults.standard.string(forKey: Config.persistenceModeOverrideKey) {
                 override = PersistenceMode(rawValue: raw)
             }
@@ -73,6 +65,9 @@ struct SettingsView: View {
         } message: {
             Text("Quit and reopen Akashic for the new persistence mode to take effect.")
         }
+        .sheet(isPresented: $showPaywall) {
+            PaywallView(reason: .settings).environmentObject(entitlements)
+        }
         .fileImporter(isPresented: $showFolderPicker,
                       allowedContentTypes: [.folder]) { result in
             if case let .success(url) = result {
@@ -81,15 +76,272 @@ struct SettingsView: View {
                 persistImportPaths()
             }
         }
-        .alert("Import to CloudKit?", isPresented: $showCloudKitConfirm) {
+        .alert(ckImport.environment == .production
+               ? "Import to PRODUCTION CloudKit?"
+               : "Import to CloudKit?",
+               isPresented: $showCloudKitConfirm) {
             Button("Cancel", role: .cancel) {}
             Button("Upload", role: .destructive) {
                 persistImportPaths()
                 ckImport.runRealImport(bundlePath: bundlePath, mediaRoot: mediaRoot)
             }
         } message: {
-            Text("This uploads the full export to \(ckImport.containerID) · \(ckImport.environment.rawValue) (the owner's private database). Production is never touched. CloudKit sync must be quiesced first — the importer writes the private database directly and must never run alongside the sync engine. Re-running is safe (idempotent, no duplicates) but restarts the upload from the beginning.")
+            Text(importConfirmationMessage)
         }
+    }
+
+    // MARK: - Consumer
+
+    @ViewBuilder
+    private var consumerSections: some View {
+        Section {
+            labelled("Status", syncStatus.summary)
+            // While a heavy download is held back for Wi-Fi, offer an inline one-occasion cellular
+            // override right here, so the user never has to hunt for the global toggle to unblock
+            // one download. It does NOT change the "Wi-Fi only" setting below.
+            if syncStatus.state == .waitingForWiFi {
+                Button {
+                    networkPolicy.grantOneOccasionCellularDownload()
+                } label: {
+                    Label("Download now over cellular", systemImage: "arrow.down.circle")
+                        .foregroundStyle(Theme.accent)
+                }
+            }
+            // v2 one-time photo-storage repack progress, while it runs (MAPPING §13).
+            if let repack = syncStatus.repackSummary {
+                labelled("Storage", repack)
+            }
+            labelled("Library", Formatters.librarySummary(journeys: store.journeys.count,
+                                                          photos: store.photoCount))
+            Toggle("Download over Wi-Fi only", isOn: $networkPolicy.wifiOnlyDownloads)
+                .tint(Theme.accent)
+                .foregroundStyle(Theme.textPrimary)
+        } header: {
+            Text("iCloud sync")
+        } footer: {
+            Text("Photo downloads can reach several GB on first sync.")
+        }
+
+        Section {
+            TextField("Your name", text: $authorName)
+                .textFieldStyle(.plain)
+                .foregroundStyle(Theme.textPrimary)
+                .autocorrectionDisabled()
+                .onChange(of: authorName) { _, newValue in
+                    store.commentService.authorName = newValue
+                }
+        } header: {
+            Text("Your name")
+        } footer: {
+            Text("Shown next to the comments you leave on your journeys.")
+        }
+
+        Section {
+            Label {
+                Text("Export a journey from its ⋯ menu — it bundles the route, photos, and notes "
+                     + "into a file you can share or back up.")
+                    .font(.footnote)
+                    .foregroundStyle(Theme.textSecondary)
+            } icon: {
+                Image(systemName: "square.and.arrow.up")
+                    .foregroundStyle(Theme.accent)
+            }
+
+            Button {
+                onboarding.replay()
+            } label: {
+                Label("Replay intro", systemImage: "sparkles")
+                    .foregroundStyle(Theme.accent)
+            }
+        } header: {
+            Text("Your journeys")
+        }
+
+        Section {
+            Button {
+                // An entitled user already owns Complete — never present a live "buy" surface for
+                // something they own (a wrong-state purchase UI). The row just shows their status.
+                // (quality gate: Settings Membership row opens purchase UI for owners.)
+                guard !entitlements.isComplete else { return }
+                showPaywall = true
+            } label: {
+                HStack {
+                    Label("Akashic Complete", systemImage: "star.circle")
+                        .foregroundStyle(Theme.textPrimary)
+                    Spacer()
+                    Text(entitlements.isComplete ? "Complete ✓" : "Free")
+                        .foregroundStyle(entitlements.isComplete ? Theme.accent : Theme.textSecondary)
+                    if !entitlements.isComplete {
+                        Image(systemName: "chevron.right")
+                            .font(.caption)
+                            .foregroundStyle(Theme.textTertiary)
+                    }
+                }
+            }
+            .disabled(entitlements.isComplete)
+        } header: {
+            Text("Membership")
+        } footer: {
+            Text(entitlements.isComplete
+                 ? "Akashic Complete is active — unlimited journeys and photos, per-journey export, and showcase publishing. Shared with your Family Sharing group."
+                 : "The free tier includes one journey (up to 100 photos), the full experience, and sharing. Akashic Complete unlocks unlimited journeys and photos, per-journey export, and publishing — one purchase, shared with your family. Restore a previous purchase from inside.")
+        }
+
+        Section("About") {
+            Link(destination: AppInfo.privacyURL) {
+                linkRow("Privacy Policy", systemImage: "hand.raised")
+            }
+            Link(destination: AppInfo.termsURL) {
+                linkRow("Terms of Use", systemImage: "doc.text")
+            }
+            Link(destination: AppInfo.supportURL) {
+                linkRow("Support", systemImage: "questionmark.circle")
+            }
+            // Version row doubles as the hidden developer-tools unlock (seven taps). Auto-unlocked
+            // in DEBUG, so the tap counter only matters in Release.
+            versionRow
+        }
+    }
+
+    /// Version row + the seven-tap unlock gesture for the developer section.
+    private var versionRow: some View {
+        labelled("Version", AppInfo.versionDisplay)
+            .contentShape(Rectangle())
+            .onTapGesture {
+                guard !developerUnlocked else { return }
+                versionTapCount += 1
+                if DeveloperTools.tapsReachUnlock(versionTapCount) {
+                    DeveloperTools.setUnlocked(true)
+                    developerUnlocked = true
+                }
+            }
+    }
+
+    private func linkRow(_ title: String, systemImage: String) -> some View {
+        HStack {
+            Label(title, systemImage: systemImage)
+                .foregroundStyle(Theme.textPrimary)
+            Spacer()
+            Image(systemName: "arrow.up.right")
+                .font(.caption)
+                .foregroundStyle(Theme.textTertiary)
+        }
+    }
+
+    // MARK: - Developer
+
+    @ViewBuilder
+    private var developerSections: some View {
+        Section {
+            labelled("Mode", store.mode.label)
+            labelled("Journeys loaded", "\(store.journeys.count)")
+            labelled("Photos in store", "\(store.photoCount)")
+            labelled("CloudKit container", Config.cloudKitContainerIdentifier)
+            // The build flag is a constant that is false in every configuration; what
+            // actually selects CloudKit is AKASHIC_CLOUDKIT=1 or the Settings override. The
+            // old row showed only the constant, so a CloudKit-mode run reported "No".
+            labelled("CloudKit environment", cloudKitEnvironmentLabel)
+            // Sync state was previously computed but never shown, so a stalled sync looked
+            // identical to a working one — from the outside and from inside the app.
+            labelled("Sync", syncStatus.summary)
+        } header: {
+            Text("Active store")
+        } footer: {
+            Text("Developer tools. Hidden from customers; revealed by seven taps on the version "
+                 + "row and always shown in DEBUG builds.")
+        }
+
+        importSection
+
+        cloudKitImportSection
+
+        Section {
+            Picker("Persistence mode", selection: Binding(
+                get: { override ?? store.mode },
+                set: { newValue in
+                    override = newValue
+                    Config.setPersistenceModeOverride(newValue)
+                    showRelaunchNote = true
+                }
+            )) {
+                ForEach(PersistenceMode.allCases) { Text($0.label).tag($0) }
+            }
+            .pickerStyle(.inline)
+
+            Button("Clear override (follow build flag)") {
+                override = nil
+                Config.setPersistenceModeOverride(nil)
+                showRelaunchNote = true
+            }
+            .foregroundStyle(Theme.accent)
+
+            Button(role: .destructive) {
+                DeveloperTools.setUnlocked(false)
+                versionTapCount = 0
+                // Clearing the gate must also clear any simulated entitlement — otherwise the
+                // device would keep reporting "Complete ✓" with no visible cause or control.
+                // (quality gate: hide-developer-tools leaves Simulate Complete active.)
+                entitlements.setSimulateComplete(false)
+                developerUnlocked = DeveloperTools.isUnlocked()
+            } label: {
+                Label("Hide developer tools", systemImage: "eye.slash")
+            }
+        } header: {
+            Text("Override (debug)")
+        } footer: {
+            Text("CloudKit mode requires the Release-CloudKit build with entitlements and an iCloud account. Changes apply after relaunching the app.")
+        }
+
+        // The entitlement toggle is compiled out of Release: even a hand-set UserDefaults key does
+        // nothing there (see EntitlementOverride.resolvedOverride). (quality gate: paywall bypass.)
+        #if DEBUG
+        entitlementSection
+        #endif
+    }
+
+    /// Developer override for the paywall (M3): flip the app into "Akashic Complete" without a
+    /// real purchase, so we can exercise both entitlement states in development. **DEBUG only** —
+    /// the whole toggle is compiled out of Release so it can never be a monetization bypass, and
+    /// `EntitlementOverride.resolvedOverride` independently ignores the flag in Release. The
+    /// `AKASHIC_COMPLETE=1` environment variable does the same for screenshots (also DEBUG-only).
+    #if DEBUG
+    @ViewBuilder
+    private var entitlementSection: some View {
+        Section {
+            labelled("Entitlement", entitlements.isComplete ? "Complete" : "Free")
+            Toggle("Simulate Akashic Complete", isOn: Binding(
+                get: { entitlements.simulateComplete },
+                set: { entitlements.setSimulateComplete($0) }
+            ))
+            .tint(Theme.accent)
+        } header: {
+            Text("Entitlement (debug)")
+        } footer: {
+            Text("Grants Akashic Complete locally without a purchase, for testing the paywall gates. "
+                 + "Honors AKASHIC_COMPLETE=1 in the environment (screenshots), which overrides this toggle. "
+                 + "Never downgrades a real purchase.")
+        }
+    }
+    #endif
+
+    /// Which CloudKit database this build talks to, and how the mode was chosen — the two
+    /// facts you need before touching the import screen.
+    private var cloudKitEnvironmentLabel: String {
+        guard store.mode == .cloudKit else { return "not in CloudKit mode" }
+        let source = FeatureFlags.cloudKitEnvOverride ? "env" : "override"
+        return "\(CloudKitImportEnvironment.current.rawValue) (\(source))"
+    }
+
+    private var importConfirmationMessage: String {
+        let target = "\(ckImport.containerID) · \(ckImport.environment.rawValue)"
+        let scope = ckImport.environment == .production
+            ? "This writes the REAL production database — the one TestFlight and App Store "
+              + "builds read. Everything the family sees comes from here."
+            : "This writes the Development database. Production is not touched."
+        return "Uploads the full export to \(target) (the owner's private database). \(scope) "
+            + "CloudKit sync must be quiesced first — the importer writes the private database "
+            + "directly and must never run alongside the sync engine. Re-running is safe "
+            + "(idempotent, no duplicates) but restarts the upload from the beginning."
     }
 
     // MARK: - CloudKit import section (T2.5)
@@ -326,5 +578,7 @@ struct SettingsView: View {
 #Preview {
     NavigationStack { SettingsView() }
         .environmentObject(JourneyStore(persistence: .preview))
+        .environmentObject(OnboardingCoordinator(isPresented: false))
+        .environmentObject(EntitlementStore.previewFree)
         .preferredColorScheme(.dark)
 }

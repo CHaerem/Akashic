@@ -121,6 +121,228 @@ final class SyncStoreTests: XCTestCase {
         XCTAssertEqual(journeys.first?.name, "Brand New")
     }
 
+    // MARK: - Encoded system fields (the code-14 first-save fix)
+    //
+    // Before this: `makeRecord` built every outgoing CKRecord from scratch, with no server change
+    // tag, so CloudKit saw the first save of any existing record as an INSERT and answered
+    // "record to insert already exists" (server error 14); the edit only landed via the
+    // serverRecordChanged rebase — double round-trips plus the engine's backoff. The fix persists
+    // each record's encoded system fields (in the CDSyncRecordMeta side table) on remote-apply and
+    // on a successful send, then rehydrates that base in makeRecord so the save carries the tag.
+
+    private func fetchMeta(_ controller: PersistenceController, _ recordName: String) throws -> CDSyncRecordMeta? {
+        let request = NSFetchRequest<CDSyncRecordMeta>(entityName: "CDSyncRecordMeta")
+        request.predicate = NSPredicate(format: "recordName == %@", recordName)
+        return try controller.viewContext.fetch(request).first
+    }
+
+    /// Applying a fetched record persists its system fields, rehydratable to the same identity.
+    func testApplyFetchedRecordPersistsRehydratableSystemFields() throws {
+        let (controller, journey) = try seededController()
+        let zone = RecordCoder.zoneID(forJourneyID: journey.id)
+        let record = try XCTUnwrap(controller.makeRecord(forRecordName: journey.id, zoneID: zone, existing: nil))
+
+        controller.beginRemoteApply()
+        controller.applyFetchedRecord(record)
+        controller.endRemoteApply()
+
+        let meta = try XCTUnwrap(try fetchMeta(controller, journey.id),
+                                 "apply must write a CDSyncRecordMeta row for the record")
+        let bytes = try XCTUnwrap(meta.systemFields)
+        let rehydrated = try XCTUnwrap(RecordCoder.recordFromSystemFields(bytes))
+        XCTAssertEqual(rehydrated.recordID.recordName, journey.id)
+        XCTAssertEqual(rehydrated.recordID.zoneID, zone, "stored system fields carry the record's zone")
+    }
+
+    /// After a fetch-apply, makeRecord rehydrates the persisted base instead of building a fresh
+    /// record: its outgoing system-field identity is exactly what was stored (this is what makes
+    /// the save an update against the server's copy rather than an insert). Old code ignored the
+    /// meta table entirely and always built fresh.
+    func testMakeRecordAfterApplyReusesPersistedSystemFields() throws {
+        let (controller, journey) = try seededController()
+        let camp = journey.camps[0]
+        let zone = RecordCoder.zoneID(forJourneyID: journey.id)
+        let fetched = try XCTUnwrap(controller.makeRecord(forRecordName: camp.id, zoneID: zone, existing: nil))
+
+        controller.beginRemoteApply()
+        controller.applyFetchedRecord(fetched)
+        controller.endRemoteApply()
+        let storedBytes = try XCTUnwrap(try fetchMeta(controller, camp.id)?.systemFields)
+
+        let outgoing = try XCTUnwrap(controller.makeRecord(forRecordName: camp.id, zoneID: zone, existing: nil))
+        XCTAssertEqual(RecordCoder.archivedSystemFields(of: outgoing), storedBytes,
+                       "makeRecord must send the persisted server identity, not a fresh insert")
+        XCTAssertEqual(outgoing.recordID.zoneID, zone, "recordID.zoneID survives the rehydrate")
+    }
+
+    /// System fields recorded for a record the server accepted (the send path) are what makes the
+    /// SECOND edit of a locally created record carry a tag — the fetch-apply path never sees it.
+    func testRecordsDidSavePersistsSystemFieldsForSentRecords() throws {
+        let (controller, journey) = try seededController()
+        let zone = RecordCoder.zoneID(forJourneyID: journey.id)
+        let saved = try XCTUnwrap(controller.makeRecord(forRecordName: journey.id, zoneID: zone, existing: nil))
+
+        XCTAssertNil(try fetchMeta(controller, journey.id), "precondition: nothing persisted yet")
+        controller.recordsDidSave([saved])
+
+        let meta = try XCTUnwrap(try fetchMeta(controller, journey.id))
+        let rehydrated = try XCTUnwrap(RecordCoder.recordFromSystemFields(try XCTUnwrap(meta.systemFields)))
+        XCTAssertEqual(rehydrated.recordID.recordName, journey.id)
+    }
+
+    /// A stale/foreign meta row (wrong zone) must not be used as the base — makeRecord falls back
+    /// to a fresh record rather than sending the row to the wrong zone.
+    func testMakeRecordIgnoresMetaWithMismatchedZone() throws {
+        let (controller, journey) = try seededController()
+        let realZone = RecordCoder.zoneID(forJourneyID: journey.id)
+        // Persist a base whose zone owner differs from the one makeRecord will be asked for.
+        let foreignZone = RecordCoder.zoneID(forJourneyID: journey.id, ownerName: "someone-else")
+        let foreign = CKRecord(recordType: RecordCoder.RecordType.journey,
+                               recordID: CKRecord.ID(recordName: journey.id, zoneID: foreignZone))
+        controller.recordsDidSave([foreign])
+
+        let outgoing = try XCTUnwrap(controller.makeRecord(forRecordName: journey.id, zoneID: realZone, existing: nil))
+        XCTAssertEqual(outgoing.recordID.zoneID, realZone,
+                       "a meta row for a different zone must not redirect the record")
+    }
+
+    /// Deleting a record removes its meta row; deleting a journey also removes its children's.
+    func testDeletingRecordsRemovesTheirSystemFields() throws {
+        let (controller, journey) = try seededController()
+        let zone = RecordCoder.zoneID(forJourneyID: journey.id)
+        let camp = journey.camps[0]
+
+        // Seed meta for the journey and one of its waypoints via the apply path.
+        controller.beginRemoteApply()
+        controller.applyFetchedRecord(try XCTUnwrap(controller.makeRecord(forRecordName: journey.id, zoneID: zone, existing: nil)))
+        controller.applyFetchedRecord(try XCTUnwrap(controller.makeRecord(forRecordName: camp.id, zoneID: zone, existing: nil)))
+        controller.endRemoteApply()
+        XCTAssertNotNil(try fetchMeta(controller, journey.id))
+        XCTAssertNotNil(try fetchMeta(controller, camp.id))
+
+        controller.beginRemoteApply()
+        controller.applyDeletedRecord(recordName: journey.id, recordType: RecordCoder.RecordType.journey)
+        controller.endRemoteApply()
+
+        XCTAssertNil(try fetchMeta(controller, journey.id), "journey meta removed on delete")
+        XCTAssertNil(try fetchMeta(controller, camp.id),
+                     "the cascade's child meta rows are removed too (no orphaned tags)")
+    }
+
+    // MARK: - Out-of-order delivery (orphan adoption)
+
+    /// A waypoint applied BEFORE its journey (CloudKit does not order a zone's records) must not
+    /// be stranded: when the journey arrives it adopts the waiting day. This is the Mount Kenya
+    /// "zero days" bug.
+    func testWaypointAppliedBeforeJourneyIsAdoptedWhenJourneyArrives() throws {
+        let controller = PersistenceController(mode: .fixtures, seed: false, fixtureBundle: bundle)
+        let journey = try FixtureLoader.load(named: "kilimanjaro", bundle: bundle)
+        let zone = RecordCoder.zoneID(forJourneyID: journey.id)
+        let camp = journey.camps[0]
+
+        controller.beginRemoteApply()
+        // Day first — its journey does not exist yet, so the relationship is nil at this point.
+        let waypointRecord = RecordCoder.record(forWaypoint: camp, journeyID: journey.id,
+                                                sortOrder: 0, in: zone)
+        controller.applyFetchedRecord(waypointRecord)
+        let orphan = try XCTUnwrap(fetchWaypoint(controller, camp.id))
+        XCTAssertNil(orphan.journey, "precondition: the day is orphaned before its journey lands")
+
+        // Journey arrives second.
+        let journeyRecord = RecordCoder.record(for: journey, in: zone)
+        controller.applyFetchedRecord(journeyRecord)
+        controller.endRemoteApply()
+
+        XCTAssertEqual(try XCTUnwrap(fetchWaypoint(controller, camp.id)).journey?.id, journey.id,
+                       "the journey adopts the day that was waiting for it")
+    }
+
+    /// The retroactive cure: a store already written with orphans (an install that synced days
+    /// before their journey on the buggy build) is healed at launch, with no re-sync.
+    func testRepairOrphanedRelationshipsRelinksExistingOrphans() throws {
+        let (controller, journey) = try seededController()
+
+        // Sever every day's journey link to simulate the already-broken store.
+        for camp in journey.camps {
+            try XCTUnwrap(fetchWaypoint(controller, camp.id)).journey = nil
+        }
+        try controller.viewContext.save()
+
+        let repaired = controller.repairOrphanedRelationships()
+
+        XCTAssertEqual(repaired, journey.camps.count)
+        for camp in journey.camps {
+            XCTAssertEqual(try XCTUnwrap(fetchWaypoint(controller, camp.id)).journey?.id, journey.id)
+        }
+        XCTAssertEqual(controller.repairOrphanedRelationships(), 0, "idempotent: nothing left to repair")
+    }
+
+    private func fetchWaypoint(_ controller: PersistenceController, _ id: String) throws -> CDWaypoint? {
+        let request = NSFetchRequest<CDWaypoint>(entityName: "CDWaypoint")
+        request.predicate = NSPredicate(format: "id == %@", id)
+        return try controller.viewContext.fetch(request).first
+    }
+
+    /// A confirmed server delete (local delete that landed) drops the meta row.
+    func testRecordsDidDeleteRemovesSystemFields() throws {
+        let (controller, journey) = try seededController()
+        let zone = RecordCoder.zoneID(forJourneyID: journey.id)
+        controller.recordsDidSave([try XCTUnwrap(controller.makeRecord(forRecordName: journey.id, zoneID: zone, existing: nil))])
+        XCTAssertNotNil(try fetchMeta(controller, journey.id))
+
+        controller.recordsDidDelete([CKRecord.ID(recordName: journey.id, zoneID: zone)])
+        XCTAssertNil(try fetchMeta(controller, journey.id))
+    }
+
+    /// The account-switch hook: purging ALL system fields empties the meta side table (the new
+    /// account's DB holds none of these records, so every retained change tag is a dead pointer).
+    func testPurgeAllSystemFieldsClearsMetaTable() throws {
+        let (controller, journey) = try seededController()
+        let zone = RecordCoder.zoneID(forJourneyID: journey.id)
+        controller.recordsDidSave([try XCTUnwrap(controller.makeRecord(forRecordName: journey.id, zoneID: zone, existing: nil))])
+        controller.recordsDidSave([try XCTUnwrap(controller.makeRecord(forRecordName: journey.camps[0].id, zoneID: zone, existing: nil))])
+        let request = NSFetchRequest<CDSyncRecordMeta>(entityName: "CDSyncRecordMeta")
+        XCTAssertGreaterThan(try controller.viewContext.count(for: request), 0, "precondition: meta rows exist")
+
+        controller.purgeAllSystemFields()
+
+        XCTAssertEqual(try controller.viewContext.count(for: request), 0,
+                       "an account switch must leave the meta side table empty")
+    }
+
+    /// The zone-loss hook: purging by journey id drops the journey's meta AND its children's, but
+    /// leaves an unrelated journey's meta untouched.
+    func testPurgeSystemFieldsForJourneyIsScopedToThatJourney() throws {
+        let (controller, journey) = try seededController()
+        let zone = RecordCoder.zoneID(forJourneyID: journey.id)
+        controller.recordsDidSave([try XCTUnwrap(controller.makeRecord(forRecordName: journey.id, zoneID: zone, existing: nil))])
+        controller.recordsDidSave([try XCTUnwrap(controller.makeRecord(forRecordName: journey.camps[0].id, zoneID: zone, existing: nil))])
+        // An unrelated record's meta that must survive.
+        let otherZone = RecordCoder.zoneID(forJourneyID: "other-journey")
+        controller.recordsDidSave([CKRecord(recordType: RecordCoder.RecordType.journey,
+                                            recordID: CKRecord.ID(recordName: "other-journey", zoneID: otherZone))])
+
+        controller.purgeSystemFields(forJourneyID: journey.id)
+
+        XCTAssertNil(try fetchMeta(controller, journey.id), "journey meta purged")
+        XCTAssertNil(try fetchMeta(controller, journey.camps[0].id), "child (waypoint) meta purged")
+        XCTAssertNotNil(try fetchMeta(controller, "other-journey"), "an unrelated journey's meta is untouched")
+    }
+
+    /// resetJourneys clears the meta side table along with the domain rows.
+    func testResetJourneysPurgesSystemFields() throws {
+        let (controller, journey) = try seededController()
+        let zone = RecordCoder.zoneID(forJourneyID: journey.id)
+        controller.recordsDidSave([try XCTUnwrap(controller.makeRecord(forRecordName: journey.id, zoneID: zone, existing: nil))])
+        XCTAssertNotNil(try fetchMeta(controller, journey.id))
+
+        controller.resetJourneys()
+
+        let request = NSFetchRequest<CDSyncRecordMeta>(entityName: "CDSyncRecordMeta")
+        XCTAssertEqual(try controller.viewContext.count(for: request), 0,
+                       "a full reset must not leave stale system-field rows behind")
+    }
+
     // MARK: - Media pointers (CRITICAL: a fetched photo must never destroy media pointers)
 
     /// Insert a CDPhoto row that looks like an imported archive photo.
@@ -307,5 +529,72 @@ final class SyncStoreTests: XCTestCase {
         let waypointRequest = NSFetchRequest<CDWaypoint>(entityName: "CDWaypoint")
         XCTAssertEqual(try controller.viewContext.count(for: waypointRequest), 0,
                        "deleting the journey cascades to its waypoints")
+    }
+
+    // MARK: - Media paths survive a new data container (T2.4 live-test regression)
+    //
+    // An iOS app's data container is re-created with a fresh UUID on reinstall, restore and
+    // migration, which invalidates every absolute path stored in Core Data while the files
+    // themselves are carried across. That is precisely the "restore the archive onto a new
+    // phone" case CloudKit sync exists for — and it showed up the first time a synced install
+    // was reinstalled: 1538 photos on disk, every single thumbnail a broken-image placeholder.
+
+    private func makeMediaFile(relativeKey: String) throws -> URL {
+        let url = MediaLibrary.shared.absoluteURL(forRelative: relativeKey)
+        try FileManager.default.createDirectory(at: url.deletingLastPathComponent(),
+                                                withIntermediateDirectories: true)
+        try Data([0x1]).write(to: url)
+        addTeardownBlock { try? FileManager.default.removeItem(at: url) }
+        return url
+    }
+
+    func testStaleAbsolutePathFallsBackToTheRelativeKey() throws {
+        let key = "journeys/j-media/photos/p-media_thumb.jpg"
+        let real = try makeMediaFile(relativeKey: key)
+        var photo = Photo(id: "p-media", journeyId: "j-media", url: "", thumbnailURL: key)
+        photo.localThumbPath = "/var/mobile/Containers/Data/Application/DEAD-BEEF/Library/"
+            + "Application Support/media/" + key
+
+        XCTAssertEqual(photo.thumbnailFileURL?.standardizedFileURL,
+                       real.standardizedFileURL,
+                       "a dead container path must be re-resolved against the current media root")
+        XCTAssertTrue(photo.hasLocalMedia)
+    }
+
+    func testValidAbsolutePathOutsideTheMediaRootStillWins() throws {
+        // The local importer legitimately points at bytes inside the export bundle, where the
+        // R2 key does not resolve — so the absolute path must be tried first, not second.
+        let outside = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("akashic-outside-\(UUID().uuidString).jpg")
+        try Data([0x1]).write(to: outside)
+        addTeardownBlock { try? FileManager.default.removeItem(at: outside) }
+
+        var photo = Photo(id: "p-outside", journeyId: "j-outside", url: "",
+                          thumbnailURL: "journeys/j-outside/photos/nothing_thumb.jpg")
+        photo.localThumbPath = outside.path
+
+        XCTAssertEqual(photo.thumbnailFileURL?.standardizedFileURL, outside.standardizedFileURL)
+    }
+
+    func testMissingBytesResolveToNil() {
+        var photo = Photo(id: "p-gone", journeyId: "j-gone", url: "journeys/j-gone/photos/p-gone.jpg",
+                          thumbnailURL: "journeys/j-gone/photos/p-gone_thumb.jpg")
+        photo.localOriginalPath = "/nope/original.jpg"
+        photo.localThumbPath = "/nope/thumb.jpg"
+
+        XCTAssertNil(photo.thumbnailFileURL)
+        XCTAssertNil(photo.originalFileURL)
+        XCTAssertFalse(photo.hasLocalMedia, "nothing on disk must not report local media")
+    }
+
+    /// The thumbnail falls back to the original so a photo whose thumb never downloaded still
+    /// renders — via the same stale-path-tolerant resolution.
+    func testThumbnailFallsBackToOriginalThroughTheRelativeKey() throws {
+        let key = "journeys/j-fallback/photos/p-fallback.jpg"
+        let real = try makeMediaFile(relativeKey: key)
+        var photo = Photo(id: "p-fallback", journeyId: "j-fallback", url: key, thumbnailURL: nil)
+        photo.localOriginalPath = "/gone/p-fallback.jpg"
+
+        XCTAssertEqual(photo.thumbnailFileURL?.standardizedFileURL, real.standardizedFileURL)
     }
 }

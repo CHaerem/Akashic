@@ -20,6 +20,7 @@ configs:
   Release: release
   Debug-CloudKit: debug
   Release-CloudKit: release
+  Debug-Production: debug
 
 settings:
   base:
@@ -60,14 +61,27 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: no.akashic.app
         PRODUCT_NAME: Akashic
         MARKETING_VERSION: "0.1.0"
-        CURRENT_PROJECT_VERSION: "1"
+        CURRENT_PROJECT_VERSION: "8"
         TARGETED_DEVICE_FAMILY: "1,2"
         GENERATE_INFOPLIST_FILE: "YES"
         INFOPLIST_KEY_CFBundleDisplayName: Akashic
+        # Export-compliance declaration, carried in every build so TestFlight never blocks on
+        # "Missing Compliance". Akashic uses only exempt encryption — HTTPS and CloudKit, no
+        # custom cryptography — which is the standard exemption. (Set once by hand on build 2
+        # via the ASC API before this key existed; from build 3 on it ships in the binary.)
+        INFOPLIST_KEY_ITSAppUsesNonExemptEncryption: "NO"
         INFOPLIST_KEY_UIApplicationSceneManifest_Generation: "YES"
         INFOPLIST_KEY_UILaunchScreen_Generation: "YES"
         INFOPLIST_KEY_UISupportedInterfaceOrientations: "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
         INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad: "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
+        # CloudKit delivers "the server changed" as a silent push, and CKSyncEngine logs
+        # "BUG IN CLIENT OF CLOUDKIT: CloudKit push notifications require the
+        # 'remote-notification' background mode" without this. Harmless in non-CloudKit
+        # configs (nothing registers for pushes there).
+        INFOPLIST_KEY_UIBackgroundModes: remote-notification
+        # Required for CloudKit share invitations to open in the app (T2.8). Without it iOS
+        # opens the share link in Safari instead of handing the metadata to the app delegate.
+        INFOPLIST_KEY_CKSharingSupported: "YES"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
         SWIFT_EMIT_LOC_STRINGS: "YES"
@@ -92,13 +106,32 @@ targets:
           DEVELOPMENT_TEAM: 9LVCB72DT8
           SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) AKASHIC_CLOUDKIT_BUILD"
         Release-CloudKit:
-          CODE_SIGN_ENTITLEMENTS: Akashic/Support/Akashic.entitlements
+          # Separate file: aps-environment must be `production` for App Store /
+          # TestFlight distribution profiles (see the file's own comment).
+          CODE_SIGN_ENTITLEMENTS: Akashic/Support/Akashic-Release.entitlements
           CODE_SIGNING_ALLOWED: "YES"
           CODE_SIGNING_REQUIRED: "YES"
           CODE_SIGN_STYLE: Automatic
           CODE_SIGN_IDENTITY: "Apple Development"
           DEVELOPMENT_TEAM: 9LVCB72DT8
-          SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) AKASHIC_CLOUDKIT_BUILD"
+          # Production, because TestFlight and App Store builds ALWAYS use the production
+          # CloudKit environment regardless of entitlements (see APPLE-MIGRATION-RUNBOOK §4a).
+          SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) AKASHIC_CLOUDKIT_BUILD AKASHIC_CLOUDKIT_PRODUCTION"
+        # Development-signed, but pointed at the PRODUCTION CloudKit database — the
+        # only way to run the migration import into Production (TestFlight builds
+        # read Production but cannot themselves be aimed elsewhere). Every write
+        # here is real. See Akashic-Production.entitlements.
+        Debug-Production:
+          CODE_SIGN_ENTITLEMENTS: Akashic/Support/Akashic-Production.entitlements
+          CODE_SIGNING_ALLOWED: "YES"
+          CODE_SIGNING_REQUIRED: "YES"
+          CODE_SIGN_STYLE: Automatic
+          CODE_SIGN_IDENTITY: "Apple Development"
+          DEVELOPMENT_TEAM: 9LVCB72DT8
+          # AKASHIC_CLOUDKIT_PRODUCTION mirrors the entitlement above. No runtime API on iOS
+          # reports which CloudKit environment the signature selected, so the UI can only tell
+          # the truth if this flag is kept in step with CODE_SIGN_ENTITLEMENTS.
+          SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) AKASHIC_CLOUDKIT_BUILD AKASHIC_CLOUDKIT_PRODUCTION"
 
   AkashicTests:
     type: bundle.unit-test
@@ -142,7 +175,7 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: no.akashic.app.widgets
         PRODUCT_NAME: AkashicWidgets
         MARKETING_VERSION: "0.1.0"
-        CURRENT_PROJECT_VERSION: "1"
+        CURRENT_PROJECT_VERSION: "8"
         TARGETED_DEVICE_FAMILY: "1,2"
         INFOPLIST_FILE: AkashicWidgets/Info.plist
         GENERATE_INFOPLIST_FILE: "NO"
@@ -171,6 +204,12 @@ targets:
           CODE_SIGN_IDENTITY: "Apple Development"
           DEVELOPMENT_TEAM: 9LVCB72DT8
         Release-CloudKit:
+          CODE_SIGNING_ALLOWED: "YES"
+          CODE_SIGNING_REQUIRED: "YES"
+          CODE_SIGN_STYLE: Automatic
+          CODE_SIGN_IDENTITY: "Apple Development"
+          DEVELOPMENT_TEAM: 9LVCB72DT8
+        Debug-Production:
           CODE_SIGNING_ALLOWED: "YES"
           CODE_SIGNING_REQUIRED: "YES"
           CODE_SIGN_STYLE: Automatic

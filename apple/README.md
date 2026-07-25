@@ -1,20 +1,32 @@
 # Akashic — iOS/iPadOS app
 
-Native SwiftUI client for Akashic ([`APPLE-MIGRATION-PLAN.md`](../APPLE-MIGRATION-PLAN.md)),
-well beyond the Phase-1 MVP: the signature globe → fly-in → day-navigation map experience,
-day content (weather, fun facts, POIs, historical sites), photo grid/lightbox with map
-markers, interactive elevation profiles + full stats, contextual editing (journey/waypoint/
-photo), a PhotosPicker → EXIF → thumbnail import pipeline, day comments, App Intents (D8),
-live Spotlight indexing, and a (dormant until App Group) stats widget — running on the REAL
-family data via the local import pipeline, until CloudKit is wired up.
+Native SwiftUI client for Akashic — the primary client, not a companion. The signature
+globe → fly-in → day-navigation map experience, day content (weather, fun facts, POIs,
+historical sites), photo grid/lightbox with map markers, interactive elevation profiles +
+full stats, day comments, App Intents (D8), live Spotlight indexing, a stats widget
+(dormant until the App Group is enabled), CKShare family sharing, per-journey export
+(GPX + JSON + photos) and showcase publishing.
 
-> **Status:** feature-parity build on the local store. **D4 decided: custom `CKRecord` sync
-> via `CKSyncEngine`, one custom zone per journey, Core Data as the local store** (Option A in
-> `CloudKit/MAPPING.md` §12). The sync layer (`Akashic/Sync/`) is built, unit-tested against a
-> mocked engine, and compiles into every build — but only *runs* in an entitled `*-CloudKit`
-> build signed into iCloud (see [Activating CloudKit sync](#activating-cloudkit-sync)). CKShare
-> collaboration is the main remaining phase; the CloudKit importer (T2.5) is a sibling module
-> (`Import/CloudKitImportSink.swift`) that shares this layer's `Sync/RecordCoder.swift`.
+**Journeys can be created here**, from four route sources: GPX import (Strava/Garmin/
+AllTrails/komoot), inference from photo GPS, **drawn by hand on the map**, or no route at
+all. Days seed from GPX waypoints or photo-date clusters; place names, POIs and historical
+weather are suggested and accepted one by one; **Akashic Intelligence** (on-device
+Foundation Models, iOS 26 + Apple Intelligence + Complete) drafts day notes and day names
+without a byte leaving the device. Everything is correctable after the fact — route, days,
+day content, photo↔day assignment, and deletion.
+
+> **Status (2026-07-25):** the migration is done. **D4: custom `CKRecord` sync via
+> `CKSyncEngine`, one custom zone per journey, Core Data as the local store** (Option A in
+> `CloudKit/MAPPING.md` §12), verified live against the real container
+> (`Docs/sync-verification.md`), with the family archive imported into **Production**
+> (1559 records / 3070 assets / 0 failures). Photo architecture v2 keeps first sync to
+> thumbnails and streams originals on demand (97 MB fresh install, not 11.2 GB). Sync only
+> *runs* in an entitled `*-CloudKit` build signed into iCloud — see
+> [Activating CloudKit sync](#activating-cloudkit-sync).
+>
+> Product work is now v1.0 commercialization: free tier + one-time unlock (StoreKit 2),
+> consumer onboarding, store assets. See [`COMMERCIALIZATION-PLAN.md`](../COMMERCIALIZATION-PLAN.md)
+> and W7 in [`APPLE-MIGRATION-TASKS.md`](../APPLE-MIGRATION-TASKS.md). **560 unit tests, CI green.**
 
 ---
 

@@ -4,8 +4,10 @@ import { useTrekData } from '../hooks/useTrekData';
 import { useIsMobile } from '../hooks/useMediaQuery';
 import { useMedia } from '../hooks/useMedia';
 import { useJourneys } from '../contexts/JourneysContext';
+import { useAuth } from '../contexts/AuthContext';
 import { fetchPhotos, getJourneyIdBySlug, updatePhoto } from '../lib/journeys';
 import { hasPendingShares } from '../lib/shareTarget';
+import { setSheetCoversChrome } from '../lib/sheetOverlay';
 import type { Photo, Camp } from '../types/trek';
 import type mapboxgl from 'mapbox-gl';
 import { MapboxGlobe } from './MapboxGlobe';
@@ -37,6 +39,8 @@ export default function AkashicApp() {
     const recenterRef = useRef<(() => void) | null>(null);
     const { getMediaUrl } = useMedia();
     const { treks, refetch: refetchJourneys } = useJourneys();
+    // Signed-out visitors get the read-only public showcase — no edit affordances.
+    const { signedIn } = useAuth();
     const stagingBranch = import.meta.env.VITE_STAGING_BRANCH;
     const deployTimeRaw = import.meta.env.VITE_DEPLOY_TIME;
 
@@ -200,6 +204,14 @@ export default function AkashicApp() {
     // Show bottom sheet when trek is selected (globe view) or in trek view
     const showSheet = (view === 'globe' && selectedTrek !== null) || view === 'trek';
 
+    // On mobile the full-width bottom sheet covers the bottom-right public chrome
+    // (the "Made with Akashic" chip + legal links, mounted by AuthGuard). Tell the
+    // chip to step aside while the sheet is open so it never overlays sheet controls.
+    useEffect(() => {
+        setSheetCoversChrome(isMobile && showSheet);
+        return () => setSheetCoversChrome(false);
+    }, [isMobile, showSheet]);
+
     // Filter photos with coordinates for map display
     // Use deferred photos to prevent map re-renders during camera animations
     // Memoized to prevent new array reference on every render (fixes React error #185)
@@ -230,7 +242,7 @@ export default function AkashicApp() {
 
     return (
         <ErrorBoundary>
-        <div style={{ position: 'fixed', inset: 0, background: colors.background.base }}>
+        <div className={signedIn ? undefined : 'public-chrome'} style={{ position: 'fixed', inset: 0, background: colors.background.base }}>
             {/* Mapbox Globe - Full screen hero */}
                     <div style={{ position: 'absolute', inset: 0 }}>
                         <MapboxGlobe
@@ -329,7 +341,7 @@ export default function AkashicApp() {
                         onNextJourney={handleNextJourney}
                         totalJourneys={treks.length}
                         editMode={editMode}
-                        onToggleEditMode={toggleEditMode}
+                        onToggleEditMode={signedIn ? toggleEditMode : undefined}
                         isMobile={isMobile}
                     >
                         <BottomSheetContent
@@ -371,7 +383,7 @@ export default function AkashicApp() {
                         onNextJourney={handleNextJourney}
                         totalJourneys={treks.length}
                         editMode={editMode}
-                            onToggleEditMode={toggleEditMode}
+                            onToggleEditMode={signedIn ? toggleEditMode : undefined}
                     >
                         <BottomSheetContent
                             view={view}
@@ -408,6 +420,7 @@ export default function AkashicApp() {
                     initialDay={selectedCamp?.dayNumber ?? 1}
                     onDayChange={handleDaySelect}
                     onViewOnMap={handleViewOnMap}
+                    journeySlug={trekData.id}
                 />
             )}
 
@@ -421,6 +434,7 @@ export default function AkashicApp() {
                 onClose={handleCloseLightbox}
                 getMediaUrl={getMediaUrl}
                 onViewOnMap={handleViewOnMap}
+                journeySlug={trekData?.id}
             />
 
             {/* Share Target Modal - for photos shared from other apps */}

@@ -15,15 +15,24 @@ vi.mock('../../../cloudkit', () => ({
 
 import { fetchJourneys } from './journeyAdapter';
 import { fetchPhotos, updatePhoto } from './photoAdapter';
+import { rememberJourneyZones, rememberRecordZone, clearJourneyZones } from './journeyZones';
+import { resetAuthCache } from './publicAdapter';
+
+const TEST_ZONE = {
+    recordName: 'j-1',
+    zoneID: { zoneName: 'journey-j-1', ownerRecordName: '_owner' },
+    scope: 'shared' as const,
+};
 import { getJourneyCacheState } from '../../journeyCache';
 
 function makeDb(handlers: {
     performQuery?: (q: CloudKitJS.Query) => Promise<{ records: unknown[] }>;
+    fetchRecords?: (n: string) => Promise<{ records: unknown[]; hasErrors?: boolean }>;
     saveRecords?: (r: unknown) => Promise<{ records: unknown[] }>;
 }) {
     return {
         performQuery: vi.fn(handlers.performQuery ?? (async () => ({ records: [] }))),
-        fetchRecords: vi.fn(async () => ({ records: [] })),
+        fetchRecords: vi.fn(handlers.fetchRecords ?? (async () => ({ records: [] }))),
         saveRecords: vi.fn(handlers.saveRecords ?? (async () => ({ records: [] }))),
         deleteRecords: vi.fn(async () => ({ records: [] })),
     };
@@ -32,6 +41,10 @@ function makeDb(handlers: {
 describe('cloudkit read path', () => {
     beforeEach(() => {
         vi.clearAllMocks();
+        // These exercise the SIGNED-IN path (shared + private zones). Establish a
+        // session so the public-mirror fallback added in T3.3 does not take over.
+        resetAuthCache();
+        getCloudKitSession.mockResolvedValue({ user: { userRecordName: 'owner' } });
     });
 
     describe('fetchJourneys', () => {
@@ -195,6 +208,21 @@ describe('cloudkit read path', () => {
     });
 
     describe('fetchPhotos', () => {
+        // Photo reads are scoped to the journey's zone, so the journey has to be
+        // known first (see journeyZones — this is what the live container taught us).
+        beforeEach(() => {
+            clearJourneyZones();
+            rememberJourneyZones(
+                [{
+                    recordName: 'j-1',
+                    recordType: 'Journey',
+                    zoneID: { zoneName: 'journey-j-1' },
+                    fields: { slug: { value: 'j-1' } },
+                } as unknown as CloudKitJS.Record],
+                'shared'
+            );
+        });
+
         it('maps photo records with full asset URLs, sorted by sort_order', async () => {
             const photos = [
                 {
@@ -226,7 +254,17 @@ describe('cloudkit read path', () => {
     });
 
     describe('updatePhoto (caption light edit)', () => {
-        it('saves the caption and returns the mapped photo', async () => {
+        // A write needs the record's zone and database, which reads record on the way
+        // past — a photo that was never loaded cannot be edited.
+        beforeEach(() => {
+            clearJourneyZones();
+            rememberRecordZone(
+                [{ recordName: 'photo-1' } as unknown as CloudKitJS.Record],
+                TEST_ZONE
+            );
+        });
+
+        it('saves the caption into the photo zone and returns the mapped photo', async () => {
             const saved = {
                 recordName: 'photo-1',
                 fields: {
@@ -235,14 +273,42 @@ describe('cloudkit read path', () => {
                     image: { value: { downloadURL: 'https://cvws.icloud/x.jpg' } },
                 },
             };
-            const sharedDb = makeDb({ saveRecords: async () => ({ records: [saved] }) });
+            const sharedDb = makeDb({
+                // The record still exists — fetch returns it with a change tag, so the
+                // save is an UPDATE (tag present), not an insert.
+                fetchRecords: async () => ({
+                    records: [{ recordName: 'photo-1', recordChangeTag: 'tag-1', fields: {} }],
+                }),
+                saveRecords: async () => ({ records: [saved] }),
+            });
             getSharedDatabase.mockResolvedValue(sharedDb);
 
             const result = await updatePhoto('photo-1', { caption: 'New caption' });
 
-            expect(sharedDb.saveRecords).toHaveBeenCalled();
+            // The zone goes in the options argument; on the record it is ignored.
+            expect(sharedDb.saveRecords).toHaveBeenCalledWith(expect.any(Array), {
+                zoneID: TEST_ZONE.zoneID,
+            });
             expect(result?.id).toBe('photo-1');
             expect(result?.caption).toBe('New caption');
+        });
+
+        it('refuses to save (no ghost insert) when the photo was deleted elsewhere', async () => {
+            // The photo was deleted from the iOS app; the lookup resolves with hasErrors
+            // and no usable record (verification doc fault #6). Without the guard the
+            // tagless save would be an INSERT, resurrecting a caption-only ghost photo.
+            const sharedDb = makeDb({
+                fetchRecords: async () => ({ records: [], hasErrors: true }),
+            });
+            getSharedDatabase.mockResolvedValue(sharedDb);
+            const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+            await expect(updatePhoto('photo-1', { caption: 'edit after delete' })).rejects.toThrow(
+                /not found/
+            );
+            // Critically, no save was attempted — nothing to resurrect.
+            expect(sharedDb.saveRecords).not.toHaveBeenCalled();
+            errSpy.mockRestore();
         });
     });
 });

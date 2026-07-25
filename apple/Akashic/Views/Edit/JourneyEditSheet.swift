@@ -66,6 +66,10 @@ struct JourneyEditSheet: View {
             GlassField(label: "Summit elevation (m)", systemImage: "mountain.2.fill") {
                 GlassTextField(placeholder: "0", text: $summitElevation, keyboard: .numberPad)
             }
+            // The route is correctable after creation — replace it, draft it from photos, or
+            // recompute stats. Each applies immediately (its own edit-path save), independent of the
+            // fields above, which commit on Save.
+            RouteCorrectionSection(journey: journey).environmentObject(store)
         }
     }
 

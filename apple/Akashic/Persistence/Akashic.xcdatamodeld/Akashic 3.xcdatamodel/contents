@@ -1,0 +1,122 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<model type="com.apple.IDECoreDataModeler.DataModel" documentVersion="1.0" lastSavedToolsVersion="23504" systemVersion="24F74" minimumToolsVersion="Automatic" sourceLanguage="Swift" usedWithCloudKit="YES" userDefinedModelVersionIdentifier="">
+    <entity name="CDJourney" representedClassName="CDJourney" syncable="YES" codeGenerationType="class">
+        <attribute name="centerCoordinates" optional="YES" attributeType="Binary"/>
+        <attribute name="country" optional="YES" attributeType="String"/>
+        <attribute name="createdAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="createdBy" optional="YES" attributeType="String"/>
+        <attribute name="dateEnded" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="dateStarted" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="defaultZoom" optional="YES" attributeType="Double" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="gpxURL" optional="YES" attributeType="String"/>
+        <attribute name="heroAssetData" optional="YES" attributeType="Binary"/>
+        <attribute name="heroImageURL" optional="YES" attributeType="String"/>
+        <attribute name="heroThumbData" optional="YES" attributeType="Binary"/>
+        <attribute name="id" optional="YES" attributeType="String"/>
+        <attribute name="isPublic" optional="YES" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
+        <attribute name="journeyDescription" optional="YES" attributeType="String"/>
+        <attribute name="journeyType" optional="YES" attributeType="String" defaultValueString="trek"/>
+        <!-- v2 (MAPPING §13): CKShare URL for the journey's media zone, so participants can
+             auto-accept the media share and stream originals on demand. nil unless shared. -->
+        <attribute name="mediaShareURL" optional="YES" attributeType="String"/>
+        <attribute name="name" optional="YES" attributeType="String"/>
+        <attribute name="preferredBearing" optional="YES" attributeType="Double" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="preferredPitch" optional="YES" attributeType="Double" defaultValueString="60" usesScalarValueType="YES"/>
+        <attribute name="route" optional="YES" attributeType="Binary"/>
+        <attribute name="slug" optional="YES" attributeType="String"/>
+        <attribute name="stats" optional="YES" attributeType="Binary"/>
+        <attribute name="summitElevation" optional="YES" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="totalDays" optional="YES" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="totalDistance" optional="YES" attributeType="Double" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="updatedAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <!-- CloudKit zone owner (T2.8). nil == we own it (private database); a non-nil value is
+             the sharing owner's record name and puts the journey in the shared database. -->
+        <attribute name="zoneOwnerName" optional="YES" attributeType="String"/>
+        <relationship name="dayComments" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="CDDayComment" inverseName="journey" inverseEntity="CDDayComment"/>
+        <relationship name="photos" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="CDPhoto" inverseName="journey" inverseEntity="CDPhoto"/>
+        <relationship name="waypoints" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="CDWaypoint" inverseName="journey" inverseEntity="CDWaypoint"/>
+    </entity>
+    <entity name="CDWaypoint" representedClassName="CDWaypoint" syncable="YES" codeGenerationType="class">
+        <attribute name="arrivalTime" optional="YES" attributeType="String"/>
+        <attribute name="coordinates" optional="YES" attributeType="Binary"/>
+        <attribute name="createdAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="dateLabel" optional="YES" attributeType="String"/>
+        <attribute name="dateVisited" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="departureTime" optional="YES" attributeType="String"/>
+        <attribute name="elevation" optional="YES" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="funFacts" optional="YES" attributeType="Binary"/>
+        <attribute name="highlights" optional="YES" attributeType="Binary"/>
+        <attribute name="historicalSites" optional="YES" attributeType="Binary"/>
+        <attribute name="id" optional="YES" attributeType="String"/>
+        <attribute name="journeyId" optional="YES" attributeType="String"/>
+        <attribute name="name" optional="YES" attributeType="String"/>
+        <attribute name="pointsOfInterest" optional="YES" attributeType="Binary"/>
+        <attribute name="routeDistanceKm" optional="YES" attributeType="Double" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="routePointIndex" optional="YES" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="sortOrder" optional="YES" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="terrain" optional="YES" attributeType="String"/>
+        <attribute name="timeFromPrevious" optional="YES" attributeType="String"/>
+        <attribute name="waypointDescription" optional="YES" attributeType="String"/>
+        <attribute name="waypointType" optional="YES" attributeType="String" defaultValueString="camp"/>
+        <attribute name="dayNumber" optional="YES" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="weather" optional="YES" attributeType="Binary"/>
+        <relationship name="dayComments" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="CDDayComment" inverseName="waypoint" inverseEntity="CDDayComment"/>
+        <relationship name="journey" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="CDJourney" inverseName="waypoints" inverseEntity="CDJourney"/>
+        <relationship name="photos" optional="YES" toMany="YES" deletionRule="Nullify" destinationEntity="CDPhoto" inverseName="waypoint" inverseEntity="CDPhoto"/>
+    </entity>
+    <entity name="CDPhoto" representedClassName="CDPhoto" syncable="YES" codeGenerationType="class">
+        <attribute name="assetData" optional="YES" attributeType="Binary"/>
+        <attribute name="caption" optional="YES" attributeType="String"/>
+        <attribute name="coordinates" optional="YES" attributeType="Binary"/>
+        <attribute name="createdAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="duration" optional="YES" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="id" optional="YES" attributeType="String"/>
+        <attribute name="isHero" optional="YES" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
+        <attribute name="journeyId" optional="YES" attributeType="String"/>
+        <attribute name="localOriginalPath" optional="YES" attributeType="String"/>
+        <attribute name="localThumbPath" optional="YES" attributeType="String"/>
+        <attribute name="locationSource" optional="YES" attributeType="String"/>
+        <attribute name="mediaType" optional="YES" attributeType="String" defaultValueString="image"/>
+        <attribute name="rotation" optional="YES" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="sortOrder" optional="YES" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="takenAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="thumbData" optional="YES" attributeType="Binary"/>
+        <attribute name="thumbnailURL" optional="YES" attributeType="String"/>
+        <attribute name="uploadedBy" optional="YES" attributeType="String"/>
+        <attribute name="url" optional="YES" attributeType="String"/>
+        <attribute name="waypointId" optional="YES" attributeType="String"/>
+        <relationship name="journey" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="CDJourney" inverseName="photos" inverseEntity="CDJourney"/>
+        <relationship name="waypoint" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="CDWaypoint" inverseName="photos" inverseEntity="CDWaypoint"/>
+    </entity>
+    <entity name="CDDayComment" representedClassName="CDDayComment" syncable="YES" codeGenerationType="class">
+        <attribute name="authorDisplayName" optional="YES" attributeType="String"/>
+        <attribute name="content" optional="YES" attributeType="String"/>
+        <attribute name="createdAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="id" optional="YES" attributeType="String"/>
+        <attribute name="journeyId" optional="YES" attributeType="String"/>
+        <attribute name="updatedAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="userId" optional="YES" attributeType="String"/>
+        <attribute name="waypointId" optional="YES" attributeType="String"/>
+        <relationship name="journey" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="CDJourney" inverseName="dayComments" inverseEntity="CDJourney"/>
+        <relationship name="waypoint" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="CDWaypoint" inverseName="dayComments" inverseEntity="CDWaypoint"/>
+    </entity>
+    <!-- Side table holding each synced record's encoded CloudKit system fields (recordID, zone,
+         server change tag). Written on remote-apply and on a successful send; read by
+         `makeRecord` to rehydrate the last-known server record so a first edit of an existing row
+         is sent as an UPDATE, not an INSERT that CloudKit rejects with server error 14. A side
+         table (one place to look up / clean up, indexed by recordName) beats per-entity
+         attributes: no churn on the four domain entities, still a lightweight migration (a brand
+         new entity has no existing rows to transform). See `PersistenceController+Sync`. -->
+    <entity name="CDSyncRecordMeta" representedClassName="CDSyncRecordMeta" syncable="YES" codeGenerationType="class">
+        <attribute name="recordName" optional="YES" attributeType="String"/>
+        <attribute name="systemFields" optional="YES" attributeType="Binary"/>
+        <fetchIndex name="byRecordName">
+            <fetchIndexElement property="recordName" type="Binary" order="ascending"/>
+        </fetchIndex>
+        <uniquenessConstraints>
+            <uniquenessConstraint>
+                <constraint value="recordName"/>
+            </uniquenessConstraint>
+        </uniquenessConstraints>
+    </entity>
+</model>

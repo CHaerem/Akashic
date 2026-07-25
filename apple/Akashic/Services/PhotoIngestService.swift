@@ -69,6 +69,10 @@ struct MediaLibrary {
 struct PhotoMetadata: Equatable {
     /// GPS as `[lng, lat]` (GeoJSON order), sign-corrected via the N/S/E/W refs.
     var coordinates: [Double]?
+    /// GPS altitude in metres (sign-corrected via `GPSAltitudeRef`: 1 = below sea level). Nil when
+    /// the EXIF carried no altitude. Consumed by `RouteInference` to give the drafted route its
+    /// `[lng, lat, ele]` elevation; not persisted on `Photo` (which stores only `[lng, lat]`).
+    var altitude: Double?
     /// `DateTimeOriginal` as an ISO-8601 instant (interpreted UTC for deterministic day-matching).
     var takenAt: String?
     var cameraMake: String?
@@ -102,6 +106,12 @@ enum ImageMetadata {
             let signedLat = latRef.uppercased() == "S" ? -lat : lat
             let signedLng = lngRef.uppercased() == "W" ? -lng : lng
             meta.coordinates = [signedLng, signedLat]
+
+            // GPS altitude, if present. GPSAltitudeRef == 1 means below sea level (negative).
+            if let alt = gps[kCGImagePropertyGPSAltitude] as? Double {
+                let ref = (gps[kCGImagePropertyGPSAltitudeRef] as? Int) ?? 0
+                meta.altitude = ref == 1 ? -alt : alt
+            }
         }
 
         // DateTimeOriginal ("yyyy:MM:dd HH:mm:ss") → ISO-8601 UTC.

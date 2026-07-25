@@ -6,7 +6,7 @@
  * - Handles unknown image dimensions automatically
  */
 
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useEffect } from 'react';
 import Lightbox, { Slide } from 'yet-another-react-lightbox';
 import Zoom from 'yet-another-react-lightbox/plugins/zoom';
 import Counter from 'yet-another-react-lightbox/plugins/counter';
@@ -14,6 +14,7 @@ import Video from 'yet-another-react-lightbox/plugins/video';
 import 'yet-another-react-lightbox/styles.css';
 import 'yet-another-react-lightbox/plugins/counter.css';
 import type { Photo } from '../../types/trek';
+import { usePhotoOriginals } from '../../hooks/usePhotoOriginals';
 
 // Helper to get video MIME type from URL
 function getVideoMimeType(url: string): string {
@@ -99,6 +100,13 @@ interface PhotoLightboxProps {
     editMode?: boolean;
     onViewOnMap?: (photo: Photo) => void;
     onEdit?: (photo: Photo) => void;
+    /**
+     * The journey's slug (signed-in only). When a photo's original has been repacked
+     * out of its Photo record, it is fetched on demand from the journey's media zone;
+     * the thumb shows until it resolves. Omitted for the signed-out showcase, which is
+     * thumbs only by design.
+     */
+    journeySlug?: string;
 }
 
 export function PhotoLightbox({
@@ -110,16 +118,30 @@ export function PhotoLightbox({
     onDelete,
     editMode = false,
     onViewOnMap,
-    onEdit
+    onEdit,
+    journeySlug
 }: PhotoLightboxProps) {
     // Local state for navigation within lightbox - initialized from initialIndex
     // NO useEffect sync - parent controls via key prop to force remount when needed
     const [currentIndex, setCurrentIndex] = useState(initialIndex);
 
+    // Full-size URL resolution: photo.url when present (pre-repack / public), else the
+    // on-demand PhotoMedia original, else the thumb. Never a broken image.
+    const { getFullSizeUrl, requestOriginal } = usePhotoOriginals(journeySlug, getMediaUrl);
+
+    // Resolve the original for the visible photo and its immediate neighbours (YARL
+    // preloads two), lazily — not for every photo in the journey.
+    useEffect(() => {
+        if (!isOpen) return;
+        for (let i = currentIndex - 1; i <= currentIndex + 1; i++) {
+            requestOriginal(photos[i]);
+        }
+    }, [isOpen, currentIndex, photos, requestOriginal]);
+
     // Convert photos to YARL slides format (supports both images and videos)
     const slides = useMemo<Slide[]>(() =>
         photos.map(photo => {
-            const mediaUrl = getMediaUrl(photo.url);
+            const mediaUrl = getFullSizeUrl(photo);
 
             // Check if this is a video
             if (photo.media_type === 'video') {
@@ -137,7 +159,7 @@ export function PhotoLightbox({
                 // YARL handles unknown dimensions automatically
             };
         }),
-        [photos, getMediaUrl]
+        [photos, getFullSizeUrl]
     );
 
     // Get current photo for actions

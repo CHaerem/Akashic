@@ -19,11 +19,29 @@ final class SyncStatus: ObservableObject {
         case restricted          // iCloud restricted by profile/parental controls
         case unavailable         // couldNotDetermine / temporarilyUnavailable
         case active              // engine running
+        case waitingForWiFi      // a heavy download is deferred by the Wi-Fi-only policy
         case error(String)
     }
 
     @Published private(set) var state: State = .disabled
     @Published private(set) var lastSyncDate: Date?
+
+    /// Set to a `.prompt` when a fresh install's heavy download is deferred and a size estimate is
+    /// available, so the UI can present the one-time first-sync sheet. Nil the rest of the time
+    /// (incremental syncs, no estimate, or after the user answers). Only ever holds a `.prompt`.
+    @Published var firstSyncPrompt: FirstSyncDownloadDecision?
+
+    /// Progress of the one-time v2 photo-storage repack (MAPPING §13), surfaced in consumer
+    /// Settings as e.g. "Optimizing photo storage · 412/1538". Nil when no repack is running or
+    /// pending (the common steady state, and on any non-owner / non-CloudKit device).
+    @Published var repackProgress: MediaRepackProgress?
+
+    /// One-line Settings string for an in-progress repack, or nil when there is nothing to show.
+    var repackSummary: String? {
+        guard let p = repackProgress, p.total > 0, p.done < p.total else { return nil }
+        let base = "Optimizing photo storage · \(p.done)/\(p.total)"
+        return p.isPaused ? base + " (waiting for Wi-Fi)" : base
+    }
 
     /// Human-readable one-liner for a Settings row.
     var summary: String {
@@ -39,6 +57,7 @@ final class SyncStatus: ObservableObject {
                 return "Syncing · last update \(Self.relative.localizedString(for: date, relativeTo: Date()))"
             }
             return "Syncing with iCloud"
+        case .waitingForWiFi:  return "Waiting for Wi-Fi to download"
         case .error(let message): return "Sync error: \(message)"
         }
     }

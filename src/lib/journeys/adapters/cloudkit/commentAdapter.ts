@@ -11,17 +11,53 @@ import { getSharedDatabase, getPrivateDatabase, getCloudKitSession } from '../..
 import { recordToDayComment, identityToProfile } from './records';
 import { getJourneyMembers } from './memberAdapter';
 import { performQueryAll } from './paginate';
+import { resolveJourneyZone, rememberRecordZone, resolveRecordZone } from './journeyZones';
+import { isSignedIn } from './publicAdapter';
 
 const COMMENT_TYPE = 'DayComment';
 
-async function queryComments(query: CloudKitJS.Query): Promise<CloudKitJS.Record[]> {
+/**
+ * Query both databases. Failures are logged, not swallowed — an empty result that
+ * means "the query was rejected" must not look like "there are no comments".
+ */
+async function queryComments(
+    query: CloudKitJS.Query,
+    options: CloudKitJS.QueryOptions = {}
+): Promise<CloudKitJS.Record[]> {
     const [shared, priv] = await Promise.all([getSharedDatabase(), getPrivateDatabase()]);
     // Paginated: a well-used journey accumulates more comments than one page holds.
     const responses = await Promise.all([
-        performQueryAll(shared, query).catch(() => [] as CloudKitJS.Record[]),
-        performQueryAll(priv, query).catch(() => [] as CloudKitJS.Record[]),
+        performQueryAll(shared, query, options).catch((err) => {
+            console.warn('[cloudkit] shared comment query failed:', err);
+            return [] as CloudKitJS.Record[];
+        }),
+        performQueryAll(priv, query, options).catch((err) => {
+            console.warn('[cloudkit] private comment query failed:', err);
+            return [] as CloudKitJS.Record[];
+        }),
     ]);
     return responses.flat();
+}
+
+/**
+ * Every comment in a journey's zone. Same reasoning as photos: callers hold the
+ * slug, `journeyRef` holds a UUID reference, and one journey owns one zone (D3),
+ * so scoping to the zone is both correct and cheaper than a predicate.
+ */
+async function queryCommentsInJourney(
+    journeyId: string,
+    sortBy?: CloudKitJS.Query['sortBy']
+): Promise<CloudKitJS.Record[]> {
+    const zone = await resolveJourneyZone(journeyId);
+    if (!zone) {
+        console.warn(`[cloudkit] no zone found for journey ${journeyId}`);
+        return [];
+    }
+    const records = await queryComments({ recordType: COMMENT_TYPE, sortBy }, { zoneID: zone.zoneID });
+    // Reading is how the write path learns which zone (and database) each comment
+    // belongs to — edits and deletes are impossible without it.
+    rememberRecordZone(records, zone);
+    return records;
 }
 
 /**
@@ -66,14 +102,32 @@ async function buildAuthorsMap(comments: CloudKitJS.Record[]): Promise<Map<strin
 }
 
 export async function getCommentsForWaypoint(waypointId: string): Promise<DayComment[]> {
+    // Comments live only in the private/shared DBs, which a signed-out visitor cannot
+    // reach. Resolve to empty without querying (no console noise on the showcase).
+    if (!(await isSignedIn())) return [];
     try {
-        const records = await queryComments({
-            recordType: COMMENT_TYPE,
-            filterBy: [
-                { fieldName: 'waypointRef', comparator: 'EQUALS', fieldValue: { value: waypointId } },
-            ],
-            sortBy: [{ fieldName: 'createdAt', ascending: true }],
-        });
+        // The day's zone comes from the waypoint, remembered when the journey loaded.
+        // Without it the query runs against the default zone and finds nothing —
+        // including comments this very session just wrote.
+        const zone = resolveRecordZone(waypointId);
+        const records = await queryComments(
+            {
+                recordType: COMMENT_TYPE,
+                filterBy: [
+                    {
+                        fieldName: 'waypointRef',
+                        comparator: 'EQUALS',
+                        fieldValue: {
+                            value: { recordName: waypointId, zoneID: zone?.zoneID },
+                            type: 'REFERENCE',
+                        },
+                    },
+                ],
+                sortBy: [{ fieldName: 'createdAt', ascending: true }],
+            },
+            zone ? { zoneID: zone.zoneID } : {}
+        );
+        if (zone) rememberRecordZone(records, zone);
         const authors = await buildAuthorsMap(records);
         return records
             .map((r) => recordToDayComment(r, authors))
@@ -85,14 +139,11 @@ export async function getCommentsForWaypoint(waypointId: string): Promise<DayCom
 }
 
 export async function getCommentsForJourney(journeyId: string): Promise<DayComment[]> {
+    if (!(await isSignedIn())) return [];
     try {
-        const records = await queryComments({
-            recordType: COMMENT_TYPE,
-            filterBy: [
-                { fieldName: 'journeyRef', comparator: 'EQUALS', fieldValue: { value: journeyId } },
-            ],
-            sortBy: [{ fieldName: 'createdAt', ascending: false }],
-        });
+        const records = await queryCommentsInJourney(journeyId, [
+            { fieldName: 'createdAt', ascending: false },
+        ]);
         const authors = await buildAuthorsMap(records);
         return records
             .map((r) => recordToDayComment(r, authors))
@@ -104,13 +155,9 @@ export async function getCommentsForJourney(journeyId: string): Promise<DayComme
 }
 
 export async function getCommentCountsForJourney(journeyId: string): Promise<Record<string, number>> {
+    if (!(await isSignedIn())) return {};
     try {
-        const records = await queryComments({
-            recordType: COMMENT_TYPE,
-            filterBy: [
-                { fieldName: 'journeyRef', comparator: 'EQUALS', fieldValue: { value: journeyId } },
-            ],
-        });
+        const records = await queryCommentsInJourney(journeyId);
         const counts: Record<string, number> = {};
         records.forEach((r) => {
             const wp = r.fields?.waypointRef?.value as { recordName?: string } | string | undefined;
@@ -131,20 +178,49 @@ export async function createComment(comment: NewDayComment): Promise<DayComment 
         throw new Error('Must be logged in to comment');
     }
 
+    // A comment belongs in its journey's zone, in whichever database that zone lives.
+    // Writing to the shared database with no zone put it nowhere and failed with
+    // "zoneID needs to have ownerRecordName field for calls to sharedb".
+    const zone = await resolveJourneyZone(comment.journey_id);
+    if (!zone) throw new Error(`[cloudkit] unknown zone for journey ${comment.journey_id}`);
+
     try {
-        // TODO(cloudkit): choose the correct writable database (shared vs private)
-        // for the target journey's zone.
-        const db = await getSharedDatabase();
-        const response = await db.saveRecords({
-            recordType: COMMENT_TYPE,
-            fields: {
-                waypointRef: { value: { recordName: comment.waypoint_id, action: 'DELETE_SELF' } },
-                journeyRef: { value: { recordName: comment.journey_id, action: 'DELETE_SELF' } },
-                content: { value: comment.content },
-            },
-        });
+        const db = zone.scope === 'shared' ? await getSharedDatabase() : await getPrivateDatabase();
+        const response = await db.saveRecords(
+            [
+                {
+                    recordType: COMMENT_TYPE,
+                    fields: {
+                        // References must carry the zone too — a bare record name is
+                        // ambiguous once records live outside the default zone.
+                        waypointRef: {
+                            value: {
+                                recordName: comment.waypoint_id,
+                                action: 'DELETE_SELF',
+                                zoneID: zone.zoneID,
+                            },
+                        },
+                        journeyRef: {
+                            value: {
+                                recordName: zone.recordName,
+                                action: 'NONE',
+                                zoneID: zone.zoneID,
+                            },
+                        },
+                        content: { value: comment.content },
+                    },
+                },
+            ],
+            { zoneID: zone.zoneID }
+        );
+        if (response.hasErrors) {
+            throw new Error(
+                `[cloudkit] comment save rejected: ${response.errors?.[0]?.reason ?? 'unknown'}`
+            );
+        }
         const saved = response.records?.[0];
         if (!saved) return null;
+        rememberRecordZone([saved], zone);
         const authors = await buildAuthorsMap([saved]);
         return recordToDayComment(saved, authors);
     } catch (err) {
@@ -157,14 +233,40 @@ export async function updateComment(
     commentId: string,
     update: DayCommentUpdate
 ): Promise<DayComment | null> {
+    const zone = resolveRecordZone(commentId);
+    if (!zone) throw new Error(`[cloudkit] unknown zone for comment ${commentId} — load the day first`);
+
     try {
-        const db = await getSharedDatabase();
-        // TODO(cloudkit): supply recordChangeTag and resolve the home database.
-        const response = await db.saveRecords({
-            recordType: COMMENT_TYPE,
-            recordName: commentId,
-            fields: { content: { value: update.content } },
-        });
+        const db = zone.scope === 'shared' ? await getSharedDatabase() : await getPrivateDatabase();
+        // Without the current change tag the save is treated as an insert and
+        // collides with the record it is trying to update.
+        const existing = await db.fetchRecords(commentId, { zoneID: zone.zoneID });
+        // A lookup for a comment deleted elsewhere resolves with `hasErrors` and no
+        // usable record (verification doc fault #6). Saving without a change tag is an
+        // INSERT, which would resurrect the comment as a ghost with content but no
+        // waypointRef/journeyRef. Refuse the edit instead of recreating it.
+        const current = existing.records?.[0];
+        if (existing.hasErrors || !current?.recordChangeTag) {
+            throw new Error(
+                `[cloudkit] comment ${commentId} not found (it may have been deleted) — edit aborted`
+            );
+        }
+        const response = await db.saveRecords(
+            [
+                {
+                    recordType: COMMENT_TYPE,
+                    recordName: commentId,
+                    recordChangeTag: current.recordChangeTag,
+                    fields: { content: { value: update.content } },
+                },
+            ],
+            { zoneID: zone.zoneID }
+        );
+        if (response.hasErrors) {
+            throw new Error(
+                `[cloudkit] comment update rejected: ${response.errors?.[0]?.reason ?? 'unknown'}`
+            );
+        }
         const saved = response.records?.[0];
         if (!saved) return null;
         const authors = await buildAuthorsMap([saved]);
@@ -176,9 +278,19 @@ export async function updateComment(
 }
 
 export async function deleteComment(commentId: string): Promise<boolean> {
+    const zone = resolveRecordZone(commentId);
+    if (!zone) throw new Error(`[cloudkit] unknown zone for comment ${commentId} — load the day first`);
+
     try {
-        const db = await getSharedDatabase();
-        await db.deleteRecords(commentId);
+        const db = zone.scope === 'shared' ? await getSharedDatabase() : await getPrivateDatabase();
+        const response = await db.deleteRecords([{ recordName: commentId }], {
+            zoneID: zone.zoneID,
+        });
+        if (response.hasErrors) {
+            throw new Error(
+                `[cloudkit] comment delete rejected: ${response.errors?.[0]?.reason ?? 'unknown'}`
+            );
+        }
         return true;
     } catch (err) {
         console.error('[cloudkit] Error deleting comment:', err);
@@ -186,14 +298,16 @@ export async function deleteComment(commentId: string): Promise<boolean> {
     }
 }
 
-export async function canUserComment(journeyId: string): Promise<boolean> {
+export async function canUserComment(_journeyId: string): Promise<boolean> {
+    // A signed-in user can comment on any journey they can read, and the read layer
+    // only ever surfaces journeys they own or participate in — so "can read" reduces
+    // to "is signed in". The previous membership check went through CKShare
+    // participants, which are empty for the OWNER of an unshared journey, so it
+    // returned false for every signed-in user and disabled the composer for the whole
+    // family. Sharing/permission is enforced natively at write time regardless.
     try {
         const session = await getCloudKitSession();
-        if (!session.user) return false;
-        // A signed-in participant of a shared journey can always comment; the
-        // public-mirror case is governed natively by the publish step.
-        const members = await getJourneyMembers(journeyId);
-        return members.some((m) => m.user_id === session.user?.userRecordName);
+        return session.user != null;
     } catch (err) {
         console.error('[cloudkit] Error checking comment permission:', err);
         return false;

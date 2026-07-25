@@ -10,6 +10,7 @@ import PhotosUI
 /// anything not committed is cleaned up on cancel.
 struct PhotoImportSheet: View {
     @EnvironmentObject private var store: JourneyStore
+    @EnvironmentObject private var entitlements: EntitlementStore
     @Environment(\.dismiss) private var dismiss
 
     let journey: Journey
@@ -23,6 +24,9 @@ struct PhotoImportSheet: View {
     @State private var isCommitting = false
     @State private var committed = false
     @State private var errorMessage: String?
+    /// After a partial import (free tier, owned journey over the photo cap): how many were left out.
+    @State private var partialRemainder = 0
+    @State private var showPaywall = false
 
     struct PendingIngest: Identifiable {
         let id: String
@@ -49,6 +53,9 @@ struct PhotoImportSheet: View {
             if let errorMessage {
                 Text(errorMessage).font(.footnote).foregroundStyle(.red)
             }
+            if partialRemainder > 0 {
+                partialImportBanner
+            }
             if !pending.isEmpty {
                 Text("\(pending.count) ready · tap a day to change the assignment")
                     .font(.caption).foregroundStyle(Theme.textTertiary)
@@ -62,6 +69,37 @@ struct PhotoImportSheet: View {
             Task { await process(items) }
         }
         .onDisappear { if !committed { cleanupUncommitted() } }
+        .sheet(isPresented: $showPaywall) {
+            PaywallView(reason: .photoLimit(remaining: partialRemainder))
+                .environmentObject(entitlements)
+        }
+    }
+
+    /// Shown after a free-tier partial import: what landed, what didn't, and the way to unlock the
+    /// rest. Never a silent drop — the remainder is always named.
+    private var partialImportBanner: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Label("\(partialRemainder) photo\(partialRemainder == 1 ? "" : "s") couldn't be added",
+                  systemImage: "exclamationmark.triangle.fill")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(Theme.warning)
+            Text("The free tier holds up to \(EntitlementPolicy.freePhotosPerOwnedJourney) photos per journey. "
+                 + "We added the ones that fit. Akashic Complete lifts the cap so the rest can come too.")
+                .font(.caption)
+                .foregroundStyle(Theme.textSecondary)
+            Button {
+                showPaywall = true
+            } label: {
+                Label("Unlock with Akashic Complete", systemImage: "star.circle")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(Theme.accent)
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Theme.surface, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Theme.hairline, lineWidth: 1))
     }
 
     // MARK: Picker
@@ -180,16 +218,48 @@ struct PhotoImportSheet: View {
 
     private func commit() {
         guard !pending.isEmpty else { return }
-        isCommitting = true
-        let photos = pending.map { item -> Photo in
-            var photo = item.photo
-            photo.waypointId = item.waypointID
-            return photo
+
+        // Free-tier photo cap applies only to journeys the user OWNS; photos added to a journey
+        // shared *into* this account are never gated (COMMERCIALIZATION-PLAN §5). Complete lifts
+        // the cap entirely.
+        let owned = store.isOwnedByCurrentUser(journeyID: journey.id)
+        let existing = store.photos(forJourneyID: journey.id).count
+        // The ownership carve-out now lives in EntitlementPolicy (pure + tested), not this view.
+        let allowed = entitlements.photosAllowed(currentCount: existing,
+                                                 adding: pending.count,
+                                                 isOwned: owned)
+
+        guard allowed < pending.count else {
+            // Everything fits — the original path.
+            isCommitting = true
+            store.addIngestedPhotos(pending.map(materialize))
+            committed = true
+            onComplete()
+            dismiss()
+            return
         }
-        store.addIngestedPhotos(photos)
-        committed = true
-        onComplete()
-        dismiss()
+
+        // Over the free cap on an owned journey: import what fits, delete the rest's staged files
+        // (never leave orphans on disk), and report the remainder with an upgrade path. Nothing is
+        // silently dropped.
+        let keep = Array(pending.prefix(allowed))
+        let drop = Array(pending.suffix(pending.count - allowed))
+        let service = PhotoEditService()
+        for item in drop { service.deleteFiles(for: item.photo) }
+        if !keep.isEmpty {
+            store.addIngestedPhotos(keep.map(materialize))
+            onComplete()
+        }
+        committed = true          // the kept photos are saved; the dropped ones already cleaned up
+        pending = []
+        partialRemainder = drop.count
+    }
+
+    /// Stamp a pending item's chosen day onto its photo for insertion.
+    private func materialize(_ item: PendingIngest) -> Photo {
+        var photo = item.photo
+        photo.waypointId = item.waypointID
+        return photo
     }
 
     private func remove(_ item: PendingIngest) {

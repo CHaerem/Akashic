@@ -3,13 +3,30 @@ import SwiftUI
 /// Journey detail: header, inline route map, stats summary, and a per-day list.
 struct JourneyDetailView: View {
     @EnvironmentObject private var store: JourneyStore
+    @EnvironmentObject private var entitlements: EntitlementStore
+    @EnvironmentObject private var intelligence: Intelligence
+    @Environment(\.dismiss) private var dismiss
     let journey: Journey
 
     /// Which day (index into `camps`) is shown in the presented `DayDetailSheet`, if any.
     @State private var selectedDayIndex: Int?
     @State private var showJourneyEdit = false
+    @State private var showManageDays = false
+    @State private var showEnrich = false
     @State private var showImport = false
+    @State private var showSharing = false
+    @State private var showExport = false
+    @State private var showShowcase = false
     @State private var editingCamp: Camp?
+    /// Delete-journey flow: tapping the menu entry routes to one of these depending on
+    /// `JourneyStore.deleteBlocker` — a still-published journey explains itself and offers the
+    /// Showcase sheet instead of the confirm dialog.
+    @State private var showDeleteConfirm = false
+    @State private var showDeleteBlockedAlert = false
+
+    /// True when this journey lives in our own database (a shared-in journey is not ours to
+    /// restructure or enrich). Fixtures / local-mode journeys are ours by definition.
+    private var isOwner: Bool { store.isOwnedByCurrentUser(journeyID: journey.id) }
 
     /// The freshest copy of this journey from the store, so contextual edits reflect
     /// immediately after `store.reload()` (this view observes the store).
@@ -51,8 +68,30 @@ struct JourneyDetailView: View {
                     Button { showJourneyEdit = true } label: {
                         Label("Edit journey", systemImage: "square.and.pencil")
                     }
+                    if isOwner {
+                        Button { showManageDays = true } label: {
+                            Label("Manage days", systemImage: "calendar.day.timeline.left")
+                        }
+                        Button { showEnrich = true } label: {
+                            Label("Enrich journey", systemImage: "wand.and.stars")
+                        }
+                    }
                     Button { showImport = true } label: {
                         Label("Add photos", systemImage: "photo.badge.plus")
+                    }
+                    Button { showSharing = true } label: {
+                        Label("Sharing", systemImage: "person.2")
+                    }
+                    Button { showShowcase = true } label: {
+                        Label("Showcase", systemImage: "globe")
+                    }
+                    Button { showExport = true } label: {
+                        Label("Export journey", systemImage: "square.and.arrow.up")
+                    }
+                    if isOwner {
+                        Button(role: .destructive) { handleDeleteTap() } label: {
+                            Label("Delete journey…", systemImage: "trash")
+                        }
                     }
                 } label: {
                     Image(systemName: "ellipsis.circle")
@@ -77,12 +116,66 @@ struct JourneyDetailView: View {
         .sheet(isPresented: $showJourneyEdit) {
             JourneyEditSheet(journey: live).environmentObject(store)
         }
+        .sheet(isPresented: $showManageDays) {
+            ManageDaysSheet(journeyID: live.id).environmentObject(store)
+        }
+        .sheet(isPresented: $showEnrich) {
+            EnrichJourneySheet(journey: live)
+                .environmentObject(store)
+                .environmentObject(entitlements)
+                .environmentObject(intelligence)
+        }
         .sheet(isPresented: $showImport) {
-            PhotoImportSheet(journey: live).environmentObject(store)
+            PhotoImportSheet(journey: live).environmentObject(store).environmentObject(entitlements)
         }
         .sheet(item: $editingCamp) { camp in
-            WaypointEditSheet(journeyID: live.id, camp: camp).environmentObject(store)
+            WaypointEditSheet(journeyID: live.id, camp: camp)
+                .environmentObject(store)
+                .environmentObject(entitlements)
+                .environmentObject(intelligence)
         }
+        .sheet(isPresented: $showExport) {
+            JourneyExportSheet(journey: live).environmentObject(store).environmentObject(entitlements)
+        }
+        .sheet(isPresented: $showShowcase) {
+            JourneyShowcaseSheet(journey: live).environmentObject(store).environmentObject(entitlements)
+        }
+        .sheet(isPresented: $showSharing) {
+            JourneyShareView(journeyID: live.id,
+                             journeyTitle: live.name,
+                             service: PersistenceController.shared.sharingService)
+        }
+        .confirmationDialog("Delete this journey?",
+                            isPresented: $showDeleteConfirm, titleVisibility: .visible) {
+            Button("Delete journey", role: .destructive) { deleteJourney() }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This deletes \"\(live.shortName)\" and its photos from your iCloud and every family device. Photos already saved in your Photos library are NOT affected. Consider using Export first to keep a copy.")
+        }
+        .alert("Remove from Showcase first", isPresented: $showDeleteBlockedAlert) {
+            Button("Open Showcase") { showShowcase = true }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("\"\(live.shortName)\" is on the public showcase. Remove it there before deleting the journey.")
+        }
+    }
+
+    /// Route the destructive menu tap through `deleteBlocker` — a published journey must come off
+    /// the showcase first (its mirror has no owner able to remove it once the source is gone).
+    private func handleDeleteTap() {
+        switch store.deleteBlocker(forJourneyID: live.id) {
+        case .stillPublished:
+            showDeleteBlockedAlert = true
+        case .notOwner:
+            break // menu entry is owner-gated; nothing to do if this is somehow reached.
+        case nil:
+            showDeleteConfirm = true
+        }
+    }
+
+    private func deleteJourney() {
+        guard store.deleteJourney(id: live.id) else { return }
+        dismiss()
     }
 
     private var daySheetPresented: Binding<Bool> {
@@ -268,5 +361,7 @@ struct FlowChips: View {
         }
     }
     .environmentObject(JourneyStore(persistence: .preview))
+    .environmentObject(EntitlementStore.previewFree)
+    .environmentObject(Intelligence.previewUnavailable)
     .preferredColorScheme(.dark)
 }

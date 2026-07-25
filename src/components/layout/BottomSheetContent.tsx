@@ -26,6 +26,7 @@ import { RouteEditor } from '../trek/RouteEditor';
 import { FunFactCard } from '../journey/FunFactCard';
 import { DayDiscoveries } from '../journey/DayDiscoveries';
 import { DayCommentsSection } from '../comments';
+import { ReportLink } from '../public/ReportLink';
 
 interface BottomSheetContentProps {
     view: ViewMode;
@@ -105,6 +106,9 @@ export function BottomSheetContent({
                 <ErrorBoundary fallback={<ComponentErrorFallback message="Failed to load info" />}>
                     <OverviewTab trekData={trekData} />
                 </ErrorBoundary>
+                {/* Report affordance — reachable on the deep-link landing view too,
+                    not just the globe overview. Self-hides for signed-in family. */}
+                {selectedTrek && <ReportLink slug={selectedTrek.id} />}
             </div>
         );
     }
@@ -112,6 +116,7 @@ export function BottomSheetContent({
     // Trek view with camp selected: Content based on active mode
     if (view === 'trek' && trekData) {
         return (
+            <>
                 <TrekViewContent
                     activeMode={activeMode}
                     trekData={trekData}
@@ -129,7 +134,15 @@ export function BottomSheetContent({
                     mapViewportBounds={mapViewportBounds}
                     mapViewportPhotoIds={mapViewportPhotoIds}
                 />
-            );
+                {/* Report affordance — every signed-out trek/day view carries it,
+                    so the moderation link is reachable from the shared deep link. */}
+                {selectedTrek && (
+                    <div style={{ padding: '0 16px 16px' }}>
+                        <ReportLink slug={selectedTrek.id} />
+                    </div>
+                )}
+            </>
+        );
     }
 
     // No content to show
@@ -229,6 +242,11 @@ function JourneyOverviewContent({ trek, onExplore, isMobile, editMode, onJourney
                     Edit Journey Details
                 </motion.button>
             )}
+
+            {/* Report affordance — public showcase only, self-hides for signed-in family. */}
+            <div>
+                <ReportLink slug={trek.id} />
+            </div>
 
             {/* Journey Edit Modal */}
             <JourneyEditModal

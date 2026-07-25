@@ -12,6 +12,7 @@ import CoreLocation
 /// and `MapGeoMath` for the (unit-tested) geometry.
 struct GlobeExperienceView: View {
     @EnvironmentObject private var store: JourneyStore
+    @EnvironmentObject private var entitlements: EntitlementStore
 
     /// Optional photo thumbnail markers. Defaults to empty so trek mode renders without
     /// photos; the Import / photo agent can map their photos into `[MapPhoto]` and pass
@@ -33,6 +34,17 @@ struct GlobeExperienceView: View {
     @State private var dayLightbox: LightboxData?
     @State private var sheetDetent: PresentationDetent = .medium
     @State private var showingPhotoGrid = false
+    @State private var showingNewJourney = false
+    @State private var showingPaywall = false
+
+    /// Start a create attempt: below the free limit → open creation; at the limit → paywall.
+    private func startCreate() {
+        if entitlements.canCreateJourney(ownedCount: store.billableOwnedJourneyCount) {
+            showingNewJourney = true
+        } else {
+            showingPaywall = true
+        }
+    }
 
     var body: some View {
         ZStack {
@@ -84,6 +96,15 @@ struct GlobeExperienceView: View {
                     .environmentObject(store)
                     .preferredColorScheme(.dark)
             }
+        }
+        .sheet(isPresented: $showingNewJourney) {
+            NewJourneySheet()
+                .environmentObject(store)
+                .environmentObject(entitlements)
+        }
+        .sheet(isPresented: $showingPaywall) {
+            PaywallView(reason: .journeyLimit)
+                .environmentObject(entitlements)
         }
     }
 
@@ -317,8 +338,13 @@ struct GlobeExperienceView: View {
             topBar
             Spacer(minLength: 0)
             if controller.isGlobe {
-                globeJourneyStrip
-                    .padding(.bottom, 8)
+                if store.journeys.isEmpty {
+                    globeEmptyState
+                        .padding(.bottom, 8)
+                } else {
+                    globeJourneyStrip
+                        .padding(.bottom, 8)
+                }
             } else if let journey = controller.selectedJourney,
                       controller.selectedDayIndex == nil {
                 // In overview: the day navigator picks a starting day. Once a day is
@@ -357,6 +383,32 @@ struct GlobeExperienceView: View {
             .buttonStyle(.plain)
         }
         .padding(.horizontal, 12)
+    }
+
+    // MARK: Globe empty state (no journeys yet)
+
+    /// The front door for a brand-new customer: an inviting call to create the first journey,
+    /// shown in place of the journey strip when the store is empty.
+    private var globeEmptyState: some View {
+        VStack(spacing: 12) {
+            Text("Your journeys will live here")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(Theme.textPrimary)
+                .shadow(color: .black.opacity(0.5), radius: 4)
+            Button {
+                startCreate()
+            } label: {
+                Label("Start your first journey", systemImage: "plus")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(Theme.background)
+                    .padding(.vertical, 14)
+                    .padding(.horizontal, 22)
+                    .background(Theme.accent, in: Capsule())
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 20)
+        .frame(maxWidth: .infinity)
     }
 
     // MARK: Globe journey selector strip

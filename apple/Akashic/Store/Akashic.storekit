@@ -1,0 +1,41 @@
+{
+  "identifier" : "13C79FD6-E8E2-4BAE-A00D-E04890A588C0",
+  "nonRenewingSubscriptions" : [
+
+  ],
+  "products" : [
+    {
+      "displayPrice" : "9.99",
+      "familyShareable" : true,
+      "internalID" : "A9E659FF-B6C6-4410-BAF6-2CDB42F025A7",
+      "localizations" : [
+        {
+          "description" : "Unlimited journeys and photos, per-journey export, and showcase publishing. One purchase covers your whole family.",
+          "displayName" : "Akashic Complete",
+          "locale" : "en_US"
+        }
+      ],
+      "productID" : "no.akashic.app.complete",
+      "referenceName" : "Akashic Complete",
+      "type" : "NonConsumable"
+    }
+  ],
+  "settings" : {
+    "_applicationInternalID" : "0",
+    "_developerTeamID" : "9LVCB72DT8",
+    "_failTransactionsEnabled" : false,
+    "_lastSynchronizedDate" : 0,
+    "_locale" : "en_US",
+    "_storefront" : "NOR",
+    "_storeKitErrors" : [
+
+    ]
+  },
+  "subscriptionGroups" : [
+
+  ],
+  "version" : {
+    "major" : 3,
+    "minor" : 0
+  }
+}

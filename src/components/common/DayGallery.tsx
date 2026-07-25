@@ -15,6 +15,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import type { Photo, TrekData } from '../../types/trek';
 import { colors, radius } from '../../styles/liquidGlass';
 import { usePhotoDay } from '../../hooks/usePhotoDay';
+import { usePhotoOriginals } from '../../hooks/usePhotoOriginals';
 
 interface DayGalleryProps {
   isOpen: boolean;
@@ -25,6 +26,12 @@ interface DayGalleryProps {
   initialDay: number;
   onDayChange: (dayNumber: number) => void;
   onViewOnMap?: (photo: Photo) => void;
+  /**
+   * The journey's slug (signed-in only). Repacked photo originals are fetched on
+   * demand from the journey's media zone; the thumb shows until they resolve. Omitted
+   * for the signed-out showcase, which is thumbs only by design.
+   */
+  journeySlug?: string;
 }
 
 export const DayGallery = memo(function DayGallery({
@@ -36,6 +43,7 @@ export const DayGallery = memo(function DayGallery({
   initialDay,
   onDayChange,
   onViewOnMap,
+  journeySlug,
 }: DayGalleryProps) {
   const [currentDay, setCurrentDay] = useState(initialDay);
   const [currentPhotoIndex, setCurrentPhotoIndex] = useState(0);
@@ -60,6 +68,18 @@ export const DayGallery = memo(function DayGallery({
 
   // Current day's photos
   const dayPhotos = useMemo(() => getPhotosForDay(currentDay), [getPhotosForDay, currentDay]);
+
+  // Full-size URL resolution: photo.url when present (pre-repack / public), else the
+  // on-demand PhotoMedia original, else the thumb. Never a broken image.
+  const { getFullSizeUrl, requestOriginal } = usePhotoOriginals(journeySlug, getMediaUrl);
+
+  // Resolve the original for the visible photo and its immediate neighbours, lazily.
+  useEffect(() => {
+    if (!isOpen) return;
+    requestOriginal(dayPhotos[currentPhotoIndex]);
+    requestOriginal(dayPhotos[currentPhotoIndex - 1]);
+    requestOriginal(dayPhotos[currentPhotoIndex + 1]);
+  }, [isOpen, dayPhotos, currentPhotoIndex, requestOriginal]);
 
   // Current camp info
   const currentCamp = useMemo(() =>
@@ -475,7 +495,7 @@ export const DayGallery = memo(function DayGallery({
                   animate={{ opacity: imageLoaded ? 1 : 0, scale: imageLoaded ? 1 : 0.98 }}
                   exit={{ opacity: 0, scale: 0.98 }}
                   transition={{ duration: 0.2 }}
-                  src={getMediaUrl(currentPhoto.url)}
+                  src={getFullSizeUrl(currentPhoto)}
                   alt={currentPhoto.caption || 'Photo'}
                   onLoad={handleImageLoad}
                   onClick={(e) => {

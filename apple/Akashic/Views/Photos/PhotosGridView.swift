@@ -9,10 +9,13 @@ import SwiftUI
 /// context menu offers the quick edits (cover / rotate / assign / delete) plus a full editor.
 struct PhotosGridView: View {
     @EnvironmentObject private var store: JourneyStore
+    @EnvironmentObject private var entitlements: EntitlementStore
     let journeyID: String
 
     @State private var lightbox: LightboxData?
     @State private var editingPhoto: Photo?
+    @State private var placingPhoto: Photo?
+    @State private var movingPhoto: Photo?
     @State private var showImport = false
     @State private var photoPendingDelete: Photo?
 
@@ -62,9 +65,20 @@ struct PhotosGridView: View {
                 PhotoEditSheet(photo: photo, journey: journey).environmentObject(store)
             }
         }
+        .sheet(item: $placingPhoto) { photo in
+            PhotoPlacementSheet(
+                startCoordinate: photo.coordinates,
+                fallbackCoordinate: placementFallback(for: photo, journey: journey),
+                onSave: { store.setPhotoLocation($0, source: "manual", forPhoto: photo.id) })
+        }
+        .sheet(item: $movingPhoto) { photo in
+            if let journey {
+                MovePhotoToDaySheet(photo: photo, journey: journey).environmentObject(store)
+            }
+        }
         .sheet(isPresented: $showImport) {
             if let journey {
-                PhotoImportSheet(journey: journey).environmentObject(store)
+                PhotoImportSheet(journey: journey).environmentObject(store).environmentObject(entitlements)
             }
         }
         .confirmationDialog("Delete this photo?", isPresented: deleteDialogPresented,
@@ -130,23 +144,13 @@ struct PhotosGridView: View {
             Label("Rotate right", systemImage: "rotate.right")
         }
 
-        if let journey {
-            Menu {
-                Button {
-                    store.assignPhoto(photo.id, toWaypoint: nil)
-                } label: {
-                    Label("Unassigned", systemImage: photo.waypointId == nil ? "checkmark" : "")
-                }
-                ForEach(journey.camps) { camp in
-                    Button {
-                        store.assignPhoto(photo.id, toWaypoint: camp.id)
-                    } label: {
-                        Label("Day \(camp.dayNumber) — \(camp.name)",
-                              systemImage: photo.waypointId == camp.id ? "checkmark" : "")
-                    }
-                }
-            } label: {
-                Label("Assign to day", systemImage: "calendar")
+        Button { placingPhoto = photo } label: {
+            Label("Adjust location", systemImage: "mappin.and.ellipse")
+        }
+
+        if journey != nil {
+            Button { movingPhoto = photo } label: {
+                Label("Move to day…", systemImage: "calendar")
             }
         }
 
@@ -158,6 +162,15 @@ struct PhotosGridView: View {
 
     private func camp(in journey: Journey?, day: Int) -> Camp? {
         journey?.camps.first { $0.dayNumber == day }
+    }
+
+    /// Opening coordinate for a photo with no GPS: its assigned day's camp, else journey centre.
+    private func placementFallback(for photo: Photo, journey: Journey?) -> [Double]? {
+        if let journey, let wpID = photo.waypointId,
+           let camp = journey.camps.first(where: { $0.id == wpID }), camp.coordinates.count >= 2 {
+            return camp.coordinates
+        }
+        return journey?.center
     }
 }
 

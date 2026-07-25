@@ -64,22 +64,6 @@ export default defineConfig({
 				navigateFallback: "/index.html",
 				navigateFallbackDenylist: [/^\/api/, /^\/share-target/],
 				runtimeCaching: [
-					// Supabase API - cache journey data for offline access
-					{
-						urlPattern: /^https:\/\/.*\.supabase\.co\/rest\/v1\//,
-						handler: "NetworkFirst",
-						options: {
-							cacheName: "supabase-api-v2", // v2: reduced cache time to 5min
-							expiration: {
-								maxEntries: 50,
-								maxAgeSeconds: 60 * 5, // 5 minutes - short cache for data that can change
-							},
-							networkTimeoutSeconds: 10,
-							cacheableResponse: {
-								statuses: [0, 200],
-							},
-						},
-					},
 					// R2 media - cache photos for offline viewing
 					{
 						urlPattern: /^https:\/\/akashic-media\..*\.workers\.dev\//,

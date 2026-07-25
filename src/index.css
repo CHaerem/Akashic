@@ -480,6 +480,15 @@ html {
    MAPBOX CUSTOMIZATION
    ============================================================================ */
 
+/* Signed-out public showcase mounts a bottom-left "Family sign-in" pill and a
+   bottom-right "Made with Akashic" chip. Lift Mapbox's own attribution + logo
+   clear of them so the wordmark and the © attribution links stay visible and
+   clickable — required by Mapbox's Terms of Service. */
+.public-chrome .mapboxgl-ctrl-bottom-left,
+.public-chrome .mapboxgl-ctrl-bottom-right {
+  bottom: 80px;
+}
+
 .dark-popup .mapboxgl-popup-content {
   background: transparent;
   padding: 0;

@@ -46,6 +46,7 @@ export {
     deletePhoto,
     assignPhotoToWaypoint,
     getPhotosForWaypoint,
+    fetchOriginalUrl,
 } from './photoAPI';
 
 // Waypoint operations

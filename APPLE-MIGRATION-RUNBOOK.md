@@ -1,5 +1,30 @@
 # Apple Migration — Operator Runbook
 
+> **⏰ MORNING STEPS (written overnight 2026-07-22 → 23) — ~10 minutes total:**
+>
+> 1. **Re-enter your Apple ID password on the simulator** (iPhone 17 Pro). iOS
+>    demanded account re-verification last night, which blocked every CloudKit
+>    call ("iCloud temporarily unavailable" in the app's Settings — the status
+>    row caught it). Simulator → Settings → tap the banner → password.
+> 2. **Publish the showcase (first real run):** the Debug-CloudKit build is
+>    already installed. Launch Akashic (it needs the CloudKit env; easiest from
+>    terminal):
+>    `SIMCTL_CHILD_AKASHIC_CLOUDKIT=1 SIMCTL_CHILD_AKASHIC_SYNC_LOG=1 xcrun simctl launch --terminate-running-process 5B09400C-4865-4044-8398-5BB050B762C9 no.akashic.app`
+>    Then per journey: **Journeys → ⋯ → Showcase → Publish/Update**. Kilimanjaro
+>    uploads 939 thumbs — expect a few minutes; watch the progress bar and the
+>    result summary (published / skipped / removed / failed).
+> 3. **See the public showcase:** open a private browser window on
+>    `http://localhost:5173` (`npm run dev`) — the globe should show the
+>    published journeys with days and thumbnails, **no sign-in**. Deep link:
+>    `?journey=kilimanjaro`. That closes T3.3's acceptance.
+> 4. **Verify the first-save fix while you're in the app:** edit any photo
+>    caption. In the sync log, the save should succeed on the FIRST
+>    `sentRecordZoneChanges` (no `code=14` line) followed by
+>    `recordsDidSave: stored systemFields`.
+> 5. Then the standing items: **merge PR #41**, add family TestFlight testers
+>    (§4/§7), and answer whether anyone in the family uses Windows (decides the
+>    web client's long-term scope, D6).
+
 **Who this is for:** Christopher (chris.haerem@gmail.com), the owner. Every step below needs a
 credential, an Apple/Cloudflare/GitHub account, or a physical device that an agent does **not**
 have. Do these yourself, in order. Everything else in the migration (code, schema files, export
@@ -194,6 +219,70 @@ with Apple ID sign-in. Only you can create it.
 **never paste it into chat**.
 
 ---
+
+## 4a. ⚠️ TestFlight talks to CloudKit **Production** — not Development
+
+Discovered while uploading build 2 (2026-07-23). This is the single fact that
+decides when the family can actually use the app.
+
+A TestFlight build is signed with an **App Store distribution profile**, and such a
+profile only ever carries the CloudKit **production** environment. The
+`com.apple.developer.icloud-container-environment` entitlement can point a
+*development* or *ad-hoc* build at either environment, but it cannot override this
+for App Store / TestFlight. There is no flag, no build setting, no workaround.
+
+Everything built and verified so far lives in **Development**:
+
+| | Development | Production |
+|---|---|---|
+| Schema | 7 record types (incl. PublicJourney/PublicPhoto) | only the default `Users` |
+| Records | 1559 (3 journeys / 18 days / 1538 photos), 5.41 GB | 0 |
+
+So build 2 installs and runs, but on a device it finds an empty container with no
+schema: no journeys, and sync errors surfaced in Settings. **The build is real; the
+data is not there yet.**
+
+To make TestFlight useful, two steps are needed, in order:
+
+### Step 1 — promote the schema (Christopher; ~1 min) 🧑
+
+`cktool` cannot do this: `import-schema --environment production` is refused with
+*"endpoint not applicable in the environment 'production'"*. The Console is the only
+path.
+
+1. Open <https://icloud.developer.apple.com/dashboard/> and pick **iCloud.no.akashic**.
+2. Make sure the environment selector says **Development**.
+3. **Schema → Deploy Schema Changes…** → review → **Deploy**.
+
+**This is irreversible.** A record type or field that reaches Production can never be
+deleted, only added to — which is exactly why it waited until the schema stopped
+changing. Verified before deploying (2026-07-23): the deployed Development schema is
+field-for-field identical to `apple/CloudKit/schema.ckdb`, so nothing unintended gets
+frozen. The six types promoted are `Journey`, `Waypoint`, `Photo`, `DayComment`,
+`PublicJourney`, `PublicPhoto`.
+
+Confirm it landed:
+
+```bash
+xcrun cktool export-schema --team-id 9LVCB72DT8 --container-id iCloud.no.akashic --environment production | grep "RECORD TYPE"
+```
+
+### Step 2 — import the archive into Production (Claude; ~1–2 h) 🤖
+
+Runs from the **`Debug-Production`** build configuration, which is a
+development-signed build carrying `icloud-container-environment = Production`
+(`apple/Akashic/Support/Akashic-Production.entitlements`). That is the only way to
+write Production from the simulator — a TestFlight build reads Production but cannot
+be aimed anywhere else, and `Debug-CloudKit` always means Development.
+
+Source: `/Users/cher/Privat/AkashicExport-20260722` (16 GB on disk; ~5.4 GB reaches
+CloudKit as assets). Driven from the app's **Settings → CloudKit import** screen.
+The importer is idempotent (`.allKeys` overwrite keyed by the original UUIDs) so a
+re-run is safe, but it is **not resumable** — an interrupted run re-uploads
+everything.
+
+Until both steps are done, keep the family off the tester list — an empty app teaches
+them the wrong thing about the migration.
 
 ## 4. Xcode signing + TestFlight — ✅ CREDENTIALS IN PLACE (2026-07-22)
 
