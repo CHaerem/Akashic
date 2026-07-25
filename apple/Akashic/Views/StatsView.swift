@@ -70,7 +70,7 @@ struct StatsView: View {
                 VStack(alignment: .leading, spacing: 4) {
                     sectionLabel("Summit")
                     Text(Formatters.meters(hp.elevation))
-                        .font(.system(size: 34, weight: .light))
+                        .font(.largeTitle.weight(.light))
                         .foregroundStyle(Theme.textPrimary)
                     Text(hp.name)
                         .font(.subheadline)
@@ -225,10 +225,14 @@ struct StatsView: View {
     // MARK: - Building blocks
 
     private func sectionLabel(_ text: String) -> some View {
+        // Was a fixed 10 pt at `Theme.textTertiary` (40% white) — small size and low contrast
+        // compounded into the least readable text in the tab. `.caption2` is the size floor;
+        // `textSecondary` (62% white) is the fix for a *label*, as opposed to a de-emphasised
+        // value, sitting at that size.
         Text(text.uppercased())
-            .font(.system(size: 10, weight: .medium))
+            .font(.caption2.weight(.medium))
             .tracking(1.4)
-            .foregroundStyle(Theme.textTertiary)
+            .foregroundStyle(Theme.textSecondary)
     }
 
     @ViewBuilder
@@ -265,12 +269,15 @@ struct StatItem: View {
     var body: some View {
         Card(padding: 14) {
             VStack(alignment: .leading, spacing: 4) {
+                // Same fix as `StatsView.sectionLabel`: a 10 pt label at `textTertiary` is small
+                // and low-contrast together. `value` below keeps `textTertiary` as its fallback —
+                // it's a de-emphasised number, not a label, so out of scope for the lift.
                 Text(label.uppercased())
-                    .font(.system(size: 10, weight: .medium))
+                    .font(.caption2.weight(.medium))
                     .tracking(1.0)
-                    .foregroundStyle(Theme.textTertiary)
+                    .foregroundStyle(Theme.textSecondary)
                 Text(value)
-                    .font(.system(size: 20, weight: .light))
+                    .font(.title3.weight(.light))
                     .foregroundStyle(color ?? Theme.textPrimary)
                     .lineLimit(1).minimumScaleFactor(0.7)
                 if let sublabel {

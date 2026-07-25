@@ -32,6 +32,11 @@ struct PhotoLightboxView: View {
     @State private var editingPhoto: Photo?
     @State private var editingIndex: Int = 0
 
+    /// The chrome's circular icon buttons (edit / close / share) were sized to fit a fixed
+    /// 40 pt glyph; scale the circle with the glyph (`.callout`, the old 16 pt) so it doesn't
+    /// outgrow it — same reasoning as `DayDetailSheet.chevronBoxSize`.
+    @ScaledMetric(relativeTo: .callout) private var iconButtonSize: CGFloat = 40
+
     init(data: LightboxData, journey: Journey? = nil) {
         self.data = data
         self.journey = journey
@@ -126,14 +131,14 @@ struct PhotoLightboxView: View {
             VStack(alignment: .leading, spacing: 4) {
                 if let dayLabel = data.dayLabel {
                     Text(dayLabel)
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(.caption.weight(.semibold))
                         .foregroundStyle(.white)
                         .padding(.horizontal, 10).padding(.vertical, 4)
                         .background(MapPalette.cyan.opacity(0.25), in: Capsule())
                 }
                 if let dateLabel = data.dateLabel {
                     Text(dateLabel)
-                        .font(.system(size: 13))
+                        .font(.footnote)
                         .foregroundStyle(.white.opacity(0.75))
                 }
             }
@@ -145,21 +150,23 @@ struct PhotoLightboxView: View {
                         editingPhoto = photo
                     } label: {
                         Image(systemName: "slider.horizontal.3")
-                            .font(.system(size: 16, weight: .bold))
+                            .font(.callout.weight(.bold))
                             .foregroundStyle(.white)
-                            .frame(width: 40, height: 40)
+                            .frame(width: iconButtonSize, height: iconButtonSize)
                             .background(.ultraThinMaterial, in: Circle())
                     }
                     .buttonStyle(.plain)
+                    .accessibilityLabel("Edit photo")
                 }
                 Button { dismiss() } label: {
                     Image(systemName: "xmark")
-                        .font(.system(size: 16, weight: .bold))
+                        .font(.callout.weight(.bold))
                         .foregroundStyle(.white)
-                        .frame(width: 40, height: 40)
+                        .frame(width: iconButtonSize, height: iconButtonSize)
                         .background(.ultraThinMaterial, in: Circle())
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("Close")
             }
         }
         .padding(.horizontal, 16)
@@ -175,24 +182,25 @@ struct PhotoLightboxView: View {
         VStack(spacing: 12) {
             if let caption = current?.caption, !caption.isEmpty {
                 Text(caption)
-                    .font(.system(size: 14))
+                    .font(.subheadline)
                     .foregroundStyle(.white)
                     .multilineTextAlignment(.center)
                     .frame(maxWidth: 520)
             }
             HStack {
                 Text("\(index + 1) / \(photos.count)")
-                    .font(.system(size: 13, weight: .medium))
+                    .font(.footnote.weight(.medium))
                     .foregroundStyle(.white.opacity(0.8))
                 Spacer()
                 if let url = current?.originalFileURL ?? current?.thumbnailFileURL {
                     ShareLink(item: url) {
                         Image(systemName: "square.and.arrow.up")
-                            .font(.system(size: 16, weight: .semibold))
+                            .font(.callout.weight(.semibold))
                             .foregroundStyle(.white)
-                            .frame(width: 40, height: 40)
+                            .frame(width: iconButtonSize, height: iconButtonSize)
                             .background(.ultraThinMaterial, in: Circle())
                     }
+                    .accessibilityLabel("Share")
                 }
             }
         }
@@ -253,7 +261,7 @@ private struct ResolvingImagePage: View {
                     Task { await resolve() }
                 } label: {
                     Label("Retry", systemImage: "arrow.clockwise")
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(.footnote.weight(.semibold))
                         .foregroundStyle(.white)
                         .padding(.horizontal, 14).padding(.vertical, 8)
                         .background(.ultraThinMaterial, in: Capsule())
@@ -333,7 +341,7 @@ private struct ZoomableImage: View {
 
     private func fallback(icon: String) -> some View {
         Image(systemName: icon)
-            .font(.system(size: 40))
+            .font(.largeTitle)
             .foregroundStyle(.white.opacity(0.4))
             .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -392,7 +400,7 @@ private struct VideoPage: View {
                         ProgressView().tint(.white)
                     } else {
                         Image(systemName: "play.slash")
-                            .font(.system(size: 40))
+                            .font(.largeTitle)
                             .foregroundStyle(.white.opacity(0.4))
                     }
                 }

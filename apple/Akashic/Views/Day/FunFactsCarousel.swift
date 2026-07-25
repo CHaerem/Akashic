@@ -7,30 +7,35 @@ struct FunFactCardView: View {
 
     private var style: FunFactStyle.Config { FunFactStyle.config(for: fact.category) }
 
+    /// The category icon was sized to fit a fixed 32 pt box; scale the box with the glyph
+    /// (`.title3`, the nearest semantic step up from the old 20 pt) so a growing emoji doesn't
+    /// outgrow its background tile.
+    @ScaledMetric(relativeTo: .title3) private var iconBoxSize: CGFloat = 32
+
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 8) {
                 Text(fact.icon ?? style.icon)
-                    .font(.system(size: 20))
-                    .frame(width: 32, height: 32)
+                    .font(.title3)
+                    .frame(width: iconBoxSize, height: iconBoxSize)
                     .background(style.color.opacity(0.16),
                                 in: RoundedRectangle(cornerRadius: 8, style: .continuous))
                 Text(style.label.uppercased())
-                    .font(.system(size: 10, weight: .semibold))
+                    .font(.caption2.weight(.semibold))
                     .tracking(0.8)
                     .foregroundStyle(style.color)
                 Spacer(minLength: 0)
             }
 
             Text(fact.content)
-                .font(.system(size: 14))
+                .font(.subheadline)
                 .foregroundStyle(Theme.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
 
             if let source = fact.source, !source.isEmpty {
                 Divider().overlay(Theme.hairline)
                 Text("Source: \(source)")
-                    .font(.system(size: 11))
+                    .font(.caption2)
                     .italic()
                     .foregroundStyle(Theme.textTertiary)
             }
@@ -90,15 +95,15 @@ struct SectionLabel: View {
 
     var body: some View {
         HStack(spacing: 6) {
-            Text(icon).font(.system(size: 14))
+            Text(icon).font(.subheadline)
             Text(title.uppercased())
-                .font(.system(size: 11, weight: .semibold))
+                .font(.caption2.weight(.semibold))
                 .tracking(0.8)
                 .foregroundStyle(Theme.textTertiary)
             Spacer(minLength: 0)
             if let trailing {
                 Text(trailing)
-                    .font(.system(size: 10, weight: .medium))
+                    .font(.caption2.weight(.medium))
                     .foregroundStyle(Theme.accent)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 2)

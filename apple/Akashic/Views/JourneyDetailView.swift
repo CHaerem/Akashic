@@ -32,6 +32,10 @@ struct JourneyDetailView: View {
     /// immediately after `store.reload()` (this view observes the store).
     private var live: Journey { store.journey(withID: journey.id) ?? journey }
 
+    /// The flag glyph was a fixed 40 pt icon, not body text; scale it like one (same treatment
+    /// as `JourneyGlobeCard.flagSize` in D1) so it stays in proportion with the title beside it.
+    @ScaledMetric(relativeTo: .largeTitle) private var flagSize: CGFloat = 40
+
     var body: some View {
         let live = self.live
         ScrollView {
@@ -252,7 +256,7 @@ struct JourneyDetailView: View {
                     .font(.largeTitle.weight(.bold))
                     .foregroundStyle(Theme.textPrimary)
                 Spacer()
-                Text(live.countryFlag).font(.system(size: 40))
+                Text(live.countryFlag).font(.system(size: flagSize))
             }
             HStack(spacing: 8) {
                 Text(live.country).foregroundStyle(Theme.textSecondary)
@@ -344,6 +348,10 @@ struct JourneyDetailView: View {
 struct DayRow: View {
     let camp: Camp
 
+    /// The day badge was sized to fit a fixed 46 pt square around a `.title3` digit; scale the
+    /// square with that digit so a two-digit day number doesn't outgrow it at larger text sizes.
+    @ScaledMetric(relativeTo: .title3) private var dayBadgeSize: CGFloat = 46
+
     var body: some View {
         Card(padding: 14) {
             VStack(alignment: .leading, spacing: 10) {
@@ -396,10 +404,11 @@ struct DayRow: View {
 
     private var dayBadge: some View {
         VStack(spacing: 0) {
-            Text("DAY").font(.system(size: 8, weight: .bold)).foregroundStyle(Theme.textTertiary)
+            // Was 8 pt — below the `.caption2` floor; `.caption2` is the smallest this can go.
+            Text("DAY").font(.caption2.weight(.bold)).foregroundStyle(Theme.textTertiary)
             Text("\(camp.dayNumber)").font(.title3.weight(.bold)).foregroundStyle(Theme.accent)
         }
-        .frame(width: 46, height: 46)
+        .frame(width: dayBadgeSize, height: dayBadgeSize)
         .background(Theme.accentSoft, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 
@@ -409,7 +418,7 @@ struct DayRow: View {
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(Theme.textPrimary)
             Text(label)
-                .font(.system(size: 10))
+                .font(.caption2)
                 .foregroundStyle(Theme.textTertiary)
         }
     }

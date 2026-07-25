@@ -22,6 +22,11 @@ struct DayDetailSheet: View {
     @State private var showImport = false
     @State private var editingPhoto: Photo?
 
+    /// The header chevrons were sized to fit a fixed 15 pt glyph in a fixed 40 pt circle; now
+    /// that the glyph scales with Dynamic Type (`.subheadline`), the circle needs to scale too
+    /// or the glyph outgrows it (same reasoning as D1's `DayNavigationView.chevronBoxSize`).
+    @ScaledMetric(relativeTo: .subheadline) private var chevronBoxSize: CGFloat = 40
+
     private var camp: Camp? {
         journey.camps.indices.contains(dayIndex) ? journey.camps[dayIndex] : nil
     }
@@ -37,7 +42,7 @@ struct DayDetailSheet: View {
 
                     if !camp.notes.isEmpty {
                         Text(camp.notes)
-                            .font(.system(size: 14))
+                            .font(.subheadline)
                             .foregroundStyle(Theme.textSecondary)
                             .fixedSize(horizontal: false, vertical: true)
                     }
@@ -152,11 +157,11 @@ struct DayDetailSheet: View {
 
                 VStack(spacing: 2) {
                     Text("DAY \(camp.dayNumber)")
-                        .font(.system(size: 11, weight: .bold))
+                        .font(.caption2.weight(.bold))
                         .tracking(1)
                         .foregroundStyle(MapPalette.cyan)
                     Text(camp.name)
-                        .font(.system(size: 19, weight: .bold))
+                        .font(.title3.weight(.bold))
                         .foregroundStyle(Theme.textPrimary)
                         .multilineTextAlignment(.center)
                         .lineLimit(2)
@@ -174,7 +179,7 @@ struct DayDetailSheet: View {
                 }
                 Label(Formatters.meters(camp.elevation), systemImage: "mountain.2.fill")
             }
-            .font(.system(size: 12))
+            .font(.caption)
             .foregroundStyle(Theme.textSecondary)
             .frame(maxWidth: .infinity)
         }
@@ -183,9 +188,9 @@ struct DayDetailSheet: View {
     private func chevron(_ system: String, enabled: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: system)
-                .font(.system(size: 15, weight: .semibold))
+                .font(.subheadline.weight(.semibold))
                 .foregroundStyle(enabled ? Theme.textPrimary : Theme.textTertiary)
-                .frame(width: 40, height: 40)
+                .frame(width: chevronBoxSize, height: chevronBoxSize)
                 .background(.ultraThinMaterial, in: Circle())
                 .overlay(Circle().strokeBorder(Theme.hairline, lineWidth: 1))
         }
@@ -216,7 +221,7 @@ struct DayDetailSheet: View {
                     HStack(alignment: .top, spacing: 8) {
                         Circle().fill(Theme.accent).frame(width: 5, height: 5).padding(.top, 6)
                         Text(item)
-                            .font(.system(size: 13))
+                            .font(.footnote)
                             .foregroundStyle(Theme.textSecondary)
                             .fixedSize(horizontal: false, vertical: true)
                     }

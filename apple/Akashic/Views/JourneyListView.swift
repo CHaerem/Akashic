@@ -43,7 +43,7 @@ struct JourneyListView: View {
                     startCreate()
                 } label: {
                     Image(systemName: "plus")
-                        .font(.system(size: 16, weight: .semibold))
+                        .font(.callout.weight(.semibold))
                         .foregroundStyle(Theme.accent)
                 }
                 .accessibilityLabel("New journey")
@@ -79,7 +79,7 @@ struct JourneyEmptyState: View {
                     .fill(Theme.accentSoft)
                     .frame(width: 96, height: 96)
                 Image(systemName: "mountain.2.fill")
-                    .font(.system(size: 40, weight: .semibold))
+                    .font(.largeTitle.weight(.semibold))
                     .foregroundStyle(Theme.accent)
             }
             VStack(spacing: 8) {
@@ -116,6 +116,11 @@ struct JourneyEmptyState: View {
 struct JourneyCard: View {
     let journey: Journey
 
+    /// The flag glyph sits in a fixed 120 pt hero band; scale it (same treatment as
+    /// `JourneyGlobeCard.flagSize` in D1) so it stays proportionate instead of eventually
+    /// overflowing that fixed-height strip.
+    @ScaledMetric(relativeTo: .largeTitle) private var flagSize: CGFloat = 34
+
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             // Hero band (gradient placeholder + flag; real hero images arrive with sync).
@@ -124,7 +129,7 @@ struct JourneyCard: View {
                     .frame(height: 120)
                     .overlay(alignment: .topTrailing) {
                         Text(journey.countryFlag)
-                            .font(.system(size: 34))
+                            .font(.system(size: flagSize))
                             .padding(12)
                     }
                 VStack(alignment: .leading, spacing: 2) {
