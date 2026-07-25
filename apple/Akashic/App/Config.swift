@@ -65,7 +65,16 @@ enum Config {
     static let coreDataModelName = "Akashic"
     static let persistenceModeOverrideKey = "akashic.persistenceMode.override"
 
-    // MARK: - Data import (T2.4)
+    /// `AKASHIC_EMPTY=1` — start with no journeys at all, in any persistence mode.
+    ///
+    /// This is the state every new customer is in on first launch, and without this flag it could
+    /// only be reached with a signed CloudKit build signed into an empty iCloud account. Used for
+    /// inspecting the empty states and for the App Store screenshot of a fresh install.
+    static var startEmpty: Bool {
+        ProcessInfo.processInfo.environment["AKASHIC_EMPTY"] == "1"
+    }
+
+    // MARK: - Data import (T2.5)
 
     static let importBundlePathKey = "akashic.import.bundlePath"
     static let importMediaRootKey = "akashic.import.mediaRoot"

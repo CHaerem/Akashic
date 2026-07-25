@@ -117,7 +117,11 @@ final class PersistenceController {
             MainActor.assumeIsolated { startSync() }
         }
 
-        guard seed else { return }
+        // `AKASHIC_EMPTY=1` keeps the store empty in every mode. Without it, the state a brand-new
+        // customer actually sees — no journeys at all — could only be reached with a signed
+        // CloudKit build and an empty iCloud account, which made the app's most important screen
+        // the hardest one for its author to look at (and impossible to screenshot for the store).
+        guard seed, !Config.startEmpty else { return }
         switch mode {
         case .fixtures:
             seedFixtures(bundle: fixtureBundle)

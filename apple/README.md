@@ -79,7 +79,8 @@ The app reads two launch environment variables (used for the screenshots in `Doc
 
 | Variable | Effect |
 |----------|--------|
-| `AKASHIC_TAB=0..3` | Select Journeys / Map / Stats / Settings |
+| `AKASHIC_TAB=0..2` | Select the tab: 0 Explore (globe) · 1 Stats · 2 Settings |
+| `AKASHIC_EMPTY=1` | Start with no journeys — the state a new customer sees on first launch |
 | `AKASHIC_OPEN=<slug or id>` | Open that journey's detail |
 | `AKASHIC_FORCE_LOCAL=1` | Force the on-disk `.local` store before the store is built |
 | `AKASHIC_IMPORT_ON_LAUNCH=1` | Run the export import at startup (see below) |

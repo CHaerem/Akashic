@@ -53,7 +53,8 @@ struct DayNavigationView: View {
                         .foregroundStyle(Theme.textSecondary)
                         .lineLimit(1)
                 } else {
-                    Text("\(camps.count) days")
+                    // "0 days" is what a journey with a route but no days used to announce.
+                    Text(camps.isEmpty ? "No days yet" : "\(camps.count) days")
                         .font(.system(size: 11, weight: .semibold))
                         .foregroundStyle(MapPalette.cyan)
                     Text(journey.shortName)

@@ -27,11 +27,18 @@ struct RouteCorrectionSection: View {
     @State private var showingDrawing = false
     @State private var drawnRoute: RouteDrawing.DrawnRoute?
 
+    /// Whether this journey already has a route — decides "Import" vs "Replace" wording.
+    private var hasRoute: Bool { !journey.route.coordinates.isEmpty }
+
     var body: some View {
         GlassField(label: "Route", systemImage: "point.topleft.down.to.point.bottomright.curvepath") {
             VStack(alignment: .leading, spacing: 10) {
-                row(icon: "arrow.down.doc", title: "Replace route from GPX",
-                    subtitle: "Import a new track — preview before it replaces this route") {
+                // A journey with no route yet is not "replacing" anything — the verb follows reality.
+                row(icon: "arrow.down.doc",
+                    title: hasRoute ? "Replace route from GPX" : "Import route from GPX",
+                    subtitle: hasRoute
+                        ? "Import a new track — preview before it replaces this route"
+                        : "Import a track from Strava, Garmin, AllTrails or komoot") {
                     message = nil
                     showingImporter = true
                 }
@@ -39,14 +46,17 @@ struct RouteCorrectionSection: View {
                     subtitle: "Build a route from this journey's geotagged photos") {
                     draftFromPhotos()
                 }
-                row(icon: "scribble", title: "Draw route on map",
+                row(icon: "scribble", title: hasRoute ? "Redraw route on map" : "Draw route on map",
                     subtitle: "Trace the route by hand — no track or geotags needed") {
                     message = nil
                     showingDrawing = true
                 }
-                row(icon: "function", title: "Recompute stats from route",
-                    subtitle: "Refresh distance, ascent and summit from the current route") {
-                    recomputeStats()
+                // Nothing to recompute from until a route exists.
+                if hasRoute {
+                    row(icon: "function", title: "Recompute stats from route",
+                        subtitle: "Refresh distance, ascent and summit from the current route") {
+                        recomputeStats()
+                    }
                 }
                 if let message {
                     Text(message).font(.caption2).foregroundStyle(Theme.textTertiary)
