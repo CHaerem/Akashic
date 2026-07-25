@@ -40,6 +40,35 @@ targets:
     type: application
     platform: iOS
     deploymentTarget: "17.0"
+    # C7: register Akashic as a GPX document handler (sharing a `.gpx` from Files/Mail/Strava
+    # straight into the app — see AkashicApp.onOpenURL). `GENERATE_INFOPLIST_FILE: YES` below
+    # means Xcode synthesizes Info.plist from `INFOPLIST_KEY_*` build settings, but there is no
+    # `INFOPLIST_KEY_` equivalent for an array/dict key like `CFBundleDocumentTypes` or
+    # `UTImportedTypeDeclarations` (those only cover scalar values) — XcodeGen's own
+    # `info.properties` is the one path that still merges arbitrary plist content into a
+    # GENERATE_INFOPLIST_FILE=YES target, so it carries these three keys instead.
+    # `com.topografix.gpx` is not a system UTI (unlike e.g. `public.image`), so it must be
+    # declared here as IMPORTED (we read/parse it; we don't own or export the type) rather than
+    # merely referenced.
+    info:
+      path: Generated/Akashic-Info.plist
+      properties:
+        CFBundleDocumentTypes:
+          - CFBundleTypeName: GPX Track
+            CFBundleTypeRole: Viewer
+            LSItemContentTypes:
+              - com.topografix.gpx
+        UTImportedTypeDeclarations:
+          - UTTypeIdentifier: com.topografix.gpx
+            UTTypeDescription: GPX Track
+            UTTypeConformsTo:
+              - public.xml
+            UTTypeTagSpecification:
+              public.filename-extension:
+                - gpx
+        # We copy and parse (GPXParser) rather than edit in place, so the system should never
+        # offer in-place editing for a file we open.
+        LSSupportsOpeningDocumentsInPlace: false
     sources:
       - path: Akashic
       # Fixture JSON recovered from git history — bundled so the app runs on

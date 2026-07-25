@@ -30,6 +30,25 @@ struct AkashicApp: App {
     /// Drives the on-foreground availability re-probe (see `.onChange` below).
     @Environment(\.scenePhase) private var scenePhase
 
+    // C7 — opening a `.gpx` shared from Files, Mail, or any app that hands off to Akashic's
+    // registered document type (see `project.yml`'s `CFBundleDocumentTypes` /
+    // `UTImportedTypeDeclarations`, and `handleOpenedGPX` below). At most one of these three is
+    // ever active: a successful parse populates `openedGPX` (driving the sheet), a parse failure
+    // populates `openGPXAlertMessage` (driving the alert), and hitting the free-tier journey cap
+    // sets `showOpenedGPXPaywall` instead of either. v1 always creates a NEW journey from the
+    // opened file — attaching a route to an existing one already has a path in its own edit sheet.
+    @State private var openedGPX: OpenedGPX?
+    @State private var showOpenedGPXPaywall = false
+    @State private var openGPXAlertMessage: String?
+
+    /// Wraps a parsed file so `.sheet(item:)` has the `Identifiable` it needs — `GPXFile` itself
+    /// carries no stable identity, and one wouldn't mean anything beyond this single hand-off.
+    private struct OpenedGPX: Identifiable {
+        let id = UUID()
+        var file: GPXFile
+        var suggestedName: String
+    }
+
     init() {
         // Demo/screenshot hook: force the on-disk `.local` store before the store is first
         // built (so the import persists and photos display). Gated on an env var, so normal
@@ -86,6 +105,52 @@ struct AkashicApp: App {
                         store.requestJourneySelection(journeyID)
                     }
                 }
+                // C7: the system hands a `.gpx` here — from Files' "Share to Akashic", from a Mail
+                // attachment's "Open in Akashic", from AirDrop, etc. — because `project.yml`
+                // registers the type. CloudKit share links do NOT arrive here: they go through
+                // `AkashicAppDelegate.application(_:userDidAcceptCloudKitShareWith:)` above instead,
+                // so this handler is GPX-only.
+                .onOpenURL { url in
+                    Task { await handleOpenedGPX(url) }
+                }
+                .sheet(item: $openedGPX) { opened in
+                    NewJourneySheet(preloadedGPX: opened.file, suggestedName: opened.suggestedName)
+                        .environmentObject(store)
+                        .environmentObject(entitlements)
+                        .environmentObject(intelligence)
+                }
+                .sheet(isPresented: $showOpenedGPXPaywall) {
+                    PaywallView(reason: .journeyLimit)
+                        .environmentObject(entitlements)
+                }
+                .alert("Couldn't open this file",
+                       isPresented: Binding(get: { openGPXAlertMessage != nil },
+                                             set: { if !$0 { openGPXAlertMessage = nil } })) {
+                    Button("OK", role: .cancel) {}
+                } message: {
+                    Text(openGPXAlertMessage ?? "")
+                }
+        }
+    }
+
+    /// C7: security-scoped read (the URL comes from outside our sandbox) → parse off the main
+    /// actor (`GPXParser.parseSecurityScoped` already `Task.detached`es the parse itself) → either
+    /// present the review sheet or surface why not. Mirrors the two other creation entry points
+    /// (`JourneyListView.startCreate`, `GlobeExperienceView.startCreate`): the paywall gate is
+    /// checked before anything is presented, not discovered after the user has already reviewed a
+    /// draft. A malformed file always surfaces as an alert and presents nothing — never a silent
+    /// no-op that leaves the user wondering whether the share worked.
+    @MainActor
+    private func handleOpenedGPX(_ url: URL) async {
+        do {
+            let file = try await GPXParser.parseSecurityScoped(url)
+            guard entitlements.canCreateJourney(ownedCount: store.billableOwnedJourneyCount) else {
+                showOpenedGPXPaywall = true
+                return
+            }
+            openedGPX = OpenedGPX(file: file, suggestedName: file.name ?? "")
+        } catch {
+            openGPXAlertMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
         }
     }
 

@@ -1,6 +1,10 @@
 # XcodeGen generates the project — never commit it.
 Akashic.xcodeproj/
 
+# C7: XcodeGen's `info.properties` (project.yml) writes this merge-fragment Info.plist on every
+# `xcodegen generate` — also generated, never commit it.
+Generated/
+
 # Xcode / build artifacts
 build/
 DerivedData/
