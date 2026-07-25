@@ -27,6 +27,9 @@ struct SettingsView: View {
     /// Wi-Fi-only download policy — the toggle below binds to it.
     @ObservedObject private var networkPolicy = NetworkPolicy.shared
 
+    /// A5 — appearance override. Automatic is the default and leaves the system in charge.
+    @AppStorage(AppearancePreference.storageKey) private var appearance: AppearancePreference = .automatic
+
     // "Your name" for comments — loaded from CommentService on appear, written back on change.
     @State private var authorName = ""
 
@@ -113,13 +116,20 @@ struct SettingsView: View {
             }
             labelled("Library", Formatters.librarySummary(journeys: store.journeys.count,
                                                           photos: store.photoCount))
+            Picker("Appearance", selection: $appearance) {
+                ForEach(AppearancePreference.allCases) { option in
+                    Text(option.label).tag(option)
+                }
+            }
             Toggle("Download over Wi-Fi only", isOn: $networkPolicy.wifiOnlyDownloads)
                 .tint(Theme.accent)
                 .foregroundStyle(Theme.textPrimary)
         } header: {
             Text("iCloud sync")
         } footer: {
-            Text("Photo downloads can reach several GB on first sync.")
+            // Says the globe stays dark out loud: choosing Light and finding the map unchanged
+            // otherwise reads as a bug rather than as the deliberate immersive choice it is.
+            Text("Photo downloads can reach several GB on first sync. The map stays dark in every appearance, so imagery keeps its contrast.")
         }
 
         Section {

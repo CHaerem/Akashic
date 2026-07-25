@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 /// Full stats experience for a single journey — the SwiftUI port of the web's `StatsTab.tsx`.
 ///
@@ -243,18 +244,39 @@ struct StatsView: View {
     }
 
     // MARK: - Palette
-
+    //
+    // Verified on screen (Kilimanjaro, Stats tab, both appearances): `violet` and `red` read
+    // fine against a white page — 3.7:1 and 4.2:1, both above the 3:1 floor for text this size
+    // (`.title3`, which clears WCAG's "large text" threshold). `green` and the difficulty
+    // badge's orange/amber did NOT — the "Hard" badge visibly washed out at ~2.8:1 and ~1.9:1
+    // (green ~2.3:1), all mirroring the web's hex 1:1 with no allowance for a light background.
+    // Rather than replace the hue family, `adaptiveHue` keeps the original (dark-mode-proven)
+    // value for dark and swaps in a darker, more saturated shade of the SAME hue for light —
+    // the same "the trait picks the value" technique `Theme` already uses for Increase
+    // Contrast, applied here to light/dark instead.
     private static let violet = Color(red: 139 / 255, green: 92 / 255, blue: 246 / 255)   // #8b5cf6
-    private static let green = Color(red: 34 / 255, green: 197 / 255, blue: 94 / 255)      // #22c55e
+    private static let green = adaptiveHue(dark: (34, 197, 94), light: (21, 128, 61))      // #22c55e / #15803d
     private static let red = Color(red: 239 / 255, green: 68 / 255, blue: 68 / 255)        // #ef4444
 
     static func difficultyColor(_ difficulty: String) -> Color {
         switch difficulty {
         case "Extreme": return Color(red: 239 / 255, green: 68 / 255, blue: 68 / 255)   // red
-        case "Hard": return Color(red: 249 / 255, green: 115 / 255, blue: 22 / 255)     // orange
-        case "Moderate": return Color(red: 234 / 255, green: 179 / 255, blue: 8 / 255)  // amber
-        default: return Color(red: 34 / 255, green: 197 / 255, blue: 94 / 255)          // green (Easy)
+        case "Hard": return adaptiveHue(dark: (249, 115, 22), light: (194, 65, 12))      // orange / dark orange
+        case "Moderate": return adaptiveHue(dark: (234, 179, 8), light: (180, 83, 9))    // amber / dark amber
+        default: return Self.green                                                       // green (Easy)
         }
+    }
+
+    /// A colour that's `dark` (0–255 RGB) under Dark Mode and `light` under Light Mode —
+    /// the system re-resolves it automatically, exactly like `Theme`'s Increase-Contrast
+    /// `UIColor`s, just keyed on `userInterfaceStyle` instead of `accessibilityContrast`.
+    private static func adaptiveHue(dark: (Int, Int, Int), light: (Int, Int, Int)) -> Color {
+        func uiColor(_ rgb: (Int, Int, Int)) -> UIColor {
+            UIColor(red: CGFloat(rgb.0) / 255, green: CGFloat(rgb.1) / 255, blue: CGFloat(rgb.2) / 255, alpha: 1)
+        }
+        return Color(uiColor: UIColor { traits in
+            traits.userInterfaceStyle == .dark ? uiColor(dark) : uiColor(light)
+        })
     }
 }
 

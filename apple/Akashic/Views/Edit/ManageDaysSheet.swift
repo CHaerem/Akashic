@@ -76,7 +76,6 @@ struct ManageDaysSheet: View {
                 Text("The day is removed and the remaining days renumber. Its photos and comments become Unassigned — nothing is deleted.")
             }
         }
-        .preferredColorScheme(.dark)
         .presentationBackground(Theme.background)
         .onAppear(perform: sync)
     }

@@ -42,6 +42,10 @@ struct AkashicApp: App {
         ExportWorkspace.purge()
     }
 
+    /// A5 — Light / Dark / Automatic, chosen in Settings. Automatic (the default) means `nil`,
+    /// i.e. no override at all.
+    @AppStorage(AppearancePreference.storageKey) private var appearance: AppearancePreference = .automatic
+
     var body: some Scene {
         WindowGroup {
             rootScreen
@@ -53,6 +57,11 @@ struct AkashicApp: App {
                 // app now follows the system appearance like any other iOS app. `Theme.swift`
                 // carries the light/dark adaptation, so removing this is safe rather than
                 // cosmetic: nothing here was still relying on a fixed dark canvas.
+                //
+                // A5: ...unless the user has chosen otherwise in Settings. `nil` for Automatic
+                // leaves the system in charge, which is the default — see `AppearancePreference`
+                // for why a viewer app earns an override that most apps should not have.
+                .preferredColorScheme(appearance.colorScheme)
                 .tint(Theme.accent)
                 // First-run onboarding (§4.2): a full-screen cover shown once. The coordinator
                 // owns the "show once" state (seeded from OnboardingState.shouldShow, which

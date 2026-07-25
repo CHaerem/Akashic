@@ -130,7 +130,6 @@ struct JourneyDetailView: View {
                     onClose: { selectedDayIndex = nil }
                 )
                 .environmentObject(store)
-                .preferredColorScheme(.dark)
                 .presentationDetents([.medium, .large])
                 .presentationBackground(Theme.background)
             }

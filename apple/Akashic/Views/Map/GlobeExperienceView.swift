@@ -133,9 +133,11 @@ struct GlobeExperienceView: View {
         }
         .fullScreenCover(isPresented: $showingPhotoGrid) {
             if let journey = controller.selectedJourney {
+                // Unlike the globe screen itself, this is an ordinary page of chrome (not the
+                // immersive map), so it follows the system appearance like everywhere else —
+                // it no longer needs its own forced-dark override.
                 NavigationStack { PhotosGridView(journeyID: journey.id) }
                     .environmentObject(store)
-                    .preferredColorScheme(.dark)
             }
         }
         .sheet(item: $sheet) { destination in
@@ -143,13 +145,11 @@ struct GlobeExperienceView: View {
             case .journeyList:
                 NavigationStack { JourneyListView() }
                     .environmentObject(store)
-                    .preferredColorScheme(.dark)
             case let .journeyDetail(id):
                 if let journey = store.journey(withID: id) {
                     NavigationStack { JourneyDetailView(journey: journey) }
                         .environmentObject(store)
                         .environmentObject(entitlements)
-                        .preferredColorScheme(.dark)
                 }
             case .newJourney:
                 NewJourneySheet()
@@ -183,6 +183,14 @@ struct GlobeExperienceView: View {
                 onClose: { controller.showOverview() }
             )
             .environmentObject(store)
+            // Unlike the journey list/detail/photo-grid presentations above (now adaptive),
+            // this sheet keeps `.presentationBackgroundInteraction(.enabled(upThrough: .medium))`
+            // — the immersive map is still visible and interactive behind it, not occluded. A
+            // light sheet over the forced-dark globe would be the exact "map stops being
+            // immersive" seam A3 says not to introduce, so this one deliberately stays paired
+            // with the map's fixed-dark chrome. `DayDetailSheet` itself is the SAME view
+            // presented (adaptively) from `JourneyDetailView` — it isn't hardcoded dark, this
+            // sheet's forced scheme is what's pinning it here.
             .preferredColorScheme(.dark)
             .presentationDetents([.medium, .large], selection: $sheetDetent)
             .presentationBackgroundInteraction(.enabled(upThrough: .medium))

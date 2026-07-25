@@ -152,7 +152,7 @@ struct RouteDrawingSheet: View {
             .font(.footnote)
             .foregroundStyle(Theme.textPrimary)
             .padding(.horizontal, 14).padding(.vertical, 8)
-            .background(.ultraThinMaterial, in: Capsule())
+            .themedMaterial(Capsule())
             .overlay(Capsule().strokeBorder(Theme.hairline, lineWidth: 1))
             .padding(.top, 12)
     }
@@ -195,7 +195,7 @@ struct RouteDrawingSheet: View {
                 .fixedSize(horizontal: false, vertical: true)
         }
         .padding(14)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .themedMaterial(RoundedRectangle(cornerRadius: 18, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(Theme.hairline, lineWidth: 1))
         .padding(.horizontal, 14)
         .padding(.bottom, 14)

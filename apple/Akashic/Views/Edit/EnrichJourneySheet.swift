@@ -66,7 +66,6 @@ struct EnrichJourneySheet: View {
                 PaywallView(reason: .enrich).environmentObject(entitlements)
             }
         }
-        .preferredColorScheme(.dark)
         .presentationBackground(Theme.background)
         .task {
             guard entitlements.isComplete, !hasRun else { return }

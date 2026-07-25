@@ -4,12 +4,12 @@ import SwiftUI
 /// `InteractiveElevationProfile.tsx`, drawn with `Canvas` at the same **300 × 120** logical
 /// space (see `ElevationProfileModel`).
 ///
-/// Visuals (parity with the web SVG):
-///   * white 1.5 pt line over a white `0.15 → 0` vertical gradient area,
-///   * a selected-day overlay (blue `#3b82f6` area `0.3 → 0` + `0.6` line) up to the
+/// Visuals (parity with the web SVG, colours adapted — see `ChartPalette`):
+///   * adaptive 1.5 pt line over a matching `0.15 → 0` vertical gradient area,
+///   * a selected-day overlay (`ChartPalette.accent` area `0.3 → 0` + `0.6` line) up to the
 ///     selected camp's x,
 ///   * camp dots r4 (selected r5) with a halo ring when selected/hovered, plus `D{n}` labels,
-///   * a dashed crosshair + white dot with a `{dist} km · {ele} m` (or camp-name) tooltip.
+///   * a dashed crosshair + a dot with a `{dist} km · {ele} m` (or camp-name) tooltip.
 ///
 /// Interaction: pinch to zoom `1×…4×` (anchored at the pinch), horizontal pan when zoomed,
 /// drag to scrub the crosshair (when un-zoomed), and tap a camp dot to select its day.
@@ -128,22 +128,24 @@ struct InteractiveElevationProfileView: View {
             var line = Path()
             line.move(to: CGPoint(x: 0, y: sy(gy)))
             line.addLine(to: CGPoint(x: size.width, y: sy(gy)))
-            context.stroke(line, with: .color(.white.opacity(0.08)), lineWidth: 1)
+            context.stroke(line, with: .color(Theme.hairline), lineWidth: 1)
         }
 
-        // Elevation line + area (white).
+        // Elevation line + area — `ChartPalette.line` inverts black/white with the appearance
+        // (was a literal `.white` stroke/fill, invisible once this screen stopped being forced
+        // dark: see `ChartPalette`'s doc comment).
         let linePath = pathThrough(model.points.map { CGPoint(x: sx($0.x), y: sy($0.y)) })
         let baseY = sy(Self.logicalHeight)
         let areaPath = closedArea(from: model.points.map { CGPoint(x: sx($0.x), y: sy($0.y)) },
                                   baseY: baseY)
         context.fill(areaPath, with: .linearGradient(
-            Gradient(colors: [.white.opacity(0.15), .white.opacity(0)]),
+            Gradient(colors: [ChartPalette.areaFillTop, ChartPalette.areaFillBottom]),
             startPoint: CGPoint(x: 0, y: sy(0)),
             endPoint: CGPoint(x: 0, y: baseY)))
-        context.stroke(linePath, with: .color(.white.opacity(0.9)),
+        context.stroke(linePath, with: .color(ChartPalette.line.opacity(0.9)),
                        style: StrokeStyle(lineWidth: 1.5, lineJoin: .round))
 
-        // Selected-day segment overlay (blue), up to the selected camp's x.
+        // Selected-day segment overlay (accent), up to the selected camp's x.
         if let marker = selectedMarker() {
             let segment = model.points.filter { $0.x <= marker.x }
             if segment.count >= 2 {
@@ -151,10 +153,10 @@ struct InteractiveElevationProfileView: View {
                 let segLine = pathThrough(segPts)
                 let segArea = closedArea(from: segPts, baseY: baseY)
                 context.fill(segArea, with: .linearGradient(
-                    Gradient(colors: [Self.blue.opacity(0.3), Self.blue.opacity(0)]),
+                    Gradient(colors: [ChartPalette.accent.opacity(0.3), ChartPalette.accent.opacity(0)]),
                     startPoint: CGPoint(x: 0, y: sy(0)),
                     endPoint: CGPoint(x: 0, y: baseY)))
-                context.stroke(segLine, with: .color(Self.blue.opacity(0.6)),
+                context.stroke(segLine, with: .color(ChartPalette.accent.opacity(0.6)),
                                style: StrokeStyle(lineWidth: 2, lineJoin: .round))
             }
         }
@@ -168,20 +170,22 @@ struct InteractiveElevationProfileView: View {
             if isSelected || isHovered {
                 let r: CGFloat = isSelected ? 10 : 8
                 let haloRect = CGRect(x: center.x - r, y: center.y - r, width: r * 2, height: r * 2)
-                let fill: Color = isSelected ? Self.blue.opacity(0.3) : .white.opacity(0.2)
+                let fill: Color = isSelected ? ChartPalette.accent.opacity(0.3) : ChartPalette.line.opacity(0.15)
                 context.fill(Path(ellipseIn: haloRect), with: .color(fill))
             }
 
+            // Dot ring is a keyline of page-background colour (`ChartPalette.dotRing`), not a
+            // fixed black/white — the same "ring matches the page" trick as a system separator,
+            // adaptive instead of assuming one fixed appearance.
             let r: CGFloat = isSelected ? 5 : 4
             let dotRect = CGRect(x: center.x - r, y: center.y - r, width: r * 2, height: r * 2)
             let dot = Path(ellipseIn: dotRect)
-            context.fill(dot, with: .color(isSelected ? Self.blue : .white.opacity(0.9)))
-            context.stroke(dot, with: .color(isSelected ? Self.blueLight : .black.opacity(0.5)),
-                           lineWidth: isSelected ? 2 : 1)
+            context.fill(dot, with: .color(isSelected ? ChartPalette.accent : ChartPalette.line.opacity(0.9)))
+            context.stroke(dot, with: .color(ChartPalette.dotRing), lineWidth: isSelected ? 2 : 1)
 
             var label = Text("D\(marker.dayNumber)")
                 .font(.system(size: 8, weight: isSelected ? .semibold : .regular))
-            label = label.foregroundColor(isSelected ? Self.blueLight : .white.opacity(0.4))
+            label = label.foregroundColor(isSelected ? ChartPalette.accent : Theme.textTertiary)
             context.draw(label, at: CGPoint(x: center.x, y: center.y - 12), anchor: .center)
         }
 
@@ -190,13 +194,13 @@ struct InteractiveElevationProfileView: View {
             var cross = Path()
             cross.move(to: CGPoint(x: sx(hover.logicalX), y: sy(0)))
             cross.addLine(to: CGPoint(x: sx(hover.logicalX), y: sy(Self.logicalHeight)))
-            context.stroke(cross, with: .color(.white.opacity(0.3)),
+            context.stroke(cross, with: .color(Theme.textSecondary.opacity(0.5)),
                            style: StrokeStyle(lineWidth: 1, dash: [4, 4]))
 
             let c = CGPoint(x: sx(hover.logicalX), y: sy(hover.logicalY))
             let dotRect = CGRect(x: c.x - 3, y: c.y - 3, width: 6, height: 6)
-            context.fill(Path(ellipseIn: dotRect), with: .color(.white))
-            context.stroke(Path(ellipseIn: dotRect), with: .color(.black.opacity(0.3)), lineWidth: 1)
+            context.fill(Path(ellipseIn: dotRect), with: .color(ChartPalette.line))
+            context.stroke(Path(ellipseIn: dotRect), with: .color(ChartPalette.dotRing), lineWidth: 1)
         }
     }
 
@@ -229,17 +233,17 @@ struct InteractiveElevationProfileView: View {
                     Text(name).font(.system(size: 10, weight: .medium))
                 } else {
                     (Text("\(hover.dist, specifier: "%.1f") km")
-                        .foregroundColor(.white.opacity(0.5))
-                     + Text("  ·  ").foregroundColor(.white.opacity(0.2))
+                        .foregroundColor(Theme.textSecondary)
+                     + Text("  ·  ").foregroundColor(Theme.textTertiary)
                      + Text("\(Int(hover.ele.rounded()))m"))
                         .font(.system(size: 10))
                 }
             }
-            .foregroundStyle(.white.opacity(0.9))
+            .foregroundStyle(Theme.textPrimary)
             .padding(.horizontal, 8)
             .padding(.vertical, 4)
-            .background(.black.opacity(0.85), in: RoundedRectangle(cornerRadius: 6))
-            .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(.white.opacity(0.15)))
+            .background(Theme.surfaceRaised, in: RoundedRectangle(cornerRadius: 6))
+            .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(Theme.hairline))
             .fixedSize()
             .position(x: clampedX, y: 8)
             .allowsHitTesting(false)
@@ -254,9 +258,9 @@ struct InteractiveElevationProfileView: View {
             } label: {
                 Text("Reset (\(zoom, specifier: "%.1f")×)")
                     .font(.system(size: 10))
-                    .foregroundStyle(.white.opacity(0.6))
+                    .foregroundStyle(Theme.textSecondary)
                     .padding(.horizontal, 8).padding(.vertical, 4)
-                    .background(.white.opacity(0.1), in: RoundedRectangle(cornerRadius: 6))
+                    .background(Theme.fillSubtle, in: RoundedRectangle(cornerRadius: 6))
             }
             .buttonStyle(.plain)
             .padding(6)
@@ -367,12 +371,10 @@ struct InteractiveElevationProfileView: View {
         }
     }
 
-    // MARK: - Palette
+    // MARK: - Geometry constants (colour palette lives in `ChartPalette`)
 
     private static let logicalWidth = ElevationProfileModel.logicalWidth
     private static let logicalHeight = ElevationProfileModel.logicalHeight
-    private static let blue = Color(red: 59 / 255, green: 130 / 255, blue: 246 / 255)      // #3b82f6
-    private static let blueLight = Color(red: 96 / 255, green: 165 / 255, blue: 250 / 255) // #60a5fa
 }
 
 #Preview {

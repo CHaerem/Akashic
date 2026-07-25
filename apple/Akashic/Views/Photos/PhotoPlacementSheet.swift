@@ -94,7 +94,7 @@ struct PhotoPlacementSheet: View {
             .font(.footnote.monospaced())
             .foregroundStyle(Theme.textPrimary)
             .padding(.horizontal, 14).padding(.vertical, 8)
-            .background(.ultraThinMaterial, in: Capsule())
+            .themedMaterial(Capsule())
             .overlay(Capsule().strokeBorder(Theme.hairline, lineWidth: 1))
             .padding(.bottom, 24)
     }

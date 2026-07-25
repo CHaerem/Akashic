@@ -1,6 +1,14 @@
 import SwiftUI
 import AVKit
 
+/// Reduce Transparency fallback for the lightbox's glass chrome buttons (both here and in
+/// `ResolvingImagePage`'s loading/retry pills below). Fixed dark, not `Theme.surface` — the
+/// backdrop underneath is fixed black in every appearance (see `PhotoLightboxView`'s doc
+/// comment on why this viewer deliberately doesn't adapt to light/dark). Parallels
+/// `MapPalette.overlaySurface` / `mapOverlayMaterial`, the map's own fixed-dark answer to the
+/// same setting.
+private let lightboxChromeOpaqueFill = Color.black.opacity(0.55)
+
 /// Everything the lightbox needs, wrapped so it can drive `.fullScreenCover(item:)`.
 struct LightboxData: Identifiable, Equatable {
     let id = UUID()
@@ -18,6 +26,15 @@ struct LightboxData: Identifiable, Equatable {
 /// When a `journey` is supplied the top bar gains an edit affordance (pencil) that opens the
 /// contextual `PhotoEditSheet`; edits update the pager's local copy in place. Passing `nil`
 /// (e.g. a read-only public context) hides all editing.
+///
+/// **Deliberately stays a fixed-dark viewer in both system appearances** — the black backdrop
+/// and white chrome text/icons here are not routed through `Theme`, on purpose. This is the same
+/// call A3 already made for the map and the globe: a full-screen photo/video pager is an
+/// immersive viewer, not a page of chrome, and that's what Apple's own Photos app does too (its
+/// lightbox stays black regardless of the system's light/dark setting). Making it "adapt" would
+/// mean a white background flashing behind photos while they decode/load, which is worse, not
+/// more correct. Reduce Transparency is a separate axis from light/dark, though, and still
+/// applies here — see `lightboxChromeOpaqueFill` above.
 struct PhotoLightboxView: View {
     let data: LightboxData
     var journey: Journey?
@@ -153,7 +170,7 @@ struct PhotoLightboxView: View {
                             .font(.callout.weight(.bold))
                             .foregroundStyle(.white)
                             .frame(width: iconButtonSize, height: iconButtonSize)
-                            .background(.ultraThinMaterial, in: Circle())
+                            .themedMaterial(Circle(), opaqueFill: lightboxChromeOpaqueFill)
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel("Edit photo")
@@ -163,7 +180,7 @@ struct PhotoLightboxView: View {
                         .font(.callout.weight(.bold))
                         .foregroundStyle(.white)
                         .frame(width: iconButtonSize, height: iconButtonSize)
-                        .background(.ultraThinMaterial, in: Circle())
+                        .themedMaterial(Circle(), opaqueFill: lightboxChromeOpaqueFill)
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Close")
@@ -198,7 +215,7 @@ struct PhotoLightboxView: View {
                             .font(.callout.weight(.semibold))
                             .foregroundStyle(.white)
                             .frame(width: iconButtonSize, height: iconButtonSize)
-                            .background(.ultraThinMaterial, in: Circle())
+                            .themedMaterial(Circle(), opaqueFill: lightboxChromeOpaqueFill)
                     }
                     .accessibilityLabel("Share")
                 }
@@ -255,7 +272,7 @@ private struct ResolvingImagePage: View {
                 ProgressView()
                     .tint(.white)
                     .padding(10)
-                    .background(.ultraThinMaterial, in: Circle())
+                    .themedMaterial(Circle(), opaqueFill: lightboxChromeOpaqueFill)
             } else if failed {
                 Button {
                     Task { await resolve() }
@@ -264,7 +281,7 @@ private struct ResolvingImagePage: View {
                         .font(.footnote.weight(.semibold))
                         .foregroundStyle(.white)
                         .padding(.horizontal, 14).padding(.vertical, 8)
-                        .background(.ultraThinMaterial, in: Capsule())
+                        .themedMaterial(Capsule(), opaqueFill: lightboxChromeOpaqueFill)
                 }
                 .buttonStyle(.plain)
             }
