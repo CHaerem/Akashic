@@ -113,6 +113,30 @@ S1 is parallelisable with C5–C6 (it touches no creation code). If the date com
 
 ---
 
+## "As if Apple made it" — A-series (added 2026-07-25)
+
+The owner set the bar: **the design should look as if Apple had made it themselves.** That is a specific standard, not a synonym for "beautiful", and the app is closer to it than most indie apps — native components, real MapKit, system materials, sheets with detents, and copy with more restraint than most shipping software. The D-series is largely this work already.
+
+But measured against the things Apple treats as non-negotiable, four gaps are *absences*, not imperfections:
+
+| Signal | Today | Why Apple would not ship it |
+|---|---|---|
+| **Reduce Motion** | **zero references in the codebase** | The signature surface is an auto-rotating globe with a cinematic fly-in. For a user with vestibular sensitivity that is not a preference, it is nausea. Apple Maps respects the setting; so does every first-party app with motion. |
+| **Reduce Transparency / Increase Contrast** | zero | Every pill and overlay is `.ultraThinMaterial`. Apple's own components adapt when these are on; custom ones have to be told. |
+| **Haptics** | zero | Apple uses `sensoryFeedback` for meaningful state changes — a day selected, a journey created, a purchase completed. Not decoration: confirmation. |
+| **Semantic colours** | zero (8 hardcoded `Color(red:)` in `Theme.swift`) | This is what makes light mode expensive, and it is the structural reason dark-only was chosen. |
+
+| ID | Task | Gate |
+|---|---|---|
+| **A1** | **Honour the accessibility display settings.** `@Environment(\.accessibilityReduceMotion)`: stop the globe's idle rotation, replace the fly-in with a cut or a cross-fade, and drop the day-transition camera animation — the destination must always be reachable without motion. `@Environment(\.accessibilityReduceTransparency)`: swap `.ultraThinMaterial` for an opaque `Theme.surface` fill. `@Environment(\.colorSchemeContrast)`: lift `textTertiary`/`textSecondary` toward full white and thicken hairlines when increased contrast is on. **This is an accessibility floor, not polish** — it belongs before submission, and it is the single clearest "Apple would not have done this" finding in the app. Files: `Views/Map/TrekCameraController.swift`, `GlobeExperienceView.swift`, `Views/Theme.swift` (material and colour helpers so the swap happens in one place). **Done when:** with all three settings on, the globe does not move on its own, nothing is translucent, and every label passes contrast — verified in the simulator with Settings → Accessibility. | submission |
+| **A2** | **Haptics on meaningful transitions** via `.sensoryFeedback`: day selected (`.selection`), journey created (`.success`), purchase completed (`.success`), a suggestion accepted (`.selection`), a destructive confirm (`.warning`). Nothing on scrolling, nothing decorative. Restraint is the point — Apple's rule is that a haptic confirms something happened, so if it fires when nothing happened it is noise. | submission |
+| **A3** | **Light mode — decision required before it is work.** `Theme.swift` is 8 hardcoded colours and no semantic ones, so supporting both appearances is roughly a week: introduce semantic/asset-catalogue colours, audit every screen in both, and re-shoot store screenshots. **The tension is real and the owner should decide knowingly:** the previously recorded decision (dark-only is right) conflicts with "as if Apple made it", because Apple ships both appearances for everything *except* deliberately immersive viewers — where dark-only is exactly what they do (Photos' viewer, Final Cut, Halide). Akashic's globe is that kind of surface; its Settings and Stats screens are not. **Recommendation: keep dark-only for v1.0** as a stated, immersive-app choice, and revisit in v1.1 — but the honest cost is that a light-mode user's Settings screen looks like a different app's. | decide, then v1.1 |
+| **A4** | **A "would Apple ship this screen?" review round**, after A1 and D2 land, on the four screens that carry the product: globe, story view, day chapter, paywall. Judge restraint (how many weights and sizes per screen), the four-layer chrome stack at the bottom of trek mode (D8), motion consistency, and the app icon. Run it as a design round, not an implementation task. | submission |
+
+**What this bar does not mean:** copying Apple's look. The globe, the periwinkle accent and the trek-shaped data are the product's own, and the reviewers were right that the copy's honesty is an asset. The bar is about *behaviour under the user's settings*, restraint, and never shipping a surface that ignores a system preference.
+
+---
+
 ## Design & HIG — D-series
 
 | ID | Task | Gate |
