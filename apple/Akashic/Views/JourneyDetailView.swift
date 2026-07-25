@@ -231,12 +231,12 @@ struct JourneyDetailView: View {
     }
 
     private var statsSummary: some View {
-        HStack(spacing: 10) {
-            StatChip(icon: "figure.walk", value: Formatters.distanceKm(live.stats.totalDistance), caption: "Distance")
-            StatChip(icon: "arrow.up.forward", value: Formatters.meters(live.stats.totalElevationGain), caption: "Ascent")
-            StatChip(icon: "mountain.2", value: Formatters.meters(live.stats.highestPoint?.elevation ?? 0), caption: "Summit")
-            StatChip(icon: "calendar", value: "\(live.stats.duration)", caption: "Days")
-        }
+        StatChipRow(items: [
+            .init(icon: "figure.walk", value: Formatters.distanceKm(live.stats.totalDistance), caption: "Distance"),
+            .init(icon: "arrow.up.forward", value: Formatters.meters(live.stats.totalElevationGain), caption: "Ascent"),
+            .init(icon: "mountain.2", value: Formatters.meters(live.stats.highestPoint?.elevation ?? 0), caption: "Summit"),
+            .init(icon: "calendar", value: "\(live.stats.duration)", caption: "Days"),
+        ])
     }
 
     private var daySection: some View {

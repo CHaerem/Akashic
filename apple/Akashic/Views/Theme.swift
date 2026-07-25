@@ -44,6 +44,44 @@ struct Card<Content: View>: View {
 }
 
 /// A small labelled stat pill (icon + value + caption).
+/// A row of `StatChip`s that wraps instead of squeezing.
+///
+/// Four chips side by side on a 402 pt phone leaves ~45 pt for the number, and `Formatters.meters`
+/// on a real summit is "5,895 m" — so Kilimanjaro's Summit chip rendered as "5,89…" even with
+/// `minimumScaleFactor`. Two columns on a compact width give every number its full width; a regular
+/// width (iPad, landscape) still gets the single row it has room for.
+struct StatChipRow: View {
+    struct Item: Identifiable {
+        var icon: String
+        var value: String
+        var caption: String
+        var id: String { caption }
+    }
+
+    @Environment(\.horizontalSizeClass) private var sizeClass
+    let items: [Item]
+    var spacing: CGFloat = 10
+
+    /// Three or fewer chips already fit a phone row; only the four-chip case needs wrapping.
+    private var wraps: Bool { sizeClass == .compact && items.count > 3 }
+
+    var body: some View {
+        if wraps {
+            LazyVGrid(columns: [GridItem(spacing: spacing), GridItem(spacing: spacing)], spacing: spacing) {
+                ForEach(items) { chip in
+                    StatChip(icon: chip.icon, value: chip.value, caption: chip.caption)
+                }
+            }
+        } else {
+            HStack(spacing: spacing) {
+                ForEach(items) { chip in
+                    StatChip(icon: chip.icon, value: chip.value, caption: chip.caption)
+                }
+            }
+        }
+    }
+}
+
 struct StatChip: View {
     let icon: String
     let value: String
