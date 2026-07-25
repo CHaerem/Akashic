@@ -230,12 +230,25 @@ struct JourneyDetailView: View {
         }
     }
 
+    /// Absent is shown as "—", never as 0. A journey created a minute ago has no route, and a
+    /// hand-drawn one has no elevation; "0 km" and "0 m Summit" read as measurements that came back
+    /// zero rather than numbers nobody has supplied yet.
     private var statsSummary: some View {
-        StatChipRow(items: [
-            .init(icon: "figure.walk", value: Formatters.distanceKm(live.stats.totalDistance), caption: "Distance"),
-            .init(icon: "arrow.up.forward", value: Formatters.meters(live.stats.totalElevationGain), caption: "Ascent"),
-            .init(icon: "mountain.2", value: Formatters.meters(live.stats.highestPoint?.elevation ?? 0), caption: "Summit"),
-            .init(icon: "calendar", value: "\(live.stats.duration)", caption: "Days"),
+        let route = live.route
+        let hasRoute = !route.coordinates.isEmpty
+        return StatChipRow(items: [
+            .init(icon: "figure.walk",
+                  value: hasRoute ? Formatters.distanceKm(live.stats.totalDistance) : "—",
+                  caption: "Distance"),
+            .init(icon: "arrow.up.forward",
+                  value: route.hasElevation ? Formatters.meters(live.stats.totalElevationGain) : "—",
+                  caption: "Ascent"),
+            .init(icon: "mountain.2",
+                  value: live.stats.highestPoint.map { Formatters.meters($0.elevation) } ?? "—",
+                  caption: "Summit"),
+            .init(icon: "calendar",
+                  value: live.stats.duration > 0 ? "\(live.stats.duration)" : "—",
+                  caption: "Days"),
         ])
     }
 
