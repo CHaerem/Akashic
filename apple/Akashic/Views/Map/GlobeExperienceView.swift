@@ -601,7 +601,7 @@ struct GlobeExperienceView: View {
                     Button {
                         controller.selectJourney(journey)
                     } label: {
-                        JourneyGlobeCard(journey: journey)
+                        JourneyGlobeCard(journey: journey, isSample: store.isSampleJourney(journey.id))
                     }
                     .buttonStyle(.plain)
                 }
@@ -615,6 +615,9 @@ struct GlobeExperienceView: View {
 /// journey overview (mirrors tapping the journey's globe pin).
 private struct JourneyGlobeCard: View {
     let journey: Journey
+    /// D9: badges the bundled demo journey right on the landing screen — the surface the whole
+    /// feature exists for ("an empty globe sells nothing").
+    var isSample: Bool = false
 
     // The flag glyph was a fixed 26 pt icon, not body text; scale it like one so it stays
     // in proportion with the title next to it instead of going stale at larger sizes.
@@ -626,12 +629,17 @@ private struct JourneyGlobeCard: View {
                 .font(.system(size: flagSize))
             // On-map card (see the note on `topBar`): fixed `MapPalette` labels, not the
             // adaptive `Theme` ones, because this card floats over the immersive map in every
-            // appearance.
+            // appearance. The SAMPLE badge is the one exception — `Theme.accent`/`.onAccent`
+            // already sit on the map elsewhere (the "Start your first journey" CTA), so reusing
+            // them here doesn't add a second on-map palette.
             VStack(alignment: .leading, spacing: 2) {
-                Text(journey.shortName)
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(MapPalette.label)
-                    .lineLimit(1)
+                HStack(spacing: 6) {
+                    Text(journey.shortName)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(MapPalette.label)
+                        .lineLimit(1)
+                    if isSample { SampleBadge() }
+                }
                 Text("\(journey.country) · \(journey.stats.duration) days")
                     .font(.caption2)
                     .foregroundStyle(MapPalette.labelSecondary)

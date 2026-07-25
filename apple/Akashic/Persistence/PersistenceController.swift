@@ -21,14 +21,35 @@ final class PersistenceController {
     let container: NSPersistentContainer
     let mode: PersistenceMode
 
-    /// IDs of journeys seeded from the bundled demo fixtures this session. These are never a
-    /// customer's real content, so the free-tier create gate excludes them — a fresh install (or a
-    /// dev/demo run) must never have its one free journey pre-consumed by the demo data.
-    /// (quality gate: fixture-seeded demo journeys consume the free tier.)
+    /// IDs of journeys seeded from the bundled demo fixtures THIS SESSION. Populated fresh on
+    /// every launch by `.fixtures` mode's full in-memory reseed (all three dev fixtures), and
+    /// also by a same-session seed of the ONE `.local`/`.cloudKit` demo journey (D9). These are
+    /// never a customer's real content, so the free-tier create gate excludes them — a fresh
+    /// install (or a dev/demo run) must never have its one free journey pre-consumed by the demo
+    /// data. (quality gate: fixture-seeded demo journeys consume the free tier.)
     private(set) var seededJourneyIDs: Set<String> = []
 
-    /// Whether a journey was seeded from the bundled demo fixtures (see `seededJourneyIDs`).
-    func isSeededFixture(journeyID: String) -> Bool { seededJourneyIDs.contains(journeyID) }
+    /// Bundle the demo journey is (re)loaded from on a later launch — stored (not `private`:
+    /// `PersistenceController+Sync.swift`'s `startSync()` reads it when wiring the deferred
+    /// `.cloudKit` seed) so that seed, fired from `onFreshInstallDetermined` long after `init`
+    /// returned, reads the fixture from the same place `init` would have.
+    let fixtureBundle: Bundle
+
+    /// Where the once-ever demo-seed decision and the persisted demo journey ids are recorded.
+    /// Injectable so tests can simulate "the next launch" against a throwaway suite instead of
+    /// polluting `.standard` (see `SyncEngineTests.makeDefaults()` for the same pattern).
+    private let defaults: UserDefaults
+
+    /// Whether a journey was seeded from the bundled demo fixtures — checked against BOTH the
+    /// in-memory `seededJourneyIDs` (this session's `.fixtures` reseed, or a same-session demo
+    /// seed) AND `demoJourneyIDs` persisted in `UserDefaults` (D9: the ONE demo journey seeded
+    /// into a real on-disk store is seeded at most once ever — see `seedDemoJourneyIfFreshInstall`
+    /// — so nothing would ever repopulate an in-memory set for it again on a later launch; without
+    /// the persisted half of this check, the demo journey would silently start counting against
+    /// the free tier, and start syncing, from the SECOND launch onward).
+    func isSeededFixture(journeyID: String) -> Bool {
+        seededJourneyIDs.contains(journeyID) || Self.persistedDemoJourneyIDs(defaults).contains(journeyID)
+    }
 
     // MARK: - CloudKit sync stack (populated only in `.cloudKit` mode; see `Sync/`)
 
@@ -66,8 +87,11 @@ final class PersistenceController {
     ///   `mode == .cloudKit` (e.g. to exercise a mode-gated branch like `deleteBlocker`'s
     ///   still-published check) can point at a throwaway temp file instead of the app's real
     ///   store — every other test drives the engine/store seam directly and stays on `.fixtures`.
-    init(mode: PersistenceMode, seed: Bool = true, fixtureBundle: Bundle = .main, storeURL: URL? = nil) {
+    init(mode: PersistenceMode, seed: Bool = true, fixtureBundle: Bundle = .main,
+         storeURL: URL? = nil, defaults: UserDefaults = .standard) {
         self.mode = mode
+        self.fixtureBundle = fixtureBundle
+        self.defaults = defaults
         let model = PersistenceController.managedObjectModel
 
         switch mode {
@@ -126,7 +150,11 @@ final class PersistenceController {
         case .fixtures:
             seedFixtures(bundle: fixtureBundle)
         case .local:
-            seedFixturesIfEmpty(bundle: fixtureBundle)
+            // `.local` never syncs, so there is no "real data about to arrive" race to consider —
+            // safe to decide synchronously, right here. `.cloudKit`'s equivalent is deliberately
+            // NOT called from init (see `seedDemoJourneyIfFreshInstall`'s doc comment); it is wired
+            // instead to `AkashicSyncEngine`'s `onFreshInstallDetermined` hook by `startSync()`.
+            seedDemoJourneyIfFreshInstall(bundle: fixtureBundle)
         case .cloudKit:
             break
         }
@@ -134,6 +162,10 @@ final class PersistenceController {
 
     // MARK: - Seeding
 
+    /// `.fixtures` dev mode: seed ALL THREE bundled dev fixtures into the in-memory store, every
+    /// launch. Deliberately unchanged by D9 — this is a development convenience (see every
+    /// `PersistenceController(mode: .fixtures, ...)` test/preview call site), not the one
+    /// customer-facing demo journey below, and it must keep working exactly as it did before.
     private func seedFixtures(bundle: Bundle) {
         let context = container.viewContext
         do {
@@ -148,12 +180,76 @@ final class PersistenceController {
         }
     }
 
-    private func seedFixturesIfEmpty(bundle: Bundle) {
+    /// Persisted (survives every relaunch) key recording whether the once-ever bundled-demo-seed
+    /// decision has already been made — seeded, or deliberately skipped. Checking "is the store
+    /// empty" instead (as the pre-D9 `.local` seeding did) cannot distinguish "fresh install,
+    /// never seeded" from "the customer deleted the sample" — both leave zero journeys in the
+    /// store — so a store-emptiness check alone would resurrect a deleted sample on every
+    /// relaunch. This flag is the difference. (quality gate: deleting the demo journey stays
+    /// deleted across relaunches.)
+    private static let demoSeedDecidedKey = "akashic.demo.seedDecided"
+
+    /// Persisted ids of journeys seeded as the bundled demo. `seededJourneyIDs` above is
+    /// in-memory and would NOT be repopulated on a later launch (the demo, unlike `.fixtures`
+    /// mode's dev fixtures, is seeded at most once ever — there is nothing to reseed on launch
+    /// two) — so `isSeededFixture` reads this persisted list too, which is what keeps the demo
+    /// free-tier-exempt and sync-excluded for its whole lifetime, not just its first session.
+    private static let demoJourneyIDsKey = "akashic.demo.journeyIDs"
+
+    private static func persistedDemoJourneyIDs(_ defaults: UserDefaults) -> Set<String> {
+        Set(defaults.stringArray(forKey: demoJourneyIDsKey) ?? [])
+    }
+
+    /// Seed the ONE bundled demo journey (Kilimanjaro — real route, real days, real notes; no
+    /// photos in the recovered fixture, so the story view falls back to its honest placeholders)
+    /// into a real (`.local`/`.cloudKit`) store, **at most once ever**, and only into a store that
+    /// is genuinely empty at the moment this runs.
+    ///
+    /// Two different callers reach this, deliberately at different times:
+    ///  - `.local`, synchronously from `init` — `.local` never syncs, so there is no race: whatever
+    ///    the store holds right now is all it will ever hold from outside this process.
+    ///  - `.cloudKit`, from `AkashicSyncEngine.onFreshInstallDetermined` (wired in
+    ///    `PersistenceController+Sync.startSync`) — fired only once the ONE fact that makes seeding
+    ///    safe is known: either there is no iCloud account (sync can never deliver anything, ever),
+    ///    or the FIRST fetch attempt just SUCCEEDED (the local store now reflects whatever the
+    ///    account actually holds). It is deliberately NOT fired when that fetch is deferred
+    ///    (Wi-Fi-only policy) or throws — in both cases whether real data is about to land is still
+    ///    unknown, and seeding a sample into a family archive that is about to arrive by sync is
+    ///    worse than not shipping the feature at all. If the account turns out to hold real
+    ///    journeys (or the user created one locally before this resolved), the store is no longer
+    ///    empty by the time this runs and the demo is skipped for good.
+    func seedDemoJourneyIfFreshInstall(bundle: Bundle) {
+        guard !defaults.bool(forKey: Self.demoSeedDecidedKey) else { return }
+        // Decided either way, the moment this runs past the guard above — seeded or skipped, this
+        // must never be reconsidered on a later launch (or a later call this same launch, e.g. a
+        // sign-out/sign-in cycle re-running `activate()`).
+        defer { defaults.set(true, forKey: Self.demoSeedDecidedKey) }
+
+        // `AKASHIC_EMPTY=1` must mean empty, full stop — the screenshot/empty-state seam takes
+        // precedence over the demo.
+        guard !Config.startEmpty else { return }
+
         let context = container.viewContext
         let request = NSFetchRequest<CDJourney>(entityName: "CDJourney")
         request.fetchLimit = 1
         let existing = (try? context.count(for: request)) ?? 0
-        if existing == 0 { seedFixtures(bundle: bundle) }
+        guard existing == 0 else { return }   // not a fresh install, or real data already landed
+
+        do {
+            let journey = try FixtureLoader.load(named: "kilimanjaro", bundle: bundle)
+            CoreDataMapping.upsertJourney(journey, into: context)
+            // Recorded BEFORE `save()`: the Core Data save notification `SyncScheduler` observes
+            // fires synchronously, on this thread, from inside `save()` — so `isSeededFixture` must
+            // already say true for this id by then, or the engine would enqueue the demo's own
+            // insert for upload before this function returns.
+            seededJourneyIDs.insert(journey.id)
+            if context.hasChanges { try context.save() }
+            var ids = Self.persistedDemoJourneyIDs(defaults)
+            ids.insert(journey.id)
+            defaults.set(Array(ids), forKey: Self.demoJourneyIDsKey)
+        } catch {
+            assertionFailure("Demo journey seeding failed: \(error)")
+        }
     }
 
     // MARK: - Reads

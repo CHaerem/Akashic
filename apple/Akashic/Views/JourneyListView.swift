@@ -27,7 +27,7 @@ struct JourneyListView: View {
                 } else {
                     ForEach(store.journeys) { journey in
                         NavigationLink(value: journey.id) {
-                            JourneyCard(journey: journey)
+                            JourneyCard(journey: journey, isSample: store.isSampleJourney(journey.id))
                         }
                         .buttonStyle(.plain)
                     }
@@ -115,6 +115,10 @@ struct JourneyEmptyState: View {
 /// A single journey summary card.
 struct JourneyCard: View {
     let journey: Journey
+    /// D9: true for the bundled demo journey. The badge is the "tell it apart" half of the
+    /// requirement; the "delete is obvious and easy" half needs no bespoke UI — it already shares
+    /// the ordinary destructive delete in `JourneyDetailView`'s overflow menu.
+    var isSample: Bool = false
 
     /// The flag glyph sits in a fixed 120 pt hero band; scale it (same treatment as
     /// `JourneyGlobeCard.flagSize` in D1) so it stays proportionate instead of eventually
@@ -131,6 +135,9 @@ struct JourneyCard: View {
                         Text(journey.countryFlag)
                             .font(.system(size: flagSize))
                             .padding(12)
+                    }
+                    .overlay(alignment: .topLeading) {
+                        if isSample { SampleBadge().padding(12) }
                     }
                 VStack(alignment: .leading, spacing: 2) {
                     Text(journey.shortName)
@@ -168,6 +175,22 @@ struct JourneyCard: View {
             RoundedRectangle(cornerRadius: 20, style: .continuous)
                 .strokeBorder(Theme.hairline, lineWidth: 1)
         )
+    }
+}
+
+/// D9: small "SAMPLE" pill marking the bundled demo journey wherever it surfaces (this list's
+/// card, the globe's journey strip, the detail header) — the one component so the three call
+/// sites can't drift in wording or styling. Uses `Theme.accent`/`Theme.onAccent`, the same pair
+/// already doing CTA duty elsewhere (e.g. `JourneyEmptyState`'s "Start your first journey"), so
+/// this doesn't introduce a new colour to the palette.
+struct SampleBadge: View {
+    var body: some View {
+        Text("SAMPLE")
+            .font(.caption2.weight(.bold))
+            .foregroundStyle(Theme.onAccent)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(Theme.accent, in: Capsule())
     }
 }
 

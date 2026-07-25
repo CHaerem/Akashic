@@ -51,6 +51,14 @@ extension PersistenceController: SyncLocalStore {
         sharedSyncCoordinator = sharedCoordinator
         // v2: a lost media zone (owner side) re-uploads that journey's PhotoMedia from local bytes.
         coordinator.onMediaZoneLost = { [weak self] journeyID in self?.healMediaZone(journeyID: journeyID) }
+        // D9: only once the private engine has determined it is safe (no account, or the first
+        // fetch succeeded) does the demo-journey seed decision get made. Deliberately wired on
+        // `coordinator` (private), never `sharedCoordinator` — a shared-in participant's account
+        // status has nothing to do with seeding a local sample of the OWNER's own journeys.
+        coordinator.onFreshInstallDetermined = { [weak self] in
+            guard let self else { return }
+            self.seedDemoJourneyIfFreshInstall(bundle: self.fixtureBundle)
+        }
         // v2 participant side: when the shared engine applies fetched changes (which may carry a
         // newly-set Journey.mediaShareURL), auto-accept any media share not yet accepted.
         sharedCoordinator.onRemoteChangesApplied = { [weak self] in self?.autoAcceptMediaSharesIfNeeded() }

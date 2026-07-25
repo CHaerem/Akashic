@@ -416,13 +416,21 @@ final class JourneyStore: ObservableObject {
     }
 
     /// The owned-journey count the create-journey paywall gate consults — owned journeys MINUS any
-    /// seeded from the bundled demo fixtures. In `.cloudKit` mode nothing is seeded, so this equals
-    /// `ownedJourneyCount`; in `.fixtures`/`.local` (dev/demo) modes the bundled demo journeys never
-    /// eat the family's one free slot. (quality gate: fixture-seeded demo journeys consume the free
-    /// tier.)
+    /// seeded from the bundled demo fixtures: `.fixtures`/`.local` mode's dev fixtures, and (D9)
+    /// the single demo journey `.local`/`.cloudKit` may seed on a fresh install. None of these ever
+    /// eat the family's one free slot — a brand-new customer who has never created a journey must
+    /// still see "create your first journey" as available, not a paywall the demo silently filled.
+    /// (quality gate: fixture-seeded demo journeys consume the free tier.)
     var billableOwnedJourneyCount: Int {
         journeys.filter {
             isOwnedByCurrentUser(journeyID: $0.id) && !persistence.isSeededFixture(journeyID: $0.id)
         }.count
+    }
+
+    /// Whether a journey is the bundled demo sample (D9) rather than the family's own content.
+    /// Views read this to badge the demo distinctly and to word its delete confirmation honestly
+    /// (it never touched iCloud, so the usual "deletes from your iCloud" copy would be false).
+    func isSampleJourney(_ id: String) -> Bool {
+        persistence.isSeededFixture(journeyID: id)
     }
 }

@@ -35,6 +35,10 @@ struct JourneyDetailView: View {
     /// restructure or enrich). Fixtures / local-mode journeys are ours by definition.
     private var isOwner: Bool { store.isOwnedByCurrentUser(journeyID: journey.id) }
 
+    /// D9: true for the bundled demo journey — drives the header badge and honest delete copy
+    /// (it never touched iCloud, so the usual "deletes from your iCloud" wording would be false).
+    private var isSample: Bool { store.isSampleJourney(journey.id) }
+
     /// The freshest copy of this journey from the store, so contextual edits reflect
     /// immediately after `store.reload()` (this view observes the store).
     private var live: Journey { store.journey(withID: journey.id) ?? journey }
@@ -184,7 +188,13 @@ struct JourneyDetailView: View {
             Button("Delete journey", role: .destructive) { deleteJourney() }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("This deletes \"\(live.shortName)\" and its photos from your iCloud and every family device. Photos already saved in your Photos library are NOT affected. Consider using Export first to keep a copy.")
+            // Honest copy (the design verdict's own bar, D9): the sample never touched iCloud, so
+            // the ordinary "from your iCloud and every family device" wording would be a lie here.
+            if isSample {
+                Text("This removes the sample \"\(live.shortName)\" journey from this device. It's bundled with the app, never synced — deleting it is permanent, but you can always start your own journey.")
+            } else {
+                Text("This deletes \"\(live.shortName)\" and its photos from your iCloud and every family device. Photos already saved in your Photos library are NOT affected. Consider using Export first to keep a copy.")
+            }
         }
         .alert("Remove from Showcase first", isPresented: $showDeleteBlockedAlert) {
             Button("Open Showcase") { showShowcase = true }
@@ -308,6 +318,10 @@ struct JourneyDetailView: View {
                 if let dates = Formatters.dateRange(live.dateStarted, live.dateEnded) {
                     Text("·").foregroundStyle(Theme.textTertiary)
                     Text(dates).foregroundStyle(Theme.textSecondary)
+                }
+                if isSample {
+                    Text("·").foregroundStyle(Theme.textTertiary)
+                    SampleBadge()
                 }
             }
             .font(.subheadline)

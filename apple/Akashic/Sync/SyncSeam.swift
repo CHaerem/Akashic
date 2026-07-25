@@ -142,4 +142,12 @@ protocol SyncLocalStore: AnyObject {
     /// All record identities for a journey in dependency order (journey root → waypoints →
     /// photos → comments) — used to enqueue a journey's initial upload.
     func recordIdentities(forJourneyID journeyID: String) -> [LocalChange]
+
+    /// Whether this journey is the bundled demo sample (D9) — or, in `.fixtures` dev mode, one of
+    /// the bundled dev fixtures — rather than the family's own content. `handles(journeyID:)` is
+    /// the ONE place this is consulted, and every sync path (the initial bulk upload, the
+    /// activation heal for a never-uploaded journey, and every observed local write) already
+    /// funnels through `handles`, so gating there is what makes "never syncs" hold everywhere at
+    /// once instead of needing a matching guard at each call site.
+    func isSeededFixture(journeyID: String) -> Bool
 }
