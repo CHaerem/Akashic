@@ -209,11 +209,35 @@ third-party apps is the **Foundation Models framework** (iOS 26+): direct,
 free, offline access to the on-device model — structured/guided generation,
 tool calling, streaming. It is a ~3B-class model: excellent at summarizing,
 drafting, naming, extracting and classifying *over content we hand it*; not a
-world-knowledge oracle. **Private Cloud Compute is not directly exposed to
-third-party apps today** — it powers Apple's own features, which we inherit for
-free (Writing Tools appear automatically in our caption/notes/comment fields on
-AI-capable devices). If Apple opens PCC APIs at a future WWDC, heavier features
-(long-journey narratives) get an upgrade path with the same privacy story.
+world-knowledge oracle. We also inherit Apple's own features for free (Writing
+Tools appear automatically in our caption/notes/comment fields on AI-capable
+devices).
+
+> **CORRECTION (2026-07-25).** This section previously said Private Cloud Compute
+> was not exposed to third-party apps. **That changed at WWDC26.** The Foundation
+> Models framework now reaches PCC, gained vision capabilities, and gained a model
+> abstraction so a session can run against Apple's on-device model, Apple's
+> frontier model on PCC, or a third-party package (Anthropic and Google both ship
+> Swift packages).
+>
+> **We qualify for it free.** Apple gives PCC access at **no cloud API cost** to
+> developers who are (a) enrolled in the App Store Small Business Program — which
+> we are doing anyway for the 15 % rate — and (b) under **2 million first-time
+> downloads**, with (c) a **PCC entitlement requested** from Apple. TestFlight and
+> ad-hoc installs don't count toward the threshold. If we ever cross 2 M or leave
+> the Small Business Program, Apple gives 6 months to migrate off.
+>
+> What this changes: the §10 ladder was scoped around a ~3B on-device model, which
+> is why the drafters are locked to rearranging facts and retrieving from
+> Wikipedia. A frontier model on PCC lifts that ceiling **without breaking the
+> privacy story** — still no servers of ours, still nothing we can see. It does not
+> change the gating discipline: PCC is available only where Apple Intelligence is,
+> so every AI feature stays runtime-gated and simply absent elsewhere, never a
+> broken button.
+>
+> **Action:** request the entitlement (developer.apple.com/contact/request/private-cloud-compute/)
+> — it is free, and the request should go in early since it is a review by Apple,
+> not a toggle.
 Hardware gate: Apple-Intelligence-capable devices (iPhone 15 Pro and newer);
 the app targets iOS 17, so every AI feature is runtime-gated and simply absent
 on older devices — never a broken button.
