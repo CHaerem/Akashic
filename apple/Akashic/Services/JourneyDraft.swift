@@ -86,20 +86,48 @@ struct JourneyDraft: Equatable {
     /// PhotoDayMatcher in reverse: cluster photos by calendar day (UTC), then propose Day 1…N in
     /// chronological order. Each day's coordinates are the median of that day's geotagged photos
     /// (empty when none carry GPS). Photos with no `takenAt` are ignored (they can't seed a day).
+    /// Thin wrapper over `daysWithAssignments(fromPhotos:)` for callers that don't need the mapping.
     static func days(fromPhotos photos: [Photo]) -> [DraftDay] {
+        daysWithAssignments(fromPhotos: photos).days
+    }
+
+    /// Sibling of `days(fromPhotos:)` that also reports which day each photo landed in (photo id →
+    /// `DraftDay.id`). `makeJourney` carries a `DraftDay`'s `id` onto its `Camp` unchanged, so this
+    /// mapping is still a valid `waypointId` once the journey is created — no id-translation step
+    /// needed at create time. (C2: stamping this straight onto each staged `Photo.waypointId` is
+    /// what lets photos land on the right day the moment the journey is made.)
+    static func daysWithAssignments(fromPhotos photos: [Photo])
+        -> (days: [DraftDay], assignments: [String: String]) {
         var buckets: [String: [Photo]] = [:]
         for photo in photos {
             guard let date = PhotoDayMatcher.parseDate(photo.takenAt) else { continue }
             buckets[dayKey(from: date), default: []].append(photo)
         }
-        return buckets.keys.sorted().enumerated().map { index, key in
+        var assignments: [String: String] = [:]
+        let days: [DraftDay] = buckets.keys.sorted().enumerated().map { index, key in
             let bucket = buckets[key] ?? []
             let coords = medianCoordinate(bucket.compactMap { $0.coordinates })
-            return DraftDay(
+            let day = DraftDay(
                 name: "Day \(index + 1)",
                 coordinates: coords ?? [],
                 dateLabel: displayLabel(fromDayKey: key),
                 source: .photoCluster)
+            for photo in bucket { assignments[photo.id] = day.id }
+            return day
+        }
+        return (days, assignments)
+    }
+
+    /// Clear `waypointId` on any photo pointing at a day no longer present in `days` — used when
+    /// the user deletes a proposed day in the review screen: its photos stay staged, just
+    /// unassigned, never deleted. Pure/testable so the view's day-removal action is a one-liner.
+    static func unassignPhotos(_ photos: [Photo], keeping days: [DraftDay]) -> [Photo] {
+        let survivingIDs = Set(days.map(\.id))
+        return photos.map { photo in
+            guard let waypointId = photo.waypointId, !survivingIDs.contains(waypointId) else { return photo }
+            var photo = photo
+            photo.waypointId = nil
+            return photo
         }
     }
 

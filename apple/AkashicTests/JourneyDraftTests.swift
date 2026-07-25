@@ -53,6 +53,53 @@ final class JourneyDraftTests: XCTestCase {
         XCTAssertTrue(days[2].coordinates.isEmpty)
     }
 
+    // MARK: - Photo → day assignment (C2: photos are staged/ingested once, not re-picked)
+
+    func testDaysWithAssignmentsMapsEachPhotoToItsClusteredDay() {
+        let sameDayA = makePhoto(takenAt: "2023-09-30T09:00:00Z", coordinates: [37.0, -3.0])
+        let sameDayB = makePhoto(takenAt: "2023-09-30T18:00:00Z", coordinates: [37.2, -3.2])
+        let earlierDay = makePhoto(takenAt: "2023-09-29T08:00:00Z", coordinates: [36.9, -2.9])
+        let dateless = makePhoto(takenAt: nil, coordinates: [1, 1])
+        let photos = [sameDayA, sameDayB, earlierDay, dateless]
+
+        let (days, assignments) = JourneyDraft.daysWithAssignments(fromPhotos: photos)
+
+        XCTAssertEqual(days.count, 2, "two calendar days; the dateless photo can't seed one")
+        // Day 1 = 2023-09-29 (chronological) → earlierDay only.
+        XCTAssertEqual(assignments[earlierDay.id], days[0].id)
+        // Day 2 = 2023-09-30 → both same-day photos land on the SAME day id.
+        XCTAssertEqual(assignments[sameDayA.id], days[1].id)
+        XCTAssertEqual(assignments[sameDayB.id], days[1].id)
+        // A photo with no capture date was never clustered, so it has no assignment — unassigned,
+        // not dropped.
+        XCTAssertNil(assignments[dateless.id])
+        XCTAssertEqual(assignments.count, 3)
+
+        // The thin `days(fromPhotos:)` wrapper must keep proposing the same days (names/sources),
+        // just without the mapping.
+        XCTAssertEqual(JourneyDraft.days(fromPhotos: photos).map(\.name), days.map(\.name))
+        XCTAssertEqual(JourneyDraft.days(fromPhotos: photos).map(\.source), days.map(\.source))
+    }
+
+    func testUnassignPhotosClearsWaypointOnlyForRemovedDays() {
+        var kept = makePhoto(takenAt: "2023-09-29T08:00:00Z", coordinates: [36.9, -2.9])
+        var removed = makePhoto(takenAt: "2023-09-30T08:00:00Z", coordinates: [37.0, -3.0])
+        let untouched = makePhoto(takenAt: nil, coordinates: nil)   // already unassigned
+
+        let keptDay = DraftDay(name: "Day 1", source: .photoCluster)
+        let removedDay = DraftDay(name: "Day 2", source: .photoCluster)
+        kept.waypointId = keptDay.id
+        removed.waypointId = removedDay.id
+
+        // The user deleted "Day 2" — only `keptDay` survives.
+        let result = JourneyDraft.unassignPhotos([kept, removed, untouched], keeping: [keptDay])
+
+        XCTAssertEqual(result[0].waypointId, keptDay.id, "still-existing day assignment is untouched")
+        XCTAssertNil(result[1].waypointId, "removed day's photo is unassigned, not deleted")
+        XCTAssertEqual(result.count, 3, "no photo is ever dropped by this helper")
+        XCTAssertNil(result[2].waypointId)
+    }
+
     // MARK: - Stats from the route (Kilimanjaro fixture)
 
     func testComputeStatsAgainstKilimanjaroRoute() throws {

@@ -60,14 +60,34 @@ struct NewJourneySheet: View {
     @State private var showingDrawing = false
     @State private var drawnRoute: RouteDrawing.DrawnRoute?
 
-    // Photo day-seeding.
+    // Photo staging + day-seeding (C2 — see apple/Docs/DESIGN-PLAN.md). Each picked item is
+    // ingested (files written + EXIF read) through the SAME `PhotoIngestService` pass that lands
+    // it on the journey at create — never loaded twice, never thrown away.
     @State private var photoSelection: [PhotosPickerItem] = []
-    @State private var isReadingPhotos = false
+    @State private var stagedPhotos: [Photo] = []
+    @State private var isStagingPhotos = false
+    @State private var photoStageTotal = 0
+    @State private var photoStageDone = 0
     @State private var photoDayCount = 0
 
     @State private var isSaving = false
     @State private var saveError: String?
     @State private var showPaywall = false
+    /// The created journey, once `create()` succeeds — kept around only so a partial photo import
+    /// (below) can hold the review screen open long enough for its banner to be seen before flying
+    /// to it. `nil` the whole time for the common case (no cap hit).
+    @State private var createdJourney: Journey?
+    /// Files already handed to `JourneyStore.addIngestedPhotos` — `onDisappear`/`cancel` must NOT
+    /// delete these. Mirrors `PhotoImportSheet`'s `committed` flag exactly.
+    @State private var committed = false
+    /// After a partial import (free tier, over the per-journey photo cap): how many staged photos
+    /// were left out.
+    @State private var partialRemainder = 0
+    @State private var showPhotoPaywall = false
+    /// Set by `cancel()`/cleanup so an ingest batch already in flight (each item is `await`ed one
+    /// at a time) stops handing new photos to `stagedPhotos` and instead deletes them the instant
+    /// they land — otherwise a cancel mid-pick could leave the tail of the batch orphaned on disk.
+    @State private var stagingCancelled = false
 
     /// Set only by `init(preloadedGPX:...)`: the suggestion pass needs `entitlements`/
     /// `intelligence` from the environment, which aren't available at init time, so it is deferred
@@ -142,7 +162,7 @@ struct NewJourneySheet: View {
                         Task { await runSuggestions() }
                     },
                     onNameOnly: { phase = .review(origin: .nameOnly) },
-                    onCancel: { dismiss() })
+                    onCancel: cancel)
             case .review:
                 reviewBody
             }
@@ -156,6 +176,14 @@ struct NewJourneySheet: View {
             if case .chooser = phase { phase = .review(origin: .photos) }
             Task { await seedDaysFromPhotos(items) }
         }
+        // Catches every way the sheet can go away that ISN'T the explicit Cancel button (swipe-
+        // to-dismiss, the presenting view tearing down) — same `committed` guard as `cancel()` so
+        // a successful create is never undone.
+        .onDisappear {
+            guard !committed else { return }
+            stagingCancelled = true
+            cleanupStagedPhotos()
+        }
         .task {
             guard needsInitialSuggestionsRun else { return }
             needsInitialSuggestionsRun = false
@@ -166,11 +194,13 @@ struct NewJourneySheet: View {
     private var reviewBody: some View {
         EditSheetScaffold(
             title: "New Journey",
-            saveTitle: "Create",
-            saveDisabled: !draft.isValid || isSaving || isReadingPhotos,
+            // Once a (possibly partial) photo import has already landed, there is nothing left to
+            // save — "Done" just navigates, same as tapping through `PhotoImportSheet`'s own banner.
+            saveTitle: createdJourney == nil ? "Create" : "Done",
+            saveDisabled: createdJourney == nil && (!draft.isValid || isSaving || isStagingPhotos),
             isSaving: isSaving,
-            onCancel: { dismiss() },
-            onSave: create
+            onCancel: cancel,
+            onSave: createdJourney == nil ? create : finishAfterPartialImport
         ) {
             // Order per the design review: name, route summary, country, dates, days, suggestions.
             // "Days from photos" isn't in that list — it seeds Days, so it stays immediately
@@ -189,6 +219,10 @@ struct NewJourneySheet: View {
         .interactiveDismissDisabled(isSaving)
         .sheet(isPresented: $showPaywall) {
             PaywallView(reason: .journeyLimit)
+                .environmentObject(entitlements)
+        }
+        .sheet(isPresented: $showPhotoPaywall) {
+            PaywallView(reason: .photoLimit(remaining: partialRemainder))
                 .environmentObject(entitlements)
         }
         .fileImporter(isPresented: $showingImporter,
@@ -441,7 +475,7 @@ struct NewJourneySheet: View {
         Task { await runSuggestions() }
     }
 
-    // MARK: Photos (seed days from photo dates)
+    // MARK: Photos (stage via PhotoIngestService, cluster from the SAME ingested photos)
 
     private var photosSection: some View {
         GlassField(label: "Days from photos", systemImage: "photo.on.rectangle.angled") {
@@ -453,12 +487,12 @@ struct NewJourneySheet: View {
                     photoLibrary: .shared()
                 ) {
                     HStack(spacing: 10) {
-                        if isReadingPhotos {
+                        if isStagingPhotos {
                             ProgressView().tint(Theme.accent)
                         } else {
                             Image(systemName: "calendar.badge.plus").font(.title3).foregroundStyle(Theme.accent)
                         }
-                        Text(isReadingPhotos ? "Reading photo dates…" : "Pick photos to propose days")
+                        Text(photoPickerLabel)
                             .font(.subheadline.weight(.semibold))
                             .foregroundStyle(Theme.textPrimary)
                         Spacer()
@@ -471,46 +505,123 @@ struct NewJourneySheet: View {
                             .strokeBorder(Theme.accent.opacity(0.4), style: StrokeStyle(lineWidth: 1, dash: [5, 4]))
                     )
                 }
-                .disabled(isReadingPhotos)
+                .disabled(isStagingPhotos)
 
-                if photoDayCount > 0 {
-                    Text("Grouped into \(photoDayCount) day(s) by capture date.")
+                if isStagingPhotos {
+                    ProgressView(value: Double(photoStageDone), total: Double(max(photoStageTotal, 1)))
+                        .tint(Theme.accent)
+                }
+                if !stagedPhotos.isEmpty {
+                    Text(stagedPhotosSummary)
                         .font(.caption2).foregroundStyle(Theme.textTertiary)
                 }
-                Text("Reads only capture dates + location to propose days. Add the actual photos after creating the journey.")
+                if partialRemainder > 0 {
+                    partialImportBanner
+                }
+                Text("Reads capture dates, location and the photos themselves — they're added to the "
+                     + "journey, on the day they belong to, the moment you create it.")
                     .font(.caption2).foregroundStyle(Theme.textTertiary)
             }
         }
     }
 
-    /// Read each picked item's EXIF (date + GPS) without ingesting the bytes, cluster into days.
-    /// Only seeds days when none exist yet, matching the route-import rule.
-    private func seedDaysFromPhotos(_ items: [PhotosPickerItem]) async {
-        isReadingPhotos = true
-        defer { isReadingPhotos = false; photoSelection = [] }
+    private var photoPickerLabel: String {
+        if isStagingPhotos { return "Preparing photos… \(photoStageDone) of \(photoStageTotal)" }
+        return stagedPhotos.isEmpty ? "Pick photos to propose days" : "Pick more photos"
+    }
 
-        var probes: [Photo] = []
-        var fixes: [PhotoFix] = []
-        for item in items {
-            guard let data = try? await item.loadTransferable(type: Data.self), !data.isEmpty else { continue }
-            let meta = ImageMetadata.extract(from: data)
-            probes.append(Photo(id: UUID().uuidString, journeyId: draft.id, waypointId: nil,
-                                url: "", thumbnailURL: nil, caption: nil,
-                                coordinates: meta.coordinates, takenAt: meta.takenAt))
-            // A usable fix needs both a coordinate and a capture instant.
-            if let coords = meta.coordinates, coords.count >= 2,
-               let takenAt = meta.takenAt, let date = PhotoDayMatcher.parseDate(takenAt) {
-                fixes.append(PhotoFix(coordinate: coords, timestamp: date, altitude: meta.altitude))
+    private var stagedPhotosSummary: String {
+        let base = "\(stagedPhotos.count) photo\(stagedPhotos.count == 1 ? "" : "s") ready"
+        guard photoDayCount > 0 else { return base }
+        return "\(base) · grouped into \(photoDayCount) day(s) by capture date"
+    }
+
+    /// Shown after a free-tier partial import: what landed, what didn't, and the way to unlock the
+    /// rest. Never a silent drop — the remainder is always named. Copied verbatim from
+    /// `PhotoImportSheet`'s banner (same contract, same wording) rather than inventing a second one.
+    private var partialImportBanner: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Label("\(partialRemainder) photo\(partialRemainder == 1 ? "" : "s") couldn't be added",
+                  systemImage: "exclamationmark.triangle.fill")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(Theme.warning)
+            Text("The free tier holds up to \(EntitlementPolicy.freePhotosPerOwnedJourney) photos per journey. "
+                 + "We added the ones that fit. Akashic Complete lifts the cap so the rest can come too.")
+                .font(.caption)
+                .foregroundStyle(Theme.textSecondary)
+            Button {
+                showPhotoPaywall = true
+            } label: {
+                Label("Unlock with Akashic Complete", systemImage: "star.circle")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(Theme.accent)
             }
+            .buttonStyle(.plain)
         }
-        photoFixes = fixes
-        let proposed = JourneyDraft.days(fromPhotos: probes)
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Theme.surface, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Theme.hairline, lineWidth: 1))
+    }
+
+    /// Stage each picked item through `PhotoIngestService.ingest(pickerItem:journeyId:sortOrder:)`,
+    /// keyed to `draft.id` — minted up front precisely so files ingested before create already key
+    /// to it — then derive EXIF fixes (for route inference) and day clusters from those SAME
+    /// ingested photos. This used to load every photo's bytes twice: once here to probe EXIF
+    /// (discarding the bytes immediately after), and again after the journey existed, when the
+    /// caption told the user to pick the same photos again. That double-load-then-discard was the
+    /// C2 defect — a family experiences it as the app losing their photos.
+    ///
+    /// Only (re)seeds days when the current list is still fully auto-proposed, matching the
+    /// route-import rule; clustering runs over ALL staged photos so far (not just this batch), so a
+    /// second pick still produces one consistent day list and one consistent assignment set.
+    private func seedDaysFromPhotos(_ items: [PhotosPickerItem]) async {
+        isStagingPhotos = true
+        photoStageTotal = items.count
+        photoStageDone = 0
+        defer {
+            isStagingPhotos = false
+            photoSelection = []
+            photoStageTotal = 0
+            photoStageDone = 0
+        }
+
+        let service = PhotoIngestService()
+        var order = stagedPhotos.count
+        for item in items {
+            if let photo = try? await service.ingest(pickerItem: item, journeyId: draft.id, sortOrder: order) {
+                if stagingCancelled {
+                    // The sheet was cancelled while this item was still loading — its bytes were
+                    // just written, so delete them immediately rather than leaving them orphaned.
+                    PhotoEditService().deleteFiles(for: photo)
+                } else {
+                    stagedPhotos.append(photo)
+                    order += 1
+                }
+            }
+            photoStageDone += 1
+        }
+        guard !stagingCancelled else { return }
+
+        // Route-inference fixes come from the SAME ingested photos — no altitude (`Photo` doesn't
+        // persist EXIF altitude; `RouteInference` degrades gracefully to a 2D route without it).
+        photoFixes = stagedPhotos.compactMap { photo in
+            guard let coords = photo.coordinates, coords.count >= 2,
+                  let takenAt = photo.takenAt, let date = PhotoDayMatcher.parseDate(takenAt)
+            else { return nil }
+            return PhotoFix(coordinate: coords, timestamp: date)
+        }
+
+        let (proposed, assignments) = JourneyDraft.daysWithAssignments(fromPhotos: stagedPhotos)
         // Only claim "Grouped into N day(s)" when the proposal is actually applied — otherwise the
         // caption advertised days that were discarded because the user had already built a list.
         // (quality gate: replace route / photo-day-count shown even when discarded.)
         if draft.days.isEmpty || JourneyDraft.daysAreAllAutoSeeded(draft.days) {
             draft.days = proposed
             photoDayCount = proposed.count
+            for index in stagedPhotos.indices {
+                stagedPhotos[index].waypointId = assignments[stagedPhotos[index].id]
+            }
         } else {
             photoDayCount = 0
         }
@@ -672,7 +783,7 @@ struct NewJourneySheet: View {
                     .foregroundStyle(index == draft.days.count - 1 ? Theme.textTertiary : Theme.textSecondary)
             }
             .buttonStyle(.plain).disabled(index == draft.days.count - 1)
-            Button { draft.days.remove(at: index) } label: {
+            Button { removeDay(at: index) } label: {
                 Image(systemName: "xmark.circle.fill").foregroundStyle(Theme.textTertiary)
             }
             .buttonStyle(.plain)
@@ -684,6 +795,14 @@ struct NewJourneySheet: View {
 
     private func addDay() {
         draft.days.append(DraftDay(name: "Day \(draft.days.count + 1)", source: .manual))
+    }
+
+    /// Remove a day, then unassign (never delete) any staged photo that pointed at it — the day was
+    /// only a proposal; the photos the user picked are not.
+    private func removeDay(at index: Int) {
+        guard draft.days.indices.contains(index) else { return }
+        draft.days.remove(at: index)
+        stagedPhotos = JourneyDraft.unassignPhotos(stagedPhotos, keeping: draft.days)
     }
 
     // MARK: Suggest names with Apple Intelligence (M6)
@@ -757,7 +876,7 @@ struct NewJourneySheet: View {
     // MARK: Create
 
     private func create() {
-        guard draft.isValid, !isSaving else { return }
+        guard draft.isValid, !isSaving, createdJourney == nil else { return }
         // Defense in depth: the entry points pre-gate, but if this sheet is ever open while the
         // user is already at the free-journey limit, present the paywall instead of creating.
         guard entitlements.canCreateJourney(ownedCount: store.billableOwnedJourneyCount) else {
@@ -772,10 +891,66 @@ struct NewJourneySheet: View {
             saveError = "Could not save the journey. Please try again."
             return
         }
-        // Land the user in their new journey via the existing deep-link path (the globe observes
-        // `pendingJourneySelection` and flies to it).
-        store.requestJourneySelection(created.id)
-        onCreated(created)
+        isSaving = false
+        commitStagedPhotos(to: created)
+    }
+
+    /// Land the staged photos on the just-created journey, capped by the free-tier per-journey
+    /// photo limit — a brand-new journey is always owned and starts at zero photos, so the math is
+    /// simpler than `PhotoImportSheet`'s (no existing count to add to), but the over-cap branch
+    /// copies its contract exactly: import what fits, delete the rest's staged files, and name the
+    /// remainder via the same banner + paywall CTA. Never a silent drop.
+    private func commitStagedPhotos(to journey: Journey) {
+        let allowed = entitlements.photosAllowed(currentCount: 0, adding: stagedPhotos.count, isOwned: true)
+        guard allowed < stagedPhotos.count else {
+            // Nothing staged, or everything fits — the original path.
+            if !stagedPhotos.isEmpty { store.addIngestedPhotos(stagedPhotos) }
+            committed = true
+            finish(journey)
+            return
+        }
+
+        let keep = Array(stagedPhotos.prefix(allowed))
+        let drop = Array(stagedPhotos.suffix(stagedPhotos.count - allowed))
+        let service = PhotoEditService()
+        for photo in drop { service.deleteFiles(for: photo) }
+        if !keep.isEmpty { store.addIngestedPhotos(keep) }
+        committed = true
+        stagedPhotos = []
+        partialRemainder = drop.count
+        // Hold the review screen open (as `PhotoImportSheet` does) so the banner above is actually
+        // seen before flying to the new journey — "Done" replaces "Create" once this is set.
+        createdJourney = journey
+    }
+
+    /// Land the user in their new journey via the existing deep-link path (the globe observes
+    /// `pendingJourneySelection` and flies to it).
+    private func finish(_ journey: Journey) {
+        store.requestJourneySelection(journey.id)
+        onCreated(journey)
         dismiss()
+    }
+
+    /// "Done" after a partial import already showed its banner — the journey exists and everything
+    /// that could be saved already was, so this just navigates.
+    private func finishAfterPartialImport() {
+        guard let createdJourney else { return }
+        finish(createdJourney)
+    }
+
+    // MARK: Cancel / cleanup
+
+    /// Delete every staged file — a photo picked here but never committed must never linger on
+    /// disk. Copies `PhotoImportSheet`'s cleanup contract exactly.
+    private func cancel() {
+        stagingCancelled = true
+        cleanupStagedPhotos()
+        dismiss()
+    }
+
+    private func cleanupStagedPhotos() {
+        let service = PhotoEditService()
+        for photo in stagedPhotos { service.deleteFiles(for: photo) }
+        stagedPhotos = []
     }
 }
