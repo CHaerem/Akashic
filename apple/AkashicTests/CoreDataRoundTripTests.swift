@@ -63,6 +63,29 @@ final class CoreDataRoundTripTests: XCTestCase {
         XCTAssertEqual(try context.count(for: waypointsReq), journey.camps.count)
     }
 
+    /// S2: `journeyType` must survive a Core Data save/load unchanged — both the ordinary
+    /// default and a non-default value. Before the fix, `upsertJourney` stamped every row
+    /// "trek" regardless of what the domain `Journey` carried, so a "diary" input would have
+    /// silently come back "trek"; that is exactly what this test would have caught.
+    func testJourneyTypeSurvivesCoreDataRoundTrip() throws {
+        let controller = PersistenceController(mode: .fixtures, seed: false, fixtureBundle: bundle)
+        let context = controller.container.viewContext
+
+        var trek = try FixtureLoader.load(named: "kilimanjaro", bundle: bundle)
+        XCTAssertEqual(trek.journeyType, "trek", "fixture precondition: default journeyType")
+        CoreDataMapping.upsertJourney(trek, into: context)
+        try context.save()
+        let loadedTrek = try XCTUnwrap(controller.loadJourneys().first { $0.id == trek.id })
+        XCTAssertEqual(loadedTrek.journeyType, "trek")
+
+        trek.journeyType = "diary"
+        CoreDataMapping.upsertJourney(trek, into: context)
+        try context.save()
+        let loadedDiary = try XCTUnwrap(controller.loadJourneys().first { $0.id == trek.id })
+        XCTAssertEqual(loadedDiary.journeyType, "diary",
+                       "a non-default value must not be overwritten by a hardcoded \"trek\"")
+    }
+
     /// The seeding path loads all three fixtures into the store.
     func testSeededStoreLoadsAllJourneys() throws {
         let controller = PersistenceController(mode: .fixtures, seed: true, fixtureBundle: bundle)

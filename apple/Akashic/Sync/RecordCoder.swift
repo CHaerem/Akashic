@@ -169,7 +169,9 @@ enum RecordCoder {
         record["slug"] = journey.slug
         record["description"] = journey.description
         record["country"] = journey.country
-        record["journeyType"] = "trek"
+        // S2: carry the domain value rather than stamping "trek" — QUERYABLE in the schema, so a
+        // fossilised wrong value here can never be retyped away in Production.
+        record["journeyType"] = journey.journeyType
         record["isPublic"] = journey.isPublic ? 1 : 0
         record["summitElevation"] = journey.summitElevation
         record["totalDistance"] = journey.totalDistance
@@ -210,6 +212,9 @@ enum RecordCoder {
             dateStarted: DateOnly.string(from: record["dateStarted"] as? Date),
             dateEnded: DateOnly.string(from: record["dateEnded"] as? Date),
             isPublic: (record["isPublic"] as? Int ?? 0) == 1,
+            // S2: decode what the record actually carries; "trek" only for records written
+            // before this field existed.
+            journeyType: record["journeyType"] as? String ?? "trek",
             summitElevation: record["summitElevation"] as? Int,
             totalDistance: totalDistance,
             totalDays: totalDays,

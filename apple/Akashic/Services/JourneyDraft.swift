@@ -43,6 +43,12 @@ struct JourneyDraft: Equatable {
     var route: Route?
     var days: [DraftDay] = []
 
+    /// S2: carried straight through to the created `Journey` rather than left for `makeJourney`
+    /// to hardcode. Every draft today is a "trek" — C1 asks one creation question, not a
+    /// taxonomy pick — but the field is honest all the way from here, so S4's inference has
+    /// somewhere real to write.
+    var journeyType: String = "trek"
+
     /// A journey needs at least a name; everything else (route, days, dates) is optional.
     var isValid: Bool { !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
 
@@ -246,6 +252,7 @@ struct JourneyDraft: Equatable {
             dateStarted: DateOnly.string(from: dateStarted),
             dateEnded: DateOnly.string(from: dateEnded),
             isPublic: false,
+            journeyType: journeyType,
             summitElevation: stats.highestPoint?.elevation,
             totalDistance: stats.totalDistance,
             totalDays: stats.duration,

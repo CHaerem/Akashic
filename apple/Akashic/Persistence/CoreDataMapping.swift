@@ -32,7 +32,9 @@ enum CoreDataMapping {
         cd.dateStarted = DateOnly.date(from: journey.dateStarted)
         cd.dateEnded = DateOnly.date(from: journey.dateEnded)
         cd.isPublic = journey.isPublic
-        cd.journeyType = "trek"
+        // S2: carry the domain value instead of stamping "trek" — the field defaults to "trek"
+        // on `Journey` itself, so behaviour is unchanged until something (S4) sets it otherwise.
+        cd.journeyType = journey.journeyType
         cd.summitElevation = Int64(journey.summitElevation ?? 0)
         cd.totalDistance = journey.totalDistance ?? 0
         cd.totalDays = Int64(journey.totalDays ?? 0)
@@ -121,6 +123,9 @@ enum CoreDataMapping {
             dateStarted: DateOnly.string(from: cd.dateStarted),
             dateEnded: DateOnly.string(from: cd.dateEnded),
             isPublic: cd.isPublic,
+            // S2: read back what was actually stored (falls back to "trek" for rows written
+            // before this attribute existed, matching its Core Data default).
+            journeyType: cd.journeyType ?? "trek",
             summitElevation: cd.summitElevation == 0 ? stats.highestPoint?.elevation : Int(cd.summitElevation),
             totalDistance: cd.totalDistance,
             totalDays: Int(cd.totalDays),

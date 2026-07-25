@@ -128,7 +128,9 @@ enum PublicMirrorBuilder {
         record["name"] = journey.name
         record["description"] = journey.description
         record["country"] = journey.country
-        record["journeyType"] = "trek"
+        // S2: mirror the owner's own value rather than stamping "trek" — this record is also
+        // QUERYABLE and world-readable, so it deserves the same honesty as the private one.
+        record["journeyType"] = journey.journeyType
         record["summitElevation"] = journey.summitElevation
         record["totalDistance"] = journey.totalDistance
         record["totalDays"] = journey.totalDays

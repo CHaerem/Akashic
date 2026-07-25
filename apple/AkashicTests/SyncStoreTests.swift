@@ -518,6 +518,25 @@ final class SyncStoreTests: XCTestCase {
                        "the record cannot carry the hero path, so applying it must not null it")
     }
 
+    /// S2: `applyJourneyScalars` must apply the fetched record's actual `journeyType`, not
+    /// stamp "trek" — otherwise a value another device set correctly would be silently
+    /// clobbered back to "trek" on the next sync of this device.
+    func testApplyFetchedJourneyAppliesNonDefaultJourneyType() throws {
+        let (controller, journey) = try seededController()
+        let zone = RecordCoder.zoneID(forJourneyID: journey.id)
+        var updated = journey
+        updated.journeyType = "diary"
+        let record = RecordCoder.record(for: updated, in: zone)
+
+        controller.beginRemoteApply()
+        controller.applyFetchedRecord(record)
+        controller.endRemoteApply()
+
+        let cd = try XCTUnwrap(controller.viewContext.registeredObjects
+            .compactMap { $0 as? CDJourney }.first { $0.id == journey.id })
+        XCTAssertEqual(cd.journeyType, "diary")
+    }
+
     func testApplyDeletedJourneyCascades() throws {
         let (controller, journey) = try seededController()
 

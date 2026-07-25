@@ -423,7 +423,10 @@ extension PersistenceController: SyncLocalStore {
         cd.dateStarted = DateOnly.date(from: journey.dateStarted)
         cd.dateEnded = DateOnly.date(from: journey.dateEnded)
         cd.isPublic = journey.isPublic
-        cd.journeyType = "trek"
+        // S2: apply what the incoming record actually decoded, not a fixed "trek" — the
+        // decode itself (`RecordCoder.journey(from:)`) already falls back to "trek" when the
+        // field is absent, so this is never a regression for older records.
+        cd.journeyType = journey.journeyType
         cd.summitElevation = Int64(journey.summitElevation ?? 0)
         cd.totalDistance = journey.totalDistance ?? 0
         cd.totalDays = Int64(journey.totalDays ?? 0)
