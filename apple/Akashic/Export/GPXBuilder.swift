@@ -26,7 +26,7 @@ enum GPXBuilder {
             lines.append("    <desc>\(escape(journey.description))</desc>")
         }
         if let generatedAt {
-            lines.append("    <time>\(iso8601.string(from: generatedAt))</time>")
+            lines.append("    <time>\(ISO8601Shared.string(from: generatedAt))</time>")
         }
         lines.append("  </metadata>")
 
@@ -99,9 +99,4 @@ enum GPXBuilder {
             .replacingOccurrences(of: "'", with: "&apos;")
     }
 
-    private static let iso8601: ISO8601DateFormatter = {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime]
-        return formatter
-    }()
 }

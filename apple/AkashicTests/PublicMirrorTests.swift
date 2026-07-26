@@ -1,4 +1,5 @@
 import XCTest
+import os
 import CloudKit
 import CoreLocation
 @testable import Akashic
@@ -385,10 +386,17 @@ final class PublicMirrorTests: XCTestCase {
 
     func testPublishReportsProgressToOne() async {
         let mock = MockPublicDatabase()
-        var last: PublicMirrorProgress?
-        _ = await PublicMirrorPublisher(database: mock).publish(journey: makeJourney(), photos: makePhotos()) { last = $0 }
-        XCTAssertEqual(last?.fraction, 1.0)
-        XCTAssertEqual(last?.phase, "Done")
+        // QUA-08: `progress` is `@Sendable` now, so a plain captured `var` would be "mutation of
+        // captured var in concurrently-executing code". The publisher calls progress sequentially
+        // from its own task, so a locked box is honest and keeps the assertion exactly as it was.
+        let last = OSAllocatedUnfairLock<PublicMirrorProgress?>(initialState: nil)
+        _ = await PublicMirrorPublisher(database: mock)
+            .publish(journey: makeJourney(), photos: makePhotos()) { p in
+                last.withLock { $0 = p }
+            }
+        let final = last.withLock { $0 }
+        XCTAssertEqual(final?.fraction, 1.0)
+        XCTAssertEqual(final?.phase, "Done")
     }
 
     // MARK: - Unpublish
@@ -827,11 +835,11 @@ final class ShowcaseViewModelTests: XCTestCase {
         private(set) var unpublishCalled = false
         init(_ report: PublicMirrorReport) { self.report = report }
         func publish(journey: Journey, photos: [Photo],
-                     progress: ((PublicMirrorProgress) -> Void)?) async -> PublicMirrorReport {
+                     progress: (@Sendable (PublicMirrorProgress) -> Void)?) async -> PublicMirrorReport {
             publishCalled = true; return report
         }
         func unpublish(slug: String,
-                       progress: ((PublicMirrorProgress) -> Void)?) async -> PublicMirrorReport {
+                       progress: (@Sendable (PublicMirrorProgress) -> Void)?) async -> PublicMirrorReport {
             unpublishCalled = true; return report
         }
     }

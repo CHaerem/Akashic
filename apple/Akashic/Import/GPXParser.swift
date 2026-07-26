@@ -367,16 +367,8 @@ final class GPXParserDelegate: NSObject, XMLParserDelegate {
 
     // MARK: Time parsing
 
-    private static let isoWithFraction: ISO8601DateFormatter = {
-        let f = ISO8601DateFormatter()
-        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return f
-    }()
-    private static let iso: ISO8601DateFormatter = {
-        let f = ISO8601DateFormatter()
-        f.formatOptions = [.withInternetDateTime]
-        return f
-    }()
+    // QUA-08: was a private static ISO8601DateFormatter. See ISO8601Shared for why these are
+    // serialised centrally rather than annotated nonisolated(unsafe) at each site.
 
     /// Lenient fallback for GPX writers that emit a zone-less `<time>` ("2023-09-29T06:00:00" with
     /// no Z/offset — nonconformant but real). `xsd:dateTime` allows the timezone to be absent, so
@@ -399,8 +391,7 @@ final class GPXParserDelegate: NSObject, XMLParserDelegate {
 
     static func parseTime(_ string: String) -> Date? {
         guard !string.isEmpty else { return nil }
-        return iso.date(from: string)
-            ?? isoWithFraction.date(from: string)
+        return ISO8601Shared.date(from: string)
             ?? zonelessLocal.date(from: string)
             ?? zonelessLocalFraction.date(from: string)
     }

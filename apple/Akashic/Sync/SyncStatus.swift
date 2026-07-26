@@ -86,7 +86,7 @@ final class SyncStatus: ObservableObject {
                           comment: "Settings › iCloud sync status row: iCloud could not be reached right now; it is expected to recover on its own.")
         case .active:
             if let date = lastSyncDate {
-                let relative = Self.relative.localizedString(for: date, relativeTo: Date())
+                let relative = Self.relativeString(for: date)
                 return String(localized: "Syncing · last update \(relative)",
                               comment: "Settings › iCloud sync status row: sync is running. The placeholder is an already-localised relative time, e.g. \"2 min ago\".")
             }
@@ -143,11 +143,21 @@ final class SyncStatus: ObservableObject {
         }
     }
 
-    private static let relative: RelativeDateTimeFormatter = {
+    /// QUA-08: built per call rather than held as a shared static.
+    ///
+    /// `RelativeDateTimeFormatter` is not `Sendable` — and unlike `DateFormatter`, which Apple marks
+    /// `NS_SWIFT_SENDABLE` with a comment about its locks, Apple declined to vouch for this one (see
+    /// `ISO8601Shared` for the full note). `SyncStatus` is a plain `ObservableObject` with no
+    /// isolation, so a shared instance here would be genuinely unprotected.
+    ///
+    /// Not worth a lock: this is reached only from the Settings sync-status row's description, once
+    /// per status change, so construction cost is invisible — where `ISO8601Shared` is on a
+    /// per-photo path and had to keep its instances.
+    private static func relativeString(for date: Date) -> String {
         let f = RelativeDateTimeFormatter()
         f.unitsStyle = .short
-        return f
-    }()
+        return f.localizedString(for: date, relativeTo: Date())
+    }
 }
 
 // MARK: - Account status seam

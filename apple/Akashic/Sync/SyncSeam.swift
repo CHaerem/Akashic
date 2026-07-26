@@ -24,7 +24,10 @@ struct LocalChange: Equatable {
 /// Seam over the underlying `CKSyncEngine` so the coordinator's enqueue / flush logic is
 /// testable against a mock. Only the surface the coordinator actually drives is exposed;
 /// the real implementation is `CKSyncEngineAdapter`, tests inject a recording mock.
-protocol SyncEngineProtocol: AnyObject {
+// QUA-08: `Sendable` because `AkashicSyncEngine` hands this across an isolation boundary.
+// The shipping conformer `CKSyncEngineAdapter` holds a single `let engine: CKSyncEngine`, and
+// CloudKit declares `final public class CKSyncEngine: Sendable`, so it satisfies this for free.
+protocol SyncEngineProtocol: AnyObject, Sendable {
     var pendingRecordZoneChanges: [CKSyncEngine.PendingRecordZoneChange] { get }
     var pendingDatabaseChanges: [CKSyncEngine.PendingDatabaseChange] { get }
 

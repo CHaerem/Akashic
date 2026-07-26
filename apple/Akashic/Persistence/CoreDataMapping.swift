@@ -209,15 +209,12 @@ enum CoreDataMapping {
             contentHash: cd.contentHash)
     }
 
-    private static let isoFormatter: ISO8601DateFormatter = {
-        let f = ISO8601DateFormatter()
-        f.formatOptions = [.withInternetDateTime]
-        return f
-    }()
+    // QUA-08: was a private static ISO8601DateFormatter. See ISO8601Shared for why these are
+    // serialised centrally rather than annotated nonisolated(unsafe) at each site.
 
     private static func isoString(from date: Date?) -> String? {
         guard let date else { return nil }
-        return isoFormatter.string(from: date)
+        return ISO8601Shared.string(from: date)
     }
 
     private static func camp(from wp: CDWaypoint) -> Camp {

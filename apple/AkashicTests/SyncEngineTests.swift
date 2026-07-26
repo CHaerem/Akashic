@@ -858,7 +858,11 @@ final class SyncEngineTests: XCTestCase {
 // MARK: - Seam mocks
 
 /// Recording mock for `SyncEngineProtocol`.
-final class MockSyncEngine: SyncEngineProtocol {
+// QUA-08: `@unchecked` because the five mutable stored properties below are test scripting
+// state, touched only from `@MainActor` XCTestCases — one isolation domain, so the promise holds.
+// `@MainActor` is NOT the alternative here: three of the seam's requirements are synchronous and
+// a main-actor member cannot witness them.
+final class MockSyncEngine: SyncEngineProtocol, @unchecked Sendable {
     private(set) var pendingRecordZoneChanges: [CKSyncEngine.PendingRecordZoneChange] = []
     private(set) var pendingDatabaseChanges: [CKSyncEngine.PendingDatabaseChange] = []
     private(set) var sendCount = 0

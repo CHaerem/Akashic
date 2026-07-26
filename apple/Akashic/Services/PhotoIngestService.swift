@@ -119,7 +119,7 @@ enum ImageMetadata {
         if let exif = props[kCGImagePropertyExifDictionary] as? [CFString: Any],
            let raw = exif[kCGImagePropertyExifDateTimeOriginal] as? String,
            let date = exifDateFormatter.date(from: raw) {
-            meta.takenAt = isoFormatter.string(from: date)
+            meta.takenAt = ISO8601Shared.string(from: date)
         }
 
         if let tiff = props[kCGImagePropertyTIFFDictionary] as? [CFString: Any] {
@@ -140,11 +140,8 @@ enum ImageMetadata {
         return f
     }()
 
-    static let isoFormatter: ISO8601DateFormatter = {
-        let f = ISO8601DateFormatter()
-        f.formatOptions = [.withInternetDateTime]
-        return f
-    }()
+    // QUA-08: was a private static ISO8601DateFormatter. See ISO8601Shared for why these are
+    // serialised centrally rather than annotated nonisolated(unsafe) at each site.
 }
 
 // MARK: - Thumbnailing (400px max, JPEG q0.8, orientation-corrected)
@@ -457,7 +454,7 @@ final class PhotoIngestService {
                     coordinates = parsed
                 } else if key == .commonKeyCreationDate,
                           let date = try? await item.load(.dateValue) {
-                    takenAt = ImageMetadata.isoFormatter.string(from: date)
+                    takenAt = ISO8601Shared.string(from: date)
                 }
             }
         }

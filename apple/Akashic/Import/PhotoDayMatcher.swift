@@ -130,23 +130,22 @@ struct PhotoDayMatcher {
 
     // MARK: - Date parsing
 
-    private static let isoWithFraction: ISO8601DateFormatter = {
-        let f = ISO8601DateFormatter()
-        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return f
-    }()
-    private static let iso: ISO8601DateFormatter = {
-        let f = ISO8601DateFormatter()
-        f.formatOptions = [.withInternetDateTime]
-        return f
-    }()
-
     /// Parse a timestamp that may be a full ISO-8601 instant, or a bare `yyyy-MM-dd`
     /// date (interpreted as UTC midnight, matching JS `new Date("YYYY-MM-DD")`).
+    ///
+    /// QUA-08: the two `ISO8601DateFormatter` statics that used to live here were a real race, not a
+    /// bookkeeping warning — this function is reached from `@MainActor JourneyStore` during SwiftUI
+    /// body evaluation *and*, concurrently, from the cooperative pool through nonisolated `async`
+    /// `PhotoCurationService.curate` and `PublicMirrorPublisher.publish`. `ISO8601Shared` serialises
+    /// them; see that file for why serialising beats `nonisolated(unsafe)` here.
+    ///
+    /// Deliberately NOT confined to the `PhotoDayMatcher` instance instead: this struct is
+    /// implicitly `Sendable` today (every member is `Int`/`Date?`/`[[Double]]`), and holding a
+    /// formatter reference would make it non-`Sendable` — which would break the
+    /// `dayOf: { matcher.day(for: $0) }` closures that cross into async work at
+    /// `PublicMirrorPublisher.swift:509` and `PhotoCurationService.swift:46`.
     static func parseDate(_ string: String?) -> Date? {
-        guard let s = string, !s.isEmpty else { return nil }
-        if let d = iso.date(from: s) { return d }
-        if let d = isoWithFraction.date(from: s) { return d }
-        return DateOnly.date(from: s)   // bare yyyy-MM-dd → UTC midnight
+        ISO8601Shared.date(from: string)
+            ?? DateOnly.date(from: string)   // bare yyyy-MM-dd → UTC midnight
     }
 }

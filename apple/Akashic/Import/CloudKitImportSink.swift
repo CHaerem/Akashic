@@ -665,15 +665,11 @@ final class CloudKitImportSink: ImportSink {
         }
     }
 
-    private static let isoWithFraction: ISO8601DateFormatter = {
-        let f = ISO8601DateFormatter(); f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]; return f
-    }()
-    private static let isoPlain: ISO8601DateFormatter = {
-        let f = ISO8601DateFormatter(); f.formatOptions = [.withInternetDateTime]; return f
-    }()
+    // QUA-08: was a private static ISO8601DateFormatter. See ISO8601Shared for why these are
+    // serialised centrally rather than annotated nonisolated(unsafe) at each site.
     static func parseISO(_ string: String?) -> Date? {
         guard let s = string, !s.isEmpty else { return nil }
-        return isoWithFraction.date(from: s) ?? isoPlain.date(from: s) ?? DateOnly.date(from: s)
+        return ISO8601Shared.date(from: s) ?? DateOnly.date(from: s)
     }
 
     // MARK: Error classification

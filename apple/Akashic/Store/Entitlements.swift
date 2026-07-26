@@ -208,7 +208,11 @@ enum EntitlementOverride {
 /// can inject fake entitlement states, products, and transaction updates without ever touching
 /// StoreKit — mirroring the `SyncEngineProtocol` / `SyncLocalStore` seam pattern. The real
 /// implementation is `StoreKitProvider`; tests inject a recording fake.
-protocol StoreKitProviding {
+// QUA-08: `Sendable` because `Entitlements` sends its provider across isolation boundaries
+// (four `sending 'self.provider'` sites). The shipping conformer is stateless over StoreKit 2's
+// own Sendable API; the test fake is scripting state and takes `@unchecked`, as this target
+// already does for `MockMediaDatabase` and `RecordingAccepter`.
+protocol StoreKitProviding: Sendable {
     /// Load the Complete product (for its localized price/name), or `nil` if the store has no such
     /// product configured yet (offline, or App Store Connect not populated). Never bricks the UI.
     func loadProduct() async throws -> StoreProduct?

@@ -260,20 +260,16 @@ enum PublicMirrorBuilder {
         for entry in entries { try? fileManager.removeItem(at: entry) }
     }
 
-    private static let isoFormatter: ISO8601DateFormatter = {
-        let f = ISO8601DateFormatter()
-        f.formatOptions = [.withInternetDateTime]
-        return f
-    }()
+    // QUA-08: was a private static ISO8601DateFormatter. See ISO8601Shared for why these are
+    // serialised centrally rather than annotated nonisolated(unsafe) at each site.
 
     /// Tolerant ISO-8601 parse (with or without fractional seconds), then bare `yyyy-MM-dd`.
+    ///
+    /// QUA-08: `ISO8601Shared.date(from:)` covers both ISO shapes, so the fractional formatter this
+    /// built per call is gone. The `DateOnly` fallback stays — that is a different format, not a
+    /// different formatter.
     private static func isoDate(from string: String?) -> Date? {
-        guard let string, !string.isEmpty else { return nil }
-        if let date = isoFormatter.date(from: string) { return date }
-        let withFraction = ISO8601DateFormatter()
-        withFraction.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        if let date = withFraction.date(from: string) { return date }
-        return DateOnly.date(from: string)
+        ISO8601Shared.date(from: string) ?? DateOnly.date(from: string)
     }
 }
 
@@ -366,14 +362,28 @@ struct PublicMirrorReport: Equatable {
 /// handling (flip the `isPublic` flag only AFTER the network op succeeds) is what needs coverage.
 protocol PublicMirrorPublishing {
     func publish(journey: Journey, photos: [Photo],
-                 progress: ((PublicMirrorProgress) -> Void)?) async -> PublicMirrorReport
+                 progress: (@Sendable (PublicMirrorProgress) -> Void)?) async -> PublicMirrorReport
     func unpublish(slug: String,
-                   progress: ((PublicMirrorProgress) -> Void)?) async -> PublicMirrorReport
+                   progress: (@Sendable (PublicMirrorProgress) -> Void)?) async -> PublicMirrorReport
 }
 
 /// Executes publish / unpublish against a `PublicMirrorDatabase`. Not main-actor: pure record
 /// building + async DB calls. The caller (a `@MainActor` view model) marshals `progress`.
-final class PublicMirrorPublisher: PublicMirrorPublishing {
+///
+/// ## `@unchecked Sendable` (QUA-08) — and its removal condition
+///
+/// `JourneyShowcaseSheet`'s `@MainActor` view model hands this instance into its own async work, so
+/// the type has to be `Sendable`. The facts behind the promise are checkable: all three stored
+/// properties are `let`; `PublicMirrorConfig` is three `Int`s; and `database` is a `CKDatabase` in
+/// every shipping path, which CloudKit declares `NS_SWIFT_SENDABLE`.
+///
+/// It is `@unchecked` rather than checked only because `PublicMirrorDatabase` — the seam that exists
+/// so tests can inject a mock — is not itself `Sendable`. **Removal condition:** declare
+/// `protocol PublicMirrorDatabase: Sendable` and this becomes a plain checked conformance.
+/// That is deliberately not done here: `CKDatabase` satisfies it for free, but the test double
+/// `MockPublicDatabase` has seven mutable stored properties and would have to become an `actor`,
+/// which adds `await` to ~30 assertions. Worth doing, not worth doing inside this commit.
+final class PublicMirrorPublisher: PublicMirrorPublishing, @unchecked Sendable {
 
     private let database: PublicMirrorDatabase
     private let config: PublicMirrorConfig
@@ -485,7 +495,7 @@ final class PublicMirrorPublisher: PublicMirrorPublishing {
     @discardableResult
     func publish(journey: Journey,
                  photos: [Photo],
-                 progress: ((PublicMirrorProgress) -> Void)? = nil) async -> PublicMirrorReport {
+                 progress: (@Sendable (PublicMirrorProgress) -> Void)? = nil) async -> PublicMirrorReport {
         var report = PublicMirrorReport()
         defer { PublicMirrorBuilder.purgeAssetScratch() }
 
@@ -616,7 +626,7 @@ final class PublicMirrorPublisher: PublicMirrorPublishing {
     /// could have published under (see `candidateSlugs`).
     @discardableResult
     func unpublish(slug: String,
-                   progress: ((PublicMirrorProgress) -> Void)? = nil) async -> PublicMirrorReport {
+                   progress: (@Sendable (PublicMirrorProgress) -> Void)? = nil) async -> PublicMirrorReport {
         var report = PublicMirrorReport()
         progress?(PublicMirrorProgress(fraction: 0.0,
                                        phase: String(localized: "Finding published photos",
