@@ -22,6 +22,8 @@ struct WeatherRow: View {
                     .font(.system(size: symbolSize))
                     .symbolRenderingMode(.multicolor)
                     .foregroundStyle(WeatherPresentation.tint(for: weather.weatherCode))
+                    // The condition is written out immediately below the glyph.
+                    .accessibilityHidden(true)
                 Text(WeatherPresentation.label(for: weather.weatherCode))
                     .font(.caption2.weight(.medium))
                     .foregroundStyle(Theme.textSecondary)
@@ -29,11 +31,14 @@ struct WeatherRow: View {
                     .lineLimit(2)
             }
             .frame(width: 72)
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel(Text("Weather: \(WeatherPresentation.label(for: weather.weatherCode))"))
 
             if hasAnyMetric {
                 Divider()
                     .frame(height: 40)
                     .overlay(Theme.hairline)
+                    .accessibilityHidden(true)
 
                 HStack(spacing: 16) {
                     if let hi = weather.temperatureMax {
@@ -65,11 +70,15 @@ struct WeatherRow: View {
         )
     }
 
+    /// QUA-07: name first, value as the value, glyph hidden — the same three-elements-per-metric
+    /// pattern as `StatsView.dayMetric` and `DayRow.metric`. Four of these in a row meant twelve
+    /// announcements for four numbers, each one arriving before the word that gave it meaning.
     private func metric(icon: String, value: String, label: LocalizedStringKey, tint: Color) -> some View {
         VStack(alignment: .leading, spacing: 3) {
             Image(systemName: icon)
                 .font(.footnote)
                 .foregroundStyle(tint)
+                .accessibilityHidden(true)
             Text(value)
                 .font(.footnote.weight(.semibold))
                 .foregroundStyle(Theme.textPrimary)
@@ -79,6 +88,9 @@ struct WeatherRow: View {
                 .font(.caption2)
                 .foregroundStyle(Theme.textTertiary)
         }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(label)
+        .accessibilityValue(value)
     }
 
     private func temp(_ value: Double) -> String {

@@ -135,7 +135,8 @@ struct DayDetailSheet: View {
     private func header(_ camp: Camp) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 12) {
-                chevron("chevron.left", enabled: dayIndex > 0) { onSelectDay(dayIndex - 1) }
+                chevron("chevron.left", label: "Previous day",
+                        enabled: dayIndex > 0) { onSelectDay(dayIndex - 1) }
 
                 VStack(spacing: 2) {
                     Text("DAY \(camp.dayNumber)")
@@ -149,8 +150,15 @@ struct DayDetailSheet: View {
                         .lineLimit(2)
                 }
                 .frame(maxWidth: .infinity)
+                // QUA-07: the day number is set in all-caps with letter tracking for looks; heard as
+                // its own element it is "D-A-Y 3". One element, and the heading trait so the rotor can
+                // jump straight back to it after reading a long day.
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(Text("Day \(camp.dayNumber), \(camp.name)"))
+                .accessibilityAddTraits(.isHeader)
 
-                chevron("chevron.right", enabled: dayIndex < journey.camps.count - 1) {
+                chevron("chevron.right", label: "Next day",
+                        enabled: dayIndex < journey.camps.count - 1) {
                     onSelectDay(dayIndex + 1)
                 }
             }
@@ -164,10 +172,17 @@ struct DayDetailSheet: View {
             .font(.caption)
             .foregroundStyle(Theme.textSecondary)
             .frame(maxWidth: .infinity)
+            // The date and the elevation are the day's subtitle, one line on screen and one fact to
+            // hear.
+            .accessibilityElement(children: .combine)
         }
     }
 
-    private func chevron(_ system: String, enabled: Bool, action: @escaping () -> Void) -> some View {
+    /// QUA-07: `label` is required. Both of these were bare `Image(systemName: "chevron.left")` inside
+    /// a `Button`, which is announced as nothing useful — and they are the only way to move between
+    /// days from this sheet, so a reader could open day 1 and not leave it.
+    private func chevron(_ system: String, label: LocalizedStringKey, enabled: Bool,
+                         action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: system)
                 .font(.subheadline.weight(.semibold))
@@ -178,6 +193,7 @@ struct DayDetailSheet: View {
         }
         .buttonStyle(.plain)
         .disabled(!enabled)
+        .accessibilityLabel(label)
     }
 
     // MARK: - Helpers

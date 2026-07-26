@@ -95,6 +95,28 @@
         }
       }
     },
+    "%@, from %@ to %@": {
+      "comment": "Mini elevation chart: the profile in one sentence — distance, lowest and highest point.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@, fra %@ til %@"
+          }
+        }
+      }
+    },
+    "%@, from %@ to %@, with %lld days marked": {
+      "comment": "Elevation chart: the profile in one sentence — distance, lowest and highest point, day count.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@, fra %@ til %@, med %lld dager markert"
+          }
+        }
+      }
+    },
     "%@, unchanged at %@": {
       "comment": "Route correction: one line of the stats diff where nothing moved.",
       "localizations": {
@@ -338,6 +360,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "%lld av %lld"
+          }
+        }
+      }
+    },
+    "%lld of %lld characters": {
+      "comment": "Comments: the composer's character count, as the field's accessibility value.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld av %lld tegn"
           }
         }
       }
@@ -1535,6 +1568,28 @@
     "CloudKit mode requires the Release-CloudKit build with entitlements and an iCloud account. Changes apply after relaunching the app.": {
       "shouldTranslate": false
     },
+    "Collapsed": {
+      "comment": "Day discoveries: accessibility value of a closed card.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sammenslått"
+          }
+        }
+      }
+    },
+    "Collapses the details": {
+      "comment": "Day discoveries: accessibility hint for an open card.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Slår sammen detaljene"
+          }
+        }
+      }
+    },
     "Comment on Day %lld…": {
       "localizations": {
         "nb": {
@@ -1822,6 +1877,17 @@
         }
       }
     },
+    "Day %lld, %@, %@ into the route, %@": {
+      "comment": "Mini elevation chart: one day marker — number, name, distance along the route, elevation.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dag %lld, %@, %@ inn i ruten, %@"
+          }
+        }
+      }
+    },
     "Day description": {
       "comment": "Day editor: accessibility label for the notes editor, which has no placeholder.",
       "localizations": {
@@ -1919,6 +1985,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "Slett"
+          }
+        }
+      }
+    },
+    "Delete comment": {
+      "comment": "Comments: accessibility action replacing the swipe-to-delete reveal.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Slett kommentaren"
           }
         }
       }
@@ -2106,6 +2183,17 @@
         }
       }
     },
+    "Difficulty rating": {
+      "comment": "Stats: accessibility label for the difficulty badge, whose value is the rating itself.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vanskelighetsgrad"
+          }
+        }
+      }
+    },
     "Discard": {
       "localizations": {
         "nb": {
@@ -2164,6 +2252,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "Distanse (km)"
+          }
+        }
+      }
+    },
+    "Distance along the route": {
+      "comment": "Elevation chart Audio Graph: the horizontal axis.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Distanse langs ruten"
           }
         }
       }
@@ -2432,6 +2531,17 @@
         }
       }
     },
+    "Edit and Delete actions are available": {
+      "comment": "Comments: accessibility hint on your own comment, whose swipe reveal VoiceOver cannot perform.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Handlingene Rediger og Slett er tilgjengelige"
+          }
+        }
+      }
+    },
     "Edit dates": {
       "comment": "New journey: accessibility label for Edit on the collapsed dates row.",
       "localizations": {
@@ -2594,6 +2704,17 @@
         }
       }
     },
+    "Elevation profile": {
+      "comment": "Elevation chart: accessibility label, Audio Graph title, and the continuous series' name.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Høydeprofil"
+          }
+        }
+      }
+    },
     "Elevation Profile": {
       "localizations": {
         "nb": {
@@ -2711,6 +2832,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "Alle du inviterer ser dagene, bildene og kommentarene på denne turen. De som kan redigere kan legge til bilder og kommentarer; de andre kan bare lese."
+          }
+        }
+      }
+    },
+    "Expanded": {
+      "comment": "Day discoveries: accessibility value of an open card.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Utvidet"
+          }
+        }
+      }
+    },
+    "Expands the details": {
+      "comment": "Day discoveries: accessibility hint for a closed card.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Utvider detaljene"
           }
         }
       }
@@ -2838,6 +2981,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "Ferdig, men noe mislyktes"
+          }
+        }
+      }
+    },
+    "Flies the globe into this journey": {
+      "comment": "Globe: accessibility hint for a journey card in the bottom strip.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Flyr kloden inn i denne turen"
           }
         }
       }
@@ -3140,6 +3294,17 @@
         }
       }
     },
+    "Highlights: %@": {
+      "comment": "Day row: accessibility label for the highlight chips, read as one list.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Høydepunkter: %@"
+          }
+        }
+      }
+    },
     "Historical Sites": {
       "localizations": {
         "nb": {
@@ -3364,6 +3529,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "Turdetaljer"
+          }
+        }
+      }
+    },
+    "Journey options": {
+      "comment": "Journey detail: accessibility label for the overflow menu.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Turvalg"
           }
         }
       }
@@ -3690,6 +3866,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "Kart over den nåværende ruten"
+          }
+        }
+      }
+    },
+    "Map of the route, %lld days marked": {
+      "comment": "Journey detail: accessibility label for the non-interactive route map.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kart over ruten, %lld dager markert"
           }
         }
       }
@@ -4267,6 +4454,17 @@
         }
       }
     },
+    "Open Audio Graph from the VoiceOver rotor to explore the route point by point": {
+      "comment": "Elevation chart: accessibility hint pointing at the Audio Graph.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Åpne Lyddiagram fra VoiceOver-rotoren for å utforske ruten punkt for punkt"
+          }
+        }
+      }
+    },
     "Open Showcase": {
       "localizations": {
         "nb": {
@@ -4287,6 +4485,28 @@
         }
       }
     },
+    "Opens all %lld photos in this journey": {
+      "comment": "Journey detail: accessibility hint for View all photos.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Åpner alle %lld bildene i denne turen"
+          }
+        }
+      }
+    },
+    "Opens in Safari": {
+      "comment": "Day discoveries: accessibility hint for an external link on a historical site.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Åpnes i Safari"
+          }
+        }
+      }
+    },
     "Opens the Akashic Complete purchase sheet": {
       "comment": "Accessibility hint for an unlock button.",
       "localizations": {
@@ -4298,6 +4518,17 @@
         }
       }
     },
+    "Opens the day. An Edit day action is also available.": {
+      "comment": "Journey detail: accessibility hint telling VoiceOver users a day row has a context menu.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Åpner dagen. Handlingen Rediger dag er også tilgjengelig."
+          }
+        }
+      }
+    },
     "Opens the file picker so you can choose a GPX track": {
       "comment": "New journey: accessibility hint for the GPX card.",
       "localizations": {
@@ -4305,6 +4536,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "Åpner filvelgeren så du kan velge et GPX-spor"
+          }
+        }
+      }
+    },
+    "Opens the journey as a day-by-day story": {
+      "comment": "Journey detail: accessibility hint for Read this journey.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Åpner turen som en fortelling dag for dag"
+          }
+        }
+      }
+    },
+    "Opens the list of every journey": {
+      "comment": "Globe: accessibility hint for the Journeys button.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Åpner lista over alle turene"
           }
         }
       }
@@ -5170,6 +5423,17 @@
     "Reset (%.1f×)": {
       "shouldTranslate": false
     },
+    "Reset the zoom": {
+      "comment": "Elevation chart: accessibility label for the reset button.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nullstill zoomen"
+          }
+        }
+      }
+    },
     "Restore purchases": {
       "localizations": {
         "nb": {
@@ -5271,6 +5535,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "EKSEMPEL"
+          }
+        }
+      }
+    },
+    "Sample journey": {
+      "comment": "Accessibility label for the SAMPLE badge — all-caps is a visual weight, not a word to spell out.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eksempeltur"
           }
         }
       }
@@ -5819,6 +6094,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "Topp"
+          }
+        }
+      }
+    },
+    "Summit %@, %@": {
+      "comment": "Journey card: accessibility label for the summit line — name and elevation.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Topp %@, %@"
           }
         }
       }
@@ -6569,6 +6855,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "Vær, steder og severdigheter til dager som mangler det. Ingenting legges inn før du trykker Godta."
+          }
+        }
+      }
+    },
+    "Weather: %@": {
+      "comment": "Day weather: accessibility label for the condition glyph and its word.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vær: %@"
           }
         }
       }

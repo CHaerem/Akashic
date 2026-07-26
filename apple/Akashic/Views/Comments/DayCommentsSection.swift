@@ -78,6 +78,13 @@ struct DayCommentsSection: View {
                                 .strokeBorder(Theme.hairline, lineWidth: 1)
                         )
                         .disabled(isSending)
+                        // QUA-07: the counter that appears near the limit is a separate element
+                        // floating inside the field's own frame, so it was announced after the field
+                        // rather than as part of it — and only over 1 800 characters, exactly when it
+                        // matters. As the field's value it arrives with the field.
+                        .accessibilityValue(isNearLimit
+                                            ? Text("\(draft.count) of \(CommentService.maxLength) characters")
+                                            : Text(draft))
 
                     if isNearLimit {
                         Text("\(draft.count)/\(CommentService.maxLength)")
@@ -85,6 +92,7 @@ struct DayCommentsSection: View {
                             .foregroundStyle(isOverLimit ? commentDanger : Theme.textTertiary)
                             .padding(.trailing, 10)
                             .padding(.bottom, 8)
+                            .accessibilityHidden(true)
                     }
                 }
 
@@ -208,10 +216,30 @@ private struct CommentRow: View {
         ZStack(alignment: .trailing) {
             if swipeEnabled {
                 swipeActions
+                    // QUA-07: these two buttons sit *behind* the card and are revealed by a custom
+                    // horizontal `DragGesture`. VoiceOver cannot perform that drag, so as elements
+                    // they were two unlabelled glyphs at a screen position with nothing on it — while
+                    // the real affordance, editing or deleting your own comment, was unreachable. The
+                    // named actions below are the accessible equivalent: they appear in the Actions
+                    // rotor on the comment itself, which is where a reader looks for them.
+                    .accessibilityHidden(true)
             }
             cardWithSwipe
         }
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: offset)
+        .accessibilityActions {
+            if comment.isMine, !isEditing {
+                Button("Edit comment") {
+                    editText = comment.content
+                    isEditing = true
+                    resetOffset()
+                }
+                Button("Delete comment") { confirmingDelete = true }
+            }
+        }
+        .accessibilityHint(comment.isMine && !isEditing
+                           ? "Edit and Delete actions are available"
+                           : "")
         .confirmationDialog("Delete this comment?", isPresented: $confirmingDelete, titleVisibility: .visible) {
             Button("Delete", role: .destructive) { onDelete() }
             Button("Cancel", role: .cancel) { resetOffset() }
@@ -251,6 +279,8 @@ private struct CommentRow: View {
                 }
                 Spacer(minLength: 0)
             }
+            // Author, when, and whether it was edited are one attribution line.
+            .accessibilityElement(children: .combine)
 
             if isEditing {
                 editor
@@ -277,6 +307,9 @@ private struct CommentRow: View {
             .foregroundStyle(Theme.textSecondary)
             .frame(width: avatarSize, height: avatarSize)
             .background(Theme.accentSoft, in: Circle())
+            // A single initial standing in for a face. The name is spelled out beside it, so this
+            // adds a stray letter and nothing else.
+            .accessibilityHidden(true)
     }
 
     // MARK: Inline editor

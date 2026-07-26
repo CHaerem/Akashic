@@ -77,14 +77,26 @@ struct StatsView: View {
                         .foregroundStyle(Theme.textSecondary)
                 }
             }
+            // QUA-07: the hero is one fact — the trip's high point — laid out as a label, a number
+            // and a place name. Three announcements made the headline figure of the whole tab arrive
+            // as "Summit", "5 895 m", "Uhuru Peak" with a swipe between each.
+            .accessibilityElement(children: .combine)
         }
     }
 
+    /// QUA-07: `StatChip` renders an icon, a value and a caption as three elements, so this row was
+    /// six announcements for three numbers — and the caption comes *after* the value, so a reader
+    /// heard "3 d" before learning it was the duration. Combining at the row rather than per chip is
+    /// deliberate: these three are the journey's headline together, and `StatChip` itself lives in
+    /// `Theme.swift`, which this task does not own (reported).
     private var headerChips: some View {
         HStack(spacing: 12) {
             StatChip(icon: "calendar", value: "\(journey.stats.duration) d", caption: "Duration")
+                .accessibilityElement(children: .combine)
             StatChip(icon: "figure.walk", value: Formatters.distanceKm(journey.stats.totalDistance), caption: "Distance")
+                .accessibilityElement(children: .combine)
             StatChip(icon: "arrow.up.forward", value: "+\(Formatters.meters(journey.stats.totalElevationGain))", caption: "Ascent")
+                .accessibilityElement(children: .combine)
         }
     }
 
@@ -130,6 +142,8 @@ struct StatsView: View {
                         .font(.subheadline).foregroundStyle(Theme.textSecondary)
                         .lineLimit(1).minimumScaleFactor(0.7)
                 }
+                .accessibilityElement(children: .combine)
+                .accessibilityAddTraits(.isHeader)
                 HStack(spacing: 0) {
                     dayMetric("Distance", Formatters.distanceKm(camp.dayDistance), "figure.walk")
                     dayMetric("Ascent", "+\(camp.elevationGainFromPrevious)m", "arrow.up.forward")
@@ -151,14 +165,21 @@ struct StatsView: View {
         .transition(.opacity)
     }
 
+    /// The label comes *below* the value visually, which is fine to look at and wrong to hear — so
+    /// the accessibility label states the name first and the value as the value, and the glyph (a
+    /// third element that only restates the label) is hidden.
     private func dayMetric(_ label: LocalizedStringKey, _ value: String, _ icon: String) -> some View {
         VStack(alignment: .leading, spacing: 3) {
             Image(systemName: icon).font(.caption2).foregroundStyle(Theme.accent)
+                .accessibilityHidden(true)
             Text(value).font(.subheadline.weight(.semibold)).foregroundStyle(Theme.textPrimary)
                 .lineLimit(1).minimumScaleFactor(0.7)
             Text(label).font(.caption2).foregroundStyle(Theme.textTertiary)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(label)
+        .accessibilityValue(value)
     }
 
     // MARK: - Extended stats grids (web StatsTab parity)
@@ -211,7 +232,10 @@ struct StatsView: View {
             VStack(alignment: .leading, spacing: 6) {
                 sectionLabel("Rating")
                 HStack(spacing: 8) {
+                    // The dot repeats the rating in colour only — nothing for a screen reader, and
+                    // nothing for a colour-blind reader either, which is why the word is beside it.
                     Circle().fill(color).frame(width: 10, height: 10)
+                        .accessibilityHidden(true)
                     // `extended.difficulty` is a stable English token (see
                     // `ExtendedStatsCalculator.localizedDifficulty`), so it has to be translated
                     // here at the display seam — `Text(extended.difficulty)` rendered the raw
@@ -224,6 +248,9 @@ struct StatsView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(color.opacity(0.4)))
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Difficulty rating")
+        .accessibilityValue(Text(ExtendedStatsCalculator.localizedDifficulty(extended.difficulty)))
     }
 
     // MARK: - Building blocks
@@ -238,6 +265,10 @@ struct StatsView: View {
             .font(.caption2.weight(.medium))
             .tracking(1.4)
             .foregroundStyle(Theme.textSecondary)
+            // These five labels are the tab's structure, so they are the right rotor stops: heading
+            // navigation jumps Summit → Elevation Profile → Journey Stats → Elevation → Difficulty
+            // instead of swiping through fourteen stat cards to reach the next section.
+            .accessibilityAddTraits(.isHeader)
     }
 
     @ViewBuilder
@@ -323,6 +354,14 @@ struct StatItem: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
+        // QUA-07: ten of these fill the Stats tab, each three separate elements, so reading the
+        // extended stats was thirty swipes for ten numbers. `children: .combine` rather than an
+        // explicit label so the optional sublabel ("Day 4") is carried without this view having to
+        // know whether it is there — and the label/value split is kept, because the value is what a
+        // reader wants repeated when they focus a cell again.
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(label)
+        .accessibilityValue(sublabel.map { Text("\(value), \(Text($0))") } ?? Text(value))
     }
 }
 

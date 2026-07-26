@@ -562,6 +562,7 @@ struct GlobeExperienceView: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .accessibilityHint("Opens the list of every journey")
         }
         .padding(.horizontal, 12)
     }
@@ -627,8 +628,11 @@ private struct JourneyGlobeCard: View {
 
     var body: some View {
         HStack(spacing: 10) {
+            // QUA-07: the country is named in words on the second line, so the flag is the same fact
+            // as a picture — and VoiceOver announces it as its own element before the journey's name.
             Text(journey.countryFlag)
                 .font(.system(size: flagSize))
+                .accessibilityHidden(true)
             // On-map card (see the note on `topBar`): fixed `MapPalette` labels, not the
             // adaptive `Theme` ones, because this card floats over the immersive map in every
             // appearance. The SAMPLE badge is the one exception — `Theme.accent`/`.onAccent`
@@ -658,6 +662,10 @@ private struct JourneyGlobeCard: View {
         )
         .frame(minHeight: 44)
         .contentShape(Rectangle())
+        // Name, sample badge, country and day count are one card describing one journey — four
+        // elements each was four swipes per journey along the strip.
+        .accessibilityElement(children: .combine)
+        .accessibilityHint("Flies the globe into this journey")
     }
 }
 

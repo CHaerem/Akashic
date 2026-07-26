@@ -136,6 +136,12 @@ final class StringCatalogTests: XCTestCase {
             "Accept %@": "Godta %@",
             // Sharing — who can see the family's photos.
             "Manage %@": "Administrer %@",
+            // The hand-rolled elevation `Canvas`, which contains no text of any kind — so the label
+            // and the Audio Graph's own axis titles are the only words it has.
+            "Elevation profile": "Høydeprofil",
+            "Distance along the route": "Distanse langs ruten",
+            // A day marker on the mini chart, which was a bare `Color.clear` tap target.
+            "Day %lld, %@, %@ into the route, %@": "Dag %lld, %@, %@ inn i ruten, %@",
         ]
         for (key, value) in expected {
             XCTAssertEqual(nb.localizedString(forKey: key, value: nil, table: "Localizable"), value,
