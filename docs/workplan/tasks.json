@@ -283,7 +283,8 @@
       "verify": [
         "grep -rln cloudflare .github/workflows/  # expect no hits",
         "gh run list --branch main --limit 5"
-      ]
+      ],
+      "resume": "Ready to execute the moment its owner dependency clears; no agent work needed beforehand. All other agent tasks in the ledger are DONE as of 2026-07-26."
     },
     {
       "id": "LEG-11",
@@ -735,7 +736,8 @@
       "verify": [
         "cd apple && xcodegen generate",
         "grep -rn 'associated-domains' apple/Akashic/*.entitlements"
-      ]
+      ],
+      "resume": "Ready to execute the moment its owner dependency clears; no agent work needed beforehand. All other agent tasks in the ledger are DONE as of 2026-07-26."
     },
     {
       "id": "SHIP-08",
@@ -1783,7 +1785,8 @@
       "verify": [
         "test ! -d workers",
         "npx vitest --run"
-      ]
+      ],
+      "resume": "Ready to execute the moment its owner dependency clears; no agent work needed beforehand. All other agent tasks in the ledger are DONE as of 2026-07-26."
     },
     {
       "id": "LEG-13",
@@ -1802,7 +1805,8 @@
       ],
       "verify": [
         "test ! -d supabase"
-      ]
+      ],
+      "resume": "Ready to execute the moment its owner dependency clears; no agent work needed beforehand. All other agent tasks in the ledger are DONE as of 2026-07-26."
     },
     {
       "id": "DOC-18",
