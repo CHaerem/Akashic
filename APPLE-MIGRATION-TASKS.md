@@ -7,7 +7,7 @@
 
 > **Where the migration actually stands (updated 2026-07-25).** The migration itself is **finished**: CloudKit sync is live (D4 = custom `CKRecord` sync via `CKSyncEngine`, zone-per-journey), the family archive is imported into **Production** (1559 records / 3070 assets), the schema is promoted, the web client is CloudKit-only with Supabase retired, and the showcase publishes. D5 (MapKit) and D6 (frozen read-mostly web) are both decided. What remains here is **operator work only** — TestFlight testers, Pages/DNS cutover, Phase-5 decommission — all marked 🧑 below.
 >
-> Product work has moved on to commercialization: see **[COMMERCIALIZATION-PLAN.md](./COMMERCIALIZATION-PLAN.md)** for the forward plan and **W7** at the bottom of this file for milestone status (M1–M10 + draw-on-map). The nightly build log ran 2026-07-21 → 24 across five nights; test suite is **560 native + ~402 web, CI green**.
+> Product work has moved on to commercialization: see **[COMMERCIALIZATION-PLAN.md](./COMMERCIALIZATION-PLAN.md)** for the forward plan and **W7** at the bottom of this file for milestone status (M1–M10 + draw-on-map). The nightly build log ran 2026-07-21 → 24 across five nights; test suite is **602 native + 402 web, CI green** — `grep -rn 'func test' apple/AkashicTests | wc -l` gives the native figure, `npx vitest --run` the web one. (The simulator run reported 599 executed when last measured; the three-test gap is tests added since that measurement.)
 
 ---
 
@@ -196,7 +196,7 @@ Verified end to end on the simulator: the produced archive is well-formed GPX (`
 
 ### Delivered ahead of schedule (night 2 — off the original W2 critical path)
 
-Unblocked once the real data arrived (W0), these landed early. They run on the local `.local` / `.fixtures` store today and bind to CloudKit automatically via `PersistenceController` once **T2.3** (sync/signing) and **T2.5** (importer) land. Test suite now **105+ unit tests, all green** (night 3: 309 apple / 378 web).
+Unblocked once the real data arrived (W0), these landed early. They run on the local `.local` / `.fixtures` store today and bind to CloudKit automatically via `PersistenceController` once **T2.3** (sync/signing) and **T2.5** (importer) land. Test suite at the time: **105+ unit tests, all green** (309 apple / 378 web *as counted on night 3, 2026-07-23* — a historical snapshot, not a current figure; see this file's header for today's counts and the commands that produce them).
 
 - **T2.12 ✅ Real-data local import pipeline** — `apple/Akashic/Import/` (`ExportBundle`, `ExportMapper`, `LocalImporter`, `ImportBrowserView`, `PhotoDayMatcher`) imports the T0.2/T0.3 export bundle into the local store. Built around an **`ImportSink` protocol seam** (`LocalImporter.swift`): `CoreDataImportSink` writes the local Core Data store tonight; the **`CloudKitImportSink` for T2.5** drops into the *same seam* to write CKRecords into per-journey zones. This is pre-T2.5 groundwork, not a replacement for it.
 - **T2.13 ✅ Day-content UI** — `apple/Akashic/Views/Day/` (`DayDetailSheet`, `DayDiscoveriesView`, `WeatherRow`, `FunFactsCarousel`, `DayContentConfig`): weather, fun facts, POIs, historical sites. **Fix along the way:** the first importer version silently dropped these JSONB payloads (`weather` / `fun_facts` / `points_of_interest` / `historical_sites`); the mapper now carries them through.

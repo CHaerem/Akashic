@@ -55,8 +55,10 @@ your memories"), some is a real limitation (§8).
 
 ## 3. Asset inventory — what already exists and carries over
 
-Everything below is built, tested (311 native + 378 web tests, CI green), and
-verified against the production CloudKit environment:
+Everything below is built, tested (**602 native + 402 web tests**, CI green), and
+verified against the production CloudKit environment. Both numbers are
+reproducible: `grep -rn 'func test' apple/AkashicTests | wc -l` for the native
+count, `npx vitest --run` for the web count.
 
 - **The app**: MapKit globe with day/night terrain, journey detail, day-by-day
   experience (weather, fun facts, POIs, history), photo grid/lightbox/map
@@ -137,8 +139,9 @@ akashic.no, age rating, the review process itself.
 - **Free**: 1 journey, full experience, sharing included, 100-photo cap — and
   **that journey is fully finishable: publishing and export included.**
 - **One-time IAP kr 149** (`no.akashic.app.complete`, non-consumable): unlimited
-  journeys and photos, plus Akashic Intelligence in v1.1. **Family Sharing ON** —
-  one purchase covers the household, which matches the product's soul.
+  journeys and photos, plus Akashic Intelligence — which is **already built and
+  already gated behind Complete**, not a v1.1 promise (§10). **Family Sharing ON**
+  — one purchase covers the household, which matches the product's soul.
 
 **Why the free tier now includes finishing.** The old line put the wall on the
 *finish* ("publishing is part of Complete"), which withheld the exact moment that
@@ -333,26 +336,55 @@ devices).
 > so every AI feature stays runtime-gated and simply absent elsewhere, never a
 > broken button.
 >
+> **But it cannot be in v1.0, for a reason that has nothing to do with cost.**
+> PCC-backed Foundation Models is developer-preview-only until **production PCC
+> ships with iOS 27 in autumn 2026**. v1.0 ships before that, to an installed base
+> that is mostly still on iOS 26, so a PCC feature would be gated off for nearly
+> everyone who installs it. Every PCC-dependent item below stays v1.1 or later;
+> the on-device ladder is what v1.0 can actually stand on.
+>
 > **Action:** request the entitlement (developer.apple.com/contact/request/private-cloud-compute/)
 > — it is free, and the request should go in early since it is a review by Apple,
-> not a toggle.
-Hardware gate: Apple-Intelligence-capable devices (iPhone 15 Pro and newer);
+> not a toggle. Requesting it now costs nothing and removes it from the critical
+> path for v1.1.
+
+**Hardware gate:** Apple-Intelligence-capable devices (iPhone 15 Pro and newer);
 the app targets iOS 17, so every AI feature is runtime-gated and simply absent
 on older devices — never a broken button.
 
-**Feature ladder** (each one = on-device model + data we already store):
+**What already ships (as of 2026-07-26).** This section used to read entirely as
+future work; three ladder rungs are in fact built, gated and reachable from real
+UI today. `apple/Akashic/Intelligence/` holds five files:
+
+| Shipped | File | Reachable from |
+|---|---|---|
+| **Day-note drafting** — "write up this day" from text metadata only: camp name, elevation, per-day distance/ascent/descent, weather, highlights, photo *count* and user-written captions. No photo bytes, no Vision labels. | `DayNoteDrafter.swift` | `Views/Edit/WaypointEditSheet.swift:177` |
+| **Grounded fun-facts / historical notes** per day, constrained to place names the enrichment step already found, plus retrieved reference text | `FactDrafter.swift` | `Views/Edit/WaypointEditSheet.swift:281` |
+| **Smart day naming** in the §4.1 creation flow — names the proposed days ("Summit night", "Rest day by the river"), and only days still carrying a `Day N` placeholder | `DayNamer.swift` | `Views/NewJourney/NewJourneySheet.swift:1085` |
+| **Geo-verified Wikipedia/Wikivoyage retrieval** feeding both drafters | `KnowledgeRetrieval.swift` | both call sites above |
+| **The availability gate** — `Intelligence.isAvailable` (iOS 26 + Apple-Intelligence-capable device + `AKASHIC_DISABLE_AI` kill switch); the Complete entitlement is `&&`-ed in at each call site | `IntelligenceAvailability.swift` | every entry point |
+
+Every one is `@available(iOS 26.0, *)` behind `#if canImport(FoundationModels)`,
+uses `@Generable` guided generation, and writes nothing without the user
+accepting a suggestion. Note the caveat in CLAUDE.md: CI runs Xcode 16.4, where
+`canImport(FoundationModels)` is false, so this code is not type-checked by
+anything automated.
+
+**Feature ladder — what is genuinely still ahead** (each one = on-device model +
+data we already store):
 
 | Feature | Ingredients | Where |
 |---|---|---|
-| **Day-note drafting** — "write up this day" from the day's photos (Vision labels), route stats, weather + camp we already have; user edits, never auto-published | Vision + Foundation Models | v1.1 flagship |
-| **Smart day seeding** — in the §4.1 creation flow: cluster photos, then *name* the proposed days ("Summit night", "Rest day at Barranco") | Foundation Models | v1.1, extends creation |
-| **Hero & best-of curation** — suggest hero image and per-day highlights by aesthetic score | Vision (works on ALL devices, no AI gate) | v1.1 |
+| **Photo-grounded day notes** — lift day-note drafting from metadata to what is actually *in* the photo | Vision — **not present in the codebase today** | v1.1 |
+| **Hero & best-of curation** — suggest hero image and per-day highlights by aesthetic score | Vision (would work on ALL devices, no AI gate) | v1.1 |
 | **Journey narrative** — showcase-ready summary from days+stats, one tap before publishing | Foundation Models | v1.1 |
-| **Natural-language search** — "the photo where we crossed the river", on-device embeddings over captions+labels | NLContextualEmbedding / FM tool-calling over our App Intents | v1.2 |
+| **Streaming output** — drafts that appear as they are generated instead of after a spinner | `streamResponse` — no streaming call site today | v1.1 |
+| **Natural-language search** — "the photo where we crossed the river", on-device embeddings over captions+labels | NLContextualEmbedding / FM tool calling over our App Intents — **no `Tool` conformance today** | v1.2 |
 | **Writing Tools** in captions/notes/comments | Free from the OS | Already inherited |
 
 **Positioning**: brand the bundle "Akashic Intelligence", included in the paid
-unlock — it fattens the paid tier without adding a krone of marginal cost.
+unlock — it fattens the paid tier without adding a krone of marginal cost. Since
+the first three rungs already ship, the paid tier can claim it at v1.0, not v1.1.
 
 ## 11. Roadmap
 
@@ -362,7 +394,7 @@ unlock — it fattens the paid tier without adding a krone of marginal cost.
 | **1 — v1.0 build** (~3–4 wks) | §4.1–4.6 | **Green-lit 2026-07-24** — §4.1 build started |
 | **2 — closed beta** | ~10 external households create journeys from their own photos | **(a)** ≥7 create one unaided · **(b)** ≥5 *finish and hand one over* — user-written words on ≥3 days, and actually shared outside the household (CKShare accepted, showcase link sent, or export delivered) · **(c)** ≥5 answer yes to "would you send this instead of making a photo book?" |
 | **3 — launch** | App Store + showcase funnel + communities | — |
-| **4 — v1.1 "the finished story"** | PDF/printable book export of the story view, people/companions, hero + best-of curation, interview-mode drafting (the model asks two grounded questions, then weaves the answers in). "Akashic Intelligence" demotes from headline to ingredient | Launch stable |
+| **4 — "the finished story"** | PDF/printable book export of the story view, people/companions, hero + best-of curation (needs Vision), interview-mode drafting (the model asks two grounded questions, then weaves the answers in), streaming drafts. The on-device drafting bundle is **not** in this phase — it ships in v1.0 (§10); what is left here is the Vision/PCC/streaming half | Launch stable |
 | **5 — iterate** | ~~Draw-on-map~~ (shipped in v1.0), NL search, live activity, watch app, Strava API import | Sales signal |
 | **6 — platform decision** | Android/web via real backend | Only on clear demand + revenue |
 
@@ -371,7 +403,9 @@ unlock — it fattens the paid tier without adding a krone of marginal cost.
 1. ~~Green light~~ — given 2026-07-24; §4.1 (journey creation + GPX import) in
    progress. Family month (phase 0) continues in parallel — it *is* the beta.
 2. Trademark/name sanity check.
-3. Then paywall + de-scaffolding + listing, beta, launch; Intelligence in v1.1.
+3. Then paywall + de-scaffolding + listing, beta, launch. Intelligence needs no
+   step here — day-note drafting, fact drafting and day naming already ship (§10);
+   what is left for v1.1 is Vision, streaming and tool calling.
 
 ---
 

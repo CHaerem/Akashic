@@ -4,9 +4,11 @@
 > - **The migration to the Apple stack is complete.** CloudKit is the only backend; `supabase-js` is gone from the web client (T3.4); the family archive lives in CloudKit **Production**; the web app is a deliberately frozen read-mostly client plus the public showcase (decision D6).
 > - **The native iOS app is now the primary client**, and it can do the things this roadmap lists as missing — notably "Create new journey" (❌ below), which exists natively with four route sources: GPX import, inference from photo GPS, hand-drawn on the map, or none. GPX import (Phase D below) also landed there rather than on the web.
 > - Supabase and Cloudflare (Worker, R2, Pages, DNS) are **read-only until the Phase 5 gate** — nothing is deleted until the family has used the native app ≥1 month.
-> - Product work has moved to **commercializing the iOS app**: [COMMERCIALIZATION-PLAN.md](./COMMERCIALIZATION-PLAN.md) is the forward-looking document.
+> - Product work has moved to **commercializing the iOS app**: [COMMERCIALIZATION-PLAN.md](../../COMMERCIALIZATION-PLAN.md) is the forward-looking document.
 >
-> For current status see [COMMERCIALIZATION-PLAN.md](./COMMERCIALIZATION-PLAN.md), [APPLE-MIGRATION-TASKS.md](./APPLE-MIGRATION-TASKS.md) (W7), [APPLE-MIGRATION-RUNBOOK.md](./APPLE-MIGRATION-RUNBOOK.md) for the operator steps, and [apple/README.md](./apple/README.md) for the app itself.
+> **Archived to `docs/history/` on 2026-07-26** (workplan DOC-11) so no unmarked stale planning document sits at the repo root. Everything below — the Supabase photo schema, the R2 key paths, the Google-login flow — describes an architecture that has been decommissioned. Nothing below is a current design.
+>
+> For current status the only authoritative source is [WORKPLAN.md](../../WORKPLAN.md). See also [COMMERCIALIZATION-PLAN.md](../../COMMERCIALIZATION-PLAN.md), [APPLE-MIGRATION-TASKS.md](../../APPLE-MIGRATION-TASKS.md) (W7), [APPLE-MIGRATION-RUNBOOK.md](../../APPLE-MIGRATION-RUNBOOK.md) for the operator steps, and [apple/README.md](../../apple/README.md) for the app itself.
 
 ## Overview
 

@@ -22,7 +22,8 @@ import Foundation
 /// are farther than ~50 km from the day's own coordinate** (`maxKmFromCoordinate`). An article with
 /// no coordinates is rejected too — UNLESS its title near-exactly matches one of the supplied names
 /// (a route/topic like "Inca Trail" is legitimately place-less; a random "Santa Teresa" is not).
-/// See `geoVerdict(...)`, which is pure and exhaustively unit-tested.
+/// See `geoVerdict(...)`, which is pure — and therefore trivially testable, though **no tests exist
+/// for it yet** (workplan QUA-12).
 ///
 /// ## Never an error
 /// Every failure — no network, a 404, a decode error, a timeout — degrades to an **empty context**,
@@ -30,8 +31,13 @@ import Foundation
 /// constrained behaviour. Retrieval only ever *improves* a draft; it never blocks one.
 ///
 /// The HTTP client sits behind the `WikimediaClient` seam so the whole orchestration (query building,
-/// candidate collection, geo-verification, context capping) is unit-tested with an in-memory fake;
-/// the real `URLSession` adapter is `LiveWikimediaClient` at the bottom of the file.
+/// candidate collection, geo-verification, context capping) *can* be unit-tested with an in-memory
+/// fake; the real `URLSession` adapter is `LiveWikimediaClient` at the bottom of the file.
+///
+/// ## Test coverage: none, today
+/// This file has **zero tests** — no file under `apple/AkashicTests/` references it. The seam above is
+/// designed for testing but nothing uses it yet. Writing that suite is workplan **QUA-12**. Until it
+/// lands, treat the behaviour described in this header as the intent, not as something verified.
 
 // MARK: - Projects
 
@@ -346,7 +352,7 @@ struct KnowledgeRetrieval {
     /// Assemble the prompt reference block from accepted articles, capped to `maxBytes` UTF-8 bytes.
     /// Each article contributes a titled paragraph; articles are added whole until the next one
     /// would overflow the budget (a partial article is truncated at a sentence-ish boundary rather
-    /// than dropped, so at least the first article always contributes). Pure + tested.
+    /// than dropped, so at least the first article always contributes). Pure — untested (QUA-12).
     static func assembleContext(from articles: [RetrievedArticle], maxBytes: Int) -> KnowledgeContext {
         var blocks: [String] = []
         var usedArticles: [RetrievedArticle] = []

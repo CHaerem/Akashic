@@ -36,9 +36,11 @@ import StoreKit
 
 /// What the current user (family) is entitled to.
 enum Entitlement: String, Equatable {
-    /// The free tier: one owned journey, 100 photos per owned journey, no export/publish.
+    /// The free tier: one owned journey, 100 photos per owned journey — and that journey IS
+    /// finishable: publishing to the showcase and exporting are both included (see the file header).
     case free
-    /// Akashic Complete: unlimited journeys/photos, export, showcase publishing.
+    /// Akashic Complete: unlimited owned journeys and photos. Export and publishing are not part of
+    /// this — they are free-tier capabilities too.
     case complete
 }
 

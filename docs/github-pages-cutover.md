@@ -150,11 +150,17 @@ Settings → Pages to stop the `github.io` → akashic.no redirect.
 
 ## Phase 5 — what gets deleted (only after ≥1 month stable on Pages)
 
-- **`.github/workflows/deploy.yml`** — the Cloudflare Pages workflow.
-- **`netlify.toml`** — legacy alternate-host config (SPA redirect), unused.
-- **GitHub secrets:** `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`. (Per the
-  migration plan, `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` are pruned later
-  once the CloudKit backend replaces Supabase.)
+- **`.github/workflows/deploy.yml`** — the Cloudflare Pages workflow. Still
+  present today, and it is the only workflow that consumes the two Cloudflare
+  secrets below (`deploy.yml:45-46`).
+- **GitHub secrets:** `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`. Also
+  `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` **if they are still set** — the
+  web client is CloudKit-only and no workflow references either key any more
+  (`grep -rn SUPABASE .github/` returns nothing), so they can be pruned in the
+  same pass rather than deferred. The only remaining Supabase references are the
+  one-shot legacy scripts `scripts/migrateR2Photos.js` and
+  `scripts/backfillThumbnails.ts`, which read their own local env vars, never CI
+  secrets.
 - **Cloudflare resources** (per plan Phase 5): the `akashic` Pages project, the
   `akashic-media` Worker + R2 bucket, and the Cloudflare DNS zone.
 - **`deploy-pages.yml` trigger:** ensure it's on `push: [branches: main]` and
@@ -171,12 +177,16 @@ native app (plan Open Q5), the site must serve an Apple App Site Association
 (no file extension, JSON body). Vite copies `public/` into `dist/` verbatim, so the
 deployed artifact carries it at `https://akashic.no/.well-known/apple-app-site-association`.
 
-**Before it works, two placeholders must be filled (see runbook §4):**
+**Status of the two prerequisites (see runbook §4):**
 
-1. Replace `<TEAMID>` in the file so `appIDs` reads `<TEAMID>.no.akashic.app`
-   (Team ID is on the Apple Developer *Membership* page).
-2. Add the **Associated Domains** capability to the `Akashic` app target with the
-   entry `applinks:akashic.no`.
+1. ✅ **Done.** The Team ID placeholder is already filled — `appIDs` reads
+   `9LVCB72DT8.no.akashic.app` in the committed file. Nothing to replace.
+2. ⬜ **Still outstanding.** Add the **Associated Domains** capability to the
+   `Akashic` app target with the entry `applinks:akashic.no`. Verify with
+   `grep -rn applinks apple/` — it returns **no hits today**, so neither
+   `apple/project.yml` nor any of the three entitlements files under
+   `apple/Akashic/Support/` declares it, and Universal Links cannot work until
+   this lands.
 
 The AASA uses the modern `components` matcher (iOS 14+; the app minimum is iOS 17):
 it matches path `/` with a non-empty `journey` query value (`"?": { "journey": "?*" }`),
@@ -232,8 +242,9 @@ Cloudflare's shared **`staging.akashic.pages.dev`** preview (produced by
 `deploy.yml` on every PR) **goes away** with the Cloudflare deploy.
 
 - **Interim:** `.github/workflows/test.yml`'s `build` job already runs
-  `npm run build` on every PR and uploads the `dist/` artifact (1-day
-  retention). Download it and serve locally for QA:
+  `npm run build` on every PR and uploads the `dist/` artifact as
+  **`build-output`** (1-day retention, `test.yml:133-138`). Download it, unzip,
+  and serve locally for QA:
   ```
   npx serve dist   # or: python3 -m http.server -d dist
   ```
