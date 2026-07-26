@@ -13,6 +13,12 @@ Read [CLAUDE.md](CLAUDE.md) before touching anything. To find work:
 node scripts/workplan.mjs next
 ```
 
+## In flight
+
+| Task | Agent | Branch | Stopped at |
+|---|---|---|---|
+| `DIFF-04` On-device photo curation with Vision | opus5 | `claude/remote-control-project-review-9462c1` | Pure policy (PhotoCuration) and the Vision scorer (VisionPhotoScorer, behind the PhotoScoring seam) are written and covered by 17 tests: ranking, exclusions, dedup, per-day caps, determinism, input-order independence. NOT YET WIRED, so Release strips it and Vision does not link — verified with otool. Remaining: (1) two SuggestionKey cases, .heroPhoto and .bestOf(dayID:), plus payload storage and an apply() arm in JourneySuggestionCoordinator, following the existing .facts pattern exactly; (2) hero can use the existing Photo.isHero field so it needs no model change, but best-of needs somewhere to live — decide between a Day field (Core Data, additive) and deriving it on read; (3) accept/dismiss rows in the day view; (4) call the scorer after ingest, off the main actor, with the existing progress reporting. Do NOT change the duplicateDistance default (0.15) without a fixture check: a false positive hides a photo the user wanted. |
+
 ## LEGACY
 
 > Retire Supabase, Cloudflare and R2. Repo-side removal can happen now; the infrastructure deletions are gated on the archive being duplicated and on the Pages cutover. LEG-01 is independent of every gate and should happen today.
@@ -102,7 +108,7 @@ node scripts/workplan.mjs next
 | `x` | `DIFF-01` **Fix the unpublish leak: thumbnails that can never be removed** | 0.5 | agent | — | Unpublishing always removes the mirror, and a failure to remove reports as a failure. |
 | `x` | `DIFF-02` **Give the owner a shareable showcase link** | 1 | agent | `DIFF-01` | Publishing yields a working URL the owner can share, correct under slug disambiguation. |
 | `x` | `DIFF-03` **Add og: metadata so a shared link renders as a card** | 0.5 | agent | `DIFF-02` | A showcase URL pasted into iMessage, WhatsApp and Slack renders a title, description and image. |
-| ` ` | `DIFF-04` **On-device photo curation with Vision** | 3 | agent | — | Each day proposes a best-of selection and a hero, accepted or dismissed like other suggestions. |
+| `~` | `DIFF-04` **On-device photo curation with Vision** | 3 | agent | — | Each day proposes a best-of selection and a hero, accepted or dismissed like other suggestions. |
 | ` ` | `DIFF-05` **Feed Vision labels into DayNoteDrafter** | 1 | agent | `DIFF-04` | A drafted day note references what is actually in the photos. |
 | ` ` | `DIFF-06` **Byte-level photo dedup** | 1.5 | agent | `DIFF-04` | A journey reports its unique-image count, and duplicates are collapsed on import. |
 | ` ` | `DIFF-07` **PDF export of the story view** | 6 | agent | `DIFF-04` `DIFF-06` | A journey exports a PDF a person would willingly hand over. |

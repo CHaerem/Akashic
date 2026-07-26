@@ -1021,7 +1021,7 @@
       "id": "DIFF-04",
       "track": "DIFF",
       "title": "On-device photo curation with Vision",
-      "status": "TODO",
+      "status": "WIP",
       "effort": 3,
       "done_when": "Each day proposes a best-of selection and a hero, accepted or dismissed like other suggestions.",
       "priority": 30,
@@ -1034,7 +1034,13 @@
         "cd apple && xcodegen generate",
         "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,id=$(xcrun simctl list devices available | grep -o '[0-9A-F-]\\{36\\}' | tail -1)\" CODE_SIGNING_ALLOWED=NO test",
         "New tests over a fixture journey asserting stable ranking"
-      ]
+      ],
+      "claim": {
+        "agent": "opus5",
+        "branch": "claude/remote-control-project-review-9462c1",
+        "at": "2026-07-26"
+      },
+      "resume": "Pure policy (PhotoCuration) and the Vision scorer (VisionPhotoScorer, behind the PhotoScoring seam) are written and covered by 17 tests: ranking, exclusions, dedup, per-day caps, determinism, input-order independence. NOT YET WIRED, so Release strips it and Vision does not link — verified with otool. Remaining: (1) two SuggestionKey cases, .heroPhoto and .bestOf(dayID:), plus payload storage and an apply() arm in JourneySuggestionCoordinator, following the existing .facts pattern exactly; (2) hero can use the existing Photo.isHero field so it needs no model change, but best-of needs somewhere to live — decide between a Day field (Core Data, additive) and deriving it on read; (3) accept/dismiss rows in the day view; (4) call the scorer after ingest, off the main actor, with the existing progress reporting. Do NOT change the duplicateDistance default (0.15) without a fixture check: a false positive hides a photo the user wanted."
     },
     {
       "id": "DIFF-05",

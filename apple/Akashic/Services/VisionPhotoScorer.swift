@@ -1,0 +1,166 @@
+import Foundation
+import Vision
+
+/// Supplies the per-photo measurements `PhotoCuration` decides from (DIFF-04).
+///
+/// A protocol so the curation policy can be exercised against fixed scores with no Vision, no image
+/// files and no device — the same seam discipline as `SyncEngineProtocol` and `StoreKitProviding`.
+protocol PhotoScoring {
+    /// Score the given photos. Implementations must tolerate missing bytes (return a score with
+    /// `aesthetics == nil` rather than dropping the photo) and must honour cancellation.
+    func score(_ photos: [Photo], dayOf: (Photo) -> Int?) async -> [PhotoScore]
+}
+
+/// Vision-backed scoring: aesthetics, utility-image detection and near-duplicate grouping.
+///
+/// ## Availability, and why it is not gated like Intelligence
+/// `VNCalculateImageAestheticsScoresRequest` is iOS 18+; `VNGenerateImageFeaturePrintRequest` is
+/// iOS 13+. The app targets iOS 17, so aesthetics is `#available`-gated per call and simply comes
+/// back nil below 18 — at which point `PhotoCuration` falls back to `sortOrder`, which is exactly
+/// today's behaviour. Duplicate detection works on every supported OS. So unlike the Foundation
+/// Models family, this feature is never *absent*: it degrades. That is the point of choosing Vision.
+///
+/// ## Why it reads thumbnails
+/// Scoring runs over `thumbnailFileURL`, not the original. A 939-photo journey is several gigabytes
+/// of originals; the thumbnails are the bytes already on disk for the grid, and both requests are
+/// resolution-tolerant. Reading originals here would reintroduce the memory profile that makes
+/// `PhotoIngestService`'s video path a problem (QUA-13).
+struct VisionPhotoScorer: PhotoScoring {
+
+    /// Feature-print distance below which two images are treated as the same moment.
+    ///
+    /// Vision's `computeDistance` is unbounded and scene-dependent, so this is a heuristic, and it
+    /// is deliberately tight: a false positive hides a photo the user wanted, which is worse than
+    /// leaving a near-duplicate in. 0.15 keeps burst frames and re-encodes together while separating
+    /// genuinely different compositions of the same subject. Exposed so a test can pin the boundary.
+    var duplicateDistance: Float = 0.15
+
+    /// How many images are scored concurrently. Vision requests are CPU/ANE-bound and each holds a
+    /// decoded image, so unbounded concurrency over 939 photos is how an app gets jetsammed.
+    var maxConcurrent: Int = 4
+
+    func score(_ photos: [Photo], dayOf: (Photo) -> Int?) async -> [PhotoScore] {
+        // Day assignment is resolved up front on the caller's actor: `dayOf` closes over the
+        // matcher, which is not Sendable, and the concurrent work below must not touch it.
+        let inputs: [(photo: Photo, day: Int?)] = photos.map { ($0, dayOf($0)) }
+
+        var scores: [PhotoScore] = []
+        var prints: [(id: String, print: VNFeaturePrintObservation)] = []
+
+        // Chunked rather than a bare TaskGroup so at most `maxConcurrent` images are decoded at
+        // once. `chunked(into:)` is the existing Array helper from PhotoMediaService.
+        for chunk in inputs.chunked(into: maxConcurrent) {
+            if Task.isCancelled { return scores }
+            let measured = await withTaskGroup(of: (PhotoScore, VNFeaturePrintObservation?).self) { group in
+                for input in chunk {
+                    group.addTask { await Self.measure(input.photo, day: input.day) }
+                }
+                var out: [(PhotoScore, VNFeaturePrintObservation?)] = []
+                for await result in group { out.append(result) }
+                return out
+            }
+            for (score, print) in measured {
+                scores.append(score)
+                if let print { prints.append((score.id, print)) }
+            }
+        }
+
+        // Grouping is a second pass because it is inherently pairwise — a photo's group depends on
+        // every other photo, so it cannot be decided while scoring one image.
+        let groups = Self.groupNearDuplicates(prints, threshold: duplicateDistance)
+        for i in scores.indices {
+            scores[i].duplicateGroup = groups[scores[i].id]
+        }
+        return scores
+    }
+
+    // MARK: - One image
+
+    private static func measure(_ photo: Photo,
+                                day: Int?) async -> (PhotoScore, VNFeaturePrintObservation?) {
+        var score = PhotoScore(id: photo.id,
+                               dayNumber: day,
+                               sortOrder: photo.sortOrder,
+                               isVideo: photo.isVideo)
+
+        // Videos get an identity row and no Vision work: `PhotoCuration` excludes them from
+        // proposals anyway, and decoding a frame to score it would cost more than it can return.
+        guard !photo.isVideo, let url = photo.thumbnailFileURL else { return (score, nil) }
+
+        let handler = VNImageRequestHandler(url: url, options: [:])
+
+        var requests: [VNRequest] = []
+        let featurePrint = VNGenerateImageFeaturePrintRequest()
+        requests.append(featurePrint)
+
+        var aesthetics: VNRequest?
+        if #available(iOS 18.0, *) {
+            let request = VNCalculateImageAestheticsScoresRequest()
+            aesthetics = request
+            requests.append(request)
+        }
+
+        do {
+            try handler.perform(requests)
+        } catch {
+            // A single unreadable image must never fail the pass — it degrades to "unscored", which
+            // the policy already handles by falling back to sortOrder.
+            return (score, nil)
+        }
+
+        if #available(iOS 18.0, *),
+           let observation = (aesthetics as? VNCalculateImageAestheticsScoresRequest)?
+               .results?.first as? VNImageAestheticsScoresObservation {
+            score.aesthetics = Double(observation.overallScore)
+            score.isUtility = observation.isUtility
+        }
+
+        return (score, featurePrint.results?.first as? VNFeaturePrintObservation)
+    }
+
+    // MARK: - Near-duplicate grouping
+
+    /// Single-link grouping by feature-print distance: id -> group number.
+    ///
+    /// Union-find rather than "compare against group representatives", because burst frames drift —
+    /// frame 1 and frame 12 can exceed the threshold while every adjacent pair sits under it, and
+    /// representative-matching would split one burst into several groups.
+    static func groupNearDuplicates(_ prints: [(id: String, print: VNFeaturePrintObservation)],
+                                    threshold: Float) -> [String: Int] {
+        guard prints.count > 1 else { return [:] }
+
+        var parent = Array(0 ..< prints.count)
+        func find(_ i: Int) -> Int {
+            var root = i
+            while parent[root] != root { root = parent[root] }
+            var walk = i                       // path compression: bursts can be long
+            while parent[walk] != walk { let next = parent[walk]; parent[walk] = root; walk = next }
+            return root
+        }
+        func union(_ a: Int, _ b: Int) {
+            let (ra, rb) = (find(a), find(b))
+            if ra != rb { parent[max(ra, rb)] = min(ra, rb) }
+        }
+
+        for i in 0 ..< prints.count {
+            for j in (i + 1) ..< prints.count {
+                var distance: Float = 0
+                guard (try? prints[i].print.computeDistance(&distance, to: prints[j].print)) != nil
+                else { continue }
+                if distance < threshold { union(i, j) }
+            }
+        }
+
+        // Only emit ids that share a root with someone else; a singleton is not a duplicate.
+        var membersByRoot: [Int: [Int]] = [:]
+        for i in 0 ..< prints.count { membersByRoot[find(i), default: []].append(i) }
+
+        var result: [String: Int] = [:]
+        // Number groups by their lowest member index so the numbering is deterministic.
+        for (group, root) in membersByRoot.keys.sorted().enumerated() {
+            guard let members = membersByRoot[root], members.count > 1 else { continue }
+            for i in members { result[prints[i].id] = group }
+        }
+        return result
+    }
+}
