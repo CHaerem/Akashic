@@ -79,9 +79,26 @@ enum Config {
     static let importBundlePathKey = "akashic.import.bundlePath"
     static let importMediaRootKey = "akashic.import.mediaRoot"
 
-    /// Default export bundle path. The iOS Simulator can read host filesystem paths
-    /// directly, so this works out of the box for the tonight demo.
-    static let defaultImportBundlePath = "/Users/cher/Privat/AkashicExport-20260722"
+    /// Default export bundle path for the one-time migration importer.
+    ///
+    /// Empty in Release: this is a developer convenience for the T2.5 import, and the literal path
+    /// it used to carry was a specific person's home directory compiled into a commercial binary
+    /// (LEG-08). The importer is developer-only and reachable only from the gated developer
+    /// section, so a Release build has no legitimate default to offer — the folder picker supplies
+    /// the path. Debug keeps the convenience, and the DEBUG value can be overridden per machine
+    /// with the AKASHIC_IMPORT_BUNDLE environment variable so it is not hardcoded to one checkout
+    /// either.
+    /// Set `AKASHIC_IMPORT_BUNDLE` in the scheme to pre-fill it; otherwise the developer screen's
+    /// folder picker supplies the path. Deliberately not derived from `NSHomeDirectory()`: in the
+    /// Simulator that resolves to the app's sandbox container, not the host home directory the
+    /// export actually lives in, so guessing would produce a path that never exists.
+    static var defaultImportBundlePath: String {
+        #if DEBUG
+        ProcessInfo.processInfo.environment["AKASHIC_IMPORT_BUNDLE"] ?? ""
+        #else
+        ""
+        #endif
+    }
 
     /// Media root = R2 objects tree inside the export (`<bundle>/r2/objects`).
     static func defaultMediaRoot(forBundlePath bundlePath: String) -> String {

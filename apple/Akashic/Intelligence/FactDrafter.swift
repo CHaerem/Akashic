@@ -11,8 +11,11 @@ import FoundationModels
 ///   * pure, deterministic `promptComponents(for:)` — no FoundationModels dependency, unit-tested;
 ///   * a hard **anti-invention** contract in the instructions — the model may only speak about the
 ///     supplied names and must not invent other places, dates, numbers, or superlatives;
-///   * `@Generable` output, iOS 26+ gated, behind the same `Intelligence.isAvailable` gate
-///     (Apple Intelligence + Complete entitlement + `AKASHIC_DISABLE_AI` kill switch);
+///   * `@Generable` output, iOS 26+ gated, behind `Intelligence.isAvailable` — which resolves the
+///     `AKASHIC_DISABLE_AI` kill switch, framework availability and model readiness, and **not**
+///     the entitlement. The Complete check is a separate `&& entitlements.isComplete` at each call
+///     site (`WaypointEditSheet.swift:46`, `NewJourneySheet.swift:139`, `:814`), so look there
+///     rather than in `IntelligenceAvailability` for the paywall half of the gate (DOC-15);
 ///   * every generated item is a **suggestion** the user accepts — nothing is written silently.
 ///
 /// Entry points: a "Draft facts" accept-row per enriched day in the creation flow, and beside the

@@ -47,7 +47,10 @@ final class SyncStatus: ObservableObject {
     var summary: String {
         switch state {
         case .disabled:        return "Off (local store)"
-        case .notEntitled:     return "Rebuild with the CloudKit configuration to sync"
+        // Only reachable in a build without the CloudKit entitlement, which no customer ever
+        // installs — but it is a user-facing string in a Form row, so it should not read like a
+        // build instruction if a configuration is ever mixed up (D5).
+        case .notEntitled:     return "Syncing is unavailable in this build"
         case .checkingAccount: return "Checking iCloud account…"
         case .noAccount:       return "Sign in to iCloud to sync"
         case .restricted:      return "iCloud is restricted on this device"

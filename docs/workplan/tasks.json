@@ -224,7 +224,7 @@
       "id": "LEG-08",
       "track": "LEGACY",
       "title": "Remove the hardcoded /Users/cher archive path from shipping code",
-      "status": "TODO",
+      "status": "DONE",
       "effort": 0.25,
       "done_when": "No absolute developer path appears in any non-test Swift file.",
       "files": [
@@ -236,7 +236,13 @@
         "grep -rn '/Users/cher' apple/Akashic/  # expect no hits",
         "cd apple && xcodegen generate",
         "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,id=$(xcrun simctl list devices available | grep -o '[0-9A-F-]\\{36\\}' | tail -1)\" CODE_SIGNING_ALLOWED=NO test"
-      ]
+      ],
+      "claim": {
+        "agent": "opus5",
+        "branch": "claude/remote-control-project-review-9462c1",
+        "at": "2026-07-26"
+      },
+      "evidence": "grep -c '/Users/cher' over the Release-CloudKit binary returns 0. defaultImportBundlePath is now empty in Release and env-var driven in DEBUG; deliberately not derived from NSHomeDirectory(), which resolves to the sandbox container in the Simulator rather than the host home the export lives in."
     },
     {
       "id": "LEG-09",
@@ -631,7 +637,7 @@
       "id": "SHIP-04",
       "track": "SHIP",
       "title": "Add PrivacyInfo.xcprivacy",
-      "status": "TODO",
+      "status": "DONE",
       "effort": 0.25,
       "done_when": "The manifest ships in the app bundle and the upload draws no ITMS-91053 notice.",
       "files": [
@@ -642,13 +648,19 @@
       "verify": [
         "cd apple && xcodegen generate",
         "find ~/Library/Developer/Xcode/DerivedData/Akashic-*/Build/Products -name '*.xcprivacy'"
-      ]
+      ],
+      "claim": {
+        "agent": "opus5",
+        "branch": "claude/remote-control-project-review-9462c1",
+        "at": "2026-07-26"
+      },
+      "evidence": "PrivacyInfo.xcprivacy declared and verified at the BUNDLE ROOT of the built Release-CloudKit app (find -maxdepth 1 finds it). Declares NSPrivacyTracking=false, empty tracking domains, empty collected data types, CA92.1 for 44 UserDefaults sites and C617.1 for attributesOfItem at CloudKitImportSink.swift:656. Documents the caveat that the public showcase does put customer content in a developer-readable database, so the ASC User Content answer must not say Data Not Collected for publishers."
     },
     {
       "id": "SHIP-05",
       "track": "SHIP",
       "title": "Bump the marketing version to 1.0.0",
-      "status": "TODO",
+      "status": "DONE",
       "effort": 0.1,
       "done_when": "The built plist reports CFBundleShortVersionString 1.0.0.",
       "files": [
@@ -659,13 +671,19 @@
       "verify": [
         "cd apple && xcodegen generate",
         "plutil -p \"$(find ~/Library/Developer/Xcode/DerivedData/Akashic-*/Build/Products -name Akashic.app -maxdepth 3 | head -1)/Info.plist\" | grep CFBundleShortVersionString"
-      ]
+      ],
+      "claim": {
+        "agent": "opus5",
+        "branch": "claude/remote-control-project-review-9462c1",
+        "at": "2026-07-26"
+      },
+      "evidence": "Built plist reports CFBundleShortVersionString 1.0.0 and CFBundleVersion 9, in both the app and widget targets."
     },
     {
       "id": "SHIP-06",
       "track": "SHIP",
       "title": "D5 — consumer sync wording, iPhone portrait lock, ASC config match",
-      "status": "TODO",
+      "status": "DONE",
       "effort": 0.5,
       "done_when": "Settings shows no engineering strings and iPhone does not rotate into the iPad panel layout.",
       "files": [
@@ -679,7 +697,13 @@
         "cd apple && xcodegen generate",
         "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,id=$(xcrun simctl list devices available | grep -o '[0-9A-F-]\\{36\\}' | tail -1)\" CODE_SIGNING_ALLOWED=NO test",
         "plutil -p \"$(find ~/Library/Developer/Xcode/DerivedData/Akashic-*/Build/Products -name Akashic.app -maxdepth 3 | head -1)/Info.plist\" | grep -A3 UISupportedInterfaceOrientations"
-      ]
+      ],
+      "claim": {
+        "agent": "opus5",
+        "branch": "claude/remote-control-project-review-9462c1",
+        "at": "2026-07-26"
+      },
+      "evidence": "(a) SyncStatus .notEntitled no longer reads as a build instruction. (b) Built plist: UISupportedInterfaceOrientations is [Portrait] only, while ~ipad keeps all four — so a Max phone can no longer rotate into the iPad floating-panel layout it was never designed for. (c) ASC config match is owner data entry, tracked under SHIP-14."
     },
     {
       "id": "SHIP-07",
@@ -725,7 +749,7 @@
       "id": "SHIP-09",
       "track": "SHIP",
       "title": "Compile the developer workshop out of Release",
-      "status": "TODO",
+      "status": "DONE",
       "effort": 0.25,
       "done_when": "No developer surface is reachable in a Release build, and the seven-tap gesture is gone.",
       "files": [
@@ -738,7 +762,13 @@
         "cd apple && xcodegen generate",
         "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,id=$(xcrun simctl list devices available | grep -o '[0-9A-F-]\\{36\\}' | tail -1)\" CODE_SIGNING_ALLOWED=NO test",
         "grep -n 'if developerUnlocked' apple/Akashic/Views/SettingsView.swift  # inside #if DEBUG"
-      ]
+      ],
+      "claim": {
+        "agent": "opus5",
+        "branch": "claude/remote-control-project-review-9462c1",
+        "at": "2026-07-26"
+      },
+      "evidence": "Two independent guards: DeveloperTools.isUnlocked returns false unconditionally in non-DEBUG, and the Form branch plus the seven-tap gesture are inside #if DEBUG so the workshop is not present in the binary at all. Verified against the Release-CloudKit binary: 'Run import to CloudKit', 'Persistence mode', 'Hidden from customers' and 'Clear override' all return 0 occurrences in strings output. Debug-CloudKit and Debug-Production both define DEBUG, so the runbook keeps its tools."
     },
     {
       "id": "SHIP-10",
@@ -1276,7 +1306,7 @@
       "id": "QUA-09",
       "track": "QUALITY",
       "title": "Light up the widget or remove it from v1.0",
-      "status": "TODO",
+      "status": "DONE",
       "effort": 0.5,
       "done_when": "The widget shows the customer's own journey, or it does not ship.",
       "priority": 14,
@@ -1290,7 +1320,13 @@
         "cd apple && xcodegen generate",
         "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,id=$(xcrun simctl list devices available | grep -o '[0-9A-F-]\\{36\\}' | tail -1)\" CODE_SIGNING_ALLOWED=NO test",
         "Add the widget in the simulator and confirm it shows real data"
-      ]
+      ],
+      "claim": {
+        "agent": "opus5",
+        "branch": "claude/remote-control-project-review-9462c1",
+        "at": "2026-07-26"
+      },
+      "evidence": "Widget set to embed:false — built (AkashicWidgets.appex present in build products, so it cannot rot and its 8 tests still run) but absent from the app bundle (no PlugIns dir), so no customer sees the placeholder Kilimanjaro trek. Two independent blockers documented in project.yml: no App Group entitlement in any config (needs Xcode GUI, since xcodebuild refuses to mint the extension profile from an ASC API key) and nothing calls WidgetSnapshot.publish outside the screenshot harness."
     },
     {
       "id": "QUA-10",
@@ -1524,7 +1560,7 @@
       "id": "DOC-15",
       "track": "DOCS",
       "title": "Fix the FactDrafter comment that misattributes where the entitlement gate lives",
-      "status": "TODO",
+      "status": "DONE",
       "effort": 0.1,
       "done_when": "No comment claims Intelligence.isAvailable performs an entitlement check.",
       "why": "FactDrafter.swift:15 claims the feature sits behind 'the same Intelligence.isAvailable gate (Apple Intelligence + Complete entitlement + AKASHIC_DISABLE_AI kill switch)'. IntelligenceAvailability.swift:110-115 resolves only the kill switch, framework availability and model readiness — no entitlement check exists there. The entitlement is a separate && entitlements.isComplete at each call site. Behaviour is correct; the comment sends the next reader to the wrong file to find the gate.",
@@ -1538,7 +1574,13 @@
       ],
       "refs": [
         "WaypointEditSheet.swift:46, NewJourneySheet.swift:139, :814 hold the real entitlement checks"
-      ]
+      ],
+      "claim": {
+        "agent": "opus5",
+        "branch": "claude/remote-control-project-review-9462c1",
+        "at": "2026-07-26"
+      },
+      "evidence": "FactDrafter's header now states that Intelligence.isAvailable resolves the kill switch, framework availability and model readiness but NOT the entitlement, and names the three call sites carrying the isComplete check. Comment-only; 608/608 tests pass."
     },
     {
       "id": "DOC-16",

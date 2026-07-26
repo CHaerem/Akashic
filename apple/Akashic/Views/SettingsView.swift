@@ -50,9 +50,15 @@ struct SettingsView: View {
         Form {
             consumerSections
 
+            // SHIP-09: compiled out of Release entirely, not merely hidden. `DeveloperTools`
+            // already returns false there, so this is the second of two independent guards — the
+            // point being that the workshop should not be *present* in a customer's binary, so
+            // there is nothing for a future refactor to accidentally re-expose.
+            #if DEBUG
             if developerUnlocked {
                 developerSections
             }
+            #endif
         }
         .scrollContentBackground(.hidden)
         // D2: a `Form` has no natural width cap of its own and otherwise runs the full width of
@@ -220,8 +226,10 @@ struct SettingsView: View {
         }
     }
 
-    /// Version row + the seven-tap unlock gesture for the developer section.
+    /// Version row. In DEBUG it also carries the seven-tap unlock gesture for the developer
+    /// section; in Release it is an ordinary row, because there is nothing to unlock (SHIP-09).
     private var versionRow: some View {
+        #if DEBUG
         labelled("Version", AppInfo.versionDisplay)
             .contentShape(Rectangle())
             .onTapGesture {
@@ -232,6 +240,9 @@ struct SettingsView: View {
                     developerUnlocked = true
                 }
             }
+        #else
+        labelled("Version", AppInfo.versionDisplay)
+        #endif
     }
 
     private func linkRow(_ title: String, systemImage: String) -> some View {

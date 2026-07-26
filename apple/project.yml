@@ -90,6 +90,13 @@ targets:
           - remote-notification
     sources:
       - path: Akashic
+      # Privacy manifest (SHIP-04). Must land at the BUNDLE ROOT, not inside Resources/, which is
+      # why it is listed explicitly with `buildPhase: resources` rather than picked up by the
+      # `path: Akashic` sweep — Apple's tooling looks for PrivacyInfo.xcprivacy at the top level of
+      # the .app. Verify after any project change with:
+      #   find "$(...)/Akashic.app" -maxdepth 1 -name '*.xcprivacy'
+      - path: Akashic/Resources/PrivacyInfo.xcprivacy
+        buildPhase: resources
       # Fixture JSON recovered from git history — bundled so the app runs on
       # fixtures by default (before CloudKit is wired up). Owned by another agent;
       # referenced read-only here.
@@ -100,16 +107,36 @@ targets:
       - path: Fixtures/recovered/incaTrail.json
         buildPhase: resources
     dependencies:
-      # WidgetKit extension, embedded in the app bundle. Builds unsigned for the simulator
-      # (inherits the project's CODE_SIGNING_ALLOWED=NO base), so CI stays team-free.
+      # WidgetKit extension — BUILT but deliberately NOT EMBEDDED for v1.0 (QUA-09).
+      #
+      # The widget cannot display real data, for two independent reasons that both have to be
+      # fixed before it is worth shipping:
+      #   1. It has no App Group entitlement in any configuration, so `AppGroup.containerURL`
+      #      never resolves and it cannot read a snapshot. That is deliberate and documented on
+      #      the AkashicWidgets target below — adding the entitlement needs the capability added
+      #      in Xcode's GUI, because `xcodebuild -allowProvisioningUpdates` refuses to mint the
+      #      extension's profile from an App Store Connect API key, and carrying an unusable
+      #      entitlement blocked archiving outright.
+      #   2. Nothing calls `WidgetSnapshot.publish` anywhere in the app. Its only caller is
+      #      WidgetGalleryHarness, which exists for screenshots.
+      #
+      # So embedded, it would appear in every customer's widget gallery and render its bundled
+      # Kilimanjaro placeholder — a stranger's trek, permanently, on the home screen of someone
+      # who paid. `embed: false` keeps the target compiling as part of every app build, so the
+      # code cannot rot and its 8 tests keep running, while nothing ships to a customer.
+      #
+      # To ship it: add the App Group capability in Xcode (see
+      # AkashicWidgets/AkashicWidgets.entitlements, kept as the reference), restore
+      # CODE_SIGN_ENTITLEMENTS on both widget configs, wire `WidgetSnapshot.publish` into the
+      # store's reload path, then set this back to `embed: true`.
       - target: AkashicWidgets
-        embed: true
+        embed: false
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: no.akashic.app
         PRODUCT_NAME: Akashic
-        MARKETING_VERSION: "0.1.0"
-        CURRENT_PROJECT_VERSION: "8"
+        MARKETING_VERSION: "1.0.0"
+        CURRENT_PROJECT_VERSION: "9"
         TARGETED_DEVICE_FAMILY: "1,2"
         GENERATE_INFOPLIST_FILE: "YES"
         INFOPLIST_KEY_CFBundleDisplayName: Akashic
@@ -120,7 +147,13 @@ targets:
         INFOPLIST_KEY_ITSAppUsesNonExemptEncryption: "NO"
         INFOPLIST_KEY_UIApplicationSceneManifest_Generation: "YES"
         INFOPLIST_KEY_UILaunchScreen_Generation: "YES"
-        INFOPLIST_KEY_UISupportedInterfaceOrientations: "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
+        # iPhone is portrait-only (D5). Landscape shipped unlocked and untested, and on a Max phone
+        # it silently routes into the `.regular` width branch — the iPad floating-panel layout in
+        # GlobeExperienceView, which was designed for a 13-inch canvas and never for a phone held
+        # sideways. Locking it is the honest fix for v1.0; supporting it properly is its own task.
+        # iPad keeps all four orientations (see the _iPad key below), which is where the panel
+        # layout belongs.
+        INFOPLIST_KEY_UISupportedInterfaceOrientations: "UIInterfaceOrientationPortrait"
         INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad: "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
         # NOTE: CKSharingSupported and UIBackgroundModes are deliberately NOT here. Xcode
         # drops non-allowlisted INFOPLIST_KEY_* settings without warning; both now live in
@@ -218,8 +251,8 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: no.akashic.app.widgets
         PRODUCT_NAME: AkashicWidgets
-        MARKETING_VERSION: "0.1.0"
-        CURRENT_PROJECT_VERSION: "8"
+        MARKETING_VERSION: "1.0.0"
+        CURRENT_PROJECT_VERSION: "9"
         TARGETED_DEVICE_FAMILY: "1,2"
         INFOPLIST_FILE: AkashicWidgets/Info.plist
         GENERATE_INFOPLIST_FILE: "NO"

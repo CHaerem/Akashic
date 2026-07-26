@@ -24,12 +24,20 @@ enum DeveloperTools {
 
     /// Whether the developer section should be visible.
     ///
-    /// DEBUG builds auto-unlock; Release builds consult the persisted flag.
+    /// DEBUG auto-unlocks. Release returns false unconditionally (SHIP-09): the migration workshop
+    /// — a persistence-mode override that can repoint the customer's store, a folder picker, and a
+    /// "Run import to CloudKit…" button whose own dialog says it writes the real production
+    /// database — has no business existing in a paid binary, however many taps guard it. The
+    /// persisted flag is deliberately ignored rather than cleared, so a Release build cannot be
+    /// unlocked even by a device that unlocked it under an earlier build.
+    ///
+    /// `Debug-CloudKit` and `Debug-Production` both define DEBUG, which is where the runbook
+    /// actually needs these tools, so nothing operational is lost.
     static func isUnlocked(defaults: UserDefaults = .standard) -> Bool {
         #if DEBUG
         return true
         #else
-        return isPersistentlyUnlocked(defaults: defaults)
+        return false
         #endif
     }
 
