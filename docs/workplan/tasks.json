@@ -2282,11 +2282,17 @@
         "apple/AkashicTests/CloudKitImportTests.swift"
       ],
       "track": "QUALITY",
-      "status": "TODO",
+      "status": "DONE",
       "verify": [
         "cd apple && xcodegen generate",
         "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,id=$(xcrun simctl list devices available | grep -o '[0-9A-F-]\\{36\\}' | tail -1)\" CODE_SIGNING_ALLOWED=NO test"
-      ]
+      ],
+      "claim": {
+        "agent": "opus5",
+        "branch": "claude/remote-control-project-review-9462c1",
+        "at": "2026-07-26"
+      },
+      "evidence": "ZERO strict-concurrency warnings on a clean build-for-testing across all three targets, with SWIFT_STRICT_CONCURRENCY: complete permanent in project.yml. 791 unit + 14 UI tests pass; testCancellationStopsBeforeUploading passes in 0.005s. NOT done the way this task said: the removal condition I wrote during QUA-08 claimed 'every requirement it exposes is already async', which was WRONG -- CloudKitImportSink conforms to ImportSink, whose three requirements are synchronous and are driven synchronously by LocalImporter.run(). An actor cannot witness those, so actor-ifying would have cascaded into ImportSink, CoreDataImportSink and LocalImporter and moved the archive's record-building onto whatever actor the protocol got isolated to. The sink is instead built INSIDE the test's Task so nothing non-Sendable crosses at all: no shipping behaviour changes, and single-owner lifetime becomes a compiler-checked fact. Cost was three small Sendable fixes: MediaResolver lost an unused stored FileManager (same shape as MediaLibrary in QUA-08), the injected sleep closure and defaultImportSleep became @Sendable, and MockDatabase took the @unchecked its sibling doubles already use."
     },
     {
       "id": "QUA-35",

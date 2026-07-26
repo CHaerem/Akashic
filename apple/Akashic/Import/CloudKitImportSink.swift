@@ -3,7 +3,7 @@ import Foundation
 
 /// Default backoff sleep for the importer (real `Task.sleep`). A file-scope function so it can
 /// be a default argument without tripping the "covariant Self in default argument" rule.
-func defaultImportSleep(_ seconds: TimeInterval) async {
+@Sendable func defaultImportSleep(_ seconds: TimeInterval) async {
     try? await Task.sleep(nanoseconds: UInt64(max(0, seconds) * 1_000_000_000))
 }
 
@@ -143,7 +143,7 @@ final class CloudKitImportSink: ImportSink {
     let environment: CloudKitImportEnvironment
 
     /// Injected so tests run backoff with zero real delay.
-    private let sleep: (TimeInterval) async -> Void
+    private let sleep: @Sendable (TimeInterval) async -> Void
 
     /// Comments keyed by journey (mapped to domain `DayComment` with migrated `authorName`).
     private let commentsByJourney: [String: [DayComment]]
@@ -164,7 +164,7 @@ final class CloudKitImportSink: ImportSink {
          containerID: String = "iCloud.no.akashic",
          environment: CloudKitImportEnvironment = .development,
          config: CloudKitImportConfig = .default,
-         sleep: @escaping (TimeInterval) async -> Void = defaultImportSleep) {
+         sleep: @escaping @Sendable (TimeInterval) async -> Void = defaultImportSleep) {
         self.database = database
         self.mediaResolver = mediaResolver
         self.commentsByJourney = Dictionary(grouping: commentRows.map { row -> DayComment in
@@ -189,7 +189,7 @@ final class CloudKitImportSink: ImportSink {
                            containerID: String = "iCloud.no.akashic",
                            environment: CloudKitImportEnvironment = .development,
                            config: CloudKitImportConfig = .default,
-                           sleep: @escaping (TimeInterval) async -> Void = defaultImportSleep) throws -> CloudKitImportSink {
+                           sleep: @escaping @Sendable (TimeInterval) async -> Void = defaultImportSleep) throws -> CloudKitImportSink {
         let bundle = try ExportBundle.load(exportRoot: exportRoot)
         return fromBundle(database: database, bundle: bundle,
                           mediaResolver: MediaResolver(root: mediaRoot),
@@ -204,7 +204,7 @@ final class CloudKitImportSink: ImportSink {
                            containerID: String = "iCloud.no.akashic",
                            environment: CloudKitImportEnvironment = .development,
                            config: CloudKitImportConfig = .default,
-                           sleep: @escaping (TimeInterval) async -> Void = defaultImportSleep) -> CloudKitImportSink {
+                           sleep: @escaping @Sendable (TimeInterval) async -> Void = defaultImportSleep) -> CloudKitImportSink {
         let sink = CloudKitImportSink(
             database: database, mediaResolver: mediaResolver,
             commentRows: bundle.comments, profileNamesByID: bundle.profileNamesByID,

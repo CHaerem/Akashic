@@ -6,13 +6,16 @@ import Foundation
 ///
 /// This is shared by every import sink: the local importer records the path for file-URL
 /// display; the future CloudKit importer would read the same path to attach CKAsset bytes.
-struct MediaResolver {
+struct MediaResolver: Sendable {
     let root: URL
-    private let fileManager: FileManager
 
-    init(root: URL, fileManager: FileManager = .default) {
+    /// QUA-34: computed, not stored. `FileManager` is not `Sendable`, and this was an injection seam
+    /// no caller ever used — exactly the shape `MediaLibrary` had in QUA-08. Storing one would keep
+    /// this struct non-`Sendable`, which is what stopped it being handed into a `Task`.
+    private var fileManager: FileManager { .default }
+
+    init(root: URL) {
         self.root = root
-        self.fileManager = fileManager
     }
 
     /// Absolute path if the object exists under the media root, else `nil`.

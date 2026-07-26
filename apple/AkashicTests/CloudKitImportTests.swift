@@ -15,7 +15,11 @@ final class CloudKitImportTests: XCTestCase {
 
     /// Records everything written and can be scripted to fail per call (whole-op throw or
     /// per-record failures) to exercise the retry/collect paths.
-    final class MockDatabase: CKDatabaseProtocol {
+    // QUA-34: `@unchecked Sendable` so the sink can be BUILT INSIDE the cancellation test's `Task`
+    // instead of being handed into it. Same justification as `MockMediaDatabase` and
+    // `RecordingAccepter` in MediaV2Tests: the mutable properties below are test scripting state,
+    // written before the task starts and read after it finishes, never concurrently.
+    final class MockDatabase: CKDatabaseProtocol, @unchecked Sendable {
         enum Response { case ok; case throwError(Error); case perRecordFailures([String: Error]) }
 
         private(set) var savedRecords: [CKRecord.ID: CKRecord] = [:]
@@ -515,30 +519,32 @@ final class CloudKitImportTests: XCTestCase {
 
     // MARK: - Cancellation
 
-    // QUA-08: **the one strict-concurrency diagnostic left in the whole project**, and it is left
-    // standing on purpose rather than suppressed.
+    // QUA-34: the sink is built INSIDE the task, so nothing non-Sendable crosses an isolation
+    // boundary — which is what finally closed the last `sending 'sink'` warning in the project.
     //
-    // `sending 'sink' risks causing data races`. `CloudKitImportSink` is a non-Sendable `final class`
-    // with real mutable state (`journeys`, `photosByJourney`, `missingMedia`, `routeByteSize`), and
-    // `execute` is a nonisolated `async` method — so calling it hands the receiver across an isolation
-    // boundary. Nothing here touches `sink` afterwards, but the compiler cannot see that.
+    // The removal condition QUA-08 wrote here said to make `CloudKitImportSink` an `actor`, on the
+    // grounds that "every requirement it exposes is already async". **That was wrong**, and worth
+    // recording: the sink conforms to `ImportSink`, whose three requirements (`upsert(journey:)`,
+    // `upsert(photo:)`, `save()`) are all SYNCHRONOUS and are driven synchronously by
+    // `LocalImporter.run()`. An actor cannot witness those, so actor-ifying the sink would have
+    // cascaded into `ImportSink`, `CoreDataImportSink` and `LocalImporter` — and would have put the
+    // archive's record-building loops on whatever actor the protocol ended up isolated to.
     //
-    // Three things that do NOT fix it, all tried:
-    //   * `@MainActor` on this method only moves the diagnostic — `execute` is nonisolated `async`, so
-    //     calling it *from* the main actor is itself the transfer.
-    //   * `@unchecked Sendable` on the sink would be a lie: the mutable state above is real.
-    //   * Building the sink inside the `Task` just transfers `MockDatabase` instead, which is also a
-    //     non-Sendable final class.
-    //
-    // **Removal condition:** make `CloudKitImportSink` an `actor`. Every requirement it exposes is
-    // already `async`, so the shipping call site (`CloudKitImportViewModel`) does not change — but the
-    // synchronous `makeSink(...).makePlan()` calls throughout this file each gain an `await`. That is
-    // a shipping-code architecture decision, not a test fix, which is why it is not bundled here.
-    @MainActor
+    // Keeping the sink inside one task is both smaller and more honest: it changes no shipping
+    // behaviour, and it makes the single-owner lifetime a fact the compiler checks rather than a
+    // claim in a comment. It cost three small Sendable fixes on the way in — `MediaResolver` lost an
+    // unused stored `FileManager`, the injected `sleep` closure became `@Sendable`, and
+    // `MockDatabase` took the `@unchecked` the other doubles in this target already use.
     func testCancellationStopsBeforeUploading() async throws {
         let mock = MockDatabase()
-        let sink = try makeSink(mock)
-        let task = Task { await sink.execute(dryRun: false) }
+        let bundle = try makeBundle()
+        let resolver = MediaResolver(root: try makeMediaRoot(hero: true))
+        let task = Task {
+            let sink = CloudKitImportSink.fromBundle(
+                database: mock, bundle: bundle, mediaResolver: resolver,
+                config: .default, sleep: { _ in })
+            return await sink.execute(dryRun: false)
+        }
         task.cancel()                    // cancel before the child task starts its work
         let report = await task.value
         XCTAssertTrue(report.wasCancelled)
