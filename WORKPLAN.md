@@ -5,7 +5,7 @@
 
 # Akashic — work ledger
 
-83 tasks · **48 open** (32 agent-doable, 38.2 d · 16 owner-only, 8 d) · 35 done · 0 dropped
+86 tasks · **45 open** (29 agent-doable, 40.6 d · 16 owner-only, 8 d) · 41 done · 0 dropped
 
 Read [CLAUDE.md](CLAUDE.md) before touching anything. To find work:
 
@@ -45,14 +45,14 @@ node scripts/workplan.mjs next
 
 > Make the documentation true. Cheap, high-value, and it is what stops the next agent inheriting a false picture.
 
-4 open of 19 · 1.4 d remaining
+0 open of 19 · 0 d remaining
 
 | | Task | Days | Who | Deps | Finish line |
 |---|---|---|---|---|---|
 | `x` | `DOC-01` **CLAUDE.md — the protocol every session loads** | 0.5 | agent | — | A fresh agent can find the ledger, build the app and run the right verification without asking. |
 | `x` | `DOC-02` **The work ledger and its enforcement** | 1 | agent | — | npm run workplan:check passes and fails loudly when the ledger and WORKPLAN.md disagree. |
 | `x` | `DOC-03` **Rewrite ARCHITECTURE.md** | 0.5 | agent | — | No document describes Supabase, R2 or the Worker as active infrastructure, and every link in ARCHITECTURE.md resolves. |
-| ` ` | `DOC-04` **Correct the cost table: public-database egress is billed to the developer** | 0.5 | agent | — | The cost table distinguishes the owner's iCloud quota from the developer-billed public database. |
+| `x` | `DOC-04` **Correct the cost table: public-database egress is billed to the developer** | 0.5 | agent | — | The cost table distinguishes the owner's iCloud quota from the developer-billed public database. |
 | `x` | `DOC-05` **Fix the test-count claims that disagree with each other** | 0.25 | agent | — | Every stated test count matches a command anyone can run. |
 | `x` | `DOC-06` **Record that Akashic Intelligence already ships** | 0.25 | agent | — | No document schedules as v1.1 a feature that is wired to real UI today. |
 | `x` | `DOC-07` **Add the PCC timing caveat: production PCC ships with iOS 27** | 0.1 | agent | — | The Apple Intelligence section states that PCC cannot be in v1.0. |
@@ -60,20 +60,20 @@ node scripts/workplan.mjs next
 | `x` | `DOC-09` **Fix the Entitlements.swift comments that contradict the same file's header** | 0.1 | agent | — | The enum comments and the file header describe the same paywall. |
 | `x` | `DOC-10` **Remove the false 'exhaustively unit-tested' claim from KnowledgeRetrieval.swift** | 0.1 | agent | — | No doc comment claims test coverage that does not exist. |
 | `x` | `DOC-11` **Archive ROADMAP.md and delete PLAN.md** | 0.25 | agent | — | No unmarked stale planning document remains at the repo root. |
-| ` ` | `DOC-12` **Correct the DESIGN-PLAN ticks that code does not support** | 0.25 | agent | — | No design item is marked shipped unless code supports it. |
+| `x` | `DOC-12` **Correct the DESIGN-PLAN ticks that code does not support** | 0.25 | agent | — | No design item is marked shipped unless code supports it. |
 | `x` | `DOC-13` **Audit every claim in README.md** | 0.25 | agent | — | Every feature and tech-stack claim in the README is true of the current build. |
 | `x` | `DOC-14` **Fix github-pages-cutover.md drift before the owner follows it** | 0.1 | agent | — | Every instruction in the cutover runbook is still executable as written. |
 | `x` | `DOC-15` **Fix the FactDrafter comment that misattributes where the entitlement gate lives** | 0.1 | agent | — | No comment claims Intelligence.isAvailable performs an entitlement check. |
 | `x` | `DOC-16` **Say what each import figure counts in APPLE-MIGRATION-TASKS** | 0.1 | agent | — | Both import figures state what they count, so neither reads as contradicting the other. |
 | `x` | `DOC-17` **apple/README.md still calls the app icon a placeholder** | 0.1 | agent | `QUA-19` | No document describes the app icon as a placeholder. |
-| ` ` | `DOC-18` **apple/README.md describes shipped work as future, and one claim is flatly false** | 0.5 | agent | — | Every claim in apple/README.md is true of the tree, and its layout tables list what exists. |
-| ` ` | `DOC-19` **Explain or delete apple/Fixtures/recovered/photoMetadata.json** | 0.1 | agent | — | The file is gone, or a comment says what reads it. |
+| `x` | `DOC-18` **apple/README.md describes shipped work as future, and one claim is flatly false** | 0.5 | agent | — | Every claim in apple/README.md is true of the tree, and its layout tables list what exists. |
+| `x` | `DOC-19` **Explain or delete apple/Fixtures/recovered/photoMetadata.json** | 0.1 | agent | — | The file is gone, or a comment says what reads it. |
 
 ## SHIP
 
 > Hard requirements for a paid v1.0. Most of the remaining calendar time lives here, in items only the owner can do.
 
-13 open of 19 · 7.3 d remaining
+12 open of 19 · 6.8 d remaining
 
 | | Task | Days | Who | Deps | Finish line |
 |---|---|---|---|---|---|
@@ -84,7 +84,7 @@ node scripts/workplan.mjs next
 | `x` | `SHIP-05` **Bump the marketing version to 1.0.0** | 0.1 | agent | — | The built plist reports CFBundleShortVersionString 1.0.0. |
 | `x` | `SHIP-06` **D5 — consumer sync wording, iPhone portrait lock, ASC config match** | 0.5 | agent | — | Settings shows no engineering strings and iPhone does not rotate into the iPad panel layout. |
 | ` ` | `SHIP-07` **Add the associated-domains entitlement so Universal Links work** | 0.25 | agent | `LEG-09` | Tapping an akashic.no journey link opens the app rather than Safari. |
-| ` ` | `SHIP-08` **Write the public-showcase takedown procedure** | 0.5 | agent | `DIFF-02` | A documented, tested procedure removes a reported public journey, and the privacy page says how to ask. |
+| `x` | `SHIP-08` **Write the public-showcase takedown procedure** | 0.5 | agent | `DIFF-02` | A documented, tested procedure removes a reported public journey, and the privacy page says how to ask. |
 | `x` | `SHIP-09` **Compile the developer workshop out of Release** | 0.25 | agent | — | No developer surface is reachable in a Release build, and the seven-tap gesture is gone. |
 | ` ` | `SHIP-10` **Point akashic.no at the CloudKit production environment** | 0.5 | owner | — | The deployed bundle carries environment:"production" and a published journey is visible signed out. |
 | ` ` | `SHIP-11` **Trademark and name clearance for 'Akashic'** | 0.5 | owner | — | A written go/no-go exists from Patentstyret and EUIPO in the software class. |
@@ -101,7 +101,7 @@ node scripts/workplan.mjs next
 
 > Capability beyond what competitors offer. Order set by decision: share link, then Vision curation, then the book.
 
-6 open of 9 · 14 d remaining
+7 open of 10 · 15.5 d remaining
 
 | | Task | Days | Who | Deps | Finish line |
 |---|---|---|---|---|---|
@@ -114,12 +114,13 @@ node scripts/workplan.mjs next
 | ` ` | `DIFF-07` **PDF export of the story view** | 6 | agent | `DIFF-04` `DIFF-06` | A journey exports a PDF a person would willingly hand over. |
 | ` ` | `DIFF-08` **Foundation Models depth: streaming, prewarm, typed errors** | 1.5 | agent | `QUA-05` | Drafting streams, sessions are reused, and guardrail refusals say something specific. |
 | ` ` | `DIFF-09` **C9 — derive days from timestamped GPX trackpoints** | 1 | agent | — | A Strava or Garmin export yields a journey with correctly dated days. |
+| ` ` | `DIFF-10` **Give the demo journey photographs** | 1.5 | agent | — | A first launch shows a journey with real photographs, and a photos-only trip is demoed too. |
 
 ## QUALITY
 
 > Tests, types, CI, localisation, accessibility. Localisation and accessibility are in v1.0 by decision.
 
-16 open of 23 · 20 d remaining
+17 open of 25 · 22.8 d remaining
 
 | | Task | Days | Who | Deps | Finish line |
 |---|---|---|---|---|---|
@@ -145,7 +146,9 @@ node scripts/workplan.mjs next
 | ` ` | `QUA-20` **A4 — the 'would Apple ship this screen?' review round** | 1 | agent | `QUA-07` `QUA-18` `QUA-19` | Each primary screen has been reviewed against current HIG and the findings closed or recorded. |
 | `x` | `QUA-21` **Redraw the web and PWA icons — same illegibility, plus transparency** | 0.25 | agent | — | Every derived web icon is opaque and its mark clears 4.5:1 against its own ground. |
 | ` ` | `QUA-22` **Make the paywall list what the purchase now advertises** | 0.5 | agent | `DOC-08` | EntitlementPolicy, the paywall benefit list and the IAP description all name the same set. |
-| ` ` | `QUA-23` **Remove the dead tab state from useTrekData** | 0.25 | agent | — | No hook exposes state nothing renders, and its tests reflect that. |
+| `x` | `QUA-23` **Remove the dead tab state from useTrekData** | 0.25 | agent | — | No hook exposes state nothing renders, and its tests reflect that. |
+| ` ` | `QUA-24` **Accessibility for the screens D1 and D3 were never scoped to cover** | 2 | agent | `QUA-06` | No view directory with interactive controls sits at zero accessibility labels. |
+| ` ` | `QUA-25` **Bound public-showcase reads before traffic arrives** | 1 | agent | — | A published journey has a size bound, and crossing a usage threshold is visible to the owner. |
 
 ## Decisions on record
 

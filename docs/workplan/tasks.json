@@ -364,7 +364,7 @@
       "id": "DOC-04",
       "track": "DOCS",
       "title": "Correct the cost table: public-database egress is billed to the developer",
-      "status": "TODO",
+      "status": "DONE",
       "effort": 0.5,
       "done_when": "The cost table distinguishes the owner's iCloud quota from the developer-billed public database.",
       "files": [
@@ -377,7 +377,8 @@
       ],
       "refs": [
         "Verified independently: COMMERCIALIZATION-PLAN.md:40 and apple/CloudKit/schema.ckdb GRANT CREATE TO \"_icloud\" on 7 types"
-      ]
+      ],
+      "evidence": "The §2 cost table's single '$0 bandwidth' row is now three: private-DB storage and bandwidth (genuinely $0, owner's quota) plus 'public DB (the showcase) — billed to us'. A new subsection carries the verified schema facts (GRANT READ TO _world on 6 types, GRANT CREATE TO _icloud on all 7) and the arithmetic (~56 MB per full journey view, ~45 views/day at 1000 customers, a 50k spike ~2.7 TB ~ $270/day). Every downstream claim resting on zero-marginal-cost was corrected too: the §1 thesis, §4.5, §5, §6, a new §8 risk row, §9, and the closing line."
     },
     {
       "id": "DOC-05",
@@ -508,7 +509,7 @@
       "id": "DOC-12",
       "track": "DOCS",
       "title": "Correct the DESIGN-PLAN ticks that code does not support",
-      "status": "TODO",
+      "status": "DONE",
       "effort": 0.25,
       "done_when": "No design item is marked shipped unless code supports it.",
       "files": [
@@ -518,7 +519,8 @@
       "why": "D1/D3 are ticked while there are 14 accessibilityLabels for ~136 interactive views, and the demo journey is marked shipped as 'the biggest conversion lever' while containing zero photos — in a photo-memory app.",
       "verify": [
         "grep -c '✅' apple/Docs/DESIGN-PLAN.md"
-      ]
+      ],
+      "evidence": "D9 changed from SHIPPED to PARTLY SHIPPED, splitting the halves honestly: the seeding mechanism is real and careful, the content is not — kilimanjaro.json has no photos key, so a first launch shows no photograph in a photo-memory app. Its self-contradicting gate column fixed. D1/D3 ticks KEPT after line-by-line verification: my premise for un-ticking them was wrong, see the new QUA-24 for the real gap."
     },
     {
       "id": "DOC-13",
@@ -732,7 +734,7 @@
       "id": "SHIP-08",
       "track": "SHIP",
       "title": "Write the public-showcase takedown procedure",
-      "status": "TODO",
+      "status": "DONE",
       "effort": 0.5,
       "done_when": "A documented, tested procedure removes a reported public journey, and the privacy page says how to ask.",
       "deps": [
@@ -746,7 +748,8 @@
       "why": "The report affordance ships and is unit-tested, but nothing on the other end removes content. Once strangers can publish world-readable content to the developer's database, the developer owns moderation — and Guideline 1.2 (UGC) is a sharper review risk than the metadata items.",
       "verify": [
         "node scripts/takedown.mjs --dry-run <recordName>"
-      ]
+      ],
+      "evidence": "scripts/takedown.mjs (714 lines, zero dependencies — node:crypto only). Dry-run is the default; --apply is required to delete, unknown flags are errors so a typo cannot delete, and --dry-run with --apply is rejected rather than resolved. Handles the disambiguated-slug case DIFF-01 fixed app-side, so a takedown cannot miss the real records. 48 tests. Verified against a stub-fetch harness across five scenarios including cross-owner isolation. privacy.html gained a removal section; review-notes.md gained a Guideline 1.2 block for App Review."
     },
     {
       "id": "SHIP-09",
@@ -1675,7 +1678,7 @@
       "id": "DOC-18",
       "track": "DOCS",
       "title": "apple/README.md describes shipped work as future, and one claim is flatly false",
-      "status": "TODO",
+      "status": "DONE",
       "effort": 0.5,
       "done_when": "Every claim in apple/README.md is true of the tree, and its layout tables list what exists.",
       "why": "Found while doing DOC-17, and larger than that task's scope. Its 'What remains (later phases)' section lists five items that all shipped, and one is false outright — 'this app ships only the flat placeholder map' — while apple/Akashic/Views/Map/ holds GlobeExperienceView, TrekCameraController and three more, and D5 ratified MapKit on 2026-07-22. The project-layout tree omits four whole directories (Export/, Intelligence/, Media/, Store/) — Store/ is the paywall and Intelligence/ is the paid-tier differentiator, so a reader taking the tree as complete misses both. The Sync/ table lists 7 of 14 files, omitting PublicMirrorPublisher, which is the entire public-showcase publish path. Its widget runbook tells the owner to create an entitlements file that already exists. And it claims 599 tests where the file's own counting method now gives 608.",
@@ -1685,7 +1688,8 @@
       "verify": [
         "grep -n 'flat placeholder map' apple/README.md  # expect no hits",
         "for d in Export Intelligence Media Store; do grep -q \"$d/\" apple/README.md || echo \"MISSING $d\"; done"
-      ]
+      ],
+      "evidence": "grep 'flat placeholder map' apple/README.md exits 1. All 15 Akashic/ directories now listed (Export, Intelligence, Media, Store were absent); Sync/ table expanded 7 -> 14 files including PublicMirrorPublisher; widget section rewritten for QUA-09's embed:false with both blocking reasons; test count 599 -> 608 with the counting command inline. Also fixed four claims outside the task's list, including 'two launch environment variables' followed by ten rows where about thirty exist."
     },
     {
       "id": "QUA-22",
@@ -1712,7 +1716,7 @@
       "id": "QUA-23",
       "track": "QUALITY",
       "title": "Remove the dead tab state from useTrekData",
-      "status": "TODO",
+      "status": "DONE",
       "effort": 0.25,
       "done_when": "No hook exposes state nothing renders, and its tests reflect that.",
       "why": "useTrekData still owns activeTab/setActiveTab and its test asserts on them in three places, but nothing renders it — the sheet redesign replaced tabs with activeMode, and AkashicApp was destructuring both and using neither. The QUA-02 agent removed only the dead destructuring, correctly declining to delete tested state on a type-safety task.",
@@ -1723,13 +1727,14 @@
       "verify": [
         "npx tsc --noEmit",
         "npx vitest --run"
-      ]
+      ],
+      "evidence": "activeTab/setActiveTab removed from useTrekData with both interface members, return entries and the unused import; the two dead tests removed (20 -> 18). TabType stays in types/trek.ts because ContextCard.tsx:34 still uses it. tsc 0, lint 0 errors, 452 tests pass."
     },
     {
       "id": "DOC-19",
       "track": "DOCS",
       "title": "Explain or delete apple/Fixtures/recovered/photoMetadata.json",
-      "status": "TODO",
+      "status": "DONE",
       "effort": 0.1,
       "done_when": "The file is gone, or a comment says what reads it.",
       "why": "Nothing under apple/ reads it — FixtureLoader has no photo path at all, which is also why the README's claim that the recovered fixtures carry no photos is still true. The only generator of that filename is the web's scripts/generatePhotoData.js, which writes to src/data/. Likely a stray copy, and it is exactly the kind of file that makes the next reader think the demo journey has photos when it does not.",
@@ -1738,6 +1743,74 @@
       ],
       "verify": [
         "grep -rn photoMetadata apple/ --include='*.swift' | wc -l  # expect 0"
+      ],
+      "evidence": "Deleted. 62 bytes of three empty arrays, zero readers: 0 hits in *.swift, never a bundled resource in project.yml, and the only generator of that filename writes to src/data/ instead."
+    },
+    {
+      "id": "QUA-24",
+      "track": "QUALITY",
+      "title": "Accessibility for the screens D1 and D3 were never scoped to cover",
+      "status": "TODO",
+      "effort": 2.0,
+      "priority": 27,
+      "deps": [
+        "QUA-06"
+      ],
+      "done_when": "No view directory with interactive controls sits at zero accessibility labels.",
+      "why": "Replaces the framing the review got wrong. D1 and D3 are genuinely finished for the files they named — verified line by line — so the '14 labels for ~136 views' ratio did not falsify them; it pointed at everything those tasks were never scoped to cover. Measured per directory: Views/Edit/ 0 labels across 59 interactive sites, Views/NewJourney/ 0/25, Views/Sharing/ 0/8, Views/Store/ 0/7 — that last one is the paywall — Views/Export/ 0/4, Views/Route/ 0/4, Views/Story/ 0/1. So VoiceOver completes the globe-to-day path D1 built, and then cannot create a journey, buy the app, or share one. Sequenced after localisation because both rewrite the same view files.",
+      "files": [
+        "apple/Akashic/Views/Edit/**",
+        "apple/Akashic/Views/NewJourney/**",
+        "apple/Akashic/Views/Store/**",
+        "apple/Akashic/Views/Sharing/**",
+        "apple/Akashic/Views/Export/**",
+        "apple/Akashic/Views/Route/**"
+      ],
+      "serialise_with": "QUA-06 and QUA-07 rewrite the same files — run these three in sequence, never in parallel",
+      "verify": [
+        "cd apple && xcodegen generate",
+        "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,id=$(xcrun simctl list devices available | grep -o '[0-9A-F-]\\{36\\}' | tail -1)\" CODE_SIGNING_ALLOWED=NO test",
+        "for d in Edit NewJourney Store Sharing Export Route; do n=$(grep -rc accessibilityLabel apple/Akashic/Views/$d 2>/dev/null | awk -F: '{s+=$2} END{print s+0}'); echo \"$d: $n\"; done"
+      ]
+    },
+    {
+      "id": "QUA-25",
+      "track": "QUALITY",
+      "title": "Bound public-showcase reads before traffic arrives",
+      "status": "TODO",
+      "effort": 1.0,
+      "priority": 28,
+      "done_when": "A published journey has a size bound, and crossing a usage threshold is visible to the owner.",
+      "why": "The only line in the business model where usage we do not control bills us, and the success mode and the cost-blowup mode are the same event. Entitlements bounds a free account's uploads (1 journey, 100 photos) but nothing bounds READS, and a paid account publishes unlimited journeys of unlimited size. Verified absent across apple/, src/, scripts/ and .github/: no publish cap, no throttle, no usage alert anywhere. The cheap version is a per-journey published-photo cap plus a documented CloudKit Console alert — not a rewrite, just a bound where there is currently none.",
+      "files": [
+        "apple/Akashic/Views/Showcase/JourneyShowcaseSheet.swift",
+        "apple/Akashic/Sync/PublicMirrorPublisher.swift",
+        "docs/store/launch-checklist.md"
+      ],
+      "serialise_with": "DIFF-01/DIFF-02 territory — take after they are settled",
+      "verify": [
+        "cd apple && xcodegen generate",
+        "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,id=$(xcrun simctl list devices available | grep -o '[0-9A-F-]\\{36\\}' | tail -1)\" CODE_SIGNING_ALLOWED=NO test"
+      ]
+    },
+    {
+      "id": "DIFF-10",
+      "track": "DIFF",
+      "title": "Give the demo journey photographs",
+      "status": "TODO",
+      "effort": 1.5,
+      "priority": 22,
+      "done_when": "A first launch shows a journey with real photographs, and a photos-only trip is demoed too.",
+      "why": "Worse than 'the fixture has no photos': FixtureLoader.swift and FixtureModels.swift contain zero occurrences of the string 'photo', so there is no photo path in the fixture pipeline at all — bundling photos with the demo needs new code, not new JSON. The seeding mechanism itself is real and careful (once-ever, ids re-minted, excluded from the free-tier count and from sync). This is the first thing a new paying customer sees in a photo-memory app, and the DESIGN-PLAN round that shipped D9 also left its 'demo both a trek and a photos-only trip' requirement unmet.",
+      "files": [
+        "apple/Akashic/Fixtures/FixtureLoader.swift",
+        "apple/Akashic/Fixtures/FixtureModels.swift",
+        "apple/Fixtures/recovered/"
+      ],
+      "verify": [
+        "cd apple && xcodegen generate",
+        "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,id=$(xcrun simctl list devices available | grep -o '[0-9A-F-]\\{36\\}' | tail -1)\" CODE_SIGNING_ALLOWED=NO test",
+        "Launch on a clean simulator and confirm the demo journey shows photographs"
       ]
     }
   ]

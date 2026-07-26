@@ -103,11 +103,6 @@ describe('useTrekData hook', () => {
             expect(result.current.selectedCamp).toBeNull();
         });
 
-        it('starts with overview tab active', () => {
-            const { result } = renderHook(() => useTrekData());
-            expect(result.current.activeTab).toBe('overview');
-        });
-
         it('has null trekData when no trek selected', () => {
             const { result } = renderHook(() => useTrekData());
             expect(result.current.trekData).toBeNull();
@@ -420,24 +415,6 @@ describe('useTrekData hook', () => {
             });
 
             expect(result.current.selectedCamp).toEqual(camp2);
-        });
-    });
-
-    describe('setActiveTab', () => {
-        it('changes active tab', () => {
-            const { result } = renderHook(() => useTrekData());
-
-            act(() => {
-                result.current.setActiveTab('journey');
-            });
-
-            expect(result.current.activeTab).toBe('journey');
-
-            act(() => {
-                result.current.setActiveTab('stats');
-            });
-
-            expect(result.current.activeTab).toBe('stats');
         });
     });
 

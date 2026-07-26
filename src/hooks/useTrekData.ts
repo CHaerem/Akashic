@@ -5,7 +5,7 @@
 import { useState, useCallback, useMemo, useTransition, useEffect, useRef } from 'react';
 import { useJourneys } from '../contexts/JourneysContext';
 import { calculateStats, generateElevationProfile } from '../utils/stats';
-import type { TrekConfig, TrekData, Camp, ExtendedStats, ElevationProfile, ViewMode, TabType } from '../types/trek';
+import type { TrekConfig, TrekData, Camp, ExtendedStats, ElevationProfile, ViewMode } from '../types/trek';
 
 /**
  * Parse URL parameters for deep linking
@@ -33,7 +33,6 @@ interface UseTrekDataReturn {
     view: ViewMode;
     selectedTrek: TrekConfig | null;
     selectedCamp: Camp | null;
-    activeTab: TabType;
     trekData: TrekData | null;
     extendedStats: ExtendedStats | null;
     elevationProfile: ElevationProfile | null;
@@ -50,7 +49,6 @@ interface UseTrekDataReturn {
 
     // Setters
     setView: (view: ViewMode) => void;
-    setActiveTab: (tab: TabType) => void;
     setSheetSnapPoint: (snap: SheetSnapPoint) => void;
     setActiveMode: (mode: ContentMode) => void;
 
@@ -72,7 +70,6 @@ export function useTrekData(): UseTrekDataReturn {
     const [view, setViewState] = useState<ViewMode>('globe');
     const [selectedTrek, setSelectedTrek] = useState<TrekConfig | null>(null);
     const [selectedCamp, setSelectedCamp] = useState<Camp | null>(null);
-    const [activeTab, setActiveTab] = useState<TabType>('overview');
 
     // Sheet state for Find My redesign
     const [sheetSnapPoint, setSheetSnapPoint] = useState<SheetSnapPoint>('half');
@@ -191,7 +188,6 @@ export function useTrekData(): UseTrekDataReturn {
         view,
         selectedTrek,
         selectedCamp,
-        activeTab,
         trekData,
         extendedStats,
         elevationProfile,
@@ -208,7 +204,6 @@ export function useTrekData(): UseTrekDataReturn {
 
         // Setters
         setView,
-        setActiveTab,
         setSheetSnapPoint,
         setActiveMode,
 
