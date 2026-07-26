@@ -16,9 +16,7 @@
     "test": "vitest",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
-    "test:e2e:perf": "playwright test e2e/performance.spec.ts --project=chromium",
     "test:e2e:mobile": "playwright test --project=mobile-chrome --project=mobile-safari",
-    "test:e2e:perf:mobile": "playwright test e2e/performance.spec.ts --project=mobile-chrome",
     "generate-photos": "node scripts/generatePhotoData.js",
     "generate-icons": "node scripts/generateIcons.js",
     "import-gpx": "node scripts/importGpx.js",
@@ -50,7 +48,6 @@
     "*.{ts,tsx}": "bash -c 'npx tsc --noEmit || true'"
   },
   "devDependencies": {
-    "@aws-sdk/client-s3": "^3.940.0",
     "@eslint/js": "^9.39.1",
     "@playwright/test": "^1.56.1",
     "@tailwindcss/postcss": "^4.1.17",
@@ -79,8 +76,9 @@
     "vite": "^7.2.4",
     "vitest": "^3.2.4"
   },
+  "//overrides": "Security overrides, not preferences. GHSA-mh99-v99m-4gvg (brace-expansion DoS) is fixed ONLY in brace-expansion 5.0.8 — the 1.x and 2.x maintenance lines were never patched, so the previous 'brace-expansion@1'/'@2' pins could never clear the advisory. 5.0.8 exports { expand } instead of a callable default, which minimatch <10 cannot consume, so minimatch has to move to 10.x in the same breath. See the Security Audit job in .github/workflows/test.yml for the removal condition.",
   "overrides": {
-    "brace-expansion@1": "^1.1.16",
-    "brace-expansion@2": "^2.1.2"
+    "brace-expansion": "^5.0.8",
+    "minimatch": "^10.2.5"
   }
 }

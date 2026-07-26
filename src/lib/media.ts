@@ -5,38 +5,42 @@
  * nothing to sign or proxy — the token plumbing this module used to carry (a Supabase
  * JWT appended as `?token=`) went away with Supabase itself (T3.4).
  *
- * The relative-path fallback still resolves against the media Worker, which stays up
- * until the Phase 5 decommission; nothing written since the migration uses it.
+ * There is no relative-path fallback any more (LEG-05). It used to resolve against the
+ * media Worker, and it was dead code against the real schema: `apple/CloudKit/schema.ckdb`
+ * declares no `url`/`thumbnailUrl` STRING on `Photo` — only `original`/`thumb` ASSETs —
+ * and `RecordCoder.swift:349` writes `url: ""` when it drops the old R2 path. So no
+ * CloudKit record can carry a relative object path, and nothing since the migration
+ * produced one. Removing it retires the last source reference to the Worker host
+ * *before* the host is deleted (Phase 5), which is the order that cannot break.
  */
+
+import { refuseNativeOnlyWrite } from './nativeOnly';
 
 // Thumbnail settings
 const THUMBNAIL_MAX_SIZE = 400; // Max width/height in pixels
 const THUMBNAIL_QUALITY = 0.8; // JPEG quality (0-1)
 
-const MEDIA_BASE_URL = import.meta.env.VITE_MEDIA_URL || 'https://akashic-media.chris-haerem.workers.dev';
-
 /**
  * Resolve a media reference to a loadable URL.
  *
  * An absolute URL — every CloudKit asset — is already complete and passes through
- * untouched. Anything else is treated as a legacy relative object path.
+ * untouched. Anything else is unresolvable: callers reach here with
+ * `photo.thumbnail_url || photo.url`, and the only non-absolute value those can hold is
+ * `''` (see `recordToPhoto` in `adapters/cloudkit/records.ts`). Returning `''` keeps that
+ * an empty `<img>` instead of a request to a host that is being decommissioned.
  */
 export function buildMediaUrl(path: string): string {
     if (/^https?:\/\//i.test(path)) {
         return path;
     }
-    return `${MEDIA_BASE_URL}/${path}`;
+    if (import.meta.env.DEV && path) {
+        console.warn(`[media] not a CloudKit asset URL, cannot resolve: ${path}`);
+    }
+    return '';
 }
 
 /**
- * Get a photo path for a journey (uses UUID for immutable paths)
- */
-export function getJourneyPhotoPath(journeyId: string, photoId: string, extension = 'jpg'): string {
-    return `journeys/${journeyId}/photos/${photoId}.${extension}`;
-}
-
-/**
- * Upload result from the media Worker with extracted metadata
+ * Upload result with extracted metadata
  */
 export interface UploadResult {
     photoId: string;
@@ -116,26 +120,21 @@ export async function createThumbnail(file: File, maxSize = THUMBNAIL_MAX_SIZE):
 }
 
 /**
- * Upload a photo to R2 storage with automatic thumbnail generation
- * @param journeyId - The journey UUID to upload to
- * @param file - The file to upload
- * @param generateThumbnail - Whether to generate and upload a thumbnail (default: true)
- * @returns Upload result with photo ID, path, and optional thumbnail path
+ * Upload a photo. Native-only: there is no web write path (see `lib/nativeOnly.ts`).
+ * Throws rather than resolving, so a caller cannot mistake it for a success.
  */
 export async function uploadPhoto(
     _journeyId: string,
     _file: File,
     _generateThumbnail = true
 ): Promise<UploadResult & { thumbnailPath?: string }> {
-    throw new Error('[cloudkit] Photo upload is native-only — use the iOS app');
+    refuseNativeOnlyWrite('Photo upload');
 }
 
 /**
- * Delete a photo and its thumbnail from R2 storage
- * @param journeyId - The journey UUID
- * @param photoId - The photo UUID (without extension)
- * @returns true if successful
+ * Delete a photo and its thumbnail. Native-only, and throws for the same reason as
+ * {@link uploadPhoto}.
  */
 export async function deletePhotoFiles(_journeyId: string, _photoId: string): Promise<boolean> {
-    throw new Error('[cloudkit] Photo deletion is native-only — use the iOS app');
+    refuseNativeOnlyWrite('Photo deletion');
 }

@@ -3,9 +3,14 @@
  *
  * Globe view + trek selected: Journey overview with "Explore" button
  * Trek view: Day details, Photos, Stats, or Info based on activeMode
+ *
+ * Edit mode used to open four editors from here — journey details, route & camp
+ * positions, day, assign photos. All four awaited a stubbed CloudKit write, ignored the
+ * `false`, and closed as if it had saved (LEG-07). They are gone; edit mode now surfaces
+ * a `NativeOnlyNotice` instead. See `lib/nativeOnly.ts`.
  */
 
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { colors, radius } from '../../styles/liquidGlass';
 import type { TrekConfig, TrekData, Camp, ExtendedStats, ElevationProfile, Photo, ViewMode } from '../../types/trek';
@@ -17,12 +22,9 @@ import { PhotosTab } from '../trek/PhotosTab';
 import { Button } from '../ui/button';
 import { ErrorBoundary, ComponentErrorFallback } from '../common/ErrorBoundary';
 import { usePhotoDay } from '../../hooks/usePhotoDay';
-import { PhotoIcon, PencilIcon } from '../icons';
+import { PhotoIcon } from '../icons';
 import { getCountryFlag } from '../../utils/countryFlags';
-import { WaypointEditModal } from '../trek/WaypointEditModal';
-import { PhotoAssignModal } from '../trek/PhotoAssignModal';
-import { JourneyEditModal } from '../trek/JourneyEditModal';
-import { RouteEditor } from '../trek/RouteEditor';
+import { NativeOnlyNotice } from '../common/NativeOnlyNotice';
 import { FunFactCard } from '../journey/FunFactCard';
 import { DayDiscoveries } from '../journey/DayDiscoveries';
 import { DayCommentsSection } from '../comments';
@@ -42,6 +44,10 @@ interface BottomSheetContentProps {
     onCampSelect: (camp: Camp) => void;
     onViewPhotoOnMap: (photo: Photo) => void;
     onOpenDayGallery: () => void;
+    /**
+     * Kept for the caller's benefit only. Nothing here saves a journey any more
+     * (LEG-07), so nothing calls this.
+     */
     onJourneySaved?: () => void;
     editMode?: boolean;
     isMobile?: boolean;
@@ -80,7 +86,6 @@ export function BottomSheetContent({
     onCampSelect,
     onViewPhotoOnMap,
     onOpenDayGallery,
-    onJourneySaved,
     editMode = false,
     isMobile = false,
     mapViewportBounds,
@@ -94,7 +99,6 @@ export function BottomSheetContent({
                 onExplore={onExplore}
                 isMobile={isMobile}
                 editMode={editMode}
-                onJourneySaved={onJourneySaved || (() => {})}
             />
         );
     }
@@ -128,7 +132,6 @@ export function BottomSheetContent({
                     onCampSelect={onCampSelect}
                     onViewPhotoOnMap={onViewPhotoOnMap}
                     onOpenDayGallery={onOpenDayGallery}
-                    onJourneySaved={onJourneySaved || (() => {})}
                     editMode={editMode}
                     isMobile={isMobile}
                     mapViewportBounds={mapViewportBounds}
@@ -155,12 +158,9 @@ interface JourneyOverviewContentProps {
     onExplore: () => void;
     isMobile: boolean;
     editMode: boolean;
-    onJourneySaved: () => void;
 }
 
-function JourneyOverviewContent({ trek, onExplore, isMobile, editMode, onJourneySaved }: JourneyOverviewContentProps) {
-    const [showJourneyEdit, setShowJourneyEdit] = useState(false);
-
+function JourneyOverviewContent({ trek, onExplore, isMobile, editMode }: JourneyOverviewContentProps) {
     return (
         <div style={{ padding: 16 }}>
             {/* Country label */}
@@ -215,50 +215,18 @@ function JourneyOverviewContent({ trek, onExplore, isMobile, editMode, onJourney
                 Explore Journey →
             </Button>
 
-            {/* Edit button - only shown in edit mode */}
+            {/* Where "Edit Journey Details" used to be. The modal it opened saved nothing. */}
             {editMode && (
-                <motion.button
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                    onClick={() => setShowJourneyEdit(true)}
-                    style={{
-                        width: '100%',
-                        padding: '12px 16px',
-                        marginTop: 12,
-                        background: 'rgba(255, 255, 255, 0.08)',
-                        border: '1px solid rgba(255, 255, 255, 0.1)',
-                        borderRadius: radius.md,
-                        cursor: 'pointer',
-                        color: colors.text.secondary,
-                        fontSize: 13,
-                        fontWeight: 500,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: 8,
-                    }}
-                >
-                    <PencilIcon size={14} />
-                    Edit Journey Details
-                </motion.button>
+                <NativeOnlyNotice
+                    what="Editing journey details"
+                    className="mt-3"
+                />
             )}
 
             {/* Report affordance — public showcase only, self-hides for signed-in family. */}
             <div>
                 <ReportLink slug={trek.id} />
             </div>
-
-            {/* Journey Edit Modal */}
-            <JourneyEditModal
-                slug={trek.id}
-                isOpen={showJourneyEdit}
-                onClose={() => setShowJourneyEdit(false)}
-                onSave={() => {
-                    setShowJourneyEdit(false);
-                    onJourneySaved();
-                }}
-                isMobile={isMobile}
-            />
         </div>
     );
 }
@@ -275,7 +243,6 @@ interface TrekViewContentProps {
     onCampSelect: (camp: Camp) => void;
     onViewPhotoOnMap: (photo: Photo) => void;
     onOpenDayGallery: () => void;
-    onJourneySaved: () => void;
     editMode: boolean;
     isMobile: boolean;
     mapViewportBounds?: mapboxgl.LngLatBoundsLike | null;
@@ -293,13 +260,11 @@ function TrekViewContent({
     onCampSelect,
     onViewPhotoOnMap,
     onOpenDayGallery,
-    onJourneySaved,
     editMode,
     isMobile,
     mapViewportBounds,
     mapViewportPhotoIds,
 }: TrekViewContentProps) {
-    const [showRouteEditor, setShowRouteEditor] = useState(false);
     const { getPhotosForDay } = usePhotoDay(trekData, photos);
 
     // Calculate date for current day
@@ -318,37 +283,16 @@ function TrekViewContent({
 
     return (
         <div style={{ padding: 16 }}>
-            {/* Edit Route button - shown when edit mode is active */}
+            {/*
+              * Where "Edit Route & Camp Positions" used to be. It opened a 3430-line
+              * editor that could redraw a whole route, then discarded every result and
+              * animated shut. LEG-07.
+              */}
             {editMode && (
-                <motion.button
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                    onClick={() => setShowRouteEditor(true)}
-                    style={{
-                        width: '100%',
-                        padding: '12px 16px',
-                        marginBottom: 16,
-                        background: 'rgba(96, 165, 250, 0.15)',
-                        border: '1px solid rgba(96, 165, 250, 0.3)',
-                        borderRadius: radius.md,
-                        cursor: 'pointer',
-                        color: colors.accent.primary,
-                        fontSize: 14,
-                        fontWeight: 600,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: 8,
-                    }}
-                >
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M3 6l3-3 3 3"/>
-                        <path d="M6 3v18"/>
-                        <path d="M21 18l-3 3-3-3"/>
-                        <path d="M18 21V3"/>
-                    </svg>
-                    Edit Route & Camp Positions
-                </motion.button>
+                <NativeOnlyNotice
+                    what="Editing the route and camp positions"
+                    className="mb-4"
+                />
             )}
 
             {activeMode === 'day' && (
@@ -356,11 +300,9 @@ function TrekViewContent({
                     camp={selectedCamp}
                     currentDayDate={currentDayDate}
                     dayPhotos={dayPhotos}
-                    allPhotos={photos}
                     getMediaUrl={getMediaUrl}
                     onOpenDayGallery={onOpenDayGallery}
                     editMode={editMode}
-                    isMobile={isMobile}
                     journeyId={trekData.uuid}
                 />
             )}
@@ -390,18 +332,6 @@ function TrekViewContent({
                     />
                 </ErrorBoundary>
             )}
-
-            {/* Route Editor Modal */}
-            <RouteEditor
-                trekData={trekData}
-                isOpen={showRouteEditor}
-                onClose={() => setShowRouteEditor(false)}
-                onSave={() => {
-                    setShowRouteEditor(false);
-                    onJourneySaved();
-                }}
-                isMobile={isMobile}
-            />
         </div>
     );
 }
@@ -425,17 +355,13 @@ interface DayContentProps {
     camp: Camp | null;
     currentDayDate: Date | null;
     dayPhotos: Photo[];
-    allPhotos: Photo[];
     getMediaUrl: (path: string) => string;
     onOpenDayGallery: () => void;
     editMode: boolean;
-    isMobile: boolean;
     journeyId: string;
 }
 
-function DayContent({ camp, currentDayDate, dayPhotos, allPhotos, getMediaUrl, onOpenDayGallery, editMode, isMobile, journeyId }: DayContentProps) {
-    const [showWaypointEdit, setShowWaypointEdit] = useState(false);
-    const [showPhotoAssign, setShowPhotoAssign] = useState(false);
+function DayContent({ camp, currentDayDate, dayPhotos, getMediaUrl, onOpenDayGallery, editMode, journeyId }: DayContentProps) {
     if (!camp) {
         return (
             <div style={{ textAlign: 'center', color: colors.text.secondary, padding: 20 }}>
@@ -714,77 +640,13 @@ function DayContent({ camp, currentDayDate, dayPhotos, allPhotos, getMediaUrl, o
                 </motion.button>
             )}
 
-            {/* Edit buttons - only shown in edit mode */}
+            {/* Where "Edit Day" and "Assign Photos" used to be. Neither saved anything. */}
             {editMode && (
-                <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
-                    <motion.button
-                        whileHover={{ scale: 1.02 }}
-                        whileTap={{ scale: 0.98 }}
-                        onClick={() => setShowWaypointEdit(true)}
-                        style={{
-                            flex: 1,
-                            padding: '10px 12px',
-                            background: 'rgba(255, 255, 255, 0.08)',
-                            border: '1px solid rgba(255, 255, 255, 0.1)',
-                            borderRadius: radius.md,
-                            cursor: 'pointer',
-                            color: colors.text.secondary,
-                            fontSize: 12,
-                            fontWeight: 500,
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            gap: 6,
-                        }}
-                    >
-                        <PencilIcon size={14} />
-                        Edit Day
-                    </motion.button>
-                    <motion.button
-                        whileHover={{ scale: 1.02 }}
-                        whileTap={{ scale: 0.98 }}
-                        onClick={() => setShowPhotoAssign(true)}
-                        style={{
-                            flex: 1,
-                            padding: '10px 12px',
-                            background: 'rgba(255, 255, 255, 0.08)',
-                            border: '1px solid rgba(255, 255, 255, 0.1)',
-                            borderRadius: radius.md,
-                            cursor: 'pointer',
-                            color: colors.text.secondary,
-                            fontSize: 12,
-                            fontWeight: 500,
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            gap: 6,
-                        }}
-                    >
-                        <PhotoIcon size={14} />
-                        Assign Photos
-                    </motion.button>
-                </div>
+                <NativeOnlyNotice
+                    what="Editing a day and assigning photos to it"
+                    className="mt-3"
+                />
             )}
-
-            {/* Edit Modals */}
-            <WaypointEditModal
-                isOpen={showWaypointEdit}
-                onClose={() => setShowWaypointEdit(false)}
-                onSave={() => setShowWaypointEdit(false)}
-                camp={camp}
-                isMobile={isMobile}
-                photos={allPhotos}
-                getMediaUrl={getMediaUrl}
-            />
-            <PhotoAssignModal
-                isOpen={showPhotoAssign}
-                onClose={() => setShowPhotoAssign(false)}
-                onAssign={() => setShowPhotoAssign(false)}
-                camp={camp}
-                photos={allPhotos}
-                isMobile={isMobile}
-                getMediaUrl={getMediaUrl}
-            />
         </>
     );
 }

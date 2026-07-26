@@ -31,12 +31,11 @@ vi.mock('../../hooks/usePhotoDay', () => ({
 const mockFetchPhotos = vi.fn();
 const mockGetJourneyIdBySlug = vi.fn();
 
+// Only the two reads the tab still performs. If a write ever reappears in PhotosTab,
+// this mock will not supply it and the suite fails loudly — which is the point.
 vi.mock('../../lib/journeys', () => ({
     fetchPhotos: (...args: unknown[]) => mockFetchPhotos(...args),
     getJourneyIdBySlug: (...args: unknown[]) => mockGetJourneyIdBySlug(...args),
-    createPhoto: vi.fn(),
-    deletePhoto: vi.fn(),
-    updatePhoto: vi.fn(),
 }));
 
 // Mock PhotoLightbox - simplified for testing
@@ -49,15 +48,6 @@ vi.mock('../common/PhotoLightbox', () => ({
             </div>
         );
     },
-}));
-
-// Mock other components
-vi.mock('./PhotoUpload', () => ({
-    PhotoUpload: () => <div data-testid="photo-upload">Upload Component</div>,
-}));
-
-vi.mock('./PhotoEditModal', () => ({
-    PhotoEditModal: () => null,
 }));
 
 vi.mock('@/components/ui/skeleton', () => ({
@@ -195,20 +185,46 @@ describe('PhotosTab', () => {
         });
     });
 
-    it('shows upload component in edit mode', async () => {
+    /**
+     * Edit mode used to mount an uploader here. Every path behind it was a no-op — the
+     * R2 upload throws and `createPhoto` is a stubbed CloudKit write — so the tab now
+     * says where media is added instead of offering to add it. LEG-07.
+     */
+    it('explains that media is native-only in edit mode, offering no control', async () => {
         render(<PhotosTab trekData={mockTrekData} isMobile={false} editMode={true} />);
 
         await waitFor(() => {
-            expect(screen.getByTestId('photo-upload')).toBeInTheDocument();
+            expect(screen.getByRole('note').textContent).toMatch(/native-only/i);
         });
+
+        expect(screen.queryByRole('button', { name: /upload|add photo|delete|edit photo/i }))
+            .toBeNull();
     });
 
-    it('hides upload component when not in edit mode', async () => {
+    it('says nothing about editing when edit mode is off', async () => {
         render(<PhotosTab trekData={mockTrekData} isMobile={false} editMode={false} />);
 
         await waitFor(() => {
-            expect(screen.queryByTestId('photo-upload')).not.toBeInTheDocument();
+            expect(screen.getByText(/Journey Media/)).toBeInTheDocument();
         });
+
+        expect(screen.queryByRole('note')).toBeNull();
+    });
+
+    /**
+     * The grid was `draggable` in edit mode and reordered by writing `sort_order` to
+     * every photo. The writes returned `false` while local state kept the new order, so
+     * the reorder survived until the next fetch. No drag handles now.
+     */
+    it('never makes the grid draggable', async () => {
+        render(<PhotosTab trekData={mockTrekData} isMobile={false} editMode={true} />);
+
+        await waitFor(() => {
+            expect(screen.getAllByRole('button', { name: /Photo \d/ }).length).toBeGreaterThan(0);
+        });
+
+        expect(document.querySelectorAll('[draggable="true"]')).toHaveLength(0);
+        expect(screen.queryByText('Drag to reorder')).toBeNull();
     });
 
     it('opens lightbox when photo is clicked', async () => {
@@ -249,14 +265,6 @@ describe('PhotosTab', () => {
 
         await waitFor(() => {
             expect(screen.getByText('Failed to load photos')).toBeInTheDocument();
-        });
-    });
-
-    it('shows drag to reorder hint in edit mode with multiple photos', async () => {
-        render(<PhotosTab trekData={mockTrekData} isMobile={false} editMode={true} />);
-
-        await waitFor(() => {
-            expect(screen.getByText('Drag to reorder')).toBeInTheDocument();
         });
     });
 

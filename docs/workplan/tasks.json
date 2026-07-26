@@ -127,7 +127,7 @@
       "id": "LEG-05",
       "track": "LEGACY",
       "title": "Rewire src/lib/media.ts off the Worker",
-      "status": "WIP",
+      "status": "DONE",
       "effort": 0.5,
       "done_when": "No source file resolves media through the workers.dev host, and web tests stay green.",
       "deps": [],
@@ -149,13 +149,14 @@
         "agent": "sprint2-web",
         "branch": "claude/remote-control-project-review-9462c1",
         "at": "2026-07-26"
-      }
+      },
+      "evidence": "grep -rn 'workers.dev' src/ -> no hits. MEDIA_BASE_URL and the Worker default deleted; buildMediaUrl passes absolute CloudKit URLs through and returns '' for anything else, so an unresolvable reference is an empty img rather than a request to a host being decommissioned. getJourneyPhotoPath and useMedia.getPhotoUrl removed as Worker-only path builders."
     },
     {
       "id": "LEG-06",
       "track": "LEGACY",
       "title": "Delete the unrunnable legacy scripts and the AWS SDK dependency",
-      "status": "WIP",
+      "status": "DONE",
       "effort": 0.5,
       "done_when": "npm run build and vitest pass with the dead scripts and @aws-sdk/client-s3 gone.",
       "deps": [],
@@ -183,13 +184,14 @@
         "agent": "sprint2-ci",
         "branch": "claude/remote-control-project-review-9462c1",
         "at": "2026-07-26"
-      }
+      },
+      "evidence": "@aws-sdk/client-s3 removed (16.8 MB installed, 785 -> 753 packages) plus the seven dead scripts (2414 lines). Each verified dead individually: all seven import @supabase/supabase-js, which is in neither dependency list and appears 0 times in the lockfile, and all target tables that no longer exist. verifyExport.ts and lib.ts deliberately kept. npm run build, 406 vitest tests, and node scripts/export/smoke.ts (26 checks) all pass."
     },
     {
       "id": "LEG-07",
       "track": "LEGACY",
       "title": "Gate every native-only web write behind one guard",
-      "status": "WIP",
+      "status": "DONE",
       "effort": 1,
       "done_when": "No web UI offers a write that silently no-ops; each either disappears or shows a native-only notice.",
       "files": [
@@ -215,7 +217,8 @@
         "agent": "sprint2-web",
         "branch": "claude/remote-control-project-review-9462c1",
         "at": "2026-07-26"
-      }
+      },
+      "evidence": "One shared guard in src/lib/nativeOnly.ts applied to all six entry points, then 5534 LOC of unreachable write UI deleted: RouteEditor (3430) + its 691-line e2e spec, JourneyEditModal (477), PhotoEditModal (461), PhotoAssignModal (219), WaypointEditModal (256). grep -rn 'onSave()' src/ now hits only the two doc comments describing the bug. tsc 117 -> 110 with zero new errors (set-diff verified); vitest 402 -> 406; AkashicApp chunk 108.41 -> 58.34 kB gzipped."
     },
     {
       "id": "LEG-08",
@@ -1149,7 +1152,7 @@
       "id": "QUA-03",
       "track": "QUALITY",
       "title": "Clear the red Security Audit job",
-      "status": "WIP",
+      "status": "DONE",
       "effort": 0.5,
       "done_when": "npm audit --audit-level=high exits 0, or the exception is documented and time-boxed.",
       "files": [
@@ -1165,13 +1168,14 @@
         "agent": "sprint2-ci",
         "branch": "claude/remote-control-project-review-9462c1",
         "at": "2026-07-26"
-      }
+      },
+      "evidence": "npm audit --audit-level=high -> 'found 0 vulnerabilities', exit 0 (was 12 high, exit 1). Genuinely green, not lowered: bare npm audit is 0 at every severity, verified after a fresh npm ci. Root cause: GHSA-mh99-v99m-4gvg's fix shipped only in brace-expansion 5.0.8, so the old pins to the 1.x/2.x lines were inside the vulnerable range by construction. Required moving minimatch to ^10.2.5 with it; the 7-major bump was proved safe by a 364 pattern-by-path differential match under both 3.1.5 and 10.2.5 with zero differences, plus all four consumer call shapes exercised live."
     },
     {
       "id": "QUA-04",
       "track": "QUALITY",
       "title": "Repair or delete the Performance Tests workflow",
-      "status": "WIP",
+      "status": "DONE",
       "effort": 0.25,
       "done_when": "No workflow references a spec file that does not exist.",
       "files": [
@@ -1187,7 +1191,8 @@
         "agent": "sprint2-ci",
         "branch": "claude/remote-control-project-review-9462c1",
         "at": "2026-07-26"
-      }
+      },
+      "evidence": "performance.yml deleted (120 lines, both jobs) along with the two npm scripts targeting the spec deleted in a4d5b67. Red since Dec 2025 and unnoticed for seven months, and web-map FPS benchmarks no longer measure what is being sold now that src/ is a read-only showcase. All five remaining workflows parse; no workflow step or npm script points at a missing file."
     },
     {
       "id": "QUA-05",
