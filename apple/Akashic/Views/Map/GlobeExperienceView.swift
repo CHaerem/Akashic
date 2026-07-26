@@ -644,22 +644,32 @@ private struct JourneyGlobeCard: View {
             // already sit on the map elsewhere (the "Start your first journey" CTA), so reusing
             // them here doesn't add a second on-map palette.
             VStack(alignment: .leading, spacing: 2) {
+                // A4-1: the badge used to sit beside the title inside a hard 200 pt card, which left
+                // "Kilimanjaro" rendering as "Kilima…" for anyone with the bundled sample — the
+                // journey's name losing a fight with a label about the journey not being theirs.
+                // Moved to the second line, where it competes with the country and day count instead:
+                // both are secondary, and the title now gets the full width it needs.
+                Text(journey.shortName)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(MapPalette.label)
+                    .lineLimit(1)
                 HStack(spacing: 6) {
-                    Text(journey.shortName)
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(MapPalette.label)
+                    Text("\(journey.country) · \(journey.stats.duration) days")
+                        .font(.caption2)
+                        .foregroundStyle(MapPalette.labelSecondary)
                         .lineLimit(1)
                     if isSample { SampleBadge() }
                 }
-                Text("\(journey.country) · \(journey.stats.duration) days")
-                    .font(.caption2)
-                    .foregroundStyle(MapPalette.labelSecondary)
-                    .lineLimit(1)
             }
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
-        .frame(width: 200, alignment: .leading)
+        // A4-1: was a hard 200 pt, which truncated something on every sample journey — first the
+        // title, then (once the badge moved to line 2) the day count. A range lets the card stay
+        // compact for a short name and take what it needs for "Kilimanjaro" plus a badge, while the
+        // ceiling keeps it from running across a screen it is meant to float over.
+        .frame(minWidth: 200, maxWidth: 260, alignment: .leading)
+        .fixedSize(horizontal: true, vertical: false)
         .mapOverlayMaterial(RoundedRectangle(cornerRadius: 16, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 16, style: .continuous)

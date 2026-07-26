@@ -149,6 +149,19 @@ right: fix this file in the same commit.
 - **`knownRegions` must be declared in `project.yml`.** XcodeGen infers regions from `.lproj`
   directories and a String Catalog has none, so without it Xcode compiles English only and the app
   falls back with every translation present and unused.
+- **`find DerivedData/Akashic-* | head -1` will hand you another worktree's build.** Xcode keys
+  DerivedData by workspace path, so parallel agent worktrees each get their own — there were seven at
+  one point. Installing the wrong one wastes real time: the app runs, the screenshot looks plausible,
+  and it shows code you did not write. Select by recency, or better, by workspace:
+
+  ```bash
+  for d in ~/Library/Developer/Xcode/DerivedData/Akashic-*; do
+    plutil -p "$d/info.plist" | grep -q "$PWD" && echo "$d"
+  done
+  ```
+
+  The same applies to `plutil`-ing a built `Info.plist` to check a key. Verify the path belongs to
+  your worktree before believing the answer.
 - **`AppleLanguages` must be a launch ARGUMENT, not an environment variable.**
   `SIMCTL_CHILD_AppleLanguages` fails silently — `UserDefaults` never reads the environment — so a run
   you believe is Norwegian comes up English and looks entirely fine. Use

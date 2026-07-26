@@ -2174,15 +2174,15 @@
     {
       "id": "QUA-30",
       "track": "QUALITY",
-      "title": "The five A4 polish items, four of them on the globe",
-      "status": "TODO",
-      "effort": 0.5,
+      "title": "The remaining A4 polish items on the globe and onboarding",
+      "status": "WIP",
+      "effort": 0.25,
       "priority": 33,
       "deps": [
         "QUA-20"
       ],
-      "done_when": "The globe reads as one designed screen, and onboarding opens with the app's own mark.",
-      "why": "A4's findings cluster on one screen, which is the useful part of the result: the globe is both the first thing a customer sees after onboarding and the screen the store listing leads with, and four of the six seen findings are there. 'Kilimanjaro' truncating to 'Kilima…' because the SAMPLE badge takes the title's width (SHIP-03's AKASHIC_HIDE_SAMPLE_BADGE fixes the screenshot, not the product); the journey card and tab bar sharing no alignment so they read as two unrelated floating objects; MapKit's ocean labels clipping at the edges; the page indicator sitting in a non-idiomatic filled pill; and onboarding leading with an SF Symbol globe rather than the mark QUA-19 redrew — the one moment brand continuity is guaranteed to be seen is the one place it is absent.",
+      "done_when": "Each remaining A4 item is either fixed or recorded as a deliberate choice.",
+      "why": "Narrowed after the two concrete defects were fixed. What remains is taste, and benefits from the owner's eye rather than mine: the journey card and tab bar share no alignment so they read as two unrelated floating objects; MapKit's ocean labels clip at the screen edges at this camera; the page indicator sits in a non-idiomatic filled pill; and onboarding leads with an SF Symbol globe rather than the mark QUA-19 redrew — that last one needs a new imageset, since the mark only exists as an appiconset today, and it is arguable whether a brand mark or an SF Symbol reads better at first launch.",
       "files": [
         "apple/Akashic/Views/Map/",
         "apple/Akashic/Views/OnboardingView.swift"
@@ -2191,13 +2191,18 @@
         "cd apple && xcodegen generate",
         "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,id=$(xcrun simctl list devices available | grep -o '[0-9A-F-]\\{36\\}' | tail -1)\" CODE_SIGNING_ALLOWED=NO test",
         "Launch on a simulator with the bundled sample and confirm the journey title is not truncated"
-      ]
+      ],
+      "claim": {
+        "agent": "opus5",
+        "branch": "claude/remote-control-project-review-9462c1",
+        "at": "2026-07-26"
+      }
     },
     {
       "id": "QUA-31",
       "track": "QUALITY",
       "title": "Two screenshot seams fall through to the globe instead of failing",
-      "status": "TODO",
+      "status": "DONE",
       "effort": 0.25,
       "priority": 34,
       "done_when": "Every AKASHIC_SCREEN value either shows its screen or fails loudly.",
@@ -2209,7 +2214,13 @@
         "cd apple && xcodegen generate",
         "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,id=$(xcrun simctl list devices available | grep -o '[0-9A-F-]\\{36\\}' | tail -1)\" CODE_SIGNING_ALLOWED=NO test",
         "SIMCTL_CHILD_AKASHIC_SCREEN=settings xcrun simctl launch <udid> no.akashic.app, then screenshot"
-      ]
+      ],
+      "claim": {
+        "agent": "opus5",
+        "branch": "claude/remote-control-project-review-9462c1",
+        "at": "2026-07-26"
+      },
+      "evidence": "The AKASHIC_SCREEN switch no longer has a silent default: an unrecognised value now preconditionFailures in DEBUG and names both the value and the known seams, while Release keeps the safe fallback so no customer can trap over an env var. Found during A4 when =settings and =paywall rendered the globe instead. NOTE the root cause of my own confusion was different and worse, and is now in CLAUDE.md: 'find DerivedData/Akashic-* | head -1' handed me another worktree's build from three hours earlier — there were seven DerivedData directories from parallel agent worktrees. The app ran, the screenshot looked plausible, and it showed code I had not written."
     }
   ]
 }

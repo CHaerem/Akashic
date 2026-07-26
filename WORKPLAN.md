@@ -5,23 +5,23 @@
 
 # Akashic — work ledger
 
-96 tasks · **26 open** (9 agent-doable, 8.6 dev-days · 17 owner-only, 8.5 dev-days) · 70 done · 0 dropped
+96 tasks · **25 open** (8 agent-doable, 8.1 dev-days · 17 owner-only, 8.5 dev-days) · 71 done · 0 dropped
 
 > **`dev-days` are a human-developer estimate, not agent time.** They came from the review
 > that produced these tasks and they are the right unit for deciding whether something is
 > worth doing — they are the wrong unit for predicting how long an agent will take, and
 > summing them as "work remaining" overstates it substantially.
 >
-> Measured so far: **70 agent tasks estimated at 51.4 dev-days**,
+> Measured so far: **71 agent tasks estimated at 51.7 dev-days**,
 > closed in roughly one working afternoon across up to three parallel tracks.
 >
 > But that compression is **unmeasured for the large items**: of the tasks closed so far,
 > 5 were 2 dev-days or more. 6 of the
-> 8.6 remaining dev-days sit in 2 such tasks —
+> 8.1 remaining dev-days sit in 2 such tasks —
 > localisation, Swift 6 strict concurrency, a UI test target, the PDF book. Those involve
 > design judgement and broad-blast-radius refactors rather than localised edits, so do not
 > assume the same ratio holds. The cheap band is nearly exhausted:
-> 6 tasks at 0.5 dev-days or less remain.
+> 5 tasks at 0.5 dev-days or less remain.
 
 Read [CLAUDE.md](CLAUDE.md) before touching anything. To find work:
 
@@ -35,6 +35,7 @@ node scripts/workplan.mjs next
 |---|---|---|---|
 | `QUA-10` First tests for Views/, and a UI test target | uitest-worktree | `claude/qua10-qua29` | — |
 | `QUA-29` A UI test target, so the accessibility audit can run unattended | uitest-worktree | `claude/qua10-qua29` | — |
+| `QUA-30` The remaining A4 polish items on the globe and onboarding | opus5 | `claude/remote-control-project-review-9462c1` | — |
 
 ## LEGACY
 
@@ -141,7 +142,7 @@ node scripts/workplan.mjs next
 
 > Tests, types, CI, localisation, accessibility. Localisation and accessibility are in v1.0 by decision.
 
-5 open of 31 · 7.8 d remaining
+4 open of 31 · 7.3 d remaining
 
 | | Task | Days | Who | Deps | Finish line |
 |---|---|---|---|---|---|
@@ -174,8 +175,8 @@ node scripts/workplan.mjs next
 | `x` | `QUA-27` **Two localisation gaps the screenshot pass surfaced but would not decide** | 0.25 | agent | — | No user-visible string is marked do-not-translate by accident, and the String-position trap is gone from the import sheets. |
 | `x` | `QUA-28` **Accessibility for Views/Photos, the one directory still at zero** | 0.5 | agent | `QUA-24` | No interactive control in Views/Photos is unlabelled. |
 | `~` | `QUA-29` **A UI test target, so the accessibility audit can run unattended** | 1 | agent | — | XCUIApplication.performAccessibilityAudit() runs in CI over the main screens. |
-| ` ` | `QUA-30` **The five A4 polish items, four of them on the globe** | 0.5 | agent | `QUA-20` | The globe reads as one designed screen, and onboarding opens with the app's own mark. |
-| ` ` | `QUA-31` **Two screenshot seams fall through to the globe instead of failing** | 0.25 | agent | — | Every AKASHIC_SCREEN value either shows its screen or fails loudly. |
+| `~` | `QUA-30` **The remaining A4 polish items on the globe and onboarding** | 0.25 | agent | `QUA-20` | Each remaining A4 item is either fixed or recorded as a deliberate choice. |
+| `x` | `QUA-31` **Two screenshot seams fall through to the globe instead of failing** | 0.25 | agent | — | Every AKASHIC_SCREEN value either shows its screen or fails loudly. |
 
 ## Decisions on record
 

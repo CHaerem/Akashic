@@ -253,8 +253,21 @@ struct AkashicApp: App {
         case "widgets":
             // Debug harness that renders the WidgetKit views for screenshots (see WidgetGallery).
             WidgetGalleryHarness(snapshots: store.journeys.map { WidgetSnapshot.make(from: $0) })
-        default:
+        case .none:
             RootView()
+        case let .some(unrecognised):
+            // QUA-31: an unrecognised value used to fall through to RootView, so a typo produced a
+            // plausible-looking screenshot of the WRONG screen — which is worse than a crash, because
+            // nothing about the result says it is wrong. SHIP-03's 24 store assets depend on these
+            // seams, so in DEBUG this is fatal and names the value; a Release build keeps the safe
+            // fallback, since no customer should ever reach a trap over an env var.
+            #if DEBUG
+            let known = ["photos", "photogrid", "settings", "editsheet", "exportsheet", "widgets"]
+            preconditionFailure(
+                "AKASHIC_SCREEN=\(unrecognised) is not a known screenshot seam. Known: \(known.joined(separator: ", ")).")
+            #else
+            RootView()
+            #endif
         }
     }
 
