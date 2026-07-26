@@ -34,6 +34,15 @@ Do not invent work. If something needs doing that is not in the ledger, add it t
 6. Commit the code **and** the ledger together. A commit that changes behaviour without
    moving the ledger is the failure mode this system exists to prevent.
 
+When several agents work at once, commit with an explicit path list (`git add <paths>`), never
+`git add -A` — someone else's half-finished file will otherwise ride along in your commit.
+
+**One catch that has already bitten us:** `git mv` and `git rm` stage themselves immediately, so
+a concurrent agent's file move lands in *your* commit no matter how careful your `git add` is.
+Run `git status --short` before committing and look for `R`/`D` in the first column. If you see
+staged changes that are not yours, unstage them (`git restore --staged <path>`) and let their
+owner commit them — and say so, because the ledger entry for that work is still open.
+
 If you stop mid-task — quota, context, anything — leave a breadcrumb first:
 
 ```bash
@@ -101,9 +110,10 @@ verification report inside the archive bundle.
   entitlement-carrying configurations and the plist merge are never exercised. CI also runs
   `macos-15` (Xcode 16.4), so `canImport(FoundationModels)` is false and ~700 lines of
   shipped Intelligence code have never been type-checked by anything automated.
-- **Four web gates are open at once**, which is how 117 type errors accumulated:
+- **Three web gates are open at once**, which is how 117 type errors accumulated:
   `eslint.config.js:9` globally ignores every `.ts`/`.tsx` file, lint-staged wraps `tsc` in
-  `|| true`, CI sets `continue-on-error`, and there is no `typecheck` script.
+  `|| true`, and CI sets `continue-on-error`. (A `typecheck` script now exists — it just is not
+  wired to anything that can fail a commit or a build. That is QUA-02.)
 - **Two workflows are red on main** and have been for several merges: Security Audit and
   Performance Tests. Do not read a red main as your own breakage — check QUA-03 and QUA-04.
 - **The public CloudKit database is billed to us, not to the customer.** The cost table in

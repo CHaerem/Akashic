@@ -331,13 +331,14 @@
       "title": "Rewrite ARCHITECTURE.md",
       "status": "TODO",
       "effort": 0.5,
-      "done_when": "No document describes Supabase, R2 or the Worker as active infrastructure.",
+      "done_when": "No document describes Supabase, R2 or the Worker as active infrastructure, and every link in ARCHITECTURE.md resolves.",
       "files": [
         "ARCHITECTURE.md"
       ],
-      "why": "The highest-priority rewrite, because the owner will be reading it while pressing irreversible buttons. Lines 24-34 still mark Supabase Auth, Supabase PostgreSQL, R2, the Worker and Cloudflare DNS as active; 245-256 still describe all media as served through the Worker.",
+      "why": "The highest-priority rewrite, because the owner will be reading it while pressing irreversible buttons. Lines 24-34 still mark Supabase Auth, Supabase PostgreSQL, R2, the Worker and Cloudflare DNS as active; 245-256 still describe all media as served through the Worker. Also fixes ARCHITECTURE.md:775, whose link to ./ROADMAP.md became a 404 when DOC-11 archived it to docs/history/ — the docs agent left it deliberately rather than editing a file another task owns.",
       "verify": [
-        "grep -in 'supabase\\|r2\\|cloudflare' ARCHITECTURE.md  # only in a clearly-labelled history section"
+        "grep -in 'supabase\\|r2\\|cloudflare' ARCHITECTURE.md  # only in a clearly-labelled history section",
+        "grep -o '(\\./[^)]*)' ARCHITECTURE.md | tr -d '()' | while read p; do test -e \"$p\" || echo \"DANGLING $p\"; done"
       ]
     },
     {
@@ -363,7 +364,7 @@
       "id": "DOC-05",
       "track": "DOCS",
       "title": "Fix the test-count claims that disagree with each other",
-      "status": "TODO",
+      "status": "DONE",
       "effort": 0.25,
       "done_when": "Every stated test count matches a command anyone can run.",
       "files": [
@@ -374,13 +375,14 @@
       "why": "Three places, three different numbers, all stale: '560 native + ~402 web', '309 apple / 378 web', '311 native + 378 web'. Real: 599 native test functions, 402 web. A plan that miscounts its own tests undercuts its credibility on everything else.",
       "verify": [
         "grep -rn 'native.*web tests\\|[0-9]\\{3\\} native' *.md"
-      ]
+      ],
+      "evidence": "Counts established independently, not copied: 602 native (46 files, cross-checked, 0 @Test macros) and 402 web via npx vitest --run. grep -rn '560 native|311 native|~402 web' *.md -> 0 hits. Both reproducing commands are now named in the docs."
     },
     {
       "id": "DOC-06",
       "track": "DOCS",
       "title": "Record that Akashic Intelligence already ships",
-      "status": "TODO",
+      "status": "DONE",
       "effort": 0.25,
       "done_when": "No document schedules as v1.1 a feature that is wired to real UI today.",
       "files": [
@@ -391,13 +393,14 @@
       "why": "Drift in the flattering direction, but still drift: five files under apple/Akashic/Intelligence/ are built and reachable from WaypointEditSheet and NewJourneySheet while the plan promises them for v1.1.",
       "verify": [
         "grep -rn 'v1.1' COMMERCIALIZATION-PLAN.md | grep -i intelligence"
-      ]
+      ],
+      "evidence": "grep 'v1.1' COMMERCIALIZATION-PLAN.md | grep -i intelligence -> 0 hits (was 1). New 'What already ships' table names all five Intelligence files and their real call sites (WaypointEditSheet:174,177,179,278,281 and NewJourneySheet:1085,1087); absences re-verified: import Vision 0, streamResponse 0, Tool 0."
     },
     {
       "id": "DOC-07",
       "track": "DOCS",
       "title": "Add the PCC timing caveat: production PCC ships with iOS 27",
-      "status": "TODO",
+      "status": "DONE",
       "effort": 0.1,
       "done_when": "The Apple Intelligence section states that PCC cannot be in v1.0.",
       "files": [
@@ -407,7 +410,8 @@
       "why": "The §10 correction block is right that PCC is free for Small Business members under 2M downloads — that premise was verified. It omits that production PCC arrives with iOS 27 in autumn 2026, which is what actually decides it cannot ship in v1.0.",
       "verify": [
         "grep -n 'iOS 27' COMMERCIALIZATION-PLAN.md"
-      ]
+      ],
+      "evidence": "grep -n 'iOS 27' COMMERCIALIZATION-PLAN.md -> hit at :341 (was 0). Section 10 now states PCC-backed Foundation Models is developer-preview-only until production PCC ships with iOS 27."
     },
     {
       "id": "DOC-08",
@@ -431,7 +435,7 @@
       "id": "DOC-09",
       "track": "DOCS",
       "title": "Fix the Entitlements.swift comments that contradict the same file's header",
-      "status": "TODO",
+      "status": "DONE",
       "effort": 0.1,
       "done_when": "The enum comments and the file header describe the same paywall.",
       "files": [
@@ -441,13 +445,14 @@
       "verify": [
         "cd apple && xcodegen generate",
         "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,id=$(xcrun simctl list devices available | grep -o '[0-9A-F-]\\{36\\}' | tail -1)\" CODE_SIGNING_ALLOWED=NO test"
-      ]
+      ],
+      "evidence": "grep -n 'no export/publish|export, showcase publishing' Entitlements.swift -> 0 hits. Comment-only diff verified (zero non-comment lines changed); 602/602 native tests pass."
     },
     {
       "id": "DOC-10",
       "track": "DOCS",
       "title": "Remove the false 'exhaustively unit-tested' claim from KnowledgeRetrieval.swift",
-      "status": "TODO",
+      "status": "DONE",
       "effort": 0.1,
       "done_when": "No doc comment claims test coverage that does not exist.",
       "files": [
@@ -457,13 +462,14 @@
       "why": "506 lines, zero tests, and its own doc comments claim it is exhaustively unit-tested. Either write the tests (QUA-12) or stop claiming them; do not ship the claim.",
       "verify": [
         "grep -rn 'exhaustively' apple/Akashic/Intelligence/  # expect no hits"
-      ]
+      ],
+      "evidence": "grep -rn 'exhaustively' apple/Akashic/Intelligence/ -> 0 hits. Added an explicit 'Test coverage: none, today' section pointing at QUA-12. Comment-only diff verified."
     },
     {
       "id": "DOC-11",
       "track": "DOCS",
       "title": "Archive ROADMAP.md and delete PLAN.md",
-      "status": "TODO",
+      "status": "DONE",
       "effort": 0.25,
       "done_when": "No unmarked stale planning document remains at the repo root.",
       "files": [
@@ -475,7 +481,8 @@
       "verify": [
         "test ! -f PLAN.md",
         "test -f docs/history/ROADMAP.md"
-      ]
+      ],
+      "evidence": "test ! -f PLAN.md and test -f docs/history/ROADMAP.md both pass. ROADMAP header marks it archived and repaths all five relative links. NOTE: the file move rode into commit 4e76bd1 because git mv/git rm self-stage — end state correct, protocol lesson now in CLAUDE.md."
     },
     {
       "id": "DOC-12",
@@ -512,7 +519,7 @@
       "id": "DOC-14",
       "track": "DOCS",
       "title": "Fix github-pages-cutover.md drift before the owner follows it",
-      "status": "TODO",
+      "status": "DONE",
       "effort": 0.1,
       "done_when": "Every instruction in the cutover runbook is still executable as written.",
       "files": [
@@ -522,7 +529,8 @@
       "why": "Line 154 tells the owner to delete netlify.toml, which commit d331970 already removed. Small, but the owner follows this document while making DNS changes.",
       "verify": [
         "grep -n netlify docs/github-pages-cutover.md  # expect no hits"
-      ]
+      ],
+      "evidence": "grep -n netlify docs/github-pages-cutover.md -> 0 hits. Also corrected the AASA section from 'two placeholders' to a status list (Team ID filled; associated-domains genuinely still missing, grep applinks apple/ -> 0) and the stale Supabase-secret parenthetical."
     },
     {
       "id": "SHIP-01",
@@ -1298,7 +1306,7 @@
       "track": "QUALITY",
       "title": "Tests for KnowledgeRetrieval, and fix its two real defects",
       "status": "TODO",
-      "effort": 1,
+      "effort": 1.5,
       "done_when": "The retrieval path has tests, including the cross-project de-dup and empty-coordinate cases.",
       "deps": [
         "DOC-10"
@@ -1308,7 +1316,7 @@
         "apple/Akashic/Intelligence/KnowledgeRetrieval.swift"
       ],
       "serialise_with": "DIFF-05, DIFF-08, DOC-10 also edit Intelligence/**",
-      "why": "506 lines, zero tests. Verification found two real defects the original finding missed: seenTitles is keyed globally at :305-308 so Wikivoyage is never fetched for any title Wikipedia already returned — which likely defeats the exact nickname case the file was written for — and there is no coordinate-count guard for hand-added days with empty coordinates, the one path where the name-match heuristic actually governs.",
+      "why": "506 lines, zero tests. Verification found two real defects the original finding missed: seenTitles is keyed globally at :305-308 so Wikivoyage is never fetched for any title Wikipedia already returned — which likely defeats the exact nickname case the file was written for — and there is no coordinate-count guard for hand-added days with empty coordinates, the one path where the name-match heuristic actually governs. Scope is larger than DOC-10 implied: the whole 506-line file is untested — query building, candidate collection, the ~50 km geo-rejection rule, the title-near-match exemption for place-less topics like 'Inca Trail', the UTF-8 byte-budget capping in assembleContext, and the degrade-to-empty-never-throw contract. The WikimediaClient seam means all of it is testable with an in-memory fake and no network, but it is more than one test.",
       "verify": [
         "cd apple && xcodegen generate",
         "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,id=$(xcrun simctl list devices available | grep -o '[0-9A-F-]\\{36\\}' | tail -1)\" CODE_SIGNING_ALLOWED=NO test"
@@ -1422,7 +1430,7 @@
       "id": "QUA-19",
       "track": "QUALITY",
       "title": "Redraw the app icon",
-      "status": "TODO",
+      "status": "DONE",
       "effort": 0.5,
       "done_when": "The icon is legible at 60 pt and works in light, dark and tinted appearances.",
       "priority": 21,
@@ -1433,7 +1441,8 @@
       "verify": [
         "cd apple && xcodegen generate",
         "Render the icon at 60 pt in light, dark and tinted and compare"
-      ]
+      ],
+      "evidence": "Independently measured the result: 1024x1024, channels=3 (no alpha), ground rgb(11,11,25), highest-contrast mark rgb(153,166,253) -> WCAG 8.57:1, up from 1.14:1. Filled globe in the app accent with dark meridians; dark and tinted variants added to Contents.json; reproducible from committed SVG sources via generate.mjs."
     },
     {
       "id": "QUA-20",
@@ -1455,6 +1464,83 @@
       "why": "Both stated preconditions are now satisfied in code. Worth doing once the a11y and haptics work lands, because it is the pass that catches what a checklist cannot — including whether to adopt any iOS 26 material language, given the app currently uses none of it.",
       "verify": [
         "Recorded findings in DESIGN-PLAN.md with each either fixed or deliberately deferred"
+      ]
+    },
+    {
+      "id": "QUA-21",
+      "track": "QUALITY",
+      "title": "Redraw the web and PWA icons — same illegibility, plus transparency",
+      "status": "TODO",
+      "effort": 0.25,
+      "done_when": "Every derived web icon is opaque and its mark clears 4.5:1 against its own ground.",
+      "why": "Found while fixing QUA-19. public/favicon.svg has no background element at all — a #1a1a2e hairline on transparency — and every derived asset inherits it: apple-touch-icon.png, pwa-512x512.png and favicon-32x32.png all measure hasAlpha=true, isOpaque=false. So the Add-to-Home-Screen icon is a near-black hairline composited onto whatever the OS puts behind it, and the favicon is close to invisible on a dark tab strip. Same fix as QUA-19: recolour, add a ground, re-run npm run generate-icons.",
+      "files": [
+        "public/favicon.svg",
+        "public/apple-touch-icon.png",
+        "public/pwa-512x512.png",
+        "public/favicon-32x32.png",
+        "scripts/generateIcons.js"
+      ],
+      "serialise_with": "DIFF-03 also owns public/ — coordinate or sequence",
+      "verify": [
+        "npm run generate-icons",
+        "node -e \"const s=require('sharp');s('public/apple-touch-icon.png').metadata().then(m=>console.log(m.channels,m.hasAlpha))\""
+      ],
+      "refs": [
+        "Measured during QUA-19: all three derived assets channels=4, hasAlpha=true"
+      ]
+    },
+    {
+      "id": "DOC-15",
+      "track": "DOCS",
+      "title": "Fix the FactDrafter comment that misattributes where the entitlement gate lives",
+      "status": "TODO",
+      "effort": 0.1,
+      "done_when": "No comment claims Intelligence.isAvailable performs an entitlement check.",
+      "why": "FactDrafter.swift:15 claims the feature sits behind 'the same Intelligence.isAvailable gate (Apple Intelligence + Complete entitlement + AKASHIC_DISABLE_AI kill switch)'. IntelligenceAvailability.swift:110-115 resolves only the kill switch, framework availability and model readiness — no entitlement check exists there. The entitlement is a separate && entitlements.isComplete at each call site. Behaviour is correct; the comment sends the next reader to the wrong file to find the gate.",
+      "files": [
+        "apple/Akashic/Intelligence/FactDrafter.swift"
+      ],
+      "serialise_with": "DIFF-05, DIFF-08, QUA-12 also edit Intelligence/**",
+      "verify": [
+        "cd apple && xcodegen generate",
+        "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,id=$(xcrun simctl list devices available | grep -o '[0-9A-F-]\\{36\\}' | tail -1)\" CODE_SIGNING_ALLOWED=NO test"
+      ],
+      "refs": [
+        "WaypointEditSheet.swift:46, NewJourneySheet.swift:139, :814 hold the real entitlement checks"
+      ]
+    },
+    {
+      "id": "DOC-16",
+      "track": "DOCS",
+      "title": "Say what each import figure counts in APPLE-MIGRATION-TASKS",
+      "status": "TODO",
+      "effort": 0.1,
+      "done_when": "Both import figures state what they count, so neither reads as contradicting the other.",
+      "why": "Line 8 states '1559 records / 3070 assets' while :217 states '3 journeys / 18 waypoints / 1538 photos' for the same import. They are consistent — 1538 photos is a subset of 1559 total records — but nothing says so, and this file is exactly where unexplained number pairs erode trust. One clause each closes it.",
+      "files": [
+        "APPLE-MIGRATION-TASKS.md"
+      ],
+      "verify": [
+        "grep -n '1559\\|1538' APPLE-MIGRATION-TASKS.md"
+      ]
+    },
+    {
+      "id": "DOC-17",
+      "track": "DOCS",
+      "title": "apple/README.md still calls the app icon a placeholder",
+      "status": "TODO",
+      "effort": 0.1,
+      "done_when": "No document describes the app icon as a placeholder.",
+      "why": "apple/README.md:285 describes Resources/ as 'Assets.xcassets (AppIcon placeholder, AccentColor)'. After QUA-19 it is a finished icon with dark and tinted variants.",
+      "files": [
+        "apple/README.md"
+      ],
+      "deps": [
+        "QUA-19"
+      ],
+      "verify": [
+        "grep -n 'AppIcon placeholder' apple/README.md  # expect no hits"
       ]
     }
   ]

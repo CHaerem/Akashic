@@ -1,0 +1,28 @@
+<!--
+  Akashic app icon — tinted appearance (iOS 18+). Source of truth for AppIcon-1024-tinted.png.
+
+  Tinted mode maps the LUMINANCE of this image onto the user's chosen colour: white becomes the
+  full tint, black stays dark. That is exactly why the old icon's 1.14:1 hairline produced an
+  unusable tinted variant — there was almost no luminance difference for the system to map, so
+  the whole tile came out one flat tone. This is the same globe rendered as pure greyscale: the
+  sphere sits high on the luminance scale (8.8:1 against the ground at its darkest) and the
+  graticule drops to the ground, so the mark still reads once the tint is applied.
+  Greyscale by construction — any hue here would be discarded anyway.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="sphereTinted" x1="0.18" y1="0.06" x2="0.82" y2="0.94">
+      <stop offset="0" stop-color="#F0F0F0"/>
+      <stop offset="1" stop-color="#A8A8A8"/>
+    </linearGradient>
+    <clipPath id="sphereClipTinted">
+      <circle cx="512" cy="512" r="352"/>
+    </clipPath>
+  </defs>
+  <rect width="1024" height="1024" fill="#000000"/>
+  <circle cx="512" cy="512" r="352" fill="url(#sphereTinted)"/>
+  <g clip-path="url(#sphereClipTinted)" fill="none" stroke="#000000" stroke-width="34">
+    <ellipse cx="512" cy="512" rx="352" ry="117"/>
+    <ellipse cx="512" cy="512" rx="117" ry="352"/>
+  </g>
+</svg>

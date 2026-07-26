@@ -1,0 +1,28 @@
+<!--
+  Akashic app icon — dark appearance (iOS 18+). Source of truth for AppIcon-1024-dark.png.
+
+  iOS derives a dark variant automatically when none is supplied, but the derivation is tuned
+  for icons with a light ground; ours is already dark, so the derived result was just the
+  default image with its own contrast problem intact. Supplying it explicitly keeps the navy
+  ground as the identity (rather than accepting the system's neutral dark) and drops the
+  sphere's luminance a step so the icon doesn't glare next to genuinely dark neighbours.
+  Kept opaque on purpose: a transparent dark variant hands the background to the system and
+  loses #0B0B19, which is the one colour the app and the icon share.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="sphereDark" x1="0.18" y1="0.06" x2="0.82" y2="0.94">
+      <stop offset="0" stop-color="#9FAAFF"/>
+      <stop offset="1" stop-color="#7382F0"/>
+    </linearGradient>
+    <clipPath id="sphereClipDark">
+      <circle cx="512" cy="512" r="352"/>
+    </clipPath>
+  </defs>
+  <rect width="1024" height="1024" fill="#08080F"/>
+  <circle cx="512" cy="512" r="352" fill="url(#sphereDark)"/>
+  <g clip-path="url(#sphereClipDark)" fill="none" stroke="#08080F" stroke-width="34">
+    <ellipse cx="512" cy="512" rx="352" ry="117"/>
+    <ellipse cx="512" cy="512" rx="117" ry="352"/>
+  </g>
+</svg>

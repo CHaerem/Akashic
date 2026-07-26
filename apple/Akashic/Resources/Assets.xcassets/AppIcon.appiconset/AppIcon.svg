@@ -1,0 +1,33 @@
+<!--
+  Akashic app icon — default (light/any) appearance. Source of truth for AppIcon-1024.png.
+  Rasterise with: node apple/Akashic/Resources/Assets.xcassets/AppIcon.appiconset/generate.mjs
+
+  Same three-ellipse globe as public/favicon.svg (circle + equator + meridian, 3:1 ellipse
+  ratio), but FILLED instead of hairline-stroked. The old icon drew the wireframe in #1A1A2E on
+  a #0B0B19 ground — 1.14:1 measured contrast, i.e. a black square at 60 pt. Here the sphere
+  carries the mass in the app's accent periwinkle (Theme.accent, #8F9EFF, lightened into a
+  gradient) and the graticule is knocked out in the ground colour, so the same globe survives
+  being scaled to a Home Screen. Full bleed, opaque, square — iOS applies the mask.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <!-- Light from the upper left, so the sphere reads as a sphere and not a flat dot.
+         Both stops stay well above 4.5:1 against the ground (measured: 6.2:1 at the dark end). -->
+    <linearGradient id="sphere" x1="0.18" y1="0.06" x2="0.82" y2="0.94">
+      <stop offset="0" stop-color="#A9B4FF"/>
+      <stop offset="1" stop-color="#7F8FFA"/>
+    </linearGradient>
+    <!-- The graticule ellipses are as wide/tall as the sphere itself, so their strokes would
+         bleed past the silhouette at the four tangent points. Clipping to the sphere lets each
+         line run all the way to the rim and stop flush, exactly like the wireframe original. -->
+    <clipPath id="sphereClip">
+      <circle cx="512" cy="512" r="352"/>
+    </clipPath>
+  </defs>
+  <rect width="1024" height="1024" fill="#0B0B19"/>
+  <circle cx="512" cy="512" r="352" fill="url(#sphere)"/>
+  <g clip-path="url(#sphereClip)" fill="none" stroke="#0B0B19" stroke-width="34">
+    <ellipse cx="512" cy="512" rx="352" ry="117"/>
+    <ellipse cx="512" cy="512" rx="117" ry="352"/>
+  </g>
+</svg>
