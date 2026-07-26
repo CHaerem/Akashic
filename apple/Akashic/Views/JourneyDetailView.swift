@@ -328,7 +328,9 @@ struct JourneyDetailView: View {
                     Text("·").foregroundStyle(Theme.textTertiary)
                     Text(dates).foregroundStyle(Theme.textSecondary)
                 }
-                if isSample {
+                // The badge goes through `showsSampleBadge` (the SHIP-03 screenshot seam); the
+                // delete copy below deliberately does NOT — it must stay honest in every run.
+                if store.showsSampleBadge(journey.id) {
                     Text("·").foregroundStyle(Theme.textTertiary)
                     SampleBadge()
                 }

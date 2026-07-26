@@ -33,7 +33,11 @@ struct PhotosGridView: View {
                         title: "Day \(day)",
                         subtitle: camp(in: journey, day: day)?.name,
                         photos: grouped.byDay[day] ?? [],
-                        dayLabel: "Day \(day)",
+                        // Resolved here, not passed as a literal: `dayLabel` is a `String` (it ends
+                        // up in `Text(verbatim:)`-equivalent position inside the lightbox), so the
+                        // same literal that localises fine as `title` above would ship English.
+                        dayLabel: String(localized: "Day \(day)",
+                                         comment: "Photo lightbox: badge naming the day a photo belongs to."),
                         journey: journey
                     )
                 }

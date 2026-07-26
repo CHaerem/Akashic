@@ -618,7 +618,7 @@
       "id": "SHIP-03",
       "track": "SHIP",
       "title": "Produce the 12 App Store screenshots",
-      "status": "WIP",
+      "status": "DONE",
       "effort": 1.5,
       "done_when": "Twelve assets exist at the two required sizes and are committed under docs/store/screenshots/.",
       "priority": 20,
@@ -642,7 +642,8 @@
         "agent": "shots-worktree",
         "branch": "claude/ship03-screenshots",
         "at": "2026-07-26"
-      }
+      },
+      "evidence": "24 assets, not 12 — both languages, because the listing is EN+NB and Norwegian captions over English chrome is the mismatch a reviewer notices. Verified: 12 at 1320x2868 and 12 at 2064x2752, zero RGBA, plus a 244-line README recording the exact launch-env command for each shot so the next release reproduces rather than re-improvises. My briefing was WRONG that five of six shots needed hand-navigation: the harness already had AKASHIC_SCENE, AKASHIC_LIGHTBOX, AKASHIC_SHEET_DETENT, AKASHIC_STATS_JOURNEY and AKASHIC_TAB, and the agent checked rather than believing me. It added one new ExportScreenshotHarness seam instead of tapping, so the whole set is script-reproducible."
     },
     {
       "id": "SHIP-04",
@@ -2054,6 +2055,26 @@
         "cd apple && xcodegen generate",
         "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,id=$(xcrun simctl list devices available | grep -o '[0-9A-F-]\\{36\\}' | tail -1)\" CODE_SIGNING_ALLOWED=NO test",
         "A migration test from the current version with data, plus a re-import test"
+      ]
+    },
+    {
+      "id": "QUA-27",
+      "track": "QUALITY",
+      "title": "Two localisation gaps the screenshot pass surfaced but would not decide",
+      "status": "TODO",
+      "effort": 0.25,
+      "priority": 30,
+      "done_when": "No user-visible string is marked do-not-translate by accident, and the String-position trap is gone from the import sheets.",
+      "why": "Found while shooting SHIP-03 and deliberately left, because both are localisation calls rather than screenshot ones. (1) \"DAY\" is marked shouldTranslate:false in the catalogue while \"DAY %lld\" is translated, so an iPad export screenshot honestly shows 'DAY 1' under 'Dager' — it looks like collateral of QUA-06's bulk developer-tools marking, so it wants confirming rather than flipping. (2) PhotoImportSheet and ImportBrowserView carry the same String-where-LocalizedStringKey-belongs trap that hid LightboxData.dayLabel's English from every language.",
+      "files": [
+        "apple/Akashic/Resources/Localizable.xcstrings",
+        "apple/Akashic/Views/Edit/PhotoImportSheet.swift",
+        "apple/Akashic/Import/ImportBrowserView.swift"
+      ],
+      "verify": [
+        "cd apple && xcodegen generate",
+        "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,id=$(xcrun simctl list devices available | grep -o '[0-9A-F-]\\{36\\}' | tail -1)\" CODE_SIGNING_ALLOWED=NO test",
+        "Run under -AppleLanguages \"(nb)\" and read the export sheet and the import sheets"
       ]
     }
   ]

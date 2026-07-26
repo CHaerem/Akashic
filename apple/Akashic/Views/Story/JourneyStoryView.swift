@@ -48,7 +48,8 @@ struct JourneyStoryView: View {
                         onNotesSave: { saveNotes($0, camp: camp) },
                         onPhotoTap: { photos, index in
                             lightbox = LightboxData(photos: photos, startIndex: index,
-                                                    dayLabel: "Day \(camp.dayNumber)",
+                                                    dayLabel: String(localized: "Day \(camp.dayNumber)",
+                                                                     comment: "Photo lightbox: badge naming the day a photo belongs to."),
                                                     dateLabel: Formatters.dayDate(dateStarted: live.dateStarted,
                                                                                   dayNumber: camp.dayNumber))
                         }

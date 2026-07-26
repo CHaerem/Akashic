@@ -5,23 +5,23 @@
 
 # Akashic — work ledger
 
-91 tasks · **31 open** (14 agent-doable, 18.9 dev-days · 17 owner-only, 8.5 dev-days) · 60 done · 0 dropped
+92 tasks · **31 open** (14 agent-doable, 17.6 dev-days · 17 owner-only, 8.5 dev-days) · 61 done · 0 dropped
 
 > **`dev-days` are a human-developer estimate, not agent time.** They came from the review
 > that produced these tasks and they are the right unit for deciding whether something is
 > worth doing — they are the wrong unit for predicting how long an agent will take, and
 > summing them as "work remaining" overstates it substantially.
 >
-> Measured so far: **60 agent tasks estimated at 38.7 dev-days**,
+> Measured so far: **61 agent tasks estimated at 40.2 dev-days**,
 > closed in roughly one working afternoon across up to three parallel tracks.
 >
 > But that compression is **unmeasured for the large items**: of the tasks closed so far,
 > 3 were 2 dev-days or more. 11 of the
-> 18.9 remaining dev-days sit in 4 such tasks —
+> 17.6 remaining dev-days sit in 4 such tasks —
 > localisation, Swift 6 strict concurrency, a UI test target, the PDF book. Those involve
 > design judgement and broad-blast-radius refactors rather than localised edits, so do not
 > assume the same ratio holds. The cheap band is nearly exhausted:
-> 4 tasks at 0.5 dev-days or less remain.
+> 5 tasks at 0.5 dev-days or less remain.
 
 Read [CLAUDE.md](CLAUDE.md) before touching anything. To find work:
 
@@ -33,7 +33,6 @@ node scripts/workplan.mjs next
 
 | Task | Agent | Branch | Stopped at |
 |---|---|---|---|
-| `SHIP-03` Produce the 12 App Store screenshots | shots-worktree | `claude/ship03-screenshots` | — |
 | `QUA-07` Bring accessibility to a shippable standard | a11y-worktree | `claude/qua07-qua24-a11y` | — |
 | `QUA-24` Accessibility for the screens D1 and D3 were never scoped to cover | a11y-worktree | `claude/qua07-qua24-a11y` | — |
 
@@ -91,13 +90,13 @@ node scripts/workplan.mjs next
 
 > Hard requirements for a paid v1.0. Most of the remaining calendar time lives here, in items only the owner can do.
 
-12 open of 19 · 6.8 d remaining
+11 open of 19 · 5.3 d remaining
 
 | | Task | Days | Who | Deps | Finish line |
 |---|---|---|---|---|---|
 | `x` | `SHIP-01` **Move the two dropped Info.plist keys into info.properties** | 0.25 | agent | — | The built Release-CloudKit Info.plist contains CKSharingSupported and UIBackgroundModes. |
 | `x` | `SHIP-02` **Register for remote notifications — the missing half of push sync** | 0.5 | agent | `SHIP-01` | The app calls registerForRemoteNotifications and a device receives a CloudKit push. |
-| `~` | `SHIP-03` **Produce the 12 App Store screenshots** | 1.5 | agent | `SHIP-06` `QUA-06` | Twelve assets exist at the two required sizes and are committed under docs/store/screenshots/. |
+| `x` | `SHIP-03` **Produce the 12 App Store screenshots** | 1.5 | agent | `SHIP-06` `QUA-06` | Twelve assets exist at the two required sizes and are committed under docs/store/screenshots/. |
 | `x` | `SHIP-04` **Add PrivacyInfo.xcprivacy** | 0.25 | agent | — | The manifest ships in the app bundle and the upload draws no ITMS-91053 notice. |
 | `x` | `SHIP-05` **Bump the marketing version to 1.0.0** | 0.1 | agent | — | The built plist reports CFBundleShortVersionString 1.0.0. |
 | `x` | `SHIP-06` **D5 — consumer sync wording, iPhone portrait lock, ASC config match** | 0.5 | agent | — | Settings shows no engineering strings and iPhone does not rotate into the iPad panel layout. |
@@ -142,7 +141,7 @@ node scripts/workplan.mjs next
 
 > Tests, types, CI, localisation, accessibility. Localisation and accessibility are in v1.0 by decision.
 
-5 open of 26 · 12 d remaining
+6 open of 27 · 12.3 d remaining
 
 | | Task | Days | Who | Deps | Finish line |
 |---|---|---|---|---|---|
@@ -172,6 +171,7 @@ node scripts/workplan.mjs next
 | `~` | `QUA-24` **Accessibility for the screens D1 and D3 were never scoped to cover** | 2 | agent | `QUA-06` | No view directory with interactive controls sits at zero accessibility labels. |
 | `x` | `QUA-25` **Bound public-showcase reads before traffic arrives** | 1 | agent | — | A published journey has a size bound, and crossing a usage threshold is visible to the owner. |
 | `x` | `QUA-26` **Localise the user-visible strings outside Views/** | 0.5 | agent | `QUA-06` | No user-visible string reaches the screen in English when the app runs in Norwegian. |
+| ` ` | `QUA-27` **Two localisation gaps the screenshot pass surfaced but would not decide** | 0.25 | agent | — | No user-visible string is marked do-not-translate by accident, and the String-position trap is gone from the import sheets. |
 
 ## Decisions on record
 

@@ -149,6 +149,10 @@ right: fix this file in the same commit.
 - **`knownRegions` must be declared in `project.yml`.** XcodeGen infers regions from `.lproj`
   directories and a String Catalog has none, so without it Xcode compiles English only and the app
   falls back with every translation present and unused.
+- **`AppleLanguages` must be a launch ARGUMENT, not an environment variable.**
+  `SIMCTL_CHILD_AppleLanguages` fails silently — `UserDefaults` never reads the environment — so a run
+  you believe is Norwegian comes up English and looks entirely fine. Use
+  `simctl launch <udid> no.akashic.app -AppleLanguages "(nb)"`.
 - **A Debug build cannot verify localisation.** Strings inside `#if AKASHIC_CLOUDKIT_BUILD` are never
   extracted by a Debug compile, so a key can be missing from the catalogue entirely while the code is
   correct. Diff the Release-CloudKit `.stringsdata` against Debug to find them. Same blind spot as the

@@ -330,6 +330,8 @@ struct StatItem: View {
 struct StatsTabView: View {
     @EnvironmentObject private var store: JourneyStore
     @State private var selectedID: String?
+    /// One-shot latch for `centreSelectedChip` — see its doc comment.
+    @State private var didCentreSelectedChip = false
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
 
     private var selected: Journey? {
@@ -369,16 +371,44 @@ struct StatsTabView: View {
     // selected/unselected language as the globe strip's day pills (`DayNavigationView`) rather
     // than a `Menu`, so the picker stays visually consistent with the rest of the app's chrome
     // instead of hiding the journey list behind a tap.
+    /// Scrolled so the SELECTED chip is visible on arrival. Without this the row always opens at
+    /// its leading edge, so a selection that is not the first journey — `AKASHIC_STATS_JOURNEY`, or
+    /// simply the second journey the user last looked at — starts off-screen or clipped mid-word,
+    /// and the screen reads as though nothing is selected at all. Grows with the archive: at ten
+    /// journeys the selected chip is usually nowhere near the leading edge.
     private var journeyChipRow: some View {
+        ScrollViewReader { proxy in
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
                 ForEach(store.journeys) { journey in
                     journeyChip(journey)
+                        .id(journey.id)
                 }
             }
             // Room for the selected chip's stroke/shadow at the scroll edges.
             .padding(.horizontal, 2)
         }
+        // Both hooks, deliberately. A child's `.onAppear` runs BEFORE its parent's, so on the very
+        // first render `selectedID` is still nil — the enclosing view's `.onAppear` (which calls
+        // `resolveInitialJourneyID`) has not run yet — and centring here alone would silently
+        // always centre the *first* journey. `.onChange` catches the resolution a moment later.
+        .onAppear { centreSelectedChip(proxy) }
+        .onChange(of: selectedID) { _, _ in centreSelectedChip(proxy) }
+        }
+    }
+
+    /// Bring the selected chip into view, once per presentation. `.center` rather than `.leading`:
+    /// the leading edge would push every earlier journey out of reach on a first read, hiding that
+    /// there are any. Guarded so a later chip TAP is never yanked around under the finger — the row
+    /// settles once, on arrival, and is the user's to scroll after that.
+    ///
+    /// Reads `selectedID`, NOT `selected` — `selected` falls back to the first journey while the
+    /// real selection is still unresolved, so keying off it would spend the one-shot latch centring
+    /// the leading chip (which never moves) and then decline to centre the actual one.
+    private func centreSelectedChip(_ proxy: ScrollViewProxy) {
+        guard !didCentreSelectedChip, let id = selectedID else { return }
+        didCentreSelectedChip = true
+        proxy.scrollTo(id, anchor: .center)
     }
 
     private func journeyChip(_ journey: Journey) -> some View {

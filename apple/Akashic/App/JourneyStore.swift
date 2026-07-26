@@ -489,4 +489,28 @@ final class JourneyStore: ObservableObject {
     func isSampleJourney(_ id: String) -> Bool {
         persistence.isSeededFixture(journeyID: id)
     }
+
+    /// Whether the "SAMPLE" pill should be *drawn* for a journey — `isSampleJourney` gated by the
+    /// screenshot seam below. Every place that draws the badge goes through this; nothing else does,
+    /// and in particular the delete confirmation's copy still reads `isSampleJourney` directly.
+    func showsSampleBadge(_ id: String,
+                          badgesVisible: Bool = JourneyStore.sampleBadgesVisible) -> Bool {
+        isSampleJourney(id) && badgesVisible
+    }
+
+    /// Screenshot seam: `AKASHIC_HIDE_SAMPLE_BADGE=1` suppresses the "SAMPLE" pill (SHIP-03).
+    ///
+    /// A store-screenshot run loads the bundled fixtures, so *every* journey on screen is a seeded
+    /// sample and every card would carry the pill — which advertises the product as a demo instead
+    /// of as the archive a customer's own journeys live in, and steals enough width from the globe
+    /// cards to truncate the journey names too. Deliberately the narrowest possible seam: it hides
+    /// the badge and nothing else. `isSampleJourney` itself stays truthful, so the free-tier
+    /// exemption (`billableOwnedJourneyCount`), the sync exclusion (`isSeededFixture`) and the
+    /// honest delete copy are all unaffected by it. No effect on a normal launch.
+    static func sampleBadgesVisible(environment env: [String: String]) -> Bool {
+        env["AKASHIC_HIDE_SAMPLE_BADGE"] != "1"
+    }
+
+    static let sampleBadgesVisible =
+        sampleBadgesVisible(environment: ProcessInfo.processInfo.environment)
 }
