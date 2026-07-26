@@ -97,12 +97,19 @@ function validate(d) {
   };
   for (const t of tasks) walk(t.id, []);
 
-  // The parallel-safety guarantee: no two in-flight tasks may own the same files.
+  // The parallel-safety guarantee: no two in-flight tasks may own the same files — unless the
+  // same agent holds both, in which case they are worked in sequence by construction and cannot
+  // race. Without that exemption a single agent could not legitimately take two related tasks
+  // that share a file (e.g. three package.json items), which would push real work out of the
+  // ledger and defeat the point of recording it.
   const wip = tasks.filter((t) => t.status === 'WIP');
   for (let i = 0; i < wip.length; i++) {
     for (let j = i + 1; j < wip.length; j++) {
+      if (wip[i].claim?.agent && wip[i].claim.agent === wip[j].claim?.agent) continue;
       if (filesCollide(wip[i], wip[j])) {
-        errs.push(`${wip[i].id} and ${wip[j].id} are both WIP and both own overlapping files — serialise them`);
+        errs.push(`${wip[i].id} (${wip[i].claim?.agent ?? '?'}) and ${wip[j].id} ` +
+          `(${wip[j].claim?.agent ?? '?'}) are both WIP and own overlapping files — serialise them ` +
+          `or give them to one agent`);
       }
     }
   }
@@ -111,9 +118,10 @@ function validate(d) {
 
 // ------------------------------------------------------------------ claimable
 
-function claimable(d, track) {
+function claimable(d, track, agent) {
   const byId = new Map(d.tasks.map((t) => [t.id, t]));
-  const wip = d.tasks.filter((t) => t.status === 'WIP');
+  // Work already held by this agent is not an obstacle to it: sequential by construction.
+  const wip = d.tasks.filter((t) => t.status === 'WIP' && !(agent && t.claim?.agent === agent));
   return d.tasks.filter((t) => {
     if (t.status !== 'TODO') return false;
     if (track && t.track !== track) return false;
@@ -270,7 +278,7 @@ switch (cmd) {
 
   case 'next': {
     const d = read();
-    const list = claimable(d, flag('track'));
+    const list = claimable(d, flag('track'), flag('agent'));
     if (!list.length) { console.log('workplan: nothing claimable — check `status` and the Blocked section'); break; }
     console.log(`${list.length} claimable task(s)${flag('track') ? ` in ${flag('track')}` : ''}:\n`);
     for (const t of list.sort((a, b) => (a.priority ?? 50) - (b.priority ?? 50) || a.effort - b.effort)) {
@@ -308,8 +316,8 @@ switch (cmd) {
     const agent = flag('agent'), branch = flag('branch');
     if (!agent || !branch) die('claim needs --agent and --branch');
     if (t.status !== 'TODO') die(`${t.id} is ${t.status}, not TODO`);
-    if (!claimable(d).some((c) => c.id === t.id)) {
-      die(`${t.id} is not claimable yet — unmet deps, or its files are held by an in-flight task`, 1);
+    if (!claimable(d, null, agent).some((c) => c.id === t.id)) {
+      die(`${t.id} is not claimable yet — unmet deps, or its files are held by another agent`, 1);
     }
     t.status = 'WIP';
     t.claim = { agent, branch, at: flag('at') || new Date().toISOString().slice(0, 10) };

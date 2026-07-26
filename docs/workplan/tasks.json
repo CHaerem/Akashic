@@ -127,7 +127,7 @@
       "id": "LEG-05",
       "track": "LEGACY",
       "title": "Rewire src/lib/media.ts off the Worker",
-      "status": "TODO",
+      "status": "WIP",
       "effort": 0.5,
       "done_when": "No source file resolves media through the workers.dev host, and web tests stay green.",
       "deps": [],
@@ -144,13 +144,18 @@
       "refs": [
         "src/lib/media.ts:16, :8-9",
         "records.ts:291 stringOrNull(f('url')) is dead against schema.ckdb"
-      ]
+      ],
+      "claim": {
+        "agent": "sprint2-web",
+        "branch": "claude/remote-control-project-review-9462c1",
+        "at": "2026-07-26"
+      }
     },
     {
       "id": "LEG-06",
       "track": "LEGACY",
       "title": "Delete the unrunnable legacy scripts and the AWS SDK dependency",
-      "status": "TODO",
+      "status": "WIP",
       "effort": 0.5,
       "done_when": "npm run build and vitest pass with the dead scripts and @aws-sdk/client-s3 gone.",
       "deps": [],
@@ -173,13 +178,18 @@
       ],
       "refs": [
         "No npm script depends on Supabase or R2 — the legacy scripts are manually-invoked dev tools"
-      ]
+      ],
+      "claim": {
+        "agent": "sprint2-ci",
+        "branch": "claude/remote-control-project-review-9462c1",
+        "at": "2026-07-26"
+      }
     },
     {
       "id": "LEG-07",
       "track": "LEGACY",
       "title": "Gate every native-only web write behind one guard",
-      "status": "TODO",
+      "status": "WIP",
       "effort": 1,
       "done_when": "No web UI offers a write that silently no-ops; each either disappears or shows a native-only notice.",
       "files": [
@@ -200,7 +210,12 @@
         "RouteEditor.tsx:2180,2195,2208,2222 discard all four results; :2228-2229 onSave(); onClose()",
         "writeStubs.test.ts:28-31 pins that the adapter returns false",
         "Decision: web is frozen as a showcase view"
-      ]
+      ],
+      "claim": {
+        "agent": "sprint2-web",
+        "branch": "claude/remote-control-project-review-9462c1",
+        "at": "2026-07-26"
+      }
     },
     {
       "id": "LEG-08",
@@ -1134,7 +1149,7 @@
       "id": "QUA-03",
       "track": "QUALITY",
       "title": "Clear the red Security Audit job",
-      "status": "TODO",
+      "status": "WIP",
       "effort": 0.5,
       "done_when": "npm audit --audit-level=high exits 0, or the exception is documented and time-boxed.",
       "files": [
@@ -1145,13 +1160,18 @@
       "why": "Red on main across at least three merges. 12 high advisories root in brace-expansion GHSA-mh99-v99m-4gvg, whose range <=5.0.7 makes the existing overrides block ineffective; npm's only offered fix is eslint@4, a semver-major. A permanently red required gate trains everyone to ignore CI.",
       "verify": [
         "npm audit --audit-level=high"
-      ]
+      ],
+      "claim": {
+        "agent": "sprint2-ci",
+        "branch": "claude/remote-control-project-review-9462c1",
+        "at": "2026-07-26"
+      }
     },
     {
       "id": "QUA-04",
       "track": "QUALITY",
       "title": "Repair or delete the Performance Tests workflow",
-      "status": "TODO",
+      "status": "WIP",
       "effort": 0.25,
       "done_when": "No workflow references a spec file that does not exist.",
       "files": [
@@ -1162,7 +1182,12 @@
       "why": "Both jobs fail with 'No tests found': e2e/performance.spec.ts was deleted in a4d5b67 while performance.yml:61,112 and package.json:15,17 still target it.",
       "verify": [
         "gh run list --workflow performance.yml --limit 1"
-      ]
+      ],
+      "claim": {
+        "agent": "sprint2-ci",
+        "branch": "claude/remote-control-project-review-9462c1",
+        "at": "2026-07-26"
+      }
     },
     {
       "id": "QUA-05",
