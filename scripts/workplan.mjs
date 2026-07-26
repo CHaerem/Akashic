@@ -150,10 +150,28 @@ function render(d) {
   L.push('');
   L.push('# Akashic — work ledger');
   L.push('');
+  const doneAgent = tasks.filter((t) => t.status === 'DONE' && !t.owner);
+  const big = (xs) => xs.filter((t) => t.effort >= 2);
   L.push(`${tasks.length} tasks · **${open.length} open** (${agentOpen.length} agent-doable, ` +
-    `${sum(agentOpen)} d · ${ownerOpen.length} owner-only, ${sum(ownerOpen)} d) · ` +
+    `${sum(agentOpen)} dev-days · ${ownerOpen.length} owner-only, ${sum(ownerOpen)} dev-days) · ` +
     `${tasks.filter((t) => t.status === 'DONE').length} done · ` +
     `${tasks.filter((t) => t.status === 'DROPPED').length} dropped`);
+  L.push('');
+  L.push('> **`dev-days` are a human-developer estimate, not agent time.** They came from the review');
+  L.push('> that produced these tasks and they are the right unit for deciding whether something is');
+  L.push('> worth doing — they are the wrong unit for predicting how long an agent will take, and');
+  L.push('> summing them as "work remaining" overstates it substantially.');
+  L.push('>');
+  L.push(`> Measured so far: **${doneAgent.length} agent tasks estimated at ${sum(doneAgent)} dev-days**,`);
+  L.push('> closed in roughly one working afternoon across up to three parallel tracks.');
+  L.push('>');
+  L.push(`> But that compression is **unmeasured for the large items**: of the tasks closed so far,`);
+  L.push(`> ${big(doneAgent).length} were 2 dev-days or more. ${sum(big(agentOpen))} of the`);
+  L.push(`> ${sum(agentOpen)} remaining dev-days sit in ${big(agentOpen).length} such tasks —`);
+  L.push('> localisation, Swift 6 strict concurrency, a UI test target, the PDF book. Those involve');
+  L.push('> design judgement and broad-blast-radius refactors rather than localised edits, so do not');
+  L.push('> assume the same ratio holds. The cheap band is nearly exhausted:');
+  L.push(`> ${agentOpen.filter((t) => t.effort <= 0.5).length} tasks at 0.5 dev-days or less remain.`);
   L.push('');
   L.push('Read [CLAUDE.md](CLAUDE.md) before touching anything. To find work:');
   L.push('');

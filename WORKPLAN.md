@@ -5,7 +5,23 @@
 
 # Akashic — work ledger
 
-86 tasks · **42 open** (26 agent-doable, 39.1 d · 16 owner-only, 8 d) · 44 done · 0 dropped
+86 tasks · **42 open** (26 agent-doable, 39.1 dev-days · 16 owner-only, 8 dev-days) · 44 done · 0 dropped
+
+> **`dev-days` are a human-developer estimate, not agent time.** They came from the review
+> that produced these tasks and they are the right unit for deciding whether something is
+> worth doing — they are the wrong unit for predicting how long an agent will take, and
+> summing them as "work remaining" overstates it substantially.
+>
+> Measured so far: **44 agent tasks estimated at 17.7 dev-days**,
+> closed in roughly one working afternoon across up to three parallel tracks.
+>
+> But that compression is **unmeasured for the large items**: of the tasks closed so far,
+> 0 were 2 dev-days or more. 24 of the
+> 39.1 remaining dev-days sit in 7 such tasks —
+> localisation, Swift 6 strict concurrency, a UI test target, the PDF book. Those involve
+> design judgement and broad-blast-radius refactors rather than localised edits, so do not
+> assume the same ratio holds. The cheap band is nearly exhausted:
+> 10 tasks at 0.5 dev-days or less remain.
 
 Read [CLAUDE.md](CLAUDE.md) before touching anything. To find work:
 

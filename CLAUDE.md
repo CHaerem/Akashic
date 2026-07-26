@@ -141,10 +141,22 @@ right: fix this file in the same commit.
 - Renovate automerges dependency updates on a nonOfficeHours schedule. A long-lived branch
   can find `package-lock.json` moved under it — rebase rather than reverting the bot.
 
+## Reading the estimates
+
+`effort` in the ledger is **dev-days: what the work would cost a human developer**, taken from
+the review that produced the tasks. It is the right unit for deciding whether something is worth
+doing and the wrong one for predicting how long you will take — measured on this project, 44 agent
+tasks estimated at 17.7 dev-days closed in about one working afternoon across three parallel
+tracks. Do not report the sum as "work remaining"; it overstates it by a large factor.
+
+Do not assume a fixed ratio either. Every task closed so far was under two dev-days, so the
+compression is entirely unmeasured on the large ones — localisation, Swift 6 strict concurrency, a
+UI test target, the PDF book. Those turn on design judgement and broad blast radius rather than
+localised edits, and that is exactly where a human estimate is most likely to be honest.
+
 ## Where the real constraints are
 
-The remaining distance to a paid v1.0 is roughly **48 agent-days and 8 owner-days**, but
-calendar time is dominated by two things no amount of work shortens: the Paid Applications
+Calendar time is dominated by two things no amount of work shortens: the Paid Applications
 agreement with banking and tax forms (1–2 weeks, entirely outside the build queue), and the
 external beta (~3 weeks, and it is the gate that decides whether the remaining
 differentiation work is worth building). Both are in the ledger. Start them early.
