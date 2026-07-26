@@ -1645,7 +1645,7 @@
       "id": "QUA-20",
       "track": "QUALITY",
       "title": "A4 — the 'would Apple ship this screen?' review round",
-      "status": "TODO",
+      "status": "DONE",
       "effort": 1,
       "done_when": "Each primary screen has been reviewed against current HIG and the findings closed or recorded.",
       "deps": [
@@ -1661,7 +1661,13 @@
       "why": "Both stated preconditions are now satisfied in code. Worth doing once the a11y and haptics work lands, because it is the pass that catches what a checklist cannot — including whether to adopt any iOS 26 material language, given the app currently uses none of it.",
       "verify": [
         "Recorded findings in DESIGN-PLAN.md with each either fixed or deliberately deferred"
-      ]
+      ],
+      "claim": {
+        "agent": "opus5",
+        "branch": "claude/remote-control-project-review-9462c1",
+        "at": "2026-07-26"
+      },
+      "evidence": "Reviewed after its three preconditions landed. Eight findings recorded in DESIGN-PLAN.md, each marked seen-by-navigation or reviewed-by-code — I installed the Debug build on a booted simulator with a clean status bar and looked at onboarding and the globe; the rest was code, because two AKASHIC_SCREEN seams fell through. A design review of a screen nobody looked at is a code review with a misleading name, so the distinction is per finding. The useful result is that the polish items CLUSTER: four of six seen findings are on the globe, which is both the first screen after onboarding and the one the store listing leads with. Nothing is a ship blocker. iOS 26 material adoption is recorded as deliberately deferred rather than fixed — the deployment target is 17.0, so it means raising the floor or #available-forking every surface."
     },
     {
       "id": "QUA-21",
@@ -2164,6 +2170,46 @@
         "branch": "claude/qua10-qua29",
         "at": "2026-07-26"
       }
+    },
+    {
+      "id": "QUA-30",
+      "track": "QUALITY",
+      "title": "The five A4 polish items, four of them on the globe",
+      "status": "TODO",
+      "effort": 0.5,
+      "priority": 33,
+      "deps": [
+        "QUA-20"
+      ],
+      "done_when": "The globe reads as one designed screen, and onboarding opens with the app's own mark.",
+      "why": "A4's findings cluster on one screen, which is the useful part of the result: the globe is both the first thing a customer sees after onboarding and the screen the store listing leads with, and four of the six seen findings are there. 'Kilimanjaro' truncating to 'Kilima…' because the SAMPLE badge takes the title's width (SHIP-03's AKASHIC_HIDE_SAMPLE_BADGE fixes the screenshot, not the product); the journey card and tab bar sharing no alignment so they read as two unrelated floating objects; MapKit's ocean labels clipping at the edges; the page indicator sitting in a non-idiomatic filled pill; and onboarding leading with an SF Symbol globe rather than the mark QUA-19 redrew — the one moment brand continuity is guaranteed to be seen is the one place it is absent.",
+      "files": [
+        "apple/Akashic/Views/Map/",
+        "apple/Akashic/Views/OnboardingView.swift"
+      ],
+      "verify": [
+        "cd apple && xcodegen generate",
+        "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,id=$(xcrun simctl list devices available | grep -o '[0-9A-F-]\\{36\\}' | tail -1)\" CODE_SIGNING_ALLOWED=NO test",
+        "Launch on a simulator with the bundled sample and confirm the journey title is not truncated"
+      ]
+    },
+    {
+      "id": "QUA-31",
+      "track": "QUALITY",
+      "title": "Two screenshot seams fall through to the globe instead of failing",
+      "status": "TODO",
+      "effort": 0.25,
+      "priority": 34,
+      "done_when": "Every AKASHIC_SCREEN value either shows its screen or fails loudly.",
+      "why": "Found during A4: AKASHIC_SCREEN=settings and =paywall fell through to the globe in my run, while AKASHIC_SKIP_ONBOARDING in the same launch DID take effect — so the environment reached the app and this is not a launch-mechanics problem. Not diagnosed and not called broken. It matters because SHIP-03's 24 store screenshots depend on these seams, and a seam that silently renders a DIFFERENT screen is worse than one that crashes: the failure mode is a plausible-looking screenshot of the wrong thing. An unrecognised value should trap in DEBUG.",
+      "files": [
+        "apple/Akashic/App/AkashicApp.swift"
+      ],
+      "verify": [
+        "cd apple && xcodegen generate",
+        "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,id=$(xcrun simctl list devices available | grep -o '[0-9A-F-]\\{36\\}' | tail -1)\" CODE_SIGNING_ALLOWED=NO test",
+        "SIMCTL_CHILD_AKASHIC_SCREEN=settings xcrun simctl launch <udid> no.akashic.app, then screenshot"
+      ]
     }
   ]
 }

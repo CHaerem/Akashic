@@ -206,6 +206,40 @@ sweep over `Edit/`, `NewJourney/` and `Store/`, not a redesign.
 
 ---
 
+## A4 — "Would Apple ship this screen?" (reviewed 2026-07-26)
+
+Reviewed after A1 (accessibility floor), A2 (haptics), QUA-07/QUA-24 (accessibility app-wide) and
+QUA-19 (app icon) landed, which were its stated preconditions.
+
+**What was reviewed how, stated plainly.** The onboarding first page and the globe were reviewed
+*by looking at the running app* — installed the Debug build on a booted simulator with a clean
+status bar and read the screenshots. Everything else was reviewed **by reading code**, because two
+of the `AKASHIC_SCREEN` seams did not take effect in my run (see the last finding). A design review
+of a screen nobody looked at is a code review with a misleading name, so the distinction is kept
+per finding below.
+
+### Findings
+
+| # | Screen | Finding | Verified | Disposition |
+|---|---|---|---|---|
+| A4-1 | Globe | **"Kilimanjaro" truncates to "Kilima…"** on the journey card, because the SAMPLE badge takes width from the title. SHIP-03 added `AKASHIC_HIDE_SAMPLE_BADGE` so store screenshots look right — that is a *screenshot* fix. A customer with the bundled sample sees the truncation. | Seen | **Open** — QUA-30 |
+| A4-2 | Globe | **The status bar is hidden on the screen users live in.** No clock, no battery, no signal. D8 recorded this and it is still true. Apple's own map apps do not do it, and the immersion gained is small against what is given up. | Seen | **Open** — D8 stands |
+| A4-3 | Globe | **The journey card and the tab bar share no alignment.** The card is bottom-left at roughly half width; the tab bar is centred. They read as two unrelated floating objects rather than one bottom chrome. | Seen | **Open** — QUA-30 |
+| A4-4 | Globe | **MapKit's ocean labels clip at the screen edges** — "orth lantic cean", "Indian Ocea". It is MapKit's labelling at this camera rather than our text, but it reads as unfinished. Worth trying a slightly tighter camera or suppressing ocean labels at this altitude. | Seen | **Open** — QUA-30 |
+| A4-5 | Onboarding | **The page indicator sits inside a filled pill.** Not an iOS idiom; a paging indicator floats. Small, and on the first screen a new customer ever sees. | Seen | **Open** — QUA-30 |
+| A4-6 | Onboarding | **The hero glyph is an SF Symbol globe, not the app's own mark** — which was redrawn to 8.57:1 in QUA-19 and is now good. The one moment brand continuity is guaranteed to be seen is the one place it is absent. | Seen | **Open** — QUA-30 |
+| A4-7 | App-wide | **Zero iOS 26 material adoption**: 0 `glassEffect`, 0 `GlassEffectContainer`, 0 `buttonStyle(.glass)`, 0 `tabBarMinimizeBehavior`, against 48 `.ultraThinMaterial` sites, `.tabItem`/`.tag` TabView, no `NavigationSplitView`, no `.searchable`, no `@Observable`. The app's own chrome is a generation behind the system chrome it sits beside. | Code | **Deliberate for v1.0** — deployment target is 17.0, so adopting it means either raising the floor or `#available`-forking every surface. Recorded, not fixed. |
+| A4-8 | Tooling | **`AKASHIC_SCREEN=settings` and `=paywall` did not take effect** in my run, falling through to the globe, while `AKASHIC_SKIP_ONBOARDING` in the same launch *did* — so the environment reached the app. I did not diagnose it and am not calling it broken. It matters because SHIP-03's twenty-four screenshots depend on these seams, and a seam that silently falls through to a different screen is worse than one that fails loudly. | Seen | **Open** — QUA-31 |
+
+### The judgement A4 was for
+
+Nothing here is a ship blocker. The app is coherent, it is now accessible, it speaks Norwegian, and
+its icon is good. What the pass actually surfaces is that the *polish* items cluster on one screen —
+the globe, which is both the first thing a customer sees after onboarding and the screen the store
+listing leads with. Four of the six seen findings are there. That is where an hour of design time
+returns the most, and it is a better use of it than adopting Liquid Glass on an iOS 17 floor.
+
+
 ## Estimate
 
 **Before the external beta:** C1–C7 — the critical path is C1 → C2.
