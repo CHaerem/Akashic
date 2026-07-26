@@ -131,6 +131,26 @@ final class JourneyStore: ObservableObject {
         return await service.curate(photos: photos, journey: journey)
     }
 
+    /// How many distinct images a journey actually holds, and how many rows are redundant (DIFF-06).
+    ///
+    /// Kilimanjaro is 939 photo rows for about 449 unique images — the data debt D6 identified and
+    /// deliberately punted. It matters beyond tidiness because it gates the book: a 939-photo journey
+    /// with 449 unique images lays out into something nobody wants.
+    ///
+    /// This *reports* and does not collapse. Deleting a photograph on the strength of a distance
+    /// heuristic is not a decision to take on the user's behalf, so the redundant ids are handed back
+    /// for a surface to offer — the same accept-or-dismiss contract the rest of curation honours.
+    func duplicateReport(forJourneyID id: String,
+                         service: PhotoCurationService = PhotoCurationService())
+        async -> (unique: Int, redundant: Int, groups: [[String]]) {
+        let total = persistence.loadPhotos(forJourneyID: id).count
+        let result = await curationProposal(forJourneyID: id, service: service)
+        let groups = result.duplicateGroups.keys.sorted().compactMap { result.duplicateGroups[$0] }
+        return (unique: total - result.redundantCount,
+                redundant: result.redundantCount,
+                groups: groups)
+    }
+
     /// Accept a curation proposal's hero. Goes through `setPhotoHero`, which already enforces the
     /// single-hero invariant across the journey, so this is only deciding *which* photo.
     @discardableResult

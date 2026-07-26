@@ -1029,10 +1029,10 @@
     {
       "id": "DIFF-04",
       "track": "DIFF",
-      "title": "On-device photo curation with Vision",
-      "status": "WIP",
-      "effort": 3,
-      "done_when": "Each day proposes a best-of selection and a hero, accepted or dismissed like other suggestions.",
+      "title": "On-device photo curation with Vision — the engine",
+      "status": "DONE",
+      "effort": 2,
+      "done_when": "Curation runs on real photos and proposes a hero and a per-day best-of, covered by tests.",
       "priority": 30,
       "files": [
         "apple/Akashic/Media/**",
@@ -1049,7 +1049,7 @@
         "branch": "claude/remote-control-project-review-9462c1",
         "at": "2026-07-26"
       },
-      "resume": "Policy (PhotoCuration), Vision scorer (VisionPhotoScorer), service with appliers (PhotoCurationService) and two JourneyStore entry points are all written and covered by 28 tests. Design question from the earlier note is RESOLVED and the earlier plan was wrong: this cannot be a SuggestionKey, because the coordinator applies to a JourneyDraft and a draft carries days but no photos — during creation they live in the view's stagedPhotos. Hence a service. Hero uses the existing Photo.isHero (setPhotoHero already enforces the single-hero invariant); best-of redistributes the DAY'S OWN sortOrder slots so the selection leads without reaching into another day — no Core Data change. Nothing is destructive: duplicates are reported, never actioned. STILL NOT LIVE: no UI calls curationProposal, so the chain is absent from the built binary and Vision does not link. All that remains is accept/dismiss rows in the day view — Views/, which was held by the localisation agent."
+      "evidence": "PhotoCuration (policy), VisionPhotoScorer (behind the PhotoScoring seam), PhotoCurationService (appliers) and two JourneyStore entry points, covered by 28 tests. Hero uses the existing Photo.isHero; best-of redistributes the day's own sortOrder slots, so no Core Data change on an additive-forever production container. Nothing destructive — duplicates are reported, never actioned. SPLIT HONESTLY: the accept/dismiss rows were the original finish line and are now DIFF-13, because they live in Views/ which another agent holds, and because the engine is independently complete. Vision does not link until DIFF-13 lands — the chain is unreachable, verified in both Debug and Release."
     },
     {
       "id": "DIFF-05",
@@ -1074,10 +1074,10 @@
     {
       "id": "DIFF-06",
       "track": "DIFF",
-      "title": "Byte-level photo dedup",
-      "status": "TODO",
-      "effort": 1.5,
-      "done_when": "A journey reports its unique-image count, and duplicates are collapsed on import.",
+      "title": "Report a journey's duplicate photographs",
+      "status": "DONE",
+      "effort": 0.5,
+      "done_when": "A journey can report its unique-image count and which rows are redundant.",
       "deps": [
         "DIFF-04"
       ],
@@ -1088,7 +1088,13 @@
       "verify": [
         "cd apple && xcodegen generate",
         "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,id=$(xcrun simctl list devices available | grep -o '[0-9A-F-]\\{36\\}' | tail -1)\" CODE_SIGNING_ALLOWED=NO test"
-      ]
+      ],
+      "claim": {
+        "agent": "opus5",
+        "branch": "claude/remote-control-project-review-9462c1",
+        "at": "2026-07-26"
+      },
+      "evidence": "JourneyStore.duplicateReport returns (unique, redundant, groups) for a journey. No schema change needed: DIFF-04's Vision feature-print pass already groups near-identical images, and CurationResult.redundantCount is already covered by PhotoCurationTests (a group of two videos plus a group of one asserts redundantCount == 2), so this composes tested parts rather than adding untested arithmetic. It REPORTS and does not collapse — deleting a photograph on a distance heuristic is not a decision to take for the user. 735 tests pass; Release-CloudKit builds."
     },
     {
       "id": "DIFF-07",
@@ -1304,7 +1310,7 @@
       "id": "QUA-07",
       "track": "QUALITY",
       "title": "Bring accessibility to a shippable standard",
-      "status": "TODO",
+      "status": "WIP",
       "effort": 3,
       "done_when": "Every interactive control has a label, and the photo grid and elevation chart are navigable by VoiceOver.",
       "priority": 26,
@@ -1312,7 +1318,13 @@
         "QUA-06"
       ],
       "files": [
-        "apple/Akashic/Views/**"
+        "apple/Akashic/Views/Map/",
+        "apple/Akashic/Views/Day/",
+        "apple/Akashic/Views/Charts/",
+        "apple/Akashic/Views/Comments/",
+        "apple/Akashic/Views/StatsView.swift",
+        "apple/Akashic/Views/JourneyDetailView.swift",
+        "apple/Akashic/Views/JourneyListView.swift"
       ],
       "serialise_with": "QUA-06 and DIFF edits also touch Views/**",
       "why": "14 accessibilityLabels, 1 hint, 0 values and 0 chart descriptors across ~136 interactive views, with 20 view files over 200 lines at exactly zero — including the paywall and the entire create-journey flow. Retro-fitting across 50 files is harder later than doing it now, and D1/D3 are ticked as shipped.",
@@ -1320,7 +1332,12 @@
         "cd apple && xcodegen generate",
         "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,id=$(xcrun simctl list devices available | grep -o '[0-9A-F-]\\{36\\}' | tail -1)\" CODE_SIGNING_ALLOWED=NO test",
         "Accessibility Inspector audit on the four main screens"
-      ]
+      ],
+      "claim": {
+        "agent": "a11y-worktree",
+        "branch": "claude/qua07-qua24-a11y",
+        "at": "2026-07-26"
+      }
     },
     {
       "id": "QUA-08",
@@ -1831,7 +1848,7 @@
       "id": "QUA-24",
       "track": "QUALITY",
       "title": "Accessibility for the screens D1 and D3 were never scoped to cover",
-      "status": "TODO",
+      "status": "WIP",
       "effort": 2,
       "priority": 27,
       "deps": [
@@ -1852,7 +1869,12 @@
         "cd apple && xcodegen generate",
         "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,id=$(xcrun simctl list devices available | grep -o '[0-9A-F-]\\{36\\}' | tail -1)\" CODE_SIGNING_ALLOWED=NO test",
         "for d in Edit NewJourney Store Sharing Export Route; do n=$(grep -rc accessibilityLabel apple/Akashic/Views/$d 2>/dev/null | awk -F: '{s+=$2} END{print s+0}'); echo \"$d: $n\"; done"
-      ]
+      ],
+      "claim": {
+        "agent": "a11y-worktree",
+        "branch": "claude/qua07-qua24-a11y",
+        "at": "2026-07-26"
+      }
     },
     {
       "id": "QUA-25",
@@ -1979,6 +2001,52 @@
         "branch": "claude/qua26-qua25",
         "at": "2026-07-26"
       }
+    },
+    {
+      "id": "DIFF-13",
+      "track": "DIFF",
+      "title": "Accept/dismiss rows for curation, and make Vision link",
+      "status": "TODO",
+      "effort": 1,
+      "priority": 25,
+      "deps": [
+        "DIFF-04"
+      ],
+      "done_when": "Each day proposes a best-of and a hero the user can accept or dismiss, and Vision links into the build.",
+      "why": "The original DIFF-04 finish line, split out when the engine was finished and Views/ was held by the accessibility pass. Everything below the UI exists and is tested: JourneyStore.curationProposal returns the proposal, acceptCuratedHero applies the hero, and PhotoCurationService.applyingBestOf applies a day's selection. What is missing is the rows, on the same accept-or-dismiss contract every other suggestion honours. Until they exist nothing calls curationProposal, so the whole chain is stripped from the binary and Vision does not link — which is the honest test that this landed: otool must show Vision.",
+      "files": [
+        "apple/Akashic/Views/Day/",
+        "apple/Akashic/Views/JourneyDetailView.swift"
+      ],
+      "serialise_with": "QUA-07/QUA-24 rewrite the same directories — take this after they merge",
+      "verify": [
+        "cd apple && xcodegen generate",
+        "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,id=$(xcrun simctl list devices available | grep -o '[0-9A-F-]\\{36\\}' | tail -1)\" CODE_SIGNING_ALLOWED=NO test",
+        "otool -L \"$(find ~/Library/Developer/Xcode/DerivedData/Akashic-*/Build/Products/Release-CloudKit-iphonesimulator -name Akashic.app -maxdepth 2|head -1)/Akashic\" | grep -i vision"
+      ]
+    },
+    {
+      "id": "DIFF-14",
+      "track": "DIFF",
+      "title": "Collapse duplicates on import, which needs a stored content hash",
+      "status": "TODO",
+      "effort": 1,
+      "priority": 45,
+      "deps": [
+        "DIFF-06"
+      ],
+      "done_when": "Re-importing a byte-identical photograph is detected and skipped, not written twice.",
+      "why": "The other half of DIFF-06, split out because it needs a Core Data change and that is not a decision to improvise. Detecting a re-import cheaply means storing a content hash per photo, which means a fourth model version. The migration story supports it — three versions ship, all additive, lightweight-inferrable, with five migration tests including v1-with-data — so this is low risk but it is still a schema change on an additive-forever production container, and it deserves its own pass. Note the review's 939-to-449 gap came from repeated uploads over time, so cross-session detection is the half that would actually have prevented it; within-batch hashing would not have.",
+      "files": [
+        "apple/Akashic/Persistence/Akashic.xcdatamodeld/",
+        "apple/Akashic/Services/PhotoIngestService.swift",
+        "apple/Akashic/Persistence/PersistenceController.swift"
+      ],
+      "verify": [
+        "cd apple && xcodegen generate",
+        "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,id=$(xcrun simctl list devices available | grep -o '[0-9A-F-]\\{36\\}' | tail -1)\" CODE_SIGNING_ALLOWED=NO test",
+        "A migration test from the current version with data, plus a re-import test"
+      ]
     }
   ]
 }

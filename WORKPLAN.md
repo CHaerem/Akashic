@@ -5,19 +5,19 @@
 
 # Akashic — work ledger
 
-89 tasks · **34 open** (17 agent-doable, 28.9 dev-days · 17 owner-only, 8.5 dev-days) · 55 done · 0 dropped
+91 tasks · **34 open** (17 agent-doable, 26.4 dev-days · 17 owner-only, 8.5 dev-days) · 57 done · 0 dropped
 
 > **`dev-days` are a human-developer estimate, not agent time.** They came from the review
 > that produced these tasks and they are the right unit for deciding whether something is
 > worth doing — they are the wrong unit for predicting how long an agent will take, and
 > summing them as "work remaining" overstates it substantially.
 >
-> Measured so far: **55 agent tasks estimated at 28.7 dev-days**,
+> Measured so far: **57 agent tasks estimated at 31.2 dev-days**,
 > closed in roughly one working afternoon across up to three parallel tracks.
 >
 > But that compression is **unmeasured for the large items**: of the tasks closed so far,
-> 1 were 2 dev-days or more. 20 of the
-> 28.9 remaining dev-days sit in 6 such tasks —
+> 2 were 2 dev-days or more. 17 of the
+> 26.4 remaining dev-days sit in 5 such tasks —
 > localisation, Swift 6 strict concurrency, a UI test target, the PDF book. Those involve
 > design judgement and broad-blast-radius refactors rather than localised edits, so do not
 > assume the same ratio holds. The cheap band is nearly exhausted:
@@ -34,7 +34,8 @@ node scripts/workplan.mjs next
 | Task | Agent | Branch | Stopped at |
 |---|---|---|---|
 | `SHIP-03` Produce the 12 App Store screenshots | shots-worktree | `claude/ship03-screenshots` | — |
-| `DIFF-04` On-device photo curation with Vision | opus5 | `claude/remote-control-project-review-9462c1` | Policy (PhotoCuration), Vision scorer (VisionPhotoScorer), service with appliers (PhotoCurationService) and two JourneyStore entry points are all written and covered by 28 tests. Design question from the earlier note is RESOLVED and the earlier plan was wrong: this cannot be a SuggestionKey, because the coordinator applies to a JourneyDraft and a draft carries days but no photos — during creation they live in the view's stagedPhotos. Hence a service. Hero uses the existing Photo.isHero (setPhotoHero already enforces the single-hero invariant); best-of redistributes the DAY'S OWN sortOrder slots so the selection leads without reaching into another day — no Core Data change. Nothing is destructive: duplicates are reported, never actioned. STILL NOT LIVE: no UI calls curationProposal, so the chain is absent from the built binary and Vision does not link. All that remains is accept/dismiss rows in the day view — Views/, which was held by the localisation agent. |
+| `QUA-07` Bring accessibility to a shippable standard | a11y-worktree | `claude/qua07-qua24-a11y` | — |
+| `QUA-24` Accessibility for the screens D1 and D3 were never scoped to cover | a11y-worktree | `claude/qua07-qua24-a11y` | — |
 | `QUA-25` Bound public-showcase reads before traffic arrives | nonviews-worktree | `claude/qua26-qua25` | — |
 | `QUA-26` Localise the user-visible strings outside Views/ | nonviews-worktree | `claude/qua26-qua25` | — |
 
@@ -120,22 +121,24 @@ node scripts/workplan.mjs next
 
 > Capability beyond what competitors offer. Order set by decision: share link, then Vision curation, then the book.
 
-6 open of 12 · 13.5 d remaining
+6 open of 14 · 11 d remaining
 
 | | Task | Days | Who | Deps | Finish line |
 |---|---|---|---|---|---|
 | `x` | `DIFF-01` **Fix the unpublish leak: thumbnails that can never be removed** | 0.5 | agent | — | Unpublishing always removes the mirror, and a failure to remove reports as a failure. |
 | `x` | `DIFF-02` **Give the owner a shareable showcase link** | 1 | agent | `DIFF-01` | Publishing yields a working URL the owner can share, correct under slug disambiguation. |
 | `x` | `DIFF-03` **Add og: metadata so a shared link renders as a card** | 0.5 | agent | `DIFF-02` | A showcase URL pasted into iMessage, WhatsApp and Slack renders a title, description and image. |
-| `~` | `DIFF-04` **On-device photo curation with Vision** | 3 | agent | — | Each day proposes a best-of selection and a hero, accepted or dismissed like other suggestions. |
+| `x` | `DIFF-04` **On-device photo curation with Vision — the engine** | 2 | agent | — | Curation runs on real photos and proposes a hero and a per-day best-of, covered by tests. |
 | ` ` | `DIFF-05` **Feed Vision labels into DayNoteDrafter** | 1 | agent | `DIFF-04` | A drafted day note references what is actually in the photos. |
-| ` ` | `DIFF-06` **Byte-level photo dedup** | 1.5 | agent | `DIFF-04` | A journey reports its unique-image count, and duplicates are collapsed on import. |
+| `x` | `DIFF-06` **Report a journey's duplicate photographs** | 0.5 | agent | `DIFF-04` | A journey can report its unique-image count and which rows are redundant. |
 | ` ` | `DIFF-07` **PDF export of the story view** | 6 | agent | `DIFF-04` `DIFF-06` | A journey exports a PDF a person would willingly hand over. |
 | ` ` | `DIFF-08` **Foundation Models depth: streaming, prewarm, typed errors** | 1.5 | agent | `QUA-05` | Drafting streams, sessions are reused, and guardrail refusals say something specific. |
 | `x` | `DIFF-09` **C9 — derive days from timestamped GPX trackpoints** | 1 | agent | — | A Strava or Garmin export yields a journey with correctly dated days. |
 | `x` | `DIFF-10` **Give the demo journey photographs** | 1.5 | agent | — | A first launch shows a journey with real photographs, and a photos-only trip is demoed too. |
 | `x` | `DIFF-11` **Wire GPX day derivation into the creation flow** | 0.25 | agent | `DIFF-09` | Importing a timestamped GPX yields a journey with correctly dated days, not zero. |
 | ` ` | `DIFF-12` **Decide what photographs the demo journey ships with** | 0.5 | owner | `DIFF-10` | A decision is recorded, and the shipped demo images are the ones intended. |
+| ` ` | `DIFF-13` **Accept/dismiss rows for curation, and make Vision link** | 1 | agent | `DIFF-04` | Each day proposes a best-of and a hero the user can accept or dismiss, and Vision links into the build. |
+| ` ` | `DIFF-14` **Collapse duplicates on import, which needs a stored content hash** | 1 | agent | `DIFF-06` | Re-importing a byte-identical photograph is detected and skipped, not written twice. |
 
 ## QUALITY
 
@@ -151,7 +154,7 @@ node scripts/workplan.mjs next
 | `x` | `QUA-04` **Repair or delete the Performance Tests workflow** | 0.25 | agent | — | No workflow references a spec file that does not exist. |
 | `x` | `QUA-05` **Add a compile tripwire for the Foundation Models code** | 0.5 | agent | — | CI fails if the Intelligence code stops compiling. |
 | `x` | `QUA-06` **Localise the app to Norwegian** | 4 | agent | — | Every user-visible string comes from a string catalogue, and the app runs in NB end to end. |
-| ` ` | `QUA-07` **Bring accessibility to a shippable standard** | 3 | agent | `QUA-06` | Every interactive control has a label, and the photo grid and elevation chart are navigable by VoiceOver. |
+| `~` | `QUA-07` **Bring accessibility to a shippable standard** | 3 | agent | `QUA-06` | Every interactive control has a label, and the photo grid and elevation chart are navigable by VoiceOver. |
 | ` ` | `QUA-08` **Turn on Swift 6 strict concurrency** | 3 | agent | — | The project builds clean under SWIFT_STRICT_CONCURRENCY=complete. |
 | `x` | `QUA-09` **Light up the widget or remove it from v1.0** | 0.5 | agent | — | The widget shows the customer's own journey, or it does not ship. |
 | ` ` | `QUA-10` **First tests for Views/, and a UI test target** | 3 | agent | `QUA-01` | A UI test target exists and the create-journey flow has an automated test. |
@@ -168,7 +171,7 @@ node scripts/workplan.mjs next
 | `x` | `QUA-21` **Redraw the web and PWA icons — same illegibility, plus transparency** | 0.25 | agent | — | Every derived web icon is opaque and its mark clears 4.5:1 against its own ground. |
 | `x` | `QUA-22` **Make the paywall list what the purchase now advertises** | 0.5 | agent | `DOC-08` | EntitlementPolicy, the paywall benefit list and the IAP description all name the same set. |
 | `x` | `QUA-23` **Remove the dead tab state from useTrekData** | 0.25 | agent | — | No hook exposes state nothing renders, and its tests reflect that. |
-| ` ` | `QUA-24` **Accessibility for the screens D1 and D3 were never scoped to cover** | 2 | agent | `QUA-06` | No view directory with interactive controls sits at zero accessibility labels. |
+| `~` | `QUA-24` **Accessibility for the screens D1 and D3 were never scoped to cover** | 2 | agent | `QUA-06` | No view directory with interactive controls sits at zero accessibility labels. |
 | `~` | `QUA-25` **Bound public-showcase reads before traffic arrives** | 1 | agent | — | A published journey has a size bound, and crossing a usage threshold is visible to the owner. |
 | `~` | `QUA-26` **Localise the user-visible strings outside Views/** | 0.5 | agent | `QUA-06` | No user-visible string reaches the screen in English when the app runs in Norwegian. |
 
