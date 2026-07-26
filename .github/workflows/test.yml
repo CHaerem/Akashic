@@ -14,6 +14,26 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # The work ledger is the project's only true statement of status. This gate fails if
+  # docs/workplan/tasks.json is invalid, if two in-flight tasks own overlapping files, or
+  # if WORKPLAN.md has drifted from the ledger — which is what stops progress being made
+  # without the plan being updated. No dependencies, so it runs in seconds.
+  workplan:
+    name: Work Ledger
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Validate ledger and check WORKPLAN.md is in sync
+        run: node scripts/workplan.mjs check
+
   unit:
     name: Unit Tests
     runs-on: ubuntu-latest
