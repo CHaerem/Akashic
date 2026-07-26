@@ -1363,7 +1363,7 @@
       "id": "QUA-08",
       "track": "QUALITY",
       "title": "Turn on Swift 6 strict concurrency",
-      "status": "TODO",
+      "status": "WIP",
       "effort": 3,
       "done_when": "The project builds clean under SWIFT_STRICT_CONCURRENCY=complete.",
       "files": [
@@ -1375,7 +1375,12 @@
       "verify": [
         "cd apple && xcodegen generate",
         "cd apple && xcodebuild -scheme Akashic SWIFT_STRICT_CONCURRENCY=complete CODE_SIGNING_ALLOWED=NO build 2>&1 | grep -c warning:"
-      ]
+      ],
+      "claim": {
+        "agent": "opus5",
+        "branch": "claude/remote-control-project-review-9462c1",
+        "at": "2026-07-26"
+      }
     },
     {
       "id": "QUA-09",
@@ -2219,6 +2224,43 @@
         "at": "2026-07-26"
       },
       "evidence": "The AKASHIC_SCREEN switch no longer has a silent default: an unrecognised value now preconditionFailures in DEBUG and names both the value and the known seams, while Release keeps the safe fallback so no customer can trap over an env var. Found during A4 when =settings and =paywall rendered the globe instead. NOTE the root cause of my own confusion was different and worse, and is now in CLAUDE.md: 'find DerivedData/Akashic-* | head -1' handed me another worktree's build from three hours earlier — there were seven DerivedData directories from parallel agent worktrees. The app ran, the screenshot looked plausible, and it showed code I had not written."
+    },
+    {
+      "id": "QUA-32",
+      "track": "QUALITY",
+      "title": "Theme.accent fails WCAG as text in Light Mode, and its own comment says otherwise",
+      "status": "TODO",
+      "effort": 0.75,
+      "priority": 36,
+      "done_when": "Accent-coloured TEXT reaches at least 4.5:1 on a Light-Mode systemBackground (3:1 for large text), and Theme.swift's comment states what was measured rather than an assumption.",
+      "why": "Measured, not guessed: Theme.accent is Color(red:0.56,green:0.62,blue:1.0), which is 2.47:1 against a Light-Mode systemBackground and 8.51:1 against a Dark one. WCAG AA wants 4.5:1 for body text and 3:1 even for large text, so the light case fails both. QUA-29's accessibility audit independently measured 2.45:1 and flags it on every screen. The comment at apple/Akashic/Views/Theme.swift:32 asserts this periwinkle 'already reads correctly on both a light and a dark systemBackground' — it is correct for exactly one of the two. That comment was almost certainly TRUE when the app was dark-only; the Light Mode migration that made `background` follow the system appearance invalidated it and nobody re-measured. Scope is narrower than it sounds: 74 of the 174 Theme.accent references are foregrounds and only those fail. The 36 fill/tint uses are fine, because Theme.onAccent is black on accent at 8.51:1. The likely fix is a dynamic accent that darkens in Light Mode (or a separate accentText token), which is why this is owner-visible design rather than a mechanical edit. Apple's own .secondaryLabel (3.45:1) and .tertiaryLabel (1.74:1) also fail the audit, but those are the system's semantic tiers and departing from them is a different and bigger decision — explicitly NOT in this task.",
+      "files": [
+        "apple/Akashic/Views/Theme.swift"
+      ],
+      "verify": [
+        "cd apple && xcodegen generate",
+        "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,id=$(xcrun simctl list devices available | grep -o '[0-9A-F-]\\{36\\}' | tail -1)\" CODE_SIGNING_ALLOWED=NO test",
+        "python3 - <<'EOF'\ndef lum(r,g,b):\n f=lambda c: c/12.92 if c<=0.03928 else ((c+0.055)/1.055)**2.4\n return 0.2126*f(r)+0.7152*f(g)+0.0722*f(b)\n# assert the chosen light-mode accent reaches 4.5:1 against white\nEOF",
+        "cd apple && xcodebuild ... -only-testing:AkashicUITests/AccessibilityAuditTests test 2>&1 | grep -c 'Theme.accent'"
+      ]
+    },
+    {
+      "id": "QUA-33",
+      "track": "QUALITY",
+      "title": "The local StoreKit test configuration ships inside the Release-CloudKit app bundle",
+      "status": "TODO",
+      "effort": 0.1,
+      "priority": 37,
+      "done_when": "Akashic.storekit is absent from the built Release-CloudKit Akashic.app, and the StoreKit tests still run.",
+      "why": "Verified against a real built bundle, not the spec: Akashic.storekit sits at the root of Release-CloudKit-iphonesimulator/Akashic.app. It is swept in by `sources: - path: Akashic` in project.yml, which takes the whole directory including Store/. It exposes _developerTeamID 9LVCB72DT8, _applicationInternalID 0, and a test price of 149.00 with referenceName 'Akashic Complete'. None of that is a credential and the Team ID is public in any provisioning profile, so this is hygiene rather than a security hole — but a local StoreKit TEST configuration inside a shipping binary can mislead anyone inspecting the app about real pricing, and it is dead weight in every download. Exclude it from the target's sources while keeping the scheme's StoreKitConfigurationFileReference, which points at the repo path and does not need the file bundled. Assert against the BUILT bundle, per the INFOPLIST trap: the spec saying it is excluded is not evidence.",
+      "files": [
+        "apple/project.yml"
+      ],
+      "verify": [
+        "cd apple && xcodegen generate",
+        "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,id=$(xcrun simctl list devices available | grep -o '[0-9A-F-]\\{36\\}' | tail -1)\" CODE_SIGNING_ALLOWED=NO test",
+        "! ls \"$(find ~/Library/Developer/Xcode/DerivedData/Akashic-*/Build/Products/Release-CloudKit-iphonesimulator -name Akashic.app -maxdepth 2 | head -1)\"/Akashic.storekit"
+      ]
     }
   ]
 }
