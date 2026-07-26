@@ -148,6 +148,42 @@ final class DemoJourneyTests: XCTestCase {
                      "a free user must still be able to create their OWN first journey")
     }
 
+    // MARK: - The SHIP-03 screenshot seam hides the badge and nothing else
+
+    /// `AKASHIC_HIDE_SAMPLE_BADGE=1` exists so a store screenshot of the bundled fixtures is not
+    /// plastered with "SAMPLE" pills. The danger in a seam like that is scope creep — if it also
+    /// made `isSampleJourney` report false, the demo would start counting against the free tier,
+    /// become eligible for sync, and its delete dialog would claim to remove it from iCloud. Assert
+    /// that the badge is the ONLY thing it moves.
+    func testHidingTheSampleBadgeDoesNotChangeWhatASampleJourneyIs() throws {
+        let storeURL = makeTempStoreURL()
+        let defaults = makeTempDefaults()
+        let controller = PersistenceController(mode: .local, seed: true, fixtureBundle: bundle,
+                                                storeURL: storeURL, defaults: defaults)
+        let store = JourneyStore(persistence: controller)
+
+        XCTAssertTrue(store.showsSampleBadge("demo-kilimanjaro", badgesVisible: true),
+                      "a normal launch badges the bundled demo")
+        XCTAssertFalse(store.showsSampleBadge("demo-kilimanjaro", badgesVisible: false),
+                       "a screenshot run does not")
+
+        // The three things the badge must NOT drag along with it.
+        XCTAssertTrue(store.isSampleJourney("demo-kilimanjaro"),
+                      "it is still the sample — the delete copy reads this, and must stay honest")
+        XCTAssertTrue(controller.isSeededFixture(journeyID: "demo-kilimanjaro"),
+                      "still sync-excluded")
+        XCTAssertEqual(store.billableOwnedJourneyCount, 0,
+                       "still free-tier-exempt")
+    }
+
+    func testSampleBadgeSeamReadsOnlyItsOwnEnvVar() {
+        XCTAssertTrue(JourneyStore.sampleBadgesVisible(environment: [:]),
+                      "badges are visible by default — a normal launch sets nothing")
+        XCTAssertFalse(JourneyStore.sampleBadgesVisible(environment: ["AKASHIC_HIDE_SAMPLE_BADGE": "1"]))
+        XCTAssertTrue(JourneyStore.sampleBadgesVisible(environment: ["AKASHIC_HIDE_SAMPLE_BADGE": "0"]),
+                      "only an explicit \"1\" hides them")
+    }
+
     // MARK: - Deleting it stays deleted across relaunches (the resurrection bug this guards against)
 
     func testDeletingTheDemoJourneyDoesNotReseedOnNextLaunch() throws {

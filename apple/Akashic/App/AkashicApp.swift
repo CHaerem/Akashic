@@ -227,6 +227,7 @@ struct AkashicApp: App {
     /// or a journey's photo grid without touching `RootView`.
     ///   AKASHIC_SCREEN=photos                         — imported-photos journey list
     ///   AKASHIC_SCREEN=photogrid + AKASHIC_PHOTOS_JOURNEY=<id> — that journey's thumbnail grid
+    ///   AKASHIC_SCREEN=exportsheet                    — JourneyExportSheet (store screenshot)
     @ViewBuilder
     private var rootScreen: some View {
         let env = ProcessInfo.processInfo.environment
@@ -238,6 +239,10 @@ struct AkashicApp: App {
         case "editsheet":
             // Screenshot harness for the Phase 3 editing sheets (see EditScreenshotHarness).
             EditScreenshotHarness(kind: env["AKASHIC_EDIT_SCREENSHOT"] ?? "photo")
+        case "exportsheet":
+            // SHIP-03 store screenshot: JourneyExportSheet has no headlessly reachable route of
+            // its own (see ExportScreenshotHarness).
+            ExportScreenshotHarness()
         case "widgets":
             // Debug harness that renders the WidgetKit views for screenshots (see WidgetGallery).
             WidgetGalleryHarness(snapshots: store.journeys.map { WidgetSnapshot.make(from: $0) })

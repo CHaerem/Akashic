@@ -51,7 +51,9 @@ struct DayDetailSheet: View {
                         onPhotoTap: { index in
                             lightbox = LightboxData(
                                 photos: dayPhotos, startIndex: index,
-                                dayLabel: "Day \(camp.dayNumber)", dateLabel: dateLabel(camp)
+                                dayLabel: String(localized: "Day \(camp.dayNumber)",
+                                                 comment: "Photo lightbox: badge naming the day a photo belongs to."),
+                                dateLabel: dateLabel(camp)
                             )
                         },
                         onAddPhoto: { showImport = true },

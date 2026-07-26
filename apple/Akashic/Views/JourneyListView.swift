@@ -27,7 +27,7 @@ struct JourneyListView: View {
                 } else {
                     ForEach(store.journeys) { journey in
                         NavigationLink(value: journey.id) {
-                            JourneyCard(journey: journey, isSample: store.isSampleJourney(journey.id))
+                            JourneyCard(journey: journey, isSample: store.showsSampleBadge(journey.id))
                         }
                         .buttonStyle(.plain)
                     }

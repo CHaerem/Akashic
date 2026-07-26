@@ -449,7 +449,10 @@ struct GlobeExperienceView: View {
         let data = LightboxData(
             photos: list.isEmpty ? journeyPhotos : list,
             startIndex: index,
-            dayLabel: mapPhoto.dayNumber.map { "Day \($0)" }
+            dayLabel: mapPhoto.dayNumber.map {
+                String(localized: "Day \($0)",
+                       comment: "Photo lightbox: badge naming the day a photo belongs to.")
+            }
         )
         // Route to the day cover (presented from the sheet) when a day sheet is up, else the
         // overview cover on the map overlays.
@@ -483,7 +486,9 @@ struct GlobeExperienceView: View {
             let dayPhotos = journeyPhotos.filter { photoDayByID[$0.id] == day }
             let list = dayPhotos.isEmpty ? journeyPhotos : dayPhotos
             if !list.isEmpty {
-                let data = LightboxData(photos: list, startIndex: 0, dayLabel: "Day \(day)")
+                let label = String(localized: "Day \(day)",
+                                   comment: "Photo lightbox: badge naming the day a photo belongs to.")
+                let data = LightboxData(photos: list, startIndex: 0, dayLabel: label)
                 if controller.selectedDayIndex != nil {
                     dayLightbox = data
                 } else {
@@ -603,7 +608,7 @@ struct GlobeExperienceView: View {
                     Button {
                         controller.selectJourney(journey)
                     } label: {
-                        JourneyGlobeCard(journey: journey, isSample: store.isSampleJourney(journey.id))
+                        JourneyGlobeCard(journey: journey, isSample: store.showsSampleBadge(journey.id))
                     }
                     .buttonStyle(.plain)
                 }
