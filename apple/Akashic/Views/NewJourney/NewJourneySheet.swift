@@ -324,7 +324,12 @@ struct NewJourneySheet: View {
     private var nameSection: some View {
         VStack(alignment: .leading, spacing: 16) {
             GlassField(label: "Name", systemImage: "flag") {
-                GlassTextField(placeholder: "e.g. Kilimanjaro — Lemosho Route", text: $draft.name)
+                // QUA-24: `accessibilityLabel` because the placeholder is an EXAMPLE. SwiftUI takes
+                // a placeholder as the field's label, so this one announced as "e. g. Kilimanjaro —
+                // Lemosho Route" — a plausible-sounding value read as if it were the field's name,
+                // on the one field the journey cannot be created without.
+                GlassTextField(placeholder: "e.g. Kilimanjaro — Lemosho Route", text: $draft.name,
+                               accessibilityLabel: "Journey name")
                     .focused($isNameFieldFocused)
                     // Set just after APPEARANCE, not at the moment the chooser hands off: the
                     // field doesn't exist yet when "Start with just a name" is tapped (review is
@@ -355,6 +360,7 @@ struct NewJourneySheet: View {
                         .background(Theme.accentSoft, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel(Text("Use the suggested name, \(suggestion)"))
             }
         }
     }
@@ -369,7 +375,8 @@ struct NewJourneySheet: View {
     private var countrySection: some View {
         GlassField(label: "Country", systemImage: "globe") {
             VStack(alignment: .leading, spacing: 4) {
-                GlassTextField(placeholder: "Country", text: countryBinding)
+                GlassTextField(placeholder: "Country", text: countryBinding,
+                               accessibilityLabel: "Country")
                 // C3: country is structural (from the route/photo centroid) and applied directly —
                 // this caption is the "visibly" half of "applied by default, visibly, reversibly".
                 // Reversal is just editing the field, which is why there's no separate Remove here
@@ -401,14 +408,17 @@ struct NewJourneySheet: View {
             VStack(alignment: .leading, spacing: 10) {
                 if isEditingDates {
                     VStack(spacing: 10) {
-                        dateRow(label: "Start", isOn: $hasStart, date: $startDate)
-                        dateRow(label: "End", isOn: $hasEnd, date: $endDate)
+                        dateRow(label: "Start", isOn: $hasStart, date: $startDate,
+                                toggleLabel: "Set a start date", pickerLabel: "Start date")
+                        dateRow(label: "End", isOn: $hasEnd, date: $endDate,
+                                toggleLabel: "Set an end date", pickerLabel: "End date")
                     }
                     .padding(12)
                     .background(Theme.surface, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                     .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Theme.hairline, lineWidth: 1))
                     Button("Done") { isEditingDates = false }
                         .font(.caption.weight(.semibold)).foregroundStyle(Theme.accent)
+                        .accessibilityLabel("Done editing dates")
                 } else {
                     HStack(alignment: .top) {
                         VStack(alignment: .leading, spacing: 2) {
@@ -418,9 +428,14 @@ struct NewJourneySheet: View {
                                 Text(datesProvenance).font(.caption2).foregroundStyle(Theme.textTertiary)
                             }
                         }
+                        // The range and where it came from are one fact ("29 Sep – 9 Oct 2023, from
+                        // your photos"), and the provenance is meaningless read on its own.
+                        .accessibilityElement(children: .combine)
                         Spacer()
+                        // Bare "Edit" beside three other sections that could equally be edited.
                         Button("Edit", action: beginEditingDates)
                             .font(.caption.weight(.semibold)).foregroundStyle(Theme.accent)
+                            .accessibilityLabel("Edit dates")
                     }
                 }
             }
@@ -445,16 +460,28 @@ struct NewJourneySheet: View {
         isEditingDates = true
     }
 
-    private func dateRow(label: LocalizedStringKey, isOn: Binding<Bool>, date: Binding<Date>) -> some View {
+    /// QUA-24: `toggleLabel` / `pickerLabel` exist because the visible `label` is a one-word column
+    /// heading ("Start", "End") shared by the toggle beside it and the picker beside that — and the
+    /// picker's own label used to be `""`. A `DatePicker` with an empty label announces the date it
+    /// holds and nothing about which date that is, so a VoiceOver user editing the trip's dates heard
+    /// "29 September 2023, date picker" twice and could not tell start from end.
+    ///
+    /// The fix is a real label plus `.labelsHidden()`, not `""` plus `.accessibilityLabel` —
+    /// `.labelsHidden()` removes the label from the layout while leaving it as the control's
+    /// accessibility label, which is what the modifier is for. It also keeps `""` out of the string
+    /// catalogue, where an empty key is noise no translator can act on.
+    private func dateRow(label: LocalizedStringKey, isOn: Binding<Bool>, date: Binding<Date>,
+                         toggleLabel: LocalizedStringKey, pickerLabel: LocalizedStringKey) -> some View {
         HStack {
             Toggle(isOn: isOn) {
                 Text(label).font(.subheadline).foregroundStyle(Theme.textPrimary)
             }
             .tint(Theme.accent)
             .fixedSize()
+            .accessibilityLabel(toggleLabel)
             Spacer()
             if isOn.wrappedValue {
-                DatePicker("", selection: date, displayedComponents: .date)
+                DatePicker(pickerLabel, selection: date, displayedComponents: .date)
                     .labelsHidden()
                     .environment(\.timeZone, TimeZone(identifier: "UTC")!)
             }
@@ -689,6 +716,7 @@ struct NewJourneySheet: View {
                             ProgressView().tint(Theme.accent)
                         } else {
                             Image(systemName: "calendar.badge.plus").font(.title3).foregroundStyle(Theme.accent)
+                                .accessibilityHidden(true)
                         }
                         Text(photoPickerLabel)
                             .font(.subheadline.weight(.semibold))
@@ -704,10 +732,18 @@ struct NewJourneySheet: View {
                     )
                 }
                 .disabled(isStagingPhotos)
+                // A `PhotosPicker` carries no button trait of its own — see `NewJourneyChooser`.
+                .accessibilityAddTraits(.isButton)
+                .accessibilityHint("Opens your photo library")
 
                 if isStagingPhotos {
                     ProgressView(value: Double(photoStageDone), total: Double(max(photoStageTotal, 1)))
                         .tint(Theme.accent)
+                        // A determinate `ProgressView` announces a bare percentage. The counts are
+                        // what the user is waiting on, and a long import is where they most need to
+                        // know something is still happening.
+                        .accessibilityLabel("Preparing photos")
+                        .accessibilityValue(Text("\(photoStageDone) of \(photoStageTotal)"))
                 }
                 if !stagedPhotos.isEmpty {
                     Text(stagedPhotosSummary)
@@ -769,11 +805,15 @@ struct NewJourneySheet: View {
                     .foregroundStyle(Theme.accent)
             }
             .buttonStyle(.plain)
+            .accessibilityHint("Opens the Akashic Complete purchase sheet")
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Theme.surface, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Theme.hairline, lineWidth: 1))
+        // The count and the explanation are one message; splitting them puts "12 photos couldn't be
+        // added" on its own with no reason attached.
+        .accessibilityElement(children: .contain)
     }
 
     /// Stage each picked item through `PhotoIngestService.ingest(pickerItem:journeyId:sortOrder:)`,
@@ -946,6 +986,7 @@ struct NewJourneySheet: View {
                     HStack(spacing: 8) {
                         if suggestions.isRunning {
                             ProgressView().controlSize(.small).tint(Theme.accent)
+                                .accessibilityHidden(true)
                             Text("Looking for suggestions…")
                                 .font(.caption).foregroundStyle(Theme.textTertiary)
                         }
@@ -954,6 +995,7 @@ struct NewJourneySheet: View {
                             Button("Accept all", action: acceptAllSuggestions)
                                 .font(.caption.weight(.semibold))
                                 .foregroundStyle(Theme.accent)
+                                .accessibilityLabel(Text("Accept all \(pending.count) suggestions"))
                         }
                     }
                     ForEach(pending, id: \.self) { key in
@@ -968,10 +1010,15 @@ struct NewJourneySheet: View {
         }
     }
 
+    /// QUA-24: the two controls here are the whole point of the suggestions panel and were two
+    /// unlabelled glyphs. With four or five suggestions pending, VoiceOver read the list as a wall of
+    /// identical anonymous buttons — and the destructive one (dismiss) came first, so the cheapest
+    /// guess was also the wrong one. Each now names the suggestion it acts on.
     private func suggestionRow(_ key: SuggestionKey) -> some View {
-        HStack(spacing: 10) {
+        let title = suggestions.title(for: key, in: draft)
+        return HStack(spacing: 10) {
             VStack(alignment: .leading, spacing: 2) {
-                Text(suggestions.title(for: key, in: draft))
+                Text(title)
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(Theme.textPrimary)
                 if let subtitle = suggestions.subtitle(for: key, in: draft), !subtitle.isEmpty {
@@ -980,15 +1027,18 @@ struct NewJourneySheet: View {
                         .lineLimit(2)
                 }
             }
+            .accessibilityElement(children: .combine)
             Spacer()
             Button { suggestions.dismiss(key) } label: {
                 Image(systemName: "xmark.circle.fill").foregroundStyle(Theme.textTertiary)
             }
             .buttonStyle(.plain)
+            .accessibilityLabel(Text("Dismiss \(title)"))
             Button { accept(key) } label: {
                 Image(systemName: "checkmark.circle.fill").foregroundStyle(Theme.accent)
             }
             .buttonStyle(.plain)
+            .accessibilityLabel(Text("Accept \(title)"))
         }
         .padding(10)
         .background(Theme.accentSoft, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
@@ -1041,6 +1091,7 @@ struct NewJourneySheet: View {
                 Button(action: addDay) {
                     HStack(spacing: 8) {
                         Image(systemName: "plus.circle.fill").foregroundStyle(Theme.accent)
+                            .accessibilityHidden(true)
                         Text("Add day").font(.subheadline.weight(.semibold)).foregroundStyle(Theme.accent)
                         Spacer()
                     }
@@ -1052,6 +1103,10 @@ struct NewJourneySheet: View {
         }
     }
 
+    /// QUA-24: three unlabelled glyph buttons per day, repeated once per day. On a ten-day trip that
+    /// was thirty anonymous "button" announcements in a row, and one of them deletes a day. Each is
+    /// now scoped to the day it acts on, and the number bubble is folded into the name field's label
+    /// rather than being read as a lone digit before it.
     private func dayRow(index: Int, day: Binding<DraftDay>) -> some View {
         HStack(spacing: 10) {
             Text("\(index + 1)")
@@ -1059,10 +1114,12 @@ struct NewJourneySheet: View {
                 .foregroundStyle(Theme.accent)
                 .frame(width: 24, height: 24)
                 .background(Theme.accentSoft, in: Circle())
+                .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
                 TextField("Day name", text: day.name)
                     .textFieldStyle(.plain)
                     .foregroundStyle(Theme.textPrimary)
+                    .accessibilityLabel(Text("Name of day \(index + 1)"))
                 if let label = day.wrappedValue.dateLabel {
                     Text(label).font(.caption2).foregroundStyle(Theme.textTertiary)
                 }
@@ -1072,15 +1129,18 @@ struct NewJourneySheet: View {
                 Image(systemName: "chevron.up").foregroundStyle(index == 0 ? Theme.textTertiary : Theme.textSecondary)
             }
             .buttonStyle(.plain).disabled(index == 0)
+            .accessibilityLabel(Text("Move day \(index + 1) earlier"))
             Button { move(from: index, by: 1) } label: {
                 Image(systemName: "chevron.down")
                     .foregroundStyle(index == draft.days.count - 1 ? Theme.textTertiary : Theme.textSecondary)
             }
             .buttonStyle(.plain).disabled(index == draft.days.count - 1)
+            .accessibilityLabel(Text("Move day \(index + 1) later"))
             Button { removeDay(at: index) } label: {
                 Image(systemName: "xmark.circle.fill").foregroundStyle(Theme.textTertiary)
             }
             .buttonStyle(.plain)
+            .accessibilityLabel(Text("Remove day \(index + 1)"))
         }
         .padding(10)
         .background(Theme.surface, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
@@ -1120,6 +1180,9 @@ struct NewJourneySheet: View {
             }
             .buttonStyle(.plain)
             .disabled(isSuggestingNames)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(isSuggestingNames ? "Suggesting names" : "Suggest names for every day")
+            .accessibilityAddTraits(.isButton)
             if suggestNamesFailed {
                 Text("Couldn't suggest names — try again")
                     .font(.caption2).foregroundStyle(Theme.textTertiary)

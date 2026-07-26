@@ -1,4 +1,5 @@
 import SwiftUI
+import Accessibility
 
 /// Full interactive elevation chart — the SwiftUI port of the web's
 /// `InteractiveElevationProfile.tsx`, drawn with `Canvas` at the same **300 × 120** logical
@@ -73,6 +74,10 @@ struct InteractiveElevationProfileView: View {
                 .font(.system(size: 9))
                 .foregroundStyle(Theme.textTertiary)
                 .frame(maxWidth: .infinity, alignment: .center)
+                // Three gestures none of which a VoiceOver user performs — pinch, scrub and tapping a
+                // dot are all sighted, direct-manipulation affordances. The chart's own hint points at
+                // Audio Graph, which is the equivalent that does work.
+                .accessibilityHidden(true)
         }
         .onAppear(perform: applyInitialStateIfNeeded)
     }
@@ -88,12 +93,30 @@ struct InteractiveElevationProfileView: View {
                 .gesture(dragGesture(size: size))
                 .simultaneousGesture(tapGesture(size: size))
                 .simultaneousGesture(magnifyGesture(size: size))
+                // QUA-07: a hand-rolled `Canvas` is a bitmap as far as accessibility is concerned —
+                // this chart, the most distinctive thing in the app, was entirely silent. It gets a
+                // real `AXChartDescriptor` rather than a summary sentence, so VoiceOver's Audio Graph
+                // can be opened on it and the profile explored point by point (and played as sound).
+                // The summary label below is what is announced before that, so focusing the chart
+                // still states the shape in words for someone who does not use Audio Graph.
+                .accessibilityElement()
+                .accessibilityLabel("Elevation profile")
+                .accessibilityValue(summary)
+                .accessibilityHint("Open Audio Graph from the VoiceOver rotor to explore the route point by point")
+                .accessibilityChartDescriptor(self)
 
                 tooltip(size: size)
                 resetButton
             }
         }
         .frame(height: chartHeight)
+    }
+
+    /// The chart in one sentence: how far, between what elevations, over how many days. Everything
+    /// here is already on screen as axis labels and `D{n}` markers — this is the same information
+    /// read in an order that makes sense aloud.
+    private var summary: Text {
+        Text("\(Formatters.distanceKm(model.totalDist)), from \(Formatters.meters(Int(model.minEle.rounded()))) to \(Formatters.meters(Int(model.maxEle.rounded()))), with \(model.campMarkers.count) days marked")
     }
 
     // MARK: - Coordinate mapping
@@ -247,6 +270,10 @@ struct InteractiveElevationProfileView: View {
             .fixedSize()
             .position(x: clampedX, y: 8)
             .allowsHitTesting(false)
+            // Transient crosshair readout, driven by a drag the user is performing. The equivalent
+            // for a screen reader is stepping the Audio Graph, not a floating label that appears and
+            // disappears under someone else's finger.
+            .accessibilityHidden(true)
         }
     }
 
@@ -265,9 +292,14 @@ struct InteractiveElevationProfileView: View {
             .buttonStyle(.plain)
             .padding(6)
             .frame(maxWidth: .infinity, alignment: .trailing)
+            .accessibilityLabel("Reset the zoom")
         }
     }
 
+    /// The three corner labels are the chart's axes, and each is a fragment out of context — "0 km",
+    /// a bare elevation range, a bare distance. Combined into one element that says what they are;
+    /// the same numbers also reach the chart's own `accessibilityValue` above, so this is hidden
+    /// rather than duplicated.
     private var axisLabels: some View {
         HStack {
             Text("0 km")
@@ -278,6 +310,7 @@ struct InteractiveElevationProfileView: View {
         }
         .font(.system(size: 10))
         .foregroundStyle(Theme.textTertiary)
+        .accessibilityHidden(true)
     }
 
     private var hint: LocalizedStringKey { "Pinch to zoom · Drag to scrub · Tap a day marker" }
@@ -375,6 +408,99 @@ struct InteractiveElevationProfileView: View {
 
     private static let logicalWidth = ElevationProfileModel.logicalWidth
     private static let logicalHeight = ElevationProfileModel.logicalHeight
+}
+
+// MARK: - Audio Graph (QUA-07)
+
+/// The chart described as data rather than as pixels, so VoiceOver's Audio Graph can explore it:
+/// swipe through the profile point by point, hear the values read, or play the whole ascent as a
+/// rising tone. This is the one accessibility affordance that makes an elevation profile genuinely
+/// *readable* without sight, as opposed to merely announced.
+///
+/// Two series, matching what is drawn: the continuous profile, and the days as discrete points. The
+/// day series is separate rather than annotated onto the first because the days are what the reader
+/// navigates by — "which day is the hard climb" is the question this chart gets asked, and it is
+/// answerable by stepping the second series.
+///
+/// Axes are in real units (km along the route, metres above sea level), NOT the 300 × 120 logical
+/// space the `Canvas` draws in. That space exists for SVG parity with the web and means nothing to a
+/// listener; `ElevationProfileModel.Point` carries both, so the projection stays a drawing concern.
+extension InteractiveElevationProfileView: AXChartDescriptorRepresentable {
+
+    /// Evenly thin `points` to at most `limit` samples, always keeping the last one.
+    ///
+    /// A real GPX route is thousands of vertices, and an Audio Graph the reader has to step through
+    /// one vertex at a time is not explorable — it is a very long list. Keeping the final point is
+    /// what makes the described route end where the route ends, which a plain `stride` does not
+    /// guarantee.
+    ///
+    /// The stride is a CEILING, not `count / limit`. Integer division rounds down, so 188 points
+    /// against a limit of 120 gave a stride of 1 and thinned nothing — 188 samples out of a promised
+    /// 120. Every fixture in the repo sits in that band (the Kilimanjaro route is 188 points), so the
+    /// bug would have shipped as "the limit does nothing until a route is twice as long as it needs to
+    /// be". Caught by the test below, which is why the sampling is internal and static rather than
+    /// inlined into `makeChartDescriptor`.
+    static func sample(_ points: [ElevationProfileModel.Point], limit: Int = 120)
+        -> [ElevationProfileModel.Point] {
+        guard points.count > limit, limit > 0 else { return points }
+        let stride = (points.count + limit - 1) / limit
+        return points.enumerated()
+            .filter { index, _ in index % stride == 0 || index == points.count - 1 }
+            .map(\.element)
+    }
+
+    func makeChartDescriptor() -> AXChartDescriptor {
+        let sampled = Self.sample(model.points)
+
+        let xAxis = AXNumericDataAxisDescriptor(
+            title: String(localized: "Distance along the route",
+                          comment: "Elevation chart Audio Graph: the horizontal axis."),
+            range: 0...Swift.max(model.totalDist, 1),
+            gridlinePositions: []) { value in
+                Formatters.distanceKm(value)
+            }
+
+        let yAxis = AXNumericDataAxisDescriptor(
+            title: String(localized: "Elevation",
+                          comment: "Elevation chart Audio Graph: the vertical axis."),
+            range: model.plotMinEle...Swift.max(model.plotMaxEle, model.plotMinEle + 1),
+            gridlinePositions: []) { value in
+                Formatters.meters(Int(value.rounded()))
+            }
+
+        let profile = AXDataSeriesDescriptor(
+            name: String(localized: "Elevation profile",
+                         comment: "Elevation chart Audio Graph: the continuous route profile series."),
+            isContinuous: true,
+            dataPoints: sampled.map { AXDataPoint(x: $0.dist, y: $0.ele) })
+
+        let days = AXDataSeriesDescriptor(
+            name: String(localized: "Days",
+                         comment: "Elevation chart Audio Graph: the series of day markers."),
+            isContinuous: false,
+            dataPoints: model.campMarkers.map { marker in
+                AXDataPoint(x: marker.dist, y: marker.ele,
+                            additionalValues: [],
+                            label: String(localized: "Day \(marker.dayNumber) — \(marker.name)",
+                                          comment: "Elevation chart Audio Graph: one day marker."))
+            })
+
+        return AXChartDescriptor(
+            title: String(localized: "Elevation profile",
+                          comment: "Elevation chart Audio Graph: the chart's title."),
+            summary: nil,
+            xAxis: xAxis,
+            yAxis: yAxis,
+            additionalAxes: [],
+            series: model.campMarkers.isEmpty ? [profile] : [profile, days])
+    }
+
+    func updateChartDescriptor(_ descriptor: AXChartDescriptor) {
+        // Nothing to reconcile: the descriptor is derived entirely from `model`, which is a `let` on
+        // this view. Zoom, pan and the crosshair are drawing state and deliberately do NOT narrow the
+        // described data — a listener exploring the profile should get the whole route, not whatever
+        // window a sighted user last pinched to.
+    }
 }
 
 #Preview {

@@ -94,11 +94,13 @@ struct PhotoImportSheet: View {
                     .foregroundStyle(Theme.accent)
             }
             .buttonStyle(.plain)
+            .accessibilityHint("Opens the Akashic Complete purchase sheet")
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Theme.surface, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Theme.hairline, lineWidth: 1))
+        .accessibilityElement(children: .contain)
     }
 
     // MARK: Picker
@@ -130,6 +132,7 @@ struct PhotoImportSheet: View {
             HStack(spacing: 10) {
                 Image(systemName: "photo.badge.plus")
                     .font(.title3).foregroundStyle(Theme.accent)
+                    .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(pending.isEmpty ? "Select photos or videos" : "Select more")
                         .font(.subheadline.weight(.semibold))
@@ -151,20 +154,25 @@ struct PhotoImportSheet: View {
                     .strokeBorder(Theme.accent.opacity(0.4), style: StrokeStyle(lineWidth: 1, dash: [5, 4]))
             )
         }
+        // A `PhotosPicker` is not a `Button` and carries no button trait — see `NewJourneyChooser`.
+        .accessibilityAddTraits(.isButton)
+        .accessibilityHint("Opens your photo library")
     }
 
     // MARK: Review row
 
     private func reviewRow(_ item: Binding<PendingIngest>) -> some View {
-        HStack(spacing: 12) {
-            EditablePhotoThumb(photo: item.wrappedValue.photo, size: 64)
+        let photo = item.wrappedValue.photo
+        return HStack(spacing: 12) {
+            EditablePhotoThumb(photo: photo, size: 64)
             VStack(alignment: .leading, spacing: 4) {
-                if item.wrappedValue.photo.isVideo {
+                if photo.isVideo {
                     Label("Video", systemImage: "play.circle").font(.caption).foregroundStyle(Theme.textSecondary)
                 }
-                if let coords = item.wrappedValue.photo.coordinates, coords.count >= 2 {
+                if let coords = photo.coordinates, coords.count >= 2 {
                     Label(String(format: "%.3f, %.3f", coords[1], coords[0]), systemImage: "mappin")
                         .font(.caption2).foregroundStyle(Theme.textTertiary)
+                        .accessibilityLabel(Text("Latitude \(String(format: "%.3f", coords[1])), longitude \(String(format: "%.3f", coords[0]))"))
                 }
                 dayMenu(item)
             }
@@ -175,6 +183,12 @@ struct PhotoImportSheet: View {
                 Image(systemName: "xmark.circle.fill").foregroundStyle(Theme.textTertiary)
             }
             .buttonStyle(.plain)
+            // QUA-24: one of these per staged item, all identical and all destructive. Naming the day
+            // it is assigned to is the only thing that distinguishes them, since a photo picked
+            // moments ago has no caption yet.
+            .accessibilityLabel(photo.isVideo
+                                ? Text("Remove this video from the import, \(dayLabel(item.wrappedValue.waypointID))")
+                                : Text("Remove this photo from the import, \(dayLabel(item.wrappedValue.waypointID))"))
         }
         .padding(10)
         .background(Theme.surface, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
@@ -206,13 +220,24 @@ struct PhotoImportSheet: View {
             .padding(.vertical, 4).padding(.horizontal, 8)
             .background(Theme.accentSoft, in: Capsule())
         }
+        // The pill's text alone ("Day 3") is a fact, not a control — it never said this is the day
+        // assignment, nor that it can be changed.
+        .accessibilityLabel("Assigned day")
+        .accessibilityValue(dayLabel(item.wrappedValue.waypointID))
     }
 
+    /// `String(localized:)`, not a bare literal. This is a `String` return type, so it lands in
+    /// `Text` through the verbatim overload — both of these were English no matter what the catalogue
+    /// held, which is the QUA-06 trap and now also the accessibility value of the day pill above.
+    /// Both keys ("Unassigned", "Day %lld") were already in the catalogue and translated; nothing was
+    /// reaching them.
     private func dayLabel(_ waypointID: String?) -> String {
         guard let waypointID, let camp = journey.camps.first(where: { $0.id == waypointID }) else {
-            return "Unassigned"
+            return String(localized: "Unassigned",
+                          comment: "Photo import: the day pill for a photo not assigned to any day.")
         }
-        return "Day \(camp.dayNumber)"
+        return String(localized: "Day \(camp.dayNumber)",
+                      comment: "Photo import: the day pill for a photo assigned to a day.")
     }
 
     // MARK: Ingest

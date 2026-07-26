@@ -115,4 +115,58 @@ final class StringCatalogTests: XCTestCase {
         XCTAssertEqual(nb.localizedString(forKey: "Easy", value: nil, table: "Localizable"),
                        "Enkel")
     }
+
+    // MARK: - QUA-24 / QUA-07: accessibility labels are user-visible strings
+
+    /// An accessibility label is read aloud, so it is as user-visible as anything on screen — and it
+    /// is the easiest kind of string to leave in English, because nobody looking at the app can see
+    /// that it is wrong. `Bundle.main` is asserted rather than the source catalogue for the same
+    /// reason as every test above: the catalogue can be right while the binary ships English.
+    ///
+    /// One label per screen the two tasks covered, chosen where the label is the ONLY thing a
+    /// VoiceOver user gets — an icon-only button, an empty-labelled picker, or a canvas.
+    func testAccessibilityLabelsAreTranslated() throws {
+        let nb = try nbBundle
+        let expected = [
+            // The paywall — the control that spends money.
+            "Unlock Akashic Complete for %@": "Lås opp Akashic Complete for %@",
+            // The create-journey flow: an empty-labelled DatePicker, and three glyph buttons per day.
+            "Start date": "Startdato",
+            "Remove day %lld": "Fjern dag %lld",
+            "Accept %@": "Godta %@",
+            // Sharing — who can see the family's photos.
+            "Manage %@": "Administrer %@",
+            // The hand-rolled elevation `Canvas`, which contains no text of any kind — so the label
+            // and the Audio Graph's own axis titles are the only words it has.
+            "Elevation profile": "Høydeprofil",
+            "Distance along the route": "Distanse langs ruten",
+            // A day marker on the mini chart, which was a bare `Color.clear` tap target.
+            "Day %lld, %@, %@ into the route, %@": "Dag %lld, %@, %@ inn i ruten, %@",
+        ]
+        for (key, value) in expected {
+            XCTAssertEqual(nb.localizedString(forKey: key, value: nil, table: "Localizable"), value,
+                           "accessibility label \(key.debugDescription) is not translated in the built bundle")
+        }
+    }
+
+    /// Three strings shipped today (QUA-14, QUA-16, QUA-17, QUA-22) reached `Text` correctly and were
+    /// never added to the catalogue, so they were English-only in an otherwise Norwegian app. The
+    /// per-file `.stringsdata` is what found them — `Bundle.main` is what proves they are fixed.
+    ///
+    /// This is a regression test for a *class* of miss rather than one bug: a correctly-typed
+    /// `LocalizedStringKey` extracts fine and still ships untranslated if nobody adds the entry, and
+    /// nothing in the build fails when that happens. The paywall is the costly place for it, which is
+    /// why two of the three assertions are the two sentences that argue for the price.
+    func testStringsAddedAfterTheLocalisationPassAreTranslated() throws {
+        let nb = try nbBundle
+        for key in [
+            "Less than half the price of one printed photo book — for every trip your family ever takes.",
+            "Draft a day's notes, name your days and ground your facts — on your device, on iPhone models that support Apple Intelligence.",
+            "%lld left on the free tier",
+        ] {
+            let value = nb.localizedString(forKey: key, value: nil, table: "Localizable")
+            XCTAssertNotEqual(value, key,
+                              "\(key.debugDescription) has no nb entry — the bundle echoed the key back")
+        }
+    }
 }

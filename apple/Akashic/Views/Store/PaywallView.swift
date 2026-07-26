@@ -108,10 +108,15 @@ struct PaywallView: View {
                     .font(.system(size: 44, weight: .semibold))
                     .foregroundStyle(Theme.accent)
             }
+            // QUA-24: the badge is ornament. Left visible it announces "star, circle, fill" as the
+            // first thing on the purchase screen, ahead of the sentence that explains why the
+            // screen appeared.
+            .accessibilityHidden(true)
             Text(reason.headline)
                 .font(.title2.weight(.bold))
                 .foregroundStyle(Theme.textPrimary)
                 .multilineTextAlignment(.center)
+                .accessibilityAddTraits(.isHeader)
             Text(reason.subhead)
                 .font(.subheadline)
                 .foregroundStyle(Theme.textSecondary)
@@ -154,6 +159,7 @@ struct PaywallView: View {
                 .font(.title3)
                 .foregroundStyle(Theme.accent)
                 .frame(width: 30)
+                .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 3) {
                 Text(title).font(.subheadline.weight(.semibold)).foregroundStyle(Theme.textPrimary)
                 Text(detail).font(.caption).foregroundStyle(Theme.textSecondary)
@@ -161,6 +167,10 @@ struct PaywallView: View {
             }
             Spacer(minLength: 0)
         }
+        // QUA-24: one benefit is one thing, not two announcements — a heading followed by an
+        // orphaned sentence makes the buyer swipe twice to hear one claim, and three times over the
+        // three benefits is how a purchase screen becomes tiring to read.
+        .accessibilityElement(children: .combine)
     }
 
     // MARK: Price + purchase
@@ -194,6 +204,7 @@ struct PaywallView: View {
         .frame(maxWidth: .infinity)
         .padding(16)
         .background(Theme.surface, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .accessibilityElement(children: .combine)
     }
 
     @ViewBuilder
@@ -204,6 +215,10 @@ struct PaywallView: View {
                 ProgressView().tint(Theme.accent)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 8)
+                    // A bare `ProgressView` announces "in progress" with no subject. On this screen
+                    // the subject is the only thing that matters: is the price coming, or is the
+                    // sheet stuck?
+                    .accessibilityLabel("Loading the price")
 
             case .loaded:
                 if let product = entitlements.product {
@@ -239,6 +254,9 @@ struct PaywallView: View {
                             .font(.subheadline.weight(.semibold))
                             .foregroundStyle(Theme.accent)
                     }
+                    // "Try again" alone does not say at what — and this is the offline state, where
+                    // the user is already guessing.
+                    .accessibilityLabel("Try loading the price again")
                 }
                 .frame(maxWidth: .infinity)
                 .padding(16)
@@ -273,6 +291,14 @@ struct PaywallView: View {
         }
         .buttonStyle(.plain)
         .disabled(isBusy(.purchasing) || isBusy(.restoring))
+        // Names the product, not just the price. "Unlock for 99 kr" read on its own is a price with
+        // no subject; this is the one control on the screen that spends money, so it says what it
+        // buys. The spinner beside the text is hidden by `children: .ignore`.
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(isBusy(.purchasing)
+                            ? Text("Purchasing Akashic Complete")
+                            : Text("Unlock Akashic Complete for \(price)"))
+        .accessibilityAddTraits(.isButton)
     }
 
     private var unavailableRow: some View {
@@ -286,6 +312,7 @@ struct PaywallView: View {
                 Label("Try again", systemImage: "arrow.clockwise")
                     .font(.subheadline.weight(.semibold)).foregroundStyle(Theme.accent)
             }
+            .accessibilityLabel("Try loading the price again")
         }
         .frame(maxWidth: .infinity)
         .padding(16)
@@ -305,12 +332,17 @@ struct PaywallView: View {
         }
         .buttonStyle(.plain)
         .disabled(isBusy(.purchasing) || isBusy(.restoring))
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(isBusy(.restoring) ? "Restoring purchases" : "Restore purchases")
+        .accessibilityHint("Checks the App Store for a purchase already made with this Apple Account")
+        .accessibilityAddTraits(.isButton)
     }
 
     private var legalRow: some View {
         HStack(spacing: 6) {
             Link("Terms", destination: AppInfo.termsURL)
-            Text("·").foregroundStyle(Theme.textTertiary)
+            // Purely a visual divider between the two links.
+            Text("·").foregroundStyle(Theme.textTertiary).accessibilityHidden(true)
             Link("Privacy", destination: AppInfo.privacyURL)
         }
         .font(.caption)

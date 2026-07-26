@@ -115,6 +115,26 @@ struct DraftMapCard: View {
         // This is a review of the draft, not a place to explore it — the day sheet's own map
         // already owns that job once the journey exists.
         .allowsHitTesting(false)
+        // QUA-24: `allowsHitTesting(false)` stops touches, not VoiceOver — the map's own annotations
+        // were still reachable, so swiping through the review screen walked every day pin one at a
+        // time before reaching the next field. It is a preview; one element saying what it shows is
+        // the honest amount of information in it, and the Days section below is where the days
+        // themselves are actually navigable.
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(mapSummary)
+    }
+
+    /// What the preview actually depicts, in words. Deliberately not a claim about shape or
+    /// direction — nothing here can describe the line, and pretending otherwise would be worse than
+    /// saying what is countable.
+    private var mapSummary: Text {
+        if coordinates.count > 1 && !pins.isEmpty {
+            return Text("Map preview of the drafted route, with \(pins.count) days marked")
+        }
+        if coordinates.count > 1 {
+            return Text("Map preview of the drafted route")
+        }
+        return Text("Map preview with \(pins.count) days marked")
     }
 
     private var region: MKCoordinateRegion {
@@ -153,6 +173,8 @@ struct DraftMapCard: View {
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(Theme.accent)
         }
+        .accessibilityLabel("Route options")
+        .accessibilityHint("Import a GPX file, draw the route on a map, or remove it")
     }
 
     // MARK: Empty states
@@ -191,6 +213,8 @@ struct DraftMapCard: View {
                 .foregroundStyle(Theme.textTertiary)
             Spacer()
         }
+        // A placeholder for a map that isn't there — the sentence beneath it carries the meaning.
+        .accessibilityHidden(true)
         .frame(height: 64)
         .background(Theme.surface, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
         .overlay(
@@ -203,6 +227,7 @@ struct DraftMapCard: View {
         Button(action: action) {
             HStack(spacing: 10) {
                 Image(systemName: icon).font(.subheadline).foregroundStyle(Theme.accent)
+                    .accessibilityHidden(true)
                 Text(title).font(.subheadline.weight(.semibold)).foregroundStyle(Theme.textPrimary)
                 Spacer()
             }

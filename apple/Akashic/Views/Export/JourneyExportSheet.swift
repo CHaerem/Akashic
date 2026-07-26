@@ -24,6 +24,13 @@ struct JourneyExportSheet: View {
                 Section {
                     Toggle("Include original photos", isOn: $includePhotos)
                         .disabled(isWorking)
+                        // QUA-24: the footer below is the whole warning that this makes the archive
+                        // large, and a `Section` footer is announced separately from the control it
+                        // qualifies — as a hint it arrives while the toggle still has focus, which is
+                        // before the decision rather than after it.
+                        .accessibilityHint(includePhotos
+                                           ? "The archive will contain the full-resolution files and can be large"
+                                           : "The archive will contain only the route and the text")
                 } footer: {
                     Text(includePhotos
                          ? "The full-resolution files, exactly as they were taken. This can be large."
@@ -48,11 +55,18 @@ struct JourneyExportSheet: View {
                                 .font(.caption)
                                 .foregroundStyle(Theme.textSecondary)
                         }
+                        // A determinate bar and its caption, announced as one thing: an export that
+                        // includes originals can take minutes, and "in progress" with no subject is
+                        // indistinguishable from a stuck sheet.
+                        .accessibilityElement(children: .ignore)
+                        .accessibilityLabel("Packaging the export")
+                        .accessibilityValue(Text("\(Int((fraction * 100).rounded())) percent"))
 
                     case .done(let url, let photoCount, let missing):
                         ShareLink(item: url) {
                             Label("Save or share", systemImage: "square.and.arrow.up")
                         }
+                        .accessibilityHint("Opens the share sheet so you can save the archive or send it")
                         VStack(alignment: .leading, spacing: 4) {
                             // Plural-varied in the catalogue, not by appending an "s" at the call
                             // site: the old form baked English morphology into the view and no
@@ -72,6 +86,7 @@ struct JourneyExportSheet: View {
                             .font(.footnote)
                             .foregroundStyle(Theme.warning)
                         Button("Try again") { phase = .idle }
+                            .accessibilityLabel("Try the export again")
                     }
                 } header: {
                     Text("Export")

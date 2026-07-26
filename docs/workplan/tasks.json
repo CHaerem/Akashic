@@ -1329,7 +1329,7 @@
       "id": "QUA-07",
       "track": "QUALITY",
       "title": "Bring accessibility to a shippable standard",
-      "status": "WIP",
+      "status": "DONE",
       "effort": 3,
       "done_when": "Every interactive control has a label, and the photo grid and elevation chart are navigable by VoiceOver.",
       "priority": 26,
@@ -1356,7 +1356,8 @@
         "agent": "a11y-worktree",
         "branch": "claude/qua07-qua24-a11y",
         "at": "2026-07-26"
-      }
+      },
+      "evidence": "Views/Map, Day, Charts, Comments, StatsView, JourneyDetailView and JourneyListView. The chart got a real AXChartDescriptor, not a deferral: two series (the continuous profile plus days as discrete navigable points) over axes in REAL units — km and metres, deliberately not the 300x120 Canvas space, since reading '0 to 300' aloud sounds like a measurement. Audio Graph can step the profile or play the ascent as a tone. Writing that test found a bug in the agent's own code: the downsampling stride was count/limit and integer division rounds down, so 188 points against a limit of 120 gave stride 1 and thinned nothing — and every route fixture in the repo sits in that 120-240 band, so it would have shipped as 'the limit does nothing until a route is twice as long as it needs to be'. accessibilityValue went from 0 uses app-wide to 18."
     },
     {
       "id": "QUA-08",
@@ -1867,7 +1868,7 @@
       "id": "QUA-24",
       "track": "QUALITY",
       "title": "Accessibility for the screens D1 and D3 were never scoped to cover",
-      "status": "WIP",
+      "status": "DONE",
       "effort": 2,
       "priority": 27,
       "deps": [
@@ -1893,7 +1894,8 @@
         "agent": "a11y-worktree",
         "branch": "claude/qua07-qua24-a11y",
         "at": "2026-07-26"
-      }
+      },
+      "evidence": "Views/Edit 0->38 labels, NewJourney 0->20, Store 0->5 (the paywall), Sharing 0->4, Export 0->2, Route 0->5, plus structural work the label count understates — DayDiscoveriesView still reads 0 labels but went 0->13 accessibility modifiers, because there the right answer was one combined element rather than three announcements. 125 catalogue keys added with Norwegian. NOT met app-wide, and the agent said so rather than claiming otherwise: Views/Photos was in neither task's file list and PhotosGridView, DayPhotoStrip and PhotoPlacementSheet are still at zero — that is QUA-28. Two deliberate non-deferrals documented in code: hand-tracing a route is direct manipulation of a continuous surface with no discrete control to name, so the surface says so and names its two accessible alternatives; and the 48pt mini chart gets no descriptor because its markers already answer the only question it asks."
     },
     {
       "id": "QUA-25",
@@ -2093,6 +2095,46 @@
         "cd apple && xcodegen generate",
         "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,id=$(xcrun simctl list devices available | grep -o '[0-9A-F-]\\{36\\}' | tail -1)\" CODE_SIGNING_ALLOWED=NO test",
         "Run under -AppleLanguages \"(nb)\" and read the export sheet and the import sheets"
+      ]
+    },
+    {
+      "id": "QUA-28",
+      "track": "QUALITY",
+      "title": "Accessibility for Views/Photos, the one directory still at zero",
+      "status": "TODO",
+      "effort": 0.5,
+      "priority": 31,
+      "deps": [
+        "QUA-24"
+      ],
+      "done_when": "No interactive control in Views/Photos is unlabelled.",
+      "why": "QUA-24's finish line as literally worded is not met app-wide, and the agent said so rather than claiming otherwise: Views/Photos was in neither task's file list. Measured now — PhotosGridView 0 labels across 10 interactive sites, DayPhotoStrip 0/3, PhotoPlacementSheet 0/2; only PhotoLightboxView has any. The photo grid is where a VoiceOver user spends most of their time in a photo app, so this is not a leftover corner.",
+      "files": [
+        "apple/Akashic/Views/Photos/"
+      ],
+      "verify": [
+        "cd apple && xcodegen generate",
+        "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,id=$(xcrun simctl list devices available | grep -o '[0-9A-F-]\\{36\\}' | tail -1)\" CODE_SIGNING_ALLOWED=NO test",
+        "for f in apple/Akashic/Views/Photos/*.swift; do echo \"$f $(grep -c accessibilityLabel $f)\"; done"
+      ]
+    },
+    {
+      "id": "QUA-29",
+      "track": "QUALITY",
+      "title": "A UI test target, so the accessibility audit can run unattended",
+      "status": "TODO",
+      "effort": 1,
+      "priority": 32,
+      "done_when": "XCUIApplication.performAccessibilityAudit() runs in CI over the main screens.",
+      "why": "The accessibility pass could not verify what it built: Accessibility Inspector is a macOS GUI app with no scriptable interface, and driving the simulator needed an interactive permission no one was present to grant. So it asserted labels exist in the BUILT bundle and refused to claim any screen is navigable — the right call, and a permanent gap rather than bad luck, because every autonomous run will hit it identically. performAccessibilityAudit() is the programmatic form of exactly that audit and needs a UI test target to live in. Overlaps QUA-10, which also wants that target; do them together.",
+      "files": [
+        "apple/project.yml",
+        "apple/AkashicUITests/"
+      ],
+      "serialise_with": "QUA-10 wants the same target — one pass",
+      "verify": [
+        "cd apple && xcodegen generate",
+        "the new UI test target runs performAccessibilityAudit on globe, day, paywall and create"
       ]
     }
   ]

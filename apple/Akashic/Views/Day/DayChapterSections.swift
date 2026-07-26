@@ -74,6 +74,10 @@ struct DayChapterSections: View {
                   value: camp.elevation > 0 ? Formatters.meters(camp.elevation) : "—",
                   caption: "Elevation"),
         ])
+        // QUA-07: three or four chips, each three elements, with the caption after the value — so a
+        // day opened with up to twelve announcements before the notes. The per-chip fix belongs in
+        // `StatChip` (`Theme.swift`), which this task does not own; reported.
+        .accessibilityElement(children: .combine)
     }
 
     // MARK: - Highlights
@@ -84,7 +88,9 @@ struct DayChapterSections: View {
             VStack(alignment: .leading, spacing: 6) {
                 ForEach(camp.highlights, id: \.self) { item in
                     HStack(alignment: .top, spacing: 8) {
+                        // A drawn bullet, not content.
                         Circle().fill(Theme.accent).frame(width: 5, height: 5).padding(.top, 6)
+                            .accessibilityHidden(true)
                         Text(item)
                             .font(.footnote)
                             .foregroundStyle(Theme.textSecondary)

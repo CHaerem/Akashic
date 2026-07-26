@@ -35,6 +35,11 @@ struct ManageDaysSheet: View {
                                     Label("Delete day", systemImage: "trash")
                                 }
                             }
+                            // QUA-24: swipe actions and a context menu are the ONLY way to delete or
+                            // insert a day, and VoiceOver reaches both through its Actions rotor —
+                            // which is discoverable, but only if the user is told the row has any.
+                            // Without this, this screen looks like a read-only list of days.
+                            .accessibilityHint("Actions available: add a day after this one, or delete it")
                     }
                     .onMove(perform: move)
                 } footer: {
@@ -63,6 +68,7 @@ struct ManageDaysSheet: View {
                         withAnimation { editMode = editMode.isEditing ? .inactive : .active }
                     }
                     .foregroundStyle(Theme.accent)
+                    .accessibilityLabel(editMode.isEditing ? "Done reordering days" : "Reorder days")
                 }
             }
             .confirmationDialog("Delete this day?",
@@ -95,6 +101,12 @@ struct ManageDaysSheet: View {
             Spacer()
         }
         .listRowBackground(Theme.surface)
+        // A day is one thing. Left as three elements, the number bubble read as a lone digit before
+        // the name and the elevation as a lone measurement after it.
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(camp.elevation > 0
+                            ? Text("Day \(camp.dayNumber), \(camp.name), \(Formatters.meters(camp.elevation))")
+                            : Text("Day \(camp.dayNumber), \(camp.name)"))
     }
 
     // MARK: Operations

@@ -82,10 +82,12 @@ struct JourneyEmptyState: View {
                     .font(.largeTitle.weight(.semibold))
                     .foregroundStyle(Theme.accent)
             }
+            .accessibilityHidden(true)
             VStack(spacing: 8) {
                 Text("Start your first journey")
                     .font(.title2.weight(.bold))
                     .foregroundStyle(Theme.textPrimary)
+                    .accessibilityAddTraits(.isHeader)
                 Text("Name a trek, drop in a GPX route, and let your photos fill the days.")
                     .font(.subheadline)
                     .foregroundStyle(Theme.textSecondary)
@@ -135,6 +137,9 @@ struct JourneyCard: View {
                         Text(journey.countryFlag)
                             .font(.system(size: flagSize))
                             .padding(12)
+                            // The country is named in words two lines below; the flag emoji is the
+                            // same fact as a picture, and VoiceOver reads it as its own element.
+                            .accessibilityHidden(true)
                     }
                     .overlay(alignment: .topLeading) {
                         if isSample { SampleBadge().padding(12) }
@@ -159,14 +164,18 @@ struct JourneyCard: View {
 
             HStack(spacing: 10) {
                 StatChip(icon: "figure.walk", value: Formatters.distanceKm(journey.stats.totalDistance), caption: "Distance")
+                    .accessibilityElement(children: .combine)
                 StatChip(icon: "arrow.up.forward", value: Formatters.meters(journey.stats.totalElevationGain), caption: "Ascent")
+                    .accessibilityElement(children: .combine)
                 StatChip(icon: "calendar", value: "\(journey.stats.duration)", caption: "Days")
+                    .accessibilityElement(children: .combine)
             }
 
             if let summit = journey.stats.highestPoint {
                 Label("\(summit.name) · \(Formatters.meters(summit.elevation))", systemImage: "flag.checkered")
                     .font(.footnote)
                     .foregroundStyle(Theme.textTertiary)
+                    .accessibilityLabel(Text("Summit \(summit.name), \(Formatters.meters(summit.elevation))"))
             }
         }
         .padding(14)
@@ -175,6 +184,12 @@ struct JourneyCard: View {
             RoundedRectangle(cornerRadius: 20, style: .continuous)
                 .strokeBorder(Theme.hairline, lineWidth: 1)
         )
+        // QUA-07: one card is one journey. Left uncombined it was up to twelve elements — a flag, a
+        // badge, a name, a country, a date range, six chip fragments and a summit — which is a lot of
+        // swiping to decide whether this is the trip you wanted to open. `children: .combine` rather
+        // than a hand-written label so a card gains nothing to forget when a field is added; the
+        // decoration above is hidden so the combination is the parts that mean something.
+        .accessibilityElement(children: .combine)
     }
 }
 
@@ -191,6 +206,10 @@ struct SampleBadge: View {
             .padding(.horizontal, 8)
             .padding(.vertical, 4)
             .background(Theme.accent, in: Capsule())
+            // QUA-07: all-caps is a visual weight, not a word — VoiceOver spells short uppercase
+            // runs out letter by letter, and "E-K-S-E-M-P-E-L" is not what this badge means. The
+            // label restores the sentence and says what the badge is telling you.
+            .accessibilityLabel("Sample journey")
     }
 }
 

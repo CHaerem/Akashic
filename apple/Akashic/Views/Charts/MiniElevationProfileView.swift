@@ -34,12 +34,31 @@ struct MiniElevationProfileView: View {
                 Canvas { context, canvasSize in
                     draw(context: context, size: canvasSize)
                 }
+                // QUA-07: the `Canvas` is a bitmap to accessibility, and the invisible tap targets
+                // over it are the only way to select a day here. They are the accessible content, so
+                // the drawing is marked as decoration and the targets carry the labels — the
+                // alternative (one summary element) would make a working control unreachable.
+                .accessibilityHidden(true)
                 tapTargets(size: size)
             }
         }
         .frame(height: height)
         .background(Theme.fillSubtle, in: RoundedRectangle(cornerRadius: 8))
         .clipShape(RoundedRectangle(cornerRadius: 8))
+        // A container, so VoiceOver announces what the group of day buttons belongs to before
+        // walking them, and the summary is there even for a profile with no days to select.
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Elevation profile")
+        .accessibilityValue(summary)
+    }
+
+    /// The same one-sentence shape `InteractiveElevationProfileView` gives, so the two charts describe
+    /// one route identically. There is no `AXChartDescriptor` on the mini chart on purpose: it is a
+    /// 48 pt strip inside a list row whose job is "which day do I want", and the day markers below are
+    /// exactly that question made navigable. The full chart in the day sheet is where a reader who
+    /// wants the profile itself goes, and that one has the Audio Graph.
+    private var summary: Text {
+        Text("\(Formatters.distanceKm(model.totalDist)), from \(Formatters.meters(Int(model.minEle.rounded()))) to \(Formatters.meters(Int(model.maxEle.rounded())))")
     }
 
     // MARK: - Projection (raw min/max, matching the web mini)
@@ -125,6 +144,13 @@ struct MiniElevationProfileView: View {
                 .frame(width: 32, height: 24)
                 .position(x: min(max(x, 16), size.width - 16), y: height - 12)
                 .onTapGesture { onSelectDay?(marker.dayNumber) }
+                // QUA-07: a `Color.clear` with an `onTapGesture` is not a control to VoiceOver — no
+                // element, no label, no button trait — so selecting a day from this chart was
+                // impossible. Each target now carries the day it selects, where it falls on the route,
+                // and how high it is, which is the information the visible dot conveys by position.
+                .accessibilityElement()
+                .accessibilityLabel(Text("Day \(marker.dayNumber), \(marker.name), \(Formatters.distanceKm(marker.dist)) into the route, \(Formatters.meters(Int(marker.ele.rounded())))"))
+                .accessibilityAddTraits(marker.dayNumber == selectedDay ? [.isButton, .isSelected] : .isButton)
         }
     }
 
