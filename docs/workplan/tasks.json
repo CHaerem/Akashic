@@ -2269,6 +2269,78 @@
         "! ls \"$(find ~/Library/Developer/Xcode/DerivedData/Akashic-*/Build/Products/Release-CloudKit-iphonesimulator -name Akashic.app -maxdepth 2 | head -1)\"/Akashic.storekit"
       ],
       "evidence": "Verified against the built Release-CloudKit bundle: Akashic.storekit is gone from Akashic.app root, PrivacyInfo.xcprivacy and en/nb.lproj still present, 791+14 tests pass. Also fixed a false-negative verification command next to it: the comment told you to find *.loctable, which this toolchain never produces."
+    },
+    {
+      "id": "QUA-34",
+      "effort": 0.5,
+      "priority": 38,
+      "title": "Make CloudKitImportSink an actor, closing the last strict-concurrency warning",
+      "done_when": "A clean build-for-testing under SWIFT_STRICT_CONCURRENCY=complete reports ZERO warnings across every target.",
+      "why": "The one diagnostic QUA-08 left standing, and it was left on purpose with this as the stated removal condition. AkashicTests/CloudKitImportTests warns 'sending sink': CloudKitImportSink is a non-Sendable final class with real mutable state (journeys, journeyIDs, photosByJourney, missingMedia, routeByteSize) whose nonisolated async execute() transfers the receiver. Three cheaper fixes were tried and rejected in QUA-08 -- @MainActor on the test only moves the diagnostic because execute is nonisolated async; @unchecked Sendable would be a lie about that mutable state; building the sink inside the Task transfers MockDatabase instead. Making it an actor is the honest fix and is cheap where it counts: every requirement it exposes is already async, so the shipping call site (CloudKitImportViewModel) does not change. The cost is the synchronous makeSink(...).makePlan() calls in the test file, which each gain an await.",
+      "files": [
+        "apple/Akashic/Import/CloudKitImportSink.swift",
+        "apple/AkashicTests/CloudKitImportTests.swift"
+      ],
+      "track": "QUALITY",
+      "status": "TODO",
+      "verify": [
+        "cd apple && xcodegen generate",
+        "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,id=$(xcrun simctl list devices available | grep -o '[0-9A-F-]\\{36\\}' | tail -1)\" CODE_SIGNING_ALLOWED=NO test"
+      ]
+    },
+    {
+      "id": "QUA-35",
+      "effort": 0.5,
+      "priority": 39,
+      "title": "Pin groupNearDuplicates against known feature prints, then delete FeaturePrintBox",
+      "done_when": "A test asserts groupNearDuplicates' behaviour against feature prints with known distances, and VisionPhotoScorer carries no @unchecked Sendable.",
+      "why": "QUA-08 introduced a documented @unchecked Sendable box for VNFeaturePrintObservation rather than the tidier descriptor-extraction refactor, for one reason: NOTHING tests groupNearDuplicates. Re-implementing computeDistance asserts Vision's metric is plain Euclidean over the raw descriptor, and if that is wrong in any detail then duplicateDistance's 0.15 calibration quietly changes which of a family's photographs the app calls duplicates -- with no test failing. So the order matters: the test comes first, and only then is the refactor verifiable. This is the removal condition written at the box itself.",
+      "files": [
+        "apple/Akashic/Services/VisionPhotoScorer.swift",
+        "apple/AkashicTests/PhotoCurationTests.swift"
+      ],
+      "track": "QUALITY",
+      "status": "TODO",
+      "verify": [
+        "cd apple && xcodegen generate",
+        "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,id=$(xcrun simctl list devices available | grep -o '[0-9A-F-]\\{36\\}' | tail -1)\" CODE_SIGNING_ALLOWED=NO test"
+      ]
+    },
+    {
+      "id": "QUA-36",
+      "effort": 0.5,
+      "priority": 40,
+      "title": "Declare PublicMirrorDatabase Sendable so PublicMirrorPublisher's conformance becomes checked",
+      "done_when": "PublicMirrorPublisher conforms to Sendable without @unchecked, and the public-mirror tests still pass.",
+      "why": "The removal condition documented on PublicMirrorPublisher in QUA-08. CKDatabase satisfies `protocol PublicMirrorDatabase: Sendable` for free -- CloudKit marks it NS_SWIFT_SENDABLE -- so the app side is a one-line change. The cost is entirely in the test double: MockPublicDatabase has seven mutable stored properties mutated inside its own async methods, so it has to become an actor, which adds await to roughly 30 assertions that read mock.saved / mock.modifyCallCount. FakePublisher's `var report` needs the same treatment. Worth doing because @unchecked is a promise the compiler cannot check, and this seam is the one that writes world-readable records.",
+      "files": [
+        "apple/Akashic/Sync/PublicMirrorPublisher.swift",
+        "apple/AkashicTests/PublicMirrorTests.swift"
+      ],
+      "track": "QUALITY",
+      "status": "TODO",
+      "verify": [
+        "cd apple && xcodegen generate",
+        "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,id=$(xcrun simctl list devices available | grep -o '[0-9A-F-]\\{36\\}' | tail -1)\" CODE_SIGNING_ALLOWED=NO test"
+      ]
+    },
+    {
+      "id": "QUA-37",
+      "effort": 0.25,
+      "priority": 41,
+      "title": "Declare MediaDatabase Sendable so PhotoMediaService's conformance becomes checked",
+      "done_when": "PhotoMediaService conforms to Sendable without @unchecked, and the media tests still pass.",
+      "why": "Same shape as QUA-36 and the removal condition documented on PhotoMediaService in QUA-08. Both its stored properties are already let and the shipping database is a CKDatabase (NS_SWIFT_SENDABLE); only the MediaDatabase seam's own lack of Sendable forces @unchecked. AkashicTests/MediaV2Tests already spells MockMediaDatabase as `@unchecked Sendable`, so that side may need nothing at all -- verify rather than assume.",
+      "files": [
+        "apple/Akashic/Media/PhotoMediaService.swift",
+        "apple/AkashicTests/MediaV2Tests.swift"
+      ],
+      "track": "QUALITY",
+      "status": "TODO",
+      "verify": [
+        "cd apple && xcodegen generate",
+        "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,id=$(xcrun simctl list devices available | grep -o '[0-9A-F-]\\{36\\}' | tail -1)\" CODE_SIGNING_ALLOWED=NO test"
+      ]
     }
   ]
 }
