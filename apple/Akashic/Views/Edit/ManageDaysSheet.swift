@@ -114,7 +114,13 @@ struct ManageDaysSheet: View {
     }
 
     private func addDay(after dayNumber: Int?) {
-        let name = "Day \((store.journey(withID: journeyID)?.camps.count ?? 0) + 1)"
+        // The default name for a freshly added day is text the customer reads and then edits, so
+        // it is localised at the point of creation — the same way the system names a new folder in
+        // the user's language. It is persisted from here on and never re-derived, so a later
+        // language change leaves existing days alone, which is the behaviour you want: a name the
+        // user may have kept or edited is their data, not a label.
+        let name = String(localized: "Day \((store.journey(withID: journeyID)?.camps.count ?? 0) + 1)",
+                          comment: "Default name for a day added from Manage days, e.g. \"Day 4\".")
         _ = store.addDay(toJourney: journeyID, name: name, afterDayNumber: dayNumber)
         sync()
     }

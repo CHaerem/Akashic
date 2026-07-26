@@ -11,7 +11,9 @@ struct DayDiscoveriesView: View {
     var body: some View {
         if total > 0 {
             VStack(alignment: .leading, spacing: 12) {
-                SectionLabel(icon: "🔍", title: "Discoveries", trailing: "\(total) places")
+                SectionLabel(icon: "🔍", title: "Discoveries",
+                             trailing: String(localized: "\(total) places",
+                                              comment: "Day discoveries: count badge over the POI + historical-site list."))
 
                 if !historicalSites.isEmpty {
                     subheader(marker: "★", markerColor: HistoricalSignificance.color(for: "major"),
@@ -31,12 +33,13 @@ struct DayDiscoveriesView: View {
         }
     }
 
-    private func subheader(marker: String, markerColor: Color, title: String) -> some View {
+    private func subheader(marker: String, markerColor: Color, title: LocalizedStringKey) -> some View {
         HStack(spacing: 6) {
             Text(marker)
                 .font(.caption)
                 .foregroundStyle(markerColor == .clear ? Theme.textSecondary : markerColor)
-            Text(title.uppercased())
+            Text(title)
+                .textCase(.uppercase)
                 .font(.caption2.weight(.medium))
                 .tracking(0.5)
                 .foregroundStyle(Theme.textTertiary)

@@ -89,16 +89,24 @@ struct FunFactsCarousel: View {
 /// A small uppercase section header with a leading emoji (shared across day sections).
 struct SectionLabel: View {
     let icon: String
-    let title: String
+    let title: LocalizedStringKey
+    /// Stays a `String`: every caller passes a already-formatted count ("12", "4 places"), not
+    /// prose. The prose ones are built with `Formatters` so they localise at their source.
     var trailing: String?
 
     var body: some View {
         HStack(spacing: 6) {
             Text(icon).font(.subheadline)
-            Text(title.uppercased())
+            // `.textCase(.uppercase)` rather than `title.uppercased()` — see `GlassField`: the
+            // `String` form made every section header ("Photos", "Comments", "Highlights",
+            // "Discoveries", "Did you know?") invisible to the string catalogue.
+            Text(title)
+                .textCase(.uppercase)
                 .font(.caption2.weight(.semibold))
                 .tracking(0.8)
                 .foregroundStyle(Theme.textTertiary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
             Spacer(minLength: 0)
             if let trailing {
                 Text(trailing)

@@ -210,8 +210,16 @@ struct StatChipRow: View {
     struct Item: Identifiable {
         var icon: String
         var value: String
-        var caption: String
-        var id: String { caption }
+        /// `LocalizedStringKey`, not `String`: the caption is the only user-visible prose here
+        /// (`value` is a formatted number and `icon` an SF Symbol name). As a `String` it reached
+        /// `Text` already-resolved and never entered the string catalogue at all — the silent
+        /// failure QUA-06 exists to remove.
+        var caption: LocalizedStringKey
+        /// The caption used to be the identity, which no longer type-checks now that it is a
+        /// `LocalizedStringKey` — and would have been wrong anyway, since two translations can
+        /// collide where two English captions did not. Every row builds its chips with distinct
+        /// symbols, so the icon is the stable identity.
+        var id: String { icon }
     }
 
     let items: [Item]
@@ -244,7 +252,7 @@ struct StatChipRow: View {
 struct StatChip: View {
     let icon: String
     let value: String
-    let caption: String
+    let caption: LocalizedStringKey
 
     var body: some View {
         VStack(alignment: .leading, spacing: 3) {
@@ -261,6 +269,14 @@ struct StatChip: View {
             Text(caption)
                 .font(.caption2)
                 .foregroundStyle(Theme.textTertiary)
+                // The caption was unconstrained while it was always an English word. Norwegian
+                // runs longer — "Descent" becomes "Nedstigning", "Duration" becomes "Varighet" —
+                // and an unconstrained caption would either wrap (making one chip in a row taller
+                // than its neighbours) or push the chip past the width `StatChipRow`'s
+                // `ViewThatFits` is measuring, flipping a row that fits into two columns. One
+                // line that shrinks a little keeps both the row height and that decision stable.
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
         }
         .padding(.vertical, 8)
         .padding(.horizontal, 12)

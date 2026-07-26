@@ -20,7 +20,7 @@ import MapKit
 struct RouteDrawingSheet: View {
     @Environment(\.dismiss) private var dismiss
 
-    var title: String = "Draw route"
+    var title: LocalizedStringKey = "Draw route"
     /// The journey's current route, drawn dashed underneath as a reference when replacing.
     var referenceRoute: Route?
     /// Where to open when there is no reference route — the region framing the days/photos we know
@@ -47,7 +47,11 @@ struct RouteDrawingSheet: View {
     private struct Drawn {
         var result = RouteDrawing.DrawnRoute(route: .empty, bridgedGaps: 0)
         var coordinates: [CLLocationCoordinate2D] = []
-        var summary: String = "Nothing drawn yet"
+        /// Resolved through the catalogue rather than a bare literal: the other values this
+        /// field takes are formatted measurements from `RouteDrawing.DrawnRoute.summary`, so
+        /// it stays a `String` and only the placeholder needs translating.
+        var summary: String = String(localized: "Nothing drawn yet",
+                                    comment: "Route drawing sheet: shown before the first stroke.")
     }
 
     var body: some View {

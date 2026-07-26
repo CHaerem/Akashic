@@ -13,7 +13,7 @@ import MapKit
 struct PhotoPlacementSheet: View {
     @Environment(\.dismiss) private var dismiss
 
-    var title: String = "Adjust location"
+    var title: LocalizedStringKey = "Adjust location"
     /// The photo's current coordinate `[lng, lat]`, if any.
     var startCoordinate: [Double]?
     /// Where to open when the photo has no coordinate (day median, or journey centre).
@@ -25,7 +25,7 @@ struct PhotoPlacementSheet: View {
     /// The live centre of the map (updated as it pans) — what Save records.
     @State private var center: CLLocationCoordinate2D
 
-    init(title: String = "Adjust location",
+    init(title: LocalizedStringKey = "Adjust location",
          startCoordinate: [Double]? = nil,
          fallbackCoordinate: [Double]? = nil,
          onSave: @escaping ([Double]) -> Void) {

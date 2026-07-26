@@ -1,0 +1,5820 @@
+{
+  "sourceLanguage": "en",
+  "version": "1.0",
+  "strings": {
+    "  hero images": {
+      "shouldTranslate": false
+    },
+    "  originals / thumbs": {
+      "shouldTranslate": false
+    },
+    "  ·  ": {
+      "shouldTranslate": false
+    },
+    "\"%@\" is on the public showcase. Remove it there before deleting the journey.": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "«%@» ligger i den offentlige utstillingen. Fjern den derfra før du sletter turen."
+          }
+        }
+      }
+    },
+    "%.1f km": {
+      "shouldTranslate": false
+    },
+    "%@": {
+      "shouldTranslate": false
+    },
+    "%@ has no route, days or photos": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ har ingen rute, dager eller bilder"
+          }
+        }
+      }
+    },
+    "%@ · %@": {
+      "shouldTranslate": false
+    },
+    "%@ · %lld days": {
+      "localizations": {
+        "nb": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%1$@ · %2$lld dag"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%1$@ · %2$lld dager"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "%@: %@, ~%@, %@ km/day": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@: %2$@, ~%3$@, %4$@ km/dag"
+          }
+        }
+      }
+    },
+    "%@: %lld camps, %@": {
+      "localizations": {
+        "nb": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%1$@: %2$lld leir, %3$@"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%1$@: %2$lld leirer, %3$@"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "%lld": {
+      "shouldTranslate": false
+    },
+    "%lld / %lld": {
+      "shouldTranslate": false
+    },
+    "%lld days": {
+      "comment": "Journey story header: how many days the trip lasted.",
+      "localizations": {
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld day"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld days"
+                }
+              }
+            }
+          }
+        },
+        "nb": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld dag"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld dager"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "%lld journeys": {
+      "comment": "Settings › Library: how many journeys are stored on the device.",
+      "localizations": {
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld journey"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld journeys"
+                }
+              }
+            }
+          }
+        },
+        "nb": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld tur"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld turer"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "%lld journeys%@: %@": {
+      "localizations": {
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%1$lld journey%2$@: %3$@"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%1$lld journeys%2$@: %3$@"
+                }
+              }
+            }
+          }
+        },
+        "nb": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%1$lld tur%2$@: %3$@"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%1$lld turer%2$@: %3$@"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "%lld km": {
+      "shouldTranslate": false
+    },
+    "%lld match: %@": {
+      "localizations": {
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld match: %@"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld matches: %@"
+                }
+              }
+            }
+          }
+        },
+        "nb": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld treff: %@"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld treff: %@"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "%lld photos": {
+      "comment": "Settings › Library: how many photos are stored on the device.",
+      "localizations": {
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld photo"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld photos"
+                }
+              }
+            }
+          }
+        },
+        "nb": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld bilde"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld bilder"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "%lld photos could not be included — their files are not on this device yet.": {
+      "localizations": {
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld photo could not be included — its file is not on this device yet."
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld photos could not be included — their files are not on this device yet."
+                }
+              }
+            }
+          }
+        },
+        "nb": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld bilde kunne ikke bli med – fila ligger ikke på denne enheten ennå."
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld bilder kunne ikke bli med – filene ligger ikke på denne enheten ennå."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "%lld photos couldn't be added": {
+      "localizations": {
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld photo couldn't be added"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld photos couldn't be added"
+                }
+              }
+            }
+          }
+        },
+        "nb": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld bilde kunne ikke legges til"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld bilder kunne ikke legges til"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "%lld photos for %@.": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld bilder fra %@."
+          }
+        }
+      }
+    },
+    "%lld photos included": {
+      "localizations": {
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld photo included"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld photos included"
+                }
+              }
+            }
+          }
+        },
+        "nb": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld bilde er med"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld bilder er med"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "%lld photos ready": {
+      "comment": "New journey: how many picked photos are staged and ready to import.",
+      "localizations": {
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld photo ready"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld photos ready"
+                }
+              }
+            }
+          }
+        },
+        "nb": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld bilde klart"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld bilder klare"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "%lld photos · %lld days": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%#@photos@ · %#@days@"
+          },
+          "substitutions": {
+            "photos": {
+              "argNum": 1,
+              "formatSpecifier": "lld",
+              "variations": {
+                "plural": {
+                  "one": {
+                    "stringUnit": {
+                      "state": "translated",
+                      "value": "%arg photo"
+                    }
+                  },
+                  "other": {
+                    "stringUnit": {
+                      "state": "translated",
+                      "value": "%arg photos"
+                    }
+                  }
+                }
+              }
+            },
+            "days": {
+              "argNum": 2,
+              "formatSpecifier": "lld",
+              "variations": {
+                "plural": {
+                  "one": {
+                    "stringUnit": {
+                      "state": "translated",
+                      "value": "%arg day"
+                    }
+                  },
+                  "other": {
+                    "stringUnit": {
+                      "state": "translated",
+                      "value": "%arg days"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%#@photos@ · %#@days@"
+          },
+          "substitutions": {
+            "photos": {
+              "argNum": 1,
+              "formatSpecifier": "lld",
+              "variations": {
+                "plural": {
+                  "one": {
+                    "stringUnit": {
+                      "state": "translated",
+                      "value": "%arg bilde"
+                    }
+                  },
+                  "other": {
+                    "stringUnit": {
+                      "state": "translated",
+                      "value": "%arg bilder"
+                    }
+                  }
+                }
+              }
+            },
+            "days": {
+              "argNum": 2,
+              "formatSpecifier": "lld",
+              "variations": {
+                "plural": {
+                  "one": {
+                    "stringUnit": {
+                      "state": "translated",
+                      "value": "%arg dag"
+                    }
+                  },
+                  "other": {
+                    "stringUnit": {
+                      "state": "translated",
+                      "value": "%arg dager"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "%lld places": {
+      "comment": "Day discoveries: count badge over the POI + historical-site list.",
+      "localizations": {
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld place"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld places"
+                }
+              }
+            }
+          }
+        },
+        "nb": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld sted"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld steder"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "%lld ready · tap a day to change the assignment": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld klare · trykk en dag for å endre"
+          }
+        }
+      }
+    },
+    "%lld records": {
+      "comment": "Showcase publish report: how many records reached the public mirror.",
+      "localizations": {
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld record"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld records"
+                }
+              }
+            }
+          }
+        },
+        "nb": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld post"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld poster"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "%lld route points": {
+      "comment": "GPX route provenance: how many coordinates the track holds.",
+      "localizations": {
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld point"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld points"
+                }
+              }
+            }
+          }
+        },
+        "nb": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld rutepunkt"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld rutepunkter"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "%lld skipped": {
+      "comment": "GPX route provenance: coordinates dropped as unusable.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld hoppet over"
+          }
+        }
+      }
+    },
+    "%lld waypoints": {
+      "comment": "GPX route provenance: how many waypoints became days.",
+      "localizations": {
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld waypoint"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld waypoints"
+                }
+              }
+            }
+          }
+        },
+        "nb": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld veipunkt"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld veipunkter"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "%lld/%lld": {
+      "shouldTranslate": false
+    },
+    "%lldm": {
+      "shouldTranslate": false
+    },
+    "%lldm – %lldm": {
+      "shouldTranslate": false
+    },
+    "(edited)": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "(redigert)"
+          }
+        }
+      }
+    },
+    "/path/to/AkashicExport": {
+      "shouldTranslate": false
+    },
+    "/path/to/r2/objects": {
+      "shouldTranslate": false
+    },
+    "0": {
+      "shouldTranslate": false
+    },
+    "0 km": {
+      "shouldTranslate": false
+    },
+    "1": {
+      "shouldTranslate": false
+    },
+    "A .zip containing route.gpx, journey.json and the photos. Everything opens without Akashic.": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "En .zip med route.gpx, journey.json og bildene. Alt kan åpnes uten Akashic."
+          }
+        }
+      }
+    },
+    "A track from Strava, Garmin, AllTrails or komoot.": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Et spor fra Strava, Garmin, AllTrails eller komoot."
+          }
+        }
+      }
+    },
+    "About": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Om"
+          }
+        }
+      }
+    },
+    "About %@ of thumbnails and metadata will upload over cellular. Full-resolution photos are never uploaded.": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Omtrent %@ med miniatyrbilder og informasjon lastes opp over mobildata. Bilder i full oppløsning lastes aldri opp."
+          }
+        }
+      }
+    },
+    "About %@ to download": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Omtrent %@ å laste ned"
+          }
+        }
+      }
+    },
+    "Accept all": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Godta alle"
+          }
+        }
+      }
+    },
+    "Active store": {
+      "shouldTranslate": false
+    },
+    "Add": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Legg til"
+          }
+        }
+      }
+    },
+    "Add %lld": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Legg til %lld"
+          }
+        }
+      }
+    },
+    "Add Media": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Legg til medier"
+          }
+        }
+      }
+    },
+    "Add a highlight": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Legg til et høydepunkt"
+          }
+        }
+      }
+    },
+    "Add a route": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Legg til en rute"
+          }
+        }
+      }
+    },
+    "Add a route, days or photos and it comes to life on the globe.": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Legg til en rute, dager eller bilder – så våkner den til liv på globusen."
+          }
+        }
+      }
+    },
+    "Add dates": {
+      "comment": "New journey: the collapsed dates row when neither end is set.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Legg til datoer"
+          }
+        }
+      }
+    },
+    "Add day": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Legg til dag"
+          }
+        }
+      }
+    },
+    "Add day after": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Legg til dag etter"
+          }
+        }
+      }
+    },
+    "Add days": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Legg til dager"
+          }
+        }
+      }
+    },
+    "Add fact": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Legg til faktum"
+          }
+        }
+      }
+    },
+    "Add historical site": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Legg til historisk sted"
+          }
+        }
+      }
+    },
+    "Add photos": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Legg til bilder"
+          }
+        }
+      }
+    },
+    "Add point of interest": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Legg til severdighet"
+          }
+        }
+      }
+    },
+    "Add the route, days and photos later — or draw the route by hand.": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Legg til rute, dager og bilder senere – eller tegn ruta selv."
+          }
+        }
+      }
+    },
+    "Add them one by one, or let your photo dates propose them": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Legg dem til én for én, eller la datoene på bildene foreslå dem"
+          }
+        }
+      }
+    },
+    "Add to day": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Legg til dag"
+          }
+        }
+      }
+    },
+    "Add your name to comment": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Skriv navnet ditt for å kommentere"
+          }
+        }
+      }
+    },
+    "Adjust location": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Juster posisjonen"
+          }
+        }
+      }
+    },
+    "Adventure": {
+      "comment": "Fun-fact category shown on a day.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eventyr"
+          }
+        }
+      }
+    },
+    "Akashic": {
+      "shouldTranslate": false
+    },
+    "Akashic Complete": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Akashic Complete"
+          }
+        }
+      }
+    },
+    "Akashic Complete is active — unlimited journeys and photos. Shared with your Family Sharing group.": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Akashic Complete er aktiv – ubegrenset med turer og bilder. Deles med familiedelingsgruppa di."
+          }
+        }
+      }
+    },
+    "Akashic Complete isn't available here yet.": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Akashic Complete er ikke tilgjengelig her ennå."
+          }
+        }
+      }
+    },
+    "Akashic turns your hikes and expeditions into journeys you can relive — every day, photo, and waypoint on a globe you can spin.": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Akashic gjør turene og ekspedisjonene dine om til reiser du kan oppleve på nytt – hver dag, hvert bilde og hvert veipunkt på en globus du kan spinne."
+          }
+        }
+      }
+    },
+    "Also update day positions": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Oppdater også posisjonene til dagene"
+          }
+        }
+      }
+    },
+    "Appearance": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Utseende"
+          }
+        }
+      }
+    },
+    "Apply": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bruk"
+          }
+        }
+      }
+    },
+    "Ascent": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stigning"
+          }
+        }
+      }
+    },
+    "Assets": {
+      "shouldTranslate": false
+    },
+    "Avg. Altitude": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Snitthøyde"
+          }
+        }
+      }
+    },
+    "Avg. Daily Distance": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Snitt per dag"
+          }
+        }
+      }
+    },
+    "Because the photos are yours, they count against your iCloud storage. A large photo archive may need a bigger iCloud+ plan.": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Siden bildene er dine, teller de mot iCloud-lagringen din. Et stort bildearkiv kan trenge en større iCloud+-plan."
+          }
+        }
+      }
+    },
+    "Browse imported photos": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Se importerte bilder"
+          }
+        }
+      }
+    },
+    "Build a route from this journey's geotagged photos": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bygg en rute fra bildene på denne turen som har posisjon"
+          }
+        }
+      }
+    },
+    "Build the day-by-day story, or seed days from your photo dates": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bygg historien dag for dag, eller lag dager fra datoene på bildene"
+          }
+        }
+      }
+    },
+    "Bytes uploaded": {
+      "shouldTranslate": false
+    },
+    "Camp name": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Navn på leiren"
+          }
+        }
+      }
+    },
+    "Cancel": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Avbryt"
+          }
+        }
+      }
+    },
+    "Cancelled": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Avbrutt"
+          }
+        }
+      }
+    },
+    "Caption": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bildetekst"
+          }
+        }
+      }
+    },
+    "Check your connection and try again.": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sjekk nettforbindelsen og prøv igjen."
+          }
+        }
+      }
+    },
+    "Choose folder…": {
+      "shouldTranslate": false
+    },
+    "Clear location": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fjern posisjonen"
+          }
+        }
+      }
+    },
+    "Clear override (follow build flag)": {
+      "shouldTranslate": false
+    },
+    "Clear sky": {
+      "comment": "WMO weather code 0.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Klarvær"
+          }
+        }
+      }
+    },
+    "Clear weather": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fjern været"
+          }
+        }
+      }
+    },
+    "Climate": {
+      "comment": "Fun-fact category shown on a day.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Klima"
+          }
+        }
+      }
+    },
+    "Close": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lukk"
+          }
+        }
+      }
+    },
+    "Close day": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lukk dagen"
+          }
+        }
+      }
+    },
+    "CloudKit container": {
+      "shouldTranslate": false
+    },
+    "CloudKit environment": {
+      "shouldTranslate": false
+    },
+    "CloudKit mode requires the Release-CloudKit build with entitlements and an iCloud account. Changes apply after relaunching the app.": {
+      "shouldTranslate": false
+    },
+    "Comment on Day %lld…": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kommenter dag %lld …"
+          }
+        }
+      }
+    },
+    "Comments": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kommentarer"
+          }
+        }
+      }
+    },
+    "Complete ✓": {
+      "shouldTranslate": false
+    },
+    "Compute import plan (dry run)": {
+      "shouldTranslate": false
+    },
+    "Continue": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fortsett"
+          }
+        }
+      }
+    },
+    "Correcting your own data is always free. Enriching a journey with suggested weather, places and points of interest is part of Akashic Complete.": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Å rette dine egne data er alltid gratis. Å berike en tur med foreslått vær, steder og severdigheter er en del av Akashic Complete."
+          }
+        }
+      }
+    },
+    "Could not save the journey. Please try again.": {
+      "comment": "New journey sheet: shown when the save fails.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kunne ikke lagre turen. Prøv igjen."
+          }
+        }
+      }
+    },
+    "Couldn't draft a route from these photos.": {
+      "comment": "Route correction: shown when drafting a route from photos produces nothing usable.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kunne ikke lage en rute fra disse bildene."
+          }
+        }
+      }
+    },
+    "Couldn't draft facts — try again": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kunne ikke lage fakta – prøv igjen"
+          }
+        }
+      }
+    },
+    "Couldn't draft — try again": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kunne ikke lage utkast – prøv igjen"
+          }
+        }
+      }
+    },
+    "Couldn't open this file": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kunne ikke åpne denne fila"
+          }
+        }
+      }
+    },
+    "Couldn't reach the App Store.": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fikk ikke kontakt med App Store."
+          }
+        }
+      }
+    },
+    "Couldn't suggest names — try again": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kunne ikke foreslå navn – prøv igjen"
+          }
+        }
+      }
+    },
+    "Country": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Land"
+          }
+        }
+      }
+    },
+    "Cover": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Forside"
+          }
+        }
+      }
+    },
+    "Create": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Opprett"
+          }
+        }
+      }
+    },
+    "Create a journey": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lag en tur"
+          }
+        }
+      }
+    },
+    "Create and keep as many trips as you like, with no photo cap.": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lag og behold så mange turer du vil, uten grense på bilder."
+          }
+        }
+      }
+    },
+    "Create export": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lag eksportfil"
+          }
+        }
+      }
+    },
+    "Culture": {
+      "comment": "Fun-fact category shown on a day.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kultur"
+          }
+        }
+      }
+    },
+    "Current": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nåværende"
+          }
+        }
+      }
+    },
+    "D%lld": {
+      "shouldTranslate": false
+    },
+    "DAY": {
+      "shouldTranslate": false
+    },
+    "DAY %lld": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "DAG %lld"
+          }
+        }
+      }
+    },
+    "Dates": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Datoer"
+          }
+        }
+      }
+    },
+    "Day": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dag"
+          }
+        }
+      }
+    },
+    "Day %lld": {
+      "comment": "Default name for a day added from Manage days, e.g. \"Day 4\".",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dag %lld"
+          }
+        }
+      }
+    },
+    "Day %lld camp": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Leir dag %lld"
+          }
+        }
+      }
+    },
+    "Day %lld — %@": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dag %lld – %@"
+          }
+        }
+      }
+    },
+    "Day %lld, %@": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dag %lld, %@"
+          }
+        }
+      }
+    },
+    "Day distance": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dagsdistanse"
+          }
+        }
+      }
+    },
+    "Day name": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dagsnavn"
+          }
+        }
+      }
+    },
+    "Day notes": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dagsnotater"
+          }
+        }
+      }
+    },
+    "Day notes, tap to edit": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dagsnotater, trykk for å redigere"
+          }
+        }
+      }
+    },
+    "Day number": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dagsnummer"
+          }
+        }
+      }
+    },
+    "Days": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dager"
+          }
+        }
+      }
+    },
+    "Days (%lld)": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dager (%lld)"
+          }
+        }
+      }
+    },
+    "Days from photos": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dager fra bilder"
+          }
+        }
+      }
+    },
+    "Delete": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Slett"
+          }
+        }
+      }
+    },
+    "Delete day": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Slett dagen"
+          }
+        }
+      }
+    },
+    "Delete journey": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Slett turen"
+          }
+        }
+      }
+    },
+    "Delete journey…": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Slett turen …"
+          }
+        }
+      }
+    },
+    "Delete photo": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Slett bildet"
+          }
+        }
+      }
+    },
+    "Delete this comment?": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Slette denne kommentaren?"
+          }
+        }
+      }
+    },
+    "Delete this day?": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Slette denne dagen?"
+          }
+        }
+      }
+    },
+    "Delete this journey?": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Slette denne turen?"
+          }
+        }
+      }
+    },
+    "Delete this photo?": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Slette dette bildet?"
+          }
+        }
+      }
+    },
+    "Delete this video?": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Slette denne videoen?"
+          }
+        }
+      }
+    },
+    "Delete video": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Slett videoen"
+          }
+        }
+      }
+    },
+    "Deleting a day never deletes its photos or comments — they move to Unassigned.": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Å slette en dag sletter aldri bildene eller kommentarene – de blir liggende uten dag."
+          }
+        }
+      }
+    },
+    "Descent": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nedstigning"
+          }
+        }
+      }
+    },
+    "Description": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Beskrivelse"
+          }
+        }
+      }
+    },
+    "Did you know?": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Visste du?"
+          }
+        }
+      }
+    },
+    "Difficulty": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vanskelighetsgrad"
+          }
+        }
+      }
+    },
+    "Discard": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Forkast"
+          }
+        }
+      }
+    },
+    "Discoveries": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Oppdagelser"
+          }
+        }
+      }
+    },
+    "Distance": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Distanse"
+          }
+        }
+      }
+    },
+    "Distance (km)": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Distanse (km)"
+          }
+        }
+      }
+    },
+    "Done": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ferdig"
+          }
+        }
+      }
+    },
+    "Done reordering": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ferdig"
+          }
+        }
+      }
+    },
+    "Download now over cellular": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Last ned nå over mobildata"
+          }
+        }
+      }
+    },
+    "Download over Wi-Fi only": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Last ned bare over Wi-Fi"
+          }
+        }
+      }
+    },
+    "Draft facts": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lag fakta"
+          }
+        }
+      }
+    },
+    "Draft route from photos": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lag rute fra bildene"
+          }
+        }
+      }
+    },
+    "Draft with Apple Intelligence": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lag utkast med Apple Intelligence"
+          }
+        }
+      }
+    },
+    "Drafting facts…": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lager fakta …"
+          }
+        }
+      }
+    },
+    "Drafting…": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lager utkast …"
+          }
+        }
+      }
+    },
+    "Draw": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tegn"
+          }
+        }
+      }
+    },
+    "Draw on map": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tegn på kartet"
+          }
+        }
+      }
+    },
+    "Draw route": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tegn rute"
+          }
+        }
+      }
+    },
+    "Draw route on map": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tegn ruta på kartet"
+          }
+        }
+      }
+    },
+    "Drizzle": {
+      "comment": "WMO weather code 53.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Yr"
+          }
+        }
+      }
+    },
+    "Dry-run computes the full plan (no account or entitlement needed). The real upload requires the Debug-CloudKit / Release-CloudKit build with entitlements and an iCloud account signed into this device — the default build cannot even construct a CloudKit container.": {
+      "shouldTranslate": false
+    },
+    "Duration": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Varighet"
+          }
+        }
+      }
+    },
+    "ELEVATION": {
+      "shouldTranslate": false
+    },
+    "Easy": {
+      "comment": "Journey difficulty rating, easiest of four.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enkel"
+          }
+        }
+      }
+    },
+    "Edit": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rediger"
+          }
+        }
+      }
+    },
+    "Edit Day %lld": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rediger dag %lld"
+          }
+        }
+      }
+    },
+    "Edit Journey": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rediger turen"
+          }
+        }
+      }
+    },
+    "Edit Photo": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rediger bilde"
+          }
+        }
+      }
+    },
+    "Edit Video": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rediger video"
+          }
+        }
+      }
+    },
+    "Edit comment": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rediger kommentaren"
+          }
+        }
+      }
+    },
+    "Edit day": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rediger dagen"
+          }
+        }
+      }
+    },
+    "Edit journey": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rediger turen"
+          }
+        }
+      }
+    },
+    "Edit photo": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rediger bilde"
+          }
+        }
+      }
+    },
+    "Editing preview": {
+      "shouldTranslate": false
+    },
+    "Edit…": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rediger …"
+          }
+        }
+      }
+    },
+    "Elapsed": {
+      "shouldTranslate": false
+    },
+    "Elevation": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Høyde"
+          }
+        }
+      }
+    },
+    "Elevation (m)": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Høyde (m)"
+          }
+        }
+      }
+    },
+    "Elevation Profile": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Høydeprofil"
+          }
+        }
+      }
+    },
+    "End": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Slutt"
+          }
+        }
+      }
+    },
+    "End Elev.": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Slutthøyde"
+          }
+        }
+      }
+    },
+    "Enrich journey": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Berik turen"
+          }
+        }
+      }
+    },
+    "Enrich journey is part of Akashic Complete": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Berik turen er en del av Akashic Complete"
+          }
+        }
+      }
+    },
+    "Entitlement": {
+      "shouldTranslate": false
+    },
+    "Entitlement (debug)": {
+      "shouldTranslate": false
+    },
+    "Environment": {
+      "shouldTranslate": false
+    },
+    "Est. Hiking Time": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Est. gangtid"
+          }
+        }
+      }
+    },
+    "Every day already has weather, places and points of interest — or WeatherKit has no data for these dates and coordinates.": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alle dagene har alt vær, steder og severdigheter – eller WeatherKit har ingen data for disse datoene og posisjonene."
+          }
+        }
+      }
+    },
+    "Everyone else loses access. Nothing is deleted — the journey stays yours, and copies already on their devices remain there.": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alle andre mister tilgangen. Ingenting slettes – turen er fortsatt din, og kopier som alt ligger på enhetene deres blir liggende."
+          }
+        }
+      }
+    },
+    "Everyone you invite sees this journey's days, photos and comments. Editors can add photos and comments; viewers can only read.": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alle du inviterer ser dagene, bildene og kommentarene på denne turen. De som kan redigere kan legge til bilder og kommentarer; de andre kan bare lese."
+          }
+        }
+      }
+    },
+    "Explore": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Utforsk"
+          }
+        }
+      }
+    },
+    "Export": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eksport"
+          }
+        }
+      }
+    },
+    "Export a journey from its ⋯ menu — it bundles the route, photos, and notes into a file you can share or back up.": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eksporter en tur fra ⋯-menyen – den samler ruta, bildene og notatene i én fil du kan dele eller ta vare på."
+          }
+        }
+      }
+    },
+    "Export bundle path": {
+      "shouldTranslate": false
+    },
+    "Export journey": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eksporter turen"
+          }
+        }
+      }
+    },
+    "Extreme": {
+      "comment": "Journey difficulty rating, hardest of four.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ekspert"
+          }
+        }
+      }
+    },
+    "Fact": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Faktum"
+          }
+        }
+      }
+    },
+    "Facts": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fakta"
+          }
+        }
+      }
+    },
+    "Failed": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mislyktes"
+          }
+        }
+      }
+    },
+    "Failures": {
+      "shouldTranslate": false
+    },
+    "Family Sharing": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Familiedeling"
+          }
+        }
+      }
+    },
+    "Filter by country name (case-insensitive)": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Filtrer på landnavn (ikke forskjell på store og små bokstaver)"
+          }
+        }
+      }
+    },
+    "Filter photos by a specific waypoint/day": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Filtrer bildene på et bestemt veipunkt eller dag"
+          }
+        }
+      }
+    },
+    "Finished with some failures": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ferdig, men noe mislyktes"
+          }
+        }
+      }
+    },
+    "Flora": {
+      "comment": "Fun-fact category shown on a day.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Planteliv"
+          }
+        }
+      }
+    },
+    "Fog": {
+      "comment": "WMO weather codes 45/48.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tåke"
+          }
+        }
+      }
+    },
+    "Free": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gratis"
+          }
+        }
+      }
+    },
+    "Freezing drizzle": {
+      "comment": "WMO weather codes 56/57.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Underkjølt yr"
+          }
+        }
+      }
+    },
+    "Freezing rain": {
+      "comment": "WMO weather codes 66/67.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Underkjølt regn"
+          }
+        }
+      }
+    },
+    "Fun facts": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Morsomme fakta"
+          }
+        }
+      }
+    },
+    "Geography": {
+      "comment": "Fun-fact category shown on a day.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Geografi"
+          }
+        }
+      }
+    },
+    "Geology": {
+      "comment": "Fun-fact category shown on a day.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Geologi"
+          }
+        }
+      }
+    },
+    "Get Journey Details": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hent turdetaljer"
+          }
+        }
+      }
+    },
+    "Get Journey Photos": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hent turbilder"
+          }
+        }
+      }
+    },
+    "Get Journey Stats": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hent turstatistikk"
+          }
+        }
+      }
+    },
+    "Get computed statistics for a journey including difficulty rating, estimated hiking time, and elevation analysis.": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hent utregnet statistikk for en tur, inkludert vanskelighetsgrad, anslått gangtid og høydeanalyse."
+          }
+        }
+      }
+    },
+    "Get details for ${journey}": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hent detaljer om ${journey}"
+          }
+        }
+      }
+    },
+    "Get full details of a journey including camps/waypoints, route coordinates, and statistics.": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hent alle detaljene om en tur, inkludert leirer/veipunkt, rutekoordinater og statistikk."
+          }
+        }
+      }
+    },
+    "Get photos for ${journey}": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hent bilder fra ${journey}"
+          }
+        }
+      }
+    },
+    "Get photos for a journey with metadata including GPS coordinates and capture date.": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hent bildene fra en tur med posisjon og opptaksdato."
+          }
+        }
+      }
+    },
+    "Get started": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kom i gang"
+          }
+        }
+      }
+    },
+    "Get stats for ${journey}": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hent statistikk for ${journey}"
+          }
+        }
+      }
+    },
+    "Globe": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Globus"
+          }
+        }
+      }
+    },
+    "Hard": {
+      "comment": "Journey difficulty rating.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Krevende"
+          }
+        }
+      }
+    },
+    "Heavy drizzle": {
+      "comment": "WMO weather code 55.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kraftig yr"
+          }
+        }
+      }
+    },
+    "Heavy rain": {
+      "comment": "WMO weather code 65.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kraftig regn"
+          }
+        }
+      }
+    },
+    "Heavy snow": {
+      "comment": "WMO weather code 75.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kraftig snø"
+          }
+        }
+      }
+    },
+    "Heroes missing": {
+      "shouldTranslate": false
+    },
+    "Hide developer tools": {
+      "shouldTranslate": false
+    },
+    "High": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Maks"
+          }
+        }
+      }
+    },
+    "High °C": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Maks °C"
+          }
+        }
+      }
+    },
+    "Highlights": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Høydepunkter"
+          }
+        }
+      }
+    },
+    "Historical Sites": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Historiske steder"
+          }
+        }
+      }
+    },
+    "Historical sites": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Historiske steder"
+          }
+        }
+      }
+    },
+    "History": {
+      "comment": "Fun-fact category shown on a day.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Historie"
+          }
+        }
+      }
+    },
+    "Import GPX": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Importer GPX"
+          }
+        }
+      }
+    },
+    "Import a GPX from Strava, Garmin or komoot — or draw it by hand": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Importer en GPX fra Strava, Garmin eller komoot – eller tegn den selv"
+          }
+        }
+      }
+    },
+    "Import a GPX route": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Importer en GPX-rute"
+          }
+        }
+      }
+    },
+    "Import a new track — preview before it replaces this route": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Importer et nytt spor – se det før det erstatter denne ruta"
+          }
+        }
+      }
+    },
+    "Import a track from Strava, Garmin, AllTrails or komoot": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Importer et spor fra Strava, Garmin, AllTrails eller komoot"
+          }
+        }
+      }
+    },
+    "Import failed": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Importen mislyktes"
+          }
+        }
+      }
+    },
+    "Import from export bundle": {
+      "shouldTranslate": false
+    },
+    "Import from export bundle (T2.5)": {
+      "shouldTranslate": false
+    },
+    "Import route from GPX": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Importer rute fra GPX"
+          }
+        }
+      }
+    },
+    "Import to CloudKit (T2.5)": {
+      "shouldTranslate": false
+    },
+    "Import to CloudKit?": {
+      "shouldTranslate": false
+    },
+    "Import to PRODUCTION CloudKit?": {
+      "shouldTranslate": false
+    },
+    "Imported photos": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Importerte bilder"
+          }
+        }
+      }
+    },
+    "Include original photos": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ta med originalbildene"
+          }
+        }
+      }
+    },
+    "Invite more people": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Inviter flere"
+          }
+        }
+      }
+    },
+    "Invite people": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Inviter folk"
+          }
+        }
+      }
+    },
+    "Invite the people you travelled with. They see your journeys on their own devices, and can add their photos and comments.": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Inviter dem du var på tur med. De ser turene dine på sine egne enheter, og kan legge til sine bilder og kommentarer."
+          }
+        }
+      }
+    },
+    "JOURNEY COMPLETE": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "TUREN ER FULLFØRT"
+          }
+        }
+      }
+    },
+    "Journey": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tur"
+          }
+        }
+      }
+    },
+    "Journey (UUID or slug)": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tur (UUID eller slug)"
+          }
+        }
+      }
+    },
+    "Journey Details": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Turdetaljer"
+          }
+        }
+      }
+    },
+    "Journey Photos": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Turbilder"
+          }
+        }
+      }
+    },
+    "Journey Stats": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Turstatistikk"
+          }
+        }
+      }
+    },
+    "Journey name": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Navn på turen"
+          }
+        }
+      }
+    },
+    "Journeys": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Turer"
+          }
+        }
+      }
+    },
+    "Journeys loaded": {
+      "shouldTranslate": false
+    },
+    "Let Akashic suggest weather, places and points of interest for an existing journey — with Akashic Complete. Correcting your own data is always free.": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La Akashic foreslå vær, steder og severdigheter til en tur du alt har – med Akashic Complete. Å rette dine egne data er alltid gratis."
+          }
+        }
+      }
+    },
+    "Library": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bibliotek"
+          }
+        }
+      }
+    },
+    "Light drizzle": {
+      "comment": "WMO weather code 51.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lett yr"
+          }
+        }
+      }
+    },
+    "Light rain": {
+      "comment": "WMO weather code 61.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lett regn"
+          }
+        }
+      }
+    },
+    "Light snow": {
+      "comment": "WMO weather code 71.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lett snø"
+          }
+        }
+      }
+    },
+    "Limit": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Grense"
+          }
+        }
+      }
+    },
+    "List Journeys": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "List opp turer"
+          }
+        }
+      }
+    },
+    "List all journeys with metadata including name, country, duration, and distance.": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "List opp alle turer med navn, land, varighet og distanse."
+          }
+        }
+      }
+    },
+    "List journeys": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "List opp turer"
+          }
+        }
+      }
+    },
+    "Location": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Posisjon"
+          }
+        }
+      }
+    },
+    "Longest Day": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lengste dag"
+          }
+        }
+      }
+    },
+    "Looking for suggestions…": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ser etter forslag …"
+          }
+        }
+      }
+    },
+    "Low": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Min"
+          }
+        }
+      }
+    },
+    "Low °C": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Min °C"
+          }
+        }
+      }
+    },
+    "Mainly clear": {
+      "comment": "WMO weather code 1.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stort sett klart"
+          }
+        }
+      }
+    },
+    "Major": {
+      "comment": "Historical-site significance, highest of three.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stor"
+          }
+        }
+      }
+    },
+    "Make this journey public": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gjør denne turen offentlig"
+          }
+        }
+      }
+    },
+    "Manage": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Administrer"
+          }
+        }
+      }
+    },
+    "Manage days": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Administrer dager"
+          }
+        }
+      }
+    },
+    "Max Daily Gain": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Største stigning"
+          }
+        }
+      }
+    },
+    "Max Daily Loss": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Største nedstigning"
+          }
+        }
+      }
+    },
+    "Maximum number of journeys (default 20, max 100)": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Høyeste antall turer (standard 20, maks 100)"
+          }
+        }
+      }
+    },
+    "Maximum number of photos (default 50, max 200)": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Høyeste antall bilder (standard 50, maks 200)"
+          }
+        }
+      }
+    },
+    "Maximum number of results (default 10, max 50)": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Høyeste antall treff (standard 10, maks 50)"
+          }
+        }
+      }
+    },
+    "Media root (R2 objects)": {
+      "shouldTranslate": false
+    },
+    "Membership": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Medlemskap"
+          }
+        }
+      }
+    },
+    "Minor": {
+      "comment": "Historical-site significance, lowest of three.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Liten"
+          }
+        }
+      }
+    },
+    "Missing media": {
+      "shouldTranslate": false
+    },
+    "Mode": {
+      "shouldTranslate": false
+    },
+    "Moderate": {
+      "comment": "Journey difficulty rating.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Middels"
+          }
+        }
+      }
+    },
+    "Move each day's location to the matching GPX waypoint (by order). Day names and content are kept.": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Flytt posisjonen til hver dag til veipunktet som passer i GPX-fila (etter rekkefølge). Navn og innhold på dagene beholdes."
+          }
+        }
+      }
+    },
+    "Move map": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Flytt kartet"
+          }
+        }
+      }
+    },
+    "Move to day": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Flytt til dag"
+          }
+        }
+      }
+    },
+    "Move to day…": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Flytt til dag …"
+          }
+        }
+      }
+    },
+    "Name": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Navn"
+          }
+        }
+      }
+    },
+    "Name a trek, drop in a GPX route, and let your photos fill the days.": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gi turen et navn, slipp inn en GPX-rute, og la bildene fylle dagene."
+          }
+        }
+      }
+    },
+    "New": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ny"
+          }
+        }
+      }
+    },
+    "New Journey": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ny tur"
+          }
+        }
+      }
+    },
+    "New journey": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ny tur"
+          }
+        }
+      }
+    },
+    "Next day": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Neste dag"
+          }
+        }
+      }
+    },
+    "No comments yet": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ingen kommentarer ennå"
+          }
+        }
+      }
+    },
+    "No days yet": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ingen dager ennå"
+          }
+        }
+      }
+    },
+    "No days yet — import a GPX with waypoints, seed from photos, or add days below.": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ingen dager ennå – importer en GPX med veipunkt, hent fra bilder, eller legg til dager under."
+          }
+        }
+      }
+    },
+    "No elevation data": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ingen høydedata"
+          }
+        }
+      }
+    },
+    "No geotagged photos to draft a route from.": {
+      "comment": "Route correction: shown when drafting a route from photos finds no GPS data.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ingen bilder med posisjon å lage rute fra."
+          }
+        }
+      }
+    },
+    "No iCloud account is signed in. Akashic works locally on this device — to sync and share, sign in via Settings › [your name] › iCloud.": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ingen iCloud-konto er logget inn. Akashic fungerer lokalt på denne enheten – for å synkronisere og dele, logg inn via Innstillinger › [navnet ditt] › iCloud."
+          }
+        }
+      }
+    },
+    "No journeys found.": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fant ingen turer."
+          }
+        }
+      }
+    },
+    "No journeys match \"%@\".": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ingen turer passer «%@»."
+          }
+        }
+      }
+    },
+    "No location": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ingen posisjon"
+          }
+        }
+      }
+    },
+    "No photos yet for %@.": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ingen bilder fra %@ ennå."
+          }
+        }
+      }
+    },
+    "No route": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ingen rute"
+          }
+        }
+      }
+    },
+    "No route yet — import a GPX, draw one on the map, or leave it for later.": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ingen rute ennå – importer en GPX, tegn en på kartet, eller vent til senere."
+          }
+        }
+      }
+    },
+    "No stats": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ingen statistikk"
+          }
+        }
+      }
+    },
+    "Not matched to a day": {
+      "comment": "Photo grid: subtitle of the section holding photos with no day.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ikke koblet til en dag"
+          }
+        }
+      }
+    },
+    "Not shared": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ikke delt"
+          }
+        }
+      }
+    },
+    "Notable": {
+      "comment": "Historical-site significance, middle of three.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Middels"
+          }
+        }
+      }
+    },
+    "Nothing drawn yet": {
+      "comment": "Route drawing sheet: shown before the first stroke.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ingenting tegnet ennå"
+          }
+        }
+      }
+    },
+    "Nothing has been added to this journey yet. Its owner can add a route, days and photos.": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ingenting er lagt til denne turen ennå. Eieren kan legge til rute, dager og bilder."
+          }
+        }
+      }
+    },
+    "Nothing to add right now.": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ingenting å legge til nå."
+          }
+        }
+      }
+    },
+    "Nothing to show yet": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ingenting å vise ennå"
+          }
+        }
+      }
+    },
+    "Number of journeys to skip for pagination": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hvor mange turer som skal hoppes over ved paginering"
+          }
+        }
+      }
+    },
+    "OK": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "OK"
+          }
+        }
+      }
+    },
+    "Offset": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Forskyvning"
+          }
+        }
+      }
+    },
+    "One purchase covers everyone in your Family Sharing group.": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ett kjøp dekker alle i familiedelingsgruppa di."
+          }
+        }
+      }
+    },
+    "One purchase, no subscription — and it's shared with your family.": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ett kjøp, ingen abonnement – og det deles med familien."
+          }
+        }
+      }
+    },
+    "One-time purchase · no subscription": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Engangskjøp · ingen abonnement"
+          }
+        }
+      }
+    },
+    "Only the journey's owner can manage the public showcase.": {
+      "comment": "Showcase: shown to someone a journey was shared with.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bare eieren av turen kan styre den offentlige utstillingen."
+          }
+        }
+      }
+    },
+    "Only the journey's owner can manage the public showcase. This journey was shared with you, so whether it appears on the world-readable showcase is controlled on the owner's device.": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bare eieren av turen kan styre den offentlige utstillingen. Denne turen er delt med deg, så om den vises offentlig bestemmes på enheten til eieren."
+          }
+        }
+      }
+    },
+    "Only the route and the text — small, and quick to share.": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bare ruta og teksten – lite, og raskt å dele."
+          }
+        }
+      }
+    },
+    "Only you can see this journey.": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bare du kan se denne turen."
+          }
+        }
+      }
+    },
+    "Open Showcase": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Åpne utstillingen"
+          }
+        }
+      }
+    },
+    "Open journey": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Åpne turen"
+          }
+        }
+      }
+    },
+    "Opens the notes for editing": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Åpner notatene for redigering"
+          }
+        }
+      }
+    },
+    "Originals on disk": {
+      "shouldTranslate": false
+    },
+    "Overcast": {
+      "comment": "WMO weather code 3.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Overskyet"
+          }
+        }
+      }
+    },
+    "Override (debug)": {
+      "shouldTranslate": false
+    },
+    "Overview": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Oversikt"
+          }
+        }
+      }
+    },
+    "Packaging…": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pakker …"
+          }
+        }
+      }
+    },
+    "Pan and zoom, then switch to Draw": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Panorer og zoom, bytt så til Tegn"
+          }
+        }
+      }
+    },
+    "Partly cloudy": {
+      "comment": "WMO weather code 2.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Delvis skyet"
+          }
+        }
+      }
+    },
+    "People": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Personer"
+          }
+        }
+      }
+    },
+    "Persistence mode": {
+      "shouldTranslate": false
+    },
+    "Photo": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bilde"
+          }
+        }
+      }
+    },
+    "Photo downloads can reach several GB on first sync. The map stays dark in every appearance, so imagery keeps its contrast.": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nedlasting av bilder kan bli flere GB ved første synkronisering. Kartet holdes mørkt i alle utseender, så bildene beholder kontrasten."
+          }
+        }
+      }
+    },
+    "Photo, day %lld": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bilde, dag %lld"
+          }
+        }
+      }
+    },
+    "Photos": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bilder"
+          }
+        }
+      }
+    },
+    "Photos carry their own dates and locations": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bilder har sine egne datoer og posisjoner"
+          }
+        }
+      }
+    },
+    "Photos in store": {
+      "shouldTranslate": false
+    },
+    "Pick more photos": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Velg flere bilder"
+          }
+        }
+      }
+    },
+    "Pick photos to propose days": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Velg bilder for å foreslå dager"
+          }
+        }
+      }
+    },
+    "Pick the trip's photos — Akashic drafts the days, route and map, and adds the photos.": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Velg bildene fra turen – Akashic foreslår dager, rute og kart, og legger inn bildene."
+          }
+        }
+      }
+    },
+    "Pinch to zoom · Drag to scrub · Tap a day marker": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Knip for å zoome · Dra for å følge · Trykk en dagsmarkør"
+          }
+        }
+      }
+    },
+    "Place name": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stedsnavn"
+          }
+        }
+      }
+    },
+    "Place on map": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Plasser på kartet"
+          }
+        }
+      }
+    },
+    "Points of Interest": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Severdigheter"
+          }
+        }
+      }
+    },
+    "Points of interest": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Severdigheter"
+          }
+        }
+      }
+    },
+    "Precip": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nedbør"
+          }
+        }
+      }
+    },
+    "Precip mm": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nedbør mm"
+          }
+        }
+      }
+    },
+    "Preparing photos… %lld of %lld": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Forbereder bilder … %lld av %lld"
+          }
+        }
+      }
+    },
+    "Preview route": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Forhåndsvis ruta"
+          }
+        }
+      }
+    },
+    "Previous day": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Forrige dag"
+          }
+        }
+      }
+    },
+    "Privacy": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Personvern"
+          }
+        }
+      }
+    },
+    "Privacy Policy": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Personvernerklæring"
+          }
+        }
+      }
+    },
+    "Private": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Privat"
+          }
+        }
+      }
+    },
+    "Processing…": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Behandler …"
+          }
+        }
+      }
+    },
+    "Progress": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Framdrift"
+          }
+        }
+      }
+    },
+    "Public": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Offentlig"
+          }
+        }
+      }
+    },
+    "Public showcase": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Offentlig utstilling"
+          }
+        }
+      }
+    },
+    "Publish": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Publiser"
+          }
+        }
+      }
+    },
+    "Publish anyway": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Publiser likevel"
+          }
+        }
+      }
+    },
+    "Publish over cellular?": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Publisere over mobildata?"
+          }
+        }
+      }
+    },
+    "Publish to showcase": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Publiser til utstillingen"
+          }
+        }
+      }
+    },
+    "Published": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Publisert"
+          }
+        }
+      }
+    },
+    "Publishing is last-write-wins: it overwrites the mirror with this device's copy and removes any showcase photos that no longer exist here.": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Den siste publiseringen gjelder: den overskriver kopien på nett med det som ligger på denne enheten, og fjerner bilder fra utstillingen som ikke finnes her lenger."
+          }
+        }
+      }
+    },
+    "Publishing makes this journey's metadata and photo thumbnails world-readable — anyone with the link can view them without signing in.": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Når du publiserer blir informasjonen om turen og miniatyrbildene lesbare for alle – hvem som helst med lenken kan se dem uten å logge inn."
+          }
+        }
+      }
+    },
+    "Publishing to the public showcase needs the CloudKit build with an iCloud account, running in %@ mode. This app is currently in %@ mode, so the showcase can only be managed once CloudKit sync is active.": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Å publisere til den offentlige utstillingen krever CloudKit-versjonen med en iCloud-konto, i %@-modus. Appen kjører nå i %@-modus, så utstillingen kan først styres når CloudKit-synkronisering er aktiv."
+          }
+        }
+      }
+    },
+    "Purchasing…": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kjøper …"
+          }
+        }
+      }
+    },
+    "Query": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Søk"
+          }
+        }
+      }
+    },
+    "Quit and reopen Akashic for the new persistence mode to take effect.": {
+      "shouldTranslate": false
+    },
+    "Rain": {
+      "comment": "WMO weather code 63.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Regn"
+          }
+        }
+      }
+    },
+    "Rain showers": {
+      "comment": "WMO weather codes 80–82.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Regnbyer"
+          }
+        }
+      }
+    },
+    "Rating": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Grad"
+          }
+        }
+      }
+    },
+    "Read this journey": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lese denne turen"
+          }
+        }
+      }
+    },
+    "Reading photo locations, places and weather…": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Leser posisjoner, steder og vær …"
+          }
+        }
+      }
+    },
+    "Reads capture dates, location and the photos themselves — they're added to the journey, on the day they belong to, the moment you create it.": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Leser opptaksdatoer, posisjon og bildene selv – de legges inn på turen, på dagen de hører til, i det du oppretter den."
+          }
+        }
+      }
+    },
+    "Recompute stats from route": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Regn ut statistikken på nytt"
+          }
+        }
+      }
+    },
+    "Records": {
+      "shouldTranslate": false
+    },
+    "Records %lld/%lld": {
+      "shouldTranslate": false
+    },
+    "Records saved": {
+      "shouldTranslate": false
+    },
+    "Redraw route": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tegn ruta på nytt"
+          }
+        }
+      }
+    },
+    "Redraw route on map": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tegn ruta på nytt på kartet"
+          }
+        }
+      }
+    },
+    "Refresh distance, ascent and summit from the current route": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Oppdater distanse, stigning og topp ut fra ruta som ligger inne"
+          }
+        }
+      }
+    },
+    "Relaunch required": {
+      "shouldTranslate": false
+    },
+    "Remove access": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fjern tilgang"
+          }
+        }
+      }
+    },
+    "Remove as cover": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fjern som forsidebilde"
+          }
+        }
+      }
+    },
+    "Remove from Showcase first": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fjern fra utstillingen først"
+          }
+        }
+      }
+    },
+    "Remove from showcase": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fjern fra utstillingen"
+          }
+        }
+      }
+    },
+    "Remove route": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fjern ruta"
+          }
+        }
+      }
+    },
+    "Removed": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fjernet"
+          }
+        }
+      }
+    },
+    "Reorder": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Endre rekkefølge"
+          }
+        }
+      }
+    },
+    "Replace": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Erstatt"
+          }
+        }
+      }
+    },
+    "Replace route from GPX": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Erstatt ruta med en GPX"
+          }
+        }
+      }
+    },
+    "Replace with GPX": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Erstatt med GPX"
+          }
+        }
+      }
+    },
+    "Replace your notes?": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Erstatte notatene dine?"
+          }
+        }
+      }
+    },
+    "Replay intro": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vis introduksjonen igjen"
+          }
+        }
+      }
+    },
+    "Reset (%.1f×)": {
+      "shouldTranslate": false
+    },
+    "Restore purchases": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gjenopprett kjøp"
+          }
+        }
+      }
+    },
+    "Restoring…": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gjenoppretter …"
+          }
+        }
+      }
+    },
+    "Retry": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Prøv igjen"
+          }
+        }
+      }
+    },
+    "Rotate left": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Roter mot venstre"
+          }
+        }
+      }
+    },
+    "Rotate right": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Roter mot høyre"
+          }
+        }
+      }
+    },
+    "Route": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rute"
+          }
+        }
+      }
+    },
+    "Route options": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rutevalg"
+          }
+        }
+      }
+    },
+    "Run import to CloudKit…": {
+      "shouldTranslate": false
+    },
+    "SAMPLE": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "EKSEMPEL"
+          }
+        }
+      }
+    },
+    "Save": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lagre"
+          }
+        }
+      }
+    },
+    "Save or share": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lagre eller del"
+          }
+        }
+      }
+    },
+    "Science": {
+      "comment": "Fun-fact category shown on a day.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vitenskap"
+          }
+        }
+      }
+    },
+    "Search Journeys": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Søk i turer"
+          }
+        }
+      }
+    },
+    "Search journeys by name, country, or description.": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Søk i turer på navn, land eller beskrivelse."
+          }
+        }
+      }
+    },
+    "Search journeys for ${query}": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Søk i turer etter ${query}"
+          }
+        }
+      }
+    },
+    "Select more": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Velg flere"
+          }
+        }
+      }
+    },
+    "Select photos or videos": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Velg bilder eller videoer"
+          }
+        }
+      }
+    },
+    "Send comment": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Send kommentaren"
+          }
+        }
+      }
+    },
+    "Set as cover": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bruk som forsidebilde"
+          }
+        }
+      }
+    },
+    "Settings": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Innstillinger"
+          }
+        }
+      }
+    },
+    "Share": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Del"
+          }
+        }
+      }
+    },
+    "Share the link": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Del lenken"
+          }
+        }
+      }
+    },
+    "Share with family": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Del med familien"
+          }
+        }
+      }
+    },
+    "Sharing": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deling"
+          }
+        }
+      }
+    },
+    "Showcase": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Utstilling"
+          }
+        }
+      }
+    },
+    "Showcase link, %@": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Utstillingslenke, %@"
+          }
+        }
+      }
+    },
+    "Showcase updated": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Utstillingen er oppdatert"
+          }
+        }
+      }
+    },
+    "Shown next to the comments you leave on your journeys.": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vises ved kommentarene du legger igjen på turene dine."
+          }
+        }
+      }
+    },
+    "Simulate Akashic Complete": {
+      "shouldTranslate": false
+    },
+    "Site name": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Navn på stedet"
+          }
+        }
+      }
+    },
+    "Skip": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hopp over"
+          }
+        }
+      }
+    },
+    "Skip — add a route later": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hopp over – legg til rute senere"
+          }
+        }
+      }
+    },
+    "Skipped (no media)": {
+      "shouldTranslate": false
+    },
+    "Skipped (no thumbnail)": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hoppet over (uten miniatyrbilde)"
+          }
+        }
+      }
+    },
+    "Snow": {
+      "comment": "WMO weather code 73.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Snø"
+          }
+        }
+      }
+    },
+    "Snow grains": {
+      "comment": "WMO weather code 77.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kornsnø"
+          }
+        }
+      }
+    },
+    "Snow showers": {
+      "comment": "WMO weather codes 85/86.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Snøbyer"
+          }
+        }
+      }
+    },
+    "Source: %@": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kilde: %@"
+          }
+        }
+      }
+    },
+    "Start": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Start"
+          }
+        }
+      }
+    },
+    "Start Elev.": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Starthøyde"
+          }
+        }
+      }
+    },
+    "Start from your photos": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Start med bildene"
+          }
+        }
+      }
+    },
+    "Start with just a name": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Start med bare et navn"
+          }
+        }
+      }
+    },
+    "Start your first journey": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Start din første tur"
+          }
+        }
+      }
+    },
+    "Starting": {
+      "comment": "Showcase publish: first progress phase.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Starter"
+          }
+        }
+      }
+    },
+    "Stats": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Statistikk"
+          }
+        }
+      }
+    },
+    "Stats only — the route itself is unchanged.": {
+      "comment": "Route correction: note on the recompute-stats preview.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bare statistikk – ruta er uendret."
+          }
+        }
+      }
+    },
+    "Status": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Status"
+          }
+        }
+      }
+    },
+    "Steepest Day": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bratteste dag"
+          }
+        }
+      }
+    },
+    "Stop sharing": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Slutt å dele"
+          }
+        }
+      }
+    },
+    "Stop sharing this journey?": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Slutte å dele denne turen?"
+          }
+        }
+      }
+    },
+    "Storage": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lagring"
+          }
+        }
+      }
+    },
+    "Suggest names": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Foreslå navn"
+          }
+        }
+      }
+    },
+    "Suggested from your route": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Foreslått ut fra ruta di"
+          }
+        }
+      }
+    },
+    "Suggesting names…": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Foreslår navn …"
+          }
+        }
+      }
+    },
+    "Suggestions": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Forslag"
+          }
+        }
+      }
+    },
+    "Suggestions for this journey": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Forslag til denne turen"
+          }
+        }
+      }
+    },
+    "Summary": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sammendrag"
+          }
+        }
+      }
+    },
+    "Summit": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Topp"
+          }
+        }
+      }
+    },
+    "Summit elevation (m)": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Topphøyde (m)"
+          }
+        }
+      }
+    },
+    "Summit: %@": {
+      "comment": "Journey story header: the highest point reached, e.g. \"Summit: 5 895 m\".",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Topp: %@"
+          }
+        }
+      }
+    },
+    "Support": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kundestøtte"
+          }
+        }
+      }
+    },
+    "Survival": {
+      "comment": "Fun-fact category shown on a day.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Overlevelse"
+          }
+        }
+      }
+    },
+    "Sync": {
+      "shouldTranslate": false
+    },
+    "TIPS": {
+      "shouldTranslate": false
+    },
+    "Target container": {
+      "shouldTranslate": false
+    },
+    "Terms": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vilkår"
+          }
+        }
+      }
+    },
+    "Terms of Use": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bruksvilkår"
+          }
+        }
+      }
+    },
+    "Text matched against name, country, or description": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Teksten sammenlignes med navn, land eller beskrivelse"
+          }
+        }
+      }
+    },
+    "The Simulator can read host paths directly. For results that persist across launches and show photos, switch the store to %@ below, relaunch, then import. Re-importing preserves native edits — it only refreshes media paths and metadata.": {
+      "shouldTranslate": false
+    },
+    "The day is removed and the remaining days renumber. Its photos and comments become Unassigned — nothing is deleted.": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dagen fjernes, og resten av dagene får nye numre. Bildene og kommentarene blir liggende uten dag – ingenting slettes."
+          }
+        }
+      }
+    },
+    "The free tier holds up to %lld photos per journey. We added the ones that fit. Akashic Complete lifts the cap so the rest can come too.": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gratisversjonen har plass til %lld bilder per tur. Vi la inn dem det var plass til. Akashic Complete fjerner grensen, så resten får plass også."
+          }
+        }
+      }
+    },
+    "The free tier includes 100 photos per journey": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gratisversjonen inneholder 100 bilder per tur"
+          }
+        }
+      }
+    },
+    "The free tier includes one journey": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gratisversjonen inneholder én tur"
+          }
+        }
+      }
+    },
+    "The free tier includes one journey (up to 100 photos), the full experience, sharing, export and publishing. Akashic Complete unlocks unlimited journeys and photos — one purchase, shared with your family. Restore a previous purchase from inside.": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gratisversjonen inneholder én tur (opptil 100 bilder), hele opplevelsen, deling, eksport og publisering. Akashic Complete låser opp ubegrenset med turer og bilder – ett kjøp, delt med familien. Du kan gjenopprette et tidligere kjøp inne i appen."
+          }
+        }
+      }
+    },
+    "The full-resolution files, exactly as they were taken. This can be large.": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Filene i full oppløsning, akkurat som de ble tatt. Dette kan bli stort."
+          }
+        }
+      }
+    },
+    "The owner hasn't added days to this journey": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eieren har ikke lagt til dager på denne turen"
+          }
+        }
+      }
+    },
+    "The showcase was removed, but this device could not save the Private flag locally. The journey may still show as Public here — reopen and try again.": {
+      "comment": "Showcase: unpublish succeeded remotely but the local flag write failed.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Utstillingen ble fjernet, men denne enheten fikk ikke lagret at turen er privat. Den kan fortsatt stå som offentlig her – åpne den på nytt og prøv igjen."
+          }
+        }
+      }
+    },
+    "The showcase was updated, but this device could not save the Public flag locally. The journey may still show as Private here — reopen and try again.": {
+      "comment": "Showcase: publish succeeded remotely but the local flag write failed.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Utstillingen ble oppdatert, men denne enheten fikk ikke lagret at turen er offentlig. Den kan fortsatt stå som privat her – åpne den på nytt og prøv igjen."
+          }
+        }
+      }
+    },
+    "This day already has notes. Replace them with the drafted version? Your current text will be lost.": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Denne dagen har alt notater. Vil du erstatte dem med utkastet? Teksten du har nå blir borte."
+          }
+        }
+      }
+    },
+    "This deletes \"%@\" and its photos from your iCloud and every family device. Photos already saved in your Photos library are NOT affected. Consider using Export first to keep a copy.": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dette sletter «%@» og bildene fra iCloud og alle enhetene i familien. Bilder du allerede har i Bilder-appen berøres IKKE. Vurder å eksportere først, så du har en kopi."
+          }
+        }
+      }
+    },
+    "This file had no waypoints, so no days were proposed — add days, or pick photos to propose them.": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fila hadde ingen veipunkt, så ingen dager ble foreslått – legg til dager, eller velg bilder for å foreslå dem."
+          }
+        }
+      }
+    },
+    "This journey has no route to recompute stats from.": {
+      "comment": "Route correction: shown when Recompute stats is tapped on a journey with no route.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Denne turen har ingen rute å regne statistikk fra."
+          }
+        }
+      }
+    },
+    "This journey is at the free 100-photo cap. Akashic Complete lifts it — for your whole family.": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Denne turen har nådd gratisgrensen på 100 bilder. Akashic Complete fjerner den – for hele familien."
+          }
+        }
+      }
+    },
+    "This journey is empty": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Denne turen er tom"
+          }
+        }
+      }
+    },
+    "This journey is private. Publishing copies its route, day notes and photo thumbnails to a world-readable showcase that anyone can view without signing in. Full-resolution photos stay on your devices.": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Denne turen er privat. Når du publiserer, kopieres ruta, dagsnotatene og miniatyrbildene til en offentlig utstilling som hvem som helst kan se uten å logge inn. Bildene i full oppløsning blir liggende på enhetene dine."
+          }
+        }
+      }
+    },
+    "This journey is published to the world-readable showcase. Its route, day notes and photo thumbnails can be viewed on the web without signing in. Full-resolution photos are never uploaded.": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Denne turen er publisert i den offentlige utstillingen. Ruta, dagsnotatene og miniatyrbildene kan ses på nett uten innlogging. Bilder i full oppløsning lastes aldri opp."
+          }
+        }
+      }
+    },
+    "This journey is shared with you. Only its owner can change who has access.": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Denne turen er delt med deg. Bare eieren kan endre hvem som har tilgang."
+          }
+        }
+      }
+    },
+    "This removes the file and cannot be undone.": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dette sletter fila, og kan ikke angres."
+          }
+        }
+      }
+    },
+    "This removes the sample \"%@\" journey from this device. It's bundled with the app, never synced — deleting it is permanent, but you can always start your own journey.": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dette fjerner eksempelturen «%@» fra denne enheten. Den følger med appen og synkroniseres aldri – sletting er permanent, men du kan alltid starte din egen tur."
+          }
+        }
+      }
+    },
+    "This route has no elevation — a route drawn by hand never does. Replace it from a GPX to get a profile.": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Denne ruta har ingen høydedata – en rute du tegner selv får aldri det. Erstatt den med en GPX for å få en profil."
+          }
+        }
+      }
+    },
+    "Thumbs missing": {
+      "shouldTranslate": false
+    },
+    "Thumbs on disk": {
+      "shouldTranslate": false
+    },
+    "Thunderstorm": {
+      "comment": "WMO weather code 95.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tordenvær"
+          }
+        }
+      }
+    },
+    "Thunderstorm & hail": {
+      "comment": "WMO weather codes 96/99.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tordenvær og hagl"
+          }
+        }
+      }
+    },
+    "Total Ascent": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Total stigning"
+          }
+        }
+      }
+    },
+    "Total Descent": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Total nedstigning"
+          }
+        }
+      }
+    },
+    "Total days": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Antall dager"
+          }
+        }
+      }
+    },
+    "Trace the route by hand — no track or geotags needed": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tegn ruta selv – du trenger verken spor eller posisjonsdata"
+          }
+        }
+      }
+    },
+    "Trace the route with one finger": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Følg ruta med én finger"
+          }
+        }
+      }
+    },
+    "Try again": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Prøv igjen"
+          }
+        }
+      }
+    },
+    "Unassigned": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Uten dag"
+          }
+        }
+      }
+    },
+    "Unlimited journeys & photos": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ubegrenset med turer og bilder"
+          }
+        }
+      }
+    },
+    "Unlimited journeys and photos — shared with your Family Sharing group.": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ubegrenset med turer og bilder – deles med familiedelingsgruppa di."
+          }
+        }
+      }
+    },
+    "Unlock Akashic Complete": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lås opp Akashic Complete"
+          }
+        }
+      }
+    },
+    "Unlock everything, once": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lås opp alt, én gang"
+          }
+        }
+      }
+    },
+    "Unlock for %@": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lås opp for %@"
+          }
+        }
+      }
+    },
+    "Unlock with Akashic Complete": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lås opp med Akashic Complete"
+          }
+        }
+      }
+    },
+    "Update showcase": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Oppdater utstillingen"
+          }
+        }
+      }
+    },
+    "Upload": {
+      "shouldTranslate": false
+    },
+    "Upload ops": {
+      "shouldTranslate": false
+    },
+    "Uploaded %@ / %@": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lastet opp %@ / %@"
+          }
+        }
+      }
+    },
+    "Uploads per-journey zones (journey-<uuid>) to the owner's private DB. Idempotent: re-running creates no duplicates, but it restarts the upload from the beginning (nothing is persisted to resume from). CloudKit sync must not be running: the importer bypasses CKSyncEngine and both writing at once is unsafe.": {
+      "shouldTranslate": false
+    },
+    "Use \"%@\"": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bruk «%@»"
+          }
+        }
+      }
+    },
+    "Use as journey cover photo": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bruk som forsidebilde for turen"
+          }
+        }
+      }
+    },
+    "Version": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Versjon"
+          }
+        }
+      }
+    },
+    "Video": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Video"
+          }
+        }
+      }
+    },
+    "View all photos": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Se alle bildene"
+          }
+        }
+      }
+    },
+    "Wait for Wi-Fi": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vent på Wi-Fi"
+          }
+        }
+      }
+    },
+    "Wait for Wi-Fi (recommended)": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vent på Wi-Fi (anbefalt)"
+          }
+        }
+      }
+    },
+    "Waiting for approval — this can happen with Ask to Buy. You'll be unlocked automatically once it's approved.": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Venter på godkjenning – dette kan skje med Spør om å kjøpe. Du blir låst opp automatisk når kjøpet er godkjent."
+          }
+        }
+      }
+    },
+    "Waypoint ID": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Veipunkt-ID"
+          }
+        }
+      }
+    },
+    "Waypoints": {
+      "shouldTranslate": false
+    },
+    "We added the photos that fit. Akashic Complete lifts the 100-photo cap so the rest can come too.": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vi la inn bildene det var plass til. Akashic Complete fjerner grensen på 100 bilder, så resten får plass også."
+          }
+        }
+      }
+    },
+    "We couldn't read dates from these photos. They'll be added to the journey; you can build days later.": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vi fikk ikke lest datoer fra disse bildene. De blir lagt til turen, og du kan bygge dager senere."
+          }
+        }
+      }
+    },
+    "Weather": {
+      "comment": "Fallback label when a day has weather but no WMO code to describe it.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vær"
+          }
+        }
+      }
+    },
+    "Weather, places and points of interest for days that don't have them yet. Nothing is applied until you tap Accept.": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vær, steder og severdigheter til dager som mangler det. Ingenting legges inn før du trykker Godta."
+          }
+        }
+      }
+    },
+    "What happened this day?": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hva skjedde denne dagen?"
+          }
+        }
+      }
+    },
+    "WidgetKit — Journey Stats": {
+      "shouldTranslate": false
+    },
+    "Wildlife": {
+      "comment": "Fun-fact category shown on a day.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dyreliv"
+          }
+        }
+      }
+    },
+    "Wind": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vind"
+          }
+        }
+      }
+    },
+    "Wind km/h": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vind km/t"
+          }
+        }
+      }
+    },
+    "Working…": {
+      "comment": "Showcase publish: placeholder while no phase has been reported yet.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Jobber …"
+          }
+        }
+      }
+    },
+    "Write what happened this day": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Skriv hva som skjedde denne dagen"
+          }
+        }
+      }
+    },
+    "You have Akashic Complete": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Du har Akashic Complete"
+          }
+        }
+      }
+    },
+    "You've filled your free journey. Akashic Complete removes the limit — for your whole family.": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Du har fylt opp gratisturen din. Akashic Complete fjerner grensen – for hele familien."
+          }
+        }
+      }
+    },
+    "Your data lives in your iCloud": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dataene dine bor i din iCloud"
+          }
+        }
+      }
+    },
+    "Your journeys": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Turene dine"
+          }
+        }
+      }
+    },
+    "Your journeys and photos live in your own iCloud. We run no servers and never see them.": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Turene og bildene dine bor i din egen iCloud. Vi har ingen servere, og ser dem aldri."
+          }
+        }
+      }
+    },
+    "Your journeys will live here": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Turene dine havner her"
+          }
+        }
+      }
+    },
+    "Your name": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Navnet ditt"
+          }
+        }
+      }
+    },
+    "Your photo archive downloads on this device's first sync. Downloading over cellular can use a large amount of data — waiting for Wi-Fi is recommended.": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bildearkivet lastes ned ved første synkronisering på denne enheten. Nedlasting over mobildata kan bruke mye data – vi anbefaler å vente på Wi-Fi."
+          }
+        }
+      }
+    },
+    "Your photos carry dates but no locations, so days were proposed without a route.": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bildene dine har datoer, men ingen posisjon, så dagene ble foreslått uten rute."
+          }
+        }
+      }
+    },
+    "Your treks, on a living globe": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Turene dine, på en levende globus"
+          }
+        }
+      }
+    },
+    "Zones": {
+      "shouldTranslate": false
+    },
+    "Zones created": {
+      "shouldTranslate": false
+    },
+    "e.g. Kilimanjaro — Lemosho Route": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "f.eks. Kilimanjaro – Lemosho-ruta"
+          }
+        }
+      }
+    },
+    "from your GPX file": {
+      "comment": "Caption under the dates row when the dates came from an imported GPX track.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "fra GPX-fila di"
+          }
+        }
+      }
+    },
+    "from your photos": {
+      "comment": "Caption under the dates row when the dates came from photo capture dates.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "fra bildene dine"
+          }
+        }
+      }
+    },
+    "grouped into %lld days by capture date": {
+      "comment": "New journey: appended to the staged-photo count when capture dates produced days.",
+      "localizations": {
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "grouped into %lld day by capture date"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "grouped into %lld days by capture date"
+                }
+              }
+            }
+          }
+        },
+        "nb": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "gruppert i %lld dag etter opptaksdato"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "gruppert i %lld dager etter opptaksdato"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "iCloud is restricted on this device. Akashic still works locally; sharing and sync need iCloud enabled in Settings.": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "iCloud er begrenset på denne enheten. Akashic fungerer fortsatt lokalt; deling og synkronisering krever at iCloud er slått på i Innstillinger."
+          }
+        }
+      }
+    },
+    "iCloud sync": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "iCloud-synkronisering"
+          }
+        }
+      }
+    },
+    "just now": {
+      "comment": "Comment timestamp for something posted less than a minute ago.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "nå nettopp"
+          }
+        }
+      }
+    },
+    "·": {
+      "shouldTranslate": false
+    },
+    "· %@": {
+      "shouldTranslate": false
+    },
+    "· Invited": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "· Invitert"
+          }
+        }
+      }
+    },
+    "—": {
+      "shouldTranslate": false
+    },
+    "•": {
+      "shouldTranslate": false
+    },
+    "• %@ %@ — %@": {
+      "shouldTranslate": false
+    },
+    "⏱ %@ from previous stop": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "⏱ %@ fra forrige stopp"
+          }
+        }
+      }
+    }
+  }
+}

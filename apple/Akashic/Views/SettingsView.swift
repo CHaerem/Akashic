@@ -158,8 +158,7 @@ struct SettingsView: View {
 
         Section {
             Label {
-                Text("Export a journey from its ⋯ menu — it bundles the route, photos, and notes "
-                     + "into a file you can share or back up.")
+                Text("Export a journey from its ⋯ menu — it bundles the route, photos, and notes into a file you can share or back up.")
                     .font(.footnote)
                     .foregroundStyle(Theme.textSecondary)
             } icon: {
@@ -245,7 +244,7 @@ struct SettingsView: View {
         #endif
     }
 
-    private func linkRow(_ title: String, systemImage: String) -> some View {
+    private func linkRow(_ title: LocalizedStringKey, systemImage: String) -> some View {
         HStack {
             Label(title, systemImage: systemImage)
                 .foregroundStyle(Theme.textPrimary)
@@ -592,7 +591,7 @@ struct SettingsView: View {
         Config.importMediaRoot = mediaRoot
     }
 
-    private func labelled(_ title: String, _ value: String) -> some View {
+    private func labelled(_ title: LocalizedStringKey, _ value: String) -> some View {
         HStack {
             Text(title).foregroundStyle(Theme.textSecondary)
             Spacer()

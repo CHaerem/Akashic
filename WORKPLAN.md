@@ -5,23 +5,23 @@
 
 # Akashic — work ledger
 
-88 tasks · **41 open** (24 agent-doable, 35.4 dev-days · 17 owner-only, 8.5 dev-days) · 47 done · 0 dropped
+89 tasks · **41 open** (24 agent-doable, 31.9 dev-days · 17 owner-only, 8.5 dev-days) · 48 done · 0 dropped
 
 > **`dev-days` are a human-developer estimate, not agent time.** They came from the review
 > that produced these tasks and they are the right unit for deciding whether something is
 > worth doing — they are the wrong unit for predicting how long an agent will take, and
 > summing them as "work remaining" overstates it substantially.
 >
-> Measured so far: **47 agent tasks estimated at 21.7 dev-days**,
+> Measured so far: **48 agent tasks estimated at 25.7 dev-days**,
 > closed in roughly one working afternoon across up to three parallel tracks.
 >
 > But that compression is **unmeasured for the large items**: of the tasks closed so far,
-> 0 were 2 dev-days or more. 24 of the
-> 35.4 remaining dev-days sit in 7 such tasks —
+> 1 were 2 dev-days or more. 20 of the
+> 31.9 remaining dev-days sit in 6 such tasks —
 > localisation, Swift 6 strict concurrency, a UI test target, the PDF book. Those involve
 > design judgement and broad-blast-radius refactors rather than localised edits, so do not
 > assume the same ratio holds. The cheap band is nearly exhausted:
-> 11 tasks at 0.5 dev-days or less remain.
+> 12 tasks at 0.5 dev-days or less remain.
 
 Read [CLAUDE.md](CLAUDE.md) before touching anything. To find work:
 
@@ -34,7 +34,6 @@ node scripts/workplan.mjs next
 | Task | Agent | Branch | Stopped at |
 |---|---|---|---|
 | `DIFF-04` On-device photo curation with Vision | opus5 | `claude/remote-control-project-review-9462c1` | Policy (PhotoCuration), Vision scorer (VisionPhotoScorer), service with appliers (PhotoCurationService) and two JourneyStore entry points are all written and covered by 28 tests. Design question from the earlier note is RESOLVED and the earlier plan was wrong: this cannot be a SuggestionKey, because the coordinator applies to a JourneyDraft and a draft carries days but no photos — during creation they live in the view's stagedPhotos. Hence a service. Hero uses the existing Photo.isHero (setPhotoHero already enforces the single-hero invariant); best-of redistributes the DAY'S OWN sortOrder slots so the selection leads without reaching into another day — no Core Data change. Nothing is destructive: duplicates are reported, never actioned. STILL NOT LIVE: no UI calls curationProposal, so the chain is absent from the built binary and Vision does not link. All that remains is accept/dismiss rows in the day view — Views/, which was held by the localisation agent. |
-| `QUA-06` Localise the app to Norwegian | loc-worktree | `claude/qua06-localisation` | — |
 
 ## LEGACY
 
@@ -139,7 +138,7 @@ node scripts/workplan.mjs next
 
 > Tests, types, CI, localisation, accessibility. Localisation and accessibility are in v1.0 by decision.
 
-13 open of 25 · 19.8 d remaining
+13 open of 26 · 16.3 d remaining
 
 | | Task | Days | Who | Deps | Finish line |
 |---|---|---|---|---|---|
@@ -148,7 +147,7 @@ node scripts/workplan.mjs next
 | `x` | `QUA-03` **Clear the red Security Audit job** | 0.5 | agent | — | npm audit --audit-level=high exits 0, or the exception is documented and time-boxed. |
 | `x` | `QUA-04` **Repair or delete the Performance Tests workflow** | 0.25 | agent | — | No workflow references a spec file that does not exist. |
 | `x` | `QUA-05` **Add a compile tripwire for the Foundation Models code** | 0.5 | agent | — | CI fails if the Intelligence code stops compiling. |
-| `~` | `QUA-06` **Localise the app to Norwegian** | 4 | agent | — | Every user-visible string comes from a string catalogue, and the app runs in NB end to end. |
+| `x` | `QUA-06` **Localise the app to Norwegian** | 4 | agent | — | Every user-visible string comes from a string catalogue, and the app runs in NB end to end. |
 | ` ` | `QUA-07` **Bring accessibility to a shippable standard** | 3 | agent | `QUA-06` | Every interactive control has a label, and the photo grid and elevation chart are navigable by VoiceOver. |
 | ` ` | `QUA-08` **Turn on Swift 6 strict concurrency** | 3 | agent | — | The project builds clean under SWIFT_STRICT_CONCURRENCY=complete. |
 | `x` | `QUA-09` **Light up the widget or remove it from v1.0** | 0.5 | agent | — | The widget shows the customer's own journey, or it does not ship. |
@@ -168,6 +167,7 @@ node scripts/workplan.mjs next
 | `x` | `QUA-23` **Remove the dead tab state from useTrekData** | 0.25 | agent | — | No hook exposes state nothing renders, and its tests reflect that. |
 | ` ` | `QUA-24` **Accessibility for the screens D1 and D3 were never scoped to cover** | 2 | agent | `QUA-06` | No view directory with interactive controls sits at zero accessibility labels. |
 | ` ` | `QUA-25` **Bound public-showcase reads before traffic arrives** | 1 | agent | — | A published journey has a size bound, and crossing a usage threshold is visible to the owner. |
+| ` ` | `QUA-26` **Localise the user-visible strings outside Views/** | 0.5 | agent | `QUA-06` | No user-visible string reaches the screen in English when the app runs in Norwegian. |
 
 ## Decisions on record
 

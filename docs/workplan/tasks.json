@@ -1273,7 +1273,7 @@
       "id": "QUA-06",
       "track": "QUALITY",
       "title": "Localise the app to Norwegian",
-      "status": "WIP",
+      "status": "DONE",
       "effort": 4,
       "done_when": "Every user-visible string comes from a string catalogue, and the app runs in NB end to end.",
       "priority": 25,
@@ -1292,7 +1292,8 @@
         "agent": "loc-worktree",
         "branch": "claude/qua06-localisation",
         "at": "2026-07-26"
-      }
+      },
+      "evidence": "579 catalogue keys, 497 translated to nb, plus 9 Siri phrases in AppShortcuts.xcstrings; knownRegions [en, nb] declared. Release-CloudKit ships nb.lproj with Localizable.strings, .stringsdict, AppShortcuts.strings and a Norwegian nlu.appintents. Verified screen by screen under -AppleLanguages '(nb)'. Xcode extraction saw 340 strings before and 579 after — the 239 extra were invisible for four distinct reasons that all compile and run, including String where LocalizedStringKey belongs (which made the entire paywall untranslatable) and Text(\"a \" + \"b\"), which is a verbatim Text. 12 new tests, one of which reads the BUILT bundle and immediately caught a regeneration that dropped every plural."
     },
     {
       "id": "QUA-07",
@@ -1892,6 +1893,31 @@
       "why": "DIFF-10 built the pipeline and had nothing real to put through it: the repo contains no photographs at all — all 76 images are AI-generated art or earth textures — so the three bundled JPEGs are re-encoded hero artwork. Illustrative scenery, not trek photographs, in the demo that is a new customer's first impression of a photo app. Real ones mean the family archive at /Users/cher/Privat/AkashicExport-20260722, and shipping private family photographs inside a public App Store binary is a decision only the owner can take. Swapping them is a file copy plus a manifest edit — no code change.",
       "verify": [
         "The three files under apple/Fixtures/demo-media/ are the intended images"
+      ]
+    },
+    {
+      "id": "QUA-26",
+      "track": "QUALITY",
+      "title": "Localise the user-visible strings outside Views/",
+      "status": "TODO",
+      "effort": 0.5,
+      "priority": 29,
+      "deps": [
+        "QUA-06"
+      ],
+      "done_when": "No user-visible string reaches the screen in English when the app runs in Norwegian.",
+      "why": "QUA-06 was scoped to Views/ and stopped at that boundary rather than reaching into files another agent held. What it left, all genuinely user-visible: Sync/SyncStatus.swift's status one-liner on Settings (including the .storageFull copy QUA-11 added the same day), App/AppearancePreference.swift's Automatic/Light/Dark picker labels, ShareRole.displayName, RouteDrawing's note and summary sentences, Import/ImportBrowserView.swift, and every LocalizedError.errorDescription in Services — which is the text a user sees when something fails, so it is the worst place to leave English.",
+      "files": [
+        "apple/Akashic/Sync/SyncStatus.swift",
+        "apple/Akashic/App/AppearancePreference.swift",
+        "apple/Akashic/Models/",
+        "apple/Akashic/Services/RouteDrawing.swift",
+        "apple/Akashic/Import/ImportBrowserView.swift"
+      ],
+      "verify": [
+        "cd apple && xcodegen generate",
+        "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,id=$(xcrun simctl list devices available | grep -o '[0-9A-F-]\\{36\\}' | tail -1)\" CODE_SIGNING_ALLOWED=NO test",
+        "Run under -AppleLanguages \"(nb)\" and read Settings > Status, the appearance picker, and a forced error"
       ]
     }
   ]

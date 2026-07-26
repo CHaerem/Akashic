@@ -58,31 +58,40 @@ enum WeatherPresentation {
         }
     }
 
+    /// The WMO code's wording, translated.
+    ///
+    /// Every branch goes through `String(localized:)` rather than returning a bare literal. The
+    /// return type stays `String` on purpose: the only caller hands it to `Text`, and a `String`
+    /// there is rendered verbatim — which is exactly why these twenty-two labels were untranslatable
+    /// before. Resolving at the switch keeps the signature (and `DayContentTests`) intact while
+    /// putting every one of them in the catalogue.
     static func label(for code: Int?) -> String {
-        guard let code else { return "Weather" }
+        let unknown = String(localized: "Weather",
+                             comment: "Fallback label when a day has weather but no WMO code to describe it.")
+        guard let code else { return unknown }
         switch code {
-        case 0: return "Clear sky"
-        case 1: return "Mainly clear"
-        case 2: return "Partly cloudy"
-        case 3: return "Overcast"
-        case 45, 48: return "Fog"
-        case 51: return "Light drizzle"
-        case 53: return "Drizzle"
-        case 55: return "Heavy drizzle"
-        case 56, 57: return "Freezing drizzle"
-        case 61: return "Light rain"
-        case 63: return "Rain"
-        case 65: return "Heavy rain"
-        case 66, 67: return "Freezing rain"
-        case 71: return "Light snow"
-        case 73: return "Snow"
-        case 75: return "Heavy snow"
-        case 77: return "Snow grains"
-        case 80, 81, 82: return "Rain showers"
-        case 85, 86: return "Snow showers"
-        case 95: return "Thunderstorm"
-        case 96, 99: return "Thunderstorm & hail"
-        default: return "Weather"
+        case 0: return String(localized: "Clear sky", comment: "WMO weather code 0.")
+        case 1: return String(localized: "Mainly clear", comment: "WMO weather code 1.")
+        case 2: return String(localized: "Partly cloudy", comment: "WMO weather code 2.")
+        case 3: return String(localized: "Overcast", comment: "WMO weather code 3.")
+        case 45, 48: return String(localized: "Fog", comment: "WMO weather codes 45/48.")
+        case 51: return String(localized: "Light drizzle", comment: "WMO weather code 51.")
+        case 53: return String(localized: "Drizzle", comment: "WMO weather code 53.")
+        case 55: return String(localized: "Heavy drizzle", comment: "WMO weather code 55.")
+        case 56, 57: return String(localized: "Freezing drizzle", comment: "WMO weather codes 56/57.")
+        case 61: return String(localized: "Light rain", comment: "WMO weather code 61.")
+        case 63: return String(localized: "Rain", comment: "WMO weather code 63.")
+        case 65: return String(localized: "Heavy rain", comment: "WMO weather code 65.")
+        case 66, 67: return String(localized: "Freezing rain", comment: "WMO weather codes 66/67.")
+        case 71: return String(localized: "Light snow", comment: "WMO weather code 71.")
+        case 73: return String(localized: "Snow", comment: "WMO weather code 73.")
+        case 75: return String(localized: "Heavy snow", comment: "WMO weather code 75.")
+        case 77: return String(localized: "Snow grains", comment: "WMO weather code 77.")
+        case 80, 81, 82: return String(localized: "Rain showers", comment: "WMO weather codes 80–82.")
+        case 85, 86: return String(localized: "Snow showers", comment: "WMO weather codes 85/86.")
+        case 95: return String(localized: "Thunderstorm", comment: "WMO weather code 95.")
+        case 96, 99: return String(localized: "Thunderstorm & hail", comment: "WMO weather codes 96/99.")
+        default: return unknown
         }
     }
 
@@ -106,16 +115,16 @@ enum FunFactStyle {
 
     static func config(for category: String) -> Config {
         switch category.lowercased() {
-        case "geology":   return Config(icon: "🪨", color: dayColorAdaptive(dark: 0xA78BFA, light: 0x6D28D9), label: "Geology")
-        case "wildlife":  return Config(icon: "🦁", color: dayColorAdaptive(dark: 0xFBBF24, light: 0xB45309), label: "Wildlife")
-        case "flora":     return Config(icon: "🌿", color: dayColorAdaptive(dark: 0x34D399, light: 0x047857), label: "Flora")
-        case "history":   return Config(icon: "📜", color: dayColorAdaptive(dark: 0xF59E0B, light: 0x92400E), label: "History")
-        case "culture":   return Config(icon: "🎭", color: dayColorAdaptive(dark: 0xF472B6, light: 0xBE185D), label: "Culture")
-        case "climate":   return Config(icon: "🌤", color: dayColorAdaptive(dark: 0x60A5FA, light: 0x1D4ED8), label: "Climate")
-        case "adventure": return Config(icon: "⛰️", color: dayColorAdaptive(dark: 0xEF4444, light: 0xB91C1C), label: "Adventure")
-        case "science":   return Config(icon: "🔬", color: dayColorAdaptive(dark: 0x8B5CF6, light: 0x6D28D9), label: "Science")
-        case "geography": return Config(icon: "🗺️", color: dayColorAdaptive(dark: 0x14B8A6, light: 0x0F766E), label: "Geography")
-        case "survival":  return Config(icon: "🧭", color: dayColorAdaptive(dark: 0xF97316, light: 0xC2410C), label: "Survival")
+        case "geology":   return Config(icon: "🪨", color: dayColorAdaptive(dark: 0xA78BFA, light: 0x6D28D9), label: String(localized: "Geology", comment: "Fun-fact category shown on a day."))
+        case "wildlife":  return Config(icon: "🦁", color: dayColorAdaptive(dark: 0xFBBF24, light: 0xB45309), label: String(localized: "Wildlife", comment: "Fun-fact category shown on a day."))
+        case "flora":     return Config(icon: "🌿", color: dayColorAdaptive(dark: 0x34D399, light: 0x047857), label: String(localized: "Flora", comment: "Fun-fact category shown on a day."))
+        case "history":   return Config(icon: "📜", color: dayColorAdaptive(dark: 0xF59E0B, light: 0x92400E), label: String(localized: "History", comment: "Fun-fact category shown on a day."))
+        case "culture":   return Config(icon: "🎭", color: dayColorAdaptive(dark: 0xF472B6, light: 0xBE185D), label: String(localized: "Culture", comment: "Fun-fact category shown on a day."))
+        case "climate":   return Config(icon: "🌤", color: dayColorAdaptive(dark: 0x60A5FA, light: 0x1D4ED8), label: String(localized: "Climate", comment: "Fun-fact category shown on a day."))
+        case "adventure": return Config(icon: "⛰️", color: dayColorAdaptive(dark: 0xEF4444, light: 0xB91C1C), label: String(localized: "Adventure", comment: "Fun-fact category shown on a day."))
+        case "science":   return Config(icon: "🔬", color: dayColorAdaptive(dark: 0x8B5CF6, light: 0x6D28D9), label: String(localized: "Science", comment: "Fun-fact category shown on a day."))
+        case "geography": return Config(icon: "🗺️", color: dayColorAdaptive(dark: 0x14B8A6, light: 0x0F766E), label: String(localized: "Geography", comment: "Fun-fact category shown on a day."))
+        case "survival":  return Config(icon: "🧭", color: dayColorAdaptive(dark: 0xF97316, light: 0xC2410C), label: String(localized: "Survival", comment: "Fun-fact category shown on a day."))
         default:          return Config(icon: "🗺️", color: dayColorAdaptive(dark: 0x14B8A6, light: 0x0F766E), label: category.capitalized)
         }
     }
@@ -157,7 +166,17 @@ enum HistoricalSignificance {
         }
     }
 
+    /// The significance badge's wording.
+    ///
+    /// `significance` is a lowercase data token from the export ("major" / "notable" / "minor"),
+    /// and this used to be `.capitalized` — a string transform, not a translation, so the badge
+    /// read "Major" in every language. `color(for:)` above still switches on the raw token, so
+    /// the two stay in step.
     static func label(for significance: String?) -> String {
-        (significance ?? "minor").capitalized
+        switch (significance ?? "minor").lowercased() {
+        case "major":   return String(localized: "Major", comment: "Historical-site significance, highest of three.")
+        case "notable": return String(localized: "Notable", comment: "Historical-site significance, middle of three.")
+        default:        return String(localized: "Minor", comment: "Historical-site significance, lowest of three.")
+        }
     }
 }

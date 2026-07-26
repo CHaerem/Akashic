@@ -139,6 +139,16 @@ right: fix this file in the same commit.
   pointed at a spec deleted seven months earlier. Both are fixed (QUA-03, QUA-04) — the lesson is
   that "known red" is not a state to leave a gate in. If you cannot fix one, document the
   exception where the next person will read it and give it a removal condition.
+- **`String` where `LocalizedStringKey` belongs is invisible to localisation.** A SwiftUI component
+  taking `String` for a label silently escapes extraction — that is how the entire paywall was
+  untranslatable while looking fine. Same for `.uppercased()` on a label (it forces `String`; use
+  `.textCase(.uppercase)`) and for `Text("a " + "b")`, which is a verbatim `Text` because
+  `LocalizedStringKey` has no `+`. Xcode's extraction saw 340 strings where 579 existed.
+- **`xcodebuild -exportLocalizations` is not a complete key list** — it silently omitted a key the
+  compiler had extracted fine. The per-file `.stringsdata` is authoritative.
+- **`knownRegions` must be declared in `project.yml`.** XcodeGen infers regions from `.lproj`
+  directories and a String Catalog has none, so without it Xcode compiles English only and the app
+  falls back with every translation present and unused.
 - **The public CloudKit database is billed to us, not to the customer.** The cost table in
   `COMMERCIALIZATION-PLAN.md` says bandwidth is free; that is true of the private database
   only. Anything that increases showcase traffic has a real cost line.

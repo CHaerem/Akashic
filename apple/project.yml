@@ -7,6 +7,22 @@ options:
   developmentLanguage: en
   groupSortPosition: top
 
+# QUA-06. Without `knownRegions` the generated project lists only `en` + `Base`, so Xcode
+# compiles `Localizable.xcstrings` for English only: `nb.lproj/Localizable.strings` is never
+# produced and the app falls back to English on a Norwegian device even though the catalogue
+# holds every translation. XcodeGen infers regions from `.lproj` directories in the source tree,
+# and a String Catalog has none — it is a single file — so the list has to be declared.
+#
+# `CFBundleLocalizations` in the built plist is what iOS reads to decide which languages the app
+# claims, and the App Store listing's language list is derived from it. Assert against the BUILT
+# plist, never this file:
+#   plutil -p "$(...)/Akashic.app/Info.plist" | grep -A4 CFBundleLocalizations
+#   ls "$(...)/Akashic.app" | grep lproj        # expect en.lproj and nb.lproj
+knownRegions:
+  - en
+  - nb
+  - Base
+
 # Build configurations.
 #   Debug / Release  -> no code signing, no team required (default simulator builds + CI).
 #   Debug-CloudKit   -> debug build WITH the CloudKit + Push entitlements, for running the
@@ -96,6 +112,19 @@ targets:
       # the .app. Verify after any project change with:
       #   find "$(...)/Akashic.app" -maxdepth 1 -name '*.xcprivacy'
       - path: Akashic/Resources/PrivacyInfo.xcprivacy
+        buildPhase: resources
+      # QUA-06: the string catalogues. Both are inside `path: Akashic` above and so are already
+      # swept up, but they are listed explicitly for two reasons: the sweep classifies by
+      # extension and a silently-misclassified `.xcstrings` produces an app that builds, runs, and
+      # is simply never translated; and `AppShortcuts.xcstrings` MUST be named exactly that — App
+      # Intents phrase localisation looks for that filename and nothing else, so a rename would
+      # break Siri's Norwegian without breaking the build.
+      #
+      # Verify both reached the bundle (they compile to a single .loctable per language):
+      #   find "$(...)/Akashic.app" -name '*.loctable'
+      - path: Akashic/Resources/Localizable.xcstrings
+        buildPhase: resources
+      - path: Akashic/Resources/AppShortcuts.xcstrings
         buildPhase: resources
       # Fixture JSON recovered from git history — bundled so the app runs on
       # fixtures by default (before CloudKit is wired up). Owned by another agent;

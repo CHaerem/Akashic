@@ -8,8 +8,8 @@ import SwiftUI
 /// Standard sheet scaffold: adaptive background, inline title, Cancel + a primary action button.
 /// `isSaving` swaps the action for a spinner; `saveDisabled` gates it.
 struct EditSheetScaffold<Content: View>: View {
-    let title: String
-    var saveTitle: String = "Save"
+    let title: LocalizedStringKey
+    var saveTitle: LocalizedStringKey = "Save"
     var saveDisabled: Bool = false
     var isSaving: Bool = false
     let onCancel: () -> Void
@@ -51,7 +51,7 @@ struct EditSheetScaffold<Content: View>: View {
 
 /// A labelled section wrapping arbitrary field content in a glass surface card.
 struct GlassField<Content: View>: View {
-    let label: String
+    let label: LocalizedStringKey
     var systemImage: String?
     @ViewBuilder var content: () -> Content
 
@@ -61,10 +61,20 @@ struct GlassField<Content: View>: View {
                 if let systemImage {
                     Image(systemName: systemImage).font(.caption2).foregroundStyle(Theme.accent)
                 }
-                Text(label.uppercased())
+                // `.textCase(.uppercase)`, not `label.uppercased()`. The old form forced the
+                // label to be a `String` — and a `String` handed to `Text` is displayed verbatim,
+                // so every one of these field labels ("Name", "Country", "Elevation (m)") was
+                // unreachable by localisation no matter what the catalogue said. The modifier
+                // uppercases at render time and also does it locale-correctly.
+                Text(label)
+                    .textCase(.uppercase)
                     .font(.system(size: 11, weight: .semibold))
                     .tracking(0.8)
                     .foregroundStyle(Theme.textTertiary)
+                    // "Summit elevation (m)" is already near the sheet width in English; the
+                    // Norwegian "Topphøyde (m)" is shorter, but "Points of interest" ->
+                    // "Interessepunkter" and "Historical sites" -> "Historiske steder" are not.
+                    .fixedSize(horizontal: false, vertical: true)
             }
             content()
         }
@@ -73,7 +83,7 @@ struct GlassField<Content: View>: View {
 
 /// A single-line glass text field.
 struct GlassTextField: View {
-    let placeholder: String
+    let placeholder: LocalizedStringKey
     @Binding var text: String
     var keyboard: UIKeyboardType = .default
 

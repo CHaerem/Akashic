@@ -144,8 +144,11 @@ struct GetJourneyStatsIntent: AppIntent {
         switch AkashicIntentData.refreshed().statsOutcome(idOrSlug: journey.id) {
         case .success(let result):
             let ext = result.extendedStats
+            // Siri speaks this line, so the difficulty has to be the translated wording rather
+            // than the English token the model carries.
+            let difficulty = String(localized: ExtendedStatsCalculator.localizedDifficulty(ext.difficulty))
             let dialog = IntentDialog(
-                "\(result.journeyName): \(ext.difficulty), ~\(ext.estimatedTotalTime), \(ext.avgDailyDistance) km/day")
+                "\(result.journeyName): \(difficulty), ~\(ext.estimatedTotalTime), \(ext.avgDailyDistance) km/day")
             return .result(value: IntentJSON.string(result), dialog: dialog)
         case .failure(let message):
             throw AkashicIntentError.message(message)

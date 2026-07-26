@@ -24,7 +24,11 @@ struct PaywallView: View {
         case enrich
         case settings
 
-        var headline: String {
+        /// `LocalizedStringKey`, not `String`. Both of these go straight into a `Text`, and a
+        /// `String` there is displayed verbatim — so the entire paywall, the one screen that has to
+        /// persuade someone to pay, was untranslatable while the store listing selling it was
+        /// Norwegian-first.
+        var headline: LocalizedStringKey {
             switch self {
             case .journeyLimit: return "The free tier includes one journey"
             case .photoLimit: return "The free tier includes 100 photos per journey"
@@ -33,7 +37,7 @@ struct PaywallView: View {
             }
         }
 
-        var subhead: String {
+        var subhead: LocalizedStringKey {
             switch self {
             case .journeyLimit:
                 return "You've filled your free journey. Akashic Complete removes the limit — for your whole family."
@@ -130,7 +134,7 @@ struct PaywallView: View {
         .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).strokeBorder(Theme.hairline, lineWidth: 1))
     }
 
-    private func benefitRow(_ icon: String, _ title: String, _ detail: String) -> some View {
+    private func benefitRow(_ icon: String, _ title: LocalizedStringKey, _ detail: LocalizedStringKey) -> some View {
         HStack(alignment: .top, spacing: 14) {
             Image(systemName: icon)
                 .font(.title3)
