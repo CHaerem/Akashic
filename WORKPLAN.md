@@ -35,7 +35,6 @@ node scripts/workplan.mjs next
 |---|---|---|---|
 | `QUA-10` First tests for Views/, and a UI test target | uitest-worktree | `claude/qua10-qua29` | — |
 | `QUA-29` A UI test target, so the accessibility audit can run unattended | uitest-worktree | `claude/qua10-qua29` | — |
-| `QUA-30` The remaining A4 polish items on the globe and onboarding | opus5 | `claude/remote-control-project-review-9462c1` | — |
 
 ## LEGACY
 
@@ -175,7 +174,7 @@ node scripts/workplan.mjs next
 | `x` | `QUA-27` **Two localisation gaps the screenshot pass surfaced but would not decide** | 0.25 | agent | — | No user-visible string is marked do-not-translate by accident, and the String-position trap is gone from the import sheets. |
 | `x` | `QUA-28` **Accessibility for Views/Photos, the one directory still at zero** | 0.5 | agent | `QUA-24` | No interactive control in Views/Photos is unlabelled. |
 | `~` | `QUA-29` **A UI test target, so the accessibility audit can run unattended** | 1 | agent | — | XCUIApplication.performAccessibilityAudit() runs in CI over the main screens. |
-| `~` | `QUA-30` **The remaining A4 polish items on the globe and onboarding** | 0.25 | agent | `QUA-20` | Each remaining A4 item is either fixed or recorded as a deliberate choice. |
+| ` ` | `QUA-30` **The remaining A4 polish items on the globe and onboarding** | 0.25 | agent | `QUA-20` | Each remaining A4 item is either fixed or recorded as a deliberate choice. |
 | `x` | `QUA-31` **Two screenshot seams fall through to the globe instead of failing** | 0.25 | agent | — | Every AKASHIC_SCREEN value either shows its screen or fails loudly. |
 
 ## Decisions on record
