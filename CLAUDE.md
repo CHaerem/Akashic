@@ -176,6 +176,15 @@ right: fix this file in the same commit.
   `Product.products(for:)` returns `[]`, and the paywall shows its "isn't available here yet" row —
   which means `StoreKitProvider.purchase()` cannot be covered from a UI test, and a test claiming
   to cover the priced surface would be asserting against a state that never renders.
+- **`performAccessibilityAudit()` reports far more than it should fail on.** Over the eight main
+  screens it finds ~130 issues; the app-owned, actionable ones were six sub-44 pt hit targets
+  (including "Restore purchases" at 131 × 18 pt and "Remove day 1", which deletes a day, at
+  17 × 17 pt). The remaining ~123 are three systemic design decisions — `.secondaryLabel` at 3.45:1
+  and `.tertiaryLabel` at 1.74:1 over a Light-Mode `systemBackground`, the map chrome's deliberate
+  `dynamicTypeSize` cap, and `StatChip`'s deliberate `lineLimit(1)` — so `AccessibilityAuditTests`
+  enforces the four structural audit types and prints the other three with a stated removal
+  condition. `.sufficientElementDescription` and `.trait` report **zero**, which is QUA-07/QUA-24's
+  labelling work verified by navigation rather than asserted.
 - **The public CloudKit database is billed to us, not to the customer.** The cost table in
   `COMMERCIALIZATION-PLAN.md` says bandwidth is free; that is true of the private database
   only. Anything that increases showcase traffic has a real cost line.
