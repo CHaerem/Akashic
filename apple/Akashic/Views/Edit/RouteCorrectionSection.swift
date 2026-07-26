@@ -89,7 +89,7 @@ struct RouteCorrectionSection: View {
     private func row(icon: String, title: LocalizedStringKey, subtitle: LocalizedStringKey, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             HStack(spacing: 12) {
-                Image(systemName: icon).font(.title3).foregroundStyle(Theme.accent).frame(width: 26)
+                Image(systemName: icon).font(.title3).foregroundStyle(Theme.accentText).frame(width: 26)
                     .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title).font(.subheadline.weight(.semibold)).foregroundStyle(Theme.textPrimary)

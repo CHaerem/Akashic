@@ -151,7 +151,7 @@ struct OnboardingView: View {
 
             Image(systemName: icon)
                 .font(.system(size: 64))
-                .foregroundStyle(Theme.accent)
+                .foregroundStyle(Theme.accentText)
                 .padding(.bottom, 8)
 
             Text(title)

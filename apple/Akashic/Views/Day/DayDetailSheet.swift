@@ -138,7 +138,7 @@ struct DayDetailSheet: View {
             Button { showWaypointEdit = true } label: {
                 Label("Edit day", systemImage: "slider.horizontal.3")
                     .font(.caption.weight(.semibold))
-                    .foregroundStyle(Theme.accent)
+                    .foregroundStyle(Theme.accentText)
                     .padding(.vertical, 6).padding(.horizontal, 12)
                     .background(Theme.accentSoft, in: Capsule())
             }
@@ -282,7 +282,7 @@ struct DayDetailSheet: View {
                     Label("Suggest the best photos", systemImage: "sparkles")
                         .font(.subheadline)
                 }
-                .foregroundStyle(Theme.accent)
+                .foregroundStyle(Theme.accentText)
                 .accessibilityHint(Text("Looks at this day's photographs on your device and suggests which stand out."))
             }
         }

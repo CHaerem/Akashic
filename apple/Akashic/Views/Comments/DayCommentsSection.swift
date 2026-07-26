@@ -337,7 +337,7 @@ private struct CommentRow: View {
                     isEditing = false
                 }
                 .font(.caption.weight(.semibold))
-                .foregroundStyle(Theme.accent)
+                .foregroundStyle(Theme.accentText)
                 .disabled(editText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
 
                 Button("Cancel") { isEditing = false }

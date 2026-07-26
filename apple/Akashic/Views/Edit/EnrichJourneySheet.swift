@@ -42,7 +42,7 @@ struct EnrichJourneySheet: View {
                         }
                         if suggestions.model.pending.count > 1 {
                             Button("Accept all", action: acceptAll)
-                                .font(.subheadline.weight(.semibold)).foregroundStyle(Theme.accent)
+                                .font(.subheadline.weight(.semibold)).foregroundStyle(Theme.accentText)
                                 .frame(maxWidth: .infinity, alignment: .trailing)
                                 .accessibilityLabel(Text("Accept all \(suggestions.model.pending.count) suggestions"))
                         }
@@ -60,7 +60,7 @@ struct EnrichJourneySheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") { dismiss() }.foregroundStyle(Theme.accent)
+                    Button("Done") { dismiss() }.foregroundStyle(Theme.accentText)
                 }
             }
             .sheet(isPresented: $showPaywall) {
@@ -100,7 +100,7 @@ struct EnrichJourneySheet: View {
 
     private var emptyState: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Image(systemName: "checkmark.seal").font(.title2).foregroundStyle(Theme.accent)
+            Image(systemName: "checkmark.seal").font(.title2).foregroundStyle(Theme.accentText)
                 .accessibilityHidden(true)
             Text("Nothing to add right now.")
                 .font(.subheadline.weight(.semibold)).foregroundStyle(Theme.textPrimary)
@@ -115,7 +115,7 @@ struct EnrichJourneySheet: View {
 
     private var locked: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Image(systemName: "wand.and.stars").font(.largeTitle).foregroundStyle(Theme.accent)
+            Image(systemName: "wand.and.stars").font(.largeTitle).foregroundStyle(Theme.accentText)
                 .accessibilityHidden(true)
             Text("Enrich journey is part of Akashic Complete")
                 .font(.headline).foregroundStyle(Theme.textPrimary)
@@ -153,7 +153,7 @@ struct EnrichJourneySheet: View {
             .buttonStyle(.plain)
             .accessibilityLabel(Text("Dismiss \(title)"))
             Button { accept(key) } label: {
-                Image(systemName: "checkmark.circle.fill").foregroundStyle(Theme.accent)
+                Image(systemName: "checkmark.circle.fill").foregroundStyle(Theme.accentText)
             }
             .buttonStyle(.plain)
             .accessibilityLabel(Text("Accept \(title)"))

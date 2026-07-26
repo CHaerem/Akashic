@@ -117,7 +117,7 @@ struct SettingsView: View {
                     networkPolicy.grantOneOccasionCellularDownload()
                 } label: {
                     Label("Download now over cellular", systemImage: "arrow.down.circle")
-                        .foregroundStyle(Theme.accent)
+                        .foregroundStyle(Theme.accentText)
                 }
             }
             // v2 one-time photo-storage repack progress, while it runs (MAPPING §13).
@@ -163,14 +163,14 @@ struct SettingsView: View {
                     .foregroundStyle(Theme.textSecondary)
             } icon: {
                 Image(systemName: "square.and.arrow.up")
-                    .foregroundStyle(Theme.accent)
+                    .foregroundStyle(Theme.accentText)
             }
 
             Button {
                 onboarding.replay()
             } label: {
                 Label("Replay intro", systemImage: "sparkles")
-                    .foregroundStyle(Theme.accent)
+                    .foregroundStyle(Theme.accentText)
             }
         } header: {
             Text("Your journeys")
@@ -306,7 +306,7 @@ struct SettingsView: View {
                 Config.setPersistenceModeOverride(nil)
                 showRelaunchNote = true
             }
-            .foregroundStyle(Theme.accent)
+            .foregroundStyle(Theme.accentText)
 
             Button(role: .destructive) {
                 DeveloperTools.setUnlocked(false)
@@ -517,7 +517,7 @@ struct SettingsView: View {
             }
 
             Button("Choose folder…") { showFolderPicker = true }
-                .foregroundStyle(Theme.accent)
+                .foregroundStyle(Theme.accentText)
 
             Button {
                 Task {
@@ -549,7 +549,7 @@ struct SettingsView: View {
                     ImportBrowserView()
                 } label: {
                     Label("Browse imported photos", systemImage: "photo.on.rectangle.angled")
-                        .foregroundStyle(Theme.accent)
+                        .foregroundStyle(Theme.accentText)
                 }
             }
         } header: {

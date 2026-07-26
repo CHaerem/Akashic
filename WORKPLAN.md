@@ -5,19 +5,19 @@
 
 # Akashic — work ledger
 
-98 tasks · **23 open** (6 agent-doable, 1.9 dev-days · 17 owner-only, 8.5 dev-days) · 75 done · 0 dropped
+98 tasks · **22 open** (5 agent-doable, 1.1 dev-days · 17 owner-only, 8.5 dev-days) · 76 done · 0 dropped
 
 > **`dev-days` are a human-developer estimate, not agent time.** They came from the review
 > that produced these tasks and they are the right unit for deciding whether something is
 > worth doing — they are the wrong unit for predicting how long an agent will take, and
 > summing them as "work remaining" overstates it substantially.
 >
-> Measured so far: **75 agent tasks estimated at 58.8 dev-days**,
+> Measured so far: **76 agent tasks estimated at 59.5 dev-days**,
 > closed in roughly one working afternoon across up to three parallel tracks.
 >
 > But that compression is **unmeasured for the large items**: of the tasks closed so far,
 > 7 were 2 dev-days or more. 0 of the
-> 1.9 remaining dev-days sit in 0 such tasks —
+> 1.1 remaining dev-days sit in 0 such tasks —
 > localisation, Swift 6 strict concurrency, a UI test target, the PDF book. Those involve
 > design judgement and broad-blast-radius refactors rather than localised edits, so do not
 > assume the same ratio holds. The cheap band is nearly exhausted:
@@ -134,7 +134,7 @@ node scripts/workplan.mjs next
 
 > Tests, types, CI, localisation, accessibility. Localisation and accessibility are in v1.0 by decision.
 
-2 open of 33 · 1 d remaining
+1 open of 33 · 0.3 d remaining
 
 | | Task | Days | Who | Deps | Finish line |
 |---|---|---|---|---|---|
@@ -169,7 +169,7 @@ node scripts/workplan.mjs next
 | `x` | `QUA-29` **A UI test target, so the accessibility audit can run unattended** | 1 | agent | — | XCUIApplication.performAccessibilityAudit() runs in CI over the main screens. |
 | ` ` | `QUA-30` **The remaining A4 polish items on the globe and onboarding** | 0.25 | agent | `QUA-20` | Each remaining A4 item is either fixed or recorded as a deliberate choice. |
 | `x` | `QUA-31` **Two screenshot seams fall through to the globe instead of failing** | 0.25 | agent | — | Every AKASHIC_SCREEN value either shows its screen or fails loudly. |
-| ` ` | `QUA-32` **Theme.accent fails WCAG as text in Light Mode, and its own comment says otherwise** | 0.75 | agent | — | Accent-coloured TEXT reaches at least 4.5:1 on a Light-Mode systemBackground (3:1 for large text), and Theme.swift's comment states what was measured rather than an assumption. |
+| `x` | `QUA-32` **Theme.accent fails WCAG as text in Light Mode, and its own comment says otherwise** | 0.75 | agent | — | Accent-coloured TEXT reaches at least 4.5:1 on a Light-Mode systemBackground (3:1 for large text), and Theme.swift's comment states what was measured rather than an assumption. |
 | `x` | `QUA-33` **The local StoreKit test configuration ships inside the Release-CloudKit app bundle** | 0.1 | agent | — | Akashic.storekit is absent from the built Release-CloudKit Akashic.app, and the StoreKit tests still run. |
 
 ## Decisions on record

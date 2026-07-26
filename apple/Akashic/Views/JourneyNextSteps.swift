@@ -50,7 +50,7 @@ struct JourneyNextStepsCard: View {
                             HStack(spacing: 12) {
                                 Image(systemName: step.icon)
                                     .font(.title3)
-                                    .foregroundStyle(Theme.accent)
+                                    .foregroundStyle(Theme.accentText)
                                     .frame(width: 26)
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(step.title)

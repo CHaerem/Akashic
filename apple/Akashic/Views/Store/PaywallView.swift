@@ -107,7 +107,7 @@ struct PaywallView: View {
                 Circle().fill(Theme.accentSoft).frame(width: 88, height: 88)
                 Image(systemName: "star.circle.fill")
                     .font(.system(size: 44, weight: .semibold))
-                    .foregroundStyle(Theme.accent)
+                    .foregroundStyle(Theme.accentText)
             }
             // QUA-24: the badge is ornament. Left visible it announces "star, circle, fill" as the
             // first thing on the purchase screen, ahead of the sentence that explains why the
@@ -161,7 +161,7 @@ struct PaywallView: View {
         HStack(alignment: .top, spacing: 14) {
             Image(systemName: icon)
                 .font(.title3)
-                .foregroundStyle(Theme.accent)
+                .foregroundStyle(Theme.accentText)
                 .frame(width: 30)
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 3) {
@@ -200,7 +200,7 @@ struct PaywallView: View {
         VStack(spacing: 8) {
             Label("You have Akashic Complete", systemImage: "checkmark.seal.fill")
                 .font(.subheadline.weight(.semibold))
-                .foregroundStyle(Theme.accent)
+                .foregroundStyle(Theme.accentText)
             Text("Unlimited journeys and photos — shared with your Family Sharing group.")
                 .font(.caption).foregroundStyle(Theme.textSecondary)
                 .multilineTextAlignment(.center)
@@ -257,7 +257,7 @@ struct PaywallView: View {
                     } label: {
                         Label("Try again", systemImage: "arrow.clockwise")
                             .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(Theme.accent)
+                            .foregroundStyle(Theme.accentText)
                     }
                     // "Try again" alone does not say at what — and this is the offline state, where
                     // the user is already guessing.
@@ -327,7 +327,7 @@ struct PaywallView: View {
                 Task { await entitlements.loadProduct() }
             } label: {
                 Label("Try again", systemImage: "arrow.clockwise")
-                    .font(.subheadline.weight(.semibold)).foregroundStyle(Theme.accent)
+                    .font(.subheadline.weight(.semibold)).foregroundStyle(Theme.accentText)
             }
             .accessibilityLabel("Try loading the price again")
             .accessibilityIdentifier(A11yID.paywallRetry)
@@ -352,7 +352,7 @@ struct PaywallView: View {
                 if isBusy(.restoring) { ProgressView().tint(Theme.accent) }
                 Text(isBusy(.restoring) ? "Restoring…" : "Restore purchases")
                     .font(.subheadline.weight(.medium))
-                    .foregroundStyle(Theme.accent)
+                    .foregroundStyle(Theme.accentText)
             }
         }
         .buttonStyle(.plain)

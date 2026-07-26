@@ -36,7 +36,7 @@ struct JourneyShareView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("Done") { dismiss() }.tint(Theme.accent)
+                    Button("Done") { dismiss() }.tint(Theme.accentText)
                 }
             }
         }
@@ -170,7 +170,7 @@ struct JourneyShareView: View {
                         Label("Remove access", systemImage: "person.badge.minus")
                     }
                 } label: {
-                    Image(systemName: "ellipsis.circle").tint(Theme.accent)
+                    Image(systemName: "ellipsis.circle").tint(Theme.accentText)
                 }
                 // An unlabelled glyph, once per participant, and the menu behind it can revoke
                 // someone's access to the family's photos.

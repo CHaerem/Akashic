@@ -357,7 +357,7 @@ struct NewJourneySheet: View {
                 } label: {
                     Label("Use \"\(suggestion)\"", systemImage: "sparkles")
                         .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(Theme.accent)
+                        .foregroundStyle(Theme.accentText)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(12)
                         .background(Theme.accentSoft, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
@@ -420,7 +420,7 @@ struct NewJourneySheet: View {
                     .background(Theme.surface, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                     .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Theme.hairline, lineWidth: 1))
                     Button("Done") { isEditingDates = false }
-                        .font(.caption.weight(.semibold)).foregroundStyle(Theme.accent)
+                        .font(.caption.weight(.semibold)).foregroundStyle(Theme.accentText)
                         .accessibilityLabel("Done editing dates")
                         // QUA-29: same sub-44 pt `.caption` text button as "Edit" below — see there.
                         .frame(minWidth: 44, minHeight: 44)
@@ -440,7 +440,7 @@ struct NewJourneySheet: View {
                         Spacer()
                         // Bare "Edit" beside three other sections that could equally be edited.
                         Button("Edit", action: beginEditingDates)
-                            .font(.caption.weight(.semibold)).foregroundStyle(Theme.accent)
+                            .font(.caption.weight(.semibold)).foregroundStyle(Theme.accentText)
                             .accessibilityLabel("Edit dates")
                             // QUA-29: `performAccessibilityAudit` measured this at 23.3 × 14.3 pt —
                             // a four-letter `.caption` word, and the only way into the date editor.
@@ -737,7 +737,7 @@ struct NewJourneySheet: View {
                         if staging {
                             ProgressView().tint(Theme.accent)
                         } else {
-                            Image(systemName: "calendar.badge.plus").font(.title3).foregroundStyle(Theme.accent)
+                            Image(systemName: "calendar.badge.plus").font(.title3).foregroundStyle(Theme.accentText)
                                 .accessibilityHidden(true)
                         }
                         pickerLabel
@@ -824,7 +824,7 @@ struct NewJourneySheet: View {
             } label: {
                 Label("Unlock with Akashic Complete", systemImage: "star.circle")
                     .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(Theme.accent)
+                    .foregroundStyle(Theme.accentText)
             }
             .buttonStyle(.plain)
             .accessibilityHint("Opens the Akashic Complete purchase sheet")
@@ -1016,7 +1016,7 @@ struct NewJourneySheet: View {
                         if pending.count > 1 {
                             Button("Accept all", action: acceptAllSuggestions)
                                 .font(.caption.weight(.semibold))
-                                .foregroundStyle(Theme.accent)
+                                .foregroundStyle(Theme.accentText)
                                 .accessibilityLabel(Text("Accept all \(pending.count) suggestions"))
                         }
                     }
@@ -1064,7 +1064,7 @@ struct NewJourneySheet: View {
                 .buttonStyle(.plain)
                 .accessibilityLabel(Text("Dismiss \(title)"))
                 Button { accept(key) } label: {
-                    Image(systemName: "checkmark.circle.fill").foregroundStyle(Theme.accent)
+                    Image(systemName: "checkmark.circle.fill").foregroundStyle(Theme.accentText)
                         .frame(width: 44, height: 44)
                         .contentShape(Rectangle())
                 }
@@ -1123,9 +1123,9 @@ struct NewJourneySheet: View {
                 }
                 Button(action: addDay) {
                     HStack(spacing: 8) {
-                        Image(systemName: "plus.circle.fill").foregroundStyle(Theme.accent)
+                        Image(systemName: "plus.circle.fill").foregroundStyle(Theme.accentText)
                             .accessibilityHidden(true)
-                        Text("Add day").font(.subheadline.weight(.semibold)).foregroundStyle(Theme.accent)
+                        Text("Add day").font(.subheadline.weight(.semibold)).foregroundStyle(Theme.accentText)
                         Spacer()
                     }
                     .padding(12)
@@ -1145,7 +1145,7 @@ struct NewJourneySheet: View {
         HStack(spacing: 10) {
             Text("\(index + 1)")
                 .font(.caption.weight(.bold))
-                .foregroundStyle(Theme.accent)
+                .foregroundStyle(Theme.accentText)
                 .frame(width: 24, height: 24)
                 .background(Theme.accentSoft, in: Circle())
                 .accessibilityHidden(true)
@@ -1221,10 +1221,10 @@ struct NewJourneySheet: View {
                     if isSuggestingNames {
                         ProgressView().controlSize(.small).tint(Theme.accent)
                     } else {
-                        Image(systemName: "apple.intelligence").foregroundStyle(Theme.accent)
+                        Image(systemName: "apple.intelligence").foregroundStyle(Theme.accentText)
                     }
                     Text(isSuggestingNames ? "Suggesting names…" : "Suggest names")
-                        .font(.subheadline.weight(.semibold)).foregroundStyle(Theme.accent)
+                        .font(.subheadline.weight(.semibold)).foregroundStyle(Theme.accentText)
                     Spacer()
                 }
                 .padding(12)

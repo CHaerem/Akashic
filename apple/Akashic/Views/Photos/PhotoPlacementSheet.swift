@@ -83,7 +83,7 @@ struct PhotoPlacementSheet: View {
         // Pin's tip points at the exact centre, so nudge the glyph up by half its height.
         Image(systemName: "mappin")
             .font(.system(size: 34, weight: .bold))
-            .foregroundStyle(Theme.accent)
+            .foregroundStyle(Theme.accentText)
             .shadow(radius: 3)
             .offset(y: -17)
             .allowsHitTesting(false)

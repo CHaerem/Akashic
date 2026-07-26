@@ -47,7 +47,7 @@ struct JourneyShowcaseSheet: View {
             .interactiveDismissDisabled(model.isWorking)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("Done") { dismiss() }.tint(Theme.accent)
+                    Button("Done") { dismiss() }.tint(Theme.accentText)
                         .disabled(model.isWorking)
                 }
             }
@@ -162,7 +162,7 @@ struct JourneyShowcaseSheet: View {
 
             case .done(let report):
                 resultView(report)
-                Button("Done") { model.reset() }.foregroundStyle(Theme.accent)
+                Button("Done") { model.reset() }.foregroundStyle(Theme.accentText)
             }
         } header: {
             Text(live.isPublic ? "Manage" : "Publish")

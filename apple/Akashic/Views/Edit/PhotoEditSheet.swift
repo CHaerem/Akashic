@@ -225,7 +225,7 @@ struct PhotoEditSheet: View {
                     Label(currentCoordinates == nil ? "Place on map" : "Adjust location",
                           systemImage: "mappin.and.ellipse")
                         .font(.subheadline.weight(.medium))
-                        .foregroundStyle(Theme.accent)
+                        .foregroundStyle(Theme.accentText)
                 }
                 .buttonStyle(.plain)
                 if currentCoordinates != nil {

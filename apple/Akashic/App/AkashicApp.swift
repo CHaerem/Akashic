@@ -136,7 +136,16 @@ struct AkashicApp: App {
                 // leaves the system in charge, which is the default — see `AppearancePreference`
                 // for why a viewer app earns an override that most apps should not have.
                 .preferredColorScheme(appearance.colorScheme)
-                .tint(Theme.accent)
+                // QUA-32: `accentText`, not `accent`. The ambient tint is what colours bar
+                // buttons, `Picker` values and links — all of which render as TEXT, where the brand
+                // periwinkle measures 2.47:1 on a Light-Mode background and fails AA. Found by
+                // looking at Settings in Light Mode: "Replay intro" had been migrated and read
+                // cleanly, while the Appearance picker's "Automatic" was still visibly pale,
+                // because a picker takes its colour from here rather than from a `foregroundStyle`.
+                //
+                // Filled controls are unaffected: every `Toggle` and `ProgressView` that wants the
+                // brand fill sets `.tint(Theme.accent)` at its own call site, which overrides this.
+                .tint(Theme.accentText)
                 // First-run onboarding (§4.2): a full-screen cover shown once. The coordinator
                 // owns the "show once" state (seeded from OnboardingState.shouldShow, which
                 // honors AKASHIC_SKIP_ONBOARDING and no-ops under XCTest), and the "Replay intro"

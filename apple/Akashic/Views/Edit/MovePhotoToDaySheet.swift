@@ -35,7 +35,7 @@ struct MovePhotoToDaySheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }.foregroundStyle(Theme.accent)
+                    Button("Cancel") { dismiss() }.foregroundStyle(Theme.accentText)
                 }
             }
         }
@@ -54,7 +54,7 @@ struct MovePhotoToDaySheet: View {
                 }
                 Spacer()
                 if isSelected {
-                    Image(systemName: "checkmark").font(.subheadline.weight(.bold)).foregroundStyle(Theme.accent)
+                    Image(systemName: "checkmark").font(.subheadline.weight(.bold)).foregroundStyle(Theme.accentText)
                         // QUA-24: the tick is what marks the photo's current day, and it announced
                         // as a stray "checkmark" on one row out of a dozen. `.isSelected` is the
                         // trait VoiceOver already has a word for, so the state is spoken as state.

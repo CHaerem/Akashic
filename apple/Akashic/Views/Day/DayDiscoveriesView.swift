@@ -230,7 +230,7 @@ private struct HistoricalSiteCardView: View {
                                         .accessibilityHidden(true)
                                 }
                                 .font(.caption)
-                                .foregroundStyle(Theme.accent)
+                                .foregroundStyle(Theme.accentText)
                             }
                             // The arrow glyph is what tells a sighted reader this leaves the app.
                             .accessibilityHint("Opens in Safari")
@@ -254,7 +254,7 @@ private struct FlowTags: View {
                 ForEach(tags, id: \.self) { tag in
                     Text(tag)
                         .font(.caption2)
-                        .foregroundStyle(Theme.accent)
+                        .foregroundStyle(Theme.accentText)
                         .padding(.horizontal, 8)
                         .padding(.vertical, 3)
                         .background(Theme.accentSoft,

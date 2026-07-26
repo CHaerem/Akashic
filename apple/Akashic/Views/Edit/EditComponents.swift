@@ -67,7 +67,7 @@ struct GlassField<Content: View>: View {
                     // QUA-24: the glyph restates the label ("flag" beside NAME, "globe" beside
                     // COUNTRY) — decoration, and SF Symbols carry their own accessibility
                     // descriptions, so leaving it visible makes VoiceOver announce the field twice.
-                    Image(systemName: systemImage).font(.caption2).foregroundStyle(Theme.accent)
+                    Image(systemName: systemImage).font(.caption2).foregroundStyle(Theme.accentText)
                         .accessibilityHidden(true)
                 }
                 // `.textCase(.uppercase)`, not `label.uppercased()`. The old form forced the
@@ -180,7 +180,7 @@ struct HighlightChipsEditor: View {
                         HStack(spacing: 6) {
                             Text(item)
                                 .font(.caption.weight(.medium))
-                                .foregroundStyle(Theme.accent)
+                                .foregroundStyle(Theme.accentText)
                             Button {
                                 items.remove(at: index)
                             } label: {

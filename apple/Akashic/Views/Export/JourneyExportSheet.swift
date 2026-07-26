@@ -103,7 +103,7 @@ struct JourneyExportSheet: View {
             .interactiveDismissDisabled(isWorking)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("Done") { dismiss() }.tint(Theme.accent)
+                    Button("Done") { dismiss() }.tint(Theme.accentText)
                         .disabled(isWorking)
                 }
             }

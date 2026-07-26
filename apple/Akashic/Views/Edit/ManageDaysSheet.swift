@@ -50,7 +50,7 @@ struct ManageDaysSheet: View {
                 Section {
                     Button { addDay(after: nil) } label: {
                         Label("Add day", systemImage: "plus.circle.fill")
-                            .foregroundStyle(Theme.accent)
+                            .foregroundStyle(Theme.accentText)
                     }
                 }
             }
@@ -61,13 +61,13 @@ struct ManageDaysSheet: View {
             .environment(\.editMode, $editMode)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Done") { dismiss() }.foregroundStyle(Theme.accent)
+                    Button("Done") { dismiss() }.foregroundStyle(Theme.accentText)
                 }
                 ToolbarItem(placement: .primaryAction) {
                     Button(editMode.isEditing ? "Done reordering" : "Reorder") {
                         withAnimation { editMode = editMode.isEditing ? .inactive : .active }
                     }
-                    .foregroundStyle(Theme.accent)
+                    .foregroundStyle(Theme.accentText)
                     .accessibilityLabel(editMode.isEditing ? "Done reordering days" : "Reorder days")
                 }
             }
@@ -89,7 +89,7 @@ struct ManageDaysSheet: View {
     private func row(_ camp: Camp) -> some View {
         HStack(spacing: 12) {
             Text("\(camp.dayNumber)")
-                .font(.caption.weight(.bold)).foregroundStyle(Theme.accent)
+                .font(.caption.weight(.bold)).foregroundStyle(Theme.accentText)
                 .frame(width: 28, height: 28)
                 .background(Theme.accentSoft, in: Circle())
             VStack(alignment: .leading, spacing: 2) {

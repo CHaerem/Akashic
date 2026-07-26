@@ -305,7 +305,7 @@ struct JourneyDetailView: View {
             HStack(spacing: 10) {
                 Image(systemName: "photo.on.rectangle.angled")
                     .font(.subheadline)
-                    .foregroundStyle(Theme.accent)
+                    .foregroundStyle(Theme.accentText)
                     .accessibilityHidden(true)
                 Text("View all photos")
                     .font(.subheadline.weight(.semibold))
@@ -400,7 +400,7 @@ struct JourneyDetailView: View {
                 Button { showManageDays = true } label: {
                     HStack(spacing: 10) {
                         Image(systemName: "calendar.badge.plus")
-                            .font(.title3).foregroundStyle(Theme.accent).frame(width: 26)
+                            .font(.title3).foregroundStyle(Theme.accentText).frame(width: 26)
                         VStack(alignment: .leading, spacing: 2) {
                             Text(isOwner ? "No days yet" : "No days yet")
                                 .font(.subheadline.weight(.semibold)).foregroundStyle(Theme.textPrimary)
@@ -465,7 +465,7 @@ struct DayRow: View {
                         HStack(spacing: 6) {
                             Image(systemName: "arrow.up.to.line.compact")
                                 .font(.caption2)
-                                .foregroundStyle(Theme.accent)
+                                .foregroundStyle(Theme.accentText)
                                 .accessibilityHidden(true)
                             Text(Formatters.meters(camp.elevation))
                                 .font(.subheadline)
@@ -512,7 +512,7 @@ struct DayRow: View {
         VStack(spacing: 0) {
             // Was 8 pt — below the `.caption2` floor; `.caption2` is the smallest this can go.
             Text("DAY").font(.caption2.weight(.bold)).foregroundStyle(Theme.textTertiary)
-            Text("\(camp.dayNumber)").font(.title3.weight(.bold)).foregroundStyle(Theme.accent)
+            Text("\(camp.dayNumber)").font(.title3.weight(.bold)).foregroundStyle(Theme.accentText)
         }
         .frame(width: dayBadgeSize, height: dayBadgeSize)
         .background(Theme.accentSoft, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
@@ -546,7 +546,7 @@ struct FlowChips: View {
             ForEach(items.prefix(4), id: \.self) { item in
                 Text(item)
                     .font(.caption2.weight(.medium))
-                    .foregroundStyle(Theme.accent)
+                    .foregroundStyle(Theme.accentText)
                     .padding(.vertical, 4)
                     .padding(.horizontal, 9)
                     .background(Theme.accentSoft, in: Capsule())

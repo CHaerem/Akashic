@@ -139,7 +139,7 @@ struct WaypointEditSheet: View {
                     Text(isDrafting ? "Drafting…" : "Draft with Apple Intelligence")
                         .font(.caption.weight(.semibold))
                 }
-                .foregroundStyle(Theme.accent)
+                .foregroundStyle(Theme.accentText)
             }
             .buttonStyle(.plain)
             .disabled(isDrafting)
@@ -223,7 +223,7 @@ struct WaypointEditSheet: View {
                         Text(isDraftingFacts ? "Drafting facts…" : "Draft facts")
                             .font(.caption.weight(.semibold))
                     }
-                    .foregroundStyle(Theme.accent)
+                    .foregroundStyle(Theme.accentText)
                 }
                 .buttonStyle(.plain)
                 .disabled(isDraftingFacts)
@@ -240,7 +240,7 @@ struct WaypointEditSheet: View {
                     }
                     HStack(spacing: 12) {
                         Button("Add to day") { addPendingFacts() }
-                            .font(.caption.weight(.semibold)).foregroundStyle(Theme.accent)
+                            .font(.caption.weight(.semibold)).foregroundStyle(Theme.accentText)
                             .accessibilityLabel("Add the drafted facts to this day")
                         Button("Discard") { pendingFacts = nil }
                             .font(.caption).foregroundStyle(Theme.textTertiary)
@@ -258,7 +258,7 @@ struct WaypointEditSheet: View {
 
     private func factPreview(icon: String, text: String) -> some View {
         HStack(alignment: .top, spacing: 6) {
-            Image(systemName: icon).font(.caption2).foregroundStyle(Theme.accent)
+            Image(systemName: icon).font(.caption2).foregroundStyle(Theme.accentText)
                 .accessibilityHidden(true)
             Text(text).font(.caption2).foregroundStyle(Theme.textSecondary)
         }
@@ -454,7 +454,7 @@ struct WaypointEditSheet: View {
     private func addRowButton(_ title: LocalizedStringKey, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Label(title, systemImage: "plus.circle.fill")
-                .font(.caption.weight(.semibold)).foregroundStyle(Theme.accent)
+                .font(.caption.weight(.semibold)).foregroundStyle(Theme.accentText)
         }
         .buttonStyle(.plain)
         .frame(maxWidth: .infinity, alignment: .leading)

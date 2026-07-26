@@ -64,7 +64,7 @@ struct DayNotesField: View {
             HStack(spacing: 8) {
                 Image(systemName: "square.and.pencil")
                     .font(.subheadline)
-                    .foregroundStyle(Theme.accent)
+                    .foregroundStyle(Theme.accentText)
                 Text("What happened this day?")
                     .font(.subheadline)
                     .foregroundStyle(Theme.textSecondary)
@@ -92,7 +92,7 @@ struct DayNotesField: View {
                     isEditing = false
                 }
                 .font(.footnote.weight(.semibold))
-                .foregroundStyle(Theme.accent)
+                .foregroundStyle(Theme.accentText)
 
                 Button("Cancel") { isEditing = false }
                     .font(.footnote.weight(.medium))

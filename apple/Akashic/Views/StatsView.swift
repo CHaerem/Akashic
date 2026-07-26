@@ -170,7 +170,7 @@ struct StatsView: View {
     /// third element that only restates the label) is hidden.
     private func dayMetric(_ label: LocalizedStringKey, _ value: String, _ icon: String) -> some View {
         VStack(alignment: .leading, spacing: 3) {
-            Image(systemName: icon).font(.caption2).foregroundStyle(Theme.accent)
+            Image(systemName: icon).font(.caption2).foregroundStyle(Theme.accentText)
                 .accessibilityHidden(true)
             Text(value).font(.subheadline.weight(.semibold)).foregroundStyle(Theme.textPrimary)
                 .lineLimit(1).minimumScaleFactor(0.7)

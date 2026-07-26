@@ -28,12 +28,40 @@ import UIKit
 ///  - **Reduce Motion** has no colour to swap and isn't handled here — see
 ///    `TrekCameraController` and `GlobeExperienceView`, where the motion actually lives.
 enum Theme {
-    /// The one brand colour this file keeps. Fixed across both appearances on purpose: this
-    /// periwinkle already reads correctly on both a light and a dark `systemBackground` —
-    /// inventing a second "light-mode accent" would be exactly the palette-growing this
-    /// rewrite is supposed to avoid.
+    /// The one brand colour this file keeps. Fixed across both appearances on purpose, and correct
+    /// for what it is actually used for: a **fill**. Against `onAccent` (black) it measures 8.51:1.
+    ///
+    /// This comment used to claim the periwinkle "already reads correctly on both a light and a dark
+    /// `systemBackground`". Measured, it is 8.51:1 on dark and **2.47:1 on light** — so it was true
+    /// for exactly one of the two. It was almost certainly true when written, because the app was
+    /// dark-only; the Light Mode migration that made `background` follow the system appearance
+    /// invalidated it and nothing re-measured. Use `accentText` for foregrounds. (QUA-32)
     static let accent = Color(red: 0.56, green: 0.62, blue: 1.0)
     static let accentSoft = accent.opacity(0.16)
+
+    /// `accent` for TEXT and icons — the same hue, darkened in Light Mode so it passes WCAG AA.
+    ///
+    /// Not the "second light-mode accent" the note above warned against: it is the brand periwinkle
+    /// scaled uniformly by 0.66, so the hue is unchanged and there is one brand colour with two
+    /// renderings, not two brand colours. Measured:
+    ///
+    /// | | on Light `systemBackground` | on Dark |
+    /// |---|---|---|
+    /// | `accent` | 2.47:1 — fails AA *and* AA-large | 8.51:1 |
+    /// | `accentText` | **5.20:1** — passes AA (4.5) | 8.51:1, identical to `accent` |
+    ///
+    /// Dark Mode is byte-identical to `accent`, so the appearance the owner designed is untouched;
+    /// only the previously-failing light case changes. QUA-29's audit flags every `accent` foreground
+    /// on every screen, which is how this was found.
+    ///
+    /// Fills keep using `accent`: a fill's contrast is against `onAccent`, which already passes.
+    ///
+    /// Built with `Color.adaptive(dark:light:)` below rather than a fourth hand-rolled
+    /// `UIColor { traits in … }` — that helper exists because this pattern had already been written
+    /// twice independently.
+    static let accentText = Color.adaptive(
+        dark: accent,
+        light: Color(red: 0.3696, green: 0.4092, blue: 0.66))
 
     /// Foreground for text/icons drawn on an `accent`-filled control (the app's primary CTA
     /// buttons). This used to just reuse `background` — which only worked because `background`
@@ -259,7 +287,7 @@ struct StatChip: View {
             HStack(spacing: 5) {
                 Image(systemName: icon)
                     .font(.caption2)
-                    .foregroundStyle(Theme.accent)
+                    .foregroundStyle(Theme.accentText)
                 Text(value)
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(Theme.textPrimary)

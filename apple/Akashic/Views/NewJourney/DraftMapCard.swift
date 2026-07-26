@@ -171,7 +171,7 @@ struct DraftMapCard: View {
         } label: {
             Label("Route options", systemImage: "ellipsis.circle")
                 .font(.caption.weight(.semibold))
-                .foregroundStyle(Theme.accent)
+                .foregroundStyle(Theme.accentText)
         }
         .accessibilityLabel("Route options")
         .accessibilityHint("Import a GPX file, draw the route on a map, or remove it")
@@ -226,7 +226,7 @@ struct DraftMapCard: View {
     private func actionButton(icon: String, title: LocalizedStringKey, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             HStack(spacing: 10) {
-                Image(systemName: icon).font(.subheadline).foregroundStyle(Theme.accent)
+                Image(systemName: icon).font(.subheadline).foregroundStyle(Theme.accentText)
                     .accessibilityHidden(true)
                 Text(title).font(.subheadline.weight(.semibold)).foregroundStyle(Theme.textPrimary)
                 Spacer()

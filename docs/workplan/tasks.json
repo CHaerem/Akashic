@@ -2230,7 +2230,7 @@
       "id": "QUA-32",
       "track": "QUALITY",
       "title": "Theme.accent fails WCAG as text in Light Mode, and its own comment says otherwise",
-      "status": "TODO",
+      "status": "DONE",
       "effort": 0.75,
       "priority": 36,
       "done_when": "Accent-coloured TEXT reaches at least 4.5:1 on a Light-Mode systemBackground (3:1 for large text), and Theme.swift's comment states what was measured rather than an assumption.",
@@ -2243,7 +2243,13 @@
         "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,id=$(xcrun simctl list devices available | grep -o '[0-9A-F-]\\{36\\}' | tail -1)\" CODE_SIGNING_ALLOWED=NO test",
         "python3 - <<'EOF'\ndef lum(r,g,b):\n f=lambda c: c/12.92 if c<=0.03928 else ((c+0.055)/1.055)**2.4\n return 0.2126*f(r)+0.7152*f(g)+0.0722*f(b)\n# assert the chosen light-mode accent reaches 4.5:1 against white\nEOF",
         "cd apple && xcodebuild ... -only-testing:AkashicUITests/AccessibilityAuditTests test 2>&1 | grep -c 'Theme.accent'"
-      ]
+      ],
+      "claim": {
+        "agent": "opus5",
+        "branch": "claude/remote-control-project-review-9462c1",
+        "at": "2026-07-26"
+      },
+      "evidence": "Theme.accentText added via the existing Color.adaptive(dark:light:) helper: brand periwinkle in Dark Mode (byte-identical to accent, 8.51:1), scaled uniformly by 0.66 in Light Mode -> 5.20:1 on systemBackground, which passes AA's 4.5 with headroom. Migrated 74 foregroundStyle/foregroundColor sites plus the app-wide ambient tint and 4 text-rendering tints; the 36 fill/tint sites keep accent, because a fill's contrast is against onAccent (8.51:1). Verified by LOOKING at Settings in both appearances, not only by counting: the first pass missed the Appearance picker's 'Automatic' because a Picker takes its colour from the ambient tint rather than a foregroundStyle -- fixed at AkashicApp's .tint. Dark Mode proven unchanged by pixel-sampling the same region before and after: identical avg RGB (130,144,231) over an identical 2770 px. QUA-29 audit contrast findings 62 -> 58; the residual is Apple's own .secondaryLabel (3.45:1) and .tertiaryLabel (1.74:1), explicitly out of scope. 791 unit + 14 UI tests pass."
     },
     {
       "id": "QUA-33",

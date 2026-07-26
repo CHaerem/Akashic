@@ -120,7 +120,7 @@ struct SectionLabel: View {
             if let trailing {
                 Text(trailing)
                     .font(.caption2.weight(.medium))
-                    .foregroundStyle(Theme.accent)
+                    .foregroundStyle(Theme.accentText)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 2)
                     .background(Theme.accentSoft, in: Capsule())

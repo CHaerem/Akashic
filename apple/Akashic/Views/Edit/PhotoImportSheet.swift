@@ -91,7 +91,7 @@ struct PhotoImportSheet: View {
             } label: {
                 Label("Unlock with Akashic Complete", systemImage: "star.circle")
                     .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(Theme.accent)
+                    .foregroundStyle(Theme.accentText)
             }
             .buttonStyle(.plain)
             .accessibilityHint("Opens the Akashic Complete purchase sheet")
@@ -138,7 +138,7 @@ struct PhotoImportSheet: View {
         ) {
             HStack(spacing: 10) {
                 Image(systemName: "photo.badge.plus")
-                    .font(.title3).foregroundStyle(Theme.accent)
+                    .font(.title3).foregroundStyle(Theme.accentText)
                     .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 2) {
                     label
@@ -223,7 +223,7 @@ struct PhotoImportSheet: View {
                 Text(dayLabel(item.wrappedValue.waypointID)).font(.caption.weight(.medium))
                 Image(systemName: "chevron.down").font(.system(size: 8))
             }
-            .foregroundStyle(Theme.accent)
+            .foregroundStyle(Theme.accentText)
             .padding(.vertical, 4).padding(.horizontal, 8)
             .background(Theme.accentSoft, in: Capsule())
         }

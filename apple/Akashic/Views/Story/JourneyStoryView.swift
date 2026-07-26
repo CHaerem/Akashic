@@ -293,7 +293,7 @@ private struct StoryChapterHeader: View {
     private var dayBadge: some View {
         VStack(spacing: 0) {
             Text("DAY").font(.caption2.weight(.bold)).foregroundStyle(Theme.textTertiary)
-            Text("\(camp.dayNumber)").font(.title3.weight(.bold)).foregroundStyle(Theme.accent)
+            Text("\(camp.dayNumber)").font(.title3.weight(.bold)).foregroundStyle(Theme.accentText)
         }
         .frame(width: dayBadgeSize, height: dayBadgeSize)
         .background(Theme.accentSoft, in: RoundedRectangle(cornerRadius: 12, style: .continuous))

@@ -109,7 +109,7 @@ private struct FirstSyncDownloadPromptView: View {
         VStack(spacing: 20) {
             Image(systemName: "icloud.and.arrow.down")
                 .font(.system(size: 44))
-                .foregroundStyle(Theme.accent)
+                .foregroundStyle(Theme.accentText)
                 .padding(.top, 32)
 
             Text("About \(estimateSummary) to download")

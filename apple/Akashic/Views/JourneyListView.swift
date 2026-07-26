@@ -44,7 +44,7 @@ struct JourneyListView: View {
                 } label: {
                     Image(systemName: "plus")
                         .font(.callout.weight(.semibold))
-                        .foregroundStyle(Theme.accent)
+                        .foregroundStyle(Theme.accentText)
                 }
                 .accessibilityLabel("New journey")
                 // QUA-10: the second-journey attempt that must hit the paywall on the free tier.
@@ -82,7 +82,7 @@ struct JourneyEmptyState: View {
                     .frame(width: 96, height: 96)
                 Image(systemName: "mountain.2.fill")
                     .font(.largeTitle.weight(.semibold))
-                    .foregroundStyle(Theme.accent)
+                    .foregroundStyle(Theme.accentText)
             }
             .accessibilityHidden(true)
             VStack(spacing: 8) {

@@ -59,7 +59,7 @@ private struct AddTile: View {
             RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .strokeBorder(Theme.accent.opacity(0.5), style: StrokeStyle(lineWidth: 1, dash: [5, 4]))
             VStack(spacing: 6) {
-                Image(systemName: "photo.badge.plus").font(.title3).foregroundStyle(Theme.accent)
+                Image(systemName: "photo.badge.plus").font(.title3).foregroundStyle(Theme.accentText)
                 Text("Add").font(.caption2).foregroundStyle(Theme.textSecondary)
             }
         }

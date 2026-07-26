@@ -19,7 +19,7 @@ struct EditScreenshotHarness: View {
         ZStack {
             Theme.background.ignoresSafeArea()
             VStack(spacing: 8) {
-                Image(systemName: "slider.horizontal.3").font(.largeTitle).foregroundStyle(Theme.accent)
+                Image(systemName: "slider.horizontal.3").font(.largeTitle).foregroundStyle(Theme.accentText)
                 Text("Editing preview").foregroundStyle(Theme.textSecondary)
             }
         }
