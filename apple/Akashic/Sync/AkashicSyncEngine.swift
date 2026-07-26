@@ -715,6 +715,18 @@ final class AkashicSyncEngine: NSObject, CKSyncEngineDelegate {
                     store.purgeSystemFields(forRecordNames: [failure.record.recordID.recordName])
                 }
                 rebased.append(.saveRecord(failure.record.recordID))
+            case .quotaExceeded:
+                // The owner's iCloud is full (QUA-11). Distinct from `.error` on both counts that
+                // matter: it is not a fault, and no amount of retrying resolves it — only the user
+                // freeing space or buying more does. Before this, the case fell into `default` as
+                // "retryable", so the Settings row went on reading "Syncing · last update 3 min
+                // ago" while every save was being rejected.
+                //
+                // Nothing is lost while this is true: local originals are never pruned, and
+                // `mediaRepackPending()` is state-derived, so a quota-failed photo is retried on
+                // the next activation and lands by itself once space exists. So this is an honesty
+                // fix, not a data-loss fix — which is exactly why it was invisible.
+                status.set(.storageFull)
             case .serverRejectedRequest, .invalidArguments, .unknownItem:
                 // Non-retryable for this record: surface, do not loop.
                 status.set(.error(failure.error.localizedDescription))
@@ -731,7 +743,13 @@ final class AkashicSyncEngine: NSObject, CKSyncEngineDelegate {
         }
         if !revokedDrops.isEmpty { engine?.remove(pendingRecordZoneChanges: revokedDrops) }
         if !rebased.isEmpty { engine?.add(pendingRecordZoneChanges: rebased) }
-        if !saved.isEmpty || !deleted.isEmpty { status.markSynced() }
+        if !saved.isEmpty || !deleted.isEmpty {
+            // A save that actually landed is the only evidence that space exists again, so this is
+            // where `.storageFull` clears — not in `markSynced`, which fetches also call and which
+            // would therefore clear it while uploads were still being rejected (QUA-11).
+            status.clearStorageFullOnSuccessfulSave()
+            status.markSynced()
+        }
     }
 
     /// Materialize the CKRecords for a set of pending changes. Prefers a rebased record from

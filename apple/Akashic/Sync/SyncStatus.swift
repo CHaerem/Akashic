@@ -20,6 +20,11 @@ final class SyncStatus: ObservableObject {
         case unavailable         // couldNotDetermine / temporarilyUnavailable
         case active              // engine running
         case waitingForWiFi      // a heavy download is deferred by the Wi-Fi-only policy
+        // The owner's iCloud is full, so the server is rejecting saves (CKError.quotaExceeded).
+        // Its own state rather than `.error` because it is not a fault and it is not transient:
+        // nothing retries its way out of a full account, the user has to free space or buy more,
+        // and until they do the honest thing to say is "waiting", not "syncing". QUA-11.
+        case storageFull
         case error(String)
     }
 
@@ -60,6 +65,7 @@ final class SyncStatus: ObservableObject {
                 return "Syncing · last update \(Self.relative.localizedString(for: date, relativeTo: Date()))"
             }
             return "Syncing with iCloud"
+        case .storageFull:     return "Your iCloud is full — new photos are waiting to upload"
         case .waitingForWiFi:  return "Waiting for Wi-Fi to download"
         case .error(let message): return "Sync error: \(message)"
         }
@@ -70,9 +76,25 @@ final class SyncStatus: ObservableObject {
 
     func set(_ newState: State) { state = newState }
 
+    /// Record a successful sync round trip.
+    ///
+    /// `.storageFull` deliberately survives this (QUA-11). `markSynced` is called from four fetch
+    /// paths as well as the save path, and **fetching keeps working perfectly when the account is
+    /// full** — only saves are rejected. So without this guard the sequence "save rejected for
+    /// quota, then any successful fetch" put the row straight back to "Syncing · last update just
+    /// now", which is how a permanently-stuck upload managed to look healthy. The timestamp is
+    /// still updated, because the fetch genuinely did happen; only the state is held.
+    ///
+    /// The state clears when a save actually succeeds — see `clearStorageFullOnSuccessfulSave`.
     func markSynced(_ date: Date = Date()) {
         lastSyncDate = date
-        state = .active
+        if state != .storageFull { state = .active }
+    }
+
+    /// Called when a save round trip succeeds, which is the only real evidence that space exists
+    /// again. Kept separate from `markSynced` precisely because a fetch is not that evidence.
+    func clearStorageFullOnSuccessfulSave() {
+        if state == .storageFull { state = .active }
     }
 
     /// Map a raw `CKAccountStatus` to the corresponding non-active state. `.available`

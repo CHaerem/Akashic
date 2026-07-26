@@ -5,7 +5,7 @@
 
 # Akashic — work ledger
 
-86 tasks · **45 open** (29 agent-doable, 40.6 d · 16 owner-only, 8 d) · 41 done · 0 dropped
+86 tasks · **42 open** (26 agent-doable, 39.1 d · 16 owner-only, 8 d) · 44 done · 0 dropped
 
 Read [CLAUDE.md](CLAUDE.md) before touching anything. To find work:
 
@@ -18,6 +18,10 @@ node scripts/workplan.mjs next
 | Task | Agent | Branch | Stopped at |
 |---|---|---|---|
 | `DIFF-04` On-device photo curation with Vision | opus5 | `claude/remote-control-project-review-9462c1` | Pure policy (PhotoCuration) and the Vision scorer (VisionPhotoScorer, behind the PhotoScoring seam) are written and covered by 17 tests: ranking, exclusions, dedup, per-day caps, determinism, input-order independence. NOT YET WIRED, so Release strips it and Vision does not link — verified with otool. Remaining: (1) two SuggestionKey cases, .heroPhoto and .bestOf(dayID:), plus payload storage and an apply() arm in JourneySuggestionCoordinator, following the existing .facts pattern exactly; (2) hero can use the existing Photo.isHero field so it needs no model change, but best-of needs somewhere to live — decide between a Day field (Core Data, additive) and deriving it on read; (3) accept/dismiss rows in the day view; (4) call the scorer after ingest, off the main actor, with the existing progress reporting. Do NOT change the duplicateDistance default (0.15) without a fixture check: a false positive hides a photo the user wanted. |
+| `DIFF-09` C9 — derive days from timestamped GPX trackpoints | native-worktree | `claude/native-batch` | — |
+| `QUA-06` Localise the app to Norwegian | loc-worktree | `claude/qua06-localisation` | — |
+| `QUA-12` Tests for KnowledgeRetrieval, and fix its two real defects | native-worktree | `claude/native-batch` | — |
+| `DIFF-10` Give the demo journey photographs | native-worktree | `claude/native-batch` | — |
 
 ## LEGACY
 
@@ -79,7 +83,7 @@ node scripts/workplan.mjs next
 |---|---|---|---|---|---|
 | `x` | `SHIP-01` **Move the two dropped Info.plist keys into info.properties** | 0.25 | agent | — | The built Release-CloudKit Info.plist contains CKSharingSupported and UIBackgroundModes. |
 | `x` | `SHIP-02` **Register for remote notifications — the missing half of push sync** | 0.5 | agent | `SHIP-01` | The app calls registerForRemoteNotifications and a device receives a CloudKit push. |
-| ` ` | `SHIP-03` **Produce the 12 App Store screenshots** | 1.5 | agent | `SHIP-06` | Twelve assets exist at the two required sizes and are committed under docs/store/screenshots/. |
+| ` ` | `SHIP-03` **Produce the 12 App Store screenshots** | 1.5 | agent | `SHIP-06` `QUA-06` | Twelve assets exist at the two required sizes and are committed under docs/store/screenshots/. |
 | `x` | `SHIP-04` **Add PrivacyInfo.xcprivacy** | 0.25 | agent | — | The manifest ships in the app bundle and the upload draws no ITMS-91053 notice. |
 | `x` | `SHIP-05` **Bump the marketing version to 1.0.0** | 0.1 | agent | — | The built plist reports CFBundleShortVersionString 1.0.0. |
 | `x` | `SHIP-06` **D5 — consumer sync wording, iPhone portrait lock, ASC config match** | 0.5 | agent | — | Settings shows no engineering strings and iPhone does not rotate into the iPad panel layout. |
@@ -113,14 +117,14 @@ node scripts/workplan.mjs next
 | ` ` | `DIFF-06` **Byte-level photo dedup** | 1.5 | agent | `DIFF-04` | A journey reports its unique-image count, and duplicates are collapsed on import. |
 | ` ` | `DIFF-07` **PDF export of the story view** | 6 | agent | `DIFF-04` `DIFF-06` | A journey exports a PDF a person would willingly hand over. |
 | ` ` | `DIFF-08` **Foundation Models depth: streaming, prewarm, typed errors** | 1.5 | agent | `QUA-05` | Drafting streams, sessions are reused, and guardrail refusals say something specific. |
-| ` ` | `DIFF-09` **C9 — derive days from timestamped GPX trackpoints** | 1 | agent | — | A Strava or Garmin export yields a journey with correctly dated days. |
-| ` ` | `DIFF-10` **Give the demo journey photographs** | 1.5 | agent | — | A first launch shows a journey with real photographs, and a photos-only trip is demoed too. |
+| `~` | `DIFF-09` **C9 — derive days from timestamped GPX trackpoints** | 1 | agent | — | A Strava or Garmin export yields a journey with correctly dated days. |
+| `~` | `DIFF-10` **Give the demo journey photographs** | 1.5 | agent | — | A first launch shows a journey with real photographs, and a photos-only trip is demoed too. |
 
 ## QUALITY
 
 > Tests, types, CI, localisation, accessibility. Localisation and accessibility are in v1.0 by decision.
 
-17 open of 25 · 22.8 d remaining
+14 open of 25 · 21.3 d remaining
 
 | | Task | Days | Who | Deps | Finish line |
 |---|---|---|---|---|---|
@@ -128,15 +132,15 @@ node scripts/workplan.mjs next
 | `x` | `QUA-02` **Make the lint and typecheck gates real for the code that ships** | 1.5 | agent | `LEG-07` | ESLint inspects src/, and a type error fails CI rather than being swallowed. |
 | `x` | `QUA-03` **Clear the red Security Audit job** | 0.5 | agent | — | npm audit --audit-level=high exits 0, or the exception is documented and time-boxed. |
 | `x` | `QUA-04` **Repair or delete the Performance Tests workflow** | 0.25 | agent | — | No workflow references a spec file that does not exist. |
-| ` ` | `QUA-05` **Add a compile tripwire for the Foundation Models code** | 0.5 | agent | — | CI fails if the Intelligence code stops compiling. |
-| ` ` | `QUA-06` **Localise the app to Norwegian** | 4 | agent | — | Every user-visible string comes from a string catalogue, and the app runs in NB end to end. |
+| `x` | `QUA-05` **Add a compile tripwire for the Foundation Models code** | 0.5 | agent | — | CI fails if the Intelligence code stops compiling. |
+| `~` | `QUA-06` **Localise the app to Norwegian** | 4 | agent | — | Every user-visible string comes from a string catalogue, and the app runs in NB end to end. |
 | ` ` | `QUA-07` **Bring accessibility to a shippable standard** | 3 | agent | `QUA-06` | Every interactive control has a label, and the photo grid and elevation chart are navigable by VoiceOver. |
 | ` ` | `QUA-08` **Turn on Swift 6 strict concurrency** | 3 | agent | — | The project builds clean under SWIFT_STRICT_CONCURRENCY=complete. |
 | `x` | `QUA-09` **Light up the widget or remove it from v1.0** | 0.5 | agent | — | The widget shows the customer's own journey, or it does not ship. |
 | ` ` | `QUA-10` **First tests for Views/, and a UI test target** | 3 | agent | `QUA-01` | A UI test target exists and the create-journey flow has an automated test. |
-| ` ` | `QUA-11` **Handle a full iCloud account** | 0.5 | agent | — | A quota-exceeded sync failure is visible in the UI and says what to do. |
-| ` ` | `QUA-12` **Tests for KnowledgeRetrieval, and fix its two real defects** | 1.5 | agent | `DOC-10` | The retrieval path has tests, including the cross-project de-dup and empty-coordinate cases. |
-| ` ` | `QUA-13` **Stop video import loading whole files into memory** | 0.5 | agent | — | Importing a multi-minute 4K video does not jetsam the app. |
+| `x` | `QUA-11` **Handle a full iCloud account** | 0.5 | agent | — | A quota-exceeded sync failure is visible in the UI and says what to do. |
+| `~` | `QUA-12` **Tests for KnowledgeRetrieval, and fix its two real defects** | 1.5 | agent | `DOC-10` | The retrieval path has tests, including the cross-project de-dup and empty-coordinate cases. |
+| `x` | `QUA-13` **Stop video import loading whole files into memory** | 0.5 | agent | — | Importing a multi-minute 4K video does not jetsam the app. |
 | ` ` | `QUA-14` **Name the shortfall when photo ingest partly fails** | 0.25 | agent | — | A creation flow that ingests fewer photos than picked says so. |
 | ` ` | `QUA-15` **Add an 'entitlement undetermined' state** | 0.5 | agent | — | A paying customer is never shown the free-tier wall while StoreKit is still resolving. |
 | ` ` | `QUA-16` **Make the 100-photo cap a limit, not a failure** | 0.5 | agent | — | The cap is visible before ingest work starts, not reported after it. |

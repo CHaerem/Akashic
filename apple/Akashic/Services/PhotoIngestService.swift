@@ -204,12 +204,17 @@ enum PhotoIngestError: LocalizedError {
     case emptyData
     case originalWriteFailed(String)
     case unsupportedType(String)
+    /// QUA-13: refused by size before the copy, rather than being jetsammed during it.
+    case movieTooLarge(maxBytes: Int)
 
     var errorDescription: String? {
         switch self {
         case .emptyData: return "The selected item had no data."
         case let .originalWriteFailed(m): return "Could not save the original file: \(m)"
         case let .unsupportedType(t): return "Unsupported media type: \(t)"
+        case let .movieTooLarge(maxBytes):
+            let limit = ByteCountFormatter.string(fromByteCount: Int64(maxBytes), countStyle: .file)
+            return "That video is larger than \(limit). Trim it in Photos first, then add it."
         }
     }
 }
@@ -250,6 +255,23 @@ final class PhotoIngestService {
         return try ingestImage(data: data, type: type, photoId: photoId,
                                journeyId: journeyId, waypointId: waypointId,
                                sortOrder: sortOrder)
+    }
+
+    /// Ingest a movie that is already a file on disk, without ever holding it in memory (QUA-13).
+    ///
+    /// The only difference from `ingest(data:type:)` is how the bytes reach their destination:
+    /// `FileManager.copyItem` streams, where `Data.write` requires the whole thing resident. Record
+    /// building is shared, so a video ingested either way produces an identical `Photo`.
+    func ingest(fileURL: URL,
+                type: UTType,
+                journeyId: String,
+                waypointId: String? = nil,
+                sortOrder: Int = 0) async throws -> Photo {
+        try media.ensurePhotoDirectory(journeyId: journeyId)
+        let photoId = UUID().uuidString.lowercased()
+        return try await ingestVideo(copyingFrom: fileURL, type: type, photoId: photoId,
+                                     journeyId: journeyId, waypointId: waypointId,
+                                     sortOrder: sortOrder)
     }
 
     /// Day suggestion for a freshly ingested photo (tiers 2–4 of `PhotoDayMatcher`, since a
@@ -310,11 +332,35 @@ final class PhotoIngestService {
 
     private func ingestVideo(data: Data, type: UTType, photoId: String,
                              journeyId: String, waypointId: String?, sortOrder: Int) async throws -> Photo {
+        try await ingestVideo(placingBytes: { url in try data.write(to: url, options: .atomic) },
+                              type: type, photoId: photoId, journeyId: journeyId,
+                              waypointId: waypointId, sortOrder: sortOrder)
+    }
+
+    /// File-to-file variant (QUA-13): `copyItem` streams, so peak memory is a copy buffer rather
+    /// than the whole movie.
+    private func ingestVideo(copyingFrom source: URL, type: UTType, photoId: String,
+                             journeyId: String, waypointId: String?, sortOrder: Int) async throws -> Photo {
+        try await ingestVideo(placingBytes: { url in
+            if FileManager.default.fileExists(atPath: url.path) {
+                try FileManager.default.removeItem(at: url)
+            }
+            try FileManager.default.copyItem(at: source, to: url)
+        }, type: type, photoId: photoId, journeyId: journeyId,
+           waypointId: waypointId, sortOrder: sortOrder)
+    }
+
+    /// Shared video ingest. `placeBytes` is the only difference between the in-memory and the
+    /// file-to-file paths, so everything after it — duration, poster frame, record building — is
+    /// identical and a video ingested either way yields an identical `Photo`.
+    private func ingestVideo(placingBytes placeBytes: (URL) throws -> Void,
+                             type: UTType, photoId: String,
+                             journeyId: String, waypointId: String?, sortOrder: Int) async throws -> Photo {
         let ext = originalExtension(for: type, imageFallback: "mov")
         let originalRel = media.relativeOriginalPath(journeyId: journeyId, photoId: photoId, ext: ext)
         let originalURL = media.absoluteURL(forRelative: originalRel)
         do {
-            try data.write(to: originalURL, options: .atomic)
+            try placeBytes(originalURL)
         } catch {
             throw PhotoIngestError.originalWriteFailed(error.localizedDescription)
         }
@@ -408,17 +454,70 @@ final class PhotoIngestService {
 import SwiftUI
 import PhotosUI
 
+/// A movie transferred as a **file** rather than as bytes in memory (QUA-13).
+///
+/// `loadTransferable(type: Data.self)` materialises the entire item as one contiguous `Data`. For a
+/// photo that is fine; for a multi-minute 4K capture it is hundreds of megabytes of contiguous
+/// allocation, and the app is jetsammed before it can write anything. A `FileRepresentation` lets
+/// the system hand over a URL instead, so the bytes go disk-to-disk and peak memory is a copy
+/// buffer rather than the whole movie.
+///
+/// The received file lives in a system-owned temporary location that is deleted when the closure
+/// returns, so it must be copied somewhere we own before it can be used.
+struct IngestedMovie: Transferable {
+    let url: URL
+
+    static var transferRepresentation: some TransferRepresentation {
+        FileRepresentation(importedContentType: .movie) { received in
+            let destination = FileManager.default.temporaryDirectory
+                .appendingPathComponent("akashic-ingest-\(UUID().uuidString)")
+                .appendingPathExtension(received.file.pathExtension.isEmpty
+                                        ? "mov" : received.file.pathExtension)
+            try FileManager.default.copyItem(at: received.file, to: destination)
+            return IngestedMovie(url: destination)
+        }
+    }
+}
+
 extension PhotoIngestService {
-    /// Load a `PhotosPickerItem`'s bytes + declared UTType and run the core ingest. The picker
-    /// itself cannot be driven headlessly, so tests exercise `ingest(data:type:…)` directly.
+
+    /// Largest movie we will ingest, mirroring `GPXParser.maxFileBytes` in intent: refuse by size
+    /// before committing memory, and say so, rather than being killed mid-import.
+    ///
+    /// 1.5 GB is roughly 12 minutes of 4K60 — far beyond any plausible trip clip, so the guard only
+    /// fires on something the user almost certainly picked by accident, while still bounding the
+    /// copy. The failure is a message, not a crash, which is the whole point.
+    static let maxMovieBytes = 1_500_000_000
+
+    /// Load a `PhotosPickerItem` and run the core ingest. The picker itself cannot be driven
+    /// headlessly, so tests exercise `ingest(data:type:…)` and `ingest(fileURL:type:…)` directly.
+    ///
+    /// Movies take the file path; still images keep the in-memory path, where `Data` is both
+    /// harmless and what the EXIF and thumbnail work needs anyway.
     func ingest(pickerItem: PhotosPickerItem,
                 journeyId: String,
                 waypointId: String? = nil,
                 sortOrder: Int = 0) async throws -> Photo {
+        let type = pickerItem.supportedContentTypes.first ?? .image
+
+        if type.conforms(to: .movie) {
+            guard let movie = try await pickerItem.loadTransferable(type: IngestedMovie.self) else {
+                throw PhotoIngestError.emptyData
+            }
+            defer { try? FileManager.default.removeItem(at: movie.url) }
+
+            let size = (try? movie.url.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
+            guard size > 0 else { throw PhotoIngestError.emptyData }
+            guard size <= Self.maxMovieBytes else {
+                throw PhotoIngestError.movieTooLarge(maxBytes: Self.maxMovieBytes)
+            }
+            return try await ingest(fileURL: movie.url, type: type, journeyId: journeyId,
+                                    waypointId: waypointId, sortOrder: sortOrder)
+        }
+
         guard let data = try await pickerItem.loadTransferable(type: Data.self), !data.isEmpty else {
             throw PhotoIngestError.emptyData
         }
-        let type = pickerItem.supportedContentTypes.first ?? .image
         return try await ingest(data: data, type: type, journeyId: journeyId,
                                 waypointId: waypointId, sortOrder: sortOrder)
     }

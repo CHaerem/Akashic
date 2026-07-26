@@ -623,13 +623,14 @@
       "done_when": "Twelve assets exist at the two required sizes and are committed under docs/store/screenshots/.",
       "priority": 20,
       "deps": [
-        "SHIP-06"
+        "SHIP-06",
+        "QUA-06"
       ],
       "files": [
         "docs/store/screenshots/**",
         "docs/store/screenshots-plan.md"
       ],
-      "why": "A hard App Store Connect gate: TARGETED_DEVICE_FAMILY '1,2' requires both a 6.9-inch iPhone set and a 13-inch iPad set before Submit is clickable. More manual than the plan assumes — EditScreenshotHarness drives only the edit sheets, and AKASHIC_SCREEN has no case for the globe, day detail, elevation profile or share sheet, so five of six shots are hand-navigated.",
+      "why": "A hard App Store Connect gate: TARGETED_DEVICE_FAMILY '1,2' requires both a 6.9-inch iPhone set and a 13-inch iPad set before Submit is clickable. More manual than the plan assumes — EditScreenshotHarness drives only the edit sheets, and AKASHIC_SCREEN has no case for the globe, day detail, elevation profile or share sheet, so five of six shots are hand-navigated. Sequenced after QUA-06: the listing is EN+NB, and NB captions over English app chrome is exactly the mismatch a reviewer notices. Capture both languages once the string catalogue exists rather than shooting twice.",
       "verify": [
         "ls docs/store/screenshots/*.png | wc -l  # expect 12",
         "file docs/store/screenshots/*.png | grep -c '1320 x 2868\\|2064 x 2752'"
@@ -1131,7 +1132,7 @@
       "id": "DIFF-09",
       "track": "DIFF",
       "title": "C9 — derive days from timestamped GPX trackpoints",
-      "status": "TODO",
+      "status": "WIP",
       "effort": 1,
       "done_when": "A Strava or Garmin export yields a journey with correctly dated days.",
       "files": [
@@ -1141,7 +1142,12 @@
       "verify": [
         "cd apple && xcodegen generate",
         "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,id=$(xcrun simctl list devices available | grep -o '[0-9A-F-]\\{36\\}' | tail -1)\" CODE_SIGNING_ALLOWED=NO test"
-      ]
+      ],
+      "claim": {
+        "agent": "native-worktree",
+        "branch": "claude/native-batch",
+        "at": "2026-07-26"
+      }
     },
     {
       "id": "QUA-01",
@@ -1242,7 +1248,7 @@
       "id": "QUA-05",
       "track": "QUALITY",
       "title": "Add a compile tripwire for the Foundation Models code",
-      "status": "TODO",
+      "status": "DONE",
       "effort": 0.5,
       "done_when": "CI fails if the Intelligence code stops compiling.",
       "priority": 13,
@@ -1254,13 +1260,19 @@
       "why": "CI runs macos-15 with no Xcode pin, so canImport(FoundationModels) is false and roughly 700 lines of shipped Intelligence code have never been type-checked by anything automated. Releases are archived locally on Xcode 26.6, which is the only reason a rename would be caught at all.",
       "verify": [
         "gh run view --log | grep -i foundationmodels"
-      ]
+      ],
+      "claim": {
+        "agent": "opus5",
+        "branch": "claude/remote-control-project-review-9462c1",
+        "at": "2026-07-26"
+      },
+      "evidence": "Tripwire placed where the guarantee belongs: AKASHIC_REQUIRE_INTELLIGENCE turns a missing FoundationModels SDK into a #error, and testflight-upload.sh passes it — so the archive that reaches a customer cannot silently ship without the paid AI family. Deliberately NOT keyed on !DEBUG, because CI builds Release-CloudKit on macos-15 and that would re-create the permanently-red gate QUA-03 removed. Plus 4 tests that print the compile mode into every run and pin that probe() stays coherent and the kill switch wins on any toolchain."
     },
     {
       "id": "QUA-06",
       "track": "QUALITY",
       "title": "Localise the app to Norwegian",
-      "status": "TODO",
+      "status": "WIP",
       "effort": 4,
       "done_when": "Every user-visible string comes from a string catalogue, and the app runs in NB end to end.",
       "priority": 25,
@@ -1274,7 +1286,12 @@
         "cd apple && xcodegen generate",
         "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,id=$(xcrun simctl list devices available | grep -o '[0-9A-F-]\\{36\\}' | tail -1)\" CODE_SIGNING_ALLOWED=NO test",
         "Run in the simulator with the system language set to Norwegian"
-      ]
+      ],
+      "claim": {
+        "agent": "loc-worktree",
+        "branch": "claude/qua06-localisation",
+        "at": "2026-07-26"
+      }
     },
     {
       "id": "QUA-07",
@@ -1368,7 +1385,7 @@
       "id": "QUA-11",
       "track": "QUALITY",
       "title": "Handle a full iCloud account",
-      "status": "TODO",
+      "status": "DONE",
       "effort": 0.5,
       "done_when": "A quota-exceeded sync failure is visible in the UI and says what to do.",
       "files": [
@@ -1379,13 +1396,19 @@
       "verify": [
         "cd apple && xcodegen generate",
         "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,id=$(xcrun simctl list devices available | grep -o '[0-9A-F-]\\{36\\}' | tail -1)\" CODE_SIGNING_ALLOWED=NO test"
-      ]
+      ],
+      "claim": {
+        "agent": "opus5",
+        "branch": "claude/remote-control-project-review-9462c1",
+        "at": "2026-07-26"
+      },
+      "evidence": "CKError.quotaExceeded now maps to a dedicated .storageFull state with consumer copy, instead of falling into the retryable default and saying nothing. The real bug was subtler: markSynced is called from four fetch paths and fetching works fine on a full account, so any successful fetch erased the warning — markSynced now holds .storageFull while still updating the timestamp, and only a landed save clears it. 6 tests including that a fetch does not clear it and that clearing is a no-op from every other state."
     },
     {
       "id": "QUA-12",
       "track": "QUALITY",
       "title": "Tests for KnowledgeRetrieval, and fix its two real defects",
-      "status": "TODO",
+      "status": "WIP",
       "effort": 1.5,
       "done_when": "The retrieval path has tests, including the cross-project de-dup and empty-coordinate cases.",
       "deps": [
@@ -1400,13 +1423,18 @@
       "verify": [
         "cd apple && xcodegen generate",
         "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,id=$(xcrun simctl list devices available | grep -o '[0-9A-F-]\\{36\\}' | tail -1)\" CODE_SIGNING_ALLOWED=NO test"
-      ]
+      ],
+      "claim": {
+        "agent": "native-worktree",
+        "branch": "claude/native-batch",
+        "at": "2026-07-26"
+      }
     },
     {
       "id": "QUA-13",
       "track": "QUALITY",
       "title": "Stop video import loading whole files into memory",
-      "status": "TODO",
+      "status": "DONE",
       "effort": 0.5,
       "done_when": "Importing a multi-minute 4K video does not jetsam the app.",
       "files": [
@@ -1417,7 +1445,13 @@
       "verify": [
         "cd apple && xcodegen generate",
         "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,id=$(xcrun simctl list devices available | grep -o '[0-9A-F-]\\{36\\}' | tail -1)\" CODE_SIGNING_ALLOWED=NO test"
-      ]
+      ],
+      "claim": {
+        "agent": "opus5",
+        "branch": "claude/remote-control-project-review-9462c1",
+        "at": "2026-07-26"
+      },
+      "evidence": "Movies now arrive as a file, not as one contiguous Data: an IngestedMovie Transferable with FileRepresentation, then copyItem disk-to-disk, so peak memory is a copy buffer rather than the whole movie. Plus a 1.5 GB size guard mirroring GPXParser's, refusing with an actionable message instead of a jetsam. ingestVideo split into a shared core with two byte-placement strategies so both paths produce an identical Photo. 4 tests including that the source survives (copy, not move) and that re-ingest does not fail on an existing destination."
     },
     {
       "id": "QUA-14",
@@ -1751,7 +1785,7 @@
       "track": "QUALITY",
       "title": "Accessibility for the screens D1 and D3 were never scoped to cover",
       "status": "TODO",
-      "effort": 2.0,
+      "effort": 2,
       "priority": 27,
       "deps": [
         "QUA-06"
@@ -1778,7 +1812,7 @@
       "track": "QUALITY",
       "title": "Bound public-showcase reads before traffic arrives",
       "status": "TODO",
-      "effort": 1.0,
+      "effort": 1,
       "priority": 28,
       "done_when": "A published journey has a size bound, and crossing a usage threshold is visible to the owner.",
       "why": "The only line in the business model where usage we do not control bills us, and the success mode and the cost-blowup mode are the same event. Entitlements bounds a free account's uploads (1 journey, 100 photos) but nothing bounds READS, and a paid account publishes unlimited journeys of unlimited size. Verified absent across apple/, src/, scripts/ and .github/: no publish cap, no throttle, no usage alert anywhere. The cheap version is a per-journey published-photo cap plus a documented CloudKit Console alert — not a rewrite, just a bound where there is currently none.",
@@ -1797,7 +1831,7 @@
       "id": "DIFF-10",
       "track": "DIFF",
       "title": "Give the demo journey photographs",
-      "status": "TODO",
+      "status": "WIP",
       "effort": 1.5,
       "priority": 22,
       "done_when": "A first launch shows a journey with real photographs, and a photos-only trip is demoed too.",
@@ -1811,7 +1845,12 @@
         "cd apple && xcodegen generate",
         "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,id=$(xcrun simctl list devices available | grep -o '[0-9A-F-]\\{36\\}' | tail -1)\" CODE_SIGNING_ALLOWED=NO test",
         "Launch on a clean simulator and confirm the demo journey shows photographs"
-      ]
+      ],
+      "claim": {
+        "agent": "native-worktree",
+        "branch": "claude/native-batch",
+        "at": "2026-07-26"
+      }
     }
   ]
 }
