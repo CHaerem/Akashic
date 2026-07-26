@@ -66,17 +66,23 @@ enum GPXParseError: Error, LocalizedError, Equatable {
     /// The file is larger than the import cap (protects the UI from a multi-hundred-MB pick).
     case tooLarge(maxBytes: Int)
 
+    /// Localised (QUA-26). These reach the screen whenever a GPX pick or a shared-in `.gpx` fails,
+    /// which is the most common import failure there is.
     var errorDescription: String? {
         switch self {
         case .empty:
-            return "This file is empty."
+            return String(localized: "This file is empty.",
+                          comment: "GPX import failure alert: the picked file had no bytes.")
         case .malformed:
-            return "This doesn't look like a valid GPX file — the XML couldn't be read."
+            return String(localized: "This doesn't look like a valid GPX file — the XML couldn't be read.",
+                          comment: "GPX import failure alert: the document is not well-formed XML.")
         case .noContent:
-            return "This GPX file has no track points or waypoints to import."
+            return String(localized: "This GPX file has no track points or waypoints to import.",
+                          comment: "GPX import failure alert: the file parsed but carried no route and no waypoints.")
         case let .tooLarge(maxBytes):
-            return "This GPX file is too large to import (over \(maxBytes / (1024 * 1024)) MB). "
-                 + "Try a simplified or trimmed track."
+            // One key, not a concatenation: a translator needs the whole sentence to reorder it.
+            return String(localized: "This GPX file is too large to import (over \(maxBytes / (1024 * 1024)) MB). Try a simplified or trimmed track.",
+                          comment: "GPX import failure alert: the file exceeds the import size cap. The placeholder is the cap in whole megabytes.")
         }
     }
 }

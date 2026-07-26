@@ -262,7 +262,10 @@ final class AkashicSyncEngine: NSObject, CKSyncEngineDelegate {
 
         if engine == nil { engine = engineBuilder?() ?? buildRealEngine() }
         guard engine != nil else {
-            status.set(.error("Could not create the CloudKit sync engine"))
+            // Localised (QUA-26): this becomes the `%@` inside "Sync error: %@" on the Settings row,
+            // so leaving it English produced a half-Norwegian sentence.
+            status.set(.error(String(localized: "Could not create the CloudKit sync engine",
+                                     comment: "Settings › iCloud sync status row, after \"Sync error:\" — the sync engine could not be constructed at all.")))
             return
         }
 
@@ -338,7 +341,8 @@ final class AkashicSyncEngine: NSObject, CKSyncEngineDelegate {
             if databaseScope == .private { onFreshInstallDetermined?() }
         } catch {
             SyncLog.error("activate: fetchChanges() threw \(error)")
-            status.set(.error("Initial fetch failed: \(error.localizedDescription)"))
+            status.set(.error(String(localized: "Initial fetch failed: \(error.localizedDescription)",
+                                     comment: "Settings › iCloud sync status row, after \"Sync error:\" — the first fetch after activation threw. The placeholder is the underlying system error.")))
         }
     }
 

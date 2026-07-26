@@ -41,8 +41,13 @@ enum RouteDrawing {
     static let snapMeters: Double = 150
 
     /// The sentence the UI must show for any hand-drawn route.
-    static let elevationNote =
-        "A drawn route carries no elevation, so ascent, descent and summit stay unset. Import a GPX if you need them."
+    ///
+    /// Computed rather than a `static let` so it is resolved against the running locale at the point
+    /// of display, not frozen at whatever the locale was when this type was first touched (QUA-26).
+    static var elevationNote: String {
+        String(localized: "A drawn route carries no elevation, so ascent, descent and summit stay unset. Import a GPX if you need them.",
+               comment: "Route drawing sheet: the honest limitation of tracing a route with a finger, shown before the user applies it.")
+    }
 
     // MARK: Capture
 
@@ -172,11 +177,18 @@ enum RouteDrawing {
         var isUsable: Bool { route.coordinates.count >= 2 }
 
         /// One-line, plain-language summary, in the house style of `RouteConfidence.summary`.
+        ///
+        /// Each clause is its own key with a real plural rule rather than an English `"s"` ternary —
+        /// Norwegian pluralises differently (`punkt`/`punkter`) and a hand-rolled suffix cannot
+        /// express that (QUA-26). The `·` separators stay outside the keys, matching the rest of the
+        /// app's provenance lines.
         var summary: String {
-            var s = "Route drawn by hand · \(pointCount) point\(pointCount == 1 ? "" : "s")"
+            var s = String(localized: "Route drawn by hand · \(pointCount) points",
+                           comment: "Route drawing sheet: provenance line for a hand-drawn route. Placeholder is how many coordinates it holds.")
             s += " · \(Formatters.distanceKm(distanceKm))"
             if bridgedGaps > 0 {
-                s += " · \(bridgedGaps) straight leg\(bridgedGaps == 1 ? "" : "s") between detached strokes"
+                s += " · " + String(localized: "\(bridgedGaps) straight legs between detached strokes",
+                                    comment: "Route drawing sheet: how many straight lines had to be inserted between strokes the user drew detached from each other.")
             }
             return s
         }

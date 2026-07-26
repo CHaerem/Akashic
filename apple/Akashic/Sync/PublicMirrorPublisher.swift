@@ -429,7 +429,8 @@ final class PublicMirrorPublisher: PublicMirrorPublishing {
             progress?(PublicMirrorProgress(fraction: frac, phase: phase))
         }
 
-        reportSave("Publishing metadata")
+        reportSave(String(localized: "Publishing metadata",
+                          comment: "Showcase publish progress phase: writing the journey's route, notes and hero images."))
 
         // 1. The metadata record (its own op — it carries the heavy route/waypoints/hero assets).
         if Task.isCancelled { report.wasCancelled = true; return report }
@@ -443,7 +444,8 @@ final class PublicMirrorPublisher: PublicMirrorPublishing {
         }
         report.failures.append(contentsOf: metaOutcome.failures)
         savedUnits += 1
-        reportSave("Publishing metadata")
+        reportSave(String(localized: "Publishing metadata",
+                          comment: "Showcase publish progress phase: writing the journey's route, notes and hero images."))
 
         // 2. Photo thumbnails, chunked.
         for chunk in Self.chunked(photoRecords, size: config.maxRecordsPerBatch) {
@@ -452,12 +454,15 @@ final class PublicMirrorPublisher: PublicMirrorPublishing {
             report.photosPublished += outcome.saved.count
             report.failures.append(contentsOf: outcome.failures)
             savedUnits += chunk.count
-            reportSave("Publishing photos (\(report.photosPublished)/\(photoRecords.count))")
+            reportSave(String(localized: "Publishing photos (\(report.photosPublished)/\(photoRecords.count))",
+                              comment: "Showcase publish progress phase: uploading photo thumbnails. Placeholders are photos done / total."))
         }
 
         // 3. Reconcile: delete PublicPhotos that no longer exist locally.
         if Task.isCancelled { report.wasCancelled = true; return report }
-        progress?(PublicMirrorProgress(fraction: 0.92, phase: "Cleaning up removed photos"))
+        progress?(PublicMirrorProgress(fraction: 0.92,
+                                       phase: String(localized: "Cleaning up removed photos",
+                                                     comment: "Showcase publish progress phase: deleting showcase photos that no longer exist on this device.")))
         do {
             let existing = try await allExistingPhotoIDs(slug: journey.slug)
             let stale = existing.filter { !desiredPhotoNames.contains($0.recordName) }
@@ -475,7 +480,9 @@ final class PublicMirrorPublisher: PublicMirrorPublishing {
                                                  message: "stale-photo query failed: \(error)"))
         }
 
-        progress?(PublicMirrorProgress(fraction: 1.0, phase: "Done"))
+        progress?(PublicMirrorProgress(fraction: 1.0,
+                                       phase: String(localized: "Done",
+                                                     comment: "Showcase publish progress phase: finished.")))
         return report
     }
 
@@ -509,7 +516,9 @@ final class PublicMirrorPublisher: PublicMirrorPublishing {
     func unpublish(slug: String,
                    progress: ((PublicMirrorProgress) -> Void)? = nil) async -> PublicMirrorReport {
         var report = PublicMirrorReport()
-        progress?(PublicMirrorProgress(fraction: 0.0, phase: "Finding published photos"))
+        progress?(PublicMirrorProgress(fraction: 0.0,
+                                       phase: String(localized: "Finding published photos",
+                                                     comment: "Showcase removal progress phase: querying which photos are currently on the showcase.")))
 
         let slugs = candidateSlugs(for: slug)
 
@@ -540,18 +549,24 @@ final class PublicMirrorPublisher: PublicMirrorPublishing {
             report.failures.append(contentsOf: outcome.failures)
             done += chunk.count
             let frac = existing.isEmpty ? 0.9 : Double(done) / Double(existing.count) * 0.9
-            progress?(PublicMirrorProgress(fraction: frac, phase: "Removing photos (\(done)/\(existing.count))"))
+            progress?(PublicMirrorProgress(fraction: frac,
+                                           phase: String(localized: "Removing photos (\(done)/\(existing.count))",
+                                                         comment: "Showcase removal progress phase: deleting photo thumbnails. Placeholders are photos done / total.")))
         }
 
         // Finally the metadata records — one per candidate slug. An absent one is a no-op, which
         // is why sweeping both is safe rather than merely thorough.
         if Task.isCancelled { report.wasCancelled = true; return report }
-        progress?(PublicMirrorProgress(fraction: 0.95, phase: "Removing metadata"))
+        progress?(PublicMirrorProgress(fraction: 0.95,
+                                       phase: String(localized: "Removing metadata",
+                                                     comment: "Showcase removal progress phase: deleting the journey record itself.")))
         let metaOutcome = await delete(slugs.map { PublicMirrorBuilder.journeyRecordID(slug: $0) })
         report.deleted += metaOutcome.deleted
         report.failures.append(contentsOf: metaOutcome.failures)
 
-        progress?(PublicMirrorProgress(fraction: 1.0, phase: "Done"))
+        progress?(PublicMirrorProgress(fraction: 1.0,
+                                       phase: String(localized: "Done",
+                                                     comment: "Showcase publish progress phase: finished.")))
         return report
     }
 

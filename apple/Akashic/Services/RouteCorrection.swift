@@ -79,13 +79,28 @@ enum RouteCorrection {
 
     /// Human before→after lines for distance / ascent / descent / summit / days. Only the fields
     /// that actually move are marked `changed` so the preview can emphasise them.
+    ///
+    /// The labels are localised here (QUA-26) because the preview renders them with `Text(line.label)`
+    /// — a `String`, so the verbatim overload. `DiffLine.id` is the label, which stays workable only
+    /// because these five remain distinct in every language; if that ever stops being true, give
+    /// `DiffLine` a separate stable key.
     static func diff(old: TrekStats, new: TrekStats) -> [DiffLine] {
         var lines: [DiffLine] = []
-        lines.append(line("Distance", km(old.totalDistance), km(new.totalDistance)))
-        lines.append(line("Ascent", meters(old.totalElevationGain), meters(new.totalElevationGain)))
-        lines.append(line("Descent", meters(old.totalElevationLoss ?? 0), meters(new.totalElevationLoss ?? 0)))
-        lines.append(line("Summit", meters(old.highestPoint?.elevation ?? 0), meters(new.highestPoint?.elevation ?? 0)))
-        lines.append(line("Days", "\(old.duration)", "\(new.duration)"))
+        lines.append(line(String(localized: "Distance",
+                                 comment: "Route correction preview: before/after row label for total route distance."),
+                          km(old.totalDistance), km(new.totalDistance)))
+        lines.append(line(String(localized: "Ascent",
+                                 comment: "Route correction preview: before/after row label for total elevation gain."),
+                          meters(old.totalElevationGain), meters(new.totalElevationGain)))
+        lines.append(line(String(localized: "Descent",
+                                 comment: "Route correction preview: before/after row label for total elevation loss."),
+                          meters(old.totalElevationLoss ?? 0), meters(new.totalElevationLoss ?? 0)))
+        lines.append(line(String(localized: "Summit",
+                                 comment: "Route correction preview: before/after row label for the highest point reached."),
+                          meters(old.highestPoint?.elevation ?? 0), meters(new.highestPoint?.elevation ?? 0)))
+        lines.append(line(String(localized: "Days",
+                                 comment: "Route correction preview: before/after row label for how many days the journey spans."),
+                          "\(old.duration)", "\(new.duration)"))
         return lines
     }
 

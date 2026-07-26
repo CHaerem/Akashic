@@ -322,19 +322,38 @@ final class JourneySuggestionCoordinator: ObservableObject {
 
     /// A short day reference ("Day 3") for per-day rows, resolved against the current draft.
     private func dayLabel(_ dayID: String, in draft: JourneyDraft) -> String {
-        if let index = draft.days.firstIndex(where: { $0.id == dayID }) { return "Day \(index + 1)" }
-        return "Day"
+        if let index = draft.days.firstIndex(where: { $0.id == dayID }) {
+            return String(localized: "Day \(index + 1)",
+                          comment: "Short day reference used inside suggestion row titles, e.g. \"Day 3\".")
+        }
+        return String(localized: "Day",
+                      comment: "Short day reference with no number, used when the day has left the draft.")
     }
 
     /// Row title for a suggestion key.
+    ///
+    /// Localised here (QUA-26) because the suggestion panel renders these with `Text(_:)` over a
+    /// `String`, which is the verbatim overload — a literal would never reach the catalogue.
     func title(for key: SuggestionKey, in draft: JourneyDraft) -> String {
         switch key {
-        case .routeFromPhotos: return "Draft route from your photos"
-        case .country: return "Set country"
-        case let .campName(dayID): return "Name \(dayLabel(dayID, in: draft))"
-        case let .weather(dayID): return "Add weather · \(dayLabel(dayID, in: draft))"
-        case let .pois(dayID): return "Add points of interest · \(dayLabel(dayID, in: draft))"
-        case let .facts(dayID): return "Draft facts · \(dayLabel(dayID, in: draft))"
+        case .routeFromPhotos:
+            return String(localized: "Draft route from your photos",
+                          comment: "Suggestion row title: infer the journey's route from the GPS in the user's own photos.")
+        case .country:
+            return String(localized: "Set country",
+                          comment: "Suggestion row title: fill in the journey's country.")
+        case let .campName(dayID):
+            return String(localized: "Name \(dayLabel(dayID, in: draft))",
+                          comment: "Suggestion row title: propose a name for one day. The placeholder is a day reference, e.g. \"Day 3\".")
+        case let .weather(dayID):
+            return String(localized: "Add weather · \(dayLabel(dayID, in: draft))",
+                          comment: "Suggestion row title: add weather to one day. The placeholder is a day reference, e.g. \"Day 3\".")
+        case let .pois(dayID):
+            return String(localized: "Add points of interest · \(dayLabel(dayID, in: draft))",
+                          comment: "Suggestion row title: add nearby places to one day. The placeholder is a day reference, e.g. \"Day 3\".")
+        case let .facts(dayID):
+            return String(localized: "Draft facts · \(dayLabel(dayID, in: draft))",
+                          comment: "Suggestion row title: draft fun facts and historical notes for one day. The placeholder is a day reference, e.g. \"Day 3\".")
         }
     }
 
@@ -356,8 +375,15 @@ final class JourneySuggestionCoordinator: ObservableObject {
             guard let facts = factsByDay[dayID] else { return nil }
             let f = facts.funFacts.count, h = facts.historicalSites.count
             var parts: [String] = []
-            if f > 0 { parts.append("\(f) fact\(f == 1 ? "" : "s")") }
-            if h > 0 { parts.append("\(h) note\(h == 1 ? "" : "s")") }
+            // Real plural keys rather than an English "s" ternary — Norwegian pluralises otherwise.
+            if f > 0 {
+                parts.append(String(localized: "\(f) facts",
+                                    comment: "Suggestion row subtitle: how many fun facts were drafted for the day."))
+            }
+            if h > 0 {
+                parts.append(String(localized: "\(h) notes",
+                                    comment: "Suggestion row subtitle: how many historical notes were drafted for the day."))
+            }
             return parts.joined(separator: ", ")
         }
     }

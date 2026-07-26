@@ -262,12 +262,15 @@ struct StoreKitProvider: StoreKitProviding {
         case productUnavailable
         case unverified
 
+        /// Localised (QUA-26). The paywall shows this verbatim when a purchase or restore fails.
         var errorDescription: String? {
             switch self {
             case .productUnavailable:
-                return "Akashic Complete is not available on the App Store right now."
+                return String(localized: "Akashic Complete is not available on the App Store right now.",
+                              comment: "Purchase failure alert: StoreKit returned no product for the configured identifier. \"Akashic Complete\" is the product name and stays untranslated.")
             case .unverified:
-                return "The purchase could not be verified with the App Store."
+                return String(localized: "The purchase could not be verified with the App Store.",
+                              comment: "Purchase failure alert: StoreKit could not verify the transaction signature.")
             }
         }
     }

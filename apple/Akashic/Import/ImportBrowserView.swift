@@ -72,11 +72,18 @@ struct JourneyPhotosView: View {
             .padding(.vertical, 16)
         }
         .background(Theme.background.ignoresSafeArea())
-        .navigationTitle(store.journey(withID: journeyID)?.shortName ?? "Photos")
+        // `??` yields a `String`, which makes this the verbatim `navigationTitle(_:)` overload — so
+        // the fallback has to be localised here rather than left as a literal (QUA-26).
+        .navigationTitle(store.journey(withID: journeyID)?.shortName
+                         ?? String(localized: "Photos",
+                                   comment: "Navigation title for a journey's photo grid when the journey itself is no longer in the store."))
         .navigationBarTitleDisplayMode(.inline)
     }
 
-    private func section(title: String, photos: [Photo]) -> some View {
+    /// `title` is a `LocalizedStringKey`, not a `String`: `Text(someString)` is the verbatim overload,
+    /// which is how "Day 3" and "Unassigned" stayed English while the keys sat translated in the
+    /// catalogue (QUA-26).
+    private func section(title: LocalizedStringKey, photos: [Photo]) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
                 Text(title).font(.headline).foregroundStyle(Theme.textPrimary)

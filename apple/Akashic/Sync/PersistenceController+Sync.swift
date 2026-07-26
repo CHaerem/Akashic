@@ -113,7 +113,9 @@ extension PersistenceController: SyncLocalStore {
             await sharedSyncCoordinator?.fetchOnActivation()
         } catch {
             SyncLog.error("acceptShare: FAILED \(error)")
-            syncStatus.set(.error("Could not open the shared journey: \(error.localizedDescription)"))
+            // Localised (QUA-26): reaches the Settings status row inside "Sync error: %@".
+            syncStatus.set(.error(String(localized: "Could not open the shared journey: \(error.localizedDescription)",
+                                        comment: "Settings › iCloud sync status row, after \"Sync error:\" — accepting a share invitation failed. The placeholder is the underlying system error.")))
         }
         #endif
     }
