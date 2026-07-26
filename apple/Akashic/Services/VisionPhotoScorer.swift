@@ -39,6 +39,39 @@ struct VisionPhotoScorer: PhotoScoring {
     /// decoded image, so unbounded concurrency over 939 photos is how an app gets jetsammed.
     var maxConcurrent: Int = 4
 
+    /// What Vision saw across a set of photographs, as words (DIFF-05).
+    ///
+    /// Feeds `DayNoteInput.photoSubjects`, closing the gap where the plan promised drafting from
+    /// "the day's photos (Vision labels)" while the drafter only ever received a count.
+    ///
+    /// Aggregated across the day and ranked by how many photographs agree, because one confident
+    /// label on one frame says much less than the same label on six — and a day note should describe
+    /// the day, not its most photogenic second.
+    static func subjects(in photos: [Photo],
+                         minimumConfidence: Float = 0.35,
+                         limit: Int = 8) async -> [String] {
+        var counts: [String: Int] = [:]
+        for photo in photos {
+            guard !photo.isVideo, let url = photo.thumbnailFileURL else { continue }
+            if Task.isCancelled { break }
+            let request = VNClassifyImageRequest()
+            guard (try? VNImageRequestHandler(url: url, options: [:]).perform([request])) != nil,
+                  let observations = request.results else { continue }
+            // Only the labels this image is reasonably sure about, and only once per image, so a
+            // single photograph cannot stuff the ranking with twenty near-synonyms.
+            let confident = Set(observations
+                .filter { $0.confidence >= minimumConfidence }
+                .prefix(6)
+                .map { $0.identifier })
+            for label in confident { counts[label, default: 0] += 1 }
+        }
+        // Sorted by agreement, then alphabetically so the result is deterministic — an unstable
+        // subject list would make the same day draft differently on each tap.
+        return counts.sorted { ($0.value, $1.key) > ($1.value, $0.key) }
+            .prefix(limit)
+            .map { $0.key.replacingOccurrences(of: "_", with: " ") }
+    }
+
     func score(_ photos: [Photo], dayOf: (Photo) -> Int?) async -> [PhotoScore] {
         // Day assignment is resolved up front on the caller's actor: `dayOf` closes over the
         // matcher, which is not Sendable, and the concurrent work below must not touch it.

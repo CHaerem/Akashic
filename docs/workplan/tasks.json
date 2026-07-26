@@ -1056,7 +1056,7 @@
       "id": "DIFF-05",
       "track": "DIFF",
       "title": "Feed Vision labels into DayNoteDrafter",
-      "status": "WIP",
+      "status": "DONE",
       "effort": 1,
       "done_when": "A drafted day note references what is actually in the photos.",
       "deps": [
@@ -1075,7 +1075,8 @@
         "agent": "opus5",
         "branch": "claude/remote-control-project-review-9462c1",
         "at": "2026-07-26"
-      }
+      },
+      "evidence": "DayNoteInput gains photoSubjects, fed by a new VisionPhotoScorer.subjects that classifies a day's thumbnails on-device and aggregates by how many photographs agree — one confident label on one frame says much less than the same label on six, and a day note should describe the day rather than its most photogenic second. Ranked deterministically so the same day does not draft differently on each tap. The prompt says 'the photos appear to show', not 'the photos show': a Vision label is an observation with a confidence, and handing the model a guess dressed as ground truth would undermine the anti-invention contract in the same prompt. Labels only — never pixels, never paths — so the privacy claim is unchanged. Also fixed a real defect found here: the memberwise init accepted referenceText and discarded it, so every caller that passed reference text, tests included, was silently exercising the UNGROUNDED path while appearing to test the grounded one. 779 tests pass."
     },
     {
       "id": "DIFF-06",

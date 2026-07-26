@@ -169,3 +169,50 @@ final class PhotoCurationTests: XCTestCase {
         XCTAssertTrue(PhotoCuration.curate([]).isEmpty)
     }
 }
+
+/// DIFF-05 — the discarded-parameter defect, and that Vision subjects reach the prompt.
+///
+/// The prompt-building side is testable without Vision or a language model, which is the half that
+/// matters: what the model is *told* is the thing a reviewer would judge.
+final class DayNoteInputTests: XCTestCase {
+
+    private func input(subjects: [String] = [], reference: String? = nil) -> DayNoteInput {
+        DayNoteInput(journeyName: "Kilimanjaro", country: "Tanzania", dayNumber: 3,
+                     campName: "Barranco Camp", elevation: 3960, dayDistanceKm: 5.5,
+                     elevationGain: 600, elevationLoss: 200, dateLabel: "1 Oct 2023",
+                     highlights: ["Barranco Wall"], weather: nil, photoCount: 4,
+                     photoCaptions: ["Morning light"],
+                     photoSubjects: subjects, referenceText: reference)
+    }
+
+    /// The defect: the memberwise init accepted `referenceText` and dropped it on the floor, so every
+    /// caller that passed reference text — tests included — was silently exercising the *ungrounded*
+    /// path while appearing to test the grounded one.
+    func testMemberwiseInitNoLongerDiscardsReferenceText() {
+        XCTAssertEqual(input(reference: "Barranco Wall is a cliff.").referenceText,
+                       "Barranco Wall is a cliff.")
+    }
+
+    func testMemberwiseInitCarriesPhotoSubjects() {
+        XCTAssertEqual(input(subjects: ["glacier", "tent"]).photoSubjects, ["glacier", "tent"])
+    }
+
+    /// Assembling from the domain must not invent subjects: Vision has not run at that point, so an
+    /// empty list is the honest value.
+    func testDomainInitStartsWithNoSubjects() {
+        let camp = Camp(id: "W3", name: "Barranco", dayNumber: 3, elevation: 3960,
+                        coordinates: [37.4, -3.1], notes: "", highlights: [])
+        let journey = Journey(id: "J", slug: "k", name: "Kilimanjaro", country: "Tanzania",
+                             description: "", heroImageURL: nil, dateStarted: nil, dateEnded: nil,
+                             isPublic: false, summitElevation: nil, totalDistance: nil,
+                             totalDays: nil, centerCoordinates: nil, preferredBearing: nil,
+                             preferredPitch: nil,
+                             stats: TrekStats(duration: 1, totalDistance: 0, totalElevationGain: 0,
+                                              totalElevationLoss: 0,
+                                              highestPoint: HighestPoint(name: "", elevation: 0,
+                                                                         coordinates: [])),
+                             route: Route(type: "LineString", coordinates: []),
+                             camps: [camp])
+        XCTAssertTrue(DayNoteInput(journey: journey, camp: camp, photos: []).photoSubjects.isEmpty)
+    }
+}

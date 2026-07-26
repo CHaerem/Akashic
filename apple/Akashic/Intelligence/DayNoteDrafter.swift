@@ -36,6 +36,17 @@ struct DayNoteInput: Equatable {
     var photoCount: Int
     /// Captions the user wrote on this day's photos (text only; empty captions omitted).
     var photoCaptions: [String]
+    /// What Vision saw in this day's photographs (DIFF-05) — e.g. "glacier", "tent", "summit sign".
+    ///
+    /// This closes the gap between the plan and the code: §10 describes day-note drafting as working
+    /// from "the day's photos (Vision labels)", and until now the drafter received a photo *count*
+    /// and wrote about the day from stats and weather while the photographs sat untouched.
+    ///
+    /// Labels, never pixels and never paths. The images are classified on-device by
+    /// `VisionPhotoScorer` and only the resulting words reach the language model, so the privacy
+    /// claim the whole AI story rests on is unchanged — nothing here could leave the device even if
+    /// the model ran elsewhere.
+    var photoSubjects: [String] = []
     /// **Retrieved reference text** (Wikipedia/Wikivoyage) for the day's places, if a geo-verified
     /// retrieval ran (see `KnowledgeRetrieval`). When present the note is grounded strictly in it
     /// plus the day's own facts; otherwise the existing facts-only behaviour applies.
@@ -68,7 +79,7 @@ struct DayNoteInput: Equatable {
     init(journeyName: String, country: String, dayNumber: Int, campName: String, elevation: Int,
          dayDistanceKm: Double, elevationGain: Int, elevationLoss: Int, dateLabel: String?,
          highlights: [String], weather: WeatherData?, photoCount: Int, photoCaptions: [String],
-         referenceText: String? = nil) {
+         photoSubjects: [String] = [], referenceText: String? = nil) {
         self.journeyName = journeyName
         self.country = country
         self.dayNumber = dayNumber
@@ -82,6 +93,10 @@ struct DayNoteInput: Equatable {
         self.weather = weather
         self.photoCount = photoCount
         self.photoCaptions = photoCaptions
+        // Was missing: the parameter was accepted and discarded, so every caller — including tests
+        // — that passed reference text silently got the ungrounded path instead.
+        self.referenceText = referenceText
+        self.photoSubjects = photoSubjects
     }
 }
 
@@ -168,6 +183,12 @@ enum DayNoteDrafter {
         }
         if input.photoCount > 0 {
             lines.append("Photos taken: \(input.photoCount)")
+        }
+        if !input.photoSubjects.isEmpty {
+            // Phrased as "appear to show" deliberately: a Vision label is an observation with a
+            // confidence, not a fact, and the anti-invention contract elsewhere in this prompt would
+            // be undermined by handing the model a guess dressed as ground truth.
+            lines.append("The photos appear to show: \(input.photoSubjects.joined(separator: ", "))")
         }
         if !input.photoCaptions.isEmpty {
             lines.append("Photo captions: \(input.photoCaptions.joined(separator: "; "))")
