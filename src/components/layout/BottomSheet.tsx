@@ -1,5 +1,5 @@
 import { useRef, useEffect, useCallback, useState, type ReactNode } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { useDragGesture } from '../../hooks/useDragGesture';
 import { colors, radius, transitions } from '../../styles/liquidGlass';
 import type { Camp, TrekConfig } from '../../types/trek';
@@ -40,6 +40,11 @@ interface BottomSheetProps {
     onModeChange: (mode: ContentMode) => void;
     onDaySelect: (dayNumber: number) => void;
     onStart: () => void;
+    /**
+     * Accepted for the call-site's convenience but not read here: the Explore CTA lives on the
+     * BottomSheetContent passed in as `children`, and AkashicApp wires that one directly.
+     * Deliberately not destructured below, so it does not read as a dropped handler.
+     */
     onExplore: () => void;
     onBackToOverview: () => void;
     // Journey navigation (globe view)
@@ -72,7 +77,6 @@ export function BottomSheet({
     onModeChange,
     onDaySelect,
     onStart,
-    onExplore,
     onBackToOverview,
     // Journey navigation
     onPrevJourney,

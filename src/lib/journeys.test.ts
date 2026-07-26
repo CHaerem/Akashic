@@ -242,6 +242,9 @@ describe('journeys utilities', () => {
                     route_distance_km: 0,
                     route_point_index: 0,
                     weather: null,
+                    fun_facts: null,
+                    points_of_interest: null,
+                    historical_sites: null,
                 },
                 {
                     id: 'wp-2',
@@ -257,6 +260,9 @@ describe('journeys utilities', () => {
                     route_distance_km: 10,
                     route_point_index: 2,
                     weather: null,
+                    fun_facts: null,
+                    points_of_interest: null,
+                    historical_sites: null,
                 },
             ];
 
@@ -310,6 +316,9 @@ describe('journeys utilities', () => {
                     route_distance_km: null,
                     route_point_index: null,
                     weather: null,
+                    fun_facts: null,
+                    points_of_interest: null,
+                    historical_sites: null,
                 },
             ];
 
@@ -335,6 +344,9 @@ describe('journeys utilities', () => {
                     route_distance_km: null,
                     route_point_index: null,
                     weather: null,
+                    fun_facts: null,
+                    points_of_interest: null,
+                    historical_sites: null,
                 },
                 {
                     id: 'wp-1',
@@ -350,6 +362,9 @@ describe('journeys utilities', () => {
                     route_distance_km: null,
                     route_point_index: null,
                     weather: null,
+                    fun_facts: null,
+                    points_of_interest: null,
+                    historical_sites: null,
                 },
             ];
 
@@ -388,6 +403,9 @@ describe('journeys utilities', () => {
                     route_distance_km: null,
                     route_point_index: null, // Not set, should find closest
                     weather: null,
+                    fun_facts: null,
+                    points_of_interest: null,
+                    historical_sites: null,
                 },
             ];
 
@@ -414,6 +432,9 @@ describe('journeys utilities', () => {
                     route_distance_km: null,
                     route_point_index: 100, // Way beyond route length (5 points)
                     weather: null,
+                    fun_facts: null,
+                    points_of_interest: null,
+                    historical_sites: null,
                 },
             ];
 

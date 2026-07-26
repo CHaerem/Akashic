@@ -109,7 +109,7 @@ export const JourneySheet = memo(function JourneySheet({
     }, [currentDay, totalDays, onDayChange]);
 
     // Handle swipe gestures
-    const handleDragEnd = useCallback((_: any, info: PanInfo) => {
+    const handleDragEnd = useCallback((_: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
         const threshold = 50;
         if (info.offset.x > threshold) {
             goToPrevDay();

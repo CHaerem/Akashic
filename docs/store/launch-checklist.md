@@ -58,10 +58,15 @@ parallel:
   - **Type:** Non-Consumable (one-time unlock — matches §5 "buy once")
   - **Reference name:** `Akashic Complete`
   - **Display name (EN):** `Akashic Complete` · **(NB):** `Akashic Complete`
-  - **Description (EN):** "Unlock unlimited journeys, publishing and export. One
-    purchase, shared with your whole family."
-  - **Description (NB):** "Lås opp ubegrenset antall reiser, publisering og eksport.
-    Ett kjøp, delt med hele familien."
+  - **Description (EN):** "Unlock unlimited journeys and photos, plus Akashic
+    Intelligence. One purchase, shared with your whole family."
+  - **Description (NB):** "Lås opp ubegrenset antall reiser og bilder, pluss Akashic
+    Intelligence. Ett kjøp, delt med hele familien."
+  - ⚠️ **Do not write "publishing" or "export" into this description.** Both are
+    free-tier capabilities (`EntitlementPolicy.canPublish`/`canExport` return `true`
+    unconditionally, §5 revised) — advertising them as paid is a claim App Review can
+    falsify against the binary. This description, the paywall benefit list in
+    `PaywallView.swift` and `app-store-listing.md §2/§3` must all say the same thing.
   - **Family Sharing: ON** — required; one purchase covering the family is core to
     the product (§5). Toggle it before first submission (turning it on later is
     fine, but set it now).
@@ -76,7 +81,7 @@ parallel:
       instead of 30%). This roughly doubles net margin; do it before first sale.
 - [ ] **Free tier is enforced locally** (1 journey, 100-photo cap) — no server
       receipt check needed (§4.4). **Revised 2026-07-25: the free journey is fully
-      finishable — publishing and export are NOT paywalled.** The wall falls only on
+      finishable — neither publishing nor exporting is paywalled.** The wall falls only on
       the *second* journey. Confirm `EntitlementPolicy`, the paywall benefit list and
       the IAP description in Connect all agree on that, or the paywall makes a claim
       App Review can falsify.

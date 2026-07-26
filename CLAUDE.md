@@ -82,12 +82,12 @@ These are measured, not guessed. Prefer them over inventing your own.
 
 | What | Command | Expected |
 |---|---|---|
-| Native build + tests | `cd apple && xcodegen generate && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination "platform=iOS Simulator,id=$(xcrun simctl list devices available \| grep -o '[0-9A-F-]\{36\}' \| tail -1)" CODE_SIGNING_ALLOWED=NO test` | 599 tests, 0 failures, ~15 s warm |
+| Native build + tests | `cd apple && xcodegen generate && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination "platform=iOS Simulator,id=$(xcrun simctl list devices available \| grep -o '[0-9A-F-]\{36\}' \| tail -1)" CODE_SIGNING_ALLOWED=NO test` | 608 tests, 0 failures, ~15 s warm |
 | Native coverage | add `-enableCodeCoverage YES -resultBundlePath /tmp/cov.xcresult`, then `xcrun xccov view --report --only-targets /tmp/cov.xcresult` | app 28.4 %; `Views/` 5.9 % |
 | Built Info.plist | `plutil -p "$(find ~/Library/Developer/Xcode/DerivedData/Akashic-*/Build/Products -name Akashic.app -maxdepth 3 \| head -1)/Info.plist"` | see the trap below |
-| Web unit tests | `npx vitest --run` | 402 tests, ~4 s |
-| Web typecheck | `npx tsc --noEmit` | **fails today, 117 errors** — see QUA-02 |
-| Web lint | `npm run lint` | passes and proves nothing — see QUA-02 |
+| Web unit tests | `npx vitest --run` | 406 tests, ~4 s |
+| Web typecheck | `npm run typecheck` | clean, and a type error now fails CI and the commit |
+| Web lint | `npm run lint` | 171 files inspected, 0 errors, warnings capped at 25 |
 | Web build | `npm run build` | ~4 s, no env needed |
 | Web e2e | `VITE_E2E_TEST_MODE=true CI=true npx playwright test --project=chromium --ignore-snapshots` | needs `.env.local` |
 | Export tooling | `npx tsc -p scripts/export/tsconfig.json && node scripts/export/smoke.ts` | clean; 26 checks |
@@ -99,23 +99,33 @@ verification report inside the archive bundle.
 
 ## Traps that have already cost real time
 
+These are durable lessons, not a status report — for status, read `WORKPLAN.md`, which is
+generated and cannot drift. If a claim here contradicts a command you just ran, the command is
+right: fix this file in the same commit.
+
 - **`INFOPLIST_KEY_*` in `apple/project.yml` silently drops keys.** Xcode honours a fixed
   allowlist. `CKSharingSupported` and `UIBackgroundModes` were declared this way and are
   absent from every build shipped so far, which killed CKShare acceptance and push sync.
   Arrays, dictionaries and anything non-scalar must go in the `info: properties:` block at
   `apple/project.yml:53`. Assert against the *built* plist, never the spec.
-- **Push sync needs two halves.** There is no `registerForRemoteNotifications` call anywhere
-  in the codebase, so the plist key alone does not revive it (SHIP-01, SHIP-02).
-- **CI does not compile what ships.** `apple-ci.yml` builds only unsigned `Debug`, so the
-  entitlement-carrying configurations and the plist merge are never exercised. CI also runs
-  `macos-15` (Xcode 16.4), so `canImport(FoundationModels)` is false and ~700 lines of
-  shipped Intelligence code have never been type-checked by anything automated.
-- **Three web gates are open at once**, which is how 117 type errors accumulated:
-  `eslint.config.js:9` globally ignores every `.ts`/`.tsx` file, lint-staged wraps `tsc` in
-  `|| true`, and CI sets `continue-on-error`. (A `typecheck` script now exists — it just is not
-  wired to anything that can fail a commit or a build. That is QUA-02.)
-- **Two workflows are red on main** and have been for several merges: Security Audit and
-  Performance Tests. Do not read a red main as your own breakage — check QUA-03 and QUA-04.
+- **Push sync needed two halves**, and finding one hid the other: the plist key was dropped
+  *and* nothing called `registerForRemoteNotifications`. Both are fixed (SHIP-01, SHIP-02) but
+  neither can be proven without two devices on two Apple IDs — that is SHIP-15, and it is why
+  SHIP-15 is sequenced before the rest of the owner list.
+- **CI still does not type-check the Intelligence code.** `apple-ci.yml` now builds
+  Release-CloudKit and asserts the built plist (QUA-01), but it runs on `macos-15` (Xcode 16.4),
+  so `canImport(FoundationModels)` is false and ~700 lines of shipped, paid-tier Intelligence
+  code are compiled by nothing automated. QUA-05 is the tripwire for it.
+- **The web gates are closed now (QUA-02), and closing them found three live defects** that had
+  been hiding behind them: a component importing a symbol that exists nowhere in the repo (so it
+  threw whenever a journey had segments), an unguarded `getBounds()` that returns null until the
+  map has a transform, and a pill control rendering square because `radius.full` is not on the
+  scale. Treat a red type check as a real finding, not as noise to route around.
+- **A red gate that stays red trains everyone to ignore CI.** Security Audit was red for months
+  because the `overrides` pinned a package line that was never patched, and Performance Tests
+  pointed at a spec deleted seven months earlier. Both are fixed (QUA-03, QUA-04) — the lesson is
+  that "known red" is not a state to leave a gate in. If you cannot fix one, document the
+  exception where the next person will read it and give it a removal condition.
 - **The public CloudKit database is billed to us, not to the customer.** The cost table in
   `COMMERCIALIZATION-PLAN.md` says bandwidth is free; that is true of the private database
   only. Anything that increases showcase traffic has a real cost line.

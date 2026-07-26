@@ -10,8 +10,10 @@ registerSW({ immediate: true });
 
 const rootElement = document.getElementById('root');
 if (rootElement) {
+    // No defaultTheme prop: the Liquid Glass design is dark-only, so ThemeProvider hard-codes
+    // 'dark' and accepts no theme prop. Passing one implied a choice that does not exist.
     createRoot(rootElement).render(
-        <ThemeProvider defaultTheme="system">
+        <ThemeProvider>
             <AuthGuard>
                 <App />
             </AuthGuard>

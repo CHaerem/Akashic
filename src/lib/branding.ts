@@ -13,10 +13,20 @@
 export const APP_NAME = 'Akashic';
 
 /**
- * Where the attribution chip points. For now the marketing anchor on the site;
- * swap to the App Store URL at launch (§4.6). Single source of truth — change here.
+ * Where the attribution chip points — the return path of the whole share funnel.
+ *
+ * Was `https://akashic.no/#about`, and `grep -rn 'id="about"' src public index.html` returned
+ * nothing: there has never been an `#about` section anywhere, so the one link that turns a
+ * visitor into a customer scrolled to the top of the page and did nothing (DIFF-03).
+ *
+ * Now the showcase root, which exists and is itself the pitch: a rotating globe of real
+ * journeys. That is a real target, not a placeholder. It is still not a *strong* one — there is
+ * no "what is Akashic / get the app" surface yet — but the destination that closes the funnel is
+ * the App Store listing, and building an interim marketing page that the listing will immediately
+ * supersede is work with a short shelf life. Swap this to the store URL at launch (§4.6); it is
+ * the single source of truth, so that is a one-line change.
  */
-export const LANDING_URL = 'https://akashic.no/#about';
+export const LANDING_URL = 'https://akashic.no/';
 
 /** Moderation inbox for the public-showcase "Report" affordance (§4.5). No backend. */
 export const REPORT_EMAIL = 'report@akashic.no';

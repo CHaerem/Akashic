@@ -8,7 +8,6 @@ import type { Env } from '../index';
 import {
     JsonRpcRequest,
     JsonRpcResponse,
-    JsonRpcError,
     JSON_RPC_ERRORS,
     MCP_ERRORS,
     MCPInitializeResult,

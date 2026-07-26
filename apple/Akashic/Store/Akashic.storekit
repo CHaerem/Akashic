@@ -5,12 +5,12 @@
   ],
   "products" : [
     {
-      "displayPrice" : "9.99",
+      "displayPrice" : "149.00",
       "familyShareable" : true,
       "internalID" : "A9E659FF-B6C6-4410-BAF6-2CDB42F025A7",
       "localizations" : [
         {
-          "description" : "Unlimited journeys and photos, per-journey export, and showcase publishing. One purchase covers your whole family.",
+          "description" : "Unlimited journeys and photos, plus Akashic Intelligence on supported devices. One purchase covers your whole family. Export and showcase publishing are included in the free tier.",
           "displayName" : "Akashic Complete",
           "locale" : "en_US"
         }

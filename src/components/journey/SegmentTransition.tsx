@@ -5,16 +5,31 @@
 import { memo } from 'react';
 import type { RouteSegment } from '../../types/trek';
 import { colors } from '../../styles/liquidGlass';
-import { getDifficultyColor } from '../../utils/routeUtils';
 
 interface SegmentTransitionProps {
     segment: RouteSegment;
 }
 
+/**
+ * This file used to `import { getDifficultyColor } from '../../utils/routeUtils'` — a symbol that
+ * exists nowhere in the repo. The swallowed typecheck hid it; at runtime the call throws
+ * "getDifficultyColor is not a function" the first time a journey with segments renders.
+ *
+ * The map lives here rather than in routeUtils on purpose: routeUtils is pure geometry and should
+ * not gain a dependency on the style layer. Keys are exhaustive over RouteSegment['difficulty'],
+ * so adding a difficulty band makes this a compile error rather than a silent `undefined`.
+ */
+const DIFFICULTY_COLORS: Record<RouteSegment['difficulty'], string> = {
+    easy: colors.accent.secondary,      // green
+    moderate: colors.accent.warning,    // amber
+    challenging: colors.accent.error,   // red
+    difficult: colors.accent.info,      // purple
+};
+
 export const SegmentTransition = memo(function SegmentTransition({
     segment,
 }: SegmentTransitionProps) {
-    const difficultyColor = getDifficultyColor(segment.difficulty);
+    const difficultyColor = DIFFICULTY_COLORS[segment.difficulty];
 
     return (
         <div style={{

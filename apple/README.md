@@ -282,7 +282,10 @@ apple/
     Sync/                         D4 CloudKit sync: RecordCoder (domain<->CKRecord contract),
                                   AkashicSyncEngine (CKSyncEngine + seams), SyncScheduler, SyncStatus
     Views/                        SwiftUI: list, detail, stats, map, settings, theme
-    Resources/                    Assets.xcassets (AppIcon placeholder, AccentColor)
+    Resources/                    Assets.xcassets: AppIcon (finished — a filled globe in the app
+                                  accent on a #0B0B19 ground, with dark and tinted variants;
+                                  the three SVG sources are committed beside the 1024 PNGs and
+                                  rasterised by `generate.mjs`), AccentColor
     Support/                      Akashic.entitlements (Release-CloudKit only)
   AkashicWidgets/                 WidgetKit extension: JourneyStatsWidget + provider + placeholder
                                   (shares the WidgetSnapshot/view files from Akashic/Services)

@@ -347,7 +347,7 @@
       "id": "DOC-03",
       "track": "DOCS",
       "title": "Rewrite ARCHITECTURE.md",
-      "status": "TODO",
+      "status": "DONE",
       "effort": 0.5,
       "done_when": "No document describes Supabase, R2 or the Worker as active infrastructure, and every link in ARCHITECTURE.md resolves.",
       "files": [
@@ -357,7 +357,8 @@
       "verify": [
         "grep -in 'supabase\\|r2\\|cloudflare' ARCHITECTURE.md  # only in a clearly-labelled history section",
         "grep -o '(\\./[^)]*)' ARCHITECTURE.md | tr -d '()' | while read p; do test -e \"$p\" || echo \"DANGLING $p\"; done"
-      ]
+      ],
+      "evidence": "grep for supabase/r2/cloudflare in ARCHITECTURE.md returns 24 hits, every one inside a labelled status table or the history section — nothing decommissioned is presented as current. Cloudflare Pages and DNS are documented as STILL LIVE, deliberately: LEG-09 is open and akashic.no resolves through them today, so claiming otherwise while the owner holds the DNS-delete button is the failure this doc exists to prevent. All 36 relative links resolve, including the ROADMAP link that DOC-11 broke."
     },
     {
       "id": "DOC-04",
@@ -435,7 +436,7 @@
       "id": "DOC-08",
       "track": "DOCS",
       "title": "Fix store copy that advertises a paywall the code does not implement",
-      "status": "TODO",
+      "status": "DONE",
       "effort": 0.25,
       "done_when": "No store or IAP copy claims Complete unlocks publishing or export.",
       "files": [
@@ -447,7 +448,8 @@
       "why": "Four places (EN, NB, checklist, .storekit) advertise 'unlimited journeys, publishing and export' while canExport and canPublish return true unconditionally. Every shipped string in the app is already correct, so this is unentered metadata — but if typed in as-is it becomes copy App Review can falsify.",
       "verify": [
         "grep -rn 'publishing and export' docs/ apple/  # expect no hits"
-      ]
+      ],
+      "evidence": "grep -rn 'publishing and export' docs/ apple/ returns only the ledger quoting the task description. All four surfaces corrected to the real model: Complete unlocks unlimited journeys and photos plus Akashic Intelligence. Akashic.storekit price matches kr 149."
     },
     {
       "id": "DOC-09",
@@ -522,7 +524,7 @@
       "id": "DOC-13",
       "track": "DOCS",
       "title": "Audit every claim in README.md",
-      "status": "TODO",
+      "status": "DONE",
       "effort": 0.25,
       "done_when": "Every feature and tech-stack claim in the README is true of the current build.",
       "files": [
@@ -531,7 +533,8 @@
       "why": "It is the first thing anyone reads, including a prospective contributor or an acquirer, and it was written across three architectures.",
       "verify": [
         "Manual read-through against the tech stack table"
-      ]
+      ],
+      "evidence": "README.md rewritten against the tree: web described as a read-only showcase, hosting stated honestly as Cloudflare Pages today with the cutover pending, WORKPLAN.md named as the only authoritative status, PLAN.md and ROADMAP.md references corrected. No dangling relative links."
     },
     {
       "id": "DOC-14",
@@ -719,7 +722,7 @@
         "apple/Akashic/Akashic.entitlements",
         "apple/Akashic/Akashic-Release.entitlements"
       ],
-      "why": "Doc status is wrong in both directions: the AASA file is finished and live with a real Team ID, but the app declares no associated-domains entitlement, so the deep link cannot work. This is the return half of the growth funnel.",
+      "why": "Doc status is wrong in both directions: the AASA file is finished and live with a real Team ID, but the app declares no associated-domains entitlement, so the deep link cannot work. This is the return half of the growth funnel. Note from DIFF-03: the journey is addressed by QUERY STRING (?journey=<slug>), which GitHub Pages cannot route on, so per-path prerendering for share previews would need a URL scheme change — and an edge-worker alternative would make every scraper hit billable public-CloudKit traffic. Any change to the URL form has to keep the AASA component in step.",
       "verify": [
         "cd apple && xcodegen generate",
         "grep -rn 'associated-domains' apple/Akashic/*.entitlements"
@@ -997,7 +1000,7 @@
       "id": "DIFF-03",
       "track": "DIFF",
       "title": "Add og: metadata so a shared link renders as a card",
-      "status": "TODO",
+      "status": "DONE",
       "effort": 0.5,
       "done_when": "A showcase URL pasted into iMessage, WhatsApp and Slack renders a title, description and image.",
       "deps": [
@@ -1011,7 +1014,8 @@
       "why": "index.html has not a single og: tag, so every shared link renders as a naked URL — the viral surface of a product whose only acquisition channel is sharing.",
       "verify": [
         "curl -s https://akashic.no | grep -c 'og:'"
-      ]
+      ],
+      "evidence": "index.html carries 11 og: and 5 twitter: tags plus image dimensions and alt, copy taken verbatim from the store listing so card and listing cannot drift. og-image.jpg generated reproducibly by scripts/generateOgImage.js (1200x630, 91 KB JPEG — the PNG was 918 KB, close to Twitter's 1 MB ceiling). LANDING_URL fixed: it pointed at #about, which exists nowhere, so the entire funnel return path was a no-op."
     },
     {
       "id": "DIFF-04",
@@ -1157,7 +1161,7 @@
       "id": "QUA-02",
       "track": "QUALITY",
       "title": "Make the lint and typecheck gates real for the code that ships",
-      "status": "TODO",
+      "status": "DONE",
       "effort": 1.5,
       "done_when": "ESLint inspects src/, and a type error fails CI rather than being swallowed.",
       "deps": [
@@ -1176,7 +1180,8 @@
         "npm run lint",
         "npx tsc --noEmit",
         "gh run list --workflow test.yml --limit 1"
-      ]
+      ],
+      "evidence": "npx tsc --noEmit: 110 errors -> 0, exit 0. ESLint now inspects 171 files (was ~20, zero of 144 .ts/.tsx). continue-on-error gone from test.yml; lint-staged propagates the exit code. Both gates PROVEN with probe files: a staged type error gives lint-staged exit 1, a staged lint error likewise, probes removed. Closing the gate found three live defects — see the new ledger items."
     },
     {
       "id": "QUA-03",
@@ -1536,7 +1541,7 @@
       "id": "QUA-21",
       "track": "QUALITY",
       "title": "Redraw the web and PWA icons — same illegibility, plus transparency",
-      "status": "TODO",
+      "status": "DONE",
       "effort": 0.25,
       "done_when": "Every derived web icon is opaque and its mark clears 4.5:1 against its own ground.",
       "why": "Found while fixing QUA-19. public/favicon.svg has no background element at all — a #1a1a2e hairline on transparency — and every derived asset inherits it: apple-touch-icon.png, pwa-512x512.png and favicon-32x32.png all measure hasAlpha=true, isOpaque=false. So the Add-to-Home-Screen icon is a near-black hairline composited onto whatever the OS puts behind it, and the favicon is close to invisible on a dark tab strip. Same fix as QUA-19: recolour, add a ground, re-run npm run generate-icons.",
@@ -1554,7 +1559,8 @@
       ],
       "refs": [
         "Measured during QUA-19: all three derived assets channels=4, hasAlpha=true"
-      ]
+      ],
+      "evidence": "All six web icons plus favicon.ico: channels=3, hasAlpha=false, isOpaque=true (were all channels=4, hasAlpha=true). favicon.svg redrawn to match the app icon with an explicit #0B0B19 ground it previously lacked; mark at 68.75% of the box, inside the 80% maskable safe zone. Contrast against that ground: 9.91:1 light stop, 6.70:1 dark stop. generateIcons.js is now self-verifying and exits non-zero on regression."
     },
     {
       "id": "DOC-15",
@@ -1586,7 +1592,7 @@
       "id": "DOC-16",
       "track": "DOCS",
       "title": "Say what each import figure counts in APPLE-MIGRATION-TASKS",
-      "status": "TODO",
+      "status": "DONE",
       "effort": 0.1,
       "done_when": "Both import figures state what they count, so neither reads as contradicting the other.",
       "why": "Line 8 states '1559 records / 3070 assets' while :217 states '3 journeys / 18 waypoints / 1538 photos' for the same import. They are consistent — 1538 photos is a subset of 1559 total records — but nothing says so, and this file is exactly where unexplained number pairs erode trust. One clause each closes it.",
@@ -1595,13 +1601,14 @@
       ],
       "verify": [
         "grep -n '1559\\|1538' APPLE-MIGRATION-TASKS.md"
-      ]
+      ],
+      "evidence": "Both import figures now say what they count: 1559 records is all record types, of which 1538 are photos; 3070 assets is 1538 originals + 1529 thumbs + 3 heroes."
     },
     {
       "id": "DOC-17",
       "track": "DOCS",
       "title": "apple/README.md still calls the app icon a placeholder",
-      "status": "TODO",
+      "status": "DONE",
       "effort": 0.1,
       "done_when": "No document describes the app icon as a placeholder.",
       "why": "apple/README.md:285 describes Resources/ as 'Assets.xcassets (AppIcon placeholder, AccentColor)'. After QUA-19 it is a finished icon with dark and tinted variants.",
@@ -1613,7 +1620,8 @@
       ],
       "verify": [
         "grep -n 'AppIcon placeholder' apple/README.md  # expect no hits"
-      ]
+      ],
+      "evidence": "apple/README.md no longer calls the icon a placeholder. The agent found five further staleness items in that file which exceed DOC-17's scope; they are now DOC-18."
     },
     {
       "id": "LEG-12",
@@ -1655,6 +1663,75 @@
       ],
       "verify": [
         "test ! -d supabase"
+      ]
+    },
+    {
+      "id": "DOC-18",
+      "track": "DOCS",
+      "title": "apple/README.md describes shipped work as future, and one claim is flatly false",
+      "status": "TODO",
+      "effort": 0.5,
+      "done_when": "Every claim in apple/README.md is true of the tree, and its layout tables list what exists.",
+      "why": "Found while doing DOC-17, and larger than that task's scope. Its 'What remains (later phases)' section lists five items that all shipped, and one is false outright — 'this app ships only the flat placeholder map' — while apple/Akashic/Views/Map/ holds GlobeExperienceView, TrekCameraController and three more, and D5 ratified MapKit on 2026-07-22. The project-layout tree omits four whole directories (Export/, Intelligence/, Media/, Store/) — Store/ is the paywall and Intelligence/ is the paid-tier differentiator, so a reader taking the tree as complete misses both. The Sync/ table lists 7 of 14 files, omitting PublicMirrorPublisher, which is the entire public-showcase publish path. Its widget runbook tells the owner to create an entitlements file that already exists. And it claims 599 tests where the file's own counting method now gives 608.",
+      "files": [
+        "apple/README.md"
+      ],
+      "verify": [
+        "grep -n 'flat placeholder map' apple/README.md  # expect no hits",
+        "for d in Export Intelligence Media Store; do grep -q \"$d/\" apple/README.md || echo \"MISSING $d\"; done"
+      ]
+    },
+    {
+      "id": "QUA-22",
+      "track": "QUALITY",
+      "title": "Make the paywall list what the purchase now advertises",
+      "status": "TODO",
+      "effort": 0.5,
+      "priority": 15,
+      "deps": [
+        "DOC-08"
+      ],
+      "done_when": "EntitlementPolicy, the paywall benefit list and the IAP description all name the same set.",
+      "why": "DOC-08 created this mismatch by fixing the store copy: the listing and IAP description now name Akashic Intelligence, while PaywallView has exactly two rows and never mentions it. launch-checklist Phase C explicitly requires those three to agree. Nothing here is falsifiable — Intelligence is real and gated on isComplete at every call site — but the paywall is the one surface with a single shot at explaining the price, and it currently undersells by half. Merge with QUA-17, which already covers the value anchor.",
+      "files": [
+        "apple/Akashic/Views/Store/PaywallView.swift"
+      ],
+      "serialise_with": "QUA-15 and QUA-17 also edit PaywallView.swift — one pass",
+      "verify": [
+        "cd apple && xcodegen generate",
+        "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,id=$(xcrun simctl list devices available | grep -o '[0-9A-F-]\\{36\\}' | tail -1)\" CODE_SIGNING_ALLOWED=NO test"
+      ]
+    },
+    {
+      "id": "QUA-23",
+      "track": "QUALITY",
+      "title": "Remove the dead tab state from useTrekData",
+      "status": "TODO",
+      "effort": 0.25,
+      "done_when": "No hook exposes state nothing renders, and its tests reflect that.",
+      "why": "useTrekData still owns activeTab/setActiveTab and its test asserts on them in three places, but nothing renders it — the sheet redesign replaced tabs with activeMode, and AkashicApp was destructuring both and using neither. The QUA-02 agent removed only the dead destructuring, correctly declining to delete tested state on a type-safety task.",
+      "files": [
+        "src/hooks/useTrekData.ts",
+        "src/hooks/useTrekData.test.ts"
+      ],
+      "verify": [
+        "npx tsc --noEmit",
+        "npx vitest --run"
+      ]
+    },
+    {
+      "id": "DOC-19",
+      "track": "DOCS",
+      "title": "Explain or delete apple/Fixtures/recovered/photoMetadata.json",
+      "status": "TODO",
+      "effort": 0.1,
+      "done_when": "The file is gone, or a comment says what reads it.",
+      "why": "Nothing under apple/ reads it — FixtureLoader has no photo path at all, which is also why the README's claim that the recovered fixtures carry no photos is still true. The only generator of that filename is the web's scripts/generatePhotoData.js, which writes to src/data/. Likely a stray copy, and it is exactly the kind of file that makes the next reader think the demo journey has photos when it does not.",
+      "files": [
+        "apple/Fixtures/recovered/photoMetadata.json"
+      ],
+      "verify": [
+        "grep -rn photoMetadata apple/ --include='*.swift' | wc -l  # expect 0"
       ]
     }
   ]

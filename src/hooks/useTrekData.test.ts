@@ -7,6 +7,7 @@ import type { TrekConfig, Camp, TrekData } from '../types/trek';
 const mockTrekDataMap: Record<string, TrekData> = {
     'kilimanjaro': {
         id: 'kilimanjaro',
+        uuid: '00000000-0000-4000-8000-000000000001',
         name: 'Kilimanjaro',
         country: 'Tanzania',
         description: 'Test description',
@@ -19,6 +20,8 @@ const mockTrekDataMap: Record<string, TrekData> = {
                 elevation: 2700,
                 coordinates: [37.35, -3.06],
                 elevationGainFromPrevious: 500,
+                elevationLossFromPrevious: 0,
+                dayDistance: 0,
                 notes: 'Test camp'
             },
             {
@@ -28,6 +31,8 @@ const mockTrekDataMap: Record<string, TrekData> = {
                 elevation: 3500,
                 coordinates: [37.36, -3.07],
                 elevationGainFromPrevious: 800,
+                elevationLossFromPrevious: 0,
+                dayDistance: 0,
                 notes: 'Test camp 2'
             }
         ],
@@ -50,6 +55,7 @@ const mockTrekDataMap: Record<string, TrekData> = {
     },
     'mount-kenya': {
         id: 'mount-kenya',
+        uuid: '00000000-0000-4000-8000-000000000002',
         name: 'Mount Kenya',
         country: 'Kenya',
         description: 'Test description',
@@ -119,7 +125,8 @@ describe('useTrekData hook', () => {
                 lat: -3.0674,
                 lng: 37.3556,
                 preferredBearing: 180,
-                preferredPitch: 60
+                preferredPitch: 60,
+                slug: 'kilimanjaro'
             };
 
             act(() => {
@@ -139,7 +146,8 @@ describe('useTrekData hook', () => {
                 lat: -3.0674,
                 lng: 37.3556,
                 preferredBearing: 180,
-                preferredPitch: 60
+                preferredPitch: 60,
+                slug: 'kilimanjaro'
             };
 
             act(() => {
@@ -160,7 +168,8 @@ describe('useTrekData hook', () => {
                 lat: -3.0674,
                 lng: 37.3556,
                 preferredBearing: 180,
-                preferredPitch: 60
+                preferredPitch: 60,
+                slug: 'kilimanjaro'
             };
             const mockCamp: Camp = {
                 id: 'camp1',
@@ -169,6 +178,8 @@ describe('useTrekData hook', () => {
                 elevation: 2700,
                 coordinates: [37.35, -3.06],
                 elevationGainFromPrevious: 500,
+                elevationLossFromPrevious: 0,
+                dayDistance: 0,
                 notes: 'Test camp'
             };
 
@@ -191,7 +202,8 @@ describe('useTrekData hook', () => {
                     lat: -0.1521,
                     lng: 37.3084,
                     preferredBearing: 0,
-                    preferredPitch: 60
+                    preferredPitch: 60,
+                    slug: 'mount-kenya'
                 });
             });
 
@@ -210,7 +222,8 @@ describe('useTrekData hook', () => {
                 lat: -3.0674,
                 lng: 37.3556,
                 preferredBearing: 180,
-                preferredPitch: 60
+                preferredPitch: 60,
+                slug: 'kilimanjaro'
             };
 
             act(() => {
@@ -246,7 +259,8 @@ describe('useTrekData hook', () => {
                 lat: -3.0674,
                 lng: 37.3556,
                 preferredBearing: 180,
-                preferredPitch: 60
+                preferredPitch: 60,
+                slug: 'kilimanjaro'
             };
 
             act(() => {
@@ -276,7 +290,8 @@ describe('useTrekData hook', () => {
                 lat: -3.0674,
                 lng: 37.3556,
                 preferredBearing: 180,
-                preferredPitch: 60
+                preferredPitch: 60,
+                slug: 'kilimanjaro'
             };
 
             act(() => {
@@ -303,7 +318,8 @@ describe('useTrekData hook', () => {
                 lat: -3.0674,
                 lng: 37.3556,
                 preferredBearing: 180,
-                preferredPitch: 60
+                preferredPitch: 60,
+                slug: 'kilimanjaro'
             };
 
             act(() => {
@@ -331,6 +347,8 @@ describe('useTrekData hook', () => {
                 elevation: 2700,
                 coordinates: [37.35, -3.06],
                 elevationGainFromPrevious: 500,
+                elevationLossFromPrevious: 0,
+                dayDistance: 0,
                 notes: 'Test camp'
             };
 
@@ -350,6 +368,8 @@ describe('useTrekData hook', () => {
                 elevation: 2700,
                 coordinates: [37.35, -3.06],
                 elevationGainFromPrevious: 500,
+                elevationLossFromPrevious: 0,
+                dayDistance: 0,
                 notes: 'Test camp'
             };
 
@@ -375,6 +395,8 @@ describe('useTrekData hook', () => {
                 elevation: 2700,
                 coordinates: [37.35, -3.06],
                 elevationGainFromPrevious: 500,
+                elevationLossFromPrevious: 0,
+                dayDistance: 0,
                 notes: 'Test camp 1'
             };
             const camp2: Camp = {
@@ -384,6 +406,8 @@ describe('useTrekData hook', () => {
                 elevation: 3500,
                 coordinates: [37.36, -3.07],
                 elevationGainFromPrevious: 800,
+                elevationLossFromPrevious: 0,
+                dayDistance: 0,
                 notes: 'Test camp 2'
             };
 
@@ -428,7 +452,8 @@ describe('useTrekData hook', () => {
                 lat: -3.0674,
                 lng: 37.3556,
                 preferredBearing: 180,
-                preferredPitch: 60
+                preferredPitch: 60,
+                slug: 'kilimanjaro'
             };
 
             act(() => {
@@ -450,7 +475,8 @@ describe('useTrekData hook', () => {
                 lat: -3.0674,
                 lng: 37.3556,
                 preferredBearing: 180,
-                preferredPitch: 60
+                preferredPitch: 60,
+                slug: 'kilimanjaro'
             };
 
             act(() => {

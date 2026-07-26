@@ -232,7 +232,7 @@ protocol StoreKitProviding {
 struct StoreProduct: Equatable {
     let id: String
     let displayName: String
-    /// Localized, currency-formatted price string from the App Store, e.g. "kr 99,00".
+    /// Localized, currency-formatted price string from the App Store, e.g. "kr 149,00".
     let displayPrice: String
     let description: String
 }

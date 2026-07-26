@@ -14,7 +14,7 @@ import { useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { colors, radius } from '../../styles/liquidGlass';
 import type { TrekConfig, TrekData, Camp, ExtendedStats, ElevationProfile, Photo, ViewMode } from '../../types/trek';
-import type mapboxgl from 'mapbox-gl';
+import type * as mapboxgl from 'mapbox-gl';
 import type { ContentMode } from '../../hooks/useTrekData';
 import { StatsTab } from '../trek/StatsTab';
 import { OverviewTab } from '../trek/OverviewTab';

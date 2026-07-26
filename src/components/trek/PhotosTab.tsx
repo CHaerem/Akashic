@@ -8,7 +8,7 @@
  */
 
 import { useState, useEffect, useCallback, useRef, useMemo, memo } from 'react';
-import type mapboxgl from 'mapbox-gl';
+import type * as mapboxgl from 'mapbox-gl';
 import type { TrekData, Photo, Camp, MediaType } from '../../types/trek';
 import { useMedia } from '../../hooks/useMedia';
 import { usePhotoDay } from '../../hooks/usePhotoDay';

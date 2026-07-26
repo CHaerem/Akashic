@@ -7,7 +7,8 @@
   "scripts": {
     "dev": "vite",
     "build": "node scripts/build.js",
-    "lint": "eslint .",
+    "//lint": "--max-warnings ratchets the 25 remaining warnings (9 exhaustive-deps + 16 React-Compiler-readiness, see eslint.config.js) so they cannot grow. Lower the number as they are fixed; do not raise it.",
+    "lint": "eslint . --max-warnings 25",
     "typecheck": "tsc --noEmit",
     "workplan": "node scripts/workplan.mjs",
     "workplan:check": "node scripts/workplan.mjs check",
@@ -19,6 +20,7 @@
     "test:e2e:mobile": "playwright test --project=mobile-chrome --project=mobile-safari",
     "generate-photos": "node scripts/generatePhotoData.js",
     "generate-icons": "node scripts/generateIcons.js",
+    "generate-og-image": "node scripts/generateOgImage.js",
     "import-gpx": "node scripts/importGpx.js",
     "view-routes": "node scripts/viewRoutes.js",
     "prepare": "husky"
@@ -43,9 +45,13 @@
     "vite-plugin-pwa": "^1.1.0",
     "yet-another-react-lightbox": "^3.27.0"
   },
+  "//lint-staged": "The ts/tsx entry was `bash -c 'npx tsc --noEmit || true'`, so a type error could never fail a commit — that `|| true` is how 110 of them accumulated. The `bash -c` wrapper itself is still needed and is NOT a smell: lint-staged appends the staged filenames to every command, and `tsc --noEmit <files>` silently discards tsconfig.json (no include, no paths, no strict). Passing them as ignored positional args to bash keeps the whole-project check. What changed is that the exit code now propagates.",
   "lint-staged": {
     "*.{js,jsx}": "eslint --fix",
-    "*.{ts,tsx}": "bash -c 'npx tsc --noEmit || true'"
+    "*.{ts,tsx}": [
+      "eslint --fix",
+      "bash -c 'npm run typecheck'"
+    ]
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",
@@ -73,6 +79,7 @@
     "sharp": "^0.35.3",
     "tailwindcss": "^4.1.17",
     "typescript": "^5.9.3",
+    "typescript-eslint": "^8.65.0",
     "vite": "^7.2.4",
     "vitest": "^3.2.4"
   },

@@ -329,7 +329,7 @@ describe('Globe rotation animation', () => {
 describe('Fixed rotation logic with isRotating state', () => {
     it('should reschedule rotation when user interaction stops it', () => {
         let isRotating = false;
-        let rotationTimerRef: { current: ReturnType<typeof setTimeout> | null } = { current: null };
+        const rotationTimerRef: { current: ReturnType<typeof setTimeout> | null } = { current: null };
         const startRotation = vi.fn(() => {
             isRotating = true;
         });
@@ -388,7 +388,7 @@ describe('Fixed rotation logic with isRotating state', () => {
 
     it('should not duplicate timers when effect re-runs while rotating', () => {
         let isRotating = false;
-        let rotationTimerRef: { current: ReturnType<typeof setTimeout> | null } = { current: null };
+        const rotationTimerRef: { current: ReturnType<typeof setTimeout> | null } = { current: null };
         const startRotation = vi.fn(() => {
             isRotating = true;
         });
@@ -432,7 +432,7 @@ describe('Fixed rotation logic with isRotating state', () => {
 
     it('should not duplicate timers when effect re-runs while timer is pending', () => {
         let isRotating = false;
-        let rotationTimerRef: { current: ReturnType<typeof setTimeout> | null } = { current: null };
+        const rotationTimerRef: { current: ReturnType<typeof setTimeout> | null } = { current: null };
         const startRotation = vi.fn(() => {
             isRotating = true;
         });

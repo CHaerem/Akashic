@@ -17,7 +17,6 @@ import type {
     ExtendedStats,
     Photo,
 } from '../types';
-import { MCP_ERRORS } from '../types';
 
 // Tool definitions for tools/list
 export const toolDefinitions: MCPToolDefinition[] = [

@@ -82,9 +82,15 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      # A real gate as of QUA-02. It carried `continue-on-error: true  # Informational - many
+      # pre-existing type issues` from the day it was added, which is precisely how the count
+      # reached 110 unnoticed. Those 110 are now zero (41 were one missing jest-dom types entry
+      # in tsconfig.json; the rest were stale test fixtures and ~15 genuine source defects,
+      # including a crash on Mapbox getBounds() returning null and a `getDifficultyColor` import
+      # of a symbol that exists nowhere). Do not reintroduce continue-on-error here — if this
+      # step is red, the fix is the type error, not the flag.
       - name: Type check
-        run: npx tsc --noEmit
-        continue-on-error: true  # Informational - many pre-existing type issues
+        run: npm run typecheck
 
   # This gate is a real gate: it fails the build on any high-or-worse advisory, with no
   # `continue-on-error` and no lowered `--audit-level`. It was red for months, so if you

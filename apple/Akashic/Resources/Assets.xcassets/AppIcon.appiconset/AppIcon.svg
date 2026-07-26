@@ -5,6 +5,10 @@
   Same three-ellipse globe as public/favicon.svg (circle + equator + meridian, 3:1 ellipse
   ratio), but FILLED instead of hairline-stroked. The old icon drew the wireframe in #1A1A2E on
   a #0B0B19 ground — 1.14:1 measured contrast, i.e. a black square at 60 pt. Here the sphere
+  is filled with the app's accent as a gradient, measuring 9.91:1 at the light stop (#A9B4FF)
+  and 6.70:1 at the dark one (#7F8FFA) against the same ground — so the WORST case still clears
+  4.5:1. (The nominal Theme accent #8F9EFF is 7.90:1 on this ground; quoting a single
+  mid-gradient pixel is misleading, which is why both stops are given.)
   carries the mass in the app's accent periwinkle (Theme.accent, #8F9EFF, lightened into a
   gradient) and the graticule is knocked out in the ground colour, so the same globe survives
   being scaled to a Home Screen. Full bleed, opaque, square — iOS applies the mask.

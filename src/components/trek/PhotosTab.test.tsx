@@ -77,6 +77,7 @@ global.ResizeObserver = MockResizeObserver as unknown as typeof ResizeObserver;
 
 const mockTrekData: TrekData = {
     id: 'test-trek',
+    uuid: '00000000-0000-4000-8000-000000000001',
     name: 'Test Trek',
     country: 'Test Country',
     description: 'Test Description',
@@ -94,6 +95,9 @@ const mockTrekData: TrekData = {
             elevation: 2000,
             coordinates: [1, 1],
             elevationGainFromPrevious: 0,
+            elevationLossFromPrevious: 0,
+            dayDistance: 0,
+            notes: '',
         },
         {
             id: 'wp-2',
@@ -102,6 +106,9 @@ const mockTrekData: TrekData = {
             elevation: 3000,
             coordinates: [2, 2],
             elevationGainFromPrevious: 1000,
+            elevationLossFromPrevious: 0,
+            dayDistance: 0,
+            notes: '',
         },
     ],
     route: { type: 'LineString', coordinates: [] },

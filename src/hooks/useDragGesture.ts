@@ -1,4 +1,4 @@
-import { useRef, useCallback, useState, type RefObject } from 'react';
+import { useRef, useEffect, useCallback, useState, type RefObject } from 'react';
 
 interface DragGestureOptions {
     /** Snap points as percentages of viewport height (0-100) */
@@ -52,8 +52,13 @@ export function useDragGesture({
     const velocity = useRef<number>(0);
     const currentIndexRef = useRef(currentSnapIndex);
 
-    // Keep ref in sync with prop
-    currentIndexRef.current = currentSnapIndex;
+    // Keep ref in sync with prop. This used to be a bare assignment in the render body, which
+    // mutates a ref during render — unsafe under StrictMode/concurrent rendering, where a render
+    // can be thrown away. The touch handlers below all fire from user events, long after commit,
+    // so an effect is soon enough for them.
+    useEffect(() => {
+        currentIndexRef.current = currentSnapIndex;
+    }, [currentSnapIndex]);
 
     // Get base height in pixels for current snap point
     const getBaseHeightPx = useCallback(() => {
