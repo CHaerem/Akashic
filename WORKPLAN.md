@@ -5,7 +5,7 @@
 
 # Akashic — work ledger
 
-77 tasks · **63 open** (47 agent-doable, 45.7 d · 16 owner-only, 8 d) · 14 done · 0 dropped
+79 tasks · **64 open** (48 agent-doable, 45 d · 16 owner-only, 8 d) · 15 done · 0 dropped
 
 Read [CLAUDE.md](CLAUDE.md) before touching anything. To find work:
 
@@ -17,7 +17,7 @@ node scripts/workplan.mjs next
 
 > Retire Supabase, Cloudflare and R2. Repo-side removal can happen now; the infrastructure deletions are gated on the archive being duplicated and on the Pages cutover. LEG-01 is independent of every gate and should happen today.
 
-11 open of 11 · 5.5 d remaining
+13 open of 13 · 5.9 d remaining
 
 | | Task | Days | Who | Deps | Finish line |
 |---|---|---|---|---|---|
@@ -25,13 +25,15 @@ node scripts/workplan.mjs next
 | ` ` | `LEG-02` **Copy the 16 GiB export archive to a second physical medium** | 0.5 | owner | — | 8147 objects and the six table sha256s verify on a second volume that is not the boot disk. |
 | ` ` | `LEG-03` **Decide the fate of the 5080 un-catalogued R2 objects (12.21 GB)** | 0.5 | owner | `LEG-02` | A written decision exists: keep in the archive forever, or discard deliberately. |
 | ` ` | `LEG-04` **Run the T5.1 delta check against live Supabase** | 0.5 | owner | `LEG-02` | Row counts and max(updated_at) per table match manifest.json, or the delta is exported and merged. |
-| ` ` | `LEG-05` **Rewire src/lib/media.ts off the Worker and delete workers/** | 0.5 | agent | `LEG-01` | No source file references the workers.dev host, and npx vitest --run stays green. |
-| ` ` | `LEG-06` **Delete supabase/, the 12 unrunnable scripts, and @aws-sdk/client-s3** | 0.5 | agent | `LEG-04` | npm run build, vitest and the Pages workflow all pass with those paths gone. |
+| ` ` | `LEG-05` **Rewire src/lib/media.ts off the Worker** | 0.5 | agent | — | No source file resolves media through the workers.dev host, and web tests stay green. |
+| ` ` | `LEG-06` **Delete the unrunnable legacy scripts and the AWS SDK dependency** | 0.5 | agent | — | npm run build and vitest pass with the dead scripts and @aws-sdk/client-s3 gone. |
 | ` ` | `LEG-07` **Gate every native-only web write behind one guard** | 1 | agent | — | No web UI offers a write that silently no-ops; each either disappears or shows a native-only notice. |
 | ` ` | `LEG-08` **Remove the hardcoded /Users/cher archive path from shipping code** | 0.25 | agent | — | No absolute developer path appears in any non-test Swift file. |
 | ` ` | `LEG-09` **Execute the GitHub Pages + DNS cutover (T4.2, T4.3)** | 0.5 | owner | `SHIP-10` | akashic.no serves from GitHub Pages, privacy/terms/support resolve, and the AASA file is reachable. |
 | ` ` | `LEG-10` **Delete deploy.yml, then revoke the Cloudflare and Supabase secrets** | 0.25 | agent | `LEG-09` | No workflow references Cloudflare, and CI is green without those secrets. |
 | ` ` | `LEG-11` **Delete the gated infrastructure: Pages project, R2 bucket, DNS zone, Supabase, OAuth** | 0.5 | owner | `LEG-03` `LEG-04` `LEG-09` `LEG-10` | All five are gone from their dashboards and the archive is verified on two media. |
+| ` ` | `LEG-12` **Delete workers/ from the repo** | 0.25 | agent | `LEG-01` `LEG-05` | workers/ is gone and no workflow or test references it. |
+| ` ` | `LEG-13` **Delete supabase/** | 0.1 | agent | `LEG-04` | supabase/ is gone from the repo. |
 
 ## DOCS
 
@@ -91,12 +93,12 @@ node scripts/workplan.mjs next
 
 > Capability beyond what competitors offer. Order set by decision: share link, then Vision curation, then the book.
 
-8 open of 9 · 15.5 d remaining
+7 open of 9 · 14.5 d remaining
 
 | | Task | Days | Who | Deps | Finish line |
 |---|---|---|---|---|---|
 | `x` | `DIFF-01` **Fix the unpublish leak: thumbnails that can never be removed** | 0.5 | agent | — | Unpublishing always removes the mirror, and a failure to remove reports as a failure. |
-| ` ` | `DIFF-02` **Give the owner a shareable showcase link** | 1 | agent | `DIFF-01` | Publishing yields a working URL the owner can share, correct under slug disambiguation. |
+| `x` | `DIFF-02` **Give the owner a shareable showcase link** | 1 | agent | `DIFF-01` | Publishing yields a working URL the owner can share, correct under slug disambiguation. |
 | ` ` | `DIFF-03` **Add og: metadata so a shared link renders as a card** | 0.5 | agent | `DIFF-02` | A showcase URL pasted into iMessage, WhatsApp and Slack renders a title, description and image. |
 | ` ` | `DIFF-04` **On-device photo curation with Vision** | 3 | agent | — | Each day proposes a best-of selection and a hero, accepted or dismissed like other suggestions. |
 | ` ` | `DIFF-05` **Feed Vision labels into DayNoteDrafter** | 1 | agent | `DIFF-04` | A drafted day note references what is actually in the photos. |

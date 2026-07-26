@@ -201,6 +201,26 @@ struct JourneyShowcaseSheet: View {
             if report.failed > 0 {
                 labelled("Failed", "\(report.failed)")
             }
+            // The point of publishing. Without this the owner had no way to obtain the URL at all,
+            // which left the growth loop — every published journey is meant to be a shareable page —
+            // with no first step. Built from `report.publishedSlug` rather than `target.slug`,
+            // because a cross-owner collision publishes under an owner-scoped variant and a link
+            // made from the pretty slug would 404 for exactly the second family to publish.
+            if let slug = report.publishedSlug, let url = AppInfo.showcaseURL(slug: slug) {
+                Divider().padding(.vertical, 6)
+                ShareLink(item: url) {
+                    Label("Share the link", systemImage: "square.and.arrow.up")
+                        .font(.subheadline.weight(.medium))
+                }
+                .buttonStyle(.borderedProminent)
+                Text(url.absoluteString)
+                    .font(.caption2.monospaced())
+                    .foregroundStyle(Theme.textSecondary)
+                    .textSelection(.enabled)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                    .accessibilityLabel("Showcase link, \(url.absoluteString)")
+            }
         }
     }
 

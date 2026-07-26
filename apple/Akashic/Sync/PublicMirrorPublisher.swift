@@ -309,6 +309,15 @@ struct PublicMirrorReport: Equatable {
     var failures: [RecordFailure] = []
     var wasCancelled = false
 
+    /// The slug the mirror was actually written under — the only reliable basis for a share link.
+    ///
+    /// `publish` resolves this at publish time and it is **not** always `journey.slug`: a
+    /// cross-owner collision moves the mirror to `kilimanjaro-a1b2c3` while the local journey keeps
+    /// the pretty slug. A link built from `journey.slug` would therefore 404 in precisely the case
+    /// the disambiguation exists to handle, so the resolved value has to travel back to the caller
+    /// rather than be guessed at the UI. Nil for unpublish, and nil when nothing was published.
+    var publishedSlug: String?
+
     /// Total records written (journey metadata + photos).
     var published: Int { photosPublished + (journeyPublished ? 1 : 0) }
     var failed: Int { failures.count }
@@ -426,7 +435,12 @@ final class PublicMirrorPublisher: PublicMirrorPublishing {
         if Task.isCancelled { report.wasCancelled = true; return report }
         let journeyRecord = PublicMirrorBuilder.journeyRecord(for: journey, photos: photos)
         let metaOutcome = await save([journeyRecord])
-        if metaOutcome.saved.contains(journey.slug) { report.journeyPublished = true }
+        if metaOutcome.saved.contains(journey.slug) {
+            report.journeyPublished = true
+            // `journey.slug` is the effective slug here — reassigned at the top of this method —
+            // so this is the value a share link must use, not the domain journey's pretty slug.
+            report.publishedSlug = journey.slug
+        }
         report.failures.append(contentsOf: metaOutcome.failures)
         savedUnits += 1
         reportSave("Publishing metadata")

@@ -126,22 +126,19 @@
     {
       "id": "LEG-05",
       "track": "LEGACY",
-      "title": "Rewire src/lib/media.ts off the Worker and delete workers/",
+      "title": "Rewire src/lib/media.ts off the Worker",
       "status": "TODO",
       "effort": 0.5,
-      "done_when": "No source file references the workers.dev host, and npx vitest --run stays green.",
-      "deps": [
-        "LEG-01"
-      ],
+      "done_when": "No source file resolves media through the workers.dev host, and web tests stay green.",
+      "deps": [],
       "files": [
         "src/lib/media.ts",
-        "workers/**",
         "src/hooks/useMedia.ts"
       ],
       "serialise_with": "none — LEGACY owns these outright",
-      "why": "MEDIA_BASE_URL:16 hardcodes the exploited Worker as its default. Four importers must move with it. The CloudKit showcase already uses absolute pre-authenticated asset URLs, so the fallback is dead code against the real schema.",
+      "why": "MEDIA_BASE_URL:16 hardcodes the exploited Worker as its default and four importers follow it. Doing this BEFORE the Worker is deleted is the safe order: it removes the last code path pointing at the host while the host still exists, so nothing can break in the gap. The CloudKit showcase already uses absolute pre-authenticated asset URLs, so the fallback is dead code against the real schema — schema.ckdb's Photo type declares no url STRING field at all.",
       "verify": [
-        "grep -rn 'workers.dev' src/ workers/ .env.example  # expect no hits",
+        "grep -rn 'workers.dev' src/  # expect no hits",
         "npx vitest --run"
       ],
       "refs": [
@@ -152,15 +149,12 @@
     {
       "id": "LEG-06",
       "track": "LEGACY",
-      "title": "Delete supabase/, the 12 unrunnable scripts, and @aws-sdk/client-s3",
+      "title": "Delete the unrunnable legacy scripts and the AWS SDK dependency",
       "status": "TODO",
       "effort": 0.5,
-      "done_when": "npm run build, vitest and the Pages workflow all pass with those paths gone.",
-      "deps": [
-        "LEG-04"
-      ],
+      "done_when": "npm run build and vitest pass with the dead scripts and @aws-sdk/client-s3 gone.",
+      "deps": [],
       "files": [
-        "supabase/**",
         "scripts/bulkUploadR2.ts",
         "scripts/migrateR2Photos.js",
         "scripts/backfillThumbnails.ts",
@@ -171,11 +165,11 @@
         "package.json"
       ],
       "serialise_with": "QUA-02 and QUA-03 also edit package.json",
-      "why": "16.8 MB of installed AWS SDK with zero runnable importers, 19 Supabase migration files, and 792 lines of hand-written facts in populateFunFacts.ts pointing at a decommissioned backend. Keep scripts/export/verifyExport.ts and lib.ts — they do no network I/O and stay useful for re-proving archive integrity forever.",
+      "why": "16.8 MB of installed AWS SDK with zero runnable importers, and 12 of 23 scripts that cannot run at all. None of this is gated on anything: no npm script depends on Supabase or R2, so build, test, e2e and the Pages workflow are all unaffected. Keep scripts/export/verifyExport.ts and lib.ts — they do no network I/O, reading r2/inventory.json from disk, so they stay useful for re-proving archive integrity long after R2 is gone.",
       "verify": [
         "npm run build",
         "npx vitest --run",
-        "node scripts/export/smoke.ts  # expect 26 checks passed"
+        "node scripts/export/smoke.ts  # 26 checks, must still pass"
       ],
       "refs": [
         "No npm script depends on Supabase or R2 — the legacy scripts are manually-invoked dev tools"
@@ -927,7 +921,7 @@
       "id": "DIFF-02",
       "track": "DIFF",
       "title": "Give the owner a shareable showcase link",
-      "status": "TODO",
+      "status": "DONE",
       "effort": 1,
       "done_when": "Publishing yields a working URL the owner can share, correct under slug disambiguation.",
       "priority": 11,
@@ -943,7 +937,13 @@
         "cd apple && xcodegen generate",
         "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,id=$(xcrun simctl list devices available | grep -o '[0-9A-F-]\\{36\\}' | tail -1)\" CODE_SIGNING_ALLOWED=NO test",
         "Manual: publish, share, open the link signed out in a private window"
-      ]
+      ],
+      "claim": {
+        "agent": "opus5",
+        "branch": "claude/remote-control-project-review-9462c1",
+        "at": "2026-07-26"
+      },
+      "evidence": "PublicMirrorReport now carries publishedSlug, set from the effective slug at the point the metadata record saves; AppInfo.showcaseURL builds ?journey=<slug>, the form useTrekData already reads and the AASA already declares. ShareLink in the result view. Six new tests: pretty-slug case, collision case asserting the link is NOT the pretty slug, failed publish yields no slug, unpublish yields no slug, URL form, and percent-encoding. 608/608 pass; Release-CloudKit builds."
     },
     {
       "id": "DIFF-03",
@@ -1541,6 +1541,48 @@
       ],
       "verify": [
         "grep -n 'AppIcon placeholder' apple/README.md  # expect no hits"
+      ]
+    },
+    {
+      "id": "LEG-12",
+      "track": "LEGACY",
+      "title": "Delete workers/ from the repo",
+      "status": "TODO",
+      "effort": 0.25,
+      "deps": [
+        "LEG-01",
+        "LEG-05"
+      ],
+      "owner": false,
+      "done_when": "workers/ is gone and no workflow or test references it.",
+      "why": "Held until the Worker itself is deleted (LEG-01) so the source of the deployed thing outlives it rather than the other way round. 12 files including the 779-line index.ts holding the HS256 bypass, plus its own package.json, tsconfig and vitest config — note vite.config.js:175 currently pulls its 16 tests into the root vitest run, so the web test count drops by 16 when this lands.",
+      "files": [
+        "workers/**",
+        "vite.config.js"
+      ],
+      "serialise_with": "QUA-02 also edits vite.config.js",
+      "verify": [
+        "test ! -d workers",
+        "npx vitest --run"
+      ]
+    },
+    {
+      "id": "LEG-13",
+      "track": "LEGACY",
+      "title": "Delete supabase/",
+      "status": "TODO",
+      "effort": 0.1,
+      "deps": [
+        "LEG-04"
+      ],
+      "owner": false,
+      "done_when": "supabase/ is gone from the repo.",
+      "why": "Held until the T5.1 delta check has run, because those 19 migration files are the written record of the schema the delta is measured against. Once the check has passed they describe a database that no longer exists.",
+      "files": [
+        "supabase/**"
+      ],
+      "verify": [
+        "test ! -d supabase"
       ]
     }
   ]

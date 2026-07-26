@@ -38,6 +38,11 @@ final class PublicMirrorTests: XCTestCase {
         /// slug -> creatorUserRecordID.recordName of an existing PublicJourney (for collision tests).
         var existingJourneyCreators: [String: String] = [:]
 
+        /// Make every save fail per-record (not by throwing), which is the shape CloudKit actually
+        /// returns for a partial failure. Lets a test assert what the report says when nothing
+        /// landed — e.g. that no share link is offered for a page that does not exist.
+        var failSaves = false
+
         func ckModifyRecords(
             saving recordsToSave: [CKRecord],
             deleting recordIDsToDelete: [CKRecord.ID],
@@ -48,6 +53,10 @@ final class PublicMirrorTests: XCTestCase {
             lastSavePolicy = savePolicy
             var saveResults: [CKRecord.ID: Result<CKRecord, Error>] = [:]
             for record in recordsToSave {
+                if failSaves {
+                    saveResults[record.recordID] = .failure(CKError(.networkFailure))
+                    continue
+                }
                 saved[record.recordID] = record
                 saveResults[record.recordID] = .success(record)
             }
@@ -403,6 +412,56 @@ final class PublicMirrorTests: XCTestCase {
         let report = await PublicMirrorPublisher(database: mock).unpublish(slug: "kilimanjaro")
         XCTAssertEqual(report.deleted, 1, "just the PublicJourney record")
         XCTAssertTrue(mock.deleted.contains(CKRecord.ID(recordName: "kilimanjaro")))
+    }
+
+    // MARK: - The share link must use the slug that was published (DIFF-02)
+
+    func testPublishReportsThePrettySlugWhenThereIsNoCollision() async {
+        let mock = MockPublicDatabase()
+        let report = await PublicMirrorPublisher(database: mock, ownerRecordName: "ownerA")
+            .publish(journey: makeJourney(), photos: makePhotos())
+        XCTAssertEqual(report.publishedSlug, "kilimanjaro")
+    }
+
+    /// The case a naive `ShareLink(item: journey.slug)` gets wrong: the mirror lives under the
+    /// owner-scoped variant, so a link built from the domain object 404s for the second family.
+    func testPublishReportsTheDisambiguatedSlugUnderACollision() async {
+        let mock = MockPublicDatabase()
+        mock.existingJourneyCreators["kilimanjaro"] = "someoneElse"
+        let owner = "ownerA"
+        let report = await PublicMirrorPublisher(database: mock, ownerRecordName: owner)
+            .publish(journey: makeJourney(), photos: makePhotos())
+
+        let expected = PublicMirrorBuilder.disambiguatedSlug("kilimanjaro", ownerRecordName: owner)
+        XCTAssertEqual(report.publishedSlug, expected)
+        XCTAssertNotEqual(report.publishedSlug, "kilimanjaro",
+                          "a link built from the pretty slug would 404 for the second family")
+    }
+
+    func testFailedPublishReportsNoSlugSoNoLinkIsOffered() async {
+        let mock = MockPublicDatabase()
+        mock.failSaves = true
+        let report = await PublicMirrorPublisher(database: mock).publish(journey: makeJourney(),
+                                                                        photos: makePhotos())
+        XCTAssertNil(report.publishedSlug, "no metadata record saved means there is no page to link to")
+    }
+
+    func testUnpublishReportsNoSlug() async {
+        let mock = MockPublicDatabase()
+        let report = await PublicMirrorPublisher(database: mock).unpublish(slug: "kilimanjaro")
+        XCTAssertNil(report.publishedSlug)
+    }
+
+    func testShowcaseURLIsTheFormTheWebClientAndAASABothRead() {
+        // `?journey=<slug>` is what useTrekData.parseUrlParams reads and what the AASA declares.
+        XCTAssertEqual(AppInfo.showcaseURL(slug: "kilimanjaro")?.absoluteString,
+                       "https://akashic.no/?journey=kilimanjaro")
+    }
+
+    func testShowcaseURLPercentEncodesASlugThatNeedsIt() {
+        // Slugs are locally minted, so an unencoded one would silently truncate the query.
+        XCTAssertEqual(AppInfo.showcaseURL(slug: "a b&c")?.absoluteString,
+                       "https://akashic.no/?journey=a%20b%26c")
     }
 
     // MARK: - Unpublish must sweep the slug it actually published under (DIFF-01)
