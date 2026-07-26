@@ -1,4 +1,5 @@
 import Foundation
+import CryptoKit
 import ImageIO
 import CoreGraphics
 import UniformTypeIdentifiers
@@ -200,6 +201,34 @@ enum Thumbnailer {
 
 // MARK: - Ingest service
 
+/// Content hashing for duplicate detection (DIFF-14).
+///
+/// Across Kilimanjaro's 939 photo rows only about 449 images are unique, and that gap came from
+/// repeated uploads over time rather than from one bad batch — so the detection that would actually
+/// have prevented it has to work across sessions, which means the hash has to be stored. Within-batch
+/// hashing alone would have caught none of it.
+///
+/// SHA-256 over the original bytes: exact-duplicate detection, deliberately distinct from
+/// `VisionPhotoScorer`'s feature-print grouping, which finds *near* duplicates and is a heuristic. A
+/// hash match is certainty, so it is the only one of the two safe to act on without asking.
+enum ContentHash {
+    /// Streamed in chunks rather than `Data(contentsOf:)` — a 4K video would otherwise be resident
+    /// in full, which is the exact problem QUA-13 removed from this file.
+    static func sha256(ofFileAt url: URL, chunkSize: Int = 1 << 20) -> String? {
+        guard let handle = try? FileHandle(forReadingFrom: url) else { return nil }
+        defer { try? handle.close() }
+        var hasher = SHA256()
+        while let chunk = try? handle.read(upToCount: chunkSize), !chunk.isEmpty {
+            hasher.update(data: chunk)
+        }
+        return hasher.finalize().map { String(format: "%02x", $0) }.joined()
+    }
+
+    static func sha256(of data: Data) -> String {
+        SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
+    }
+}
+
 enum PhotoIngestError: LocalizedError {
     case emptyData
     case originalWriteFailed(String)
@@ -335,7 +364,10 @@ final class PhotoIngestService {
             duration: nil,
             locationSource: meta.hasLocation ? "exif" : "manual",
             localOriginalPath: originalURL.path,
-            localThumbPath: thumbAbsolute)
+            localThumbPath: thumbAbsolute,
+            // DIFF-14: hashed from the file that actually landed, not from the input buffer —
+            // the committed bytes are what a future re-import will be compared against.
+            contentHash: ContentHash.sha256(ofFileAt: originalURL))
     }
 
     // MARK: Video
@@ -406,7 +438,10 @@ final class PhotoIngestService {
             duration: durationSeconds,
             locationSource: coordinates != nil ? "exif" : "manual",
             localOriginalPath: originalURL.path,
-            localThumbPath: thumbAbsolute)
+            localThumbPath: thumbAbsolute,
+            // DIFF-14: hashed from the file that actually landed, not from the input buffer —
+            // the committed bytes are what a future re-import will be compared against.
+            contentHash: ContentHash.sha256(ofFileAt: originalURL))
     }
 
     /// Best-effort location (ISO-6709) + creation date from a video's container metadata.

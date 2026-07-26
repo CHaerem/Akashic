@@ -389,6 +389,20 @@ final class PersistenceController {
     }
 
     /// Total photo count in the store (for status display).
+    /// Photo ids in a journey whose stored content hash matches `hash` (DIFF-14).
+    ///
+    /// Exact-match, so a hit is certainty rather than a heuristic — which is what makes it safe to
+    /// skip an import without asking, where the Vision feature-print grouping only ever proposes.
+    /// Returns empty for a nil or empty hash: absent means "unknown", never "unique", and treating
+    /// unknown as a match would silently refuse every photo imported before this existed.
+    func photoIDs(inJourney journeyID: String, matchingContentHash hash: String?) -> [String] {
+        guard let hash, !hash.isEmpty else { return [] }
+        let request = NSFetchRequest<CDPhoto>(entityName: "CDPhoto")
+        request.predicate = NSPredicate(format: "journeyId == %@ AND contentHash == %@",
+                                       journeyID, hash)
+        return ((try? viewContext.fetch(request)) ?? []).compactMap(\.id)
+    }
+
     func photoCount() -> Int {
         let request = NSFetchRequest<CDPhoto>(entityName: "CDPhoto")
         return (try? container.viewContext.count(for: request)) ?? 0

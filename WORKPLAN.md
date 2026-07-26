@@ -5,19 +5,19 @@
 
 # Akashic — work ledger
 
-92 tasks · **31 open** (14 agent-doable, 17.6 dev-days · 17 owner-only, 8.5 dev-days) · 61 done · 0 dropped
+92 tasks · **30 open** (13 agent-doable, 16.6 dev-days · 17 owner-only, 8.5 dev-days) · 62 done · 0 dropped
 
 > **`dev-days` are a human-developer estimate, not agent time.** They came from the review
 > that produced these tasks and they are the right unit for deciding whether something is
 > worth doing — they are the wrong unit for predicting how long an agent will take, and
 > summing them as "work remaining" overstates it substantially.
 >
-> Measured so far: **61 agent tasks estimated at 40.2 dev-days**,
+> Measured so far: **62 agent tasks estimated at 41.2 dev-days**,
 > closed in roughly one working afternoon across up to three parallel tracks.
 >
 > But that compression is **unmeasured for the large items**: of the tasks closed so far,
 > 3 were 2 dev-days or more. 11 of the
-> 17.6 remaining dev-days sit in 4 such tasks —
+> 16.6 remaining dev-days sit in 4 such tasks —
 > localisation, Swift 6 strict concurrency, a UI test target, the PDF book. Those involve
 > design judgement and broad-blast-radius refactors rather than localised edits, so do not
 > assume the same ratio holds. The cheap band is nearly exhausted:
@@ -33,6 +33,8 @@ node scripts/workplan.mjs next
 
 | Task | Agent | Branch | Stopped at |
 |---|---|---|---|
+| `DIFF-05` Feed Vision labels into DayNoteDrafter | opus5 | `claude/remote-control-project-review-9462c1` | — |
+| `DIFF-08` Foundation Models depth: streaming, prewarm, typed errors | opus5 | `claude/remote-control-project-review-9462c1` | — |
 | `QUA-07` Bring accessibility to a shippable standard | a11y-worktree | `claude/qua07-qua24-a11y` | — |
 | `QUA-24` Accessibility for the screens D1 and D3 were never scoped to cover | a11y-worktree | `claude/qua07-qua24-a11y` | — |
 
@@ -118,7 +120,7 @@ node scripts/workplan.mjs next
 
 > Capability beyond what competitors offer. Order set by decision: share link, then Vision curation, then the book.
 
-5 open of 14 · 5 d remaining
+4 open of 14 · 4 d remaining
 
 | | Task | Days | Who | Deps | Finish line |
 |---|---|---|---|---|---|
@@ -126,16 +128,16 @@ node scripts/workplan.mjs next
 | `x` | `DIFF-02` **Give the owner a shareable showcase link** | 1 | agent | `DIFF-01` | Publishing yields a working URL the owner can share, correct under slug disambiguation. |
 | `x` | `DIFF-03` **Add og: metadata so a shared link renders as a card** | 0.5 | agent | `DIFF-02` | A showcase URL pasted into iMessage, WhatsApp and Slack renders a title, description and image. |
 | `x` | `DIFF-04` **On-device photo curation with Vision — the engine** | 2 | agent | — | Curation runs on real photos and proposes a hero and a per-day best-of, covered by tests. |
-| ` ` | `DIFF-05` **Feed Vision labels into DayNoteDrafter** | 1 | agent | `DIFF-04` | A drafted day note references what is actually in the photos. |
+| `~` | `DIFF-05` **Feed Vision labels into DayNoteDrafter** | 1 | agent | `DIFF-04` | A drafted day note references what is actually in the photos. |
 | `x` | `DIFF-06` **Report a journey's duplicate photographs** | 0.5 | agent | `DIFF-04` | A journey can report its unique-image count and which rows are redundant. |
 | `x` | `DIFF-07` **PDF export of the story view** | 6 | agent | `DIFF-04` `DIFF-06` | A journey exports a PDF a person would willingly hand over. |
-| ` ` | `DIFF-08` **Foundation Models depth: streaming, prewarm, typed errors** | 1.5 | agent | `QUA-05` | Drafting streams, sessions are reused, and guardrail refusals say something specific. |
+| `~` | `DIFF-08` **Foundation Models depth: streaming, prewarm, typed errors** | 1.5 | agent | `QUA-05` | Drafting streams, sessions are reused, and guardrail refusals say something specific. |
 | `x` | `DIFF-09` **C9 — derive days from timestamped GPX trackpoints** | 1 | agent | — | A Strava or Garmin export yields a journey with correctly dated days. |
 | `x` | `DIFF-10` **Give the demo journey photographs** | 1.5 | agent | — | A first launch shows a journey with real photographs, and a photos-only trip is demoed too. |
 | `x` | `DIFF-11` **Wire GPX day derivation into the creation flow** | 0.25 | agent | `DIFF-09` | Importing a timestamped GPX yields a journey with correctly dated days, not zero. |
 | ` ` | `DIFF-12` **Decide what photographs the demo journey ships with** | 0.5 | owner | `DIFF-10` | A decision is recorded, and the shipped demo images are the ones intended. |
 | ` ` | `DIFF-13` **Accept/dismiss rows for curation, and make Vision link** | 1 | agent | `DIFF-04` | Each day proposes a best-of and a hero the user can accept or dismiss, and Vision links into the build. |
-| ` ` | `DIFF-14` **Collapse duplicates on import, which needs a stored content hash** | 1 | agent | `DIFF-06` | Re-importing a byte-identical photograph is detected and skipped, not written twice. |
+| `x` | `DIFF-14` **Collapse duplicates on import, which needs a stored content hash** | 1 | agent | `DIFF-06` | Re-importing a byte-identical photograph is detected and skipped, not written twice. |
 
 ## QUALITY
 

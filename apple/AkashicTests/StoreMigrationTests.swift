@@ -27,7 +27,8 @@ final class StoreMigrationTests: XCTestCase {
     func testAllModelVersionsShipInTheBundle() throws {
         XCTAssertNotNil(try model(named: "Akashic"), "version 1 must stay in the bundle to migrate from")
         XCTAssertNotNil(try model(named: "Akashic 2"), "version 2 must stay in the bundle to migrate from")
-        XCTAssertNotNil(try model(named: "Akashic 3"), "version 3 is the current model")
+        XCTAssertNotNil(try model(named: "Akashic 3"), "version 3 must stay in the bundle to migrate from")
+        XCTAssertNotNil(try model(named: "Akashic 4"), "version 4 is the current model")
     }
 
     func testVersionOneHasNoZoneOwnerAndVersionTwoDoes() throws {
@@ -93,6 +94,62 @@ final class StoreMigrationTests: XCTestCase {
         XCTAssertEqual(migrated.first?.value(forKey: "zoneOwnerName") as? String, "someone-else")
         // The new side table is present and empty on a freshly migrated store.
         XCTAssertEqual(try newContext.count(for: NSFetchRequest<NSManagedObject>(entityName: "CDSyncRecordMeta")), 0)
+    }
+
+    /// Version 4 adds ONLY `CDPhoto.contentHash`, optional (DIFF-14). Optional is what keeps the
+    /// migration lightweight AND what keeps it honest: every photo imported before this existed has
+    /// no hash, and a non-optional attribute would have to invent one for them.
+    func testVersionFourAddsOnlyTheOptionalContentHash() throws {
+        let v3 = try XCTUnwrap(try model(named: "Akashic 3"))
+        let v4 = try XCTUnwrap(try model(named: "Akashic 4"))
+
+        XCTAssertNil(v3.entitiesByName["CDPhoto"]?.attributesByName["contentHash"],
+                     "contentHash is new in v4")
+        let added = try XCTUnwrap(v4.entitiesByName["CDPhoto"]?.attributesByName["contentHash"])
+        XCTAssertTrue(added.isOptional,
+                      "a required attribute would fail validation for every pre-existing photo")
+        XCTAssertEqual(added.attributeType, .stringAttributeType)
+
+        // Nothing else moved: an additive change is the whole reason this stays inferrable.
+        XCTAssertEqual(Set(v3.entitiesByName.keys), Set(v4.entitiesByName.keys))
+        for (name, v3Entity) in v3.entitiesByName where name != "CDPhoto" {
+            let v4Entity = try XCTUnwrap(v4.entitiesByName[name])
+            XCTAssertEqual(Set(v3Entity.attributesByName.keys), Set(v4Entity.attributesByName.keys),
+                           "\(name) must be untouched in v4")
+        }
+    }
+
+    /// A v3 store holding a photograph, opened by the current model. The case that matters for
+    /// anyone already running the app: their photos keep their identity and simply gain a nil hash.
+    func testVersionThreeStoreWithAPhotoMigratesAndKeepsIt() throws {
+        let storeURL = directory.appendingPathComponent("Akashic-v3.sqlite")
+        let v3 = try XCTUnwrap(try model(named: "Akashic 3"))
+
+        let old = NSPersistentStoreCoordinator(managedObjectModel: v3)
+        try old.addPersistentStore(ofType: NSSQLiteStoreType, configurationName: nil,
+                                   at: storeURL, options: nil)
+        let oldContext = NSManagedObjectContext(concurrencyType: .mainQueueConcurrencyType)
+        oldContext.persistentStoreCoordinator = old
+        let photo = NSEntityDescription.insertNewObject(forEntityName: "CDPhoto", into: oldContext)
+        photo.setValue("P1", forKey: "id")
+        photo.setValue("kilimanjaro", forKey: "journeyId")
+        photo.setValue("Summit sign", forKey: "caption")
+        try oldContext.save()
+        for store in old.persistentStores { try old.remove(store) }
+
+        let new = NSPersistentStoreCoordinator(managedObjectModel: PersistenceController.managedObjectModel)
+        try new.addPersistentStore(
+            ofType: NSSQLiteStoreType, configurationName: nil, at: storeURL,
+            options: [NSMigratePersistentStoresAutomaticallyOption: true,
+                      NSInferMappingModelAutomaticallyOption: true])
+        let newContext = NSManagedObjectContext(concurrencyType: .mainQueueConcurrencyType)
+        newContext.persistentStoreCoordinator = new
+
+        let migrated = try newContext.fetch(NSFetchRequest<NSManagedObject>(entityName: "CDPhoto"))
+        XCTAssertEqual(migrated.count, 1, "the photograph must survive the upgrade")
+        XCTAssertEqual(migrated.first?.value(forKey: "caption") as? String, "Summit sign")
+        XCTAssertNil(migrated.first?.value(forKey: "contentHash"),
+                     "an existing photo has no hash — absent must mean unknown, not unique")
     }
 
     /// The real thing: an existing v1 store with data in it, opened by the current app.

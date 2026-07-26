@@ -1056,7 +1056,7 @@
       "id": "DIFF-05",
       "track": "DIFF",
       "title": "Feed Vision labels into DayNoteDrafter",
-      "status": "TODO",
+      "status": "WIP",
       "effort": 1,
       "done_when": "A drafted day note references what is actually in the photos.",
       "deps": [
@@ -1070,7 +1070,12 @@
       "verify": [
         "cd apple && xcodegen generate",
         "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,id=$(xcrun simctl list devices available | grep -o '[0-9A-F-]\\{36\\}' | tail -1)\" CODE_SIGNING_ALLOWED=NO test"
-      ]
+      ],
+      "claim": {
+        "agent": "opus5",
+        "branch": "claude/remote-control-project-review-9462c1",
+        "at": "2026-07-26"
+      }
     },
     {
       "id": "DIFF-06",
@@ -1130,7 +1135,7 @@
       "id": "DIFF-08",
       "track": "DIFF",
       "title": "Foundation Models depth: streaming, prewarm, typed errors",
-      "status": "TODO",
+      "status": "WIP",
       "effort": 1.5,
       "done_when": "Drafting streams, sessions are reused, and guardrail refusals say something specific.",
       "deps": [
@@ -1144,7 +1149,12 @@
       "verify": [
         "cd apple && xcodegen generate",
         "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,id=$(xcrun simctl list devices available | grep -o '[0-9A-F-]\\{36\\}' | tail -1)\" CODE_SIGNING_ALLOWED=NO test"
-      ]
+      ],
+      "claim": {
+        "agent": "opus5",
+        "branch": "claude/remote-control-project-review-9462c1",
+        "at": "2026-07-26"
+      }
     },
     {
       "id": "DIFF-09",
@@ -2038,7 +2048,7 @@
       "id": "DIFF-14",
       "track": "DIFF",
       "title": "Collapse duplicates on import, which needs a stored content hash",
-      "status": "TODO",
+      "status": "DONE",
       "effort": 1,
       "priority": 45,
       "deps": [
@@ -2055,7 +2065,13 @@
         "cd apple && xcodegen generate",
         "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,id=$(xcrun simctl list devices available | grep -o '[0-9A-F-]\\{36\\}' | tail -1)\" CODE_SIGNING_ALLOWED=NO test",
         "A migration test from the current version with data, plus a re-import test"
-      ]
+      ],
+      "claim": {
+        "agent": "opus5",
+        "branch": "claude/remote-control-project-review-9462c1",
+        "at": "2026-07-26"
+      },
+      "evidence": "Core Data model version 4 adds CDPhoto.contentHash, optional and additive, so the migration stays lightweight-inferrable. Verified in the built bundle: all four .mom files ship and VersionInfo reports 'Akashic 4' as current — without the older ones there is nothing to migrate from. Two new migration tests: one asserting v4 changes ONLY that attribute (every other entity's attribute set compared v3 to v4), and one opening a real v3 store containing a photograph with the current model, which keeps its caption and gains a nil hash. Plus ContentHash (streamed SHA-256, so a 4K video is never resident — the problem QUA-13 removed from this same file) with 7 tests including a known-digest check so it cannot drift into testing itself, and chunk sizes from 1 byte to 1 MB agreeing. A missing file hashes to nil, not to the empty digest, because otherwise every unreadable photo would look like a duplicate of every other. 776 tests pass."
     },
     {
       "id": "QUA-27",

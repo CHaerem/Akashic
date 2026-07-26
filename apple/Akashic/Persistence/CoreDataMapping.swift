@@ -168,6 +168,10 @@ enum CoreDataMapping {
         cd.duration = Int64(photo.duration ?? 0)
         cd.localOriginalPath = photo.localOriginalPath
         cd.localThumbPath = photo.localThumbPath
+        // DIFF-14. Written outside the `created` guard on purpose: unlike a caption it is not a
+        // user edit but a fact about the bytes, so a re-import that finally computes one must be
+        // able to fill it in — while an existing hash is never overwritten with nil.
+        if let hash = photo.contentHash { cd.contentHash = hash }
         // User-editable fields: seed on create only so a re-import never clobbers native edits.
         if created {
             cd.waypointId = photo.waypointId
@@ -201,7 +205,8 @@ enum CoreDataMapping {
             duration: cd.duration == 0 ? nil : Int(cd.duration),
             locationSource: cd.locationSource,
             localOriginalPath: cd.localOriginalPath,
-            localThumbPath: cd.localThumbPath)
+            localThumbPath: cd.localThumbPath,
+            contentHash: cd.contentHash)
     }
 
     private static let isoFormatter: ISO8601DateFormatter = {

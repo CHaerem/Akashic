@@ -213,6 +213,11 @@ struct Photo: Codable, Equatable, Identifiable {
     /// Absolute on-disk path to the thumbnail bytes, if present under the media root.
     var localThumbPath: String?
 
+    /// SHA-256 of the original bytes, set at ingest (DIFF-14). Optional because every photo
+    /// imported before this existed has none, and because a photo whose bytes are not on disk
+    /// cannot be hashed — absent means "unknown", never "unique".
+    var contentHash: String?
+
     var isVideo: Bool { mediaType == "video" }
 
     /// File URL for the thumbnail, preferring the resolved thumb, falling back to the
