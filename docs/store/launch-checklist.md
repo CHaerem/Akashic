@@ -155,6 +155,60 @@ aren't the developer. Gate to proceed: **≥7 complete a journey without help.**
 
 ---
 
+## Phase G — Public-database cost watch (QUA-25)
+
+**Why this phase exists.** Every other cost in the model is $0 or fixed: journeys and
+photos live in the *customer's* iCloud, on the customer's quota. The public showcase is
+the one exception — `PublicJourney` and `PublicPhoto` are in **our** CloudKit container,
+so every signed-out visitor who scrolls a showcase page spends our egress
+(`COMMERCIALIZATION-PLAN.md` §2). The success mode and the cost-blow-up mode are the
+same event: the Product Hunt / HN spike that sells app units is also the bill.
+
+The app now bounds the write side. What is left is the operator side, and neither of
+these can be set from code.
+
+- [x] **Per-journey published-photo cap — done in code.**
+      `PublicMirrorConfig.maxPublishedPhotos = 200`
+      (`apple/Akashic/Sync/PublicMirrorPublisher.swift`). At the app's own ~60 KB
+      thumbnail budget that is ~12 MB per fully-scrolled journey view, against ~56 MB
+      for a 939-photo journey uncapped. The cap is spread across the journey's days
+      rather than taken off the front, so a long trek's later days are smaller, not
+      empty. A journey over the cap still publishes and the report says how many photos
+      were held back. Raising the number is a **cost** decision — read the usage panel
+      below first.
+
+- [ ] **Set the CloudKit Console usage alert.** CloudKit Console →
+      `iCloud.no.akashic` → **Telemetry** (Production) → the public-database
+      *Data Transfer* metric → add an alert.
+      **Threshold: 50 % of the current free daily transfer allowance**, alerting to the
+      developer's email.
+      Why 50 % and not 80 %: the free allowance scales with active users, so the
+      absolute number moves under you, and the traffic shape here is a *spike* rather
+      than a ramp — a threshold that only fires once you are nearly out gives no time
+      to react. 50 % of the day's allowance is the point at which "today is unusual" is
+      true and nothing has been billed yet.
+      Set the same alert on **Database Requests** — a scripted scraper hits request
+      count long before it hits bytes.
+
+- [ ] **Record the baseline the first week after launch.** Note the normal daily public
+      transfer and request count in this file once real traffic exists. Every threshold
+      above is reasoned from the plan's arithmetic, not measured, and the first real
+      week replaces the estimate.
+
+- [ ] **Know the two levers before you need them.** Neither is automatic:
+      1. Lower `maxPublishedPhotos` and ship an update (bounds future publishes; already
+         published mirrors shrink on their owner's next publish, because held-back
+         photos are absent from the desired set and the reconciliation pass deletes
+         them).
+      2. Reduce the published thumbnail dimension/quality (400 px q0.8 today) — this
+         cuts every existing journey's egress on the next publish, and is the bigger
+         lever of the two.
+      A per-slug or per-account read throttle does not exist and cannot be built with
+      CloudKit's public database alone; it is the trigger for the object-storage + CDN
+      migration the plan reserves as the escape hatch (§8).
+
+---
+
 ## Quick reference — decisions baked in
 
 | Item | Value |
@@ -168,3 +222,5 @@ aren't the developer. Gate to proceed: **≥7 complete a journey without help.**
 | First release | Manual release (control go-live); phased rollout for later updates |
 | Categories | Travel (primary), Photo & Video (secondary) |
 | Age rating | 4+ |
+| Published photos per journey | **200** (`PublicMirrorConfig.maxPublishedPhotos`) — ~12 MB per full showcase view |
+| Public-DB usage alert | 50 % of the free daily allowance, on both Data Transfer and Database Requests |
