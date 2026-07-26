@@ -360,7 +360,11 @@ struct PublicMirrorReport: Equatable {
 /// can be unit-tested against a fake that fails on demand — the concrete `PublicMirrorPublisher`
 /// talks to a real (or mock) `PublicMirrorDatabase`, but the view model's ordering + failure
 /// handling (flip the `isPublic` flag only AFTER the network op succeeds) is what needs coverage.
-protocol PublicMirrorPublishing {
+// QUA-08: `Sendable` so `any PublicMirrorPublishing` can cross into the showcase view model's
+// async work. The concrete publisher documents its own conformance below; the test double takes
+// `@unchecked`. Refining the protocol is what fixes the existential — annotating only the class
+// leaves `sending 'publisher'` standing, because the call site holds the protocol type.
+protocol PublicMirrorPublishing: Sendable {
     func publish(journey: Journey, photos: [Photo],
                  progress: (@Sendable (PublicMirrorProgress) -> Void)?) async -> PublicMirrorReport
     func unpublish(slug: String,

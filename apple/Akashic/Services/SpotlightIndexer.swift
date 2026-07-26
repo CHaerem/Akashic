@@ -113,12 +113,26 @@ struct SpotlightIndexer {
 
     /// Clear the Akashic domain and re-index the given journeys. Idempotent: safe to call on
     /// every store load / import.
-    func reindex(_ journeys: [Journey], index: CSSearchableIndex = .default()) {
+    ///
+    /// Still fire-and-forget: `JourneyStore.publishExtras()` calls this from the main actor and does
+    /// not wait, so that call site is unchanged. (QUA-08)
+    func reindex(_ journeys: [Journey]) {
         guard Self.indexingEnabled else { return }
         let items = searchableItems(for: journeys)
-        index.deleteSearchableItems(withDomainIdentifiers: [Self.domainIdentifier]) { _ in
-            guard !items.isEmpty else { return }
-            index.indexSearchableItems(items) { _ in }
-        }
+        Task.detached { await Self.write(items) }
+    }
+
+    /// The index write itself.
+    ///
+    /// QUA-08: this used to be nested completion handlers, which captured the non-Sendable
+    /// `[CSSearchableItem]` and `CSSearchableIndex` into a `@Sendable` closure. `CSSearchableIndex` is
+    /// created *inside* this function now rather than passed in, so it never crosses a boundary, and
+    /// the async API replaces the callbacks — the items are handed to one detached task and consumed
+    /// there. `index:` disappeared from `reindex` as a result; it had no caller that overrode it.
+    private static func write(_ items: [CSSearchableItem]) async {
+        let index = CSSearchableIndex.default()
+        try? await index.deleteSearchableItems(withDomainIdentifiers: [domainIdentifier])
+        guard !items.isEmpty else { return }
+        try? await index.indexSearchableItems(items)
     }
 }

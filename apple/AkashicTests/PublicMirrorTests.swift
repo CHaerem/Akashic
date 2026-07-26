@@ -829,7 +829,7 @@ final class PublicMirrorTests: XCTestCase {
 final class ShowcaseViewModelTests: XCTestCase {
 
     /// Fake mirror publisher: returns a preset report and records which op ran.
-    final class FakePublisher: PublicMirrorPublishing {
+    final class FakePublisher: PublicMirrorPublishing, @unchecked Sendable {
         var report: PublicMirrorReport
         private(set) var publishCalled = false
         private(set) var unpublishCalled = false

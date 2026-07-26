@@ -11,6 +11,33 @@ protocol PhotoScoring {
     func score(_ photos: [Photo], dayOf: (Photo) -> Int?) async -> [PhotoScore]
 }
 
+/// Single-owner handoff for a `VNFeaturePrintObservation`. (QUA-08)
+///
+/// `VNFeaturePrintObservation` is a non-Sendable Apple class that will never become `Sendable`, and
+/// the scorer has to carry one out of the child task that produced it: grouping is inherently
+/// pairwise, so it cannot be decided while scoring a single image.
+///
+/// The `@unchecked` promise is narrow and checkable by reading `score(_:dayOf:)`: each observation is
+/// created inside one `measure` child task, returned once, collected into a local array, and then
+/// read only by `groupNearDuplicates` — which is a plain synchronous function. No two tasks ever
+/// hold the same box, and nothing mutates one. It is a handoff, not shared state.
+///
+/// ## Why not extract the descriptor instead
+///
+/// The tidier fix is to copy the descriptor into `[Float]` and compute the distance directly, so no
+/// Apple class crosses at all. It was proposed, and rejected here for one reason: **nothing tests
+/// `groupNearDuplicates`.** Re-implementing `computeDistance` means asserting that Vision's metric is
+/// plain Euclidean over the raw descriptor — and if it is not (normalisation, a different element
+/// stride), `duplicateDistance`'s 0.15 calibration silently changes meaning and no test in this repo
+/// would notice. A silent change to which photographs the app calls duplicates is worse than a box.
+///
+/// **Removal condition:** add a test that pins `groupNearDuplicates` against known feature prints
+/// with known distances. With that in place the descriptor refactor becomes verifiable, and this box
+/// should go.
+private struct FeaturePrintBox: @unchecked Sendable {
+    let observation: VNFeaturePrintObservation
+}
+
 /// Vision-backed scoring: aesthetics, utility-image detection and near-duplicate grouping.
 ///
 /// ## Availability, and why it is not gated like Intelligence
@@ -84,17 +111,17 @@ struct VisionPhotoScorer: PhotoScoring {
         // once. `chunked(into:)` is the existing Array helper from PhotoMediaService.
         for chunk in inputs.chunked(into: maxConcurrent) {
             if Task.isCancelled { return scores }
-            let measured = await withTaskGroup(of: (PhotoScore, VNFeaturePrintObservation?).self) { group in
+            let measured = await withTaskGroup(of: (PhotoScore, FeaturePrintBox?).self) { group in
                 for input in chunk {
                     group.addTask { await Self.measure(input.photo, day: input.day) }
                 }
-                var out: [(PhotoScore, VNFeaturePrintObservation?)] = []
+                var out: [(PhotoScore, FeaturePrintBox?)] = []
                 for await result in group { out.append(result) }
                 return out
             }
-            for (score, print) in measured {
+            for (score, box) in measured {
                 scores.append(score)
-                if let print { prints.append((score.id, print)) }
+                if let box { prints.append((score.id, box.observation)) }
             }
         }
 
@@ -110,7 +137,7 @@ struct VisionPhotoScorer: PhotoScoring {
     // MARK: - One image
 
     private static func measure(_ photo: Photo,
-                                day: Int?) async -> (PhotoScore, VNFeaturePrintObservation?) {
+                                day: Int?) async -> (PhotoScore, FeaturePrintBox?) {
         var score = PhotoScore(id: photo.id,
                                dayNumber: day,
                                sortOrder: photo.sortOrder,
@@ -148,7 +175,7 @@ struct VisionPhotoScorer: PhotoScoring {
             score.isUtility = observation.isUtility
         }
 
-        return (score, featurePrint.results?.first as? VNFeaturePrintObservation)
+        return (score, (featurePrint.results?.first as? VNFeaturePrintObservation).map(FeaturePrintBox.init))
     }
 
     // MARK: - Near-duplicate grouping

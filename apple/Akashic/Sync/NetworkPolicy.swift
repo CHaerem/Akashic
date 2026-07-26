@@ -156,7 +156,10 @@ protocol NetworkPathSource: AnyObject {
     /// The current path's expensive-ness, readable before `start` (best-effort initial value).
     var isExpensivePath: Bool { get }
     /// Begin monitoring; `onChange` fires on the main thread whenever the path changes.
-    func start(onChange: @escaping (Bool) -> Void)
+    /// QUA-08: `@Sendable` because `NWPathSource` carries this into `DispatchQueue.main.async`.
+    /// The annotation is what makes that legal, and it checks that callers capture only
+    /// Sendable state rather than trusting them to.
+    func start(onChange: @escaping @Sendable (Bool) -> Void)
 }
 
 /// Production source backed by `NWPathMonitor`. The monitor delivers on a private queue; this
@@ -167,7 +170,7 @@ final class NWPathSource: NetworkPathSource {
 
     var isExpensivePath: Bool { monitor.currentPath.isExpensive }
 
-    func start(onChange: @escaping (Bool) -> Void) {
+    func start(onChange: @escaping @Sendable (Bool) -> Void) {
         monitor.pathUpdateHandler = { path in
             let expensive = path.isExpensive
             DispatchQueue.main.async { onChange(expensive) }

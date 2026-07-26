@@ -715,7 +715,17 @@ struct NewJourneySheet: View {
     // MARK: Photos (stage via PhotoIngestService, cluster from the SAME ingested photos)
 
     private var photosSection: some View {
-        GlassField(label: "Days from photos", systemImage: "photo.on.rectangle.angled") {
+        // QUA-08: `PhotosPicker`'s label builder is a nonisolated closure, so reading
+        // `isStagingPhotos` or `photoPickerLabel` inside it warns. Both are hoisted out here, where
+        // this main-actor `View` member can read them.
+        //
+        // `pickerLabel` is a `Text`, NOT the `LocalizedStringKey`: `Text` is `Sendable` and a
+        // `LocalizedStringKey` is not. Resolution still happens inside `Text(...)`, so the QUA-06
+        // catalogue extraction that `photoPickerLabel`'s three literals depend on is untouched —
+        // which hoisting the key itself would not have preserved.
+        let staging = isStagingPhotos
+        let pickerLabel = Text(photoPickerLabel)
+        return GlassField(label: "Days from photos", systemImage: "photo.on.rectangle.angled") {
             VStack(alignment: .leading, spacing: 10) {
                 PhotosPicker(
                     selection: $photoSelection,
@@ -724,13 +734,13 @@ struct NewJourneySheet: View {
                     photoLibrary: .shared()
                 ) {
                     HStack(spacing: 10) {
-                        if isStagingPhotos {
+                        if staging {
                             ProgressView().tint(Theme.accent)
                         } else {
                             Image(systemName: "calendar.badge.plus").font(.title3).foregroundStyle(Theme.accent)
                                 .accessibilityHidden(true)
                         }
-                        Text(photoPickerLabel)
+                        pickerLabel
                             .font(.subheadline.weight(.semibold))
                             .foregroundStyle(Theme.textPrimary)
                         Spacer()
