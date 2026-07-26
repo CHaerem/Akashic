@@ -5,23 +5,23 @@
 
 # Akashic — work ledger
 
-102 tasks · **23 open** (6 agent-doable, 1.6 dev-days · 17 owner-only, 8.5 dev-days) · 79 done · 0 dropped
+103 tasks · **23 open** (5 agent-doable, 1.1 dev-days · 18 owner-only, 9 dev-days) · 80 done · 0 dropped
 
 > **`dev-days` are a human-developer estimate, not agent time.** They came from the review
 > that produced these tasks and they are the right unit for deciding whether something is
 > worth doing — they are the wrong unit for predicting how long an agent will take, and
 > summing them as "work remaining" overstates it substantially.
 >
-> Measured so far: **79 agent tasks estimated at 60.8 dev-days**,
+> Measured so far: **80 agent tasks estimated at 61.3 dev-days**,
 > closed in roughly one working afternoon across up to three parallel tracks.
 >
 > But that compression is **unmeasured for the large items**: of the tasks closed so far,
 > 7 were 2 dev-days or more. 0 of the
-> 1.6 remaining dev-days sit in 0 such tasks —
+> 1.1 remaining dev-days sit in 0 such tasks —
 > localisation, Swift 6 strict concurrency, a UI test target, the PDF book. Those involve
 > design judgement and broad-blast-radius refactors rather than localised edits, so do not
 > assume the same ratio holds. The cheap band is nearly exhausted:
-> 6 tasks at 0.5 dev-days or less remain.
+> 5 tasks at 0.5 dev-days or less remain.
 
 Read [CLAUDE.md](CLAUDE.md) before touching anything. To find work:
 
@@ -134,7 +134,7 @@ node scripts/workplan.mjs next
 
 > Tests, types, CI, localisation, accessibility. Localisation and accessibility are in v1.0 by decision.
 
-2 open of 37 · 0.8 d remaining
+2 open of 38 · 0.8 d remaining
 
 | | Task | Days | Who | Deps | Finish line |
 |---|---|---|---|---|---|
@@ -172,9 +172,10 @@ node scripts/workplan.mjs next
 | `x` | `QUA-32` **Theme.accent fails WCAG as text in Light Mode, and its own comment says otherwise** | 0.75 | agent | — | Accent-coloured TEXT reaches at least 4.5:1 on a Light-Mode systemBackground (3:1 for large text), and Theme.swift's comment states what was measured rather than an assumption. |
 | `x` | `QUA-33` **The local StoreKit test configuration ships inside the Release-CloudKit app bundle** | 0.1 | agent | — | Akashic.storekit is absent from the built Release-CloudKit Akashic.app, and the StoreKit tests still run. |
 | `x` | `QUA-34` **Make CloudKitImportSink an actor, closing the last strict-concurrency warning** | 0.5 | agent | — | A clean build-for-testing under SWIFT_STRICT_CONCURRENCY=complete reports ZERO warnings across every target. |
-| ` ` | `QUA-35` **Pin groupNearDuplicates against known feature prints, then delete FeaturePrintBox** | 0.5 | agent | — | A test asserts groupNearDuplicates' behaviour against feature prints with known distances, and VisionPhotoScorer carries no @unchecked Sendable. |
+| `x` | `QUA-35` **Pin groupNearDuplicates against known feature prints, then delete FeaturePrintBox** | 0.5 | agent | — | A test asserts groupNearDuplicates' behaviour against feature prints with known distances, and VisionPhotoScorer carries no @unchecked Sendable. |
 | `x` | `QUA-36` **Declare PublicMirrorDatabase Sendable so PublicMirrorPublisher's conformance becomes checked** | 0.5 | agent | — | PublicMirrorPublisher conforms to Sendable without @unchecked, and the public-mirror tests still pass. |
 | `x` | `QUA-37` **Declare MediaDatabase Sendable so PhotoMediaService's conformance becomes checked** | 0.25 | agent | — | PhotoMediaService conforms to Sendable without @unchecked, and the media tests still pass. |
+| ` ` | `QUA-38` **Verify the Vision features on a real device — they cannot run in any simulator** | 0.5 | owner | — | Photo curation (hero pick, best-of, duplicate grouping) and DIFF-05 subject labels are confirmed working on a physical device, with a note recording what was seen. |
 
 ## Decisions on record
 

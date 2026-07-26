@@ -17,31 +17,52 @@ protocol PhotoScoring: Sendable {
     func score(_ photos: [Photo], dayOf: @Sendable (Photo) -> Int?) async -> [PhotoScore]
 }
 
-/// Single-owner handoff for a `VNFeaturePrintObservation`. (QUA-08)
+/// A feature print flattened to plain numbers, so it can cross a concurrency boundary. (QUA-35)
 ///
-/// `VNFeaturePrintObservation` is a non-Sendable Apple class that will never become `Sendable`, and
-/// the scorer has to carry one out of the child task that produced it: grouping is inherently
-/// pairwise, so it cannot be decided while scoring a single image.
+/// `VNFeaturePrintObservation` is a non-Sendable Apple class that will never become one, and the
+/// scorer has to carry one out of the child task that produced it — grouping is inherently pairwise,
+/// so it cannot be decided while scoring a single image. QUA-08 solved that with an
+/// `@unchecked Sendable` box, on the grounds that re-implementing Vision's metric was unverifiable
+/// while nothing tested `groupNearDuplicates`.
 ///
-/// The `@unchecked` promise is narrow and checkable by reading `score(_:dayOf:)`: each observation is
-/// created inside one `measure` child task, returned once, collected into a local array, and then
-/// read only by `groupNearDuplicates` — which is a plain synchronous function. No two tasks ever
-/// hold the same box, and nothing mutates one. It is a handoff, not shared state.
+/// What changed is *why* that argument no longer holds. Nothing tested `groupNearDuplicates` **because
+/// it could not be tested**: its parameter was an Apple class no test can construct, and every Vision
+/// ML request fails in the simulator with "Failed to create espresso context" (see QUA-38). Taking
+/// plain floats is what makes the union-find, the burst-drift behaviour and the threshold boundaries
+/// testable at all — so the refactor removes an unchecked promise *and* buys the coverage whose
+/// absence was the reason for keeping it.
 ///
-/// ## Why not extract the descriptor instead
-///
-/// The tidier fix is to copy the descriptor into `[Float]` and compute the distance directly, so no
-/// Apple class crosses at all. It was proposed, and rejected here for one reason: **nothing tests
-/// `groupNearDuplicates`.** Re-implementing `computeDistance` means asserting that Vision's metric is
-/// plain Euclidean over the raw descriptor — and if it is not (normalisation, a different element
-/// stride), `duplicateDistance`'s 0.15 calibration silently changes meaning and no test in this repo
-/// would notice. A silent change to which photographs the app calls duplicates is worse than a box.
-///
-/// **Removal condition:** add a test that pins `groupNearDuplicates` against known feature prints
-/// with known distances. With that in place the descriptor refactor becomes verifiable, and this box
-/// should go.
-private struct FeaturePrintBox: @unchecked Sendable {
-    let observation: VNFeaturePrintObservation
+/// The one thing it does assert is that Vision's `computeDistance` is Euclidean over this descriptor.
+/// That is pinned by `FeaturePrintVectorTests.testComputeDistanceIsEuclideanOverTheDescriptor`, which
+/// skips in the simulator and runs on a device — the only place it can.
+struct FeaturePrintVector: Sendable, Equatable {
+    let values: [Float]
+
+    /// Copies the descriptor out of the observation, inside the task that owns it.
+    ///
+    /// Returns nil for a non-float descriptor rather than reinterpreting bytes it does not understand:
+    /// a wrong element type would produce plausible numbers and a silently wrong grouping.
+    init?(_ observation: VNFeaturePrintObservation) {
+        guard observation.elementType == .float, observation.elementCount > 0 else { return nil }
+        values = observation.data.withUnsafeBytes { Array($0.bindMemory(to: Float.self)) }
+        guard !values.isEmpty else { return nil }
+    }
+
+    /// Test seam: build one directly from known numbers.
+    init(values: [Float]) { self.values = values }
+
+    /// Euclidean distance — what `VNFeaturePrintObservation.computeDistance` computes over the same
+    /// numbers. Mismatched lengths cannot be compared meaningfully, so they report `.infinity` and
+    /// simply never group, rather than crashing on a descriptor from a different model revision.
+    func distance(to other: FeaturePrintVector) -> Float {
+        guard values.count == other.values.count else { return .infinity }
+        var sum: Float = 0
+        for i in values.indices {
+            let d = values[i] - other.values[i]
+            sum += d * d
+        }
+        return sum.squareRoot()
+    }
 }
 
 /// Vision-backed scoring: aesthetics, utility-image detection and near-duplicate grouping.
@@ -111,23 +132,23 @@ struct VisionPhotoScorer: PhotoScoring {
         let inputs: [(photo: Photo, day: Int?)] = photos.map { ($0, dayOf($0)) }
 
         var scores: [PhotoScore] = []
-        var prints: [(id: String, print: VNFeaturePrintObservation)] = []
+        var prints: [(id: String, print: FeaturePrintVector)] = []
 
         // Chunked rather than a bare TaskGroup so at most `maxConcurrent` images are decoded at
         // once. `chunked(into:)` is the existing Array helper from PhotoMediaService.
         for chunk in inputs.chunked(into: maxConcurrent) {
             if Task.isCancelled { return scores }
-            let measured = await withTaskGroup(of: (PhotoScore, FeaturePrintBox?).self) { group in
+            let measured = await withTaskGroup(of: (PhotoScore, FeaturePrintVector?).self) { group in
                 for input in chunk {
                     group.addTask { await Self.measure(input.photo, day: input.day) }
                 }
-                var out: [(PhotoScore, FeaturePrintBox?)] = []
+                var out: [(PhotoScore, FeaturePrintVector?)] = []
                 for await result in group { out.append(result) }
                 return out
             }
-            for (score, box) in measured {
+            for (score, vector) in measured {
                 scores.append(score)
-                if let box { prints.append((score.id, box.observation)) }
+                if let vector { prints.append((score.id, vector)) }
             }
         }
 
@@ -143,7 +164,7 @@ struct VisionPhotoScorer: PhotoScoring {
     // MARK: - One image
 
     private static func measure(_ photo: Photo,
-                                day: Int?) async -> (PhotoScore, FeaturePrintBox?) {
+                                day: Int?) async -> (PhotoScore, FeaturePrintVector?) {
         var score = PhotoScore(id: photo.id,
                                dayNumber: day,
                                sortOrder: photo.sortOrder,
@@ -181,7 +202,8 @@ struct VisionPhotoScorer: PhotoScoring {
             score.isUtility = observation.isUtility
         }
 
-        return (score, (featurePrint.results?.first as? VNFeaturePrintObservation).map(FeaturePrintBox.init))
+        return (score, (featurePrint.results?.first as? VNFeaturePrintObservation)
+            .flatMap(FeaturePrintVector.init))
     }
 
     // MARK: - Near-duplicate grouping
@@ -191,7 +213,7 @@ struct VisionPhotoScorer: PhotoScoring {
     /// Union-find rather than "compare against group representatives", because burst frames drift —
     /// frame 1 and frame 12 can exceed the threshold while every adjacent pair sits under it, and
     /// representative-matching would split one burst into several groups.
-    static func groupNearDuplicates(_ prints: [(id: String, print: VNFeaturePrintObservation)],
+    static func groupNearDuplicates(_ prints: [(id: String, print: FeaturePrintVector)],
                                     threshold: Float) -> [String: Int] {
         guard prints.count > 1 else { return [:] }
 
@@ -210,10 +232,7 @@ struct VisionPhotoScorer: PhotoScoring {
 
         for i in 0 ..< prints.count {
             for j in (i + 1) ..< prints.count {
-                var distance: Float = 0
-                guard (try? prints[i].print.computeDistance(&distance, to: prints[j].print)) != nil
-                else { continue }
-                if distance < threshold { union(i, j) }
+                if prints[i].print.distance(to: prints[j].print) < threshold { union(i, j) }
             }
         }
 

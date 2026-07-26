@@ -95,7 +95,7 @@ These are measured, not guessed. Prefer them over inventing your own.
 
 | What | Command | Expected |
 |---|---|---|
-| Native build + tests | `cd apple && xcodegen generate && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination "platform=iOS Simulator,id=$(xcrun simctl list devices available \| grep -o '[0-9A-F-]\{36\}' \| tail -1)" CODE_SIGNING_ALLOWED=NO test` | 791 unit + 14 UI tests, 0 failures (~6 s + ~190 s). Add `-only-testing:AkashicTests` for the fast unit-only loop; the UI suite relaunches the app per test |
+| Native build + tests | `cd apple && xcodegen generate && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination "platform=iOS Simulator,id=$(xcrun simctl list devices available \| grep -o '[0-9A-F-]\{36\}' \| tail -1)" CODE_SIGNING_ALLOWED=NO test` | 804 unit (1 skipped, device-only) + 14 UI tests, 0 failures (~6 s + ~190 s). Add `-only-testing:AkashicTests` for the fast unit-only loop; the UI suite relaunches the app per test |
 | Native coverage | add `-enableCodeCoverage YES -resultBundlePath /tmp/cov.xcresult`, then `xcrun xccov view --report --only-targets /tmp/cov.xcresult` | app 48.4 %; `Views/` 34.4 % (was 30.2 % / 6.0 % before the UI test target — QUA-10) |
 | Built Info.plist | `plutil -p "$(find ~/Library/Developer/Xcode/DerivedData/Akashic-*/Build/Products -name Akashic.app -maxdepth 3 \| head -1)/Info.plist"` | see the trap below |
 | Web unit tests | `npx vitest --run` | 452 tests, ~5 s |
@@ -199,6 +199,18 @@ right: fix this file in the same commit.
   condition. `.sufficientElementDescription` and `.trait` report **zero**, which is QUA-07/QUA-24's
   labelling work verified by navigation rather than asserted. Exact totals drift — see the
   re-measure command in that file's triage comment, and prefer it to any number written down.
+- **No Vision ML request works in the simulator, so the whole curation feature has never run in CI —
+  and it fails SILENTLY.** Measured on iOS 26.5: `VNGenerateImageFeaturePrintRequest`,
+  `VNClassifyImageRequest` and `VNCalculateImageAestheticsScoresRequest` all return *"Failed to create
+  espresso context"*, and `VNDetectFaceRectanglesRequest` returns *"Could not create inference
+  context"*. So DIFF-04 (aesthetics, near-duplicate grouping) and DIFF-05 (subject labels) are
+  exercised nowhere automated, and cannot be — CI runs simulators too. This is the same blind spot as
+  the Intelligence code (QUA-05) but more dangerous, because this code IS compiled and therefore looks
+  covered. And `VisionPhotoScorer.score` catches the failure and degrades to "unscored", after which
+  `PhotoCuration` falls back to `sortOrder` — so tapping Curate in the simulator is a no-op that looks
+  like a working feature, and every screenshot taken so far has never exercised it. QUA-38 is the
+  device check. When you must assert something about Vision, `XCTSkip` on the backend failure
+  (`FeaturePrintVectorTests` does) so the requirement stays visible in the run log.
 - **A warning count is only real from a CLEAN build, and only if the build succeeded.** Two separate
   ways to get a confidently wrong number, both of which caught me during QUA-08. (1) An incremental
   build does not re-emit warnings for files it did not recompile — it reported 19 app-target warnings

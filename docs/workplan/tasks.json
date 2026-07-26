@@ -2303,14 +2303,20 @@
       "why": "QUA-08 introduced a documented @unchecked Sendable box for VNFeaturePrintObservation rather than the tidier descriptor-extraction refactor, for one reason: NOTHING tests groupNearDuplicates. Re-implementing computeDistance asserts Vision's metric is plain Euclidean over the raw descriptor, and if that is wrong in any detail then duplicateDistance's 0.15 calibration quietly changes which of a family's photographs the app calls duplicates -- with no test failing. So the order matters: the test comes first, and only then is the refactor verifiable. This is the removal condition written at the box itself.",
       "files": [
         "apple/Akashic/Services/VisionPhotoScorer.swift",
-        "apple/AkashicTests/PhotoCurationTests.swift"
+        "apple/AkashicTests/FeaturePrintVectorTests.swift"
       ],
       "track": "QUALITY",
-      "status": "TODO",
+      "status": "DONE",
       "verify": [
         "cd apple && xcodegen generate",
         "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,id=$(xcrun simctl list devices available | grep -o '[0-9A-F-]\\{36\\}' | tail -1)\" CODE_SIGNING_ALLOWED=NO test"
-      ]
+      ],
+      "claim": {
+        "agent": "opus5",
+        "branch": "claude/remote-control-project-review-9462c1",
+        "at": "2026-07-26"
+      },
+      "evidence": "FeaturePrintVector replaces the @unchecked Sendable box; there is now NO @unchecked Sendable anywhere in shipping code. 0 errors and 0 warnings under strict concurrency; 804 unit (1 skipped) + 14 UI tests pass. THE PREMISE INVERTED while doing it: QUA-08 kept the box because 'nothing tests groupNearDuplicates', but the reason nothing tested it was that its parameter was an Apple class no test can construct AND every Vision ML request fails in the simulator with 'Failed to create espresso context' (now QUA-38 + a CLAUDE.md trap). So taking plain floats is what makes the function testable at all -- 12 new simulator-runnable tests now cover the union-find, including the burst that drifts past the threshold end-to-end and still forms one group (the actual reason the algorithm is union-find, never asserted before), deterministic group numbering, the strict-< threshold boundary, and mismatched descriptor lengths. The one thing the refactor asserts -- that Vision's computeDistance is Euclidean over the descriptor -- is pinned by a 13th test that XCTSkips where Vision has no ML backend, so it stays green in CI and runs on a device."
     },
     {
       "id": "QUA-36",
@@ -2359,6 +2365,21 @@
         "at": "2026-07-26"
       },
       "evidence": "PhotoMediaService is a CHECKED Sendable conformance now, 0 errors and 0 warnings. The task's premise was wrong and I verified rather than assumed: MediaDatabase has been 'protocol MediaDatabase: AnyObject, Sendable' since the original Photo-architecture-v2 commit (145490a), long before this session -- so the @unchecked I added in QUA-08, and the removal condition I wrote alongside it claiming the seam 'is not itself Sendable', were both unnecessary. 791 unit tests pass."
+    },
+    {
+      "id": "QUA-38",
+      "track": "QUALITY",
+      "status": "TODO",
+      "effort": 0.5,
+      "priority": 42,
+      "owner": true,
+      "title": "Verify the Vision features on a real device — they cannot run in any simulator",
+      "done_when": "Photo curation (hero pick, best-of, duplicate grouping) and DIFF-05 subject labels are confirmed working on a physical device, with a note recording what was seen.",
+      "why": "Measured, not suspected. Every Vision ML request fails in the iOS 26.5 simulator: VNGenerateImageFeaturePrintRequest, VNClassifyImageRequest and VNCalculateImageAestheticsScoresRequest all return 'Failed to create espresso context', and VNDetectFaceRectanglesRequest returns 'Could not create inference context'. So DIFF-04 (aesthetics + near-duplicate grouping) and DIFF-05 (subject labels) have NEVER executed anywhere automated and cannot be covered by CI, which also runs simulators. This is the same blind spot as the Intelligence code CI never type-checks (QUA-05), but more dangerous, because this code IS compiled and so looks covered. Worse, VisionPhotoScorer.score catches the failure and degrades to 'unscored', after which PhotoCuration falls back to sortOrder -- so a simulator run of Curate photos is a silent no-op that looks like a working feature. Every screenshot and demo taken so far has therefore never exercised curation. Pair this with SHIP-15's device session; it needs no second Apple ID, so it is cheaper than that one.",
+      "files": [],
+      "verify": [
+        "Run on a physical device: create a journey with a photo burst, tap Curate, and confirm a hero is proposed, a best-of selection appears, and burst frames are grouped as duplicates."
+      ]
     }
   ]
 }
