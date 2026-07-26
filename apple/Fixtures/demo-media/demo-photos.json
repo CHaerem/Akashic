@@ -1,0 +1,54 @@
+{
+  "_comment": [
+    "DIFF-10 — photographs for the bundled fixtures, and through them for the once-ever demo",
+    "journey a new customer sees on first launch (PersistenceController.seedDemoJourneyIfFreshInstall).",
+    "",
+    "Kept as a SIDECAR here rather than as a `photos` array inside Fixtures/recovered/*.json: those",
+    "files are the recovered pre-Supabase archive, declared read-only in project.yml, and they stay",
+    "byte-identical. Keyed by journey slug; `file` names a JPEG in this same directory, bundled as a",
+    "resource and copied into the app's media library at seed time by FixtureMedia.",
+    "",
+    "CONTENT CAVEAT: these three images are the repo's existing 1024x1024 generated hero art",
+    "(public/hero-images/*.png, re-encoded as JPEG). They are illustrative scenery for the place, NOT",
+    "photographs from the trek, and the repo contains no photographs to use instead. Dropping real",
+    "trek photographs in is a file copy plus an edit to this manifest — no code change."
+  ],
+  "journeys": {
+    "kilimanjaro": [
+      {
+        "id": "fixture-photo-kilimanjaro-summit",
+        "file": "demo-kilimanjaro-summit.jpg",
+        "dayNumber": 6,
+        "caption": "Kilimanjaro from the plains — the mountain you spend a week walking up.",
+        "coordinates": [37.354, -3.0764],
+        "takenAt": "2023-10-06T06:12:00Z",
+        "isHero": true,
+        "sortOrder": 0
+      }
+    ],
+    "mount-kenya": [
+      {
+        "id": "fixture-photo-mount-kenya-lenana",
+        "file": "demo-mount-kenya.jpg",
+        "dayNumber": 4,
+        "caption": "Point Lenana at first light.",
+        "coordinates": [37.3179, -0.1552],
+        "takenAt": "2024-10-14T05:40:00Z",
+        "isHero": true,
+        "sortOrder": 0
+      }
+    ],
+    "inca-trail": [
+      {
+        "id": "fixture-photo-inca-trail-sun-gate",
+        "file": "demo-inca-trail.jpg",
+        "dayNumber": 4,
+        "caption": "Machu Picchu from the Sun Gate.",
+        "coordinates": [-72.5364, -13.1611],
+        "takenAt": "2024-05-04T06:30:00Z",
+        "isHero": true,
+        "sortOrder": 0
+      }
+    ]
+  }
+}

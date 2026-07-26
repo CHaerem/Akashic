@@ -35,7 +35,7 @@ than covering it.
 >
 > Product work is now v1.0 commercialization: free tier + one-time unlock (StoreKit 2),
 > consumer onboarding, store assets. See [`COMMERCIALIZATION-PLAN.md`](../COMMERCIALIZATION-PLAN.md)
-> and W7 in [`APPLE-MIGRATION-TASKS.md`](../APPLE-MIGRATION-TASKS.md). **599 unit tests, CI green.**
+> and W7 in [`APPLE-MIGRATION-TASKS.md`](../APPLE-MIGRATION-TASKS.md). **666 unit tests, CI green.**
 
 ---
 
@@ -276,7 +276,8 @@ apple/
     Intents/                      App Intents (D8): 5 MCP-parity intents, JourneyEntity, stats calc
     Services/                     SpotlightIndexer, WidgetSnapshot(+Journey)/WidgetDataStore/
                                   WidgetPublisher, JourneyStatsWidgetView, WidgetGallery harness
-    Fixtures/                     FixtureModels + FixtureLoader (old camp shape -> domain)
+    Fixtures/                     FixtureModels + FixtureLoader (old camp shape -> domain),
+                                  FixtureMedia (DIFF-10: bundled photographs -> media library)
     Persistence/                  PersistenceController (modes incl. CloudKit), Core Data <-> domain mapping, JSON coders
       Akashic.xcdatamodeld        Core Data model (CloudKit-compatible; CDPhoto local media paths)
     Sync/                         D4 CloudKit sync: RecordCoder (domain<->CKRecord contract),
@@ -290,6 +291,8 @@ apple/
                                   Spotlight items, widget snapshot/data-store
   Docs/                           Screenshots (incl. screenshot-widgets.png)
   Fixtures/recovered/             Input JSON (owned elsewhere; read-only here)
+  Fixtures/demo-media/            DIFF-10: bundled fixture photographs (JPEG, ~474 KB) + the
+                                  demo-photos.json sidecar mapping them to slugs/days
 ```
 
 ## Data model notes (Core Data ↔ CloudKit)
@@ -360,8 +363,11 @@ failures throw `AkashicIntentError` carrying the MCP's plain-text message
 - **Access model** — local mode has no membership layer (every journey in the private store is
   accessible), so the worker's `"Access denied"` branch collapses into `"Journey not found"`
   for an unresolved id/slug.
-- **Photos** — the recovered fixtures carry **no** photos, so `get_journey_photos` returns the
-  correct empty shape `{"photos":[],"total":0}` (unit-tested). Real photos arrive with the
+- **Photos** — the *recovered* fixture JSON carries no photos of its own; since DIFF-10 each bundled
+  fixture (and the once-ever demo journey) gets its photograph from the
+  `Fixtures/demo-media/demo-photos.json` sidecar instead, staged into the media library by
+  `FixtureMedia`. `get_journey_photos` still returns the correct empty shape
+  `{"photos":[],"total":0}` for a journey with none (unit-tested). Bulk real photos arrive with the
   Phase 2 data import (`CDPhoto` → `MCPPhoto`).
 
 Tests live in `AkashicTests/IntentModelTests.swift`, `IntentQueryTests.swift`,
