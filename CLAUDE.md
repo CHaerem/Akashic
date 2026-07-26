@@ -95,8 +95,8 @@ These are measured, not guessed. Prefer them over inventing your own.
 
 | What | Command | Expected |
 |---|---|---|
-| Native build + tests | `cd apple && xcodegen generate && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination "platform=iOS Simulator,id=$(xcrun simctl list devices available \| grep -o '[0-9A-F-]\{36\}' \| tail -1)" CODE_SIGNING_ALLOWED=NO test` | 608 tests, 0 failures, ~15 s warm |
-| Native coverage | add `-enableCodeCoverage YES -resultBundlePath /tmp/cov.xcresult`, then `xcrun xccov view --report --only-targets /tmp/cov.xcresult` | app 28.4 %; `Views/` 5.9 % |
+| Native build + tests | `cd apple && xcodegen generate && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination "platform=iOS Simulator,id=$(xcrun simctl list devices available \| grep -o '[0-9A-F-]\{36\}' \| tail -1)" CODE_SIGNING_ALLOWED=NO test` | 791 unit + 14 UI tests, 0 failures (~6 s + ~190 s). Add `-only-testing:AkashicTests` for the fast unit-only loop; the UI suite relaunches the app per test |
+| Native coverage | add `-enableCodeCoverage YES -resultBundlePath /tmp/cov.xcresult`, then `xcrun xccov view --report --only-targets /tmp/cov.xcresult` | app 48.4 %; `Views/` 34.4 % (was 30.2 % / 6.0 % before the UI test target — QUA-10) |
 | Built Info.plist | `plutil -p "$(find ~/Library/Developer/Xcode/DerivedData/Akashic-*/Build/Products -name Akashic.app -maxdepth 3 \| head -1)/Info.plist"` | see the trap below |
 | Web unit tests | `npx vitest --run` | 406 tests, ~4 s |
 | Web typecheck | `npm run typecheck` | clean, and a type error now fails CI and the commit |
@@ -176,6 +176,37 @@ right: fix this file in the same commit.
   test you already deleted, even after touching the source — the binary in DerivedData is correct the
   whole time. `xcrun simctl uninstall no.akashic.app` fixes it. This is the likeliest explanation for
   any inexplicable "transient" test failure.
+- **A UI test that cannot find its element PASSES.** `XCUIElement.waitForExistence(for:)` returns a
+  `Bool` that is trivially ignored, and a query that matches nothing taps nothing and asserts
+  nothing. `AkashicUITests/Support` wraps every lookup in a `require(...)` that fails loudly, and
+  every element is addressed by `accessibilityIdentifier` (`Akashic/App/A11yID.swift`) — never by
+  label, because a label is a catalogue string that changes with any copy edit and with every
+  non-English run. The same file pins `-AppleLanguages "(en)"` as a launch ARGUMENT, per the trap
+  above.
+- **XcodeGen writes `storeKitConfiguration` into the scheme's Launch action only.** There is no
+  `<TestAction>` equivalent in 2.45.4, and `shouldUseLaunchSchemeArgsEnv` carries arguments and
+  environment but not this. So under `xcodebuild test` the app has no local store,
+  `Product.products(for:)` returns `[]`, and the paywall shows its "isn't available here yet" row —
+  which means `StoreKitProvider.purchase()` cannot be covered from a UI test, and a test claiming
+  to cover the priced surface would be asserting against a state that never renders.
+- **`performAccessibilityAudit()` reports far more than it should fail on.** Over the eight main
+  screens it finds ~130 issues; the app-owned, actionable ones were six sub-44 pt hit targets
+  (including "Restore purchases" at 131 × 18 pt and "Remove day 1", which deletes a day, at
+  17 × 17 pt). The remaining ~123 are three systemic design decisions — `.secondaryLabel` at 3.45:1
+  and `.tertiaryLabel` at 1.74:1 over a Light-Mode `systemBackground`, the map chrome's deliberate
+  `dynamicTypeSize` cap, and `StatChip`'s deliberate `lineLimit(1)` — so `AccessibilityAuditTests`
+  enforces the four structural audit types and prints the other three with a stated removal
+  condition. `.sufficientElementDescription` and `.trait` report **zero**, which is QUA-07/QUA-24's
+  labelling work verified by navigation rather than asserted. Exact totals drift — see the
+  re-measure command in that file's triage comment, and prefer it to any number written down.
+- **Neither branch's numbers are the merged tree's, so verify after the merge, not before.** Merging
+  QUA-10 auto-merged with no conflicts and still left two documents lying: the agent's branch had
+  measured 787 unit tests before four of mine existed, so the table it updated was already false for
+  the tree it landed in (791 + 14 = 805 is the real figure), and its audit comment pinned 123
+  findings where the merged tree stably measures 124. A clean `git merge` proves the *text* composes,
+  never that the claims do. The cheap habit that catches it: after any agent merge, re-run the suite
+  and re-grep the counts, then fix every number the merge invalidated in the merge commit itself.
+  Prose counts are the dangerous kind — an assertion goes red, a sentence just goes quietly stale.
 - **The public CloudKit database is billed to us, not to the customer.** The cost table in
   `COMMERCIALIZATION-PLAN.md` says bandwidth is free; that is true of the private database
   only. Anything that increases showcase traffic has a real cost line.

@@ -595,6 +595,11 @@ struct GlobeExperienceView: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            // QUA-10: `AkashicUITests` drives the create flow from here. An identifier rather
+            // than the visible label, because the label is a localised catalogue string and a UI
+            // test that stops finding its element still PASSES — it just never taps anything.
+            // Identifiers are invisible to VoiceOver and never enter the string catalogue.
+            .accessibilityIdentifier(A11yID.globeCreateFirstJourney)
         }
         .padding(.horizontal, 20)
         .frame(maxWidth: .infinity)

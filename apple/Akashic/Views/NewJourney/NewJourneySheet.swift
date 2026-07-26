@@ -343,6 +343,9 @@ struct NewJourneySheet: View {
                             isNameFieldFocused = true
                         }
                     }
+                    // QUA-10: the one field the journey cannot be created without, so it is the
+                    // one the create-flow UI test has to type into. See `A11yID`.
+                    .accessibilityIdentifier(A11yID.newJourneyName)
             }
             // C3: a one-tap name suggestion once we know the country and the trip's first dated day
             // — "Use \"Tanzania, September 2023\"". `JourneyDraft.nameSuggestion` itself guards on the
@@ -419,6 +422,9 @@ struct NewJourneySheet: View {
                     Button("Done") { isEditingDates = false }
                         .font(.caption.weight(.semibold)).foregroundStyle(Theme.accent)
                         .accessibilityLabel("Done editing dates")
+                        // QUA-29: same sub-44 pt `.caption` text button as "Edit" below — see there.
+                        .frame(minWidth: 44, minHeight: 44)
+                        .contentShape(Rectangle())
                 } else {
                     HStack(alignment: .top) {
                         VStack(alignment: .leading, spacing: 2) {
@@ -436,6 +442,12 @@ struct NewJourneySheet: View {
                         Button("Edit", action: beginEditingDates)
                             .font(.caption.weight(.semibold)).foregroundStyle(Theme.accent)
                             .accessibilityLabel("Edit dates")
+                            // QUA-29: `performAccessibilityAudit` measured this at 23.3 × 14.3 pt —
+                            // a four-letter `.caption` word, and the only way into the date editor.
+                            // The frame grows the hit area without moving the glyph or the text;
+                            // `contentShape` is what makes the grown frame actually tappable.
+                            .frame(minWidth: 44, minHeight: 44)
+                            .contentShape(Rectangle())
                     }
                 }
             }
@@ -1029,18 +1041,29 @@ struct NewJourneySheet: View {
             }
             .accessibilityElement(children: .combine)
             Spacer()
-            Button { suggestions.dismiss(key) } label: {
-                Image(systemName: "xmark.circle.fill").foregroundStyle(Theme.textTertiary)
+            // QUA-29: the same 17 × 17 pt glyph pair as `dayRow`, and the same reasoning — the
+            // destructive one (dismiss) comes first, so a mistap discards the suggestion the user
+            // was reaching to accept. Not flagged by the audit only because no provider had resolved
+            // on the audited screen; the defect is identical.
+            HStack(spacing: 0) {
+                Button { suggestions.dismiss(key) } label: {
+                    Image(systemName: "xmark.circle.fill").foregroundStyle(Theme.textTertiary)
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(Text("Dismiss \(title)"))
+                Button { accept(key) } label: {
+                    Image(systemName: "checkmark.circle.fill").foregroundStyle(Theme.accent)
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(Text("Accept \(title)"))
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel(Text("Dismiss \(title)"))
-            Button { accept(key) } label: {
-                Image(systemName: "checkmark.circle.fill").foregroundStyle(Theme.accent)
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(Text("Accept \(title)"))
         }
-        .padding(10)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 2)
         .background(Theme.accentSoft, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 
@@ -1099,6 +1122,7 @@ struct NewJourneySheet: View {
                     .background(Theme.accentSoft, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                 }
                 .buttonStyle(.plain)
+                .accessibilityIdentifier(A11yID.newJourneyAddDay)
             }
         }
     }
@@ -1125,24 +1149,42 @@ struct NewJourneySheet: View {
                 }
             }
             Spacer()
-            Button { move(from: index, by: -1) } label: {
-                Image(systemName: "chevron.up").foregroundStyle(index == 0 ? Theme.textTertiary : Theme.textSecondary)
+            // QUA-29: all three of these were 17 × 17 pt glyphs — `performAccessibilityAudit`
+            // measured "Remove day 1" at exactly that, and it DELETES a day. Three sub-minimum
+            // targets 10 pt apart is also how a mistap lands on the wrong one, which on this row
+            // means removing a day when you meant to reorder it. `spacing: 0` on their own HStack
+            // because each button now carries its own 44 pt frame, so the gap between the glyphs is
+            // the frames, not extra spacing on top of them — otherwise three 44 pt buttons plus
+            // 10 pt gaps would squeeze the day-name field they sit beside.
+            HStack(spacing: 0) {
+                Button { move(from: index, by: -1) } label: {
+                    Image(systemName: "chevron.up").foregroundStyle(index == 0 ? Theme.textTertiary : Theme.textSecondary)
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain).disabled(index == 0)
+                .accessibilityLabel(Text("Move day \(index + 1) earlier"))
+                Button { move(from: index, by: 1) } label: {
+                    Image(systemName: "chevron.down")
+                        .foregroundStyle(index == draft.days.count - 1 ? Theme.textTertiary : Theme.textSecondary)
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain).disabled(index == draft.days.count - 1)
+                .accessibilityLabel(Text("Move day \(index + 1) later"))
+                Button { removeDay(at: index) } label: {
+                    Image(systemName: "xmark.circle.fill").foregroundStyle(Theme.textTertiary)
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(Text("Remove day \(index + 1)"))
             }
-            .buttonStyle(.plain).disabled(index == 0)
-            .accessibilityLabel(Text("Move day \(index + 1) earlier"))
-            Button { move(from: index, by: 1) } label: {
-                Image(systemName: "chevron.down")
-                    .foregroundStyle(index == draft.days.count - 1 ? Theme.textTertiary : Theme.textSecondary)
-            }
-            .buttonStyle(.plain).disabled(index == draft.days.count - 1)
-            .accessibilityLabel(Text("Move day \(index + 1) later"))
-            Button { removeDay(at: index) } label: {
-                Image(systemName: "xmark.circle.fill").foregroundStyle(Theme.textTertiary)
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(Text("Remove day \(index + 1)"))
         }
-        .padding(10)
+        // The three controls above now supply the row's height, so the vertical padding that used to
+        // give a 17 pt glyph some room would only make an already-44 pt row taller.
+        .padding(.horizontal, 10)
+        .padding(.vertical, 2)
         .background(Theme.surface, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Theme.hairline, lineWidth: 1))
     }

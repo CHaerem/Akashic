@@ -82,6 +82,7 @@ struct PaywallView: View {
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Close") { dismiss() }.tint(Theme.accent)
+                        .accessibilityIdentifier(A11yID.paywallClose)
                 }
             }
             .onAppear { entitlements.resetPurchasePhase() }
@@ -117,6 +118,9 @@ struct PaywallView: View {
                 .foregroundStyle(Theme.textPrimary)
                 .multilineTextAlignment(.center)
                 .accessibilityAddTraits(.isHeader)
+                // QUA-10: the headline is the only thing on the sheet that says WHY it appeared,
+                // so it is what a test asserts to prove the right `reason` was routed. See `A11yID`.
+                .accessibilityIdentifier(A11yID.paywallHeadline)
             Text(reason.subhead)
                 .font(.subheadline)
                 .foregroundStyle(Theme.textSecondary)
@@ -205,6 +209,7 @@ struct PaywallView: View {
         .padding(16)
         .background(Theme.surface, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
         .accessibilityElement(children: .combine)
+        .accessibilityIdentifier(A11yID.paywallAlreadyComplete)
     }
 
     @ViewBuilder
@@ -257,6 +262,11 @@ struct PaywallView: View {
                     // "Try again" alone does not say at what — and this is the offline state, where
                     // the user is already guessing.
                     .accessibilityLabel("Try loading the price again")
+                    .accessibilityIdentifier(A11yID.paywallRetry)
+                    // QUA-29: same sub-44 pt hit target as `unavailableRow`'s retry below — this is
+                    // the `.failed(message)` branch of the same "the store is unreachable" state.
+                    .frame(minHeight: 44)
+                    .contentShape(Rectangle())
                 }
                 .frame(maxWidth: .infinity)
                 .padding(16)
@@ -299,12 +309,19 @@ struct PaywallView: View {
                             ? Text("Purchasing Akashic Complete")
                             : Text("Unlock Akashic Complete for \(price)"))
         .accessibilityAddTraits(.isButton)
+        .accessibilityIdentifier(A11yID.paywallPurchase)
     }
 
     private var unavailableRow: some View {
         VStack(spacing: 8) {
             Text("Akashic Complete isn't available here yet.")
                 .font(.subheadline.weight(.semibold)).foregroundStyle(Theme.textPrimary)
+                // QUA-10: "the sheet degraded instead of bricking" is a state a test has to be able
+                // to NAME. On the sentence rather than on the enclosing VStack, because an
+                // identifier set on a container is inherited by every descendant — put it on the
+                // stack and the retry Button inside it reports `paywall.unavailable` too, which is
+                // exactly how the first version of this failed to find its own retry control.
+                .accessibilityIdentifier(A11yID.paywallUnavailable)
             Text("Check your connection and try again.").font(.caption).foregroundStyle(Theme.textSecondary)
             Button {
                 Task { await entitlements.loadProduct() }
@@ -313,6 +330,14 @@ struct PaywallView: View {
                     .font(.subheadline.weight(.semibold)).foregroundStyle(Theme.accent)
             }
             .accessibilityLabel("Try loading the price again")
+            .accessibilityIdentifier(A11yID.paywallRetry)
+            // QUA-29: `performAccessibilityAudit` measured this at 90 × 19.7 pt. It is the ONLY
+            // way out of the offline state — the difference between "the sheet degraded
+            // gracefully" and "the sheet is dead" — and it was under half the 44 pt minimum on
+            // its short axis. `contentShape` is what makes the enlarged frame actually tappable
+            // rather than merely tall; the same pairing the globe's own chrome already uses.
+            .frame(minHeight: 44)
+            .contentShape(Rectangle())
         }
         .frame(maxWidth: .infinity)
         .padding(16)
@@ -336,17 +361,32 @@ struct PaywallView: View {
         .accessibilityLabel(isBusy(.restoring) ? "Restoring purchases" : "Restore purchases")
         .accessibilityHint("Checks the App Store for a purchase already made with this Apple Account")
         .accessibilityAddTraits(.isButton)
+        .accessibilityIdentifier(A11yID.paywallRestore)
+        // QUA-29: measured at 131 × 18 pt — less than half the 44 pt minimum, on the control App
+        // Review specifically looks for on a non-consumable purchase screen. A customer restoring
+        // on a new device is, by definition, someone who has already paid and cannot get in.
+        .frame(minHeight: 44)
+        .contentShape(Rectangle())
     }
 
     private var legalRow: some View {
         HStack(spacing: 6) {
+            // QUA-29: both links measured ~38 × 14 pt. `minWidth`/`minHeight` on each link rather
+            // than on the `HStack`, because enlarging the row would leave two small targets inside
+            // a large one — the audit measures the ELEMENT, and so does a thumb.
             Link("Terms", destination: AppInfo.termsURL)
+                .frame(minWidth: 44, minHeight: 44)
+                .contentShape(Rectangle())
             // Purely a visual divider between the two links.
             Text("·").foregroundStyle(Theme.textTertiary).accessibilityHidden(true)
             Link("Privacy", destination: AppInfo.privacyURL)
+                .frame(minWidth: 44, minHeight: 44)
+                .contentShape(Rectangle())
         }
         .font(.caption)
         .tint(Theme.textSecondary)
+        // The links now carry their own 44 pt height, so the row no longer needs padding to keep
+        // its distance from the restore button above.
         .padding(.top, 4)
     }
 

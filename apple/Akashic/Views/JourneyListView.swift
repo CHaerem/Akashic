@@ -47,6 +47,8 @@ struct JourneyListView: View {
                         .foregroundStyle(Theme.accent)
                 }
                 .accessibilityLabel("New journey")
+                // QUA-10: the second-journey attempt that must hit the paywall on the free tier.
+                .accessibilityIdentifier(A11yID.journeyListCreate)
             }
         }
         .sheet(isPresented: $showingNewJourney) {

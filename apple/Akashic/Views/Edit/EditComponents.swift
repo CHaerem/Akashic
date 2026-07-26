@@ -32,6 +32,10 @@ struct EditSheetScaffold<Content: View>: View {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel", action: onCancel)
                         .foregroundStyle(Theme.textSecondary)
+                        // QUA-10: see `A11yID`. `saveTitle` alone varies per sheet AND per state
+                        // ("Save" / "Create" / "Done"), so the affirmative control of whichever
+                        // sheet is on screen needs a stable handle for the UI tests.
+                        .accessibilityIdentifier(A11yID.editSheetCancel)
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     if isSaving {
@@ -41,6 +45,7 @@ struct EditSheetScaffold<Content: View>: View {
                             .fontWeight(.semibold)
                             .foregroundStyle(saveDisabled ? Theme.textTertiary : Theme.accent)
                             .disabled(saveDisabled)
+                            .accessibilityIdentifier(A11yID.editSheetSave)
                     }
                 }
             }

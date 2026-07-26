@@ -1407,7 +1407,7 @@
       "id": "QUA-10",
       "track": "QUALITY",
       "title": "First tests for Views/, and a UI test target",
-      "status": "WIP",
+      "status": "DONE",
       "effort": 3,
       "done_when": "A UI test target exists and the create-journey flow has an automated test.",
       "deps": [
@@ -1428,7 +1428,8 @@
         "agent": "uitest-worktree",
         "branch": "claude/qua10-qua29",
         "at": "2026-07-26"
-      }
+      },
+      "evidence": "Merged and verified in the combined tree: 791 unit + 14 UI tests, 0 failures, TEST SUCCEEDED. Views/ coverage 6.0% -> 34.4%, app 30.2% -> 48.4% (xccov over /Akashic/Views/)."
     },
     {
       "id": "QUA-11",
@@ -2151,7 +2152,7 @@
       "id": "QUA-29",
       "track": "QUALITY",
       "title": "A UI test target, so the accessibility audit can run unattended",
-      "status": "WIP",
+      "status": "DONE",
       "effort": 1,
       "priority": 32,
       "done_when": "XCUIApplication.performAccessibilityAudit() runs in CI over the main screens.",
@@ -2169,7 +2170,8 @@
         "agent": "uitest-worktree",
         "branch": "claude/qua10-qua29",
         "at": "2026-07-26"
-      }
+      },
+      "evidence": "performAccessibilityAudit over 8 screens; 4 structural types enforced, 6 sub-44pt hit targets fixed in PaywallView + NewJourneySheet, 2 seams excused by name. sufficientElementDescription and trait both report zero. 124 reported-not-enforced, stable across 2 runs."
     },
     {
       "id": "QUA-30",

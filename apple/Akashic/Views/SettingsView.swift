@@ -201,6 +201,9 @@ struct SettingsView: View {
                 }
             }
             .disabled(entitlements.isComplete)
+            // QUA-10: the paywall's `.settings` entry point, and the only one reachable without
+            // first filling the free tier — so it is where the paywall-state tests start. See `A11yID`.
+            .accessibilityIdentifier(A11yID.settingsComplete)
         } header: {
             Text("Membership")
         } footer: {
