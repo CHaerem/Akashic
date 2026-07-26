@@ -10,17 +10,21 @@ import CoreData
 /// release build would come up with no archive and no explanation. Hence a real second model
 /// version, and hence this test: it builds a store with the ORIGINAL model, then reopens it
 /// with the current one, exactly as an upgrading install does.
+@MainActor
 final class StoreMigrationTests: XCTestCase {
 
     private var directory: URL!
 
-    override func setUpWithError() throws {
+    // QUA-08: `setUpWithError`/`tearDownWithError` are nonisolated, so in a `@MainActor` class they
+    // cannot touch `directory`. The `async throws` overrides run on the class's actor and are the
+    // direct replacements — same throwing behaviour, same ordering.
+    override func setUp() async throws {
         directory = URL(fileURLWithPath: NSTemporaryDirectory())
             .appendingPathComponent("akashic-migration-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
     }
 
-    override func tearDownWithError() throws {
+    override func tearDown() async throws {
         try? FileManager.default.removeItem(at: directory)
     }
 

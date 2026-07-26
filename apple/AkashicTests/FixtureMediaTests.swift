@@ -10,15 +10,19 @@ import XCTest
 ///
 /// The pure mapping is tested from values; the byte staging is tested against a temporary media root
 /// so nothing touches the real `MediaLibrary.shared`.
+@MainActor
 final class FixtureMediaTests: XCTestCase {
 
     private var bundle: Bundle { Bundle(for: type(of: self)) }
     private var tempRoots: [URL] = []
 
-    override func tearDown() {
+    // QUA-08: the `async throws` override, not the synchronous one. XCTest's plain `tearDown()` is
+    // nonisolated, so in a `@MainActor` class it cannot touch `tempRoots`; the async variant runs
+    // on the class's actor.
+    override func tearDown() async throws {
         for root in tempRoots { try? FileManager.default.removeItem(at: root) }
         tempRoots = []
-        super.tearDown()
+        try await super.tearDown()
     }
 
     /// A media library rooted in a fresh temp directory, cleaned up after the test.

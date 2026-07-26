@@ -8,6 +8,7 @@ import UniformTypeIdentifiers
 /// Tests for the native editing writes (Phase 3): photo caption / rotation / hero / assignment,
 /// delete-removes-files, and waypoint / journey edits — all through `PersistenceController`
 /// (the same seam the CloudKit write path will use in D4) + `PhotoEditService` for file cleanup.
+@MainActor
 final class EditTests: XCTestCase {
 
     private var bundleForTests: Bundle { Bundle(for: type(of: self)) }

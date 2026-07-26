@@ -154,10 +154,16 @@ final class NetworkPolicyTests: XCTestCase {
 
     // MARK: - Through the engine seam
 
-    private func makeDeferredEngine(store: FakeLocalStore = FakeLocalStore(),
+    // QUA-08: `nil`-defaulted and built in the body — see the same note on
+    // `SyncEngineTests.makeEngine`. `FakeLocalStore` is main-actor isolated via the `@MainActor`
+    // `SyncLocalStore` protocol, and a default argument expression must be nonisolated in Swift 5
+    // language mode. Callers are unchanged.
+    @MainActor
+    private func makeDeferredEngine(store: FakeLocalStore? = nil,
                                     mock: MockSyncEngine = MockSyncEngine(),
                                     counter: RemotePhotoCounting? = nil)
         -> (AkashicSyncEngine, MockSyncEngine, NetworkPolicy, FakeNetworkPathSource, SyncStatus) {
+        let store = store ?? FakeLocalStore()
         let source = FakeNetworkPathSource(expensive: true)
         let policy = NetworkPolicy(source: source, defaults: freshDefaults())   // wifiOnly default true
         policy.start()

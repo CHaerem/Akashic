@@ -763,10 +763,22 @@ final class AkashicSyncEngine: NSObject, CKSyncEngineDelegate {
         -> CKSyncEngine.RecordZoneChangeBatch? {
         guard !changes.isEmpty else { return nil }
         let cache = mergedRecordCache
-        let store = self.store
-        let batch = await CKSyncEngine.RecordZoneChangeBatch(pendingChanges: changes) { recordID in
+        // QUA-08 — this was a real data race, not a warning to satisfy.
+        //
+        // `recordProvider` is `@Sendable` and CloudKit calls it on its OWN queue, so hoisting
+        // `let store = self.store` out and calling `store.makeRecord` inside the closure read the
+        // main-QUEUE Core Data context from a cooperative-pool thread. Core Data does not diagnose
+        // that; it corrupts quietly. It only became visible once `PersistenceController` and
+        // `SyncLocalStore` carried `@MainActor` — which is the whole reason that annotation is worth
+        // more than the warning count it moves.
+        //
+        // The provider is `async`, so the fix is a real hop rather than a suppression: `record(for:)`
+        // below is main-actor isolated, and `CKRecord` is `Sendable` in this SDK so the result may
+        // cross back out. Behaviour is unchanged — still lazy per record ID, so `RecordZoneChangeBatch`
+        // still materializes only what fits CloudKit's per-operation limits and leaves the rest pending.
+        let batch = await CKSyncEngine.RecordZoneChangeBatch(pendingChanges: changes) { [self] recordID in
             if let merged = cache[recordID] { return merged }
-            return store.makeRecord(forRecordName: recordID.recordName, zoneID: recordID.zoneID, existing: nil)
+            return await record(for: recordID)
         }
         // Evict ONLY what the batch actually materialized. `RecordZoneChangeBatch` honors
         // CloudKit's per-operation record/byte limits and leaves the overflow pending, so
@@ -778,6 +790,15 @@ final class AkashicSyncEngine: NSObject, CKSyncEngineDelegate {
             for record in batch.recordsToSave { mergedRecordCache[record.recordID] = nil }
         }
         return batch
+    }
+
+    /// Materialize one pending record on the main actor.
+    ///
+    /// Exists so `nextBatch`'s `@Sendable` provider closure has something main-actor isolated to
+    /// `await` into, instead of reaching a main-queue Core Data context from CloudKit's queue.
+    /// Isolation is inherited from the class — the annotation is not repeated. (QUA-08)
+    private func record(for recordID: CKRecord.ID) -> CKRecord? {
+        store.makeRecord(forRecordName: recordID.recordName, zoneID: recordID.zoneID, existing: nil)
     }
 
     // MARK: - Helpers

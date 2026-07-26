@@ -3,6 +3,7 @@ import XCTest
 
 /// DIFF-04 — the service half: running curation through the seam, and applying an accepted
 /// proposal to real `Photo` values without destroying anything.
+@MainActor
 final class PhotoCurationServiceTests: XCTestCase {
 
     /// Fixed scores, no Vision, no files — so these tests exercise the wiring and the appliers
@@ -139,12 +140,15 @@ final class PhotoCurationServiceTests: XCTestCase {
 /// Batched rather than one save per photograph, because accepting renumbers up to six at once and six
 /// saves would publish six change notifications: the gallery would visibly reshuffle step by step
 /// instead of settling once.
+@MainActor
 final class PhotoSortOrderBatchTests: XCTestCase {
 
     private var controller: PersistenceController!
 
-    override func setUp() {
-        super.setUp()
+    // QUA-08: `async throws`, because `PersistenceController.init` is main-actor isolated now and
+    // XCTest's synchronous `setUp()` is not.
+    override func setUp() async throws {
+        try await super.setUp()
         controller = PersistenceController(mode: .fixtures)
     }
 

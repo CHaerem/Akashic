@@ -10,6 +10,25 @@ import CoreData
 ///                  iCloud account is available; with none (the simulator today) the app keeps
 ///                  working locally and `syncStatus` explains why. Compiles with no team;
 ///                  needs the `Debug-CloudKit`/`Release-CloudKit` entitlements to run for real.
+/// ## Isolation: `@MainActor` (QUA-08)
+///
+/// Everything in this type and its extensions drives `container.viewContext`, a main-QUEUE Core Data
+/// context. Touching one of those off its queue is undefined behaviour that Core Data does not
+/// diagnose — it corrupts quietly rather than trapping — so this was always a main-actor type. It
+/// was just never *said*, and the only enforcement anywhere was the `MainActor.assumeIsolated` at
+/// the bottom of `init`, which trapped instead of preventing and ran only in `.cloudKit` mode.
+/// `.fixtures` and `.local` had no check at all, while `init` does real fetch-and-save work
+/// (`repairOrphanedRelationships()`, `seedFixtures()`) before it returns.
+///
+/// Two unsynchronised mutable properties come along for free, and they are the ones that would have
+/// cost data rather than warnings: `syncIsApplyingRemoteChanges`, which decides whether a local save
+/// is forwarded to CloudKit as a remote delete, and `seededJourneyIDs`, which gates the free tier.
+/// Strict concurrency never flagged either — a non-Sendable class has nothing to complain about —
+/// so the annotation closes two races the compiler could not see.
+///
+/// Nothing moves onto the main thread as a result: `JourneyStore`, `AkashicSyncEngine` and
+/// `SyncScheduler` were all already `@MainActor`.
+@MainActor
 final class PersistenceController {
 
     /// App-wide instance, mode chosen by `Config.resolvedPersistenceMode`.
@@ -133,15 +152,14 @@ final class PersistenceController {
         // are normally empty and it runs once at launch.
         repairOrphanedRelationships()
 
-        // Attach the CloudKit sync engine (account-gated inside `startSync`/`activate`). Built
-        // on the main actor: `.shared`/`.cloudKit` is created on launch from `@MainActor`
-        // `JourneyStore`. Nearly every test drives the engine/store seam directly and stays on
-        // `.fixtures`, so this main-actor assumption is mostly exercised on the app's own launch
-        // path; the rare test that does build `.cloudKit` (via the `storeURL` override above,
-        // to reach a mode-gated branch) runs on XCTest's main-thread test runner, so the
-        // assumption still holds there.
+        // Attach the CloudKit sync engine (account-gated inside `startSync`/`activate`).
+        //
+        // This used to be `MainActor.assumeIsolated { startSync() }` — an assertion that the caller
+        // had got the threading right, checked only in `.cloudKit` mode and only at runtime. The
+        // class-level `@MainActor` (see the type doc) makes `init` itself main-actor isolated, so
+        // the guarantee is now the compiler's in every mode and the call needs no ceremony. QUA-08.
         if mode == .cloudKit {
-            MainActor.assumeIsolated { startSync() }
+            startSync()
         }
 
         // `AKASHIC_EMPTY=1` keeps the store empty in every mode. Without it, the state a brand-new

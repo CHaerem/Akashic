@@ -5,6 +5,7 @@ import CoreData
 /// Tests for the export reader (`ExportBundle`) and the local importer (`LocalImporter`),
 /// both against tiny inline fixtures and — when the real export is present on disk — the
 /// actual family data (filesystem-gated, so CI without the export still passes).
+@MainActor
 final class ImportTests: XCTestCase {
 
     private var bundleForTests: Bundle { Bundle(for: type(of: self)) }

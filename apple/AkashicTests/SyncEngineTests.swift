@@ -15,11 +15,19 @@ final class SyncEngineTests: XCTestCase {
         UserDefaults(suiteName: "sync-test-\(UUID().uuidString)")!
     }
 
+    // QUA-08: `store` is `nil`-defaulted and built in the body rather than defaulted to
+    // `FakeLocalStore()`. `FakeLocalStore` is main-actor isolated now (it conforms to the
+    // `@MainActor` `SyncLocalStore`), and a default argument expression must be usable from a
+    // nonisolated context in Swift 5 language mode — SE-0411's isolated default values need Swift 6.
+    // Annotating this function does NOT help; the expression is evaluated at the call site. Building
+    // it one line down puts it inside this function's isolation instead. Callers are unchanged.
+    @MainActor
     private func makeEngine(account: CKAccountStatus,
-                            store: FakeLocalStore = FakeLocalStore(),
+                            store: FakeLocalStore? = nil,
                             mock: MockSyncEngine = MockSyncEngine(),
                             status: SyncStatus = SyncStatus())
         -> (AkashicSyncEngine, MockSyncEngine, FakeLocalStore, SyncStatus) {
+        let store = store ?? FakeLocalStore()
         let engine = AkashicSyncEngine(
             store: store,
             status: status,
@@ -894,6 +902,10 @@ final class MockSyncEngine: SyncEngineProtocol {
 }
 
 /// Recording fake for `SyncLocalStore`.
+// QUA-08: `SyncLocalStore` is `@MainActor` now, so this conformer is main-actor isolated
+// whether or not it says so. Saying so explicitly is what lets `FakeLocalStore()` appear as a
+// default argument below — a default value expression has no isolation of its own to borrow.
+@MainActor
 final class FakeLocalStore: SyncLocalStore {
     var journeyIDs: [String] = []
     var identities: [String: [LocalChange]] = [:]

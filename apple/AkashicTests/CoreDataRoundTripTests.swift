@@ -2,6 +2,7 @@ import XCTest
 import CoreData
 @testable import Akashic
 
+@MainActor
 final class CoreDataRoundTripTests: XCTestCase {
 
     private var bundle: Bundle { Bundle(for: type(of: self)) }

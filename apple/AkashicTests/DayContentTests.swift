@@ -7,6 +7,7 @@ import CoreData
 /// Core Data round-trip that surfaces them, the weather-symbol helper, and photo→day
 /// grouping (incl. "unassigned"). The waypoint blob below is a compacted copy of the real
 /// Kilimanjaro summit (Uhuru Peak) row from the family export.
+@MainActor
 final class DayContentTests: XCTestCase {
 
     private var bundle: Bundle { Bundle(for: type(of: self)) }

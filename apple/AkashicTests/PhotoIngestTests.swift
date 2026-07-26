@@ -8,6 +8,7 @@ import UniformTypeIdentifiers
 /// Tests for the native photo pipeline: EXIF extraction (ImageIO), 400px JPEG thumbnailing
 /// with orientation, and the ingest → files + `CDPhoto` round-trip (incl. the R2 key scheme).
 /// Fixtures are generated in-test with ImageIO so no binary assets are needed.
+@MainActor
 final class PhotoIngestTests: XCTestCase {
 
     private var bundleForTests: Bundle { Bundle(for: type(of: self)) }
