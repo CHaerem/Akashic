@@ -5,7 +5,7 @@
 
 # Akashic — work ledger
 
-103 tasks · **23 open** (5 agent-doable, 1.1 dev-days · 18 owner-only, 9 dev-days) · 80 done · 0 dropped
+103 tasks · **23 open** (4 agent-doable, 0.9 dev-days · 19 owner-only, 9.1 dev-days) · 80 done · 0 dropped
 
 > **`dev-days` are a human-developer estimate, not agent time.** They came from the review
 > that produced these tasks and they are the right unit for deciding whether something is
@@ -17,23 +17,17 @@
 >
 > But that compression is **unmeasured for the large items**: of the tasks closed so far,
 > 7 were 2 dev-days or more. 0 of the
-> 1.1 remaining dev-days sit in 0 such tasks —
+> 0.9 remaining dev-days sit in 0 such tasks —
 > localisation, Swift 6 strict concurrency, a UI test target, the PDF book. Those involve
 > design judgement and broad-blast-radius refactors rather than localised edits, so do not
 > assume the same ratio holds. The cheap band is nearly exhausted:
-> 5 tasks at 0.5 dev-days or less remain.
+> 4 tasks at 0.5 dev-days or less remain.
 
 Read [CLAUDE.md](CLAUDE.md) before touching anything. To find work:
 
 ```bash
 node scripts/workplan.mjs next
 ```
-
-## In flight
-
-| Task | Agent | Branch | Stopped at |
-|---|---|---|---|
-| `QUA-30` The remaining A4 polish items on the globe and onboarding | opus5 | `claude/remote-control-project-review-9462c1` | Released rather than held: the two concrete A4 defects are fixed and committed; what is left is four taste calls I judged better made by the owner than by me — card/tab-bar alignment, MapKit ocean labels clipping, the page-indicator pill, and whether onboarding should lead with the app mark (needs a new imageset; the mark is appiconset-only today). |
 
 ## LEGACY
 
@@ -140,7 +134,7 @@ node scripts/workplan.mjs next
 
 > Tests, types, CI, localisation, accessibility. Localisation and accessibility are in v1.0 by decision.
 
-2 open of 38 · 0.8 d remaining
+2 open of 38 · 0.6 d remaining
 
 | | Task | Days | Who | Deps | Finish line |
 |---|---|---|---|---|---|
@@ -173,7 +167,7 @@ node scripts/workplan.mjs next
 | `x` | `QUA-27` **Two localisation gaps the screenshot pass surfaced but would not decide** | 0.25 | agent | — | No user-visible string is marked do-not-translate by accident, and the String-position trap is gone from the import sheets. |
 | `x` | `QUA-28` **Accessibility for Views/Photos, the one directory still at zero** | 0.5 | agent | `QUA-24` | No interactive control in Views/Photos is unlabelled. |
 | `x` | `QUA-29` **A UI test target, so the accessibility audit can run unattended** | 1 | agent | — | XCUIApplication.performAccessibilityAudit() runs in CI over the main screens. |
-| `~` | `QUA-30` **The remaining A4 polish items on the globe and onboarding** | 0.25 | agent | `QUA-20` | Each remaining A4 item is either fixed or recorded as a deliberate choice. |
+| ` ` | `QUA-30` **Decide A4-4: keep MapKit's clipping ocean labels, or drop all globe labels** | 0.1 | owner | `QUA-20` | A decision recorded in DESIGN-PLAN.md: stay on .hybrid and accept the clipped ocean names, or move to .imagery and lose the continent labels too. |
 | `x` | `QUA-31` **Two screenshot seams fall through to the globe instead of failing** | 0.25 | agent | — | Every AKASHIC_SCREEN value either shows its screen or fails loudly. |
 | `x` | `QUA-32` **Theme.accent fails WCAG as text in Light Mode, and its own comment says otherwise** | 0.75 | agent | — | Accent-coloured TEXT reaches at least 4.5:1 on a Light-Mode systemBackground (3:1 for large text), and Theme.swift's comment states what was measured rather than an assumption. |
 | `x` | `QUA-33` **The local StoreKit test configuration ships inside the Release-CloudKit app bundle** | 0.1 | agent | — | Akashic.storekit is absent from the built Release-CloudKit Akashic.app, and the StoreKit tests still run. |

@@ -605,6 +605,17 @@ struct GlobeExperienceView: View {
         .frame(maxWidth: .infinity)
     }
 
+    /// Leading inset shared by the bottom chrome, so the journey strip and the tab bar sit on one
+    /// vertical line instead of two. (A4-3 / QUA-30)
+    ///
+    /// **Matched by measurement, not by API**, because the tab bar's floating capsule is laid out by
+    /// the system and exposes no metric. On a 402 pt screen the capsule's leading edge lands at 64 pt
+    /// (x = 193 px of 1206 at @3x). Re-measure with a screenshot if the system chrome changes — a row
+    /// through the tab bar and a row through the strip, comparing the first non-black pixel:
+    ///
+    ///     xs = [x for x in range(w) if sum(im.getpixel((x, y))) > 40]
+    static let bottomChromeInset: CGFloat = 64
+
     // MARK: Globe journey selector strip
 
     private var globeJourneyStrip: some View {
@@ -619,7 +630,15 @@ struct GlobeExperienceView: View {
                     .buttonStyle(.plain)
                 }
             }
-            .padding(.horizontal, 12)
+            // A4-3 (QUA-30): 12 pt left the strip and the tab bar sharing no alignment — measured
+            // on a 402 pt screen, the first card started at 12 pt while the tab bar's capsule starts
+            // at 64 pt, so they read as two unrelated floating objects instead of one bottom chrome.
+            //
+            // `Self.bottomChromeInset` is that measurement, named once. It is deliberately an inset on
+            // the SCROLL CONTENT, not on the ScrollView: the strip still bleeds to both screen edges,
+            // so a half-visible next card remains the affordance that says "scroll me". Only the
+            // resting position of the first card moves.
+            .padding(.horizontal, Self.bottomChromeInset)
         }
     }
 }

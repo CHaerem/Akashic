@@ -2182,30 +2182,21 @@
     {
       "id": "QUA-30",
       "track": "QUALITY",
-      "title": "The remaining A4 polish items on the globe and onboarding",
-      "status": "WIP",
-      "effort": 0.25,
+      "title": "Decide A4-4: keep MapKit's clipping ocean labels, or drop all globe labels",
+      "status": "TODO",
+      "effort": 0.1,
       "priority": 33,
       "deps": [
         "QUA-20"
       ],
-      "done_when": "Each remaining A4 item is either fixed or recorded as a deliberate choice.",
-      "why": "Narrowed after the two concrete defects were fixed. What remains is taste, and benefits from the owner's eye rather than mine: the journey card and tab bar share no alignment so they read as two unrelated floating objects; MapKit's ocean labels clip at the screen edges at this camera; the page indicator sits in a non-idiomatic filled pill; and onboarding leads with an SF Symbol globe rather than the mark QUA-19 redrew — that last one needs a new imageset, since the mark only exists as an appiconset today, and it is arguable whether a brand mark or an SF Symbol reads better at first launch.",
-      "files": [
-        "apple/Akashic/Views/Map/",
-        "apple/Akashic/Views/OnboardingView.swift"
-      ],
+      "done_when": "A decision recorded in DESIGN-PLAN.md: stay on .hybrid and accept the clipped ocean names, or move to .imagery and lose the continent labels too.",
+      "why": "All three code items in the original QUA-30 are fixed (A4-3 alignment, A4-5 page indicator, A4-6 brand mark). A4-4 is not a fix but a choice, and both suggestions in the finding were tested and ruled out. Camera framing is impossible: centerCoordinateDistance is already at MapKit's clamp, and 42,000 km vs 52,000 km render pixel-identically (the disc spans x=0..1205 of 1206 either way), so the globe always overflows the screen width. Label suppression is unavailable: ocean names are base-map labels rather than POIs, so pointsOfInterest: .excludingAll does not reach them and MapKit offers no other switch. That leaves exactly one lever -- .imagery instead of .hybrid -- which removes EUROPE/AFRICA/ASIA along with the clipped ocean names. Those continent labels genuinely help a reader orient on a globe, so trading them away to tidy an edge is an aesthetic judgement about the app's signature screen, not an engineering call. Both states are already screenshotted in the scratchpad from this session.",
+      "files": [],
       "verify": [
-        "cd apple && xcodegen generate",
-        "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,id=$(xcrun simctl list devices available | grep -o '[0-9A-F-]\\{36\\}' | tail -1)\" CODE_SIGNING_ALLOWED=NO test",
-        "Launch on a simulator with the bundled sample and confirm the journey title is not truncated"
+        "Record the decision in apple/Docs/DESIGN-PLAN.md A4-4"
       ],
       "resume": "Released rather than held: the two concrete A4 defects are fixed and committed; what is left is four taste calls I judged better made by the owner than by me — card/tab-bar alignment, MapKit ocean labels clipping, the page-indicator pill, and whether onboarding should lead with the app mark (needs a new imageset; the mark is appiconset-only today).",
-      "claim": {
-        "agent": "opus5",
-        "branch": "claude/remote-control-project-review-9462c1",
-        "at": "2026-07-26"
-      }
+      "owner": true
     },
     {
       "id": "QUA-31",
