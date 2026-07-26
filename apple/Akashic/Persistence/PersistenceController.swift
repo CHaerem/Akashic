@@ -588,6 +588,36 @@ final class PersistenceController {
         return editPhoto(id: id) { $0.caption = (trimmed?.isEmpty ?? true) ? nil : trimmed }
     }
 
+    /// Apply new `sortOrder` values to several photos in one save (DIFF-13).
+    ///
+    /// Batched rather than looping `editPhoto`, because accepting a day's curation renumbers up to
+    /// six photographs at once and six separate saves would publish six change notifications — the
+    /// gallery would visibly reshuffle step by step instead of settling once.
+    ///
+    /// Returns the number of rows actually changed, so a caller can tell "nothing matched" from
+    /// "nothing needed changing".
+    @discardableResult
+    func updatePhotoSortOrders(_ orders: [String: Int]) -> Int {
+        guard !orders.isEmpty else { return 0 }
+        let request = NSFetchRequest<CDPhoto>(entityName: "CDPhoto")
+        request.predicate = NSPredicate(format: "id IN %@", Array(orders.keys))
+        let rows = (try? viewContext.fetch(request)) ?? []
+        var changed = 0
+        for row in rows {
+            guard let id = row.id, let order = orders[id], row.sortOrder != Int64(order) else { continue }
+            row.sortOrder = Int64(order)
+            changed += 1
+        }
+        guard changed > 0 else { return 0 }
+        do {
+            try viewContext.save()
+        } catch {
+            viewContext.rollback()
+            return 0
+        }
+        return changed
+    }
+
     /// Store a 0/90/180/270 display rotation (normalised into range).
     @discardableResult
     func setPhotoRotation(id: String, rotation: Int) -> Photo? {

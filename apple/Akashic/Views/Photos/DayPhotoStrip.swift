@@ -20,12 +20,20 @@ struct DayPhotoStrip: View {
                         if let onAdd {
                             Button(action: onAdd) { AddTile() }
                                 .buttonStyle(.plain)
+                                .accessibilityLabel(Text("Add photos to this day",
+                                                         comment: "Day photo strip: the add tile."))
                         }
                         ForEach(Array(photos.enumerated()), id: \.element.id) { index, photo in
                             Button { onTap(index) } label: {
                                 StripThumbnail(photo: photo)
                             }
                             .buttonStyle(.plain)
+                            // Position carries this one: the strip is a horizontal row where a
+                            // VoiceOver user has no other way to know where they are in it.
+                            .accessibilityLabel(Text("Photo \(index + 1) of \(photos.count)",
+                                                     comment: "Day photo strip cell: position in the strip."))
+                            .accessibilityHint(Text("Opens full screen.",
+                                                    comment: "Day photo strip cell hint."))
                             .contextMenu {
                                 if let onEditPhoto {
                                     Button { onEditPhoto(photo) } label: {

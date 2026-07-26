@@ -133,3 +133,52 @@ final class PhotoCurationServiceTests: XCTestCase {
         XCTAssertEqual(once, twice)
     }
 }
+
+/// DIFF-13 — the batched reorder that accepting a day's curation performs.
+///
+/// Batched rather than one save per photograph, because accepting renumbers up to six at once and six
+/// saves would publish six change notifications: the gallery would visibly reshuffle step by step
+/// instead of settling once.
+final class PhotoSortOrderBatchTests: XCTestCase {
+
+    private var controller: PersistenceController!
+
+    override func setUp() {
+        super.setUp()
+        controller = PersistenceController(mode: .fixtures)
+    }
+
+    private func insertPhoto(_ id: String, journey: String, order: Int) {
+        let cd = CDPhoto(context: controller.viewContext)
+        cd.id = id
+        cd.journeyId = journey
+        cd.sortOrder = Int64(order)
+        try? controller.viewContext.save()
+    }
+
+    func testAppliesEveryOrderInOneSave() {
+        for i in 0 ..< 4 { insertPhoto("p\(i)", journey: "J", order: i) }
+        let changed = controller.updatePhotoSortOrders(["p0": 3, "p1": 2, "p2": 1, "p3": 0])
+        XCTAssertEqual(changed, 4)
+        let orders = Dictionary(uniqueKeysWithValues:
+            controller.loadPhotos(forJourneyID: "J").map { ($0.id, $0.sortOrder) })
+        XCTAssertEqual(orders, ["p0": 3, "p1": 2, "p2": 1, "p3": 0])
+    }
+
+    /// "Nothing matched" and "nothing needed changing" must be distinguishable, so a caller can tell
+    /// a stale proposal from a no-op.
+    func testReportsZeroWhenNothingNeedsChanging() {
+        insertPhoto("p0", journey: "J", order: 5)
+        XCTAssertEqual(controller.updatePhotoSortOrders(["p0": 5]), 0,
+                       "already at that order — no write, no notification")
+    }
+
+    func testIgnoresIDsThatDoNotExist() {
+        insertPhoto("real", journey: "J", order: 0)
+        XCTAssertEqual(controller.updatePhotoSortOrders(["real": 1, "ghost": 9]), 1)
+    }
+
+    func testEmptyInputIsANoOp() {
+        XCTAssertEqual(controller.updatePhotoSortOrders([:]), 0)
+    }
+}

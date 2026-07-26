@@ -60,6 +60,7 @@ struct PhotosGridView: View {
                     Image(systemName: "plus")
                 }
                 .tint(Theme.accent)
+                .accessibilityLabel(Text("Add photos", comment: "Photo grid toolbar button."))
             }
         }
         .fullScreenCover(item: $lightbox) { data in
@@ -118,6 +119,13 @@ struct PhotosGridView: View {
                         GridThumbnail(photo: photo)
                     }
                     .buttonStyle(.plain)
+                    // A thumbnail button announces nothing on its own. The caption is the only thing
+                    // that tells one photograph from another, and the position is what keeps a
+                    // VoiceOver user oriented in a grid of hundreds — so both, and the video/hero
+                    // state as traits rather than words baked into the label.
+                    .accessibilityLabel(photoLabel(photo, index: index, of: photos.count))
+                    .accessibilityHint(Text("Opens full screen.",
+                                            comment: "Photo grid cell hint."))
                     .contextMenu { photoMenu(photo, journey: journey) }
                 }
             }
@@ -134,6 +142,31 @@ struct PhotosGridView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(Theme.background)
         }
+    }
+
+    /// What a screen reader says for one grid cell.
+    ///
+    /// Caption first when there is one, because it is the only thing that identifies the photograph;
+    /// otherwise the position carries it. "Video" is stated rather than left to a trait because
+    /// whether tapping starts playback is the thing a user most needs to know before tapping.
+    private func photoLabel(_ photo: Photo, index: Int, of total: Int) -> Text {
+        let position = String(localized: "Photo \(index + 1) of \(total)",
+                              comment: "Photo grid cell accessibility label: position within the grid.")
+        var parts: [String] = []
+        if let caption = photo.caption?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !caption.isEmpty {
+            parts.append(caption)
+        }
+        parts.append(position)
+        if photo.isVideo {
+            parts.append(String(localized: "Video",
+                                comment: "Photo grid cell accessibility label: this item is a video."))
+        }
+        if photo.isHero {
+            parts.append(String(localized: "Cover photo",
+                                comment: "Photo grid cell accessibility label: this is the journey's hero image."))
+        }
+        return Text(parts.joined(separator: ", "))
     }
 
     @ViewBuilder

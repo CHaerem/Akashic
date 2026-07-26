@@ -1407,7 +1407,7 @@
       "id": "QUA-10",
       "track": "QUALITY",
       "title": "First tests for Views/, and a UI test target",
-      "status": "TODO",
+      "status": "WIP",
       "effort": 3,
       "done_when": "A UI test target exists and the create-journey flow has an automated test.",
       "deps": [
@@ -1423,7 +1423,12 @@
         "cd apple && xcodegen generate",
         "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,id=$(xcrun simctl list devices available | grep -o '[0-9A-F-]\\{36\\}' | tail -1)\" CODE_SIGNING_ALLOWED=NO test",
         "xcrun xccov view --report --only-targets /tmp/cov.xcresult"
-      ]
+      ],
+      "claim": {
+        "agent": "uitest-worktree",
+        "branch": "claude/qua10-qua29",
+        "at": "2026-07-26"
+      }
     },
     {
       "id": "QUA-11",
@@ -2029,7 +2034,7 @@
       "id": "DIFF-13",
       "track": "DIFF",
       "title": "Accept/dismiss rows for curation, and make Vision link",
-      "status": "TODO",
+      "status": "DONE",
       "effort": 1,
       "priority": 25,
       "deps": [
@@ -2046,7 +2051,13 @@
         "cd apple && xcodegen generate",
         "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,id=$(xcrun simctl list devices available | grep -o '[0-9A-F-]\\{36\\}' | tail -1)\" CODE_SIGNING_ALLOWED=NO test",
         "otool -L \"$(find ~/Library/Developer/Xcode/DerivedData/Akashic-*/Build/Products/Release-CloudKit-iphonesimulator -name Akashic.app -maxdepth 2|head -1)/Akashic\" | grep -i vision"
-      ]
+      ],
+      "claim": {
+        "agent": "opus5",
+        "branch": "claude/remote-control-project-review-9462c1",
+        "at": "2026-07-26"
+      },
+      "evidence": "otool -L on the Release-CloudKit binary now lists Vision.framework — the whole DIFF-04 chain is reachable rather than merely compiled, which was this task's actual verification and the reason it existed. The day sheet gains an owner-only, one-shot accept-or-dismiss row: user-initiated (scoring every day on open would spend battery on days nobody asked about), reports near-duplicates without ever actioning them, and accepting goes through a new batched updatePhotoSortOrders so six renumbered photographs produce one change notification instead of six — otherwise the gallery visibly reshuffles step by step instead of settling. 4 new persistence tests including that 'nothing matched' and 'nothing needed changing' stay distinguishable."
     },
     {
       "id": "DIFF-14",
@@ -2081,7 +2092,7 @@
       "id": "QUA-27",
       "track": "QUALITY",
       "title": "Two localisation gaps the screenshot pass surfaced but would not decide",
-      "status": "TODO",
+      "status": "DONE",
       "effort": 0.25,
       "priority": 30,
       "done_when": "No user-visible string is marked do-not-translate by accident, and the String-position trap is gone from the import sheets.",
@@ -2095,13 +2106,19 @@
         "cd apple && xcodegen generate",
         "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,id=$(xcrun simctl list devices available | grep -o '[0-9A-F-]\\{36\\}' | tail -1)\" CODE_SIGNING_ALLOWED=NO test",
         "Run under -AppleLanguages \"(nb)\" and read the export sheet and the import sheets"
-      ]
+      ],
+      "claim": {
+        "agent": "opus5",
+        "branch": "claude/remote-control-project-review-9462c1",
+        "at": "2026-07-26"
+      },
+      "evidence": "'DAY' had shouldTranslate:false and is genuinely user-visible — the caption above the day badge on the journey detail and story screens — so an iPad screenshot honestly showed 'DAY 1' under 'Dager'. Confirmed it was collateral from bulk-marking 81 developer-tool strings, removed the flag and translated it: the built nb.lproj now maps DAY to DAG. The import-sheet half needed no work: PhotoImportSheet.dayLabel already uses String(localized:) after the accessibility merge, and ImportBrowserView has no bare literals in String position."
     },
     {
       "id": "QUA-28",
       "track": "QUALITY",
       "title": "Accessibility for Views/Photos, the one directory still at zero",
-      "status": "TODO",
+      "status": "DONE",
       "effort": 0.5,
       "priority": 31,
       "deps": [
@@ -2116,13 +2133,19 @@
         "cd apple && xcodegen generate",
         "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,id=$(xcrun simctl list devices available | grep -o '[0-9A-F-]\\{36\\}' | tail -1)\" CODE_SIGNING_ALLOWED=NO test",
         "for f in apple/Akashic/Views/Photos/*.swift; do echo \"$f $(grep -c accessibilityLabel $f)\"; done"
-      ]
+      ],
+      "claim": {
+        "agent": "opus5",
+        "branch": "claude/remote-control-project-review-9462c1",
+        "at": "2026-07-26"
+      },
+      "evidence": "PhotosGridView: the icon-only toolbar button labelled, and every grid cell now announces caption-then-position-then-state — the caption is the only thing distinguishing one photograph from another and the position is what keeps a VoiceOver user oriented in a grid of hundreds. Video is stated in words rather than left to a trait, because whether tapping starts playback is what a user most needs to know first. DayPhotoStrip's add tile and cells labelled. PhotoPlacementSheet needed nothing: both its controls are text buttons, which are self-labelling — the '0 accessibilityLabel calls' count was measuring the wrong thing there."
     },
     {
       "id": "QUA-29",
       "track": "QUALITY",
       "title": "A UI test target, so the accessibility audit can run unattended",
-      "status": "TODO",
+      "status": "WIP",
       "effort": 1,
       "priority": 32,
       "done_when": "XCUIApplication.performAccessibilityAudit() runs in CI over the main screens.",
@@ -2135,7 +2158,12 @@
       "verify": [
         "cd apple && xcodegen generate",
         "the new UI test target runs performAccessibilityAudit on globe, day, paywall and create"
-      ]
+      ],
+      "claim": {
+        "agent": "uitest-worktree",
+        "branch": "claude/qua10-qua29",
+        "at": "2026-07-26"
+      }
     }
   ]
 }

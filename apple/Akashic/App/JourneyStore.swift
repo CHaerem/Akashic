@@ -151,6 +151,24 @@ final class JourneyStore: ObservableObject {
                 groups: groups)
     }
 
+    /// Accept a curation proposal's best-of for one day: the chosen photographs lead the day.
+    ///
+    /// Non-destructive by design — nothing is deleted or hidden, only reordered, and only within the
+    /// day's own `sortOrder` slots so another day cannot be disturbed.
+    @discardableResult
+    func acceptCuratedBestOf(_ result: CurationResult, day: Int, journeyID: String) -> Int {
+        let photos = persistence.loadPhotos(forJourneyID: journeyID)
+        let reordered = PhotoCurationService.applyingBestOf(day: day, result, to: photos,
+                                                           dayOf: { [weak self] photo in
+            guard let journey = self?.journey(withID: journeyID) else { return nil }
+            return PhotoDayMatcher(journey: journey).day(for: photo)
+        })
+        let orders = Dictionary(reordered.map { ($0.id, $0.sortOrder) }, uniquingKeysWith: { a, _ in a })
+        let changed = persistence.updatePhotoSortOrders(orders)
+        if changed > 0 { reload() }
+        return changed
+    }
+
     /// Accept a curation proposal's hero. Goes through `setPhotoHero`, which already enforces the
     /// single-hero invariant across the journey, so this is only deciding *which* photo.
     @discardableResult

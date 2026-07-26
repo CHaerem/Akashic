@@ -2122,7 +2122,16 @@
       "shouldTranslate": false
     },
     "DAY": {
-      "shouldTranslate": false
+      "comment": "Day badge: the word above the day number, on the journey detail and story screens. Visually a two-line composition; VoiceOver reads the combined element instead. Was marked shouldTranslate:false by mistake (QUA-27) — it is user-visible text.",
+      "extractionState": "manual",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "DAG"
+          }
+        }
+      }
     },
     "DAY %lld": {
       "localizations": {
