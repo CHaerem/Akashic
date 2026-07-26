@@ -2183,7 +2183,7 @@
       "id": "QUA-30",
       "track": "QUALITY",
       "title": "The remaining A4 polish items on the globe and onboarding",
-      "status": "TODO",
+      "status": "WIP",
       "effort": 0.25,
       "priority": 33,
       "deps": [
@@ -2200,7 +2200,12 @@
         "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,id=$(xcrun simctl list devices available | grep -o '[0-9A-F-]\\{36\\}' | tail -1)\" CODE_SIGNING_ALLOWED=NO test",
         "Launch on a simulator with the bundled sample and confirm the journey title is not truncated"
       ],
-      "resume": "Released rather than held: the two concrete A4 defects are fixed and committed; what is left is four taste calls I judged better made by the owner than by me — card/tab-bar alignment, MapKit ocean labels clipping, the page-indicator pill, and whether onboarding should lead with the app mark (needs a new imageset; the mark is appiconset-only today)."
+      "resume": "Released rather than held: the two concrete A4 defects are fixed and committed; what is left is four taste calls I judged better made by the owner than by me — card/tab-bar alignment, MapKit ocean labels clipping, the page-indicator pill, and whether onboarding should lead with the app mark (needs a new imageset; the mark is appiconset-only today).",
+      "claim": {
+        "agent": "opus5",
+        "branch": "claude/remote-control-project-review-9462c1",
+        "at": "2026-07-26"
+      }
     },
     {
       "id": "QUA-31",

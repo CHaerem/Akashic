@@ -1,0 +1,31 @@
+<!--
+  Akashic brand mark — the app icon's globe WITHOUT the icon's ground. (QUA-30 / A4-6)
+
+  Identical geometry to AppIcon.svg: same 352 r sphere, same accent gradient, same two graticule
+  ellipses at the 3:1 ratio, clipped to the sphere so each line runs to the rim and stops flush.
+  The only difference is the missing `<rect fill="#0B0B19">` background.
+
+  The graticule keeps its #0B0B19 stroke. That colour is the app icon's GROUND, used there as a
+  knockout — but it works unchanged here because the lines only ever fall inside the periwinkle
+  sphere, so they read as dark lines on a light sphere against any page colour. That is why this
+  mark needs no light/dark variant while the app icon has three.
+
+  viewBox is tightened to the sphere's bounding box (160..864) rather than kept at 1024 square, so
+  `Image("AkashicMark").frame(width:)` sizes the visible globe instead of sizing invisible padding.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" width="704" height="704" viewBox="160 160 704 704">
+  <defs>
+    <linearGradient id="sphere" x1="0.18" y1="0.06" x2="0.82" y2="0.94">
+      <stop offset="0" stop-color="#A9B4FF"/>
+      <stop offset="1" stop-color="#7F8FFA"/>
+    </linearGradient>
+    <clipPath id="sphereClip">
+      <circle cx="512" cy="512" r="352"/>
+    </clipPath>
+  </defs>
+  <circle cx="512" cy="512" r="352" fill="url(#sphere)"/>
+  <g clip-path="url(#sphereClip)" fill="none" stroke="#0B0B19" stroke-width="34">
+    <ellipse cx="512" cy="512" rx="352" ry="117"/>
+    <ellipse cx="512" cy="512" rx="117" ry="352"/>
+  </g>
+</svg>
