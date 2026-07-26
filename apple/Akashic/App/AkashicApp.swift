@@ -227,12 +227,19 @@ struct AkashicApp: App {
     /// or a journey's photo grid without touching `RootView`.
     ///   AKASHIC_SCREEN=photos                         — imported-photos journey list
     ///   AKASHIC_SCREEN=photogrid + AKASHIC_PHOTOS_JOURNEY=<id> — that journey's thumbnail grid
+    ///   AKASHIC_SCREEN=settings                       — Settings, for locale screenshots
     @ViewBuilder
     private var rootScreen: some View {
         let env = ProcessInfo.processInfo.environment
         switch env["AKASHIC_SCREEN"] {
         case "photos":
             NavigationStack { ImportBrowserView() }
+        case "settings":
+            // Settings is otherwise three taps deep behind first-run onboarding, which makes
+            // "does this row read Norwegian?" impossible to verify from a script (QUA-26). It is
+            // the screen that carries the sync-status one-liner and the appearance picker, so it
+            // is the one a localisation change most needs a screenshot of.
+            NavigationStack { SettingsView() }
         case "photogrid":
             NavigationStack { JourneyPhotosView(journeyID: env["AKASHIC_PHOTOS_JOURNEY"] ?? "") }
         case "editsheet":

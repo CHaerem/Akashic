@@ -27,11 +27,20 @@ enum AppearancePreference: String, CaseIterable, Identifiable {
     /// Stored under this key so the value survives launches; read via `@AppStorage`.
     static let storageKey = "akashic.appearance"
 
+    /// Picker label. Returns `String`, not `LocalizedStringKey`, because the call site feeds it to
+    /// `Text(_:)` in a `Picker` — so it must arrive already localised (QUA-26). A bare literal here
+    /// would render verbatim and never reach the String Catalog.
     var label: String {
         switch self {
-        case .automatic: return "Automatic"
-        case .light: return "Light"
-        case .dark: return "Dark"
+        case .automatic:
+            return String(localized: "Automatic",
+                          comment: "Settings › Appearance picker: let the system decide light or dark.")
+        case .light:
+            return String(localized: "Light",
+                          comment: "Settings › Appearance picker: force the light appearance.")
+        case .dark:
+            return String(localized: "Dark",
+                          comment: "Settings › Appearance picker: force the dark appearance.")
         }
     }
 

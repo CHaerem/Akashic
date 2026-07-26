@@ -202,6 +202,14 @@ struct JourneyShowcaseSheet: View {
             if report.deleted > 0 {
                 labelled("Removed", "\(report.deleted)")
             }
+            // QUA-25: the per-journey cap holds photographs back rather than failing the publish, so
+            // the owner has to be told which ones did not go. Silently publishing 200 of 939 would be
+            // the same class of dishonesty as the unpublish that reported success (DIFF-01).
+            if report.photosHeldBack > 0 {
+                labelled("Not published",
+                         String(localized: "\(report.photosHeldBack) photos over the showcase limit",
+                                comment: "Showcase publish report: photographs the per-journey cap held back."))
+            }
             if report.failed > 0 {
                 labelled("Failed", "\(report.failed)")
             }

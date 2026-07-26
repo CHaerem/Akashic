@@ -207,14 +207,24 @@ enum PhotoIngestError: LocalizedError {
     /// QUA-13: refused by size before the copy, rather than being jetsammed during it.
     case movieTooLarge(maxBytes: Int)
 
+    /// Localised (QUA-26). Every branch reaches an alert during "add photos", the single most-used
+    /// write path in the app.
     var errorDescription: String? {
         switch self {
-        case .emptyData: return "The selected item had no data."
-        case let .originalWriteFailed(m): return "Could not save the original file: \(m)"
-        case let .unsupportedType(t): return "Unsupported media type: \(t)"
+        case .emptyData:
+            return String(localized: "The selected item had no data.",
+                          comment: "Add-photos failure alert: the picked item yielded no bytes.")
+        case let .originalWriteFailed(m):
+            return String(localized: "Could not save the original file: \(m)",
+                          comment: "Add-photos failure alert: writing the original to disk failed. The placeholder is the underlying system error.")
+        case let .unsupportedType(t):
+            return String(localized: "Unsupported media type: \(t)",
+                          comment: "Add-photos failure alert: the picked item is not an image or a video. The placeholder is the uniform type identifier.")
         case let .movieTooLarge(maxBytes):
+            // ByteCountFormatter is already locale-aware, so the size arrives formatted.
             let limit = ByteCountFormatter.string(fromByteCount: Int64(maxBytes), countStyle: .file)
-            return "That video is larger than \(limit). Trim it in Photos first, then add it."
+            return String(localized: "That video is larger than \(limit). Trim it in Photos first, then add it.",
+                          comment: "Add-photos failure alert: the picked video exceeds the ingest size cap. The placeholder is the already-formatted cap, e.g. \"500 MB\".")
         }
     }
 }

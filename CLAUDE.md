@@ -149,6 +149,16 @@ right: fix this file in the same commit.
 - **`knownRegions` must be declared in `project.yml`.** XcodeGen infers regions from `.lproj`
   directories and a String Catalog has none, so without it Xcode compiles English only and the app
   falls back with every translation present and unused.
+- **A Debug build cannot verify localisation.** Strings inside `#if AKASHIC_CLOUDKIT_BUILD` are never
+  extracted by a Debug compile, so a key can be missing from the catalogue entirely while the code is
+  correct. Diff the Release-CloudKit `.stringsdata` against Debug to find them. Same blind spot as the
+  Intelligence code that CI never type-checks — anything behind a compilation condition is invisible
+  to every tool that does not compile that condition.
+- **`xcodebuild test` can silently reuse a stale `.xctest` on the simulator.** If you have ever run
+  `simctl install` by hand, `xcodebuild test` may keep reporting an old test count and failing on a
+  test you already deleted, even after touching the source — the binary in DerivedData is correct the
+  whole time. `xcrun simctl uninstall no.akashic.app` fixes it. This is the likeliest explanation for
+  any inexplicable "transient" test failure.
 - **The public CloudKit database is billed to us, not to the customer.** The cost table in
   `COMMERCIALIZATION-PLAN.md` says bandwidth is free; that is true of the private database
   only. Anything that increases showcase traffic has a real cost line.

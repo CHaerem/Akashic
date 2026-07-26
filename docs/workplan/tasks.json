@@ -1100,7 +1100,7 @@
       "id": "DIFF-07",
       "track": "DIFF",
       "title": "PDF export of the story view",
-      "status": "TODO",
+      "status": "DONE",
       "effort": 6,
       "done_when": "A journey exports a PDF a person would willingly hand over.",
       "priority": 40,
@@ -1117,7 +1117,13 @@
         "cd apple && xcodegen generate",
         "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,id=$(xcrun simctl list devices available | grep -o '[0-9A-F-]\\{36\\}' | tail -1)\" CODE_SIGNING_ALLOWED=NO test",
         "Render a fixture journey to PDF and open it"
-      ]
+      ],
+      "claim": {
+        "agent": "opus5",
+        "branch": "claude/remote-control-project-review-9462c1",
+        "at": "2026-07-26"
+      },
+      "evidence": "The project's thesis finally has code behind it. StoryBook (pure pagination), StoryPDFRenderer (resolve-then-draw) and StoryPageView (values and decoded UIImages only) produce an A4 PDF. 15 tests, including a PDFKit test that opens the real document, asserts the page count matches pagination, and extracts the text to prove the user's own day notes reach the page — 'it compiled' proves nothing about a document. AsyncImage never resolves inside ImageRenderer and SwiftUI Map renders blank, which is why this is a separate view tree rather than JourneyStoryView reused; the route page is an MKMapSnapshotter image with the polyline drawn over it. 765 tests pass."
     },
     {
       "id": "DIFF-08",
@@ -1880,7 +1886,7 @@
       "id": "QUA-25",
       "track": "QUALITY",
       "title": "Bound public-showcase reads before traffic arrives",
-      "status": "WIP",
+      "status": "DONE",
       "effort": 1,
       "priority": 28,
       "done_when": "A published journey has a size bound, and crossing a usage threshold is visible to the owner.",
@@ -1899,7 +1905,8 @@
         "agent": "nonviews-worktree",
         "branch": "claude/qua26-qua25",
         "at": "2026-07-26"
-      }
+      },
+      "evidence": "PublicMirrorConfig.maxPublishedPhotos = 200, chosen against the 60 KB/thumb budget and floored above the free tier's 100 so a free journey can publish whole. Spread by day round-robin rather than a flat prefix — a flat prefix on a 7-day trek publishes days 1-3 and leaves day 6 empty, which reads as broken rather than abridged. Publishing degrades: the cap holds photos back and reports photosHeldBack, now surfaced in the showcase sheet. 15 tests. launch-checklist gains Phase G with a CloudKit Console alert at 50% of the free daily allowance."
     },
     {
       "id": "DIFF-10",
@@ -1976,7 +1983,7 @@
       "id": "QUA-26",
       "track": "QUALITY",
       "title": "Localise the user-visible strings outside Views/",
-      "status": "WIP",
+      "status": "DONE",
       "effort": 0.5,
       "priority": 29,
       "deps": [
@@ -2000,7 +2007,8 @@
         "agent": "nonviews-worktree",
         "branch": "claude/qua26-qua25",
         "at": "2026-07-26"
-      }
+      },
+      "evidence": "61 keys added: SyncStatus's Settings one-liner (including the .storageFull copy QUA-11 added the same day), the appearance picker, ShareRole.displayName, RouteDrawing, the import browser, and all six LocalizedError.errorDescriptions. Five became real plural keys with en+nb variations, because a manual English 's' ternary cannot express Norwegian plurals. nb.lproj ships 538 strings; verified on screen — Settings reads 'Av (lokal lagring)' and 'Automatisk'."
     },
     {
       "id": "DIFF-13",
