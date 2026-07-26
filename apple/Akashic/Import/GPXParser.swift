@@ -28,11 +28,31 @@ struct GPXFile: Equatable {
     var name: String?
     var time: Date?
     var droppedPointCount: Int
+    /// Each track point's `<time>`, **index-aligned with `route.coordinates`**: same count, `nil`
+    /// where that point carried no (or an unparseable) `<time>`. A dropped point (out-of-range
+    /// coordinate) contributes to neither array, so the alignment holds by construction.
+    ///
+    /// Kept as a parallel array rather than a fourth coordinate channel because `Route` is the
+    /// *persisted* domain shape (`[lng, lat, ele?]`, GeoJSON) shared with CloudKit, the exporter and
+    /// the web adapter — widening it to carry a timestamp would change every one of those contracts
+    /// for a signal only the importer needs. This array is parse-time-only: it feeds
+    /// `JourneyDraft.days(fromTrackPoints:times:)` and is never stored.
+    var trackPointTimes: [Date?] = []
 
     /// True when the document produced neither a route nor any waypoints.
     var isEmpty: Bool { route.coordinates.isEmpty && waypoints.isEmpty }
 
     var trackPointCount: Int { route.coordinates.count }
+
+    /// The track points that carry a usable time, as `(coordinate, time)` pairs in document order.
+    /// Empty for a track with no `<time>` at all — which is exactly the signal day-derivation needs
+    /// to decline rather than invent days.
+    var timedTrackPoints: [(coordinate: [Double], time: Date)] {
+        zip(route.coordinates, trackPointTimes).compactMap { coordinate, time in
+            guard let time, coordinate.count >= 2 else { return nil }
+            return (coordinate, time)
+        }
+    }
 }
 
 /// Typed, user-presentable failures. The messages are safe to show verbatim in a sheet.
@@ -140,6 +160,8 @@ final class GPXParserDelegate: NSObject, XMLParserDelegate {
 
     // Output accumulators.
     private var routeCoordinates: [[Double]] = []
+    /// Index-aligned with `routeCoordinates` — see `GPXFile.trackPointTimes`.
+    private var routePointTimes: [Date?] = []
     private var waypoints: [GPXWaypoint] = []
     private var metadataName: String?
     private var metadataTime: Date?
@@ -164,6 +186,9 @@ final class GPXParserDelegate: NSObject, XMLParserDelegate {
     private var pendingWaypoint: PendingPoint?
     /// Coordinates of the current `<trkseg>`, flushed into `routeCoordinates` on `</trkseg>`.
     private var currentSegment: [[Double]] = []
+    /// Times of the current `<trkseg>`, flushed alongside `currentSegment` so the two arrays stay
+    /// index-aligned through every flush path (`</trkseg>`, `</rte>`, and the `</trk>` fallback).
+    private var currentSegmentTimes: [Date?] = []
     private var trackName: String?
 
     func makeFile() -> GPXFile {
@@ -171,7 +196,8 @@ final class GPXParserDelegate: NSObject, XMLParserDelegate {
                 waypoints: waypoints,
                 name: metadataName ?? trackName,
                 time: metadataTime,
-                droppedPointCount: droppedPointCount)
+                droppedPointCount: droppedPointCount,
+                trackPointTimes: routePointTimes)
     }
 
     // MARK: Element start
@@ -198,6 +224,7 @@ final class GPXParserDelegate: NSObject, XMLParserDelegate {
         case "trkseg", "rte":
             // A <rte> is a route (a LineString of <rtept>) with no <trkseg>; buffer it the same way.
             currentSegment = []
+            currentSegmentTimes = []
         default:
             break
         }
@@ -256,16 +283,14 @@ final class GPXParserDelegate: NSObject, XMLParserDelegate {
             finishWaypoint()
 
         case "trkseg", "rte":
-            routeCoordinates.append(contentsOf: currentSegment)
-            currentSegment = []
+            flushSegment()
 
         case "trk":
             // Flush any points that were emitted directly under <trk> without a wrapping <trkseg>
             // (a schema-invalid but real producer quirk). Without this, those parsed points would
             // be stranded in `currentSegment` and the file wrongly reported as having "no content".
             // (quality gate: trkpt outside a trkseg is silently discarded.)
-            routeCoordinates.append(contentsOf: currentSegment)
-            currentSegment = []
+            flushSegment()
 
         default:
             break
@@ -274,6 +299,14 @@ final class GPXParserDelegate: NSObject, XMLParserDelegate {
 
     // MARK: Point finishing
 
+    /// Move the buffered segment into the route, keeping coordinates and times index-aligned.
+    private func flushSegment() {
+        routeCoordinates.append(contentsOf: currentSegment)
+        routePointTimes.append(contentsOf: currentSegmentTimes)
+        currentSegment = []
+        currentSegmentTimes = []
+    }
+
     private func finishTrackPoint() {
         defer { pendingTrackPoint = nil }
         guard let point = pendingTrackPoint,
@@ -281,6 +314,9 @@ final class GPXParserDelegate: NSObject, XMLParserDelegate {
                                           ele: point.elevation)
         else { droppedPointCount += 1; return }
         currentSegment.append(coordinate)
+        // Appended unconditionally (nil included) on exactly the path that appended a coordinate —
+        // that pairing is what keeps the two arrays aligned.
+        currentSegmentTimes.append(point.time)
     }
 
     private func finishWaypoint() {
