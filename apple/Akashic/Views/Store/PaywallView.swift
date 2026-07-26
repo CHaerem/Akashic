@@ -85,6 +85,12 @@ struct PaywallView: View {
                 }
             }
             .onAppear { entitlements.resetPurchasePhase() }
+            // A2 (QUA-18): `.success` rather than `.selection` — this is the one moment in the app
+            // that is an event rather than a nudge, and the sheet dismisses immediately afterwards,
+            // so the haptic is the only confirmation the purchase landed at all.
+            .sensoryFeedback(.success, trigger: entitlements.isComplete) { was, now in
+                !was && now
+            }
             .onChange(of: entitlements.isComplete) { _, complete in
                 // The moment the purchase (or restore) lands, get out of the user's way.
                 if complete { dismiss() }
@@ -120,13 +126,21 @@ struct PaywallView: View {
 
     private var benefits: some View {
         // Export and showcase publishing are NOT listed here — plan §5 (revised) made both part
-        // of the free tier (the one free journey is fully finishable). The only thing Akashic
-        // Complete still unlocks is more journeys and more photos, for the whole family.
+        // of the free tier (the one free journey is fully finishable).
+        //
+        // Akashic Intelligence IS listed (QUA-22). It was missing while `entitlements.isComplete`
+        // already gated three working features, so the paywall was selling half of what the
+        // purchase unlocks — and once DOC-08 put it in the store description and the IAP
+        // description, launch-checklist Phase C's requirement that those three agree was broken.
+        // It is listed last and hedged, because it needs Apple Intelligence hardware: promising it
+        // flatly to someone whose phone cannot run it would be the opposite problem.
         VStack(alignment: .leading, spacing: 14) {
             benefitRow("infinity", "Unlimited journeys & photos",
                        "Create and keep as many trips as you like, with no photo cap.")
             benefitRow("person.2.fill", "Family Sharing",
                        "One purchase covers everyone in your Family Sharing group.")
+            benefitRow("sparkles", "Akashic Intelligence",
+                       "Draft a day's notes, name your days and ground your facts — on your device, on iPhone models that support Apple Intelligence.")
         }
         .padding(18)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -194,8 +208,19 @@ struct PaywallView: View {
             case .loaded:
                 if let product = entitlements.product {
                     purchaseButton(price: product.displayPrice)
+                    // QUA-17: the anchor, which is the plan's own argument for the price and was
+                    // missing from the one surface that gets a single shot at making it. The buyer's
+                    // real alternative is not another app, it is a printed photo book at several
+                    // hundred kroner *per trip* — so the comparison is the sentence, not the number.
+                    // Deliberately no figure for the book: quoting a competitor's price in-app would
+                    // go stale and invites a claim we would have to keep true.
                     Text("One-time purchase · no subscription")
                         .font(.caption2).foregroundStyle(Theme.textTertiary)
+                    Text("Less than half the price of one printed photo book — for every trip your family ever takes.")
+                        .font(.caption2)
+                        .foregroundStyle(Theme.textSecondary)
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
                 } else {
                     // Store reachable but the product isn't configured yet — treat like offline.
                     unavailableRow

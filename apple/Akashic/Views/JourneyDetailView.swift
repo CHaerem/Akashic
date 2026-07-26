@@ -10,6 +10,8 @@ struct JourneyDetailView: View {
 
     /// Which day (index into `camps`) is shown in the presented `DayDetailSheet`, if any.
     @State private var selectedDayIndex: Int?
+    /// A2 (QUA-18): bumped when a delete succeeds, so the destructive confirm has feedback.
+    @State private var deletedTick = 0
     @State private var showJourneyEdit = false
     @State private var showManageDays = false
     @State private var showEnrich = false
@@ -86,6 +88,9 @@ struct JourneyDetailView: View {
             .padding(16)
         }
         .background(Theme.background.ignoresSafeArea())
+        // A2 (QUA-18): `.warning`, not `.success` — deleting a journey is not a happy event, and the
+        // view dismisses immediately afterwards so this is the only confirmation it happened.
+        .sensoryFeedback(.warning, trigger: deletedTick)
         .navigationTitle(live.shortName)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -219,6 +224,10 @@ struct JourneyDetailView: View {
 
     private func deleteJourney() {
         guard store.deleteJourney(id: live.id) else { return }
+        // A2 (QUA-18): `.warning` on the destructive confirm, and only once the delete actually
+        // succeeded — a haptic that fires on a failed delete would be telling the user their journey
+        // is gone when it is not. The view dismisses right after, so this is the confirmation.
+        deletedTick += 1
         dismiss()
     }
 

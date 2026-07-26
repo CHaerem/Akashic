@@ -103,19 +103,44 @@ struct PhotoImportSheet: View {
 
     // MARK: Picker
 
+    /// How many more photos this journey may take, or nil when there is no cap (QUA-16).
+    ///
+    /// Free tier, owned journey only — a shared-in journey is never gated, and Complete lifts the
+    /// cap entirely. Nil means "no limit", which is not the same as 0.
+    private var remainingAllowance: Int? {
+        guard !entitlements.isComplete else { return nil }
+        guard store.isOwnedByCurrentUser(journeyID: journey.id) else { return nil }
+        let existing = store.photos(forJourneyID: journey.id).count
+        return max(0, EntitlementPolicy.freePhotosPerOwnedJourney - existing)
+    }
+
     private var picker: some View {
         PhotosPicker(
             selection: $selection,
-            maxSelectionCount: 0,
+            // QUA-16: the cap is a limit the picker enforces, not a failure reported afterwards.
+            // It used to be 0 (unlimited), so a free-tier user could pick 300 photos, wait while
+            // every one of them was decoded, EXIF-read, thumbnailed and written to disk, and only
+            // then be told 200 were dropped. The partial-import path below still exists — it has to,
+            // for a journey already over the cap and for anything the picker cannot bound — but it
+            // is now the fallback rather than the normal experience.
+            maxSelectionCount: remainingAllowance ?? 0,
             matching: .any(of: [.images, .videos]),
             photoLibrary: .shared()
         ) {
             HStack(spacing: 10) {
                 Image(systemName: "photo.badge.plus")
                     .font(.title3).foregroundStyle(Theme.accent)
-                Text(pending.isEmpty ? "Select photos or videos" : "Select more")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(Theme.textPrimary)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(pending.isEmpty ? "Select photos or videos" : "Select more")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(Theme.textPrimary)
+                    // Stated up front, so the number is a budget rather than a surprise.
+                    if let remaining = remainingAllowance {
+                        Text("\(remaining) left on the free tier")
+                            .font(.caption2)
+                            .foregroundStyle(Theme.textSecondary)
+                    }
+                }
                 Spacer()
             }
             .padding(16)

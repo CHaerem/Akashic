@@ -188,7 +188,10 @@ struct SettingsView: View {
                     Label("Akashic Complete", systemImage: "star.circle")
                         .foregroundStyle(Theme.textPrimary)
                     Spacer()
-                    Text(entitlements.isComplete ? "Complete ✓" : "Free")
+                    // QUA-15: "Free" is a claim, and on a cold launch it is one we cannot make yet.
+                    Text(entitlements.isEntitlementDetermined
+                         ? (entitlements.isComplete ? "Complete ✓" : "Free")
+                         : "Checking…")
                         .foregroundStyle(entitlements.isComplete ? Theme.accent : Theme.textSecondary)
                     if !entitlements.isComplete {
                         Image(systemName: "chevron.right")

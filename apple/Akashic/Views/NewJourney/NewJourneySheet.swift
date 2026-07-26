@@ -88,6 +88,16 @@ struct NewJourneySheet: View {
     @State private var isStagingPhotos = false
     @State private var photoStageTotal = 0
     @State private var photoStageDone = 0
+    /// How many picked photos failed to import in the last pass (QUA-14). Surfaced on the
+    /// review screen so a shortfall is explained rather than silently absorbed.
+    @State private var photoStageFailed = 0
+    /// A2 (QUA-18): increments on every accepted suggestion so `.sensoryFeedback` fires per accept.
+    /// A counter rather than a flag or the model's own state, because two accepts in a row must
+    /// produce two ticks and an equatable state would coalesce them into one.
+    @State private var acceptTick = 0
+    /// Set once when the journey is actually created, so creation lands as a success rather than a
+    /// tick. Separate from `acceptTick` because they deserve different feedback styles.
+    @State private var createdTick = 0
     @State private var photoDayCount = 0
 
     @State private var isSaving = false
@@ -208,6 +218,10 @@ struct NewJourneySheet: View {
     }
 
     var body: some View {
+        // A2 (QUA-18). Two triggers with two styles, on the Group so they survive the phase switch:
+        // accepting a suggestion is a nudge, creating the journey is the event the whole sheet exists
+        // for. The sheet dismisses immediately after creating, so the haptic is the last thing the
+        // user gets from it.
         Group {
             switch phase {
             case .chooser:
@@ -224,6 +238,12 @@ struct NewJourneySheet: View {
                 reviewBody
             }
         }
+        // A2 (QUA-18): two triggers, two styles. Accepting a suggestion is a nudge; creating the
+        // journey is the event this whole sheet exists for, and since the sheet dismisses straight
+        // afterwards the haptic is the last thing the user gets from it. Counters rather than flags,
+        // so two accepts in a row give two ticks instead of coalescing into one.
+        .sensoryFeedback(.selection, trigger: acceptTick)
+        .sensoryFeedback(.success, trigger: createdTick)
         // Lives above the phase switch because the photo picker itself is presented from the
         // chooser card, but its result must be handled the same way regardless of which phase is
         // on screen (the review screen's own "Days from photos" section reuses this exact binding
@@ -566,8 +586,13 @@ struct NewJourneySheet: View {
             distanceKm: JourneyDraft.totalDistanceKm(route: file.route.coordinates),
             waypointCount: file.waypoints.count,
             droppedCount: file.droppedPointCount)
+        // DIFF-11: `days(fromGPX:)` rather than `days(fromWaypoints:)`. It still prefers explicit
+        // `<wpt>` markers when the file has them — those are human-named camps — and falls back to
+        // clustering the track's own timestamps when it does not. Before this line changed, a Strava
+        // or Garmin export (all trackpoints, no waypoints) produced a route with ZERO days and the
+        // user built every one by hand, which was the entire point of DIFF-09.
         let days = (currentDays.isEmpty || JourneyDraft.daysAreAllAutoSeeded(currentDays))
-            ? JourneyDraft.days(fromWaypoints: file.waypoints)
+            ? JourneyDraft.days(fromGPX: file)
             : currentDays
         return (file.route, summary, days)
     }
@@ -710,10 +735,18 @@ struct NewJourneySheet: View {
         // they have not decided, and which no other language can even imitate.
         let base = String(localized: "\(stagedPhotos.count) photos ready",
                           comment: "New journey: how many picked photos are staged and ready to import.")
-        guard photoDayCount > 0 else { return base }
+        // QUA-14: a shortfall is stated, not absorbed. Appended rather than replacing the count,
+        // because what landed is still the more important number.
+        let shortfall = photoStageFailed > 0
+            ? String(localized: "\(photoStageFailed) couldn't be read and were skipped",
+                     comment: "New journey: appended when some picked photos failed to import.")
+            : nil
+        guard photoDayCount > 0 else {
+            return [base, shortfall].compactMap { $0 }.joined(separator: " · ")
+        }
         let grouped = String(localized: "grouped into \(photoDayCount) days by capture date",
                              comment: "New journey: appended to the staged-photo count when capture dates produced days.")
-        return "\(base) · \(grouped)"
+        return [base, grouped, shortfall].compactMap { $0 }.joined(separator: " · ")
     }
 
     /// Shown after a free-tier partial import: what landed, what didn't, and the way to unlock the
@@ -767,8 +800,11 @@ struct NewJourneySheet: View {
 
         let service = PhotoIngestService()
         var order = stagedPhotos.count
+        var failed = 0
         for item in items {
-            if let photo = try? await service.ingest(pickerItem: item, journeyId: draft.id, sortOrder: order) {
+            do {
+                let photo = try await service.ingest(pickerItem: item, journeyId: draft.id,
+                                                     sortOrder: order)
                 if stagingCancelled {
                     // The sheet was cancelled while this item was still loading — its bytes were
                     // just written, so delete them immediately rather than leaving them orphaned.
@@ -777,9 +813,17 @@ struct NewJourneySheet: View {
                     stagedPhotos.append(photo)
                     order += 1
                 }
+            } catch {
+                // QUA-14: this was `try?`, so a photo that failed to import simply was not there.
+                // The review screen's count is honest about what landed, but an unexplained
+                // shortfall — six picked, four ready — reads as the app losing photos, which is the
+                // exact C2 failure this flow was built to avoid. Count them and say so; the import
+                // itself still continues, because one unreadable item must not abandon the rest.
+                failed += 1
             }
             photoStageDone += 1
         }
+        photoStageFailed = stagingCancelled ? 0 : failed
         guard !stagingCancelled else { return }
 
         // Route-inference fixes come from the SAME ingested photos — no altitude (`Photo` doesn't
@@ -854,11 +898,15 @@ struct NewJourneySheet: View {
     private func accept(_ key: SuggestionKey) {
         suggestions.accept(key, into: &draft)
         syncRouteSummaryFromDraft()
+        acceptTick += 1
     }
 
     private func acceptAllSuggestions() {
         suggestions.acceptAll(into: &draft)
         syncRouteSummaryFromDraft()
+        // One tick for the batch, not one per suggestion — a dozen accepts firing together would
+        // be a buzz rather than a confirmation.
+        acceptTick += 1
     }
 
     /// Refresh the route summary card when the draft's route no longer matches it — after a
@@ -1174,6 +1222,7 @@ struct NewJourneySheet: View {
     /// Land the user in their new journey via the existing deep-link path (the globe observes
     /// `pendingJourneySelection` and flies to it).
     private func finish(_ journey: Journey) {
+        createdTick += 1
         store.requestJourneySelection(journey.id)
         onCreated(journey)
         dismiss()

@@ -365,6 +365,19 @@ final class EntitlementStore: ObservableObject {
     /// The real StoreKit entitlement (before any override). Published so capability reads refresh.
     @Published private(set) var realEntitlement: Entitlement = .free
 
+    /// Whether `realEntitlement` reflects an actual answer from StoreKit yet (QUA-15).
+    ///
+    /// It starts `.free` because there is no third case to start it in, which means on every cold
+    /// launch a paying customer looks free-tier until `refreshEntitlement()` returns — and
+    /// indefinitely if it never does. That is the worst possible first impression in a paid app, so
+    /// the UI needs to be able to tell "free" from "not known yet" and say *checking* rather than
+    /// putting up a wall the customer already paid to remove.
+    ///
+    /// Deliberately does NOT loosen any capability gate. Treating unknown as entitled would let a
+    /// genuinely free account create a second journey whenever StoreKit was slow, which trades one
+    /// wrong answer for another. The gates stay strict; only what is *shown* changes.
+    @Published private(set) var hasResolvedEntitlement = false
+
     /// The loaded product (price/name for the paywall), or nil while loading / if unavailable.
     @Published private(set) var product: StoreProduct?
 
@@ -400,6 +413,13 @@ final class EntitlementStore: ObservableObject {
     }
 
     var isComplete: Bool { current == .complete }
+
+    /// True once the entitlement is known — either StoreKit answered, or an override is in force
+    /// (overrides are deterministic by construction, which is the point of them).
+    var isEntitlementDetermined: Bool {
+        hasResolvedEntitlement
+            || EntitlementOverride.resolvedOverride(defaults: defaults, environment: environment) != nil
+    }
 
     private var policy: EntitlementPolicy { EntitlementPolicy(entitlement: current) }
 
@@ -444,6 +464,9 @@ final class EntitlementStore: ObservableObject {
     /// Re-read the verified entitlement (launch + after purchase/restore).
     func refreshEntitlement() async {
         realEntitlement = await provider.currentEntitlement()
+        // Set after the assignment and never reset: once StoreKit has answered once, "free" is a
+        // real answer rather than the initial placeholder (QUA-15).
+        hasResolvedEntitlement = true
     }
 
     /// Load the product for its price/name, with graceful failure so an offline launch never

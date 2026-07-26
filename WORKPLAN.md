@@ -5,23 +5,23 @@
 
 # Akashic — work ledger
 
-89 tasks · **41 open** (24 agent-doable, 31.9 dev-days · 17 owner-only, 8.5 dev-days) · 48 done · 0 dropped
+89 tasks · **34 open** (17 agent-doable, 28.9 dev-days · 17 owner-only, 8.5 dev-days) · 55 done · 0 dropped
 
 > **`dev-days` are a human-developer estimate, not agent time.** They came from the review
 > that produced these tasks and they are the right unit for deciding whether something is
 > worth doing — they are the wrong unit for predicting how long an agent will take, and
 > summing them as "work remaining" overstates it substantially.
 >
-> Measured so far: **48 agent tasks estimated at 25.7 dev-days**,
+> Measured so far: **55 agent tasks estimated at 28.7 dev-days**,
 > closed in roughly one working afternoon across up to three parallel tracks.
 >
 > But that compression is **unmeasured for the large items**: of the tasks closed so far,
 > 1 were 2 dev-days or more. 20 of the
-> 31.9 remaining dev-days sit in 6 such tasks —
+> 28.9 remaining dev-days sit in 6 such tasks —
 > localisation, Swift 6 strict concurrency, a UI test target, the PDF book. Those involve
 > design judgement and broad-blast-radius refactors rather than localised edits, so do not
 > assume the same ratio holds. The cheap band is nearly exhausted:
-> 12 tasks at 0.5 dev-days or less remain.
+> 5 tasks at 0.5 dev-days or less remain.
 
 Read [CLAUDE.md](CLAUDE.md) before touching anything. To find work:
 
@@ -33,7 +33,10 @@ node scripts/workplan.mjs next
 
 | Task | Agent | Branch | Stopped at |
 |---|---|---|---|
+| `SHIP-03` Produce the 12 App Store screenshots | shots-worktree | `claude/ship03-screenshots` | — |
 | `DIFF-04` On-device photo curation with Vision | opus5 | `claude/remote-control-project-review-9462c1` | Policy (PhotoCuration), Vision scorer (VisionPhotoScorer), service with appliers (PhotoCurationService) and two JourneyStore entry points are all written and covered by 28 tests. Design question from the earlier note is RESOLVED and the earlier plan was wrong: this cannot be a SuggestionKey, because the coordinator applies to a JourneyDraft and a draft carries days but no photos — during creation they live in the view's stagedPhotos. Hence a service. Hero uses the existing Photo.isHero (setPhotoHero already enforces the single-hero invariant); best-of redistributes the DAY'S OWN sortOrder slots so the selection leads without reaching into another day — no Core Data change. Nothing is destructive: duplicates are reported, never actioned. STILL NOT LIVE: no UI calls curationProposal, so the chain is absent from the built binary and Vision does not link. All that remains is accept/dismiss rows in the day view — Views/, which was held by the localisation agent. |
+| `QUA-25` Bound public-showcase reads before traffic arrives | nonviews-worktree | `claude/qua26-qua25` | — |
+| `QUA-26` Localise the user-visible strings outside Views/ | nonviews-worktree | `claude/qua26-qua25` | — |
 
 ## LEGACY
 
@@ -95,7 +98,7 @@ node scripts/workplan.mjs next
 |---|---|---|---|---|---|
 | `x` | `SHIP-01` **Move the two dropped Info.plist keys into info.properties** | 0.25 | agent | — | The built Release-CloudKit Info.plist contains CKSharingSupported and UIBackgroundModes. |
 | `x` | `SHIP-02` **Register for remote notifications — the missing half of push sync** | 0.5 | agent | `SHIP-01` | The app calls registerForRemoteNotifications and a device receives a CloudKit push. |
-| ` ` | `SHIP-03` **Produce the 12 App Store screenshots** | 1.5 | agent | `SHIP-06` `QUA-06` | Twelve assets exist at the two required sizes and are committed under docs/store/screenshots/. |
+| `~` | `SHIP-03` **Produce the 12 App Store screenshots** | 1.5 | agent | `SHIP-06` `QUA-06` | Twelve assets exist at the two required sizes and are committed under docs/store/screenshots/. |
 | `x` | `SHIP-04` **Add PrivacyInfo.xcprivacy** | 0.25 | agent | — | The manifest ships in the app bundle and the upload draws no ITMS-91053 notice. |
 | `x` | `SHIP-05` **Bump the marketing version to 1.0.0** | 0.1 | agent | — | The built plist reports CFBundleShortVersionString 1.0.0. |
 | `x` | `SHIP-06` **D5 — consumer sync wording, iPhone portrait lock, ASC config match** | 0.5 | agent | — | Settings shows no engineering strings and iPhone does not rotate into the iPad panel layout. |
@@ -117,7 +120,7 @@ node scripts/workplan.mjs next
 
 > Capability beyond what competitors offer. Order set by decision: share link, then Vision curation, then the book.
 
-7 open of 12 · 13.8 d remaining
+6 open of 12 · 13.5 d remaining
 
 | | Task | Days | Who | Deps | Finish line |
 |---|---|---|---|---|---|
@@ -131,14 +134,14 @@ node scripts/workplan.mjs next
 | ` ` | `DIFF-08` **Foundation Models depth: streaming, prewarm, typed errors** | 1.5 | agent | `QUA-05` | Drafting streams, sessions are reused, and guardrail refusals say something specific. |
 | `x` | `DIFF-09` **C9 — derive days from timestamped GPX trackpoints** | 1 | agent | — | A Strava or Garmin export yields a journey with correctly dated days. |
 | `x` | `DIFF-10` **Give the demo journey photographs** | 1.5 | agent | — | A first launch shows a journey with real photographs, and a photos-only trip is demoed too. |
-| ` ` | `DIFF-11` **Wire GPX day derivation into the creation flow** | 0.25 | agent | `DIFF-09` | Importing a timestamped GPX yields a journey with correctly dated days, not zero. |
+| `x` | `DIFF-11` **Wire GPX day derivation into the creation flow** | 0.25 | agent | `DIFF-09` | Importing a timestamped GPX yields a journey with correctly dated days, not zero. |
 | ` ` | `DIFF-12` **Decide what photographs the demo journey ships with** | 0.5 | owner | `DIFF-10` | A decision is recorded, and the shipped demo images are the ones intended. |
 
 ## QUALITY
 
 > Tests, types, CI, localisation, accessibility. Localisation and accessibility are in v1.0 by decision.
 
-13 open of 26 · 16.3 d remaining
+7 open of 26 · 13.5 d remaining
 
 | | Task | Days | Who | Deps | Finish line |
 |---|---|---|---|---|---|
@@ -155,19 +158,19 @@ node scripts/workplan.mjs next
 | `x` | `QUA-11` **Handle a full iCloud account** | 0.5 | agent | — | A quota-exceeded sync failure is visible in the UI and says what to do. |
 | `x` | `QUA-12` **Tests for KnowledgeRetrieval, and fix its two real defects** | 1.5 | agent | `DOC-10` | The retrieval path has tests, including the cross-project de-dup and empty-coordinate cases. |
 | `x` | `QUA-13` **Stop video import loading whole files into memory** | 0.5 | agent | — | Importing a multi-minute 4K video does not jetsam the app. |
-| ` ` | `QUA-14` **Name the shortfall when photo ingest partly fails** | 0.25 | agent | — | A creation flow that ingests fewer photos than picked says so. |
-| ` ` | `QUA-15` **Add an 'entitlement undetermined' state** | 0.5 | agent | — | A paying customer is never shown the free-tier wall while StoreKit is still resolving. |
-| ` ` | `QUA-16` **Make the 100-photo cap a limit, not a failure** | 0.5 | agent | — | The cap is visible before ingest work starts, not reported after it. |
-| ` ` | `QUA-17` **Sell what the purchase actually unlocks** | 0.5 | agent | — | The paywall lists all four unlocked capabilities and carries the price anchor. |
-| ` ` | `QUA-18` **A2 — haptics on meaningful transitions** | 0.5 | agent | — | The five named moments produce sensory feedback. |
+| `x` | `QUA-14` **Name the shortfall when photo ingest partly fails** | 0.25 | agent | — | A creation flow that ingests fewer photos than picked says so. |
+| `x` | `QUA-15` **Add an 'entitlement undetermined' state** | 0.5 | agent | — | A paying customer is never shown the free-tier wall while StoreKit is still resolving. |
+| `x` | `QUA-16` **Make the 100-photo cap a limit, not a failure** | 0.5 | agent | — | The cap is visible before ingest work starts, not reported after it. |
+| `x` | `QUA-17` **Sell what the purchase actually unlocks** | 0.5 | agent | — | The paywall lists all four unlocked capabilities and carries the price anchor. |
+| `x` | `QUA-18` **A2 — haptics on meaningful transitions** | 0.5 | agent | — | The five named moments produce sensory feedback. |
 | `x` | `QUA-19` **Redraw the app icon** | 0.5 | agent | — | The icon is legible at 60 pt and works in light, dark and tinted appearances. |
 | ` ` | `QUA-20` **A4 — the 'would Apple ship this screen?' review round** | 1 | agent | `QUA-07` `QUA-18` `QUA-19` | Each primary screen has been reviewed against current HIG and the findings closed or recorded. |
 | `x` | `QUA-21` **Redraw the web and PWA icons — same illegibility, plus transparency** | 0.25 | agent | — | Every derived web icon is opaque and its mark clears 4.5:1 against its own ground. |
-| ` ` | `QUA-22` **Make the paywall list what the purchase now advertises** | 0.5 | agent | `DOC-08` | EntitlementPolicy, the paywall benefit list and the IAP description all name the same set. |
+| `x` | `QUA-22` **Make the paywall list what the purchase now advertises** | 0.5 | agent | `DOC-08` | EntitlementPolicy, the paywall benefit list and the IAP description all name the same set. |
 | `x` | `QUA-23` **Remove the dead tab state from useTrekData** | 0.25 | agent | — | No hook exposes state nothing renders, and its tests reflect that. |
 | ` ` | `QUA-24` **Accessibility for the screens D1 and D3 were never scoped to cover** | 2 | agent | `QUA-06` | No view directory with interactive controls sits at zero accessibility labels. |
-| ` ` | `QUA-25` **Bound public-showcase reads before traffic arrives** | 1 | agent | — | A published journey has a size bound, and crossing a usage threshold is visible to the owner. |
-| ` ` | `QUA-26` **Localise the user-visible strings outside Views/** | 0.5 | agent | `QUA-06` | No user-visible string reaches the screen in English when the app runs in Norwegian. |
+| `~` | `QUA-25` **Bound public-showcase reads before traffic arrives** | 1 | agent | — | A published journey has a size bound, and crossing a usage threshold is visible to the owner. |
+| `~` | `QUA-26` **Localise the user-visible strings outside Views/** | 0.5 | agent | `QUA-06` | No user-visible string reaches the screen in English when the app runs in Norwegian. |
 
 ## Decisions on record
 

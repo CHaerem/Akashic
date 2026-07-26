@@ -618,7 +618,7 @@
       "id": "SHIP-03",
       "track": "SHIP",
       "title": "Produce the 12 App Store screenshots",
-      "status": "TODO",
+      "status": "WIP",
       "effort": 1.5,
       "done_when": "Twelve assets exist at the two required sizes and are committed under docs/store/screenshots/.",
       "priority": 20,
@@ -637,7 +637,12 @@
       ],
       "refs": [
         "Shot 5 (UICloudSharingController with participants) may not be reachable in a simulator — substitute JourneyShareView"
-      ]
+      ],
+      "claim": {
+        "agent": "shots-worktree",
+        "branch": "claude/ship03-screenshots",
+        "at": "2026-07-26"
+      }
     },
     {
       "id": "SHIP-04",
@@ -1460,7 +1465,7 @@
       "id": "QUA-14",
       "track": "QUALITY",
       "title": "Name the shortfall when photo ingest partly fails",
-      "status": "TODO",
+      "status": "DONE",
       "effort": 0.25,
       "done_when": "A creation flow that ingests fewer photos than picked says so.",
       "files": [
@@ -1471,13 +1476,19 @@
       "verify": [
         "cd apple && xcodegen generate",
         "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,id=$(xcrun simctl list devices available | grep -o '[0-9A-F-]\\{36\\}' | tail -1)\" CODE_SIGNING_ALLOWED=NO test"
-      ]
+      ],
+      "claim": {
+        "agent": "opus5",
+        "branch": "claude/remote-control-project-review-9462c1",
+        "at": "2026-07-26"
+      },
+      "evidence": "The staging loop now counts failures instead of swallowing them with try?, and the review screen states the shortfall ('N couldn't be read and were skipped') alongside what landed. The import still continues past one unreadable item. Appended rather than replacing the count, because what landed is the more important number."
     },
     {
       "id": "QUA-15",
       "track": "QUALITY",
       "title": "Add an 'entitlement undetermined' state",
-      "status": "TODO",
+      "status": "DONE",
       "effort": 0.5,
       "done_when": "A paying customer is never shown the free-tier wall while StoreKit is still resolving.",
       "files": [
@@ -1488,13 +1499,19 @@
       "verify": [
         "cd apple && xcodegen generate",
         "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,id=$(xcrun simctl list devices available | grep -o '[0-9A-F-]\\{36\\}' | tail -1)\" CODE_SIGNING_ALLOWED=NO test"
-      ]
+      ],
+      "claim": {
+        "agent": "opus5",
+        "branch": "claude/remote-control-project-review-9462c1",
+        "at": "2026-07-26"
+      },
+      "evidence": "hasResolvedEntitlement added and set after the first refreshEntitlement, with isEntitlementDetermined also honouring an override (deterministic by construction). Settings now says 'Checking…' rather than 'Free' while unknown. Deliberately did NOT loosen any capability gate — treating unknown as entitled would let a genuinely free account create a second journey whenever StoreKit was slow, trading one wrong answer for another; there is a test asserting the gate stays strict. 6 tests, reusing the existing FakeStoreKitProvider rather than defining a second fake."
     },
     {
       "id": "QUA-16",
       "track": "QUALITY",
       "title": "Make the 100-photo cap a limit, not a failure",
-      "status": "TODO",
+      "status": "DONE",
       "effort": 0.5,
       "done_when": "The cap is visible before ingest work starts, not reported after it.",
       "files": [
@@ -1506,13 +1523,19 @@
       "verify": [
         "cd apple && xcodegen generate",
         "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,id=$(xcrun simctl list devices available | grep -o '[0-9A-F-]\\{36\\}' | tail -1)\" CODE_SIGNING_ALLOWED=NO test"
-      ]
+      ],
+      "claim": {
+        "agent": "opus5",
+        "branch": "claude/remote-control-project-review-9462c1",
+        "at": "2026-07-26"
+      },
+      "evidence": "The picker's maxSelectionCount is now the remaining free-tier allowance instead of 0 (unlimited), and the button states 'N left on the free tier' before the pick. So the cap is a budget the picker enforces rather than a failure reported after 300 photos were decoded, EXIF-read, thumbnailed and written to disk. The partial-import path stays as the fallback for a journey already over the cap."
     },
     {
       "id": "QUA-17",
       "track": "QUALITY",
       "title": "Sell what the purchase actually unlocks",
-      "status": "TODO",
+      "status": "DONE",
       "effort": 0.5,
       "done_when": "The paywall lists all four unlocked capabilities and carries the price anchor.",
       "files": [
@@ -1523,25 +1546,40 @@
       "verify": [
         "cd apple && xcodegen generate",
         "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,id=$(xcrun simctl list devices available | grep -o '[0-9A-F-]\\{36\\}' | tail -1)\" CODE_SIGNING_ALLOWED=NO test"
-      ]
+      ],
+      "claim": {
+        "agent": "opus5",
+        "branch": "claude/remote-control-project-review-9462c1",
+        "at": "2026-07-26"
+      },
+      "evidence": "The paywall carries the value anchor the plan's own pricing argument rests on: less than half the price of one printed photo book, for every trip the family ever takes. No competitor figure quoted — that would go stale and invite a claim we would have to keep true."
     },
     {
       "id": "QUA-18",
       "track": "QUALITY",
       "title": "A2 — haptics on meaningful transitions",
-      "status": "TODO",
+      "status": "DONE",
       "effort": 0.5,
       "done_when": "The five named moments produce sensory feedback.",
       "files": [
-        "apple/Akashic/Views/**"
+        "apple/Akashic/Views/Store/PaywallView.swift",
+        "apple/Akashic/Views/Map/DayNavigationView.swift",
+        "apple/Akashic/Views/JourneyDetailView.swift",
+        "apple/Akashic/Views/NewJourney/NewJourneySheet.swift"
       ],
       "serialise_with": "QUA-06, QUA-07 also touch Views/**",
-      "why": "Zero sensoryFeedback in the codebase, so day selected, journey created, purchase completed, suggestion accepted and destructive confirm are all silent. On Apple hardware that absence reads as unfinished.",
+      "why": "Zero sensoryFeedback in the codebase, so day selected, journey created, purchase completed, suggestion accepted and destructive confirm are all silent. On Apple hardware that absence reads as unfinished. File list narrowed from a Views/** glob to the four files that actually carry the five moments — the glob was imprecise and collided with QUA-25's Showcase file, which is a different agent's. Making the list accurate is the fix; widening the exemption would not be.",
       "verify": [
         "cd apple && xcodegen generate",
         "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,id=$(xcrun simctl list devices available | grep -o '[0-9A-F-]\\{36\\}' | tail -1)\" CODE_SIGNING_ALLOWED=NO test",
         "grep -rn sensoryFeedback apple/Akashic/Views/ | wc -l"
-      ]
+      ],
+      "claim": {
+        "agent": "opus5",
+        "branch": "claude/remote-control-project-review-9462c1",
+        "at": "2026-07-26"
+      },
+      "evidence": "All five moments: day selection (.selection, attached to the selection VALUE so one declaration covers pills, chevrons and programmatic moves), suggestion accepted (.selection via a counter so two accepts give two ticks), journey created (.success), purchase completed (.success, with a false-to-true predicate), destructive delete (.warning, and only after the delete actually succeeded — firing on a failed delete would tell the user their journey is gone when it is not)."
     },
     {
       "id": "QUA-19",
@@ -1732,7 +1770,7 @@
       "id": "QUA-22",
       "track": "QUALITY",
       "title": "Make the paywall list what the purchase now advertises",
-      "status": "TODO",
+      "status": "DONE",
       "effort": 0.5,
       "priority": 15,
       "deps": [
@@ -1747,7 +1785,13 @@
       "verify": [
         "cd apple && xcodegen generate",
         "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,id=$(xcrun simctl list devices available | grep -o '[0-9A-F-]\\{36\\}' | tail -1)\" CODE_SIGNING_ALLOWED=NO test"
-      ]
+      ],
+      "claim": {
+        "agent": "opus5",
+        "branch": "claude/remote-control-project-review-9462c1",
+        "at": "2026-07-26"
+      },
+      "evidence": "Akashic Intelligence is now listed on the paywall, hedged on Apple Intelligence hardware so it is not promised flatly to a device that cannot run it. Closes the mismatch DOC-08 created by putting it in the store and IAP descriptions while the paywall listed two of four benefits — launch-checklist Phase C requires those three to agree."
     },
     {
       "id": "QUA-23",
@@ -1814,7 +1858,7 @@
       "id": "QUA-25",
       "track": "QUALITY",
       "title": "Bound public-showcase reads before traffic arrives",
-      "status": "TODO",
+      "status": "WIP",
       "effort": 1,
       "priority": 28,
       "done_when": "A published journey has a size bound, and crossing a usage threshold is visible to the owner.",
@@ -1828,7 +1872,12 @@
       "verify": [
         "cd apple && xcodegen generate",
         "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,id=$(xcrun simctl list devices available | grep -o '[0-9A-F-]\\{36\\}' | tail -1)\" CODE_SIGNING_ALLOWED=NO test"
-      ]
+      ],
+      "claim": {
+        "agent": "nonviews-worktree",
+        "branch": "claude/qua26-qua25",
+        "at": "2026-07-26"
+      }
     },
     {
       "id": "DIFF-10",
@@ -1860,7 +1909,7 @@
       "id": "DIFF-11",
       "track": "DIFF",
       "title": "Wire GPX day derivation into the creation flow",
-      "status": "TODO",
+      "status": "DONE",
       "effort": 0.25,
       "priority": 23,
       "deps": [
@@ -1876,7 +1925,13 @@
         "cd apple && xcodegen generate",
         "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,id=$(xcrun simctl list devices available | grep -o '[0-9A-F-]\\{36\\}' | tail -1)\" CODE_SIGNING_ALLOWED=NO test",
         "Import a multi-day timestamped GPX and confirm the day count"
-      ]
+      ],
+      "claim": {
+        "agent": "opus5",
+        "branch": "claude/remote-control-project-review-9462c1",
+        "at": "2026-07-26"
+      },
+      "evidence": "One line: days(fromWaypoints:) -> days(fromGPX:) in NewJourneySheet.applying. days(fromGPX:) already prefers explicit <wpt> markers when present and falls back to trackpoint-time clustering, so a Strava or Garmin export now yields dated days instead of zero — which was the entire point of DIFF-09."
     },
     {
       "id": "DIFF-12",
@@ -1899,7 +1954,7 @@
       "id": "QUA-26",
       "track": "QUALITY",
       "title": "Localise the user-visible strings outside Views/",
-      "status": "TODO",
+      "status": "WIP",
       "effort": 0.5,
       "priority": 29,
       "deps": [
@@ -1918,7 +1973,12 @@
         "cd apple && xcodegen generate",
         "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,id=$(xcrun simctl list devices available | grep -o '[0-9A-F-]\\{36\\}' | tail -1)\" CODE_SIGNING_ALLOWED=NO test",
         "Run under -AppleLanguages \"(nb)\" and read Settings > Status, the appearance picker, and a forced error"
-      ]
+      ],
+      "claim": {
+        "agent": "nonviews-worktree",
+        "branch": "claude/qua26-qua25",
+        "at": "2026-07-26"
+      }
     }
   ]
 }
