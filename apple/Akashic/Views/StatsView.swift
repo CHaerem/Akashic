@@ -151,7 +151,7 @@ struct StatsView: View {
         .transition(.opacity)
     }
 
-    private func dayMetric(_ label: String, _ value: String, _ icon: String) -> some View {
+    private func dayMetric(_ label: LocalizedStringKey, _ value: String, _ icon: String) -> some View {
         VStack(alignment: .leading, spacing: 3) {
             Image(systemName: icon).font(.caption2).foregroundStyle(Theme.accent)
             Text(value).font(.subheadline.weight(.semibold)).foregroundStyle(Theme.textPrimary)
@@ -212,7 +212,11 @@ struct StatsView: View {
                 sectionLabel("Rating")
                 HStack(spacing: 8) {
                     Circle().fill(color).frame(width: 10, height: 10)
-                    Text(extended.difficulty)
+                    // `extended.difficulty` is a stable English token (see
+                    // `ExtendedStatsCalculator.localizedDifficulty`), so it has to be translated
+                    // here at the display seam — `Text(extended.difficulty)` rendered the raw
+                    // token verbatim and could never have been localised.
+                    Text(ExtendedStatsCalculator.localizedDifficulty(extended.difficulty))
                         .font(.title3.weight(.semibold))
                         .foregroundStyle(color)
                 }
@@ -224,12 +228,13 @@ struct StatsView: View {
 
     // MARK: - Building blocks
 
-    private func sectionLabel(_ text: String) -> some View {
+    private func sectionLabel(_ text: LocalizedStringKey) -> some View {
         // Was a fixed 10 pt at `Theme.textTertiary` (40% white) — small size and low contrast
         // compounded into the least readable text in the tab. `.caption2` is the size floor;
         // `textSecondary` (62% white) is the fix for a *label*, as opposed to a de-emphasised
         // value, sitting at that size.
-        Text(text.uppercased())
+        Text(text)
+            .textCase(.uppercase)
             .font(.caption2.weight(.medium))
             .tracking(1.4)
             .foregroundStyle(Theme.textSecondary)
@@ -280,9 +285,13 @@ struct StatsView: View {
 /// A single stat cell mirroring the web `StatItem`: uppercase label, large light value,
 /// optional accent colour and sublabel.
 struct StatItem: View {
-    let label: String
+    let label: LocalizedStringKey
     let value: String
-    var sublabel: String?
+    /// Prose after all. This was left as a `String` on the assumption that callers pass formatted
+    /// measurements — but both of them pass "Day \(n)", which rendered "Day 2" under the Norwegian
+    /// "LENGSTE DAG" heading. Caught by looking at the Stats tab in nb rather than by the compiler,
+    /// which is the argument for actually running the app in the language.
+    var sublabel: LocalizedStringKey?
     var color: Color?
 
     var body: some View {
@@ -291,10 +300,17 @@ struct StatItem: View {
                 // Same fix as `StatsView.sectionLabel`: a 10 pt label at `textTertiary` is small
                 // and low-contrast together. `value` below keeps `textTertiary` as its fallback —
                 // it's a de-emphasised number, not a label, so out of scope for the lift.
-                Text(label.uppercased())
+                // `.textCase(.uppercase)` rather than `label.uppercased()`, which forced `String`
+                // and so kept all fourteen extended-stat labels out of the catalogue. Two lines
+                // are allowed now: "Avg. Daily Distance" is "Gj.sn. dagsdistanse" in Norwegian
+                // and does not fit one line in a two-column grid at this size.
+                Text(label)
+                    .textCase(.uppercase)
                     .font(.caption2.weight(.medium))
                     .tracking(1.0)
                     .foregroundStyle(Theme.textSecondary)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
                 Text(value)
                     .font(.title3.weight(.light))
                     .foregroundStyle(color ?? Theme.textPrimary)

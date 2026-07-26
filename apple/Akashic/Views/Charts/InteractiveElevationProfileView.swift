@@ -280,7 +280,7 @@ struct InteractiveElevationProfileView: View {
         .foregroundStyle(Theme.textTertiary)
     }
 
-    private var hint: String { "Pinch to zoom · Drag to scrub · Tap a day marker" }
+    private var hint: LocalizedStringKey { "Pinch to zoom · Drag to scrub · Tap a day marker" }
 
     // MARK: - Gestures
 

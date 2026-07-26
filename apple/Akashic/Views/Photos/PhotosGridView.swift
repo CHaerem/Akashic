@@ -38,7 +38,9 @@ struct PhotosGridView: View {
                     )
                 }
                 if !grouped.unassigned.isEmpty {
-                    section(title: "Unassigned", subtitle: "Not matched to a day",
+                    section(title: "Unassigned",
+                            subtitle: String(localized: "Not matched to a day",
+                                             comment: "Photo grid: subtitle of the section holding photos with no day."),
                             photos: grouped.unassigned, dayLabel: nil, journey: journey)
                 }
             }
@@ -98,7 +100,10 @@ struct PhotosGridView: View {
                 set: { if !$0 { photoPendingDelete = nil } })
     }
 
-    private func section(title: String, subtitle: String?, photos: [Photo],
+    /// `subtitle` stays a `String?`: in the per-day sections it is the camp's own name, which is
+    /// the customer's data and must not go near the catalogue. Only the Unassigned section passes
+    /// prose, and it resolves it at the call site.
+    private func section(title: LocalizedStringKey, subtitle: String?, photos: [Photo],
                          dayLabel: String?, journey: Journey?) -> some View {
         Section {
             LazyVGrid(columns: columns, spacing: 4) {

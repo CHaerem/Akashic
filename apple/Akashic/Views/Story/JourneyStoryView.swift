@@ -157,9 +157,11 @@ struct JourneyStoryView: View {
     }
 
     private func summaryLine(_ live: Journey) -> String {
-        var parts = ["\(live.stats.duration) day\(live.stats.duration == 1 ? "" : "s")"]
+        var parts = [String(localized: "\(live.stats.duration) days",
+                            comment: "Journey story header: how many days the trip lasted.")]
         if let summit = live.stats.highestPoint {
-            parts.append("Summit: \(Formatters.meters(summit.elevation))")
+            parts.append(String(localized: "Summit: \(Formatters.meters(summit.elevation))",
+                                comment: "Journey story header: the highest point reached, e.g. \"Summit: 5 895 m\"."))
         }
         return parts.joined(separator: " · ")
     }

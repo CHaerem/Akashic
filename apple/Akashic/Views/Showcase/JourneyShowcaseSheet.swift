@@ -57,8 +57,7 @@ struct JourneyShowcaseSheet: View {
                 Button("Publish anyway") { performPublish() }
                 Button("Wait for Wi-Fi", role: .cancel) {}
             } message: {
-                Text("About \(ByteCount.string(estimatedPublishBytes)) of thumbnails and metadata "
-                     + "will upload over cellular. Full-resolution photos are never uploaded.")
+                Text("About \(ByteCount.string(estimatedPublishBytes)) of thumbnails and metadata will upload over cellular. Full-resolution photos are never uploaded.")
             }
         }
     }
@@ -153,7 +152,10 @@ struct JourneyShowcaseSheet: View {
                 VStack(alignment: .leading, spacing: 8) {
                     ProgressView(value: model.progress?.fraction ?? 0)
                         .tint(Theme.accent)
-                    Text(model.progress?.phase ?? "Working…")
+                    // `phase` is supplied by the publish service; the fallback is ours and needs the
+        // catalogue.
+        Text(model.progress?.phase ?? String(localized: "Working…",
+                                             comment: "Showcase publish: placeholder while no phase has been reported yet."))
                         .font(.caption).foregroundStyle(Theme.textSecondary)
                 }
 
@@ -191,7 +193,8 @@ struct JourneyShowcaseSheet: View {
                  : (report.succeeded ? "Showcase updated" : "Finished with some failures"))
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(report.succeeded ? Theme.textPrimary : Theme.warning)
-            labelled("Published", "\(report.published) record\(report.published == 1 ? "" : "s")")
+            labelled("Published", String(localized: "\(report.published) records",
+                                     comment: "Showcase publish report: how many records reached the public mirror."))
             if report.skippedNoThumb > 0 {
                 labelled("Skipped (no thumbnail)", "\(report.skippedNoThumb)")
             }
@@ -224,7 +227,7 @@ struct JourneyShowcaseSheet: View {
         }
     }
 
-    private func labelled(_ title: String, _ value: String) -> some View {
+    private func labelled(_ title: LocalizedStringKey, _ value: String) -> some View {
         HStack {
             Text(title).font(.caption).foregroundStyle(Theme.textSecondary)
             Spacer()
@@ -327,7 +330,8 @@ final class ShowcaseViewModel: ObservableObject {
         #endif
     }
 
-    static let notOwnerMessage = "Only the journey's owner can manage the public showcase."
+    static let notOwnerMessage = String(localized: "Only the journey's owner can manage the public showcase.",
+                                        comment: "Showcase: shown to someone a journey was shared with.")
 
     func reset() {
         guard !isWorking else { return }
@@ -383,7 +387,9 @@ final class ShowcaseViewModel: ObservableObject {
                      setPublic: @escaping (Bool) -> Bool,
                      _ body: @escaping (PublicMirrorPublishing) async -> PublicMirrorReport) {
         phase = .working
-        progress = PublicMirrorProgress(fraction: 0, phase: "Starting")
+        progress = PublicMirrorProgress(fraction: 0,
+                                        phase: String(localized: "Starting",
+                                                      comment: "Showcase publish: first progress phase."))
         task = Task {
             switch await self.resolveMirror() {
             case .unavailable(let message):
@@ -405,10 +411,12 @@ final class ShowcaseViewModel: ObservableObject {
         }
     }
 
-    static let publishFlagWriteFailed =
-        "The showcase was updated, but this device could not save the Public flag locally. The journey may still show as Private here — reopen and try again."
-    static let removeFlagWriteFailed =
-        "The showcase was removed, but this device could not save the Private flag locally. The journey may still show as Public here — reopen and try again."
+    static let publishFlagWriteFailed = String(
+        localized: "The showcase was updated, but this device could not save the Public flag locally. The journey may still show as Private here — reopen and try again.",
+        comment: "Showcase: publish succeeded remotely but the local flag write failed.")
+    static let removeFlagWriteFailed = String(
+        localized: "The showcase was removed, but this device could not save the Private flag locally. The journey may still show as Public here — reopen and try again.",
+        comment: "Showcase: unpublish succeeded remotely but the local flag write failed.")
 
     /// Production resolver: build the public database behind the entitlement gate and confirm an
     /// available iCloud account.
@@ -417,7 +425,8 @@ final class ShowcaseViewModel: ObservableObject {
         let container = CKContainer(identifier: Config.cloudKitContainerIdentifier)
         let status = (try? await container.accountStatus()) ?? .couldNotDetermine
         guard status == .available else {
-            return .unavailable("No iCloud account available. Sign in (Settings → iCloud) and try again.")
+            return .unavailable(String(localized: "No iCloud account available. Sign in (Settings → iCloud) and try again.",
+                                   comment: "Showcase: shown when publishing needs an iCloud account."))
         }
         // The current user's record name lets the publisher detect a cross-user slug collision in
         // the global public keyspace and publish under a disambiguated slug. (quality gate: slug

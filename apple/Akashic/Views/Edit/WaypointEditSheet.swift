@@ -399,15 +399,16 @@ struct WaypointEditSheet: View {
         }
     }
 
-    private func weatherNumber(_ label: String, _ text: Binding<String>) -> some View {
+    private func weatherNumber(_ label: LocalizedStringKey, _ text: Binding<String>) -> some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text(label.uppercased()).font(.system(size: 10, weight: .semibold))
+            Text(label).textCase(.uppercase).font(.system(size: 10, weight: .semibold))
                 .tracking(0.6).foregroundStyle(Theme.textTertiary)
+                .lineLimit(1).minimumScaleFactor(0.8)
             GlassTextField(placeholder: "—", text: text, keyboard: .numbersAndPunctuation)
         }
     }
 
-    private func contentRow(text: Binding<String>, placeholder: String, onDelete: @escaping () -> Void) -> some View {
+    private func contentRow(text: Binding<String>, placeholder: LocalizedStringKey, onDelete: @escaping () -> Void) -> some View {
         HStack(spacing: 8) {
             GlassTextField(placeholder: placeholder, text: text)
             Button(action: onDelete) {
@@ -419,7 +420,7 @@ struct WaypointEditSheet: View {
         }
     }
 
-    private func addRowButton(_ title: String, action: @escaping () -> Void) -> some View {
+    private func addRowButton(_ title: LocalizedStringKey, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Label(title, systemImage: "plus.circle.fill")
                 .font(.caption.weight(.semibold)).foregroundStyle(Theme.accent)

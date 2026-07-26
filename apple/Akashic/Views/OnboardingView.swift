@@ -42,8 +42,7 @@ struct OnboardingView: View {
                     card(
                         icon: "globe.europe.africa.fill",
                         title: "Your treks, on a living globe",
-                        body: "Akashic turns your hikes and expeditions into journeys you can "
-                            + "relive — every day, photo, and waypoint on a globe you can spin."
+                        body: "Akashic turns your hikes and expeditions into journeys you can relive — every day, photo, and waypoint on a globe you can spin."
                     ).tag(0)
 
                     dataLivesCard.tag(1)
@@ -89,10 +88,8 @@ struct OnboardingView: View {
         card(
             icon: "icloud.fill",
             title: "Your data lives in your iCloud",
-            body: "Your journeys and photos live in your own iCloud. We run no servers and "
-                + "never see them.",
-            footnote: "Because the photos are yours, they count against your iCloud storage. "
-                + "A large photo archive may need a bigger iCloud+ plan."
+            body: "Your journeys and photos live in your own iCloud. We run no servers and never see them.",
+            footnote: "Because the photos are yours, they count against your iCloud storage. A large photo archive may need a bigger iCloud+ plan."
         )
     }
 
@@ -101,8 +98,7 @@ struct OnboardingView: View {
         card(
             icon: "person.2.fill",
             title: "Share with family",
-            body: "Invite the people you travelled with. They see your journeys on their own "
-                + "devices, and can add their photos and comments.",
+            body: "Invite the people you travelled with. They see your journeys on their own devices, and can add their photos and comments.",
             extra: { AnyView(iCloudStateRow) }
         )
     }
@@ -116,14 +112,12 @@ struct OnboardingView: View {
         case .noAccount:
             noteRow(
                 icon: "exclamationmark.icloud",
-                text: "No iCloud account is signed in. Akashic works locally on this device — "
-                    + "to sync and share, sign in via Settings › [your name] › iCloud."
+                text: "No iCloud account is signed in. Akashic works locally on this device — to sync and share, sign in via Settings › [your name] › iCloud."
             )
         case .restricted:
             noteRow(
                 icon: "lock.icloud",
-                text: "iCloud is restricted on this device. Akashic still works locally; sharing "
-                    + "and sync need iCloud enabled in Settings."
+                text: "iCloud is restricted on this device. Akashic still works locally; sharing and sync need iCloud enabled in Settings."
             )
         default:
             // .available / .couldNotDetermine / .temporarilyUnavailable / unknown → say nothing.
@@ -131,7 +125,7 @@ struct OnboardingView: View {
         }
     }
 
-    private func noteRow(icon: String, text: String) -> some View {
+    private func noteRow(icon: String, text: LocalizedStringKey) -> some View {
         HStack(alignment: .top, spacing: 8) {
             Image(systemName: icon)
                 .foregroundStyle(Theme.warning)
@@ -148,9 +142,9 @@ struct OnboardingView: View {
     // MARK: - Card chrome
 
     private func card(icon: String,
-                      title: String,
-                      body text: String,
-                      footnote: String? = nil,
+                      title: LocalizedStringKey,
+                      body text: LocalizedStringKey,
+                      footnote: LocalizedStringKey? = nil,
                       extra: (() -> AnyView)? = nil) -> some View {
         VStack(spacing: 20) {
             Spacer(minLength: 0)

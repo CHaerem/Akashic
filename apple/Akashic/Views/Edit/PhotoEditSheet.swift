@@ -104,7 +104,7 @@ struct PhotoEditSheet: View {
         }
     }
 
-    private func rotateButton(system: String, label: String, action: @escaping () -> Void) -> some View {
+    private func rotateButton(system: String, label: LocalizedStringKey, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Label(label, systemImage: system)
                 .font(.subheadline.weight(.medium))
@@ -245,7 +245,12 @@ struct PhotoEditSheet: View {
         Button(role: .destructive) {
             confirmingDelete = true
         } label: {
-            Label("Delete \(photo.isVideo ? "video" : "photo")", systemImage: "trash")
+            // Two whole keys, not one key with the noun interpolated into it. The old form
+            // ("Delete \(isVideo ? "video" : "photo")") produced the catalogue key "Delete %@" and
+            // substituted the English noun into it verbatim, so a Norwegian read "Slett photo" —
+            // a half-translated sentence, which is worse than either language alone. Interpolating
+            // a *word* into a `LocalizedStringKey` is always this bug; only values belong there.
+            Label(photo.isVideo ? "Delete video" : "Delete photo", systemImage: "trash")
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(.red)
                 .frame(maxWidth: .infinity)
@@ -253,7 +258,7 @@ struct PhotoEditSheet: View {
                 .background(Color.red.opacity(0.12), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
         }
         .buttonStyle(.plain)
-        .confirmationDialog("Delete this \(photo.isVideo ? "video" : "photo")?",
+        .confirmationDialog(photo.isVideo ? "Delete this video?" : "Delete this photo?",
                             isPresented: $confirmingDelete, titleVisibility: .visible) {
             Button("Delete", role: .destructive, action: performDelete)
             Button("Cancel", role: .cancel) {}

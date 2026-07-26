@@ -79,12 +79,11 @@ struct PhotoImportSheet: View {
     /// rest. Never a silent drop — the remainder is always named.
     private var partialImportBanner: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Label("\(partialRemainder) photo\(partialRemainder == 1 ? "" : "s") couldn't be added",
+            Label("\(partialRemainder) photos couldn't be added",
                   systemImage: "exclamationmark.triangle.fill")
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(Theme.warning)
-            Text("The free tier holds up to \(EntitlementPolicy.freePhotosPerOwnedJourney) photos per journey. "
-                 + "We added the ones that fit. Akashic Complete lifts the cap so the rest can come too.")
+            Text("The free tier holds up to \(EntitlementPolicy.freePhotosPerOwnedJourney) photos per journey. We added the ones that fit. Akashic Complete lifts the cap so the rest can come too.")
                 .font(.caption)
                 .foregroundStyle(Theme.textSecondary)
             Button {

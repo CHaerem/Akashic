@@ -82,7 +82,7 @@ struct RouteCorrectionSection: View {
         }
     }
 
-    private func row(icon: String, title: String, subtitle: String, action: @escaping () -> Void) -> some View {
+    private func row(icon: String, title: LocalizedStringKey, subtitle: LocalizedStringKey, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             HStack(spacing: 12) {
                 Image(systemName: icon).font(.title3).foregroundStyle(Theme.accent).frame(width: 26)
@@ -107,12 +107,14 @@ struct RouteCorrectionSection: View {
         message = nil
         let fixes = RouteCorrection.fixes(from: store.photos(forJourneyID: journey.id))
         guard !fixes.isEmpty else {
-            message = "No geotagged photos to draft a route from."
+            message = String(localized: "No geotagged photos to draft a route from.",
+                             comment: "Route correction: shown when drafting a route from photos finds no GPS data.")
             return
         }
         let result = RouteInference.infer(from: fixes)
         guard !result.isEmpty else {
-            message = "Couldn't draft a route from these photos."
+            message = String(localized: "Couldn't draft a route from these photos.",
+                             comment: "Route correction: shown when drafting a route from photos produces nothing usable.")
             return
         }
         preview = makePreview(newRoute: result.route, gpxWaypoints: [], note: result.confidence.summary)
@@ -132,11 +134,13 @@ struct RouteCorrectionSection: View {
     private func recomputeStats() {
         message = nil
         guard !journey.route.coordinates.isEmpty else {
-            message = "This journey has no route to recompute stats from."
+            message = String(localized: "This journey has no route to recompute stats from.",
+                             comment: "Route correction: shown when Recompute stats is tapped on a journey with no route.")
             return
         }
         preview = makePreview(newRoute: journey.route, gpxWaypoints: [],
-                              note: "Stats only — the route itself is unchanged.")
+                              note: String(localized: "Stats only — the route itself is unchanged.",
+                                     comment: "Route correction: note on the recompute-stats preview."))
     }
 
     private func handleImport(_ result: Result<[URL], Error>) {
@@ -157,8 +161,16 @@ struct RouteCorrectionSection: View {
             let file = try await Task.detached(priority: .userInitiated) {
                 try GPXParser.parse(contentsOf: url)
             }.value
-            var note = "\(file.route.coordinates.count) points · \(file.waypoints.count) waypoints"
-            if file.droppedPointCount > 0 { note += " · \(file.droppedPointCount) skipped" }
+            // Same three plural-varied catalogue entries the new-journey sheet uses for a GPX
+            // provenance line, so the two screens describe an imported track identically.
+            var note = String(localized: "\(file.route.coordinates.count) route points",
+                              comment: "GPX route provenance: how many coordinates the track holds.")
+                     + " · " + String(localized: "\(file.waypoints.count) waypoints",
+                                      comment: "GPX route provenance: how many waypoints became days.")
+            if file.droppedPointCount > 0 {
+                note += " · " + String(localized: "\(file.droppedPointCount) skipped",
+                                       comment: "GPX route provenance: coordinates dropped as unusable.")
+            }
             preview = makePreview(newRoute: file.route, gpxWaypoints: file.waypoints, note: note)
         } catch {
             message = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
@@ -274,7 +286,7 @@ struct RoutePreviewSheet: View {
         .font(.caption2)
     }
 
-    private func legendItem(color: Color, label: String) -> some View {
+    private func legendItem(color: Color, label: LocalizedStringKey) -> some View {
         HStack(spacing: 6) {
             Capsule().fill(color).frame(width: 18, height: 3)
             Text(label).foregroundStyle(Theme.textTertiary)

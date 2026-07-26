@@ -65,7 +65,7 @@ struct WeatherRow: View {
         )
     }
 
-    private func metric(icon: String, value: String, label: String, tint: Color) -> some View {
+    private func metric(icon: String, value: String, label: LocalizedStringKey, tint: Color) -> some View {
         VStack(alignment: .leading, spacing: 3) {
             Image(systemName: icon)
                 .font(.footnote)

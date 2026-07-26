@@ -54,12 +54,14 @@ struct JourneyExportSheet: View {
                             Label("Save or share", systemImage: "square.and.arrow.up")
                         }
                         VStack(alignment: .leading, spacing: 4) {
-                            Text("\(photoCount) photo\(photoCount == 1 ? "" : "s") included")
+                            // Plural-varied in the catalogue, not by appending an "s" at the call
+                            // site: the old form baked English morphology into the view and no
+                            // translation could reach it.
+                            Text("\(photoCount) photos included")
                                 .font(.caption)
                                 .foregroundStyle(Theme.textSecondary)
                             if missing > 0 {
-                                Text("\(missing) photo\(missing == 1 ? "" : "s") could not be included — "
-                                     + "their files are not on this device yet.")
+                                Text("\(missing) photos could not be included — their files are not on this device yet.")
                                     .font(.caption)
                                     .foregroundStyle(Theme.warning)
                             }
@@ -74,8 +76,7 @@ struct JourneyExportSheet: View {
                 } header: {
                     Text("Export")
                 } footer: {
-                    Text("A .zip containing route.gpx, journey.json and the photos. "
-                         + "Everything opens without Akashic.")
+                    Text("A .zip containing route.gpx, journey.json and the photos. Everything opens without Akashic.")
                 }
             }
             .scrollContentBackground(.hidden)

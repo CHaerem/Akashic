@@ -182,7 +182,7 @@ struct DayNavigationView: View {
         }
     }
 
-    private func controlButton(_ title: String, system: String, active: Bool, action: @escaping () -> Void) -> some View {
+    private func controlButton(_ title: LocalizedStringKey, system: String, active: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Label(title, systemImage: system)
                 .font(.footnote.weight(.semibold))
@@ -206,7 +206,7 @@ struct DayNavigationView: View {
 
     // MARK: - Bits
 
-    private func chevron(_ system: String, label: String, enabled: Bool, action: @escaping () -> Void) -> some View {
+    private func chevron(_ system: String, label: LocalizedStringKey, enabled: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: system)
                 .font(.subheadline.weight(.semibold))

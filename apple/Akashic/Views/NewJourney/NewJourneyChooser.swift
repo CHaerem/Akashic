@@ -108,7 +108,7 @@ struct NewJourneyChooser: View {
     /// One chooser card. `promoted` gives the photos card the filled accent surface the redesign
     /// calls for; the other two stay visually equal to each other — GPX and just-a-name are both
     /// ordinary, valid starting points, neither more "correct" than the other.
-    private func card(icon: String, title: String, subtitle: String,
+    private func card(icon: String, title: LocalizedStringKey, subtitle: LocalizedStringKey,
                        promoted: Bool, isLoading: Bool = false) -> some View {
         HStack(alignment: .top, spacing: 14) {
             ZStack {

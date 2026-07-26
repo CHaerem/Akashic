@@ -471,7 +471,7 @@ struct DayRow: View {
         .background(Theme.accentSoft, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 
-    private func metric(icon: String, label: String, value: String) -> some View {
+    private func metric(icon: String, label: LocalizedStringKey, value: String) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             Label(value, systemImage: icon)
                 .font(.caption.weight(.semibold))

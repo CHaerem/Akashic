@@ -199,7 +199,7 @@ struct DraftMapCard: View {
         )
     }
 
-    private func actionButton(icon: String, title: String, action: @escaping () -> Void) -> some View {
+    private func actionButton(icon: String, title: LocalizedStringKey, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             HStack(spacing: 10) {
                 Image(systemName: icon).font(.subheadline).foregroundStyle(Theme.accent)

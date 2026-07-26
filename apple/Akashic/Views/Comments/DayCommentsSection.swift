@@ -361,23 +361,47 @@ private struct CommentRow: View {
 // MARK: - Relative time (web parity: CommentItem.formatRelativeTime)
 
 enum CommentTime {
-    /// "just now" / "Xm ago" / "Xh ago" / "Xd ago" (≤ 30 days), else a short "MMM d" date.
-    static func relative(_ date: Date, now: Date = Date()) -> String {
+    /// "just now" / "2 min ago" / "5 hr ago" / "3 days ago" (≤ 30 days), else a short date.
+    ///
+    /// The four relative forms come from `RelativeDateTimeFormatter`, not from hand-built strings.
+    /// The previous version composed "\(minutes)m ago" itself, which is untranslatable twice over:
+    /// the word "ago" is a literal no catalogue could see, and the "m"/"h"/"d" abbreviations and
+    /// their position relative to the number are language-specific (Norwegian says "for 5 min
+    /// siden" — the marker goes *before* the number). Foundation already knows this for every
+    /// language Apple ships, including the plural rules, so the only thing left to decide here is
+    /// the *unit* to express the gap in.
+    static func relative(_ date: Date, now: Date = Date(), locale: Locale = .current) -> String {
         let seconds = Int(now.timeIntervalSince(date))
-        if seconds < 60 { return "just now" }
+        if seconds < 60 {
+            return String(localized: "just now",
+                          comment: "Comment timestamp for something posted less than a minute ago.")
+        }
+        let f = relativeFormatter(locale)
         let minutes = seconds / 60
-        if minutes < 60 { return "\(minutes)m ago" }
+        if minutes < 60 { return f.localizedString(from: DateComponents(minute: -minutes)) }
         let hours = minutes / 60
-        if hours < 24 { return "\(hours)h ago" }
+        if hours < 24 { return f.localizedString(from: DateComponents(hour: -hours)) }
         let days = hours / 24
-        if days <= 30 { return "\(days)d ago" }
-        return shortDateFormatter.string(from: date)
+        if days <= 30 { return f.localizedString(from: DateComponents(day: -days)) }
+        return shortDate(locale).string(from: date)
     }
 
-    private static let shortDateFormatter: DateFormatter = {
-        let f = DateFormatter()
-        f.locale = Locale(identifier: "en_US_POSIX")
-        f.dateFormat = "MMM d"
+    private static func relativeFormatter(_ locale: Locale) -> RelativeDateTimeFormatter {
+        let f = RelativeDateTimeFormatter()
+        f.locale = locale
+        // `.short` keeps the compactness the abbreviations were there for ("5 min ago" rather than
+        // "5 minutes ago") without hardcoding what "short" looks like in any one language.
+        f.unitsStyle = .short
         return f
-    }()
+    }
+
+    /// A day-and-month date for comments older than a month. Built from a template so the locale
+    /// picks the order and the separator: `en_US` "Sep 29", `en_GB` "29 Sep", `nb` "29. sep.".
+    /// The old fixed "MMM d" against `en_US_POSIX` gave every language the American form.
+    private static func shortDate(_ locale: Locale) -> DateFormatter {
+        let f = DateFormatter()
+        f.locale = locale
+        f.setLocalizedDateFormatFromTemplate("dMMM")
+        return f
+    }
 }

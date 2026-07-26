@@ -98,8 +98,7 @@ struct JourneyShareView: View {
                         }
                     }
                 } footer: {
-                    Text("Everyone you invite sees this journey's days, photos and comments. "
-                         + "Editors can add photos and comments; viewers can only read.")
+                    Text("Everyone you invite sees this journey's days, photos and comments. Editors can add photos and comments; viewers can only read.")
                 }
             } else if state?.isShared == true {
                 Section {
@@ -116,8 +115,7 @@ struct JourneyShareView: View {
             Button("Stop sharing", role: .destructive) { Task { await stopSharing() } }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("Everyone else loses access. Nothing is deleted — the journey stays yours, "
-                 + "and copies already on their devices remain there.")
+            Text("Everyone else loses access. Nothing is deleted — the journey stays yours, and copies already on their devices remain there.")
         }
     }
 
@@ -244,6 +242,7 @@ struct CloudSharingSheet: UIViewControllerRepresentable {
     func updateUIViewController(_ controller: UICloudSharingController, context: Context) {}
 
     final class Coordinator: NSObject, UICloudSharingControllerDelegate {
+        /// The journey's own name, not prose — nothing to localise here.
         private let title: String
         init(title: String) { self.title = title }
 

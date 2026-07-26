@@ -85,7 +85,7 @@ struct JourneyEditSheet: View {
         }
     }
 
-    private func dateRow(label: String, isOn: Binding<Bool>, date: Binding<Date>) -> some View {
+    private func dateRow(label: LocalizedStringKey, isOn: Binding<Bool>, date: Binding<Date>) -> some View {
         HStack {
             Toggle(isOn: isOn) {
                 Text(label).font(.subheadline).foregroundStyle(Theme.textPrimary)

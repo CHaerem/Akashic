@@ -157,10 +157,17 @@ struct NewJourneySheet: View {
         /// `RouteConfidence.summary` and `RouteDrawing.DrawnRoute.summary`.
         var provenanceLine: String {
             if let drawnNote { return drawnNote }
-            var s = "\(pointCount) point\(pointCount == 1 ? "" : "s") · \(Formatters.distanceKm(distanceKm))"
-                  + " · \(waypointCount) waypoint\(waypointCount == 1 ? "" : "s")"
+            // Each count is its own plural-varied catalogue entry, joined with the middot. The
+            // previous form appended "s" inline, which is English-only morphology hardcoded into
+            // a view model where no translation could reach it.
+            var s = String(localized: "\(pointCount) route points",
+                           comment: "GPX route provenance: how many coordinates the track holds.")
+                  + " · \(Formatters.distanceKm(distanceKm))"
+                  + " · " + String(localized: "\(waypointCount) waypoints",
+                                   comment: "GPX route provenance: how many waypoints became days.")
             if droppedCount > 0 {
-                s += " · \(droppedCount) skipped"
+                s += " · " + String(localized: "\(droppedCount) skipped",
+                                    comment: "GPX route provenance: coordinates dropped as unusable.")
             }
             return s
         }
@@ -190,7 +197,8 @@ struct NewJourneySheet: View {
         if let range = JourneyDraft.dateRange(fromGPX: file) {
             draft.dateStarted = range.start
             draft.dateEnded = range.end
-            provenance = "from your GPX file"
+            provenance = String(localized: "from your GPX file",
+                                comment: "Caption under the dates row when the dates came from an imported GPX track.")
         }
         _draft = State(initialValue: draft)
         _routeSummary = State(initialValue: applied.summary)
@@ -403,7 +411,8 @@ struct NewJourneySheet: View {
     /// `Formatters.dateRange` already uses elsewhere for a journey's dates.
     private var datesSummary: String {
         Formatters.dateRange(DateOnly.string(from: draft.dateStarted), DateOnly.string(from: draft.dateEnded))
-            ?? "Add dates"
+            ?? String(localized: "Add dates",
+                      comment: "New journey: the collapsed dates row when neither end is set.")
     }
 
     /// Seed the expanded editor from whatever the draft currently holds — including a derived range
@@ -416,7 +425,7 @@ struct NewJourneySheet: View {
         isEditingDates = true
     }
 
-    private func dateRow(label: String, isOn: Binding<Bool>, date: Binding<Date>) -> some View {
+    private func dateRow(label: LocalizedStringKey, isOn: Binding<Bool>, date: Binding<Date>) -> some View {
         HStack {
             Toggle(isOn: isOn) {
                 Text(label).font(.subheadline).foregroundStyle(Theme.textPrimary)
@@ -582,7 +591,8 @@ struct NewJourneySheet: View {
         guard !datesTouched, let range = JourneyDraft.dateRange(fromGPX: file) else { return }
         draft.dateStarted = range.start
         draft.dateEnded = range.end
-        datesProvenance = "from your GPX file"
+        datesProvenance = String(localized: "from your GPX file",
+                                 comment: "Caption under the dates row when the dates came from an imported GPX track.")
     }
 
     // MARK: Draw on map
@@ -681,22 +691,29 @@ struct NewJourneySheet: View {
                 if partialRemainder > 0 {
                     partialImportBanner
                 }
-                Text("Reads capture dates, location and the photos themselves — they're added to the "
-                     + "journey, on the day they belong to, the moment you create it.")
+                Text("Reads capture dates, location and the photos themselves — they're added to the journey, on the day they belong to, the moment you create it.")
                     .font(.caption2).foregroundStyle(Theme.textTertiary)
             }
         }
     }
 
-    private var photoPickerLabel: String {
+    /// `LocalizedStringKey`, not `String`. As a `String` these three literals were handed to
+    /// `Text` already-resolved, so they never entered the catalogue — the silent half of QUA-06.
+    private var photoPickerLabel: LocalizedStringKey {
         if isStagingPhotos { return "Preparing photos… \(photoStageDone) of \(photoStageTotal)" }
         return stagedPhotos.isEmpty ? "Pick photos to propose days" : "Pick more photos"
     }
 
     private var stagedPhotosSummary: String {
-        let base = "\(stagedPhotos.count) photo\(stagedPhotos.count == 1 ? "" : "s") ready"
+        // Both counts are plural-varied in the catalogue. The day count in particular used to read
+        // "grouped into 3 day(s)" — the parenthesised "(s)" that English writers reach for when
+        // they have not decided, and which no other language can even imitate.
+        let base = String(localized: "\(stagedPhotos.count) photos ready",
+                          comment: "New journey: how many picked photos are staged and ready to import.")
         guard photoDayCount > 0 else { return base }
-        return "\(base) · grouped into \(photoDayCount) day(s) by capture date"
+        let grouped = String(localized: "grouped into \(photoDayCount) days by capture date",
+                             comment: "New journey: appended to the staged-photo count when capture dates produced days.")
+        return "\(base) · \(grouped)"
     }
 
     /// Shown after a free-tier partial import: what landed, what didn't, and the way to unlock the
@@ -704,12 +721,11 @@ struct NewJourneySheet: View {
     /// `PhotoImportSheet`'s banner (same contract, same wording) rather than inventing a second one.
     private var partialImportBanner: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Label("\(partialRemainder) photo\(partialRemainder == 1 ? "" : "s") couldn't be added",
+            Label("\(partialRemainder) photos couldn't be added",
                   systemImage: "exclamationmark.triangle.fill")
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(Theme.warning)
-            Text("The free tier holds up to \(EntitlementPolicy.freePhotosPerOwnedJourney) photos per journey. "
-                 + "We added the ones that fit. Akashic Complete lifts the cap so the rest can come too.")
+            Text("The free tier holds up to \(EntitlementPolicy.freePhotosPerOwnedJourney) photos per journey. We added the ones that fit. Akashic Complete lifts the cap so the rest can come too.")
                 .font(.caption)
                 .foregroundStyle(Theme.textSecondary)
             Button {
@@ -802,7 +818,8 @@ struct NewJourneySheet: View {
         guard !datesTouched, let range = JourneyDraft.dateRange(fromDays: draft.days) else { return }
         draft.dateStarted = range.start
         draft.dateEnded = range.end
-        datesProvenance = "from your photos"
+        datesProvenance = String(localized: "from your photos",
+                                 comment: "Caption under the dates row when the dates came from photo capture dates.")
     }
 
     // MARK: Suggestions orchestration
@@ -933,14 +950,12 @@ struct NewJourneySheet: View {
 
     /// C6: the empty-days caption is context-specific where the reason is knowable, rather than one
     /// generic sentence for every "no days" cause.
-    private var daysEmptyMessage: String {
+    private var daysEmptyMessage: LocalizedStringKey {
         if gpxHadNoWaypoints {
-            return "This file had no waypoints, so no days were proposed — add days, or pick photos "
-                 + "to propose them."
+            return "This file had no waypoints, so no days were proposed — add days, or pick photos to propose them."
         }
         if photosHadNoReadableDates {
-            return "We couldn't read dates from these photos. They'll be added to the journey; you "
-                 + "can build days later."
+            return "We couldn't read dates from these photos. They'll be added to the journey; you can build days later."
         }
         return "No days yet — import a GPX with waypoints, seed from photos, or add days below."
     }
@@ -1120,7 +1135,8 @@ struct NewJourneySheet: View {
         // either derived automatically or kept current by `userEditedDates()` on every picker change.
         guard let created = store.createJourney(from: draft) else {
             isSaving = false
-            saveError = "Could not save the journey. Please try again."
+            saveError = String(localized: "Could not save the journey. Please try again.",
+                               comment: "New journey sheet: shown when the save fails.")
             return
         }
         isSaving = false

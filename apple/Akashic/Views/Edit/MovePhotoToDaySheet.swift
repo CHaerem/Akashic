@@ -43,7 +43,7 @@ struct MovePhotoToDaySheet: View {
         .presentationDetents([.medium, .large])
     }
 
-    private func dayButton(title: String, subtitle: String?, isSelected: Bool, action: @escaping () -> Void) -> some View {
+    private func dayButton(title: LocalizedStringKey, subtitle: String?, isSelected: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             HStack(spacing: 10) {
                 VStack(alignment: .leading, spacing: 2) {
