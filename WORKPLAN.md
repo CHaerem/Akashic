@@ -5,23 +5,23 @@
 
 # Akashic — work ledger
 
-86 tasks · **42 open** (26 agent-doable, 39.1 dev-days · 16 owner-only, 8 dev-days) · 44 done · 0 dropped
+88 tasks · **41 open** (24 agent-doable, 35.4 dev-days · 17 owner-only, 8.5 dev-days) · 47 done · 0 dropped
 
 > **`dev-days` are a human-developer estimate, not agent time.** They came from the review
 > that produced these tasks and they are the right unit for deciding whether something is
 > worth doing — they are the wrong unit for predicting how long an agent will take, and
 > summing them as "work remaining" overstates it substantially.
 >
-> Measured so far: **44 agent tasks estimated at 17.7 dev-days**,
+> Measured so far: **47 agent tasks estimated at 21.7 dev-days**,
 > closed in roughly one working afternoon across up to three parallel tracks.
 >
 > But that compression is **unmeasured for the large items**: of the tasks closed so far,
 > 0 were 2 dev-days or more. 24 of the
-> 39.1 remaining dev-days sit in 7 such tasks —
+> 35.4 remaining dev-days sit in 7 such tasks —
 > localisation, Swift 6 strict concurrency, a UI test target, the PDF book. Those involve
 > design judgement and broad-blast-radius refactors rather than localised edits, so do not
 > assume the same ratio holds. The cheap band is nearly exhausted:
-> 10 tasks at 0.5 dev-days or less remain.
+> 11 tasks at 0.5 dev-days or less remain.
 
 Read [CLAUDE.md](CLAUDE.md) before touching anything. To find work:
 
@@ -34,10 +34,7 @@ node scripts/workplan.mjs next
 | Task | Agent | Branch | Stopped at |
 |---|---|---|---|
 | `DIFF-04` On-device photo curation with Vision | opus5 | `claude/remote-control-project-review-9462c1` | Pure policy (PhotoCuration) and the Vision scorer (VisionPhotoScorer, behind the PhotoScoring seam) are written and covered by 17 tests: ranking, exclusions, dedup, per-day caps, determinism, input-order independence. NOT YET WIRED, so Release strips it and Vision does not link — verified with otool. Remaining: (1) two SuggestionKey cases, .heroPhoto and .bestOf(dayID:), plus payload storage and an apply() arm in JourneySuggestionCoordinator, following the existing .facts pattern exactly; (2) hero can use the existing Photo.isHero field so it needs no model change, but best-of needs somewhere to live — decide between a Day field (Core Data, additive) and deriving it on read; (3) accept/dismiss rows in the day view; (4) call the scorer after ingest, off the main actor, with the existing progress reporting. Do NOT change the duplicateDistance default (0.15) without a fixture check: a false positive hides a photo the user wanted. |
-| `DIFF-09` C9 — derive days from timestamped GPX trackpoints | native-worktree | `claude/native-batch` | — |
 | `QUA-06` Localise the app to Norwegian | loc-worktree | `claude/qua06-localisation` | — |
-| `QUA-12` Tests for KnowledgeRetrieval, and fix its two real defects | native-worktree | `claude/native-batch` | — |
-| `DIFF-10` Give the demo journey photographs | native-worktree | `claude/native-batch` | — |
 
 ## LEGACY
 
@@ -121,7 +118,7 @@ node scripts/workplan.mjs next
 
 > Capability beyond what competitors offer. Order set by decision: share link, then Vision curation, then the book.
 
-7 open of 10 · 15.5 d remaining
+7 open of 12 · 13.8 d remaining
 
 | | Task | Days | Who | Deps | Finish line |
 |---|---|---|---|---|---|
@@ -133,14 +130,16 @@ node scripts/workplan.mjs next
 | ` ` | `DIFF-06` **Byte-level photo dedup** | 1.5 | agent | `DIFF-04` | A journey reports its unique-image count, and duplicates are collapsed on import. |
 | ` ` | `DIFF-07` **PDF export of the story view** | 6 | agent | `DIFF-04` `DIFF-06` | A journey exports a PDF a person would willingly hand over. |
 | ` ` | `DIFF-08` **Foundation Models depth: streaming, prewarm, typed errors** | 1.5 | agent | `QUA-05` | Drafting streams, sessions are reused, and guardrail refusals say something specific. |
-| `~` | `DIFF-09` **C9 — derive days from timestamped GPX trackpoints** | 1 | agent | — | A Strava or Garmin export yields a journey with correctly dated days. |
-| `~` | `DIFF-10` **Give the demo journey photographs** | 1.5 | agent | — | A first launch shows a journey with real photographs, and a photos-only trip is demoed too. |
+| `x` | `DIFF-09` **C9 — derive days from timestamped GPX trackpoints** | 1 | agent | — | A Strava or Garmin export yields a journey with correctly dated days. |
+| `x` | `DIFF-10` **Give the demo journey photographs** | 1.5 | agent | — | A first launch shows a journey with real photographs, and a photos-only trip is demoed too. |
+| ` ` | `DIFF-11` **Wire GPX day derivation into the creation flow** | 0.25 | agent | `DIFF-09` | Importing a timestamped GPX yields a journey with correctly dated days, not zero. |
+| ` ` | `DIFF-12` **Decide what photographs the demo journey ships with** | 0.5 | owner | `DIFF-10` | A decision is recorded, and the shipped demo images are the ones intended. |
 
 ## QUALITY
 
 > Tests, types, CI, localisation, accessibility. Localisation and accessibility are in v1.0 by decision.
 
-14 open of 25 · 21.3 d remaining
+13 open of 25 · 19.8 d remaining
 
 | | Task | Days | Who | Deps | Finish line |
 |---|---|---|---|---|---|
@@ -155,7 +154,7 @@ node scripts/workplan.mjs next
 | `x` | `QUA-09` **Light up the widget or remove it from v1.0** | 0.5 | agent | — | The widget shows the customer's own journey, or it does not ship. |
 | ` ` | `QUA-10` **First tests for Views/, and a UI test target** | 3 | agent | `QUA-01` | A UI test target exists and the create-journey flow has an automated test. |
 | `x` | `QUA-11` **Handle a full iCloud account** | 0.5 | agent | — | A quota-exceeded sync failure is visible in the UI and says what to do. |
-| `~` | `QUA-12` **Tests for KnowledgeRetrieval, and fix its two real defects** | 1.5 | agent | `DOC-10` | The retrieval path has tests, including the cross-project de-dup and empty-coordinate cases. |
+| `x` | `QUA-12` **Tests for KnowledgeRetrieval, and fix its two real defects** | 1.5 | agent | `DOC-10` | The retrieval path has tests, including the cross-project de-dup and empty-coordinate cases. |
 | `x` | `QUA-13` **Stop video import loading whole files into memory** | 0.5 | agent | — | Importing a multi-minute 4K video does not jetsam the app. |
 | ` ` | `QUA-14` **Name the shortfall when photo ingest partly fails** | 0.25 | agent | — | A creation flow that ingests fewer photos than picked says so. |
 | ` ` | `QUA-15` **Add an 'entitlement undetermined' state** | 0.5 | agent | — | A paying customer is never shown the free-tier wall while StoreKit is still resolving. |

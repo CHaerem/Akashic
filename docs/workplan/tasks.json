@@ -1132,7 +1132,7 @@
       "id": "DIFF-09",
       "track": "DIFF",
       "title": "C9 — derive days from timestamped GPX trackpoints",
-      "status": "WIP",
+      "status": "DONE",
       "effort": 1,
       "done_when": "A Strava or Garmin export yields a journey with correctly dated days.",
       "files": [
@@ -1147,7 +1147,8 @@
         "agent": "native-worktree",
         "branch": "claude/native-batch",
         "at": "2026-07-26"
-      }
+      },
+      "evidence": "GPXParser now keeps per-point times in a trackPointTimes array index-aligned with route.coordinates (parallel rather than a fourth channel, because Route is the persisted shape shared with CloudKit, the exporter and the web adapter). GPXTrackDays is the pure clustering, grouped by LOCAL calendar date with the offset derived from the track's own median longitude — not UTC (which splits any trek west of Greenwich) and not TimeZone.current (which would give different days at home and abroad). 20 tests. NOT WIRED: the one call site is in NewJourneySheet, which was out of the agent's scope — see DIFF-11."
     },
     {
       "id": "QUA-01",
@@ -1408,7 +1409,7 @@
       "id": "QUA-12",
       "track": "QUALITY",
       "title": "Tests for KnowledgeRetrieval, and fix its two real defects",
-      "status": "WIP",
+      "status": "DONE",
       "effort": 1.5,
       "done_when": "The retrieval path has tests, including the cross-project de-dup and empty-coordinate cases.",
       "deps": [
@@ -1428,7 +1429,8 @@
         "agent": "native-worktree",
         "branch": "claude/native-batch",
         "at": "2026-07-26"
-      }
+      },
+      "evidence": "31 tests over KnowledgeRetrieval. Defect 1 confirmed and fixed: seenTitles was keyed globally so Wikivoyage was never fetched for any title Wikipedia already returned, defeating the exact nickname case the file exists for. Defect 2 was NOT as described — the coordinate-count guard already existed in two places — but a real one sat next to it: distanceKm over NaN returns NaN, and NaN <= maxKm is false, so one garbage coordinate silently rejected every coordinate-bearing article while reporting 'nan km away'. Non-finite now treated as absent. The bare-title over-accept was tightened so 'Camp' no longer matches 'Barafu Camp'."
     },
     {
       "id": "QUA-13",
@@ -1831,7 +1833,7 @@
       "id": "DIFF-10",
       "track": "DIFF",
       "title": "Give the demo journey photographs",
-      "status": "WIP",
+      "status": "DONE",
       "effort": 1.5,
       "priority": 22,
       "done_when": "A first launch shows a journey with real photographs, and a photos-only trip is demoed too.",
@@ -1850,7 +1852,47 @@
         "agent": "native-worktree",
         "branch": "claude/native-batch",
         "at": "2026-07-26"
-      }
+      },
+      "evidence": "Built the missing pipeline: FixturePhoto/FixturePhotoManifest plus FixtureMedia, splitting pure mapping from the byte-staging shell that copies bundled JPEGs to the same journeys/<jid>/photos/<pid>.jpg layout an ingested photo uses, so every consumer reads them through existing paths. Manifest is a sidecar so Fixtures/recovered/ stays byte-identical. 16 tests. Verified on a clean simulator: the demo journey seeds and its photograph renders under Day 6. 474 KB added. CAVEAT: the repo contains no actual photographs — all 76 images are AI-generated art or earth textures — so these are re-encoded hero artwork. Swapping real ones in is a file copy plus a manifest edit."
+    },
+    {
+      "id": "DIFF-11",
+      "track": "DIFF",
+      "title": "Wire GPX day derivation into the creation flow",
+      "status": "TODO",
+      "effort": 0.25,
+      "priority": 23,
+      "deps": [
+        "DIFF-09"
+      ],
+      "done_when": "Importing a timestamped GPX yields a journey with correctly dated days, not zero.",
+      "why": "DIFF-09 built and tested `days(fromGPX:)` but could not connect it: the single call site is `NewJourneySheet.applying(_:toDays:)`, and Views/ belonged to the localisation agent. Until this lands, a Strava or Garmin import still produces a route with zero days — the whole point of DIFF-09. The change is one line: days(fromWaypoints: file.waypoints) -> days(fromGPX: file).",
+      "files": [
+        "apple/Akashic/Views/NewJourney/NewJourneySheet.swift"
+      ],
+      "serialise_with": "QUA-06/07/24 rewrite the same file — take this after localisation merges",
+      "verify": [
+        "cd apple && xcodegen generate",
+        "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,id=$(xcrun simctl list devices available | grep -o '[0-9A-F-]\\{36\\}' | tail -1)\" CODE_SIGNING_ALLOWED=NO test",
+        "Import a multi-day timestamped GPX and confirm the day count"
+      ]
+    },
+    {
+      "id": "DIFF-12",
+      "track": "DIFF",
+      "title": "Decide what photographs the demo journey ships with",
+      "status": "TODO",
+      "effort": 0.5,
+      "owner": true,
+      "priority": 24,
+      "deps": [
+        "DIFF-10"
+      ],
+      "done_when": "A decision is recorded, and the shipped demo images are the ones intended.",
+      "why": "DIFF-10 built the pipeline and had nothing real to put through it: the repo contains no photographs at all — all 76 images are AI-generated art or earth textures — so the three bundled JPEGs are re-encoded hero artwork. Illustrative scenery, not trek photographs, in the demo that is a new customer's first impression of a photo app. Real ones mean the family archive at /Users/cher/Privat/AkashicExport-20260722, and shipping private family photographs inside a public App Store binary is a decision only the owner can take. Swapping them is a file copy plus a manifest edit — no code change.",
+      "verify": [
+        "The three files under apple/Fixtures/demo-media/ are the intended images"
+      ]
     }
   ]
 }

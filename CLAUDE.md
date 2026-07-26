@@ -67,6 +67,19 @@ cd apple && xcodegen generate
 
 ## If you are in a git worktree, read this
 
+**Check what you are branched from before you trust anything.** An agent worktree is branched from
+the repo's base commit, not from the dispatching session's HEAD, so it can easily be many commits
+behind — one agent found no `CLAUDE.md`, no `WORKPLAN.md` and a test baseline 40 tests light, and
+correctly reported that rather than guessing. Start with:
+
+```bash
+git log --oneline -1 && git merge-base --is-ancestor <expected-commit> HEAD && echo "up to date"
+```
+
+If the working agreement or the ledger is missing, you are on an old base. Say so in your report,
+work from `apple/README.md`, and expect the merge back to need real conflict resolution.
+
+
 `.env` and `.env.local` are gitignored and live only in the main checkout at
 `/Users/cher/Privat/Akashic/`. `git worktree add` does not copy them. Without them the
 Playwright suite fails **37 of 37 tests over ten minutes**, every failure a missing Mapbox
