@@ -5,23 +5,23 @@
 
 # Akashic — work ledger
 
-102 tasks · **25 open** (8 agent-doable, 2.4 dev-days · 17 owner-only, 8.5 dev-days) · 77 done · 0 dropped
+102 tasks · **24 open** (7 agent-doable, 2.1 dev-days · 17 owner-only, 8.5 dev-days) · 78 done · 0 dropped
 
 > **`dev-days` are a human-developer estimate, not agent time.** They came from the review
 > that produced these tasks and they are the right unit for deciding whether something is
 > worth doing — they are the wrong unit for predicting how long an agent will take, and
 > summing them as "work remaining" overstates it substantially.
 >
-> Measured so far: **77 agent tasks estimated at 60 dev-days**,
+> Measured so far: **78 agent tasks estimated at 60.3 dev-days**,
 > closed in roughly one working afternoon across up to three parallel tracks.
 >
 > But that compression is **unmeasured for the large items**: of the tasks closed so far,
 > 7 were 2 dev-days or more. 0 of the
-> 2.4 remaining dev-days sit in 0 such tasks —
+> 2.1 remaining dev-days sit in 0 such tasks —
 > localisation, Swift 6 strict concurrency, a UI test target, the PDF book. Those involve
 > design judgement and broad-blast-radius refactors rather than localised edits, so do not
 > assume the same ratio holds. The cheap band is nearly exhausted:
-> 8 tasks at 0.5 dev-days or less remain.
+> 7 tasks at 0.5 dev-days or less remain.
 
 Read [CLAUDE.md](CLAUDE.md) before touching anything. To find work:
 
@@ -134,7 +134,7 @@ node scripts/workplan.mjs next
 
 > Tests, types, CI, localisation, accessibility. Localisation and accessibility are in v1.0 by decision.
 
-4 open of 37 · 1.5 d remaining
+3 open of 37 · 1.3 d remaining
 
 | | Task | Days | Who | Deps | Finish line |
 |---|---|---|---|---|---|
@@ -174,7 +174,7 @@ node scripts/workplan.mjs next
 | `x` | `QUA-34` **Make CloudKitImportSink an actor, closing the last strict-concurrency warning** | 0.5 | agent | — | A clean build-for-testing under SWIFT_STRICT_CONCURRENCY=complete reports ZERO warnings across every target. |
 | ` ` | `QUA-35` **Pin groupNearDuplicates against known feature prints, then delete FeaturePrintBox** | 0.5 | agent | — | A test asserts groupNearDuplicates' behaviour against feature prints with known distances, and VisionPhotoScorer carries no @unchecked Sendable. |
 | ` ` | `QUA-36` **Declare PublicMirrorDatabase Sendable so PublicMirrorPublisher's conformance becomes checked** | 0.5 | agent | — | PublicMirrorPublisher conforms to Sendable without @unchecked, and the public-mirror tests still pass. |
-| ` ` | `QUA-37` **Declare MediaDatabase Sendable so PhotoMediaService's conformance becomes checked** | 0.25 | agent | — | PhotoMediaService conforms to Sendable without @unchecked, and the media tests still pass. |
+| `x` | `QUA-37` **Declare MediaDatabase Sendable so PhotoMediaService's conformance becomes checked** | 0.25 | agent | — | PhotoMediaService conforms to Sendable without @unchecked, and the media tests still pass. |
 
 ## Decisions on record
 

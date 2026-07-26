@@ -2342,11 +2342,17 @@
         "apple/AkashicTests/MediaV2Tests.swift"
       ],
       "track": "QUALITY",
-      "status": "TODO",
+      "status": "DONE",
       "verify": [
         "cd apple && xcodegen generate",
         "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,id=$(xcrun simctl list devices available | grep -o '[0-9A-F-]\\{36\\}' | tail -1)\" CODE_SIGNING_ALLOWED=NO test"
-      ]
+      ],
+      "claim": {
+        "agent": "opus5",
+        "branch": "claude/remote-control-project-review-9462c1",
+        "at": "2026-07-26"
+      },
+      "evidence": "PhotoMediaService is a CHECKED Sendable conformance now, 0 errors and 0 warnings. The task's premise was wrong and I verified rather than assumed: MediaDatabase has been 'protocol MediaDatabase: AnyObject, Sendable' since the original Photo-architecture-v2 commit (145490a), long before this session -- so the @unchecked I added in QUA-08, and the removal condition I wrote alongside it claiming the seam 'is not itself Sendable', were both unnecessary. 791 unit tests pass."
     }
   ]
 }

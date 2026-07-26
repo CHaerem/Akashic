@@ -50,18 +50,20 @@ struct PhotoMediaUploadResult: Equatable {
 ///
 /// The service itself does NOT consult the Wi-Fi policy: a single user-initiated ingest (~4 MB) is
 /// always allowed, and the batch repack does its own Wi-Fi gating before calling in (MAPPING §13).
-/// QUA-08: `@unchecked Sendable` because `MediaRepackJob` awaits `upload(_:)` from its own async
-/// work, so the service crosses an isolation boundary.
+/// `Sendable` — checked, not `@unchecked` — because `MediaRepackJob` awaits `upload(_:)` from its own
+/// async work, so the service crosses an isolation boundary. Both stored properties are `let`, and
+/// `MediaDatabase` was already declared `Sendable` (`MediaDatabase.swift:22`), so the compiler can
+/// verify the whole thing.
 ///
-/// The promise is narrow: both remaining stored properties are `let`, `batchSize` is an `Int`, and
-/// `database` is a `CKDatabase` in every shipping path (CloudKit marks it `NS_SWIFT_SENDABLE`).
-/// It is `@unchecked` only because `MediaDatabase` — the seam that exists so tests can inject a mock
-/// — is not itself `Sendable`. **Removal condition:** declare `protocol MediaDatabase: Sendable` and
-/// this becomes a checked conformance; the test double would need `@unchecked` in its place.
+/// QUA-37: this said `@unchecked Sendable` for a few hours, with a removal condition claiming
+/// `MediaDatabase` "is not itself `Sendable`". That was simply false — it had been `Sendable` all
+/// along, and I did not check before writing the caveat. `@unchecked` is a promise the compiler stops
+/// checking, so asserting one that was never needed is the expensive kind of wrong: it would have
+/// survived every future refactor that genuinely broke it.
 ///
-/// The stored `FileManager` is gone: it was never injected with anything but `.default`, and keeping
-/// it would have made even the unchecked conformance a lie about non-Sendable storage.
-final class PhotoMediaService: @unchecked Sendable {
+/// The stored `FileManager` is still gone (QUA-08): never injected with anything but `.default`, and
+/// keeping it would have made even an unchecked conformance a lie about non-Sendable storage.
+final class PhotoMediaService: Sendable {
 
     private let database: MediaDatabase
     private let batchSize: Int
