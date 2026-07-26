@@ -47,7 +47,7 @@ final class EntitlementTests: XCTestCase {
             if let restoreError { throw restoreError }
             if restoreGrantsComplete { entitlement = .complete }
         }
-        func observeTransactionUpdates(_ onChange: @escaping (Entitlement) -> Void) {
+        func observeTransactionUpdates(_ onChange: @escaping @Sendable (Entitlement) -> Void) {
             observeRegistered = true
             lastUpdateHandler = onChange
         }

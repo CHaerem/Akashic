@@ -4,7 +4,8 @@ import CloudKit
 /// Seam over the CloudKit share-accept round-trip so the auto-accept policy is unit-tested without
 /// a container. The real implementation runs a `CKFetchShareMetadataOperation` then
 /// `container.accept(_:)`; the test fake records calls and can be told to fail.
-protocol MediaShareAccepting: AnyObject {
+// QUA-08: `Sendable` because the auto-accepter hands `any MediaShareAccepting` into async work.
+protocol MediaShareAccepting: AnyObject, Sendable {
     /// Fetch the share metadata for `shareURL` and accept it. Returns on success; throws on failure.
     func fetchAndAccept(shareURL: URL) async throws
 }

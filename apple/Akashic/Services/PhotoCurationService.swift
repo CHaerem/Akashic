@@ -21,7 +21,9 @@ import Foundation
 ///     additive-forever production container.
 /// Duplicate groups are reported, never actioned automatically — collapsing them is the user's call,
 /// and a false positive from a distance heuristic must not cost anyone a photograph.
-struct PhotoCurationService {
+// QUA-08: `Sendable` so `@MainActor JourneyStore.curationProposal` can await it off the main
+// actor. Genuinely immutable — one injected `PhotoScoring` seam and no mutable storage.
+struct PhotoCurationService: Sendable {
 
     /// Injectable so tests drive the policy with fixed scores and no Vision. Production uses the
     /// Vision-backed scorer, which is what links the framework and makes this code live at all.
@@ -34,7 +36,7 @@ struct PhotoCurationService {
     /// The closure form is the primitive because the two callers resolve days differently: a saved
     /// journey has a `PhotoDayMatcher`, while the creation sheet is still assembling draft days when
     /// the photos land.
-    func curate(photos: [Photo], dayOf: (Photo) -> Int?) async -> CurationResult {
+    func curate(photos: [Photo], dayOf: @Sendable (Photo) -> Int?) async -> CurationResult {
         guard !photos.isEmpty else { return CurationResult() }
         let scores = await scorer.score(photos, dayOf: dayOf)
         return PhotoCuration.curate(scores)

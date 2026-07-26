@@ -199,6 +199,34 @@ right: fix this file in the same commit.
   condition. `.sufficientElementDescription` and `.trait` report **zero**, which is QUA-07/QUA-24's
   labelling work verified by navigation rather than asserted. Exact totals drift — see the
   re-measure command in that file's triage comment, and prefer it to any number written down.
+- **A warning count is only real from a CLEAN build, and only if the build succeeded.** Two separate
+  ways to get a confidently wrong number, both of which caught me during QUA-08. (1) An incremental
+  build does not re-emit warnings for files it did not recompile — it reported 19 app-target warnings
+  where a clean build found 58, and later 9 where a clean build found 25. (2) A build **with errors**
+  under-reports, because a file that failed to compile emits errors instead of its warnings: I read
+  44, fixed the errors, and the same tree then reported 62. So a *falling* count can mean the build
+  got worse. Always `clean` then `build-for-testing`, and check the error count is zero before you
+  believe the warning count. And note `build` compiles the app target ONLY — the ledger's "63
+  warnings" for QUA-08 was really 294, because `AkashicUITests` alone held 218 of them.
+- **Strict concurrency is on (`complete`, `project.yml:52`) and it earned its keep by finding two real
+  races, not by tidying warnings.** `AkashicSyncEngine.nextBatch` read the main-queue Core Data
+  context from CloudKit's own queue via the `@Sendable` `recordProvider`; `PhotoDayMatcher` shared two
+  `ISO8601DateFormatter`s between `@MainActor` SwiftUI body evaluation and cooperative-pool curation.
+  Treat a concurrency diagnostic in sync or persistence code as a probable defect, not noise.
+  `SWIFT_VERSION` is still `5.0`; flipping to 6 turns every remaining diagnostic into an error.
+- **`nonisolated(unsafe)` on an Apple type is often asserting what Apple declined to assert.** In
+  `Foundation`'s own headers `NSDateFormatter` carries
+  `NS_SWIFT_SENDABLE // All mutable state protected by locks`, while `NSISO8601DateFormatter` and
+  `NSRelativeDateTimeFormatter`, in the same family, carry nothing. That is a per-class decision, and
+  the proof is in this repo: `DateOnly.formatter` is a plain `DateFormatter` and never warns. Shared
+  ISO-8601 formatting goes through `ISO8601Shared`, which serialises with an `OSAllocatedUnfairLock`
+  and is *cheaper* than what it replaced — two sites were constructing a formatter per call.
+- **SE-0411 isolated default values need Swift 6 mode, so `store: Foo = Foo()` breaks when `Foo`
+  becomes main-actor.** Annotating the enclosing function does nothing — the expression is evaluated
+  at the call site. Take a `nil` default and build the value in the body. Same family: a `@MainActor`
+  class's `deinit` may not *read* its isolated stored properties (move the cleanup into a small
+  non-isolated holder's own deinit), and XCTest's synchronous `setUp`/`tearDown` overrides are
+  nonisolated — use the `async throws` forms, which do run on the class's actor.
 - **Neither branch's numbers are the merged tree's, so verify after the merge, not before.** Merging
   QUA-10 auto-merged with no conflicts and still left two documents lying: the agent's branch had
   measured 787 unit tests before four of mine existed, so the table it updated was already false for

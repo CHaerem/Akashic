@@ -349,7 +349,7 @@ final class CloudKitImportSink: ImportSink {
     /// cancellation is honored between ops (cancel the enclosing `Task`).
     @discardableResult
     func execute(dryRun: Bool,
-                 progress: ((CloudKitImportProgress) -> Void)? = nil) async -> CloudKitImportReport {
+                 progress: (@Sendable (CloudKitImportProgress) -> Void)? = nil) async -> CloudKitImportReport {
         let start = Date()
         let plan = makePlan()
         var report = CloudKitImportReport(dryRun: dryRun, environment: environment,
@@ -476,7 +476,7 @@ final class CloudKitImportSink: ImportSink {
 
     private func finish(_ report: inout CloudKitImportReport, _ prog: inout CloudKitImportProgress,
                         _ start: Date, cancelled: Bool,
-                        progress: ((CloudKitImportProgress) -> Void)?) -> CloudKitImportReport {
+                        progress: (@Sendable (CloudKitImportProgress) -> Void)?) -> CloudKitImportReport {
         purgeRouteAssetsIfNeeded(report)
         report.wasCancelled = cancelled
         report.elapsed = Date().timeIntervalSince(start)

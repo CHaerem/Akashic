@@ -229,7 +229,7 @@ protocol StoreKitProviding: Sendable {
 
     /// Observe live transaction updates (`Transaction.updates`), calling back with the freshly
     /// resolved entitlement. Called once at launch.
-    func observeTransactionUpdates(_ onChange: @escaping (Entitlement) -> Void)
+    func observeTransactionUpdates(_ onChange: @escaping @Sendable (Entitlement) -> Void)
 }
 
 /// StoreKit-free description of the product, so the paywall and tests share one shape.
@@ -319,7 +319,10 @@ struct StoreKitProvider: StoreKitProviding {
         try await AppStore.sync()
     }
 
-    func observeTransactionUpdates(_ onChange: @escaping (Entitlement) -> Void) {
+    // QUA-08: `@Sendable` — this is handed to `Task.detached` below, so the closure and everything
+    // it captures genuinely cross an isolation boundary. Annotating the parameter checks the
+    // callers' captures instead of trusting them.
+    func observeTransactionUpdates(_ onChange: @escaping @Sendable (Entitlement) -> Void) {
         let productID = self.productID
         Task.detached {
             for await update in Transaction.updates {

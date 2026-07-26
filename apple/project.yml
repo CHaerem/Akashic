@@ -49,7 +49,23 @@ settings:
     CODE_SIGN_IDENTITY: ""
     DEVELOPMENT_TEAM: ""
     ENABLE_USER_SCRIPT_SANDBOXING: "YES"
-    SWIFT_STRICT_CONCURRENCY: minimal
+    # QUA-08. Was `minimal`, which hid 294 diagnostics — 53 of them errors in Swift 6 language mode,
+    # in an app whose whole job is syncing a Core Data store from CloudKit callbacks. Turning it on
+    # found two real races the `minimal` setting could never have reported:
+    #
+    #   * `AkashicSyncEngine.nextBatch` read the main-queue Core Data context from CloudKit's own
+    #     queue, via the `@Sendable` `recordProvider` closure.
+    #   * `PhotoDayMatcher.parseDate` shared two `ISO8601DateFormatter`s between `@MainActor`
+    #     SwiftUI body evaluation and cooperative-pool curation/publishing.
+    #
+    # `complete` rather than `targeted` deliberately: `targeted` would have flagged neither, because
+    # both live in code that predates any explicit isolation. The app and UI-test targets are clean;
+    # ONE diagnostic remains, in `AkashicTests/CloudKitImportTests`, and it is left visible on purpose
+    # rather than suppressed — see the comment at that test for what closing it requires.
+    #
+    # `SWIFT_VERSION` stays "5.0". Flipping to 6 is the next step and a separate decision: every
+    # remaining diagnostic becomes an error, and SE-0411/SE-0470 behaviours change with it.
+    SWIFT_STRICT_CONCURRENCY: complete
 
 targets:
   Akashic:

@@ -515,11 +515,25 @@ final class CloudKitImportTests: XCTestCase {
 
     // MARK: - Cancellation
 
-    // QUA-08: `@MainActor` so the `Task { }` below inherits this method's isolation instead of
-    // starting a new region. `CloudKitImportSink` is a non-Sendable final class, so handing it to a
-    // `Task` from a nonisolated context is a region transfer the compiler cannot prove is safe —
-    // and it is right to ask, even though nothing here touches `sink` after the task is created.
-    // Inheriting the isolation removes the crossing rather than asserting it is fine.
+    // QUA-08: **the one strict-concurrency diagnostic left in the whole project**, and it is left
+    // standing on purpose rather than suppressed.
+    //
+    // `sending 'sink' risks causing data races`. `CloudKitImportSink` is a non-Sendable `final class`
+    // with real mutable state (`journeys`, `photosByJourney`, `missingMedia`, `routeByteSize`), and
+    // `execute` is a nonisolated `async` method — so calling it hands the receiver across an isolation
+    // boundary. Nothing here touches `sink` afterwards, but the compiler cannot see that.
+    //
+    // Three things that do NOT fix it, all tried:
+    //   * `@MainActor` on this method only moves the diagnostic — `execute` is nonisolated `async`, so
+    //     calling it *from* the main actor is itself the transfer.
+    //   * `@unchecked Sendable` on the sink would be a lie: the mutable state above is real.
+    //   * Building the sink inside the `Task` just transfers `MockDatabase` instead, which is also a
+    //     non-Sendable final class.
+    //
+    // **Removal condition:** make `CloudKitImportSink` an `actor`. Every requirement it exposes is
+    // already `async`, so the shipping call site (`CloudKitImportViewModel`) does not change — but the
+    // synchronous `makeSink(...).makePlan()` calls throughout this file each gain an `await`. That is
+    // a shipping-code architecture decision, not a test fix, which is why it is not bundled here.
     @MainActor
     func testCancellationStopsBeforeUploading() async throws {
         let mock = MockDatabase()

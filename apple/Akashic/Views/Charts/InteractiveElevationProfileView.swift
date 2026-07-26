@@ -425,6 +425,14 @@ struct InteractiveElevationProfileView: View {
 /// Axes are in real units (km along the route, metres above sea level), NOT the 300 × 120 logical
 /// space the `Canvas` draws in. That space exists for SVG parity with the web and means nothing to a
 /// listener; `ElevationProfileModel.Point` carries both, so the projection stays a drawing concern.
+// QUA-08: `nonisolated` members. `View` is `@preconcurrency @MainActor` in the SDK, which isolates
+// the whole struct, while `AXChartDescriptorRepresentable` is a nonisolated protocol — so a
+// main-actor witness cannot satisfy it and the conformance "crosses into main actor-isolated code".
+//
+// `nonisolated` is correct rather than a dodge: both members below read only `model`/`points` value
+// types and touch no view state. The alternative the compiler suggests — an isolated conformance,
+// `extension …: @MainActor AXChartDescriptorRepresentable` — is SE-0470 and needs Swift 6.2, while CI
+// runs macos-15 / Xcode 16.4, so it would build here and fail there.
 extension InteractiveElevationProfileView: AXChartDescriptorRepresentable {
 
     /// Evenly thin `points` to at most `limit` samples, always keeping the last one.
@@ -440,7 +448,7 @@ extension InteractiveElevationProfileView: AXChartDescriptorRepresentable {
     /// bug would have shipped as "the limit does nothing until a route is twice as long as it needs to
     /// be". Caught by the test below, which is why the sampling is internal and static rather than
     /// inlined into `makeChartDescriptor`.
-    static func sample(_ points: [ElevationProfileModel.Point], limit: Int = 120)
+    nonisolated static func sample(_ points: [ElevationProfileModel.Point], limit: Int = 120)
         -> [ElevationProfileModel.Point] {
         guard points.count > limit, limit > 0 else { return points }
         let stride = (points.count + limit - 1) / limit
@@ -449,7 +457,7 @@ extension InteractiveElevationProfileView: AXChartDescriptorRepresentable {
             .map(\.element)
     }
 
-    func makeChartDescriptor() -> AXChartDescriptor {
+    nonisolated func makeChartDescriptor() -> AXChartDescriptor {
         let sampled = Self.sample(model.points)
 
         let xAxis = AXNumericDataAxisDescriptor(
@@ -495,7 +503,7 @@ extension InteractiveElevationProfileView: AXChartDescriptorRepresentable {
             series: model.campMarkers.isEmpty ? [profile] : [profile, days])
     }
 
-    func updateChartDescriptor(_ descriptor: AXChartDescriptor) {
+    nonisolated func updateChartDescriptor(_ descriptor: AXChartDescriptor) {
         // Nothing to reconcile: the descriptor is derived entirely from `model`, which is a `let` on
         // this view. Zoom, pan and the crosshair are drawing state and deliberately do NOT narrow the
         // described data — a listener exploring the profile should get the whole route, not whatever

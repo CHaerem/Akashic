@@ -119,7 +119,14 @@ struct NewJourneyChooser: View {
     /// One chooser card. `promoted` gives the photos card the filled accent surface the redesign
     /// calls for; the other two stay visually equal to each other — GPX and just-a-name are both
     /// ordinary, valid starting points, neither more "correct" than the other.
-    private func card(icon: String, title: LocalizedStringKey, subtitle: LocalizedStringKey,
+    // QUA-08: `nonisolated` so `PhotosPicker`'s nonisolated label builder can call it.
+    //
+    // Hoisting the built card out of the closure — the trick that works for `NewJourneySheet`'s
+    // label — does NOT work here: that hoists a `Text`, which is `Sendable`, whereas this returns
+    // `some View`, which is not, so the capture just moves the warning. Making the builder
+    // nonisolated is the real answer, and it is honest: this function reads nothing but its own
+    // parameters and `Theme`'s immutable `Color` statics.
+    nonisolated private func card(icon: String, title: LocalizedStringKey, subtitle: LocalizedStringKey,
                        promoted: Bool, isLoading: Bool = false) -> some View {
         HStack(alignment: .top, spacing: 14) {
             ZStack {

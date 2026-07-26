@@ -117,7 +117,14 @@ struct PhotoImportSheet: View {
     }
 
     private var picker: some View {
-        PhotosPicker(
+        // QUA-08: `PhotosPicker`'s label builder is nonisolated, so `pending` and `remainingAllowance`
+        // are read out here on this main-actor `View` and only the results go inside. `label` is a
+        // `Text` (Sendable) rather than a `LocalizedStringKey` (not), so the two literals are still
+        // resolved inside `Text(...)` and stay extractable for the string catalogue — the same reason
+        // `NewJourneySheet.photosSection` hoists a `Text`.
+        let label = Text(pending.isEmpty ? "Select photos or videos" : "Select more")
+        let allowance = remainingAllowance
+        return PhotosPicker(
             selection: $selection,
             // QUA-16: the cap is a limit the picker enforces, not a failure reported afterwards.
             // It used to be 0 (unlimited), so a free-tier user could pick 300 photos, wait while
@@ -134,11 +141,11 @@ struct PhotoImportSheet: View {
                     .font(.title3).foregroundStyle(Theme.accent)
                     .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(pending.isEmpty ? "Select photos or videos" : "Select more")
+                    label
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(Theme.textPrimary)
                     // Stated up front, so the number is a budget rather than a surprise.
-                    if let remaining = remainingAllowance {
+                    if let remaining = allowance {
                         Text("\(remaining) left on the free tier")
                             .font(.caption2)
                             .foregroundStyle(Theme.textSecondary)

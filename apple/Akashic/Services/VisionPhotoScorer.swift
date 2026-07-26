@@ -5,10 +5,16 @@ import Vision
 ///
 /// A protocol so the curation policy can be exercised against fixed scores with no Vision, no image
 /// files and no device — the same seam discipline as `SyncEngineProtocol` and `StoreKitProviding`.
-protocol PhotoScoring {
+// QUA-08: `Sendable` because `PhotoCurationService` is a Sendable value that stores one of these
+// and crosses an isolation boundary with it. Both conformers qualify: `VisionPhotoScorer` is a
+// struct of two value-typed settings, and the test fakes hold fixed scores.
+protocol PhotoScoring: Sendable {
     /// Score the given photos. Implementations must tolerate missing bytes (return a score with
     /// `aesthetics == nil` rather than dropping the photo) and must honour cancellation.
-    func score(_ photos: [Photo], dayOf: (Photo) -> Int?) async -> [PhotoScore]
+    /// QUA-08: `dayOf` is `@Sendable` because implementations resolve it before fanning out into
+    /// concurrent work, and the value crosses that boundary. Annotating the seam checks callers'
+    /// captures rather than trusting them — `VisionPhotoScorer` closes over a `PhotoDayMatcher`.
+    func score(_ photos: [Photo], dayOf: @Sendable (Photo) -> Int?) async -> [PhotoScore]
 }
 
 /// Single-owner handoff for a `VNFeaturePrintObservation`. (QUA-08)
@@ -99,7 +105,7 @@ struct VisionPhotoScorer: PhotoScoring {
             .map { $0.key.replacingOccurrences(of: "_", with: " ") }
     }
 
-    func score(_ photos: [Photo], dayOf: (Photo) -> Int?) async -> [PhotoScore] {
+    func score(_ photos: [Photo], dayOf: @Sendable (Photo) -> Int?) async -> [PhotoScore] {
         // Day assignment is resolved up front on the caller's actor: `dayOf` closes over the
         // matcher, which is not Sendable, and the concurrent work below must not touch it.
         let inputs: [(photo: Photo, day: Int?)] = photos.map { ($0, dayOf($0)) }

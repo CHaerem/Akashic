@@ -16,13 +16,21 @@ import AVFoundation
 /// `.localOriginalPath` / `.localThumbPath` (as the local importer does). Keeping the scheme
 /// identical means the CloudKit import path (D4) can attach a CKAsset from the same key
 /// without any migration.
-struct MediaLibrary {
+// QUA-08: `Sendable` so the `shared` static is concurrency-safe.
+//
+// That required dropping a stored `FileManager`, which is not `Sendable`. It was an injection seam
+// no caller ever used — every construction took the `.default` — so it is a computed property now.
+// The struct's only stored state is the root `URL`; the files it manages live on disk, not in here.
+struct MediaLibrary: Sendable {
     let root: URL
-    private let fileManager: FileManager
 
-    init(root: URL, fileManager: FileManager = .default) {
+    /// `.default` rather than stored, so the struct stays `Sendable`. If a test ever genuinely needs
+    /// to inject one, the honest move is a protocol seam over the handful of operations used below —
+    /// not a stored `FileManager`, which would take `Sendable` away again.
+    private var fileManager: FileManager { .default }
+
+    init(root: URL) {
         self.root = root
-        self.fileManager = fileManager
     }
 
     /// App default: `<Application Support>/media`. Survives relaunches on the `.local` store;

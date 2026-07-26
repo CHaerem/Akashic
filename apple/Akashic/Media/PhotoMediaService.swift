@@ -50,16 +50,26 @@ struct PhotoMediaUploadResult: Equatable {
 ///
 /// The service itself does NOT consult the Wi-Fi policy: a single user-initiated ingest (~4 MB) is
 /// always allowed, and the batch repack does its own Wi-Fi gating before calling in (MAPPING §13).
-final class PhotoMediaService {
+/// QUA-08: `@unchecked Sendable` because `MediaRepackJob` awaits `upload(_:)` from its own async
+/// work, so the service crosses an isolation boundary.
+///
+/// The promise is narrow: both remaining stored properties are `let`, `batchSize` is an `Int`, and
+/// `database` is a `CKDatabase` in every shipping path (CloudKit marks it `NS_SWIFT_SENDABLE`).
+/// It is `@unchecked` only because `MediaDatabase` — the seam that exists so tests can inject a mock
+/// — is not itself `Sendable`. **Removal condition:** declare `protocol MediaDatabase: Sendable` and
+/// this becomes a checked conformance; the test double would need `@unchecked` in its place.
+///
+/// The stored `FileManager` is gone: it was never injected with anything but `.default`, and keeping
+/// it would have made even the unchecked conformance a lie about non-Sendable storage.
+final class PhotoMediaService: @unchecked Sendable {
 
     private let database: MediaDatabase
     private let batchSize: Int
-    private let fileManager: FileManager
+    private var fileManager: FileManager { .default }
 
-    init(database: MediaDatabase, batchSize: Int = 50, fileManager: FileManager = .default) {
+    init(database: MediaDatabase, batchSize: Int = 50) {
         self.database = database
         self.batchSize = max(1, batchSize)
-        self.fileManager = fileManager
     }
 
     /// Upload PhotoMedia records for the given items. Ensures each journey's media zone exists

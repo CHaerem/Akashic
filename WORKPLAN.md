@@ -5,19 +5,19 @@
 
 # Akashic — work ledger
 
-98 tasks · **24 open** (7 agent-doable, 4.9 dev-days · 17 owner-only, 8.5 dev-days) · 74 done · 0 dropped
+98 tasks · **23 open** (6 agent-doable, 1.9 dev-days · 17 owner-only, 8.5 dev-days) · 75 done · 0 dropped
 
 > **`dev-days` are a human-developer estimate, not agent time.** They came from the review
 > that produced these tasks and they are the right unit for deciding whether something is
 > worth doing — they are the wrong unit for predicting how long an agent will take, and
 > summing them as "work remaining" overstates it substantially.
 >
-> Measured so far: **74 agent tasks estimated at 55.8 dev-days**,
+> Measured so far: **75 agent tasks estimated at 58.8 dev-days**,
 > closed in roughly one working afternoon across up to three parallel tracks.
 >
 > But that compression is **unmeasured for the large items**: of the tasks closed so far,
-> 6 were 2 dev-days or more. 3 of the
-> 4.9 remaining dev-days sit in 1 such tasks —
+> 7 were 2 dev-days or more. 0 of the
+> 1.9 remaining dev-days sit in 0 such tasks —
 > localisation, Swift 6 strict concurrency, a UI test target, the PDF book. Those involve
 > design judgement and broad-blast-radius refactors rather than localised edits, so do not
 > assume the same ratio holds. The cheap band is nearly exhausted:
@@ -28,12 +28,6 @@ Read [CLAUDE.md](CLAUDE.md) before touching anything. To find work:
 ```bash
 node scripts/workplan.mjs next
 ```
-
-## In flight
-
-| Task | Agent | Branch | Stopped at |
-|---|---|---|---|
-| `QUA-08` Turn on Swift 6 strict concurrency | opus5 | `claude/remote-control-project-review-9462c1` | 294 -> 55 (52 app + 3 test), 0 errors, 791+14 tests pass. PersistenceController and SyncLocalStore are now @MainActor -- the convention is the compiler's guarantee. THAT CHANGE FOUND A REAL PRE-EXISTING RACE, not a warning: AkashicSyncEngine.nextBatch hoisted 'let store = self.store' into CKSyncEngine.RecordZoneChangeBatch's @Sendable recordProvider, which CloudKit invokes on its own queue -- so makeRecord read the main-QUEUE Core Data context off-main. The provider is async, so it is fixed with a real hop into a main-actor record(for:) helper, not a suppression. MEASUREMENT TRAPS BOTH HIT: an incremental build does not re-emit warnings for files it did not recompile, and a build WITH ERRORS under-reports warnings (44 became 62 once the errors were fixed). Always clean + build-for-testing. SE-0411 isolated default values need Swift 6 mode, so 'store: FakeLocalStore = FakeLocalStore()' defaults had to move into the function body; annotating the function does nothing because the expression is evaluated at the call site. |
 
 ## LEGACY
 
@@ -140,7 +134,7 @@ node scripts/workplan.mjs next
 
 > Tests, types, CI, localisation, accessibility. Localisation and accessibility are in v1.0 by decision.
 
-3 open of 33 · 4 d remaining
+2 open of 33 · 1 d remaining
 
 | | Task | Days | Who | Deps | Finish line |
 |---|---|---|---|---|---|
@@ -151,7 +145,7 @@ node scripts/workplan.mjs next
 | `x` | `QUA-05` **Add a compile tripwire for the Foundation Models code** | 0.5 | agent | — | CI fails if the Intelligence code stops compiling. |
 | `x` | `QUA-06` **Localise the app to Norwegian** | 4 | agent | — | Every user-visible string comes from a string catalogue, and the app runs in NB end to end. |
 | `x` | `QUA-07` **Bring accessibility to a shippable standard** | 3 | agent | `QUA-06` | Every interactive control has a label, and the photo grid and elevation chart are navigable by VoiceOver. |
-| `~` | `QUA-08` **Turn on Swift 6 strict concurrency** | 3 | agent | — | The project builds clean under SWIFT_STRICT_CONCURRENCY=complete. |
+| `x` | `QUA-08` **Turn on Swift 6 strict concurrency** | 3 | agent | — | The project builds clean under SWIFT_STRICT_CONCURRENCY=complete. |
 | `x` | `QUA-09` **Light up the widget or remove it from v1.0** | 0.5 | agent | — | The widget shows the customer's own journey, or it does not ship. |
 | `x` | `QUA-10` **First tests for Views/, and a UI test target** | 3 | agent | `QUA-01` | A UI test target exists and the create-journey flow has an automated test. |
 | `x` | `QUA-11` **Handle a full iCloud account** | 0.5 | agent | — | A quota-exceeded sync failure is visible in the UI and says what to do. |
