@@ -5,7 +5,7 @@
 
 # Akashic — work ledger
 
-73 tasks · **71 open** (55 agent-doable, 48 d · 16 owner-only, 8 d) · 2 done · 0 dropped
+73 tasks · **69 open** (53 agent-doable, 47.3 d · 16 owner-only, 8 d) · 4 done · 0 dropped
 
 Read [CLAUDE.md](CLAUDE.md) before touching anything. To find work:
 
@@ -60,11 +60,11 @@ node scripts/workplan.mjs next
 
 > Hard requirements for a paid v1.0. Most of the remaining calendar time lives here, in items only the owner can do.
 
-19 open of 19 · 9.1 d remaining
+18 open of 19 · 8.9 d remaining
 
 | | Task | Days | Who | Deps | Finish line |
 |---|---|---|---|---|---|
-| ` ` | `SHIP-01` **Move the two dropped Info.plist keys into info.properties** | 0.25 | agent | — | The built Release-CloudKit Info.plist contains CKSharingSupported and UIBackgroundModes. |
+| `x` | `SHIP-01` **Move the two dropped Info.plist keys into info.properties** | 0.25 | agent | — | The built Release-CloudKit Info.plist contains CKSharingSupported and UIBackgroundModes. |
 | ` ` | `SHIP-02` **Register for remote notifications — the missing half of push sync** | 0.5 | agent | `SHIP-01` | The app calls registerForRemoteNotifications and a device receives a CloudKit push. |
 | ` ` | `SHIP-03` **Produce the 12 App Store screenshots** | 1.5 | agent | `SHIP-06` | Twelve assets exist at the two required sizes and are committed under docs/store/screenshots/. |
 | ` ` | `SHIP-04` **Add PrivacyInfo.xcprivacy** | 0.25 | agent | — | The manifest ships in the app bundle and the upload draws no ITMS-91053 notice. |
@@ -106,11 +106,11 @@ node scripts/workplan.mjs next
 
 > Tests, types, CI, localisation, accessibility. Localisation and accessibility are in v1.0 by decision.
 
-20 open of 20 · 22.5 d remaining
+19 open of 20 · 22 d remaining
 
 | | Task | Days | Who | Deps | Finish line |
 |---|---|---|---|---|---|
-| ` ` | `QUA-01` **Make CI build and test the configurations that actually ship** | 0.5 | agent | `SHIP-01` | CI builds Release and Release-CloudKit and asserts the two Info.plist keys are present. |
+| `x` | `QUA-01` **Make CI build and test the configurations that actually ship** | 0.5 | agent | `SHIP-01` | CI builds Release and Release-CloudKit and asserts the two Info.plist keys are present. |
 | ` ` | `QUA-02` **Make the lint and typecheck gates real for the code that ships** | 1.5 | agent | `LEG-07` | ESLint inspects src/, and a type error fails CI rather than being swallowed. |
 | ` ` | `QUA-03` **Clear the red Security Audit job** | 0.5 | agent | — | npm audit --audit-level=high exits 0, or the exception is documented and time-boxed. |
 | ` ` | `QUA-04` **Repair or delete the Performance Tests workflow** | 0.25 | agent | — | No workflow references a spec file that does not exist. |

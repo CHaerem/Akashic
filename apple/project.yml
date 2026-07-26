@@ -69,6 +69,25 @@ targets:
         # We copy and parse (GPXParser) rather than edit in place, so the system should never
         # offer in-place editing for a file we open.
         LSSupportsOpeningDocumentsInPlace: false
+        # These two live here, NOT as INFOPLIST_KEY_* settings, and that distinction is
+        # load-bearing: Xcode's INFOPLIST_KEY_ mechanism only merges keys on a fixed
+        # allowlist, and neither of these is on it. Declared as INFOPLIST_KEY_* they were
+        # silently discarded — absent from every build shipped through build 8 — which left
+        # CKShare acceptance and push-driven sync dead in the binary while project.yml
+        # claimed both were carried. Assert against the BUILT plist, never the spec:
+        #   plutil -p "$(...)/Akashic.app/Info.plist" | grep CKSharingSupported
+        # apple-ci.yml does exactly that now, so this cannot silently regress (QUA-01).
+        #
+        # Required for CloudKit share invitations to open in the app (T2.8). Without it iOS
+        # hands the link to Safari instead of giving the metadata to the app delegate.
+        CKSharingSupported: true
+        # CloudKit delivers "the server changed" as a silent push, and CKSyncEngine logs
+        # "BUG IN CLIENT OF CLOUDKIT: CloudKit push notifications require the
+        # 'remote-notification' background mode" without this. Harmless in non-CloudKit
+        # configs — nothing registers for pushes there. Note the key alone is not enough:
+        # the app must also call registerForRemoteNotifications (SHIP-02).
+        UIBackgroundModes:
+          - remote-notification
     sources:
       - path: Akashic
       # Fixture JSON recovered from git history — bundled so the app runs on
@@ -103,14 +122,10 @@ targets:
         INFOPLIST_KEY_UILaunchScreen_Generation: "YES"
         INFOPLIST_KEY_UISupportedInterfaceOrientations: "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
         INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad: "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
-        # CloudKit delivers "the server changed" as a silent push, and CKSyncEngine logs
-        # "BUG IN CLIENT OF CLOUDKIT: CloudKit push notifications require the
-        # 'remote-notification' background mode" without this. Harmless in non-CloudKit
-        # configs (nothing registers for pushes there).
-        INFOPLIST_KEY_UIBackgroundModes: remote-notification
-        # Required for CloudKit share invitations to open in the app (T2.8). Without it iOS
-        # opens the share link in Safari instead of handing the metadata to the app delegate.
-        INFOPLIST_KEY_CKSharingSupported: "YES"
+        # NOTE: CKSharingSupported and UIBackgroundModes are deliberately NOT here. Xcode
+        # drops non-allowlisted INFOPLIST_KEY_* settings without warning; both now live in
+        # the `info: properties:` block above, which is the only form that reaches the
+        # built plist.
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
         SWIFT_EMIT_LOC_STRINGS: "YES"

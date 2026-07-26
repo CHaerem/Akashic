@@ -63,3 +63,46 @@ jobs:
             -destination "platform=iOS Simulator,id=${{ steps.sim.outputs.udid }}" \
             CODE_SIGNING_ALLOWED=NO \
             test
+
+      # Debug does not carry the entitlements, the CloudKit compilation condition or the
+      # same plist merge, so building only Debug is how two dropped Info.plist keys shipped
+      # undetected through build 8. This builds the configuration that actually reaches
+      # TestFlight (testflight-upload.sh archives Release-CloudKit).
+      - name: Build the configuration that ships
+        working-directory: apple
+        run: |
+          xcodebuild \
+            -project Akashic.xcodeproj \
+            -scheme Akashic \
+            -configuration Release-CloudKit \
+            -destination "platform=iOS Simulator,id=${{ steps.sim.outputs.udid }}" \
+            CODE_SIGNING_ALLOWED=NO \
+            build
+
+      # Assert against the BUILT plist, not against project.yml. Xcode silently discards
+      # INFOPLIST_KEY_* settings that are not on its fixed allowlist, so the spec claiming a
+      # key proves nothing — only the merged output does. Without CKSharingSupported iOS
+      # opens share invitations in Safari; without the remote-notification background mode
+      # CKSyncEngine is never told the server changed.
+      - name: Assert the shipping Info.plist carries the keys the app depends on
+        run: |
+          APP=$(find ~/Library/Developer/Xcode/DerivedData/Akashic-*/Build/Products/Release-CloudKit-iphonesimulator \
+                  -name Akashic.app -maxdepth 2 | head -1)
+          if [ -z "$APP" ]; then echo "::error::no built Akashic.app found" ; exit 1 ; fi
+          echo "Inspecting $APP/Info.plist"
+          fail=0
+          for key in CKSharingSupported UIBackgroundModes ITSAppUsesNonExemptEncryption UILaunchScreen; do
+            if plutil -p "$APP/Info.plist" | grep -q "\"$key\""; then
+              echo "  ok      $key"
+            else
+              echo "::error::$key is missing from the built Info.plist"
+              fail=1
+            fi
+          done
+          if plutil -p "$APP/Info.plist" | grep -A2 '"UIBackgroundModes"' | grep -q 'remote-notification'; then
+            echo "  ok      UIBackgroundModes contains remote-notification"
+          else
+            echo "::error::UIBackgroundModes does not contain remote-notification"
+            fail=1
+          fi
+          exit $fail

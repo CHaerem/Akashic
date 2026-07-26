@@ -186,7 +186,7 @@
       "track": "LEGACY",
       "title": "Gate every native-only web write behind one guard",
       "status": "TODO",
-      "effort": 1.0,
+      "effort": 1,
       "done_when": "No web UI offers a write that silently no-ops; each either disappears or shows a native-only notice.",
       "files": [
         "src/components/trek/RouteEditor.tsx",
@@ -312,7 +312,7 @@
       "track": "DOCS",
       "title": "The work ledger and its enforcement",
       "status": "DONE",
-      "effort": 1.0,
+      "effort": 1,
       "done_when": "npm run workplan:check passes and fails loudly when the ledger and WORKPLAN.md disagree.",
       "files": [
         "docs/workplan/tasks.json",
@@ -528,7 +528,7 @@
       "id": "SHIP-01",
       "track": "SHIP",
       "title": "Move the two dropped Info.plist keys into info.properties",
-      "status": "TODO",
+      "status": "DONE",
       "effort": 0.25,
       "done_when": "The built Release-CloudKit Info.plist contains CKSharingSupported and UIBackgroundModes.",
       "priority": 4,
@@ -544,7 +544,13 @@
       "refs": [
         "apple/project.yml:110, :113 — the broken form",
         "apple/project.yml:53-71 — info.properties, used correctly for CFBundleDocumentTypes"
-      ]
+      ],
+      "claim": {
+        "agent": "opus5",
+        "branch": "claude/remote-control-project-review-9462c1",
+        "at": "2026-07-26"
+      },
+      "evidence": "Built Release-CloudKit (the config testflight-upload.sh archives) and dumped the merged plist: CKSharingSupported => true and UIBackgroundModes => [remote-notification] both present; ITSAppUsesNonExemptEncryption and UILaunchScreen unregressed; 599/599 tests pass. CI now asserts all five against the built plist."
     },
     {
       "id": "SHIP-02",
@@ -794,7 +800,7 @@
       "track": "SHIP",
       "title": "Real-device smoke test on two Apple IDs",
       "status": "TODO",
-      "effort": 1.0,
+      "effort": 1,
       "done_when": "A share invitation opens in-app, and an edit on device A appears on device B without foregrounding.",
       "owner": true,
       "priority": 8,
@@ -828,7 +834,7 @@
       "track": "SHIP",
       "title": "The external beta gate",
       "status": "TODO",
-      "effort": 0.0,
+      "effort": 0,
       "done_when": "At least 7 of 10 households create a journey unaided and 5 finish and hand one over.",
       "owner": true,
       "deps": [
@@ -902,7 +908,7 @@
       "track": "DIFF",
       "title": "Give the owner a shareable showcase link",
       "status": "TODO",
-      "effort": 1.0,
+      "effort": 1,
       "done_when": "Publishing yields a working URL the owner can share, correct under slug disambiguation.",
       "priority": 11,
       "deps": [
@@ -944,7 +950,7 @@
       "track": "DIFF",
       "title": "On-device photo curation with Vision",
       "status": "TODO",
-      "effort": 3.0,
+      "effort": 3,
       "done_when": "Each day proposes a best-of selection and a hero, accepted or dismissed like other suggestions.",
       "priority": 30,
       "files": [
@@ -963,7 +969,7 @@
       "track": "DIFF",
       "title": "Feed Vision labels into DayNoteDrafter",
       "status": "TODO",
-      "effort": 1.0,
+      "effort": 1,
       "done_when": "A drafted day note references what is actually in the photos.",
       "deps": [
         "DIFF-04"
@@ -1002,7 +1008,7 @@
       "track": "DIFF",
       "title": "PDF export of the story view",
       "status": "TODO",
-      "effort": 6.0,
+      "effort": 6,
       "done_when": "A journey exports a PDF a person would willingly hand over.",
       "priority": 40,
       "deps": [
@@ -1045,7 +1051,7 @@
       "track": "DIFF",
       "title": "C9 — derive days from timestamped GPX trackpoints",
       "status": "TODO",
-      "effort": 1.0,
+      "effort": 1,
       "done_when": "A Strava or Garmin export yields a journey with correctly dated days.",
       "files": [
         "apple/Akashic/Import/GPXParser.swift"
@@ -1060,7 +1066,7 @@
       "id": "QUA-01",
       "track": "QUALITY",
       "title": "Make CI build and test the configurations that actually ship",
-      "status": "TODO",
+      "status": "DONE",
       "effort": 0.5,
       "done_when": "CI builds Release and Release-CloudKit and asserts the two Info.plist keys are present.",
       "priority": 12,
@@ -1076,7 +1082,8 @@
         "gh run list --workflow apple-ci.yml --limit 1",
         "cd apple && xcodegen generate",
         "plutil -p \"$(find ~/Library/Developer/Xcode/DerivedData/Akashic-*/Build/Products -name Akashic.app -maxdepth 3 | head -1)/Info.plist\" | grep CKSharingSupported"
-      ]
+      ],
+      "evidence": "apple-ci.yml now builds Release-CloudKit in addition to Debug and asserts five keys against the built Info.plist. Assertion logic run against real output: 5 ok, exit 0; negative control on NSPhotoLibraryUsageDescription correctly reports absent."
     },
     {
       "id": "QUA-02",
@@ -1160,7 +1167,7 @@
       "track": "QUALITY",
       "title": "Localise the app to Norwegian",
       "status": "TODO",
-      "effort": 4.0,
+      "effort": 4,
       "done_when": "Every user-visible string comes from a string catalogue, and the app runs in NB end to end.",
       "priority": 25,
       "files": [
@@ -1180,7 +1187,7 @@
       "track": "QUALITY",
       "title": "Bring accessibility to a shippable standard",
       "status": "TODO",
-      "effort": 3.0,
+      "effort": 3,
       "done_when": "Every interactive control has a label, and the photo grid and elevation chart are navigable by VoiceOver.",
       "priority": 26,
       "deps": [
@@ -1202,7 +1209,7 @@
       "track": "QUALITY",
       "title": "Turn on Swift 6 strict concurrency",
       "status": "TODO",
-      "effort": 3.0,
+      "effort": 3,
       "done_when": "The project builds clean under SWIFT_STRICT_CONCURRENCY=complete.",
       "files": [
         "apple/project.yml",
@@ -1240,7 +1247,7 @@
       "track": "QUALITY",
       "title": "First tests for Views/, and a UI test target",
       "status": "TODO",
-      "effort": 3.0,
+      "effort": 3,
       "done_when": "A UI test target exists and the create-journey flow has an automated test.",
       "deps": [
         "QUA-01"
@@ -1279,7 +1286,7 @@
       "track": "QUALITY",
       "title": "Tests for KnowledgeRetrieval, and fix its two real defects",
       "status": "TODO",
-      "effort": 1.0,
+      "effort": 1,
       "done_when": "The retrieval path has tests, including the cross-project de-dup and empty-coordinate cases.",
       "deps": [
         "DOC-10"
@@ -1421,7 +1428,7 @@
       "track": "QUALITY",
       "title": "A4 — the 'would Apple ship this screen?' review round",
       "status": "TODO",
-      "effort": 1.0,
+      "effort": 1,
       "done_when": "Each primary screen has been reviewed against current HIG and the findings closed or recorded.",
       "deps": [
         "QUA-07",
