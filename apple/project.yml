@@ -106,6 +106,17 @@ targets:
         buildPhase: resources
       - path: Fixtures/recovered/incaTrail.json
         buildPhase: resources
+      # DIFF-10: photographs for the bundled fixtures + the once-ever demo journey, and the sidecar
+      # manifest that maps them to journey slugs and days (FixtureMedia). Kept OUT of
+      # Fixtures/recovered/ so that recovered archive stays byte-identical. ~474 KB of JPEG total.
+      - path: Fixtures/demo-media/demo-photos.json
+        buildPhase: resources
+      - path: Fixtures/demo-media/demo-kilimanjaro-summit.jpg
+        buildPhase: resources
+      - path: Fixtures/demo-media/demo-mount-kenya.jpg
+        buildPhase: resources
+      - path: Fixtures/demo-media/demo-inca-trail.jpg
+        buildPhase: resources
     dependencies:
       # WidgetKit extension — BUILT but deliberately NOT EMBEDDED for v1.0 (QUA-09).
       #
@@ -223,6 +234,16 @@ targets:
       - path: Fixtures/recovered/mountKenya.json
         buildPhase: resources
       - path: Fixtures/recovered/incaTrail.json
+        buildPhase: resources
+      # DIFF-10 fixture photographs + manifest, so the photo pipeline is unit-testable from the
+      # test bundle without the host app's layout.
+      - path: Fixtures/demo-media/demo-photos.json
+        buildPhase: resources
+      - path: Fixtures/demo-media/demo-kilimanjaro-summit.jpg
+        buildPhase: resources
+      - path: Fixtures/demo-media/demo-mount-kenya.jpg
+        buildPhase: resources
+      - path: Fixtures/demo-media/demo-inca-trail.jpg
         buildPhase: resources
     dependencies:
       - target: Akashic

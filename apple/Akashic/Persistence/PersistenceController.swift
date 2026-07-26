@@ -169,14 +169,49 @@ final class PersistenceController {
     private func seedFixtures(bundle: Bundle) {
         let context = container.viewContext
         do {
-            let journeys = try FixtureLoader.loadAll(bundle: bundle)
-            for journey in journeys {
-                CoreDataMapping.upsertJourney(journey, into: context)
+            // DIFF-10: each dev fixture also gets its own bundled photographs, so `.fixtures` mode
+            // (every preview, every screenshot run, the default simulator build) exercises the same
+            // photo path the demo journey uses rather than a photo-free special case.
+            let manifest = FixtureMedia.loadManifest(bundle: bundle)
+            for name in FixtureLoader.fixtureNames {
+                let trek = try FixtureLoader.trek(named: name, bundle: bundle)
+                let journey = FixtureLoader.map(trek)
+                let cd = CoreDataMapping.upsertJourney(journey, into: context)
                 seededJourneyIDs.insert(journey.id)
+                // No id prefix: `.fixtures` is an in-memory dev store that never syncs, and its
+                // journeys deliberately keep their raw fixture ids (see this method's doc comment).
+                seedPhotos(for: journey, slug: trek.slug, cdJourney: cd, manifest: manifest,
+                           idPrefix: "", bundle: bundle, context: context)
             }
             if context.hasChanges { try context.save() }
         } catch {
             assertionFailure("Fixture seeding failed: \(error)")
+        }
+    }
+
+    /// Stage a fixture journey's bundled photographs into the media library and persist their rows
+    /// (DIFF-10). Never throws: a journey with no photographs is a lesser failure than no journey.
+    ///
+    /// Called before the enclosing `save()`, so the demo's `seededJourneyIDs` registration has already
+    /// happened by the time `SyncScheduler` observes the save — which is what keeps these photo rows
+    /// sync-excluded along with their journey (`AkashicSyncEngine.handles(journeyID:)` gates every
+    /// upload path on the journey id a photo carries).
+    private func seedPhotos(for journey: Journey, slug: String, cdJourney: CDJourney,
+                            manifest: FixturePhotoManifest, idPrefix: String,
+                            bundle: Bundle, context: NSManagedObjectContext) {
+        let fixtures = manifest.photos(forSlug: slug)
+        guard !fixtures.isEmpty else { return }
+        let photos = FixtureMedia.stagePhotos(fixtures, for: journey,
+                                              idPrefix: idPrefix, bundle: bundle)
+        guard !photos.isEmpty else { return }
+
+        var waypointsByID: [String: CDWaypoint] = [:]
+        for waypoint in (cdJourney.waypoints as? Set<CDWaypoint> ?? []) {
+            if let id = waypoint.id { waypointsByID[id] = waypoint }
+        }
+        for photo in photos {
+            CoreDataMapping.upsertPhoto(photo, into: context, journey: cdJourney,
+                                        waypoint: photo.waypointId.flatMap { waypointsByID[$0] })
         }
     }
 
@@ -200,10 +235,10 @@ final class PersistenceController {
         Set(defaults.stringArray(forKey: demoJourneyIDsKey) ?? [])
     }
 
-    /// Seed the ONE bundled demo journey (Kilimanjaro — real route, real days, real notes; no
-    /// photos in the recovered fixture, so the story view falls back to its honest placeholders)
-    /// into a real (`.local`/`.cloudKit`) store, **at most once ever**, and only into a store that
-    /// is genuinely empty at the moment this runs.
+    /// Seed the ONE bundled demo journey (Kilimanjaro — real route, real days, real notes, and since
+    /// DIFF-10 its bundled photograph(s) too, so a photo-memory app's first-launch sample is not
+    /// photo-free) into a real (`.local`/`.cloudKit`) store, **at most once ever**, and only into a
+    /// store that is genuinely empty at the moment this runs.
     ///
     /// Two different callers reach this, deliberately at different times:
     ///  - `.local`, synchronously from `init` — `.local` never syncs, so there is no race: whatever
@@ -240,16 +275,21 @@ final class PersistenceController {
         guard existing == 0 else { return }   // not a fresh install, or real data already landed
 
         do {
-            let fixture = try FixtureLoader.load(named: "kilimanjaro", bundle: bundle)
+            let trek = try FixtureLoader.trek(named: "kilimanjaro", bundle: bundle)
             // Re-mint every stable id the fixture carries — see `remapToDemoIdentity`'s doc
             // comment for why this is a ship-blocker, not a nicety.
-            let journey = Self.remapToDemoIdentity(fixture)
-            CoreDataMapping.upsertJourney(journey, into: context)
+            let journey = Self.remapToDemoIdentity(FixtureLoader.map(trek))
+            let cd = CoreDataMapping.upsertJourney(journey, into: context)
             // Recorded BEFORE `save()`: the Core Data save notification `SyncScheduler` observes
             // fires synchronously, on this thread, from inside `save()` — so `isSeededFixture` must
             // already say true for this id by then, or the engine would enqueue the demo's own
             // insert for upload before this function returns.
             seededJourneyIDs.insert(journey.id)
+            // DIFF-10: the demo journey's photographs. Ids carry the same `demo-` prefix as the
+            // journey and its waypoints, for the same record-identity reason.
+            seedPhotos(for: journey, slug: trek.slug, cdJourney: cd,
+                       manifest: FixtureMedia.loadManifest(bundle: bundle),
+                       idPrefix: "demo-", bundle: bundle, context: context)
             if context.hasChanges { try context.save() }
             var ids = Self.persistedDemoJourneyIDs(defaults)
             ids.insert(journey.id)

@@ -62,6 +62,50 @@ struct FixtureStats: Decodable {
     }
 }
 
+// MARK: - Photographs (DIFF-10)
+
+/// One bundled photograph belonging to a fixture journey.
+///
+/// `file` names a JPEG in the same bundle (`Fixtures/demo-media/*.jpg`); `FixtureMedia` copies its
+/// bytes into the app's media library under the R2-style object key the rest of the app already uses,
+/// which is what makes it resolvable by `Photo.thumbnailFileURL` / `.originalFileURL`. `dayNumber`
+/// attaches the photo to that day's waypoint, so it shows on the day sheet and the story chapter as
+/// well as in the journey's grid.
+///
+/// Lenient in the same spirit as the rest of this file: everything but `id` and `file` is optional,
+/// because a photo with no caption, no day and no GPS is still a photo worth showing.
+struct FixturePhoto: Decodable, Equatable {
+    var id: String
+    /// Bundled resource file name, including extension.
+    var file: String
+    /// Which day (`FixtureCamp.dayNumber`) this photo belongs to; nil leaves it unassigned.
+    var dayNumber: Int?
+    var caption: String?
+    /// `[lng, lat]` (GeoJSON order), for the photo's map marker.
+    var coordinates: [Double]?
+    /// ISO-8601 capture instant.
+    var takenAt: String?
+    var isHero: Bool?
+    var sortOrder: Int?
+}
+
+/// The `Fixtures/demo-media/demo-photos.json` sidecar: photographs keyed by **journey slug**.
+///
+/// A sidecar rather than a `photos` array on `FixtureTrek` because `Fixtures/recovered/*.json` is the
+/// recovered pre-Supabase archive, declared read-only in `project.yml` — it stays byte-identical.
+/// `_comment` in the file is not decoded (documentation for whoever swaps the images out).
+struct FixturePhotoManifest: Decodable, Equatable {
+    var journeys: [String: [FixturePhoto]]
+
+    /// Photographs for a journey slug, in `sortOrder` then id order (deterministic regardless of how
+    /// the JSON happened to be written).
+    func photos(forSlug slug: String) -> [FixturePhoto] {
+        (journeys[slug] ?? []).sorted {
+            ($0.sortOrder ?? 0, $0.id) < ($1.sortOrder ?? 0, $1.id)
+        }
+    }
+}
+
 struct FixtureCamp: Decodable {
     var id: String
     var name: String

@@ -217,8 +217,8 @@ extension KnowledgeRetrieval {
         }
         let nameMatches = suppliedNames.contains { isNearExactMatch(title: title, name: $0) }
 
-        if let article = articleCoordinate, article.count >= 2 {
-            guard let day = dayCoordinate, day.count >= 2 else {
+        if let article = usableCoordinate(articleCoordinate) {
+            guard let day = usableCoordinate(dayCoordinate) else {
                 return nameMatches
                     ? .accept
                     : .reject(reason: "no day coordinate to verify against and title is not a near-exact match")
@@ -230,10 +230,26 @@ extension KnowledgeRetrieval {
             return .reject(reason: String(format: "%.0f km away (> %.0f km)", km, maxKm))
         }
 
-        // No coordinates on the article.
+        // No usable coordinates on the article.
         return nameMatches
             ? .accept
             : .reject(reason: "no coordinates and title is not a near-exact match of a supplied name")
+    }
+
+    /// A coordinate we can actually do distance arithmetic with: present, at least `[lng, lat]`, and
+    /// **finite**. Anything else is treated as *absent*, which routes the decision to the name-match
+    /// rule instead of the distance rule.
+    ///
+    /// The count part matters because a **hand-added day carries empty `coordinates`** — the one path
+    /// where the name-match heuristic actually governs rather than the distance branch, so it must be
+    /// reached rather than crashed past. The finiteness part matters because `distanceKm` over a NaN
+    /// coordinate returns NaN, and `NaN <= maxKm` is `false`: a single garbage fix would have silently
+    /// rejected *every* coordinate-bearing article and turned grounding off altogether, with a
+    /// distance in the reject reason ("nan km away") rather than an honest "can't verify".
+    static func usableCoordinate(_ coordinate: [Double]?) -> [Double]? {
+        guard let coordinate, coordinate.count >= 2,
+              coordinate[0].isFinite, coordinate[1].isFinite else { return nil }
+        return coordinate
     }
 
     /// Whether an article title near-exactly matches a supplied place name. Both are normalised
@@ -241,16 +257,48 @@ extension KnowledgeRetrieval {
     /// disambiguator on the title ("Santa Teresa (Peru)") is dropped before comparison. A supplied
     /// name that merely *contains* the title (or vice-versa) as its whole leading token also counts,
     /// so "Kilimanjaro" matches the article "Mount Kilimanjaro".
+    ///
+    /// **Containment requires a distinctive title.** Without that rule, the whole-phrase containment
+    /// below accepted a bare generic article for any name ending in that word: the article "Camp"
+    /// matched "Barafu Camp", "Trail" matched "Inca Trail", "Pass" matched "Karanga Pass". Since a
+    /// coordinate-less article is admitted *solely* on a name match, that is the one path where a
+    /// generic hit becomes grounding — the model would then be handed an encyclopaedia entry on the
+    /// concept of camping as source material for a day on Kilimanjaro. Exact equality still passes
+    /// (a supplied name that really is just "Camp" is degenerate, not a mismatch); only the
+    /// containment shortcut is closed.
     static func isNearExactMatch(title: String, name: String) -> Bool {
         let t = normalize(stripParenthetical(title))
         let n = normalize(name)
         guard !t.isEmpty, !n.isEmpty else { return false }
         if t == n { return true }
+        guard !isGenericPlaceTerm(t) else { return false }
         // Whole-phrase containment either direction (guards against "Mount X" vs "X").
         if t.hasSuffix(" " + n) || t.hasPrefix(n + " ") { return true }
         if n.hasSuffix(" " + t) || n.hasPrefix(t + " ") { return true }
         return false
     }
+
+    /// Whether an already-normalised title is *only* generic geographic vocabulary — the feature-type
+    /// words that appear in thousands of place names and identify nothing on their own. Kept
+    /// deliberately small and literal: every entry is a word that has actually shown up as a bare
+    /// Wikipedia/Wikivoyage article title. A multi-word title counts as generic only when **every**
+    /// word does ("base camp"), so "Machame Camp" and "Mount Kilimanjaro" are unaffected.
+    static func isGenericPlaceTerm(_ normalized: String) -> Bool {
+        let words = normalized.split(separator: " ")
+        guard !words.isEmpty else { return false }
+        return words.allSatisfy { genericPlaceTerms.contains(String($0)) }
+    }
+
+    private static let genericPlaceTerms: Set<String> = [
+        "camp", "camps", "campsite", "base", "hut", "huts", "lodge", "shelter", "refuge",
+        "trail", "trails", "track", "path", "route", "trek", "trekking", "hike", "hiking",
+        "mount", "mountain", "mountains", "hill", "peak", "peaks", "summit", "ridge", "crater",
+        "glacier", "pass", "gap", "col", "saddle", "valley", "gorge", "canyon", "cave",
+        "lake", "lakes", "river", "stream", "waterfall", "falls", "spring", "springs",
+        "gate", "gates", "bridge", "point", "viewpoint", "junction", "crossing",
+        "park", "national", "reserve", "forest", "village", "town", "city", "island",
+        "north", "south", "east", "west", "upper", "lower", "old", "new",
+    ]
 
     /// Drop a trailing "(...)" disambiguator from a title.
     static func stripParenthetical(_ title: String) -> String {
@@ -299,8 +347,15 @@ struct KnowledgeRetrieval {
 
         // 1. Collect candidate (project, hit) pairs, de-duplicated by normalised title, preserving
         //    discovery order (specific place names first, Wikipedia before Wikivoyage).
+        //
+        //    De-dup is keyed **per project**, not globally. A global key defeated the entire point of
+        //    consulting two projects: Wikipedia is searched first, so every title it returned blocked
+        //    the *same* title on Wikivoyage — and the same title is exactly the case that matters.
+        //    "Lemosho Route" exists on both; only Wikivoyage's article calls it the Whiskey Route,
+        //    which is the gap this file was written to close (COMMERCIALIZATION-PLAN §10). Within one
+        //    project a repeated title is still a genuine duplicate and still skipped.
         var candidates: [(project: WikimediaProject, hit: WikimediaSearchHit)] = []
-        var seenTitles = Set<String>()
+        var seenTitles: [WikimediaProject: Set<String>] = [:]
         for query in queries {
             let searchQuery = searchTerm(query, regionHint: request.regionHint)
             for project in projects {
@@ -309,8 +364,8 @@ struct KnowledgeRetrieval {
                                                      limit: request.searchLimitPerQuery)) ?? []
                 for hit in hits {
                     let key = Self.normalize(hit.title)
-                    guard !key.isEmpty, !seenTitles.contains(key) else { continue }
-                    seenTitles.insert(key)
+                    guard !key.isEmpty, seenTitles[project]?.contains(key) != true else { continue }
+                    seenTitles[project, default: []].insert(key)
                     candidates.append((project, hit))
                 }
             }

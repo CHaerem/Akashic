@@ -306,7 +306,8 @@ apple/
     Models/                       Domain value types, flexible decoding, DayStats (per-day route math)
     Export/                       Per-journey archive (the exit door): JourneyExporter,
                                   ExportArchive (zip), GPXBuilder
-    Fixtures/                     FixtureModels + FixtureLoader (old camp shape -> domain).
+    Fixtures/                     FixtureModels + FixtureLoader (old camp shape -> domain),
+                                  FixtureMedia (DIFF-10: bundled photographs -> media library)
                                   NOTE: no photo path — fixtures carry metadata only
     Import/                       ExportBundle reader, ExportMapper, LocalImporter (+ sink seam),
                                   CloudKitImportSink, PhotoDayMatcher, ImportBrowserView
@@ -347,7 +348,10 @@ apple/
   CloudKit/                       schema.ckdb (hand-authored) + MAPPING.md — the record contract
   Docs/                           Screenshots, DESIGN-PLAN.md, sync-verification.md, sharing.md
   Fixtures/recovered/             Input JSON (owned elsewhere; read-only here) — metadata only,
-                                  no photos
+                                  no photos. Photographs live in Fixtures/demo-media/
+                                  instead, so this archive stays byte-identical
+  Fixtures/demo-media/            DIFF-10: three JPEGs (~474 KB) + demo-photos.json, the
+                                  sidecar manifest mapping them to journey slugs and days
   Spikes/                         MapKitGlobe / Mapbox evaluation spikes behind decision D5
   Scripts/                        testflight-upload.sh + ExportOptions.plist (owner-only;
                                   needs credentials — do not run)
@@ -421,31 +425,13 @@ failures throw `AkashicIntentError` carrying the MCP's plain-text message
 - **Access model** — local mode has no membership layer (every journey in the private store is
   accessible), so the worker's `"Access denied"` branch collapses into `"Journey not found"`
   for an unresolved id/slug.
-- **Photos** — the recovered fixtures under `Fixtures/recovered/` carry **no** photos (there is
-  no photo path in `Fixtures/FixtureLoader.swift` at all), so in fixtures mode
-  `get_journey_photos` returns the correct empty shape `{"photos":[],"total":0}` (unit-tested).
-  Against imported or synced data it returns real photos (`CDPhoto` → `MCPPhoto`). **This is
-  also why the bundled demo journey shows no photographs** — it is seeded from
-  `kilimanjaro.json`; see D9 in [`Docs/DESIGN-PLAN.md`](Docs/DESIGN-PLAN.md).
-
-Tests live in `AkashicTests/IntentModelTests.swift`, `IntentQueryTests.swift`,
-`IntentStatsTests.swift` (21 tests): wire-shape golden encode/decode, the Kilimanjaro
-`ExtendedStats` numbers (70 km, avg `"10.0"` km/day, `Xh Ymin`, difficulty `Hard`), limit
-clamps (500 → 100 / 50 / 200), and UUID-or-slug resolution.
-
-## Widgets (WidgetKit) & Spotlight
-
-Two "extras" from Phase 6, pulled forward. Both are additive — the default unsigned simulator
-build keeps working with no team. Spotlight is live; the widget target **builds** with every
-app build but is **not embedded** (see below).
-
-### Spotlight — works tonight, no entitlement
-
-`Services/SpotlightIndexer.swift` indexes every journey **and each of its days** into
-`CSSearchableIndex` (`CoreSpotlight` needs no App Group or signing, so this is live on the
-plain simulator build). It runs from the store's load path (`JourneyStore.reload()`), so it
-**de-indexes + re-indexes idempotently on every load / import**.
-
+- **Photos** — the recovered fixtures under `Fixtures/recovered/` still carry no photos, but
+  there IS a photo path now (DIFF-10): `Fixtures/FixtureMedia.swift` reads the
+  `Fixtures/demo-media/demo-photos.json` manifest and stages the bundled JPEGs into the media
+  library at the same `journeys/<jid>/photos/<pid>.jpg` layout an ingested photo uses, so every
+  consumer reads them through the existing paths. Caveat worth knowing: those three images are
+  re-encoded hero artwork, not trek photographs — the repo contains no real photographs at all.
+  Swapping real ones in is a file copy plus a manifest edit, no code change.
 - **Item ids** — `journey/<id>` and `journey/<id>/day/<n>`; both decode back to the journey id.
 - **Deep-link** — `AkashicApp` handles `onContinueUserActivity(CSSearchableItemActionType)` and
   records the tapped journey on `JourneyStore.pendingJourneySelection`; `GlobeExperienceView`
