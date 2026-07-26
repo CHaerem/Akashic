@@ -113,6 +113,32 @@ final class JourneyStore: ObservableObject {
         return matcher.photos(forDay: day, from: persistence.loadPhotos(forJourneyID: id))
     }
 
+    // MARK: - Curation (DIFF-04)
+
+    /// Look at a journey's photographs and propose a hero, a best-of per day, and any groups of
+    /// near-identical shots.
+    ///
+    /// Nothing is applied here — the result is a *proposal*, on the same accept-or-dismiss contract
+    /// every other suggestion in the app honours. Scoring runs on thumbnails off the main actor;
+    /// this method is `async` and the store only touches its own state after it returns.
+    ///
+    /// Degrades rather than disappearing: below iOS 18 there are no aesthetics scores and the
+    /// ranking falls back to `sortOrder`, which is exactly the current behaviour.
+    func curationProposal(forJourneyID id: String,
+                          service: PhotoCurationService = PhotoCurationService()) async -> CurationResult {
+        guard let journey = journey(withID: id) else { return CurationResult() }
+        let photos = persistence.loadPhotos(forJourneyID: id)
+        return await service.curate(photos: photos, journey: journey)
+    }
+
+    /// Accept a curation proposal's hero. Goes through `setPhotoHero`, which already enforces the
+    /// single-hero invariant across the journey, so this is only deciding *which* photo.
+    @discardableResult
+    func acceptCuratedHero(_ result: CurationResult) -> Photo? {
+        guard let hero = result.hero else { return nil }
+        return setPhotoHero(true, forPhoto: hero)
+    }
+
     // MARK: - Import
 
     /// Run the local importer against an export bundle on disk, then reload the UI.
