@@ -16,7 +16,12 @@ final class PublicMirrorTests: XCTestCase {
 
     // MARK: - Mock public database
 
-    final class MockPublicDatabase: PublicMirrorDatabase {
+    // QUA-36: `@unchecked` for the reason the other doubles in this target use it — the mutable
+    // properties below are scripting state, written before `publish` runs and read after it returns.
+    // `PublicMirrorPublisher` uses no concurrency primitives at all, so nothing here is ever touched
+    // from two places at once. Verified by grep rather than assumed, because the alternative on offer
+    // was an actor and ~30 `await`s.
+    final class MockPublicDatabase: PublicMirrorDatabase, @unchecked Sendable {
         private(set) var saved: [CKRecord.ID: CKRecord] = [:]
         private(set) var deleted: Set<CKRecord.ID> = []
         private(set) var lastSavePolicy: CKModifyRecordsOperation.RecordSavePolicy?

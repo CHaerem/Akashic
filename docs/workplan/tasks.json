@@ -2324,11 +2324,17 @@
         "apple/AkashicTests/PublicMirrorTests.swift"
       ],
       "track": "QUALITY",
-      "status": "TODO",
+      "status": "DONE",
       "verify": [
         "cd apple && xcodegen generate",
         "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,id=$(xcrun simctl list devices available | grep -o '[0-9A-F-]\\{36\\}' | tail -1)\" CODE_SIGNING_ALLOWED=NO test"
-      ]
+      ],
+      "claim": {
+        "agent": "opus5",
+        "branch": "claude/remote-control-project-review-9462c1",
+        "at": "2026-07-26"
+      },
+      "evidence": "PublicMirrorDatabase is Sendable and PublicMirrorPublisher's conformance is CHECKED, not @unchecked. 0 errors, 0 warnings, 791 unit tests pass. The task budgeted for turning MockPublicDatabase into an actor plus ~30 awaits; that turned out to be unnecessary and I verified rather than assuming: PublicMirrorPublisher contains no TaskGroup, no async let and no Task, so every database call is sequential within one task and the double's scripting state is never touched concurrently. @unchecked on the double is therefore a truthful promise of the same kind the five other doubles in this target already make. Two lines instead of a refactor."
     },
     {
       "id": "QUA-37",

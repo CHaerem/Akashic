@@ -41,7 +41,11 @@ struct PublicMirrorCursor {
 }
 
 /// The subset of `CKDatabase` the public-mirror publisher needs, in async form.
-protocol PublicMirrorDatabase {
+///
+/// QUA-36: `Sendable`, which is what lets `PublicMirrorPublisher`'s own conformance be CHECKED rather
+/// than `@unchecked`. `CKDatabase` satisfies it for free — CloudKit marks it `NS_SWIFT_SENDABLE` — so
+/// the entire cost fell on the test double, and turned out to be one word rather than an actor.
+protocol PublicMirrorDatabase: Sendable {
     /// Save/delete a batch of public records. Non-atomic: a per-record failure must not roll
     /// back the records that saved, so a re-publish only has to overwrite what already landed.
     func ckModifyRecords(
@@ -374,20 +378,19 @@ protocol PublicMirrorPublishing: Sendable {
 /// Executes publish / unpublish against a `PublicMirrorDatabase`. Not main-actor: pure record
 /// building + async DB calls. The caller (a `@MainActor` view model) marshals `progress`.
 ///
-/// ## `@unchecked Sendable` (QUA-08) — and its removal condition
+/// ## `Sendable`, checked (QUA-36)
 ///
 /// `JourneyShowcaseSheet`'s `@MainActor` view model hands this instance into its own async work, so
-/// the type has to be `Sendable`. The facts behind the promise are checkable: all three stored
-/// properties are `let`; `PublicMirrorConfig` is three `Int`s; and `database` is a `CKDatabase` in
-/// every shipping path, which CloudKit declares `NS_SWIFT_SENDABLE`.
+/// the type has to be `Sendable` — and the compiler now verifies it rather than being told to trust
+/// us: all three stored properties are `let`, `PublicMirrorConfig` is three `Int`s, and
+/// `PublicMirrorDatabase` is `Sendable` (see above).
 ///
-/// It is `@unchecked` rather than checked only because `PublicMirrorDatabase` — the seam that exists
-/// so tests can inject a mock — is not itself `Sendable`. **Removal condition:** declare
-/// `protocol PublicMirrorDatabase: Sendable` and this becomes a plain checked conformance.
-/// That is deliberately not done here: `CKDatabase` satisfies it for free, but the test double
-/// `MockPublicDatabase` has seven mutable stored properties and would have to become an `actor`,
-/// which adds `await` to ~30 assertions. Worth doing, not worth doing inside this commit.
-final class PublicMirrorPublisher: PublicMirrorPublishing, @unchecked Sendable {
+/// This carried `@unchecked` for a few hours, with a removal condition predicting the cost would be
+/// turning `MockPublicDatabase` into an `actor` and adding `await` to ~30 assertions. It was not:
+/// this class contains no `TaskGroup`, no `async let`, no `Task` — every database call is sequential
+/// within one task — so the double's scripting state is never touched concurrently and `@unchecked`
+/// on the double is a truthful promise of the same kind the five other doubles in that target make.
+final class PublicMirrorPublisher: PublicMirrorPublishing {
 
     private let database: PublicMirrorDatabase
     private let config: PublicMirrorConfig
