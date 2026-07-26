@@ -515,6 +515,12 @@ final class CloudKitImportTests: XCTestCase {
 
     // MARK: - Cancellation
 
+    // QUA-08: `@MainActor` so the `Task { }` below inherits this method's isolation instead of
+    // starting a new region. `CloudKitImportSink` is a non-Sendable final class, so handing it to a
+    // `Task` from a nonisolated context is a region transfer the compiler cannot prove is safe —
+    // and it is right to ask, even though nothing here touches `sink` after the task is created.
+    // Inheriting the isolation removes the crossing rather than asserting it is fine.
+    @MainActor
     func testCancellationStopsBeforeUploading() async throws {
         let mock = MockDatabase()
         let sink = try makeSink(mock)

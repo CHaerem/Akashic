@@ -114,7 +114,10 @@ final class PersistenceController {
         }
 
         container.viewContext.automaticallyMergesChangesFromParent = true
-        container.viewContext.mergePolicy = NSMergeByPropertyObjectTrumpMergePolicy
+        // QUA-08: `NSMergeByPropertyObjectTrumpMergePolicy` is a legacy global declared `var` and
+        // typed `Any`, so strict concurrency flags it as shared mutable state. This is the same
+        // policy expressed through Apple's typed static — identical behaviour, and now checkable.
+        container.viewContext.mergePolicy = NSMergePolicy.mergeByPropertyObjectTrump
 
         var loadError: Error?
         container.loadPersistentStores { _, error in loadError = error }

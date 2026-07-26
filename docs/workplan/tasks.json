@@ -1380,7 +1380,8 @@
         "agent": "opus5",
         "branch": "claude/remote-control-project-review-9462c1",
         "at": "2026-07-26"
-      }
+      },
+      "resume": "294 -> 59 unique strict-concurrency warnings, clean-build measured. DONE: Intents (12, static var -> static let, real fix); AkashicUITests (218, @MainActor on the base class + the XCTestCase helper extension); AkashicTests (18 -> 1, @MainActor on 5 classes); the legacy NSMergeByPropertyObjectTrumpMergePolicy global. REMAINING: 58 in the app target + 1 in CloudKitImportTests. The app-target work is dominated by ONE edit -- @MainActor on PersistenceController, which must land in the SAME commit as @MainActor on the SyncLocalStore protocol (Sync/SyncSeam.swift:72) or the tree does not compile between them. Do NOT use SE-0470 isolated conformances: CI is macos-15 / Swift 6.1 and they are unavailable there. The remaining CloudKitImportTests warning is architectural -- CloudKitImportSink is a non-Sendable final class with real mutable state whose nonisolated async execute() transfers self; it wants to be an actor, which is the importexport cluster's call, not a test fix."
     },
     {
       "id": "QUA-09",

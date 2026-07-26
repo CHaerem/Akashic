@@ -4,6 +4,7 @@ import CoreGraphics
 @testable import Akashic
 
 /// Unit tests for `ElevationProfileModel` — the pure port of the web `generateElevationProfile`.
+@MainActor
 final class ElevationProfileTests: XCTestCase {
 
     private var bundle: Bundle { Bundle(for: type(of: self)) }

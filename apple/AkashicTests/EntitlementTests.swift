@@ -7,6 +7,7 @@ import XCTest
 /// content invariant, grandfathering, the partial photo-import math, entitlement refresh through
 /// the StoreKit seam (fake transactions — never real StoreKit), and the developer/env override
 /// precedence.
+@MainActor
 final class EntitlementTests: XCTestCase {
 
     // MARK: - Fake seam (no StoreKit)

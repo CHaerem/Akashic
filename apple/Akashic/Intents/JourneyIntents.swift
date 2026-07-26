@@ -25,8 +25,8 @@ enum AkashicIntentError: Error, CustomLocalizedStringResourceConvertible {
 // MARK: list_journeys
 
 struct ListJourneysIntent: AppIntent {
-    static var title: LocalizedStringResource = "List Journeys"
-    static var description = IntentDescription(
+    static let title: LocalizedStringResource = "List Journeys"
+    static let description = IntentDescription(
         "List all journeys with metadata including name, country, duration, and distance.")
 
     @Parameter(title: "Limit", description: "Maximum number of journeys (default 20, max 100)", default: 20)
@@ -64,8 +64,8 @@ struct ListJourneysIntent: AppIntent {
 // MARK: search_journeys
 
 struct SearchJourneysIntent: AppIntent {
-    static var title: LocalizedStringResource = "Search Journeys"
-    static var description = IntentDescription(
+    static let title: LocalizedStringResource = "Search Journeys"
+    static let description = IntentDescription(
         "Search journeys by name, country, or description.")
 
     @Parameter(title: "Query", description: "Text matched against name, country, or description")
@@ -101,8 +101,8 @@ struct SearchJourneysIntent: AppIntent {
 // MARK: get_journey_details
 
 struct GetJourneyDetailsIntent: AppIntent {
-    static var title: LocalizedStringResource = "Get Journey Details"
-    static var description = IntentDescription(
+    static let title: LocalizedStringResource = "Get Journey Details"
+    static let description = IntentDescription(
         "Get full details of a journey including camps/waypoints, route coordinates, and statistics.")
 
     @Parameter(title: "Journey", description: "Journey (UUID or slug)")
@@ -128,8 +128,8 @@ struct GetJourneyDetailsIntent: AppIntent {
 // MARK: get_journey_stats
 
 struct GetJourneyStatsIntent: AppIntent {
-    static var title: LocalizedStringResource = "Get Journey Stats"
-    static var description = IntentDescription(
+    static let title: LocalizedStringResource = "Get Journey Stats"
+    static let description = IntentDescription(
         "Get computed statistics for a journey including difficulty rating, estimated hiking time, and elevation analysis.")
 
     @Parameter(title: "Journey", description: "Journey (UUID or slug)")
@@ -159,8 +159,8 @@ struct GetJourneyStatsIntent: AppIntent {
 // MARK: get_journey_photos
 
 struct GetJourneyPhotosIntent: AppIntent {
-    static var title: LocalizedStringResource = "Get Journey Photos"
-    static var description = IntentDescription(
+    static let title: LocalizedStringResource = "Get Journey Photos"
+    static let description = IntentDescription(
         "Get photos for a journey with metadata including GPS coordinates and capture date.")
 
     @Parameter(title: "Journey", description: "Journey (UUID or slug)")

@@ -5,6 +5,7 @@ import MapKit
 /// Draw-on-map route authoring — sample thinning, metric simplification, how strokes attach to each
 /// other (including the reversed and prepended orientations), stroke folding/undo, and the honest
 /// no-elevation contract. All pure — no MapKit, no gestures.
+@MainActor
 final class RouteDrawingTests: XCTestCase {
 
     /// A point `metersEast` east of Kilimanjaro's approximate longitude at a fixed latitude.

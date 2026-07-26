@@ -8,6 +8,7 @@ import CoreData
 /// photo linkage by waypointId), photo day-moves, editable day content, and enrichment reuse of the
 /// SHARED suggestion coordinator against an EXISTING journey (gap-only weather/POIs, auto-named-day
 /// rename detection). All writes flow through `PersistenceController` — the same seam sync drives.
+@MainActor
 final class CorrectableDataTests: XCTestCase {
 
     private var bundle: Bundle { Bundle(for: type(of: self)) }

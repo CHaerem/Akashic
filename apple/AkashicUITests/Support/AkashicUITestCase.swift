@@ -21,6 +21,18 @@ import XCTest
 /// * **A fresh store per launch.** The default Debug build resolves `.fixtures`, an IN-MEMORY
 ///   store, so nothing a test creates survives into the next one. That is what makes the
 ///   create-then-hit-the-paywall sequence below deterministic rather than order-dependent.
+///
+/// ## Why the whole class is `@MainActor` (QUA-08)
+///
+/// `XCUIApplication`, `XCUIElement` and its subscripts are all main-actor isolated in the current
+/// SDK, while `XCTestCase`'s test methods are nonisolated. Under
+/// `SWIFT_STRICT_CONCURRENCY=complete` that mismatch produced **218 diagnostics** across this
+/// target — every `app.buttons[...]`, every `.exists`, every `.tap()`. They were 218 reports of one
+/// fact, not 218 problems: a UI test drives an out-of-process app through a main-actor-isolated
+/// proxy API and belongs on the main actor. Annotating the base class fixes the target, because
+/// isolation is inherited by subclasses — so `CreateJourneyUITests`, `PaywallUITests` and
+/// `AccessibilityAuditTests` need nothing of their own.
+@MainActor
 class AkashicUITestCase: XCTestCase {
 
     /// Long enough for a cold launch on a loaded CI runner, short enough that a genuinely missing
@@ -57,6 +69,10 @@ class AkashicUITestCase: XCTestCase {
 
 // MARK: - Assertive waiting
 
+// `@MainActor` for the same reason as the base class: both helpers take an `XCUIElement`, and
+// `waitForExistence` and `NSPredicate(format: "exists == false")` both reach main-actor-isolated
+// state. Declared on the extension so the isolation covers every member without repeating it.
+@MainActor
 extension XCTestCase {
 
     /// Wait for `element` to exist, and FAIL if it does not.
