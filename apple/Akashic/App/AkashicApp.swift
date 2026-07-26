@@ -15,6 +15,61 @@ final class AkashicAppDelegate: NSObject, UIApplicationDelegate {
             await PersistenceController.shared.acceptShare(metadata)
         }
     }
+
+    /// Ask APNs for a device token so CloudKit can deliver "the server changed".
+    ///
+    /// This is the half of push sync that was missing. `CKSyncEngine` with
+    /// `automaticallySync = true` creates and owns its database subscription, but a subscription
+    /// only describes *what* to send — it cannot make iOS hand the app a push it never registered
+    /// to receive. Without this call every change arrived only on the next foreground activation,
+    /// which reads as "sync is slow" rather than as a missing API call. (The other half was the
+    /// `remote-notification` background mode, which XcodeGen was silently dropping from the built
+    /// Info.plist — see SHIP-01 and the note in `project.yml`.)
+    ///
+    /// No user-visible permission is involved: this is a silent-push registration, not
+    /// `UNUserNotificationCenter.requestAuthorization`, so nothing is prompted and nothing is
+    /// shown. Only entitled CloudKit builds register — in a plain Debug build there is no
+    /// container, so a token would have nothing to subscribe to.
+    func application(_ application: UIApplication,
+                     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
+        #if AKASHIC_CLOUDKIT_BUILD
+        application.registerForRemoteNotifications()
+        #endif
+        return true
+    }
+
+    func application(_ application: UIApplication,
+                     didFailToRegisterForRemoteNotificationsWithError error: Error) {
+        // Not fatal and not worth telling the user about: sync still works, it just falls back to
+        // fetching on activation. Logged because a silent permanent failure here looks exactly
+        // like the bug this method exists to fix.
+        SyncLog.error("APNs registration failed — sync falls back to fetch-on-activation: \(error)")
+    }
+
+    /// Handle a CloudKit database change push.
+    ///
+    /// `CKSyncEngine` also observes pushes itself, so this is belt-and-braces rather than the
+    /// primary path — but declaring the `remote-notification` background mode without
+    /// implementing this method leaves iOS with no completion handler to wait on, which makes
+    /// background delivery less reliable and is the kind of thing App Review notices. Fetching is
+    /// idempotent (the engine drives it from its own change tokens), so a redundant fetch after
+    /// the engine has already handled the push costs one cheap no-op round trip.
+    func application(_ application: UIApplication,
+                     didReceiveRemoteNotification userInfo: [AnyHashable: Any],
+                     fetchCompletionHandler completionHandler: @escaping (UIBackgroundFetchResult) -> Void) {
+        #if AKASHIC_CLOUDKIT_BUILD
+        guard CKNotification(fromRemoteNotificationDictionary: userInfo) != nil else {
+            completionHandler(.noData)      // not ours
+            return
+        }
+        Task { @MainActor in
+            await PersistenceController.shared.fetchChangesForPush()
+            completionHandler(.newData)
+        }
+        #else
+        completionHandler(.noData)
+        #endif
+    }
 }
 
 @main

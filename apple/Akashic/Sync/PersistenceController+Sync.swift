@@ -118,6 +118,21 @@ extension PersistenceController: SyncLocalStore {
         #endif
     }
 
+    /// Pull changes for both database scopes in response to a CloudKit push (SHIP-02).
+    ///
+    /// Both scopes are fetched because one silent push does not say which database moved, and a
+    /// shared journey changing is exactly as interesting to the user as one of their own. Failures
+    /// are the coordinators' own business — they already set `syncStatus` and retry — so this only
+    /// has to decide *when* to fetch, not what to do when it does not work.
+    @MainActor
+    func fetchChangesForPush() async {
+        #if AKASHIC_CLOUDKIT_BUILD
+        guard mode == .cloudKit else { return }
+        await syncCoordinator?.fetchOnActivation()
+        await sharedSyncCoordinator?.fetchOnActivation()
+        #endif
+    }
+
     // MARK: Public-mirror upkeep (finding #7)
 
     /// Best-effort removal of a deleted photo's `PublicPhoto` mirror record.

@@ -556,7 +556,7 @@
       "id": "SHIP-02",
       "track": "SHIP",
       "title": "Register for remote notifications — the missing half of push sync",
-      "status": "TODO",
+      "status": "DONE",
       "effort": 0.5,
       "done_when": "The app calls registerForRemoteNotifications and a device receives a CloudKit push.",
       "priority": 5,
@@ -575,7 +575,13 @@
       ],
       "refs": [
         "Requires two real devices on two Apple IDs to prove — pair with SHIP-15"
-      ]
+      ],
+      "claim": {
+        "agent": "opus5",
+        "branch": "claude/remote-control-project-review-9462c1",
+        "at": "2026-07-26"
+      },
+      "evidence": "registerForRemoteNotifications() added behind AKASHIC_CLOUDKIT_BUILD, plus a didReceiveRemoteNotification handler routing to a new fetchChangesForPush() that pulls both database scopes. Release-CloudKit BUILD SUCCEEDED; the selectors and the registration symbol are present in the shipping binary; Debug still green at 602/602. End-to-end delivery is unprovable without two devices — that is SHIP-15."
     },
     {
       "id": "SHIP-03",

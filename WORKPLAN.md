@@ -5,7 +5,7 @@
 
 # Akashic — work ledger
 
-73 tasks · **68 open** (52 agent-doable, 46.8 d · 16 owner-only, 8 d) · 5 done · 0 dropped
+73 tasks · **67 open** (51 agent-doable, 46.3 d · 16 owner-only, 8 d) · 6 done · 0 dropped
 
 Read [CLAUDE.md](CLAUDE.md) before touching anything. To find work:
 
@@ -60,12 +60,12 @@ node scripts/workplan.mjs next
 
 > Hard requirements for a paid v1.0. Most of the remaining calendar time lives here, in items only the owner can do.
 
-18 open of 19 · 8.9 d remaining
+17 open of 19 · 8.4 d remaining
 
 | | Task | Days | Who | Deps | Finish line |
 |---|---|---|---|---|---|
 | `x` | `SHIP-01` **Move the two dropped Info.plist keys into info.properties** | 0.25 | agent | — | The built Release-CloudKit Info.plist contains CKSharingSupported and UIBackgroundModes. |
-| ` ` | `SHIP-02` **Register for remote notifications — the missing half of push sync** | 0.5 | agent | `SHIP-01` | The app calls registerForRemoteNotifications and a device receives a CloudKit push. |
+| `x` | `SHIP-02` **Register for remote notifications — the missing half of push sync** | 0.5 | agent | `SHIP-01` | The app calls registerForRemoteNotifications and a device receives a CloudKit push. |
 | ` ` | `SHIP-03` **Produce the 12 App Store screenshots** | 1.5 | agent | `SHIP-06` | Twelve assets exist at the two required sizes and are committed under docs/store/screenshots/. |
 | ` ` | `SHIP-04` **Add PrivacyInfo.xcprivacy** | 0.25 | agent | — | The manifest ships in the app bundle and the upload draws no ITMS-91053 notice. |
 | ` ` | `SHIP-05` **Bump the marketing version to 1.0.0** | 0.1 | agent | — | The built plist reports CFBundleShortVersionString 1.0.0. |
