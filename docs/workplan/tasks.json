@@ -2248,7 +2248,7 @@
       "id": "QUA-33",
       "track": "QUALITY",
       "title": "The local StoreKit test configuration ships inside the Release-CloudKit app bundle",
-      "status": "TODO",
+      "status": "DONE",
       "effort": 0.1,
       "priority": 37,
       "done_when": "Akashic.storekit is absent from the built Release-CloudKit Akashic.app, and the StoreKit tests still run.",
@@ -2260,7 +2260,8 @@
         "cd apple && xcodegen generate",
         "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,id=$(xcrun simctl list devices available | grep -o '[0-9A-F-]\\{36\\}' | tail -1)\" CODE_SIGNING_ALLOWED=NO test",
         "! ls \"$(find ~/Library/Developer/Xcode/DerivedData/Akashic-*/Build/Products/Release-CloudKit-iphonesimulator -name Akashic.app -maxdepth 2 | head -1)\"/Akashic.storekit"
-      ]
+      ],
+      "evidence": "Verified against the built Release-CloudKit bundle: Akashic.storekit is gone from Akashic.app root, PrivacyInfo.xcprivacy and en/nb.lproj still present, 791+14 tests pass. Also fixed a false-negative verification command next to it: the comment told you to find *.loctable, which this toolchain never produces."
     }
   ]
 }

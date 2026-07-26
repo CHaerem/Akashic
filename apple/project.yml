@@ -106,6 +106,22 @@ targets:
           - remote-notification
     sources:
       - path: Akashic
+        excludes:
+          # QUA-33: the local StoreKit test configuration was being swept into the app by this
+          # `path: Akashic` sweep and shipped at the BUNDLE ROOT of Release-CloudKit — verified in
+          # a built .app, not inferred from this file. It carries `_developerTeamID`,
+          # `_applicationInternalID` and a test price, none of which is a credential, but a StoreKit
+          # *test* config inside a shipping binary misleads anyone inspecting the app about real
+          # pricing and is dead weight in every download.
+          #
+          # Excluding it does NOT break the StoreKit tests: `storeKitConfiguration` in the scheme
+          # (below) is a path into the REPO, resolved by Xcode at launch, so the file never needed
+          # to be in the bundle to work.
+          #
+          # Assert against the built bundle, per the INFOPLIST_KEY trap — this file claiming the
+          # exclusion is not evidence that it happened:
+          #   ! ls "$(...)/Akashic.app"/Akashic.storekit
+          - "Store/Akashic.storekit"
       # Privacy manifest (SHIP-04). Must land at the BUNDLE ROOT, not inside Resources/, which is
       # why it is listed explicitly with `buildPhase: resources` rather than picked up by the
       # `path: Akashic` sweep — Apple's tooling looks for PrivacyInfo.xcprivacy at the top level of
@@ -120,8 +136,16 @@ targets:
       # Intents phrase localisation looks for that filename and nothing else, so a rename would
       # break Siri's Norwegian without breaking the build.
       #
-      # Verify both reached the bundle (they compile to a single .loctable per language):
-      #   find "$(...)/Akashic.app" -name '*.loctable'
+      # Verify both reached the bundle. This comment used to say they compile to "a single
+      # .loctable per language" and to look for `-name '*.loctable'` — that command finds NOTHING
+      # on this toolchain, which is a false negative and worse than no command at all: it reports a
+      # broken localisation when localisation is fine. String Catalogues compile to per-language
+      # .lproj directories here, so ask for what is actually produced:
+      #   ls "$(...)/Akashic.app"/*.lproj        # expect en.lproj and nb.lproj
+      #   ls "$(...)/Akashic.app"/nb.lproj       # Localizable.strings, .stringsdict, AppShortcuts.strings
+      # Note AppShortcuts.strings appears only under nb.lproj: English is the development language,
+      # so its phrases come from source and only the translation needs a file. Its ABSENCE from
+      # en.lproj is correct and is not the bug it looks like.
       - path: Akashic/Resources/Localizable.xcstrings
         buildPhase: resources
       - path: Akashic/Resources/AppShortcuts.xcstrings
