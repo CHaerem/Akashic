@@ -281,6 +281,37 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: no.akashic.app.tests
         GENERATE_INFOPLIST_FILE: "YES"
 
+  # QUA-10 / QUA-29 — the UI test target. The project had exactly one test target and it was a
+  # `bundle.unit-test`, so nothing automated had ever driven the app's UI: `Views/` sat at 6.0%
+  # coverage of 21,384 executable lines, and today's accessibility pass could verify none of what
+  # it built by NAVIGATION (Accessibility Inspector is a macOS GUI app with no scriptable
+  # interface). `XCUIApplication.performAccessibilityAudit()` is the programmatic form of exactly
+  # that audit, and it needs a `bundle.ui-testing` target to live in — which is why the two tasks
+  # were one pass.
+  #
+  # A UI test target runs OUT of process: it does not link the app, so it cannot see `Journey`,
+  # `EntitlementPolicy` or any other app symbol. Everything it knows about the app it learns by
+  # launching it (`AKASHIC_*` launch environment, see apple/README.md) and reading the
+  # accessibility tree — which is why `AkashicUITests/Support/` has its own tiny copies of the
+  # few constants it asserts against.
+  AkashicUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    deploymentTarget: "17.0"
+    sources:
+      - path: AkashicUITests
+    dependencies:
+      - target: Akashic
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: no.akashic.app.uitests
+        GENERATE_INFOPLIST_FILE: "YES"
+        # XcodeGen infers this from the `Akashic` dependency above, but a UI test bundle with no
+        # TEST_TARGET_NAME builds fine and then fails at RUN time with "no target application"
+        # — a failure that reads like a broken simulator rather than a missing build setting. It
+        # is cheap to state and expensive to rediscover.
+        TEST_TARGET_NAME: Akashic
+
   # WidgetKit extension. Data reaches it via a WidgetSnapshot JSON in the App-Group container
   # (see AppGroup / WidgetDataStore); with no App Group configured (unsigned simulator build)
   # the widget renders its bundled placeholder. The shared snapshot/view/data files live in the
@@ -349,13 +380,32 @@ schemes:
       targets:
         Akashic: all
         AkashicTests: [test]
+        AkashicUITests: [test]
     run:
       config: Debug
+      # QUA-10: the local StoreKit configuration, so the paywall's PRICED state exists at all
+      # without an App Store connection. Without it `Product.products(for:)` returns an empty array
+      # on a simulator, `EntitlementStore.product` stays nil, and the paywall renders its "isn't
+      # available here yet" row — a real state, but not the one a customer sees.
+      #
+      # This reaches the RUN action only, and that is a limitation rather than a choice: XcodeGen
+      # 2.45.4 writes `StoreKitConfigurationFileReference` into the scheme's `<LaunchAction>` and
+      # has no equivalent key for `<TestAction>` (verified by generating and reading the
+      # `.xcscheme`; `shouldUseLaunchSchemeArgsEnv` carries arguments and environment, not this).
+      # So `xcodebuild test` — and therefore the UI tests — run with no local store, and
+      # `AkashicUITests/PaywallUITests` documents which paywall branch that leaves unreachable
+      # instead of pretending to cover it. Adding it under `test:` here would be a silently
+      # ignored key, which is the precise failure mode the INFOPLIST_KEY_* note above exists for.
+      storeKitConfiguration: Akashic/Store/Akashic.storekit
     test:
       config: Debug
       gatherCoverageData: false
       targets:
         - AkashicTests
+        # QUA-29's finish line is the audit running unattended, so the UI tests are in the SHARED
+        # scheme's test action rather than a separate one: `xcodebuild ... test` — the exact
+        # command apple-ci.yml runs — picks them up.
+        - AkashicUITests
     profile:
       config: Release
     analyze:

@@ -68,15 +68,48 @@ xcodebuild -project Akashic.xcodeproj -scheme Akashic \
   -destination 'platform=iOS Simulator,name=iPhone 17 Pro' \
   CODE_SIGNING_ALLOWED=NO build
 
-# Unit tests (the AkashicTests suite: fixture decoding, per-day stats,
-# Core Data round-trip, and App Intent wire shapes)
+# Both test suites: AkashicTests (fixture decoding, per-day stats, Core Data
+# round-trip, App Intent wire shapes) and AkashicUITests (see below)
 xcodebuild -project Akashic.xcodeproj -scheme Akashic \
   -destination 'platform=iOS Simulator,name=iPhone 17 Pro' \
   CODE_SIGNING_ALLOWED=NO test
+
+# One suite at a time — the UI tests launch the app per test and take ~3 min
+xcodebuild ... -only-testing:AkashicTests test      # ~8 s, 787 tests
+xcodebuild ... -only-testing:AkashicUITests test    # ~3 min, 14 tests
 ```
 
 CI runs the same steps on every push/PR touching `apple/**` — see
 [`.github/workflows/apple-ci.yml`](../.github/workflows/apple-ci.yml).
+
+### `AkashicUITests` — the UI test target (QUA-10 / QUA-29)
+
+A `bundle.ui-testing` target that drives the app through the accessibility tree. Three files,
+all in the shared scheme's test action so plain `xcodebuild test` (and therefore CI) runs them:
+
+| File | What it covers |
+|---|---|
+| `AccessibilityAuditTests` | `XCUIApplication.performAccessibilityAudit()` over the globe (with and without journeys), a day view, the paywall, both phases of the create-journey flow, Settings and Stats |
+| `CreateJourneyUITests` | `NewJourneySheet` end to end via the name-only path: chooser → review → validity gate → Create → the journey on the globe; plus Cancel leaving nothing behind |
+| `PaywallUITests` | The `.settings` and `.journeyLimit` entry points, the unreachable-store surface and its retry, restore, the legal links, and that an entitled customer is never shown a buy button |
+
+Three things about it are worth knowing before changing it:
+
+- **It cannot import the app.** A UI test bundle runs out of process, so `A11yID`, `Journey` and
+  `EntitlementPolicy` are all invisible to it. `AkashicUITests/Support/` restates the handful of
+  identifiers it needs; that duplication is deliberate and documented there.
+- **Elements are found by `accessibilityIdentifier`, not by label.** See `Akashic/App/A11yID.swift`
+  for the rule. A label query would break on any copy edit and on every non-English run — and a UI
+  test that stops finding its element does not fail, it silently taps nothing and passes.
+- **The audit enforces four of its seven checks and reports the other three.**
+  `AccessibilityAuditTests.audit(_:screen:)` explains exactly which, with the measured contrast
+  ratios behind the decision and the condition for promoting each reported type to enforced. The
+  reported findings are printed in full on every run; the log is the backlog.
+
+Two paths are deliberately **not** covered, both because they are out-of-process system UI rather
+than Akashic: the `PhotosPicker` and `.fileImporter` cards in the create chooser (asserted present
+and hittable, never opened), and StoreKit's purchase confirmation sheet — see `PaywallUITests`'
+class comment for why the paywall's priced state is unreachable under `xcodebuild test` at all.
 
 ## Run on fixtures (default)
 
@@ -302,7 +335,8 @@ apple/
   project.yml                     XcodeGen spec (source of truth)
   Akashic/
     App/                          @main app, Config (modes/flags), JourneyStore, AppGroup,
-                                  OnboardingState
+                                  OnboardingState, A11yID (the accessibility identifiers
+                                  AkashicUITests drives — and the rule for adding one)
     Models/                       Domain value types, flexible decoding, DayStats (per-day route math)
     Export/                       Per-journey archive (the exit door): JourneyExporter,
                                   ExportArchive (zip), GPXBuilder
@@ -345,6 +379,10 @@ apple/
   AkashicTests/                   XCTest: fixtures, day-stats, Core Data round-trip, import, day
                                   matcher, sync/mirror, entitlements, intelligence, Spotlight,
                                   widget snapshot/data-store
+  AkashicUITests/                 XCUITest (QUA-10/QUA-29): performAccessibilityAudit over the main
+                                  screens, the create-journey flow end to end, the paywall's
+                                  states. Runs OUT of process — cannot import the app; see the
+                                  section above and Support/AkashicUITestCase.swift
   CloudKit/                       schema.ckdb (hand-authored) + MAPPING.md — the record contract
   Docs/                           Screenshots, DESIGN-PLAN.md, sync-verification.md, sharing.md
   Fixtures/recovered/             Input JSON (owned elsewhere; read-only here) — metadata only,

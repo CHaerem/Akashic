@@ -75,6 +75,9 @@ struct NewJourneyChooser: View {
         // first and least-friction way into the app reads as unactionable.
         .accessibilityAddTraits(.isButton)
         .accessibilityHint("Opens your photo library")
+        // QUA-10: see `A11yID`. Each card's label is its title AND subtitle concatenated, so a
+        // label query here is ambiguous in a way an identifier is not.
+        .accessibilityIdentifier(A11yID.chooserPhotos)
     }
 
     private var gpxCard: some View {
@@ -99,6 +102,7 @@ struct NewJourneyChooser: View {
         .buttonStyle(.plain)
         .disabled(isImportingGPX)
         .accessibilityHint("Opens the file picker so you can choose a GPX track")
+        .accessibilityIdentifier(A11yID.chooserGPX)
     }
 
     private var nameOnlyCard: some View {
@@ -109,6 +113,7 @@ struct NewJourneyChooser: View {
                  promoted: false)
         }
         .buttonStyle(.plain)
+        .accessibilityIdentifier(A11yID.chooserNameOnly)
     }
 
     /// One chooser card. `promoted` gives the photos card the filled accent surface the redesign
