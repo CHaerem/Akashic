@@ -216,3 +216,47 @@ final class DayNoteInputTests: XCTestCase {
         XCTAssertTrue(DayNoteInput(journey: journey, camp: camp, photos: []).photoSubjects.isEmpty)
     }
 }
+
+/// DIFF-08 — what the UI is allowed to say when drafting fails, and whether it may offer a retry.
+///
+/// Testable on any toolchain because `DayNoteDraftFailure` lives outside
+/// `#if canImport(FoundationModels)` — the same reason `ModelAvailability` does.
+final class DayNoteDraftFailureTests: XCTestCase {
+
+    /// The distinction the whole type exists for: telling someone to retry when retrying cannot
+    /// work is worse than saying nothing, and it is how a feature earns distrust.
+    func testOnlyRecoverableFailuresOfferARetry() {
+        XCTAssertFalse(DayNoteDraftFailure.declined.isWorthRetrying,
+                       "a guardrail refusal will refuse the same input again")
+        XCTAssertFalse(DayNoteDraftFailure.tooMuchInput.isWorthRetrying,
+                       "an oversized day will overflow the context window again")
+        XCTAssertTrue(DayNoteDraftFailure.modelNotReady.isWorthRetrying,
+                      "assets still downloading will succeed later with no user action")
+        XCTAssertTrue(DayNoteDraftFailure.unknown(nil).isWorthRetrying,
+                      "an unrecognised failure is the one case where a retry is honest")
+    }
+
+    /// Each message has to say what to do, not merely that something went wrong — and the two
+    /// unrecoverable cases must not suggest retrying, because that is precisely what will not help.
+    func testMessagesAreDistinctAndActionable() {
+        let messages = [DayNoteDraftFailure.declined,
+                        .tooMuchInput,
+                        .modelNotReady,
+                        .unknown(nil)].map(\.message)
+        XCTAssertEqual(Set(messages).count, 4, "a shared message would defeat the point of the type")
+        XCTAssertTrue(DayNoteDraftFailure.tooMuchInput.message.lowercased().contains("shorten"))
+        XCTAssertFalse(DayNoteDraftFailure.declined.message.lowercased().contains("try again"),
+                       "an unrecoverable failure must not advise the one thing that cannot work")
+        XCTAssertFalse(DayNoteDraftFailure.tooMuchInput.message.lowercased().contains("try again"))
+    }
+
+    /// The underlying description must not change identity: two unknowns with different details are
+    /// still both unknown, so a view can switch on the case without unwrapping.
+    func testUnknownCarriesDetailWithoutChangingItsMeaning() {
+        XCTAssertTrue(DayNoteDraftFailure.unknown("some CK error").isWorthRetrying)
+        XCTAssertEqual(DayNoteDraftFailure.unknown("a").message,
+                       DayNoteDraftFailure.unknown("b").message)
+        XCTAssertNotEqual(DayNoteDraftFailure.unknown("a"), DayNoteDraftFailure.unknown("b"),
+                          "but the detail is still preserved for logging")
+    }
+}

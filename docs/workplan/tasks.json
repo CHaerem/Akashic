@@ -1136,7 +1136,7 @@
       "id": "DIFF-08",
       "track": "DIFF",
       "title": "Foundation Models depth: streaming, prewarm, typed errors",
-      "status": "WIP",
+      "status": "DONE",
       "effort": 1.5,
       "done_when": "Drafting streams, sessions are reused, and guardrail refusals say something specific.",
       "deps": [
@@ -1155,7 +1155,8 @@
         "agent": "opus5",
         "branch": "claude/remote-control-project-review-9462c1",
         "at": "2026-07-26"
-      }
+      },
+      "evidence": "prewarm on both paths, streaming via streamResponse, and typed failures. The design constraint is honoured rather than worked around: generateStreaming's onPartial must NOT write into the notes field, because the clobber guard compares field-now against field-at-request and streaming into it would make the view see staleness it caused itself and discard its own draft — so partial text goes to a separate buffer and the final value passes the guard exactly once. That is why it is a separate method rather than a flag. DayNoteDraftFailure distinguishes declined / tooMuchInput / modelNotReady / unknown with an isWorthRetrying flag, because telling someone to retry when retrying cannot work is worse than saying nothing. Defined outside canImport so the UI and tests reason about it on any toolchain. Verified locally on Xcode 26.6 where canImport is true, so the FM API surface is genuinely type-checked. 782 tests pass."
     },
     {
       "id": "DIFF-09",

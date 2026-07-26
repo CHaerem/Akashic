@@ -100,6 +100,57 @@ struct DayNoteInput: Equatable {
     }
 }
 
+// MARK: - Why a draft failed (DIFF-08)
+
+/// Why a drafting attempt did not produce text.
+///
+/// Every failure used to collapse to "Couldn't draft — try again", which is wrong three ways: a
+/// guardrail refusal will refuse again, an oversized day will overflow again, and a model still
+/// downloading will succeed later without the user doing anything. Telling someone to retry when
+/// retrying cannot work is worse than saying nothing.
+///
+/// Defined outside `#if canImport(FoundationModels)` deliberately, so the UI and these tests compile
+/// and reason about it on a toolchain without the framework — the same reason `ModelAvailability`
+/// lives outside it.
+enum DayNoteDraftFailure: Equatable {
+    /// The model declined on safety grounds. Retrying the same input will decline again.
+    case declined
+    /// The day carried more text than the context window holds — usually very long notes plus
+    /// retrieved reference text. Actionable: shorten, or draft without the reference.
+    case tooMuchInput
+    /// Model assets are still downloading. Genuinely worth trying later, and the only case where
+    /// "try again" is honest advice.
+    case modelNotReady
+    /// Anything else, including a genuine transient.
+    case unknown(String?)
+
+    /// Whether retrying the *same* request could plausibly succeed. Drives whether the UI offers a
+    /// retry button at all — offering one that cannot work is how a feature earns distrust.
+    var isWorthRetrying: Bool {
+        switch self {
+        case .modelNotReady, .unknown: return true
+        case .declined, .tooMuchInput: return false
+        }
+    }
+
+    var message: String {
+        switch self {
+        case .declined:
+            return String(localized: "The model declined to write about this day. Editing the notes or highlights and trying again usually helps.",
+                          comment: "Day-note drafting failed because the on-device model refused on safety grounds.")
+        case .tooMuchInput:
+            return String(localized: "There is too much text on this day for the model to read at once. Shortening the notes will let it through.",
+                          comment: "Day-note drafting failed because the day's text exceeded the model's context window.")
+        case .modelNotReady:
+            return String(localized: "Apple Intelligence is still preparing on this device. This will work shortly.",
+                          comment: "Day-note drafting failed because on-device model assets are still downloading.")
+        case .unknown:
+            return String(localized: "Couldn't draft a note just now. Please try again.",
+                          comment: "Day-note drafting failed for an unrecognised reason.")
+        }
+    }
+}
+
 // MARK: - Clobber-guard decision (pure)
 
 /// What to do with a freshly generated day-note draft, given the notes field's state. Enforces the
@@ -257,10 +308,61 @@ extension DayNoteDrafter {
     /// this never checks the gate itself (it can't see the env kill switch).
     static func generate(for input: DayNoteInput) async throws -> String {
         let session = LanguageModelSession(instructions: instructions(for: input))
+        session.prewarm()
         let response = try await session.respond(
             to: promptComponents(for: input),
             generating: DayNoteDraft.self)
         return response.content.note.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// Stream a draft, reporting partial text as it arrives (DIFF-08).
+    ///
+    /// **`onPartial` must not write into the notes field.** The clobber guard compares the field now
+    /// against the field at request time, so streaming into it would make the view see staleness it
+    /// caused itself and discard its own draft. Partial text belongs in a separate buffer the UI
+    /// displays; the final value goes through `decision(fieldAtRequest:fieldNow:)` exactly once, the
+    /// same as the non-streaming path. That is the whole reason this is a separate method rather than
+    /// a flag on `generate`.
+    static func generateStreaming(for input: DayNoteInput,
+                                 onPartial: @escaping (String) -> Void) async throws -> String {
+        let session = LanguageModelSession(instructions: instructions(for: input))
+        session.prewarm()
+        var latest = ""
+        let stream = session.streamResponse(to: promptComponents(for: input),
+                                            generating: DayNoteDraft.self)
+        for try await partial in stream {
+            if let note = partial.content.note {
+                latest = note
+                onPartial(note)
+            }
+        }
+        return latest.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// Warm the model ahead of a likely request, so the first tap is not the slowest one.
+    ///
+    /// Costs nothing when the feature is never used: `prewarm` is a hint, and a session that is never
+    /// asked for a response never generates. Call it when a drafting entry point becomes visible,
+    /// not at launch — warming for a screen the user may not open is how a battery gets spent.
+    static func prewarm(for input: DayNoteInput) {
+        LanguageModelSession(instructions: instructions(for: input)).prewarm()
+    }
+
+    /// Map a framework error to the domain failure, so the UI can say something true about it.
+    ///
+    /// The `default` is deliberate rather than exhaustive: `GenerationError` can gain cases in a
+    /// point release, and a compile break there would be a worse outcome than one unmapped error
+    /// falling back to a generic message.
+    static func failure(from error: Error) -> DayNoteDraftFailure {
+        if let generation = error as? LanguageModelSession.GenerationError {
+            switch generation {
+            case .exceededContextWindowSize:            return .tooMuchInput
+            case .guardrailViolation:                   return .declined
+            case .assetsUnavailable:                    return .modelNotReady
+            default:                                    return .unknown(generation.localizedDescription)
+            }
+        }
+        return .unknown(error.localizedDescription)
     }
 }
 
