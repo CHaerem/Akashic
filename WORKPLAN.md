@@ -5,7 +5,7 @@
 
 # Akashic — work ledger
 
-73 tasks · **69 open** (53 agent-doable, 47.3 d · 16 owner-only, 8 d) · 4 done · 0 dropped
+73 tasks · **68 open** (52 agent-doable, 46.8 d · 16 owner-only, 8 d) · 5 done · 0 dropped
 
 Read [CLAUDE.md](CLAUDE.md) before touching anything. To find work:
 
@@ -88,11 +88,11 @@ node scripts/workplan.mjs next
 
 > Capability beyond what competitors offer. Order set by decision: share link, then Vision curation, then the book.
 
-9 open of 9 · 16 d remaining
+8 open of 9 · 15.5 d remaining
 
 | | Task | Days | Who | Deps | Finish line |
 |---|---|---|---|---|---|
-| ` ` | `DIFF-01` **Fix the unpublish leak: thumbnails that can never be removed** | 0.5 | agent | — | Unpublishing always removes the mirror, and a failure to remove reports as a failure. |
+| `x` | `DIFF-01` **Fix the unpublish leak: thumbnails that can never be removed** | 0.5 | agent | — | Unpublishing always removes the mirror, and a failure to remove reports as a failure. |
 | ` ` | `DIFF-02` **Give the owner a shareable showcase link** | 1 | agent | `DIFF-01` | Publishing yields a working URL the owner can share, correct under slug disambiguation. |
 | ` ` | `DIFF-03` **Add og: metadata so a shared link renders as a card** | 0.5 | agent | `DIFF-02` | A showcase URL pasted into iMessage, WhatsApp and Slack renders a title, description and image. |
 | ` ` | `DIFF-04` **On-device photo curation with Vision** | 3 | agent | — | Each day proposes a best-of selection and a hero, accepted or dismissed like other suggestions. |

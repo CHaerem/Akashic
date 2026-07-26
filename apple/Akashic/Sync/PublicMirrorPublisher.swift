@@ -467,25 +467,54 @@ final class PublicMirrorPublisher: PublicMirrorPublishing {
 
     // MARK: Unpublish
 
+    /// Every slug under which this owner could have published `slug`.
+    ///
+    /// `publish` does not necessarily write under the journey's pretty slug: `resolveEffectiveSlug`
+    /// moves the mirror to an owner-scoped `kilimanjaro-a1b2c3` when another family already holds
+    /// `kilimanjaro` in the shared public keyspace, and the local journey deliberately keeps the
+    /// pretty one. Unpublishing only the pretty slug therefore found nothing, and because `delete`
+    /// treats an already-absent record as success, it reported OK — so the caller flipped `isPublic`
+    /// to false and the Remove button disappeared while the real records stayed world-readable,
+    /// GPS and timestamps included, with no UI left to remove them.
+    ///
+    /// Sweeping both is enough and needs no persisted state: `disambiguatedSlug` is deterministic
+    /// for a given (slug, owner) pair, so the variant can always be recomputed. It is also the
+    /// robust choice over re-running `resolveEffectiveSlug` at unpublish time — that asks "is the
+    /// pretty slug taken by someone else *now*", which can answer differently than it did at
+    /// publish time and would send the sweep to the wrong slug again.
+    func candidateSlugs(for slug: String) -> [String] {
+        guard let ownerRecordName else { return [slug] }
+        let disambiguated = PublicMirrorBuilder.disambiguatedSlug(slug, ownerRecordName: ownerRecordName)
+        return disambiguated == slug ? [slug] : [slug, disambiguated]
+    }
+
     /// Remove a journey from the mirror entirely: delete every `PublicPhoto` for the slug
-    /// (following query cursors), then the `PublicJourney` record.
+    /// (following query cursors), then the `PublicJourney` record — for every slug this owner
+    /// could have published under (see `candidateSlugs`).
     @discardableResult
     func unpublish(slug: String,
                    progress: ((PublicMirrorProgress) -> Void)? = nil) async -> PublicMirrorReport {
         var report = PublicMirrorReport()
         progress?(PublicMirrorProgress(fraction: 0.0, phase: "Finding published photos"))
 
-        let existing: [CKRecord.ID]
-        do {
-            existing = try await allExistingPhotoIDs(slug: slug)
-        } catch is CancellationError {
-            report.wasCancelled = true
-            return report
-        } catch {
-            report.failures.append(RecordFailure(recordName: slug, recordType: PublicMirrorBuilder.photoType,
-                                                 zoneName: "_defaultZone", code: Self.code(of: error),
-                                                 message: "photo query failed: \(error)"))
-            return report
+        let slugs = candidateSlugs(for: slug)
+
+        // Collect across every candidate slug before deleting anything, so the progress
+        // denominator is the true total and a cursor failure on one slug does not leave the
+        // other half-swept.
+        var existing: [CKRecord.ID] = []
+        for candidate in slugs {
+            do {
+                existing.append(contentsOf: try await allExistingPhotoIDs(slug: candidate))
+            } catch is CancellationError {
+                report.wasCancelled = true
+                return report
+            } catch {
+                report.failures.append(RecordFailure(recordName: candidate, recordType: PublicMirrorBuilder.photoType,
+                                                     zoneName: "_defaultZone", code: Self.code(of: error),
+                                                     message: "photo query failed: \(error)"))
+                return report
+            }
         }
 
         let chunks = Self.chunked(existing, size: config.maxRecordsPerBatch)
@@ -500,10 +529,11 @@ final class PublicMirrorPublisher: PublicMirrorPublishing {
             progress?(PublicMirrorProgress(fraction: frac, phase: "Removing photos (\(done)/\(existing.count))"))
         }
 
-        // Finally the metadata record.
+        // Finally the metadata records — one per candidate slug. An absent one is a no-op, which
+        // is why sweeping both is safe rather than merely thorough.
         if Task.isCancelled { report.wasCancelled = true; return report }
         progress?(PublicMirrorProgress(fraction: 0.95, phase: "Removing metadata"))
-        let metaOutcome = await delete([PublicMirrorBuilder.journeyRecordID(slug: slug)])
+        let metaOutcome = await delete(slugs.map { PublicMirrorBuilder.journeyRecordID(slug: $0) })
         report.deleted += metaOutcome.deleted
         report.failures.append(contentsOf: metaOutcome.failures)
 

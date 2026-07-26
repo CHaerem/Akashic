@@ -21,9 +21,19 @@ final class PublicMirrorTests: XCTestCase {
         private(set) var lastSavePolicy: CKModifyRecordsOperation.RecordSavePolicy?
         private(set) var modifyCallCount = 0
         private(set) var queryCallCount = 0
+        /// Every slug the publisher asked about, in order — lets a test assert *which* keyspace
+        /// was swept, not merely that something was deleted.
+        private(set) var queriedSlugs: [String] = []
 
         /// Pages of `PublicPhoto` IDs to hand back, consumed in order (cursor = next page index).
+        /// Slug-agnostic: every slug sees these pages.
         var photoIDPages: [[CKRecord.ID]] = []
+
+        /// Pages keyed by the slug they are stored under. Needed to express the case where the
+        /// mirror lives under a disambiguated slug while the caller only knows the pretty one —
+        /// a slug-agnostic mock cannot tell a correct sweep from a sweep of the wrong keyspace.
+        /// Takes precedence over `photoIDPages` when the queried slug has an entry.
+        var photoIDPagesBySlug: [String: [[CKRecord.ID]]] = [:]
 
         /// slug -> creatorUserRecordID.recordName of an existing PublicJourney (for collision tests).
         var existingJourneyCreators: [String: String] = [:]
@@ -56,11 +66,13 @@ final class PublicMirrorTests: XCTestCase {
             resultsLimit: Int
         ) async throws -> (ids: [CKRecord.ID], cursor: PublicMirrorCursor?) {
             queryCallCount += 1
+            queriedSlugs.append(slug)
+            let pages = photoIDPagesBySlug[slug] ?? photoIDPages
             let page = (cursor?.underlying as? Int) ?? 0
-            guard page < photoIDPages.count else { return ([], nil) }
-            let next: PublicMirrorCursor? = (page + 1 < photoIDPages.count)
+            guard page < pages.count else { return ([], nil) }
+            let next: PublicMirrorCursor? = (page + 1 < pages.count)
                 ? PublicMirrorCursor(underlying: page + 1) : nil
-            return (photoIDPages[page], next)
+            return (pages[page], next)
         }
 
         func ckExistingPublicJourneyCreator(slug: String) async throws -> String? {
@@ -391,6 +403,71 @@ final class PublicMirrorTests: XCTestCase {
         let report = await PublicMirrorPublisher(database: mock).unpublish(slug: "kilimanjaro")
         XCTAssertEqual(report.deleted, 1, "just the PublicJourney record")
         XCTAssertTrue(mock.deleted.contains(CKRecord.ID(recordName: "kilimanjaro")))
+    }
+
+    // MARK: - Unpublish must sweep the slug it actually published under (DIFF-01)
+
+    /// The leak this closes: `publish` moves the mirror to an owner-scoped slug when another family
+    /// already holds the pretty one, but the Showcase sheet only ever knows `journey.slug`. The old
+    /// `unpublish` swept the pretty slug, found nothing, and — because `delete` treats an absent
+    /// record as success — reported OK. The caller then flipped `isPublic` to false, which removed
+    /// the Remove button, leaving GPS-tagged world-readable thumbnails online with no way back.
+    func testUnpublishSweepsTheDisambiguatedSlugItActuallyPublishedUnder() async {
+        let mock = MockPublicDatabase()
+        let owner = "ownerA"
+        // Another family already owns the pretty slug, so publish resolves to the variant.
+        mock.existingJourneyCreators["kilimanjaro"] = "someoneElse"
+        let effective = PublicMirrorBuilder.disambiguatedSlug("kilimanjaro", ownerRecordName: owner)
+        XCTAssertNotEqual(effective, "kilimanjaro", "precondition: the slugs must differ")
+
+        // The mirror's photos live under the disambiguated slug; the pretty slug holds nothing.
+        mock.photoIDPagesBySlug[effective] = [[CKRecord.ID(recordName: "P1"),
+                                               CKRecord.ID(recordName: "P2")]]
+        mock.photoIDPagesBySlug["kilimanjaro"] = []
+
+        // The caller passes the PRETTY slug — that is all JourneyShowcaseSheet has.
+        let report = await PublicMirrorPublisher(database: mock, ownerRecordName: owner)
+            .unpublish(slug: "kilimanjaro")
+
+        XCTAssertTrue(mock.queriedSlugs.contains(effective),
+                      "the disambiguated keyspace must be swept, not just the pretty slug")
+        XCTAssertTrue(mock.deleted.contains(CKRecord.ID(recordName: "P1")),
+                      "the world-readable thumbnail must actually be deleted")
+        XCTAssertTrue(mock.deleted.contains(CKRecord.ID(recordName: "P2")))
+        XCTAssertTrue(mock.deleted.contains(CKRecord.ID(recordName: effective)),
+                      "the metadata record that was really published must be removed")
+        XCTAssertTrue(report.succeeded)
+    }
+
+    /// Round trip: whatever `publish` wrote, `unpublish` must be able to remove using only the
+    /// pretty slug. Guards the pairing rather than either half in isolation.
+    func testPublishThenUnpublishLeavesNothingBehindUnderACollidedSlug() async {
+        let mock = MockPublicDatabase()
+        let owner = "ownerA"
+        mock.existingJourneyCreators["kilimanjaro"] = "someoneElse"
+        let publisher = PublicMirrorPublisher(database: mock, ownerRecordName: owner)
+
+        let photos = makePhotos()
+        _ = await publisher.publish(journey: makeJourney(), photos: photos)
+        let publishedNames = Set(mock.saved.keys.map(\.recordName))
+        XCTAssertFalse(publishedNames.isEmpty, "precondition: publish wrote something")
+
+        // Feed the mirror's real contents back as the query result, keyed by the slug used.
+        let effective = PublicMirrorBuilder.disambiguatedSlug("kilimanjaro", ownerRecordName: owner)
+        mock.photoIDPagesBySlug[effective] = [photos.map { CKRecord.ID(recordName: $0.id) }]
+
+        _ = await publisher.unpublish(slug: "kilimanjaro")
+
+        XCTAssertTrue(mock.saved.isEmpty,
+                      "every record publish created must be gone — left over: \(mock.saved.keys.map(\.recordName))")
+    }
+
+    /// With no owner identity (dev and test paths) there is only ever one keyspace, so the sweep
+    /// must not invent a second query — that would double the CloudKit calls for every unpublish.
+    func testUnpublishQueriesOneSlugWhenThereIsNoOwnerIdentity() async {
+        let mock = MockPublicDatabase()
+        _ = await PublicMirrorPublisher(database: mock).unpublish(slug: "kilimanjaro")
+        XCTAssertEqual(mock.queriedSlugs, ["kilimanjaro"])
     }
 
     // MARK: - Cross-user slug collision in the global public keyspace (quality gate)

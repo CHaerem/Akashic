@@ -886,7 +886,7 @@
       "id": "DIFF-01",
       "track": "DIFF",
       "title": "Fix the unpublish leak: thumbnails that can never be removed",
-      "status": "TODO",
+      "status": "DONE",
       "effort": 0.5,
       "done_when": "Unpublishing always removes the mirror, and a failure to remove reports as a failure.",
       "priority": 9,
@@ -901,7 +901,13 @@
       ],
       "refs": [
         "PublicMirrorPublisher.swift:205 disambiguatedSlug, :354-365 resolveEffectiveSlug, :299-322 PublicMirrorReport carries no slug"
-      ]
+      ],
+      "claim": {
+        "agent": "opus5",
+        "branch": "claude/remote-control-project-review-9462c1",
+        "at": "2026-07-26"
+      },
+      "evidence": "unpublish now sweeps every candidate slug. Proved by reverting the fix: the two new tests fail with 'left over: [P1, kilimanjaro-fd3596, P2]' — the metadata record and both GPS-tagged thumbnails stranded. With the fix, 602/602 pass (599 + 3 new, incl. a no-owner case asserting the sweep does not double CloudKit queries)."
     },
     {
       "id": "DIFF-02",
