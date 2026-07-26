@@ -55,10 +55,15 @@ struct MovePhotoToDaySheet: View {
                 Spacer()
                 if isSelected {
                     Image(systemName: "checkmark").font(.subheadline.weight(.bold)).foregroundStyle(Theme.accent)
+                        // QUA-24: the tick is what marks the photo's current day, and it announced
+                        // as a stray "checkmark" on one row out of a dozen. `.isSelected` is the
+                        // trait VoiceOver already has a word for, so the state is spoken as state.
+                        .accessibilityHidden(true)
                 }
             }
         }
         .listRowBackground(Theme.surface)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 
     private func move(to waypointID: String?) {

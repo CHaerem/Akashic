@@ -46,25 +46,32 @@ struct JourneyEditSheet: View {
             onSave: save
         ) {
             GlassField(label: "Name", systemImage: "flag") {
-                GlassTextField(placeholder: "Journey name", text: $name)
+                GlassTextField(placeholder: "Journey name", text: $name,
+                               accessibilityLabel: "Journey name")
             }
             GlassField(label: "Country", systemImage: "globe") {
-                GlassTextField(placeholder: "Country", text: $country)
+                GlassTextField(placeholder: "Country", text: $country, accessibilityLabel: "Country")
             }
             GlassField(label: "Description", systemImage: "text.alignleft") {
-                GlassTextEditor(text: $description, minHeight: 110)
+                GlassTextEditor(text: $description, minHeight: 110, label: "Journey description")
             }
             datesSection
+            // QUA-24: three numeric fields whose placeholder is "0" — announced as "0, text field"
+            // three times over, with the only distinguishing text in a sibling caption VoiceOver
+            // reads separately.
             HStack(spacing: 12) {
                 GlassField(label: "Total days", systemImage: "calendar") {
-                    GlassTextField(placeholder: "0", text: $totalDays, keyboard: .numberPad)
+                    GlassTextField(placeholder: "0", text: $totalDays, keyboard: .numberPad,
+                                   accessibilityLabel: "Total days")
                 }
                 GlassField(label: "Distance (km)", systemImage: "figure.walk") {
-                    GlassTextField(placeholder: "0", text: $totalDistance, keyboard: .decimalPad)
+                    GlassTextField(placeholder: "0", text: $totalDistance, keyboard: .decimalPad,
+                                   accessibilityLabel: "Distance in kilometres")
                 }
             }
             GlassField(label: "Summit elevation (m)", systemImage: "mountain.2.fill") {
-                GlassTextField(placeholder: "0", text: $summitElevation, keyboard: .numberPad)
+                GlassTextField(placeholder: "0", text: $summitElevation, keyboard: .numberPad,
+                               accessibilityLabel: "Summit elevation in metres")
             }
             // The route is correctable after creation — replace it, draft it from photos, or
             // recompute stats. Each applies immediately (its own edit-path save), independent of the
@@ -76,8 +83,10 @@ struct JourneyEditSheet: View {
     private var datesSection: some View {
         GlassField(label: "Dates", systemImage: "calendar.badge.clock") {
             VStack(spacing: 10) {
-                dateRow(label: "Start", isOn: $hasStart, date: $startDate)
-                dateRow(label: "End", isOn: $hasEnd, date: $endDate)
+                dateRow(label: "Start", isOn: $hasStart, date: $startDate,
+                        toggleLabel: "Set a start date", pickerLabel: "Start date")
+                dateRow(label: "End", isOn: $hasEnd, date: $endDate,
+                        toggleLabel: "Set an end date", pickerLabel: "End date")
             }
             .padding(12)
             .background(Theme.surface, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
@@ -85,16 +94,21 @@ struct JourneyEditSheet: View {
         }
     }
 
-    private func dateRow(label: LocalizedStringKey, isOn: Binding<Bool>, date: Binding<Date>) -> some View {
+    /// See `NewJourneySheet.dateRow` — same shape, same reason for the two extra labels: the visible
+    /// "Start"/"End" is one word shared by the toggle and the picker beside it, and the picker's own
+    /// label is empty, so both dates announced identically (QUA-24).
+    private func dateRow(label: LocalizedStringKey, isOn: Binding<Bool>, date: Binding<Date>,
+                         toggleLabel: LocalizedStringKey, pickerLabel: LocalizedStringKey) -> some View {
         HStack {
             Toggle(isOn: isOn) {
                 Text(label).font(.subheadline).foregroundStyle(Theme.textPrimary)
             }
             .tint(Theme.accent)
             .fixedSize()
+            .accessibilityLabel(toggleLabel)
             Spacer()
             if isOn.wrappedValue {
-                DatePicker("", selection: date, displayedComponents: .date)
+                DatePicker(pickerLabel, selection: date, displayedComponents: .date)
                     .labelsHidden()
                     .environment(\.timeZone, TimeZone(identifier: "UTC")!)
             }

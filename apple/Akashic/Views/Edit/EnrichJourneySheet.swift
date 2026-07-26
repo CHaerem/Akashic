@@ -44,6 +44,7 @@ struct EnrichJourneySheet: View {
                             Button("Accept all", action: acceptAll)
                                 .font(.subheadline.weight(.semibold)).foregroundStyle(Theme.accent)
                                 .frame(maxWidth: .infinity, alignment: .trailing)
+                                .accessibilityLabel(Text("Accept all \(suggestions.model.pending.count) suggestions"))
                         }
                         ForEach(suggestions.model.pending, id: \.self) { key in
                             row(key)
@@ -82,6 +83,7 @@ struct EnrichJourneySheet: View {
         VStack(alignment: .leading, spacing: 6) {
             Text("Suggestions for this journey")
                 .font(.headline).foregroundStyle(Theme.textPrimary)
+                .accessibilityAddTraits(.isHeader)
             Text("Weather, places and points of interest for days that don't have them yet. Nothing is applied until you tap Accept.")
                 .font(.caption).foregroundStyle(Theme.textTertiary)
         }
@@ -91,6 +93,7 @@ struct EnrichJourneySheet: View {
     private var running: some View {
         HStack(spacing: 8) {
             ProgressView().controlSize(.small).tint(Theme.accent)
+                .accessibilityHidden(true)
             Text("Looking for suggestions…").font(.caption).foregroundStyle(Theme.textTertiary)
         }
     }
@@ -98,6 +101,7 @@ struct EnrichJourneySheet: View {
     private var emptyState: some View {
         VStack(alignment: .leading, spacing: 6) {
             Image(systemName: "checkmark.seal").font(.title2).foregroundStyle(Theme.accent)
+                .accessibilityHidden(true)
             Text("Nothing to add right now.")
                 .font(.subheadline.weight(.semibold)).foregroundStyle(Theme.textPrimary)
             Text("Every day already has weather, places and points of interest — or WeatherKit has no data for these dates and coordinates.")
@@ -106,13 +110,16 @@ struct EnrichJourneySheet: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(16)
         .background(Theme.surface, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .accessibilityElement(children: .combine)
     }
 
     private var locked: some View {
         VStack(alignment: .leading, spacing: 12) {
             Image(systemName: "wand.and.stars").font(.largeTitle).foregroundStyle(Theme.accent)
+                .accessibilityHidden(true)
             Text("Enrich journey is part of Akashic Complete")
                 .font(.headline).foregroundStyle(Theme.textPrimary)
+                .accessibilityAddTraits(.isHeader)
             Text("Correcting your own data is always free. Enriching a journey with suggested weather, places and points of interest is part of Akashic Complete.")
                 .font(.callout).foregroundStyle(Theme.textSecondary)
             Button { showPaywall = true } label: {
@@ -122,27 +129,34 @@ struct EnrichJourneySheet: View {
                     .background(Theme.accent, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
             }
             .buttonStyle(.plain)
+            .accessibilityHint("Opens the Akashic Complete purchase sheet")
         }
     }
 
+    /// QUA-24: identical to `NewJourneySheet.suggestionRow`'s problem and fix — two unlabelled glyphs
+    /// per row, the destructive one first, repeated once per pending suggestion.
     private func row(_ key: SuggestionKey) -> some View {
-        HStack(spacing: 10) {
+        let title = suggestions.title(for: key, in: draft)
+        return HStack(spacing: 10) {
             VStack(alignment: .leading, spacing: 2) {
-                Text(suggestions.title(for: key, in: draft))
+                Text(title)
                     .font(.subheadline.weight(.semibold)).foregroundStyle(Theme.textPrimary)
                 if let subtitle = suggestions.subtitle(for: key, in: draft), !subtitle.isEmpty {
                     Text(subtitle).font(.caption2).foregroundStyle(Theme.textTertiary).lineLimit(2)
                 }
             }
+            .accessibilityElement(children: .combine)
             Spacer()
             Button { suggestions.dismiss(key) } label: {
                 Image(systemName: "xmark.circle.fill").foregroundStyle(Theme.textTertiary)
             }
             .buttonStyle(.plain)
+            .accessibilityLabel(Text("Dismiss \(title)"))
             Button { accept(key) } label: {
                 Image(systemName: "checkmark.circle.fill").foregroundStyle(Theme.accent)
             }
             .buttonStyle(.plain)
+            .accessibilityLabel(Text("Accept \(title)"))
         }
         .padding(12)
         .background(Theme.accentSoft, in: RoundedRectangle(cornerRadius: 12, style: .continuous))

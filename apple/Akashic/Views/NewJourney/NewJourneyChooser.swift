@@ -70,6 +70,11 @@ struct NewJourneyChooser: View {
                  promoted: true)
         }
         .buttonStyle(.plain)
+        // QUA-24: a `PhotosPicker` is not a `Button`, so it does not carry the button trait its
+        // three sibling cards get for free — without this it is announced as static text, and the
+        // first and least-friction way into the app reads as unactionable.
+        .accessibilityAddTraits(.isButton)
+        .accessibilityHint("Opens your photo library")
     }
 
     private var gpxCard: some View {
@@ -93,6 +98,7 @@ struct NewJourneyChooser: View {
         }
         .buttonStyle(.plain)
         .disabled(isImportingGPX)
+        .accessibilityHint("Opens the file picker so you can choose a GPX track")
     }
 
     private var nameOnlyCard: some View {
@@ -122,10 +128,13 @@ struct NewJourneyChooser: View {
                     // render pale-on-pale in Light Mode exactly like the CTA buttons `onAccent`
                     // was introduced for.
                     ProgressView().tint(promoted ? Theme.onAccent : Theme.accent)
+                        .accessibilityLabel("Reading the file")
                 } else {
                     Image(systemName: icon)
                         .font(.title3)
                         .foregroundStyle(promoted ? Theme.onAccent : Theme.accent)
+                        // The glyph restates the card's own title; the title is the announcement.
+                        .accessibilityHidden(true)
                 }
             }
             VStack(alignment: .leading, spacing: 4) {

@@ -62,6 +62,50 @@
         }
       }
     },
+    "%@, %@": {
+      "comment": "Sharing: one participant read as one element — name, then access level.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@, %@"
+          }
+        }
+      }
+    },
+    "%@, %@, invitation not accepted yet": {
+      "comment": "Sharing: one participant who has been invited but has not joined.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@, %@, invitasjonen er ikke godtatt ennå"
+          }
+        }
+      }
+    },
+    "%@, changes from %@ to %@": {
+      "comment": "Route correction: one line of the stats diff, read as one sentence.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@, endres fra %@ til %@"
+          }
+        }
+      }
+    },
+    "%@, unchanged at %@": {
+      "comment": "Route correction: one line of the stats diff where nothing moved.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@, uendret på %@"
+          }
+        }
+      }
+    },
     "%@: %@, ~%@, %@ km/day": {
       "localizations": {
         "nb": {
@@ -99,6 +143,17 @@
     },
     "%lld / %lld": {
       "shouldTranslate": false
+    },
+    "%lld couldn't be read and were skipped": {
+      "comment": "New journey: appended when some picked photos failed to import.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld kunne ikke leses og ble hoppet over"
+          }
+        }
+      }
     },
     "%lld days": {
       "comment": "Journey story header: how many days the trip lasted.",
@@ -225,6 +280,17 @@
     "%lld km": {
       "shouldTranslate": false
     },
+    "%lld left on the free tier": {
+      "comment": "Photo import: how many more photos the free tier allows.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld igjen på gratisnivået"
+          }
+        }
+      }
+    },
     "%lld match: %@": {
       "localizations": {
         "en": {
@@ -261,6 +327,28 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "%lld of %lld": {
+      "comment": "Accessibility value for a determinate progress bar: done of total.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld av %lld"
+          }
+        }
+      }
+    },
+    "%lld percent": {
+      "comment": "Accessibility value for a determinate progress bar.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld prosent"
           }
         }
       }
@@ -846,12 +934,45 @@
         }
       }
     },
+    "Accept %@": {
+      "comment": "Suggestions: accessibility label for the accept button on one suggestion row.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Godta %@"
+          }
+        }
+      }
+    },
     "Accept all": {
       "localizations": {
         "nb": {
           "stringUnit": {
             "state": "translated",
             "value": "Godta alle"
+          }
+        }
+      }
+    },
+    "Accept all %lld suggestions": {
+      "comment": "Suggestions: accessibility label for the batch Accept all.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Godta alle %lld forslagene"
+          }
+        }
+      }
+    },
+    "Actions available: add a day after this one, or delete it": {
+      "comment": "Manage days: accessibility hint telling VoiceOver users the row has swipe actions.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Handlinger finnes: legg til en dag etter denne, eller slett den"
           }
         }
       }
@@ -875,6 +996,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "Legg til %lld"
+          }
+        }
+      }
+    },
+    "Add highlight": {
+      "comment": "Accessibility label for the plus button beside the highlight field.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Legg til høydepunkt"
           }
         }
       }
@@ -1000,6 +1132,17 @@
         }
       }
     },
+    "Add the drafted facts to this day": {
+      "comment": "Day editor: accessibility label for Add to day in the facts preview.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Legg de foreslåtte faktaene til denne dagen"
+          }
+        }
+      }
+    },
     "Add the route, days and photos later — or draw the route by hand.": {
       "localizations": {
         "nb": {
@@ -1094,6 +1237,17 @@
         }
       }
     },
+    "Akashic Intelligence": {
+      "comment": "Paywall: the third thing the purchase unlocks.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Akashic Intelligence"
+          }
+        }
+      }
+    },
     "Akashic turns your hikes and expeditions into journeys you can relive — every day, photo, and waypoint on a globe you can spin.": {
       "localizations": {
         "nb": {
@@ -1146,6 +1300,17 @@
     },
     "Assets": {
       "shouldTranslate": false
+    },
+    "Assigned day": {
+      "comment": "Photo import: accessibility label for the day pill, whose value is the day itself.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tilknyttet dag"
+          }
+        }
+      }
     },
     "Avg. Altitude": {
       "localizations": {
@@ -1250,6 +1415,17 @@
         }
       }
     },
+    "Change their access level, or remove them": {
+      "comment": "Sharing: accessibility hint for a participant's menu.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Endre tilgangsnivået, eller fjern personen"
+          }
+        }
+      }
+    },
     "Check your connection and try again.": {
       "localizations": {
         "nb": {
@@ -1260,8 +1436,30 @@
         }
       }
     },
+    "Checks the App Store for a purchase already made with this Apple Account": {
+      "comment": "Paywall: accessibility hint for Restore purchases.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sjekker App Store for et kjøp som alt er gjort med denne Apple-kontoen"
+          }
+        }
+      }
+    },
     "Choose folder…": {
       "shouldTranslate": false
+    },
+    "Clear everything drawn": {
+      "comment": "Route drawing: accessibility label for the clear button.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fjern alt som er tegnet"
+          }
+        }
+      }
     },
     "Clear location": {
       "localizations": {
@@ -1613,6 +1811,28 @@
         }
       }
     },
+    "Day %lld, %@, %@": {
+      "comment": "Manage days: one row read as one element — day number, name, elevation.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dag %lld, %@, %@"
+          }
+        }
+      }
+    },
+    "Day description": {
+      "comment": "Day editor: accessibility label for the notes editor, which has no placeholder.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Beskrivelse av dagen"
+          }
+        }
+      }
+    },
     "Day distance": {
       "localizations": {
         "nb": {
@@ -1763,6 +1983,28 @@
         }
       }
     },
+    "Delete this fact": {
+      "comment": "Day editor: accessibility label for the delete button on a fun-fact row.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Slett dette faktumet"
+          }
+        }
+      }
+    },
+    "Delete this historical site": {
+      "comment": "Day editor: accessibility label for the delete button on a historical-site row.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Slett dette historiske stedet"
+          }
+        }
+      }
+    },
     "Delete this journey?": {
       "localizations": {
         "nb": {
@@ -1779,6 +2021,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "Slette dette bildet?"
+          }
+        }
+      }
+    },
+    "Delete this point of interest": {
+      "comment": "Day editor: accessibility label for the delete button on a point-of-interest row.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Slett denne severdigheten"
           }
         }
       }
@@ -1863,12 +2116,34 @@
         }
       }
     },
+    "Discard the drafted facts": {
+      "comment": "Day editor: accessibility label for Discard in the facts preview.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Forkast de foreslåtte faktaene"
+          }
+        }
+      }
+    },
     "Discoveries": {
       "localizations": {
         "nb": {
           "stringUnit": {
             "state": "translated",
             "value": "Oppdagelser"
+          }
+        }
+      }
+    },
+    "Dismiss %@": {
+      "comment": "Suggestions: accessibility label for the dismiss button on one suggestion row.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Avvis %@"
           }
         }
       }
@@ -1893,6 +2168,17 @@
         }
       }
     },
+    "Distance in kilometres": {
+      "comment": "Journey editor: accessibility label for the distance field, whose placeholder is \"0\".",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Distanse i kilometer"
+          }
+        }
+      }
+    },
     "Done": {
       "localizations": {
         "nb": {
@@ -1903,12 +2189,34 @@
         }
       }
     },
+    "Done editing dates": {
+      "comment": "New journey: accessibility label for Done in the expanded date editor.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ferdig med datoene"
+          }
+        }
+      }
+    },
     "Done reordering": {
       "localizations": {
         "nb": {
           "stringUnit": {
             "state": "translated",
             "value": "Ferdig"
+          }
+        }
+      }
+    },
+    "Done reordering days": {
+      "comment": "Manage days: accessibility label for the button that leaves reordering mode.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ferdig med rekkefølgen"
           }
         }
       }
@@ -1933,12 +2241,34 @@
         }
       }
     },
+    "Draft a day's notes, name your days and ground your facts — on your device, on iPhone models that support Apple Intelligence.": {
+      "comment": "Paywall: what Akashic Intelligence does, hedged because it needs Apple Intelligence hardware.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lag utkast til dagsnotater, navngi dagene og gi faktaene et grunnlag – på din egen enhet, på iPhone-modeller som støtter Apple Intelligence."
+          }
+        }
+      }
+    },
     "Draft facts": {
       "localizations": {
         "nb": {
           "stringUnit": {
             "state": "translated",
             "value": "Lag fakta"
+          }
+        }
+      }
+    },
+    "Draft facts with Apple Intelligence": {
+      "comment": "Day editor: accessibility label for the fact-drafting button.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lag fakta med Apple Intelligence"
           }
         }
       }
@@ -1953,6 +2283,17 @@
         }
       }
     },
+    "Draft the day's notes with Apple Intelligence": {
+      "comment": "Day editor: accessibility label for the note-drafting button.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lag utkast til dagsnotatene med Apple Intelligence"
+          }
+        }
+      }
+    },
     "Draft with Apple Intelligence": {
       "localizations": {
         "nb": {
@@ -1963,12 +2304,34 @@
         }
       }
     },
+    "Drafting facts": {
+      "comment": "Day editor: accessibility label for the fact-drafting button while it runs.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lager fakta"
+          }
+        }
+      }
+    },
     "Drafting facts…": {
       "localizations": {
         "nb": {
           "stringUnit": {
             "state": "translated",
             "value": "Lager fakta …"
+          }
+        }
+      }
+    },
+    "Drafting the day's notes": {
+      "comment": "Day editor: accessibility label for the note-drafting button while it runs.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lager utkast til dagsnotatene"
           }
         }
       }
@@ -2023,6 +2386,28 @@
         }
       }
     },
+    "Drawing surface": {
+      "comment": "Route drawing: accessibility label for the surface a route is traced on.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tegneflate"
+          }
+        }
+      }
+    },
+    "Drawn so far": {
+      "comment": "Route drawing: accessibility label for the running summary of the drawing.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tegnet så langt"
+          }
+        }
+      }
+    },
     "Drizzle": {
       "comment": "WMO weather code 53.",
       "localizations": {
@@ -2043,6 +2428,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "Varighet"
+          }
+        }
+      }
+    },
+    "Edit dates": {
+      "comment": "New journey: accessibility label for Edit on the collapsed dates row.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rediger datoene"
           }
         }
       }
@@ -2187,6 +2583,17 @@
         }
       }
     },
+    "Elevation in metres": {
+      "comment": "Day editor: accessibility label for the elevation field, whose placeholder is \"0\".",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Høyde i meter"
+          }
+        }
+      }
+    },
     "Elevation Profile": {
       "localizations": {
         "nb": {
@@ -2203,6 +2610,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "Slutt"
+          }
+        }
+      }
+    },
+    "End date": {
+      "comment": "Accessibility label for the end-date picker, whose visible label is empty.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sluttdato"
           }
         }
       }
@@ -2252,6 +2670,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "Est. gangtid"
+          }
+        }
+      }
+    },
+    "Estimated from the route": {
+      "comment": "Photo editor: where the photo's location came from.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Anslått fra ruten"
           }
         }
       }
@@ -2463,6 +2892,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "Underkjølt regn"
+          }
+        }
+      }
+    },
+    "From the photo's own GPS data": {
+      "comment": "Photo editor: where the photo's location came from.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fra bildets egne GPS-data"
           }
         }
       }
@@ -2679,6 +3119,17 @@
         }
       }
     },
+    "Highest temperature in degrees Celsius": {
+      "comment": "Day editor: accessibility label for a weather field whose placeholder is an em dash.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Høyeste temperatur i grader celsius"
+          }
+        }
+      }
+    },
     "Highlights": {
       "localizations": {
         "nb": {
@@ -2716,6 +3167,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "Historie"
+          }
+        }
+      }
+    },
+    "Import a GPX file, draw the route on a map, or remove it": {
+      "comment": "New journey: accessibility hint for the Route options menu.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Importer en GPX-fil, tegn ruten på et kart, eller fjern den"
           }
         }
       }
@@ -2885,6 +3347,17 @@
         }
       }
     },
+    "Journey description": {
+      "comment": "Journey editor: accessibility label for the description editor, which has no placeholder.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Beskrivelse av turen"
+          }
+        }
+      }
+    },
     "Journey Details": {
       "localizations": {
         "nb": {
@@ -2937,6 +3410,28 @@
     },
     "Journeys loaded": {
       "shouldTranslate": false
+    },
+    "Latitude %@, longitude %@": {
+      "comment": "Accessibility label for a bare coordinate readout.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Breddegrad %@, lengdegrad %@"
+          }
+        }
+      }
+    },
+    "Less than half the price of one printed photo book — for every trip your family ever takes.": {
+      "comment": "Paywall: the price anchor under the purchase button.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Under halve prisen av én trykt fotobok – for hver eneste tur familien din tar."
+          }
+        }
+      }
     },
     "Let Akashic suggest weather, places and points of interest for an existing journey — with Akashic Complete. Correcting your own data is always free.": {
       "localizations": {
@@ -3031,6 +3526,17 @@
         }
       }
     },
+    "Loading the price": {
+      "comment": "Paywall: what the spinner is waiting for.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Henter prisen"
+          }
+        }
+      }
+    },
     "Location": {
       "localizations": {
         "nb": {
@@ -3081,6 +3587,17 @@
         }
       }
     },
+    "Lowest temperature in degrees Celsius": {
+      "comment": "Day editor: accessibility label for a weather field whose placeholder is an em dash.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Laveste temperatur i grader celsius"
+          }
+        }
+      }
+    },
     "Mainly clear": {
       "comment": "WMO weather code 1.",
       "localizations": {
@@ -3123,12 +3640,89 @@
         }
       }
     },
+    "Manage %@": {
+      "comment": "Sharing: accessibility label for a participant's menu — names the person.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Administrer %@"
+          }
+        }
+      }
+    },
     "Manage days": {
       "localizations": {
         "nb": {
           "stringUnit": {
             "state": "translated",
             "value": "Administrer dager"
+          }
+        }
+      }
+    },
+    "Map comparing the current route with the new one": {
+      "comment": "Route correction: accessibility label for the before/after preview map.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kart som sammenligner den nåværende ruten med den nye"
+          }
+        }
+      }
+    },
+    "Map mode": {
+      "comment": "Route drawing: accessibility label for the Draw / Move map picker.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kartmodus"
+          }
+        }
+      }
+    },
+    "Map of the current route": {
+      "comment": "Route correction: accessibility label for the preview map when only stats change.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kart over den nåværende ruten"
+          }
+        }
+      }
+    },
+    "Map preview of the drafted route": {
+      "comment": "New journey: accessibility label for the route preview map when no days are placed.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kartforhåndsvisning av ruten du har laget"
+          }
+        }
+      }
+    },
+    "Map preview of the drafted route, with %lld days marked": {
+      "comment": "New journey: accessibility label for the route preview map.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kartforhåndsvisning av ruten du har laget, med %lld dager markert"
+          }
+        }
+      }
+    },
+    "Map preview with %lld days marked": {
+      "comment": "New journey: accessibility label for the route preview map when there is no route line.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kartforhåndsvisning med %lld dager markert"
           }
         }
       }
@@ -3224,6 +3818,28 @@
         }
       }
     },
+    "Move day %lld earlier": {
+      "comment": "New journey: accessibility label for the up chevron on a day row.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Flytt dag %lld tidligere"
+          }
+        }
+      }
+    },
+    "Move day %lld later": {
+      "comment": "New journey: accessibility label for the down chevron on a day row.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Flytt dag %lld senere"
+          }
+        }
+      }
+    },
     "Move each day's location to the matching GPX waypoint (by order). Day names and content are kept.": {
       "localizations": {
         "nb": {
@@ -3280,6 +3896,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "Gi turen et navn, slipp inn en GPX-rute, og la bildene fylle dagene."
+          }
+        }
+      }
+    },
+    "Name of day %lld": {
+      "comment": "New journey: accessibility label for one day's name field in the day list.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Navn på dag %lld"
           }
         }
       }
@@ -3462,6 +4089,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "Ikke koblet til en dag"
+          }
+        }
+      }
+    },
+    "Not rotated": {
+      "comment": "Photo editor: accessibility value of the preview when rotation is zero.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ikke rotert"
           }
         }
       }
@@ -3649,12 +4287,67 @@
         }
       }
     },
+    "Opens the Akashic Complete purchase sheet": {
+      "comment": "Accessibility hint for an unlock button.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Åpner kjøpsvinduet for Akashic Complete"
+          }
+        }
+      }
+    },
+    "Opens the file picker so you can choose a GPX track": {
+      "comment": "New journey: accessibility hint for the GPX card.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Åpner filvelgeren så du kan velge et GPX-spor"
+          }
+        }
+      }
+    },
     "Opens the notes for editing": {
       "localizations": {
         "nb": {
           "stringUnit": {
             "state": "translated",
             "value": "Åpner notatene for redigering"
+          }
+        }
+      }
+    },
+    "Opens the share sheet so you can save the archive or send it": {
+      "comment": "Export: accessibility hint for the share link.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Åpner delingsvinduet så du kan lagre arkivet eller sende det"
+          }
+        }
+      }
+    },
+    "Opens the system sheet for sending an invitation": {
+      "comment": "Sharing: accessibility hint for the invite button.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Åpner systemvinduet for å sende en invitasjon"
+          }
+        }
+      }
+    },
+    "Opens your photo library": {
+      "comment": "Accessibility hint for a photo picker.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Åpner bildebiblioteket ditt"
           }
         }
       }
@@ -3682,6 +4375,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "Oversikt"
+          }
+        }
+      }
+    },
+    "Packaging the export": {
+      "comment": "Export: accessibility label for the progress bar.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pakker eksportfila"
           }
         }
       }
@@ -3746,6 +4450,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "Nedlasting av bilder kan bli flere GB ved første synkronisering. Kartet holdes mørkt i alle utseender, så bildene beholder kontrasten."
+          }
+        }
+      }
+    },
+    "Photo preview": {
+      "comment": "Photo editor: accessibility label for the preview, which carries the rotation as its value.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Forhåndsvisning av bildet"
           }
         }
       }
@@ -3843,6 +4558,17 @@
         }
       }
     },
+    "Placed by hand": {
+      "comment": "Photo editor: where the photo's location came from.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Plassert manuelt"
+          }
+        }
+      }
+    },
     "Points of Interest": {
       "localizations": {
         "nb": {
@@ -3883,12 +4609,45 @@
         }
       }
     },
+    "Precipitation in millimetres": {
+      "comment": "Day editor: accessibility label for a weather field whose placeholder is an em dash.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nedbør i millimeter"
+          }
+        }
+      }
+    },
+    "Preparing photos": {
+      "comment": "New journey: accessibility label for the staging progress bar.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Forbereder bilder"
+          }
+        }
+      }
+    },
     "Preparing photos… %lld of %lld": {
       "localizations": {
         "nb": {
           "stringUnit": {
             "state": "translated",
             "value": "Forbereder bilder … %lld av %lld"
+          }
+        }
+      }
+    },
+    "Preparing the invitation": {
+      "comment": "Sharing: accessibility label for the invite button while the share is being prepared.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Forbereder invitasjonen"
           }
         }
       }
@@ -4063,6 +4822,17 @@
         }
       }
     },
+    "Purchasing Akashic Complete": {
+      "comment": "Paywall: accessibility label for the purchase button while the purchase is in flight.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kjøper Akashic Complete"
+          }
+        }
+      }
+    },
     "Purchasing…": {
       "localizations": {
         "nb": {
@@ -4138,6 +4908,28 @@
         }
       }
     },
+    "Reading the file": {
+      "comment": "New journey: accessibility label for the spinner on the GPX card.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Leser fila"
+          }
+        }
+      }
+    },
+    "Reading who this journey is shared with": {
+      "comment": "Sharing: accessibility label for the loading spinner.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Leser hvem turen er delt med"
+          }
+        }
+      }
+    },
     "Reads capture dates, location and the photos themselves — they're added to the journey, on the day they belong to, the moment you create it.": {
       "localizations": {
         "nb": {
@@ -4200,6 +4992,17 @@
     "Relaunch required": {
       "shouldTranslate": false
     },
+    "Remove %@": {
+      "comment": "Accessibility label for the delete button on a highlight chip — names the highlight.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fjern %@"
+          }
+        }
+      }
+    },
     "Remove access": {
       "localizations": {
         "nb": {
@@ -4216,6 +5019,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "Fjern som forsidebilde"
+          }
+        }
+      }
+    },
+    "Remove day %lld": {
+      "comment": "New journey: accessibility label for the delete button on a day row.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fjern dag %lld"
           }
         }
       }
@@ -4250,6 +5064,28 @@
         }
       }
     },
+    "Remove this photo from the import, %@": {
+      "comment": "Photo import: accessibility label for the remove button on a staged photo — the day distinguishes the rows.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fjern dette bildet fra importen, %@"
+          }
+        }
+      }
+    },
+    "Remove this video from the import, %@": {
+      "comment": "Photo import: accessibility label for the remove button on a staged video.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fjern denne videoen fra importen, %@"
+          }
+        }
+      }
+    },
     "Removed": {
       "localizations": {
         "nb": {
@@ -4266,6 +5102,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "Endre rekkefølge"
+          }
+        }
+      }
+    },
+    "Reorder days": {
+      "comment": "Manage days: accessibility label for the Reorder button.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Endre rekkefølgen på dagene"
           }
         }
       }
@@ -4333,6 +5180,17 @@
         }
       }
     },
+    "Restoring purchases": {
+      "comment": "Paywall: accessibility label for the restore button while it is running.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gjenoppretter kjøp"
+          }
+        }
+      }
+    },
     "Restoring…": {
       "localizations": {
         "nb": {
@@ -4369,6 +5227,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "Roter mot høyre"
+          }
+        }
+      }
+    },
+    "Rotated %lld degrees": {
+      "comment": "Photo editor: accessibility value of the preview stating the current rotation.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rotert %lld grader"
           }
         }
       }
@@ -4493,6 +5362,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "Send kommentaren"
+          }
+        }
+      }
+    },
+    "Set a start date": {
+      "comment": "Accessibility label for the toggle that enables the start date.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sett en startdato"
+          }
+        }
+      }
+    },
+    "Set an end date": {
+      "comment": "Accessibility label for the toggle that enables the end date.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sett en sluttdato"
           }
         }
       }
@@ -4676,6 +5567,17 @@
         }
       }
     },
+    "Source unknown": {
+      "comment": "Photo editor: where the photo's location came from, when the stored token is unrecognised.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ukjent kilde"
+          }
+        }
+      }
+    },
     "Source: %@": {
       "localizations": {
         "nb": {
@@ -4692,6 +5594,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "Start"
+          }
+        }
+      }
+    },
+    "Start date": {
+      "comment": "Accessibility label for the start-date picker, whose visible label is empty.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Startdato"
           }
         }
       }
@@ -4828,12 +5741,34 @@
         }
       }
     },
+    "Suggest names for every day": {
+      "comment": "New journey: accessibility label for the Apple Intelligence day-naming button.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Foreslå navn for alle dagene"
+          }
+        }
+      }
+    },
     "Suggested from your route": {
       "localizations": {
         "nb": {
           "stringUnit": {
             "state": "translated",
             "value": "Foreslått ut fra ruta di"
+          }
+        }
+      }
+    },
+    "Suggesting names": {
+      "comment": "New journey: accessibility label for the day-naming button while it runs.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Foreslår navn"
           }
         }
       }
@@ -4898,6 +5833,17 @@
         }
       }
     },
+    "Summit elevation in metres": {
+      "comment": "Journey editor: accessibility label for the summit field, whose placeholder is \"0\".",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Topphøyde i meter"
+          }
+        }
+      }
+    },
     "Summit: %@": {
       "comment": "Journey story header: the highest point reached, e.g. \"Summit: 5 895 m\".",
       "localizations": {
@@ -4932,6 +5878,50 @@
     },
     "Sync": {
       "shouldTranslate": false
+    },
+    "Text": {
+      "comment": "Fallback accessibility label for a multi-line text editor that was given no label.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tekst"
+          }
+        }
+      }
+    },
+    "The archive will contain only the route and the text": {
+      "comment": "Export: accessibility hint on the include-photos toggle when it is off.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Arkivet vil bare inneholde ruten og teksten"
+          }
+        }
+      }
+    },
+    "The archive will contain the full-resolution files and can be large": {
+      "comment": "Export: accessibility hint on the include-photos toggle.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Arkivet vil inneholde filene i full oppløsning og kan bli stort"
+          }
+        }
+      }
+    },
+    "The change is stated as numbers below": {
+      "comment": "Route correction: accessibility hint pointing from the map to the readable stats diff.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Endringen står som tall nedenfor"
+          }
+        }
+      }
     },
     "TIPS": {
       "shouldTranslate": false
@@ -5263,6 +6253,17 @@
         }
       }
     },
+    "Tracing a route needs sight and a finger. To set a route without drawing, close this and use Import GPX or Draft route from photos.": {
+      "comment": "Route drawing: accessibility hint naming the alternatives, because tracing is not operable with VoiceOver.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Å tegne en rute krever syn og en finger. For å sette en rute uten å tegne, lukk dette og bruk Importer GPX eller Lag rute fra bildene."
+          }
+        }
+      }
+    },
     "Try again": {
       "localizations": {
         "nb": {
@@ -5273,12 +6274,45 @@
         }
       }
     },
+    "Try loading the price again": {
+      "comment": "Paywall: accessibility label for Try again in the offline state.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Prøv å hente prisen igjen"
+          }
+        }
+      }
+    },
+    "Try the export again": {
+      "comment": "Export: accessibility label for Try again after a failure.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Prøv eksporten igjen"
+          }
+        }
+      }
+    },
     "Unassigned": {
       "localizations": {
         "nb": {
           "stringUnit": {
             "state": "translated",
             "value": "Uten dag"
+          }
+        }
+      }
+    },
+    "Undo the last stroke": {
+      "comment": "Route drawing: accessibility label for the undo button.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Angre siste strek"
           }
         }
       }
@@ -5309,6 +6343,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "Lås opp Akashic Complete"
+          }
+        }
+      }
+    },
+    "Unlock Akashic Complete for %@": {
+      "comment": "Paywall: accessibility label for the purchase button — names the product, not only the price.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lås opp Akashic Complete for %@"
           }
         }
       }
@@ -5392,6 +6437,17 @@
         }
       }
     },
+    "Use the suggested name, %@": {
+      "comment": "New journey: accessibility label for the one-tap name suggestion.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bruk det foreslåtte navnet, %@"
+          }
+        }
+      }
+    },
     "Version": {
       "localizations": {
         "nb": {
@@ -5408,6 +6464,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "Video"
+          }
+        }
+      }
+    },
+    "Video preview": {
+      "comment": "Photo editor: accessibility label for the preview of a video.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Forhåndsvisning av videoen"
           }
         }
       }
@@ -5546,6 +6613,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "Vind km/t"
+          }
+        }
+      }
+    },
+    "Wind speed in kilometres per hour": {
+      "comment": "Day editor: accessibility label for a weather field whose placeholder is an em dash.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vindstyrke i kilometer i timen"
           }
         }
       }
