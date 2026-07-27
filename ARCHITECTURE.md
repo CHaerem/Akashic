@@ -27,15 +27,15 @@ database to operate, and no server to run.
 | Public journeys | A mirror in the container's **public** database, written by the app on publish | **Live.** Metadata + thumbnails only. |
 | Assistant / automation | App Intents (Siri, Shortcuts) inside the app | **Live.** |
 | iOS app native maps | MapKit `.hybrid(elevation: .realistic)` | **Live.** No token, no vendor. |
-| Web maps | Mapbox GL JS (globe projection, 3D terrain) | **Live.** |
-| Web hosting | **Cloudflare Pages**, via [`.github/workflows/deploy.yml`](./.github/workflows/deploy.yml) | **Live, and scheduled to move.** GitHub Pages is staged but dormant — see [Hosting and DNS](#hosting-and-dns). |
-| DNS for `akashic.no` | **Cloudflare DNS** | **Live, and scheduled to move** to the registrar at the same cutover (`LEG-09`). |
+| Web maps | Mapbox GL JS (globe projection, 3D terrain) | **Live, and the only third-party runtime dependency left in the product.** Web only — the native app uses MapKit. Metered by map load and billed to us, so it belongs in the same cost conversation as the public CloudKit database (`QUA-40`). |
+| Web hosting | **GitHub Pages**, via [`.github/workflows/deploy-pages.yml`](./.github/workflows/deploy-pages.yml) | **Live.** Cut over 2026-07-27; `deploy.yml` (Cloudflare) is deleted. Only `main` may deploy — the `github-pages` environment restricts it. |
+| DNS for `akashic.no` | **Domeneshop** (also the registrar) | **Live.** Zone rebuilt 2026-07-27: 4 apex A + 4 AAAA at GitHub Pages, `www` CNAME. Cloudflare DNS is redundant and awaiting deletion (`LEG-11A`). |
 
 | Concern | Former owner | Status |
 |---|---|---|
-| Database | Supabase PostgreSQL | **Retired from the code.** No source file reaches it. The project is still switched on, read-only, pending deletion (`LEG-04` → `LEG-11`). |
+| Database | Supabase PostgreSQL | **Gone from the product, measured.** No package dependency (`@supabase/*` absent from `package.json`), nothing in `src/`, and **nothing in the built bundle** — verified by grepping `dist/assets/*.js`. What remains is migration tooling, not product: `supabase/` (19 SQL migrations, `LEG-13`) and three one-shot export scripts. The project is still switched on because `LEG-04`'s delta check needs it; `LEG-11B` deletes it. |
 | Auth | Supabase Auth (Google OAuth) | **Retired from the code** (`T3.4`). Config still exists in the dashboards, pending deletion. |
-| Photo storage | Cloudflare R2 (`akashic-media`) | **Retired from the code.** Bucket still exists with the archived bytes, pending `LEG-03` / `LEG-11`. |
+| Photo storage | Cloudflare R2 (`akashic-media`) | **Retired from the code.** Bucket still holds the archive — and 5080 of its objects (12.21 GB) exist **only** there and in the local export, never having been imported. That is why `LEG-11B` waits on `LEG-02`/`LEG-03` rather than on a calendar. |
 | Media access proxy | Cloudflare Worker | **Gone.** Deployment deleted (`LEG-01`, verified by Cloudflare edge error 1042); source removed from the repo (`LEG-12`). |
 | Assistant API | MCP endpoint on the same Worker | **Gone with the Worker.** Replaced 1:1 by App Intents (D8); `Intents/JourneyQuery.swift` now holds the only copy of the tool defaults and clamps. |
 

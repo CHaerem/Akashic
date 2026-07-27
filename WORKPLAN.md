@@ -5,7 +5,7 @@
 
 # Akashic — work ledger
 
-107 tasks · **23 open** (3 agent-doable, 0.6 dev-days · 20 owner-only, 8.5 dev-days) · 84 done · 0 dropped
+108 tasks · **24 open** (3 agent-doable, 0.6 dev-days · 21 owner-only, 8.7 dev-days) · 84 done · 0 dropped
 
 > **`dev-days` are a human-developer estimate, not agent time.** They came from the review
 > that produced these tasks and they are the right unit for deciding whether something is
@@ -143,7 +143,7 @@ node scripts/workplan.mjs next
 
 > Tests, types, CI, localisation, accessibility. Localisation and accessibility are in v1.0 by decision.
 
-2 open of 39 · 0.6 d remaining
+3 open of 40 · 0.9 d remaining
 
 | | Task | Days | Who | Deps | Finish line |
 |---|---|---|---|---|---|
@@ -186,6 +186,7 @@ node scripts/workplan.mjs next
 | `x` | `QUA-37` **Declare MediaDatabase Sendable so PhotoMediaService's conformance becomes checked** | 0.25 | agent | — | PhotoMediaService conforms to Sendable without @unchecked, and the media tests still pass. |
 | ` ` | `QUA-38` **Verify the Vision features on a real device — they cannot run in any simulator** | 0.5 | owner | — | Photo curation (hero pick, best-of, duplicate grouping) and DIFF-05 subject labels are confirmed working on a physical device, with a note recording what was seen. |
 | `x` | `QUA-39` **Bump the GitHub Actions that still target Node 20** | 0.1 | agent | — | Every action the workflows reference DIRECTLY targets Node 24. The residual annotation from inside upload-pages-artifact is upstream's and is out of scope -- see why. |
+| ` ` | `QUA-40` **Price the Mapbox dependency before the showcase gets traffic** | 0.25 | owner | — | A written figure for expected Mapbox cost at beta and launch traffic, and a decision to keep it or replace it. |
 
 ## Decisions on record
 

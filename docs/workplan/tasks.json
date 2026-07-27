@@ -2477,6 +2477,21 @@
         "gh api repos/CHaerem/Akashic/branches/main/protection --jq '.required_status_checks.contexts'",
         "Open a throwaway PR and confirm it becomes mergeable once the three checks pass"
       ]
+    },
+    {
+      "id": "QUA-40",
+      "track": "QUALITY",
+      "status": "TODO",
+      "effort": 0.25,
+      "priority": 45,
+      "owner": true,
+      "title": "Price the Mapbox dependency before the showcase gets traffic",
+      "done_when": "A written figure for expected Mapbox cost at beta and launch traffic, and a decision to keep it or replace it.",
+      "why": "Measured 2026-07-27 while auditing external dependencies: after Supabase, R2 and the Cloudflare Worker are gone, **Mapbox is the only third-party runtime dependency left in the product.** The built web bundle reaches exactly two external origins that matter -- cdn.apple-cloudkit.com and api/events.mapbox.com -- and the native app reaches none at all (every import is an Apple framework; there are no SPM packages). So the 'write ourselves out of external dependencies' goal is essentially met, with one exception nobody has been discussing.\nIt matters because Mapbox is metered per map load and billed to us, exactly like the public CloudKit database whose cost line COMMERCIALIZATION-PLAN.md got wrong. The showcase is the public, world-readable surface -- the one whose traffic we do not control -- and every visitor who spins the globe is a billed load. Mapbox's free tier is generous but finite, and the failure mode is a bill rather than an outage, which is the kind that arrives unannounced.\nNote the asymmetry worth deciding on: the native app already renders the same globe with MapKit at no marginal cost. If the showcase could too, the last third-party dependency disappears -- but MapKit JS has its own terms and the globe projection may not be equivalent, so this is a real evaluation and not a swap.",
+      "files": [],
+      "verify": [
+        "A figure and a decision recorded in COMMERCIALIZATION-PLAN.md"
+      ]
     }
   ]
 }
