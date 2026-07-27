@@ -1,13 +1,24 @@
 import { describe, it, expect } from 'vitest';
 import { createPublicKey, createVerify, generateKeyPairSync } from 'node:crypto';
-import { mintMapKitToken, decodePayload, daysUntilExpiry, DEFAULT_DAYS } from './mintToken.mjs';
+import {
+    mintMapKitToken,
+    decodePayload,
+    daysUntilExpiry,
+    DEFAULT_DAYS,
+    DEFAULT_SCOPE,
+    SCOPES,
+} from './mintToken.mjs';
 
 /**
- * MAP-04 — the token minter, tested without needing Apple's key.
+ * MAP-04A — the token minter, tested without needing Apple's key.
  *
  * A generated P-256 key is cryptographically the same shape as an `AuthKey_*.p8`, so everything except
  * "does Apple accept it" is provable here. That last question needs the real key and is called out in
  * MAP-04; nothing in this file pretends to answer it.
+ *
+ * The claim assertions below are pinned to Apple's own DocC source, re-fetched 2026-07-27. That matters
+ * because the first version of this suite asserted the OPPOSITE of Apple's spec on the `origin` claim and
+ * passed — a suite can only be as right as the spec it was written from.
  */
 
 const { privateKey, publicKey } = generateKeyPairSync('ec', {
@@ -16,7 +27,13 @@ const { privateKey, publicKey } = generateKeyPairSync('ec', {
     publicKeyEncoding: { type: 'spki', format: 'pem' },
 });
 
-const BASE = { keyId: 'ABC1234567', teamId: '9LVCB72DT8', privateKey, now: 1_770_000_000_000 };
+const BASE = {
+    keyId: 'ABC1234567',
+    teamId: '9LVCB72DT8',
+    privateKey,
+    origin: 'akashic.no',
+    now: 1_770_000_000_000,
+};
 
 function parts(token) {
     const [h, p, s] = token.split('.');
@@ -67,35 +84,122 @@ describe('mintMapKitToken', () => {
         expect(ok).toBe(true);
     });
 
-    it('omits the origin claim entirely when none is given, rather than sending an empty one', () => {
+    // MARK: - the scope claim
+
+    /**
+     * Apple: "A space-separated list of one or more Apple Maps frameworks you are authorizing the token to
+     * use." The first version of this file emitted no scope at all, which Apple's own example payload
+     * carries — a token that may be honoured for compatibility today and is not what the spec asks for.
+     */
+    it('carries the browser scope by default, because that is what this repo needs', () => {
         const { payload } = parts(mintMapKitToken(BASE).token);
-        expect('origin' in payload).toBe(false);
+        expect(payload.scope).toBe('mapkit_js');
+        expect(DEFAULT_SCOPE).toBe('mapkit_js');
     });
 
-    it('carries a well-formed origin through untouched', () => {
-        const { payload } = parts(mintMapKitToken({ ...BASE, origin: 'https://akashic.no' }).token);
-        expect(payload.origin).toBe('https://akashic.no');
+    it('knows exactly Apple’s four documented scope values', () => {
+        expect(SCOPES).toEqual(['embed_api', 'mapkit_js', 'server_api', 'web_snapshots']);
+    });
+
+    it('accepts a space-separated combination', () => {
+        const { payload } = parts(mintMapKitToken({ ...BASE, scope: 'mapkit_js web_snapshots' }).token);
+        expect(payload.scope).toBe('mapkit_js web_snapshots');
+    });
+
+    it('refuses a scope Apple does not define, rather than minting a token that cannot work', () => {
+        expect(() => mintMapKitToken({ ...BASE, scope: 'maps_js' })).toThrow(/unknown scope "maps_js"/);
+        expect(() => mintMapKitToken({ ...BASE, scope: 'mapkit_js nonsense' })).toThrow(/unknown scope/);
+    });
+
+    /** server_api is not a browser scope, so Apple does not require an origin for it. */
+    it('allows a server_api token with no origin', () => {
+        const { payload } = parts(mintMapKitToken({ ...BASE, origin: undefined, scope: 'server_api' }).token);
+        expect('origin' in payload).toBe(false);
+        expect(payload.scope).toBe('server_api');
+    });
+
+    // MARK: - the origin claim
+
+    /**
+     * Apple: "Use a domain pattern such as `*.example.com`, a specific domain such as `example.com`, or a
+     * comma-separated list of origins for multiple domains such as `example.com,*.subdomain.com`."
+     *
+     * No scheme appears anywhere in Apple's spec or example payload.
+     */
+    it.each([
+        'akashic.no',
+        '*.akashic.no',
+        'akashic.no,*.akashic.no',
+        'example.co.uk',
+    ])('carries the documented bare-domain form %s untouched', good => {
+        const { payload } = parts(mintMapKitToken({ ...BASE, origin: good }).token);
+        expect(payload.origin).toBe(good);
     });
 
     /**
-     * Refused rather than silently normalised. The CloudKit token's Allowed Origins had been entered as
-     * `akashic.no/` with a trailing slash, which passed from a curl written to match the stored string and
-     * failed from every real browser, because an HTTP `Origin` header never carries a path. Normalising
-     * here would hide the same class of mistake instead of surfacing it.
+     * **The regression this suite exists to prevent.** The first version of the minter *enforced* a
+     * scheme, so it threw on `akashic.no` — the documented value — and accepted `https://akashic.no`,
+     * which Apple never documents. The justification was the CloudKit trailing-slash trap, where Allowed
+     * Origins IS matched against an HTTP `Origin` header and therefore does need the scheme. Same word,
+     * two Apple services, opposite formats.
+     *
+     * So the error message has to name the remedy, not the rule — anyone hitting this is hitting it
+     * because every other origin-shaped field in this project takes a URL.
      */
     it.each([
-        'https://akashic.no/',
-        'https://akashic.no/?journey=x',
-        'akashic.no',
-        'https://akashic.no/path',
-    ])('refuses the malformed origin %s instead of correcting it', bad => {
-        expect(() => mintMapKitToken({ ...BASE, origin: bad })).toThrow(/scheme:\/\/host/);
+        'https://akashic.no',
+        'http://localhost:5173',
+        'HTTPS://AKASHIC.NO',
+    ])('refuses the URL form %s and says to drop the scheme', bad => {
+        expect(() => mintMapKitToken({ ...BASE, origin: bad })).toThrow(/bare domain, not a URL/);
     });
 
-    it('accepts http for localhost, which is where dev and Playwright live', () => {
-        const { payload } = parts(mintMapKitToken({ ...BASE, origin: 'http://localhost:5173' }).token);
-        expect(payload.origin).toBe('http://localhost:5173');
+    it('explains that CloudKit is the opposite, since that is where the wrong instinct comes from', () => {
+        expect(() => mintMapKitToken({ ...BASE, origin: 'https://akashic.no' }))
+            .toThrow(/CloudKit's Allowed Origins is the opposite/);
     });
+
+    it.each([
+        'akashic.no/',
+        'akashic.no/path',
+        'akashic.no/?journey=x',
+    ])('refuses %s, because a path is not part of an origin', bad => {
+        expect(() => mintMapKitToken({ ...BASE, origin: bad })).toThrow(/path or trailing slash/);
+    });
+
+    it.each([
+        ['a bare word with no dot', 'akashic'],
+        ['an empty entry', 'akashic.no,'],
+        ['a leading empty entry', ',akashic.no'],
+        ['an underscore', 'akashic_no.example'],
+        ['a mid-label wildcard', 'ak*.akashic.no'],
+    ])('refuses %s', (_name, bad) => {
+        expect(() => mintMapKitToken({ ...BASE, origin: bad })).toThrow();
+    });
+
+    it('refuses padded list entries rather than trimming them, so the token matches what was written', () => {
+        expect(() => mintMapKitToken({ ...BASE, origin: 'akashic.no, *.akashic.no' }))
+            .toThrow(/whitespace/);
+    });
+
+    /**
+     * `localhost` is a deliberate exception with a removal condition in the source: it is the only way
+     * `npm run dev` and Playwright can authenticate, and Apple does not document whether MapKit accepts
+     * it. If MAP-04's verify step shows it rejected, this test and that branch go together.
+     */
+    it('allows bare localhost, which is unverified against Apple and documented as such', () => {
+        const { payload } = parts(mintMapKitToken({ ...BASE, origin: 'localhost' }).token);
+        expect(payload.origin).toBe('localhost');
+    });
+
+    /** Apple requires an origin whenever the scope runs in a browser. Silence here would be unusable. */
+    it.each(['mapkit_js', 'web_snapshots', 'embed_api'])(
+        'refuses to mint a %s token with no origin at all', scope => {
+            expect(() => mintMapKitToken({ ...BASE, origin: undefined, scope }))
+                .toThrow(/requires an origin claim/);
+        });
+
+    // MARK: - the key itself
 
     it.each([
         ['keyId', { keyId: '' }],
@@ -150,8 +254,12 @@ describe('the CI expiry guard', () => {
     });
 
     it('decodes the payload without needing the key', () => {
-        const { token } = mintMapKitToken({ ...BASE, origin: 'https://akashic.no' });
-        expect(decodePayload(token)).toMatchObject({ iss: '9LVCB72DT8', origin: 'https://akashic.no' });
+        const { token } = mintMapKitToken(BASE);
+        expect(decodePayload(token)).toMatchObject({
+            iss: '9LVCB72DT8',
+            origin: 'akashic.no',
+            scope: 'mapkit_js',
+        });
     });
 
     it.each(['', 'not-a-jwt', 'only.two'])('rejects %s rather than reporting a healthy token', bad => {

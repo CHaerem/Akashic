@@ -2592,7 +2592,8 @@
       "track": "QUALITY",
       "status": "WIP",
       "notes": [
-        "2026-07-27: minter written and green (26 tests, scripts/mapkit/mintToken.test.mjs) -- a generated P-256 key proves everything except \"does Apple accept it\", which needs the real key and is MAP-04. Workflow wiring is the remaining half and wants MAP-03 landed first so there is something to authenticate."
+        "2026-07-27: minter written and green (26 tests, scripts/mapkit/mintToken.test.mjs) -- a generated P-256 key proves everything except \"does Apple accept it\", which needs the real key and is MAP-04. Workflow wiring is the remaining half and wants MAP-03 landed first so there is something to authenticate.",
+        "2026-07-27: rewritten against Apple's DocC source after a research pass found THREE defects in the first version, two of which would have minted a token that signs cleanly and 401s. (1) No \"scope\" claim at all; Apple requires it and the browser SDK needs \"mapkit_js\". (2) The origin validator ENFORCED a scheme, so it threw on \"akashic.no\" -- the documented value -- and accepted \"https://akashic.no\", which Apple documents nowhere. That guard's own justification was the CloudKit trailing-slash trap: same word, two Apple services, opposite formats. (3) \"origin\" was optional; Apple requires it for any browser scope. 45 tests now, up from 26, pinning both directions of the origin format. See the new CLAUDE.md trap."
       ],
       "verify": [
         "npx vitest --run scripts/mapkit/mintToken.test.mjs"
@@ -2602,22 +2603,22 @@
         "branch": "claude/remote-control-project-review-9462c1",
         "at": "2026-07-27"
       },
-      "resume": "minter done + 26 tests green; the deploy-workflow wiring wants MAP-03 landed first"
+      "resume": "minter rewritten against Apple's spec, 45 tests green; the deploy-workflow wiring wants MAP-03 landed first"
     },
     {
       "id": "MAP-04",
-      "effort": 0.2,
+      "effort": 0.3,
       "priority": 53,
       "deps": [],
       "owner": true,
-      "title": "Create the MapKit JS key and add two repository secrets",
-      "done_when": "A MapKit JS key exists in the Apple Developer portal, and MAPKIT_KEY_ID + MAPKIT_PRIVATE_KEY are set as repository secrets. Verified by running scripts/mapkit/mintToken.mjs in CI and getting a token.",
-      "why": "Reduced from the original scope, and worth recording why. The obvious path is to press \"Generate Token\" in the portal and paste the result -- and that is a fuse. Portal tokens max out at ONE YEAR, there is no backend to replace one, and the day it lapses mapkit.init fails with `unauthorized`, the journey map becomes an empty box, and it stays broken until a human notices and pushes a build. On a keepsake that may go untouched for months that is a bad failure mode.\nThe private key does not expire. So the build mints the token instead (MAP-04A), which means every deploy refreshes it: the fuse resets on every push rather than burning down once. There is no Apple CLI for either half -- verified: altool and notarytool take a .p8 but authenticate to App Store Connect, and xcrun offers only mapc and vmmap -- but only the KEY needs the portal. The JWT is fully scriptable and already written and tested.\nSo the owner action is two downloads-worth of clicking, not a recurring chore. The .p8 downloads ONCE and cannot be re-downloaded; losing it means revoking and re-creating the key.",
+      "title": "Create the Maps ID and MapKit key, then add two repository secrets",
+      "done_when": "A Maps ID (maps.no.akashic) and a Maps key exist in the Apple Developer portal, MAPKIT_KEY_ID + MAPKIT_PRIVATE_KEY are repository secrets, and `node scripts/mapkit/mintToken.mjs --origin akashic.no` produces a token mapkit.init accepts.",
+      "why": "Reduced from the original scope -- the build mints the token now (MAP-04A), so this is portal clicking,\nnot a recurring chore. Two corrections to what this entry used to say, both verified against Apple's own\nDocC source on 2026-07-27.\n\nFIRST: there is a prerequisite the portal only hints at. The \"Maps\" row on Register-a-New-Key renders GREY\nwith \"There are no identifiers available that can be associated with the key\" until a Maps ID exists.\nApple states it plainly elsewhere: \"the MapKit JS checkbox isn't in an enabled state until you create a\nMaps ID.\" So the path is Identifiers -> + -> Maps IDs -> Continue, description free-text, and an\nidentifier whose FIRST dot-separated field must literally be \"maps\" -- maps.no.akashic, NOT\nno.akashic.maps. Then Keys -> + -> tick Maps -> Configure -> pick the Maps ID -> Register -> Download.\nThe .p8 downloads ONCE and is not recoverable; there are two key slots per Maps ID, so treat the second\nas the rotation slot.\n\nSECOND: this entry previously said \"Maximum portal validity is ONE YEAR\" and used that to argue for\nbuild-time minting. That premise has weakened -- Apple's current documentation lists No Expiration among\nthe Domain Token Validation Durations. It does not change the decision (a hardcoded credential you must\nhand-edit to rotate is still worse than one minted on every deploy) but the stated reason was wrong, and\nis corrected here rather than quietly left standing.\n\nWhat can still go wrong, in likelihood order: the identifier string is rejected (that is the \"maps.\"\nprefix, every time); the Identifiers list looks empty because it filters by type and defaults to App IDs;\nthe token signs and then 401s, for which the order of suspicion is the origin/scope format (fixed in\nMAP-04A), then Apple-side breakage -- there are unresolved forum reports of portal-minted MapKit tokens\n401ing on cdn.apple-mapkit.com/ma/bootstrap with DTS concluding service-side, so verify with a trivial\nlocal page before rewriting any integration.\n\nOne cost line for the ledger: MapKit's entitlement is 250,000 map views and 25,000 service calls per day\nPER PROGRAM MEMBERSHIP, not per token. That is a second ceiling on showcase traffic, independent of the\npublic CloudKit egress the cost table already tracks.",
       "files": [],
       "track": "QUALITY",
       "status": "TODO",
       "verify": [
-        "node scripts/mapkit/mintToken.mjs --origin https://akashic.no  # with the two env vars set"
+        "node scripts/mapkit/mintToken.mjs --origin akashic.no  # with MAPKIT_KEY_ID, MAPKIT_TEAM_ID, MAPKIT_PRIVATE_KEY set"
       ]
     },
     {

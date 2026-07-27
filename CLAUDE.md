@@ -213,6 +213,28 @@ right: fix this file in the same commit.
   * The token IS environment-scoped (dev token: 200 on development, 401 on production), so a separate
     Production token is genuinely required. Test it with an explicit `Origin` header, from the exact
     scheme+host a browser would send.
+- **"Origin" means two incompatible things in two Apple services, and knowing one makes you confidently
+  wrong about the other.** CloudKit's Allowed Origins is matched against an HTTP `Origin` header, so it
+  needs the scheme and no path: `https://akashic.no`. MapKit's `origin` JWT claim is a *domain pattern* and
+  takes no scheme at all — Apple's own words are "a domain pattern such as `*.example.com`, a specific
+  domain such as `example.com`, or a comma-separated list", and their example payload is
+  `"origin": "*.example.com"`. This cost real time in the useful direction: fresh off the CloudKit
+  trailing-slash bug I wrote a MapKit validator that *enforced* a scheme, so it threw on `akashic.no` — the
+  documented value — and accepted `https://akashic.no`, which Apple documents nowhere. A precisely-wrong
+  validator is worse than none, because it rejects the right answer with an authoritative message. The
+  minter now refuses a URL and names the remedy; `scripts/mapkit/mintToken.test.mjs` pins both directions.
+  Same family: MapKit's `scope` claim is required (`mapkit_js` for the browser SDK, of `embed_api`,
+  `mapkit_js`, `server_api`, `web_snapshots`) and an `origin` is mandatory for any browser scope — the
+  first version of the minter omitted the former entirely and treated the latter as optional.
+- **A MapKit key cannot be created until a Maps ID exists**, and the portal says so only in red small
+  print on a greyed row. Apple: "the MapKit JS checkbox isn't in an enabled state until you create a Maps
+  ID." The identifier's first dot-separated field must literally be `maps` (`maps.no.akashic`), which is
+  the one place reverse-domain muscle memory misleads you. Keys → the four rows carrying "There are no
+  identifiers available" (Maps, Media Services, Sign in with Apple, iWork Document Exporting) are the
+  identifier-scoped services; APNs, DeviceCheck and WeatherKit bind to nothing and are always selectable.
+  Note also that Apple's own two pages disagree on whether a Maps ID is needed for the *token* route —
+  `applemapsserverapi/creating-a-maps-identifier-and-a-private-key` states it twice, `mapkitjs/creating-a-maps-token`
+  omits it. Create the Maps ID unconditionally; it is free and removes the ambiguity.
 - **Entitlements are never embedded in an unsigned simulator build, so no simulator test can prove one.**
   Measured on Release-CloudKit with `CODE_SIGNING_ALLOWED=NO`: the log contains **zero** codesign steps
   and `codesign -d --entitlements - <app>` reports nothing at all. So `associated-domains`, App Groups,
