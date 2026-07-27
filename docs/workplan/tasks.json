@@ -2461,6 +2461,22 @@
       ],
       "evidence": "Bumped across all four workflows: checkout v4->v5, setup-node v4->v5, upload-artifact v4->v5, configure-pages v5->v6, upload-pages-artifact v3->v4, deploy-pages v4->v4. Versions read from the GitHub API rather than guessed. Deliberately conservative on the Pages-specific actions (one major at a time) because their inputs have changed across majors and this is now the live deploy path for akashic.no. NOT yet validated by a CI run -- see the note. VALIDATED on run 30245980429: build job success with all four bumped actions executing. The deploy job failed for an unrelated and benign reason -- see the environment note on LEG-09.",
       "resume": "The bumps are committed but NOT exercised by a CI run: the trigger is now push:[main] and the change sits on a feature branch, so validating it needs either a merge to main or a workflow_dispatch against this branch's ref. Harmless to discover late while akashic.no is still served by Cloudflare -- a broken Pages deploy has no user impact until DNS moves. Validate BEFORE the DNS cutover."
+    },
+    {
+      "id": "LEG-14",
+      "track": "LEGACY",
+      "status": "TODO",
+      "effort": 0.1,
+      "priority": 44,
+      "owner": true,
+      "title": "Remove the dead 'build-deploy' required status check from main",
+      "done_when": "main's required status checks are exactly the three that can still report, and a test PR is mergeable.",
+      "why": "I BROKE THIS and could not fix it: changing branch protection is blocked for me by a permission guard, which is the right guard to have.\nmain requires four status checks: 'Unit Tests', 'Lint & Type Check', 'Build' and 'build-deploy'. The first three come from test.yml and still run. 'build-deploy' was the JOB ID in .github/workflows/deploy.yml -- the Cloudflare workflow deleted in LEG-10/LEG-09. It can never report again.\nBecause required_status_checks.strict is true, every future PR to main will sit forever waiting for a check that no longer exists. It has not bitten yet only because enforce_admins is false, so direct pushes still land -- which is exactly how this session's merge went through without noticing.\nFix: remove 'build-deploy', leaving the three that report on PRs. Do NOT substitute deploy-pages.yml's 'deploy' job: it triggers on push to main, so it would never report on a PR either and would recreate the same deadlock.\nWorth considering while in there: 'Work Ledger' (test.yml) and 'Build & test (iOS Simulator)' (apple-ci.yml) both run and are NOT required. Adding them would enforce the ledger discipline the project rests on -- but that is a policy change, not a repair, so it is the owner's call rather than part of this fix.",
+      "files": [],
+      "verify": [
+        "gh api repos/CHaerem/Akashic/branches/main/protection --jq '.required_status_checks.contexts'",
+        "Open a throwaway PR and confirm it becomes mergeable once the three checks pass"
+      ]
     }
   ]
 }

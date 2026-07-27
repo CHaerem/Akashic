@@ -5,7 +5,7 @@
 
 # Akashic — work ledger
 
-106 tasks · **22 open** (3 agent-doable, 0.6 dev-days · 19 owner-only, 8.4 dev-days) · 84 done · 0 dropped
+107 tasks · **23 open** (3 agent-doable, 0.6 dev-days · 20 owner-only, 8.5 dev-days) · 84 done · 0 dropped
 
 > **`dev-days` are a human-developer estimate, not agent time.** They came from the review
 > that produced these tasks and they are the right unit for deciding whether something is
@@ -39,7 +39,7 @@ node scripts/workplan.mjs next
 
 > Retire Supabase, Cloudflare and R2. Repo-side removal can happen now; the infrastructure deletions are gated on the archive being duplicated and on the Pages cutover. LEG-01 is independent of every gate and should happen today.
 
-8 open of 14 · 2.9 d remaining
+9 open of 15 · 3 d remaining
 
 | | Task | Days | Who | Deps | Finish line |
 |---|---|---|---|---|---|
@@ -57,6 +57,7 @@ node scripts/workplan.mjs next
 | ` ` | `LEG-11B` **Delete the R2 bucket, Supabase project and Google OAuth config** | 0.25 | owner | `LEG-03` `LEG-04` | All three are gone from their dashboards AND the archive has been verified on a second physical medium. |
 | `x` | `LEG-12` **Delete workers/ from the repo** | 0.25 | agent | `LEG-01` `LEG-05` | workers/ is gone and no workflow or test references it. |
 | ` ` | `LEG-13` **Delete supabase/** | 0.1 | agent | `LEG-04` | supabase/ is gone from the repo. |
+| ` ` | `LEG-14` **Remove the dead 'build-deploy' required status check from main** | 0.1 | owner | — | main's required status checks are exactly the three that can still report, and a test PR is mergeable. |
 
 ## DOCS
 
