@@ -137,14 +137,30 @@ describe('mintMapKitToken', () => {
     });
 
     /**
-     * **The regression this suite exists to prevent.** The first version of the minter *enforced* a
-     * scheme, so it threw on `akashic.no` — the documented value — and accepted `https://akashic.no`,
-     * which Apple never documents. The justification was the CloudKit trailing-slash trap, where Allowed
-     * Origins IS matched against an HTTP `Origin` header and therefore does need the scheme. Same word,
-     * two Apple services, opposite formats.
+     * **The one that would have broken production**, and the only claim here proven against Apple rather
+     * than read off a page.
      *
-     * So the error message has to name the remedy, not the rule — anyone hitting this is hitting it
-     * because every other origin-shaped field in this project takes a URL.
+     * MEASURED 2026-07-27 against `cdn.apple-mapkit.com/ma/bootstrap` with the real key: a bare domain
+     * and a wildcard are DISJOINT. `akashic.no` is 401 ORIGIN_CHECK_FAILURE from `sub.akashic.no`, and
+     * `*.akashic.no` is 401 from the apex. The site serves from both — www.akashic.no is a CNAME to
+     * chaerem.github.io and resolves — so either form alone leaves half the visitors at an empty box.
+     * Only the list covers it.
+     */
+    it('accepts the list form that is the only one covering both apex and www', () => {
+        const { payload } = parts(mintMapKitToken({ ...BASE, origin: 'akashic.no,*.akashic.no' }).token);
+        expect(payload.origin).toBe('akashic.no,*.akashic.no');
+    });
+
+    /**
+     * The first version of the minter *enforced* a scheme, so it threw on `akashic.no` — the documented
+     * value — and accepted `https://akashic.no`, which Apple documents nowhere. The justification was the
+     * CloudKit trailing-slash trap, where Allowed Origins IS matched against an HTTP `Origin` header and
+     * therefore does need the scheme. Same word, two Apple services, opposite formats.
+     *
+     * Worth being accurate about the stakes, since I overstated them once already: MEASURED, Apple returns
+     * **200** for a scheme-form origin. It is tolerated, not rejected. So this guard is about writing to
+     * the spec rather than to what the server currently forgives — and the error message names the remedy
+     * rather than the rule, because anyone hitting it is hitting it from the CloudKit instinct.
      */
     it.each([
         'https://akashic.no',
@@ -183,16 +199,24 @@ describe('mintMapKitToken', () => {
     });
 
     /**
-     * `localhost` is a deliberate exception with a removal condition in the source: it is the only way
-     * `npm run dev` and Playwright can authenticate, and Apple does not document whether MapKit accepts
-     * it. If MAP-04's verify step shows it rejected, this test and that branch go together.
+     * `localhost` has no dot, so it does not match Apple's "specific domain" shape and Apple documents
+     * nothing about it — but the dev loop and Playwright serve from `http://localhost:5173`.
+     * MEASURED 2026-07-27: both `localhost` alone and `akashic.no,localhost` return 200 for a request from
+     * `http://localhost:5173`, so this is verified rather than hoped. The port is not part of the claim.
      */
-    it('allows bare localhost, which is unverified against Apple and documented as such', () => {
-        const { payload } = parts(mintMapKitToken({ ...BASE, origin: 'localhost' }).token);
-        expect(payload.origin).toBe('localhost');
+    it.each(['localhost', 'akashic.no,localhost'])('allows %s, measured working against Apple', origin => {
+        const { payload } = parts(mintMapKitToken({ ...BASE, origin }).token);
+        expect(payload.origin).toBe(origin);
     });
 
-    /** Apple requires an origin whenever the scope runs in a browser. Silence here would be unusable. */
+    /**
+     * Apple's spec requires an origin whenever the scope runs in a browser, so the minter does too.
+     *
+     * Measured, the server is more forgiving than its spec: a token with NO origin claim is served 200
+     * from a matching site. Enforcing it anyway is deliberate — the claim is the only thing standing
+     * between a public bundle token and anyone reusing it in a browser, and "the server currently lets it
+     * through" is not a property to build on.
+     */
     it.each(['mapkit_js', 'web_snapshots', 'embed_api'])(
         'refuses to mint a %s token with no origin at all', scope => {
             expect(() => mintMapKitToken({ ...BASE, origin: undefined, scope }))

@@ -213,19 +213,40 @@ right: fix this file in the same commit.
   * The token IS environment-scoped (dev token: 200 on development, 401 on production), so a separate
     Production token is genuinely required. Test it with an explicit `Origin` header, from the exact
     scheme+host a browser would send.
-- **"Origin" means two incompatible things in two Apple services, and knowing one makes you confidently
-  wrong about the other.** CloudKit's Allowed Origins is matched against an HTTP `Origin` header, so it
-  needs the scheme and no path: `https://akashic.no`. MapKit's `origin` JWT claim is a *domain pattern* and
-  takes no scheme at all — Apple's own words are "a domain pattern such as `*.example.com`, a specific
-  domain such as `example.com`, or a comma-separated list", and their example payload is
-  `"origin": "*.example.com"`. This cost real time in the useful direction: fresh off the CloudKit
-  trailing-slash bug I wrote a MapKit validator that *enforced* a scheme, so it threw on `akashic.no` — the
-  documented value — and accepted `https://akashic.no`, which Apple documents nowhere. A precisely-wrong
-  validator is worse than none, because it rejects the right answer with an authoritative message. The
-  minter now refuses a URL and names the remedy; `scripts/mapkit/mintToken.test.mjs` pins both directions.
-  Same family: MapKit's `scope` claim is required (`mapkit_js` for the browser SDK, of `embed_api`,
-  `mapkit_js`, `server_api`, `web_snapshots`) and an `origin` is mandatory for any browser scope — the
-  first version of the minter omitted the former entirely and treated the latter as optional.
+- **MapKit's `origin` claim: a bare domain and a wildcard are DISJOINT, and using either alone breaks half
+  the site.** Measured 2026-07-27 against `cdn.apple-mapkit.com/ma/bootstrap` with the real key — the only
+  way to learn any of this, because no page says it:
+
+  | claim | request `Origin` | result |
+  |---|---|---|
+  | `akashic.no` | `https://akashic.no` | 200 |
+  | `akashic.no` | `https://sub.akashic.no` | **401 ORIGIN_CHECK_FAILURE** |
+  | `*.akashic.no` | `https://akashic.no` | **401 ORIGIN_CHECK_FAILURE** |
+  | `akashic.no,*.akashic.no` | apex **and** `www` | 200 both |
+  | `akashic.no/` | `https://akashic.no` | 401 ORIGIN_CHECK_FAILURE |
+  | `https://akashic.no` | `https://akashic.no` | **200** — the scheme is tolerated |
+  | *(no `origin` claim)* | matching site | 200 |
+  | *(no `scope` claim)* | matching site | 200 |
+  | `akashic.no` | *(no `Origin` header)* | 200 |
+
+  The site serves from the apex **and** `www` (a CNAME to `chaerem.github.io` that resolves), so the only
+  correct value is the list: `--origin 'akashic.no,*.akashic.no'`. `localhost` works as a list entry and the
+  port is not part of the claim.
+
+  Two lessons beyond the table. **First**, the spec and the enforcement disagree, and not where you would
+  guess: Apple documents `scope` and `origin` as required and tolerates both being absent, while the two
+  things that actually 401 are a trailing slash and the apex/subdomain split. Write to the spec anyway — but
+  do not claim a spec violation will fail until you have seen it fail. I asserted in a commit message that
+  three spec violations "would 401"; measured, all three return 200, and I had to correct it.
+  **Second**, "the token is protected by its origin claim, not by secrecy" holds only for browsers, which
+  always send `Origin`. With no `Origin` header the token is served regardless of the claim, so a copied
+  token works server-side from anywhere against the 250,000-views-per-day entitlement — which is billed per
+  Program membership, not per token.
+
+  And the sibling trap that started all this: CloudKit's Allowed Origins is matched against an HTTP
+  `Origin` header, so it needs the scheme (`https://akashic.no`) and rejects a trailing slash. MapKit's is a
+  domain pattern. Same word, two Apple services, opposite formats — carrying one lesson across produced a
+  validator that rejected the documented value with an authoritative message.
 - **A MapKit key cannot be created until a Maps ID exists**, and the portal says so only in red small
   print on a greyed row. Apple: "the MapKit JS checkbox isn't in an enabled state until you create a Maps
   ID." The identifier's first dot-separated field must literally be `maps` (`maps.no.akashic`), which is

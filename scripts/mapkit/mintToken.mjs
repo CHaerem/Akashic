@@ -22,35 +22,64 @@
  *   MAPKIT_KEY_ID=ABC1234567 \
  *   MAPKIT_TEAM_ID=9LVCB72DT8 \
  *   MAPKIT_PRIVATE_KEY="$(cat AuthKey_ABC1234567.p8)" \
- *     node scripts/mapkit/mintToken.mjs --origin akashic.no --days 180
+ *     node scripts/mapkit/mintToken.mjs --origin 'akashic.no,*.akashic.no' --days 180
+ *
+ * Note the origin value: BOTH the apex and the wildcard. See the measured matrix below — they are disjoint,
+ * and using either one alone breaks half the site.
  *
  * In CI the key is a repository secret, so it never touches the filesystem. The minted token is public by
  * design — it ships in the client bundle — and is protected by the `origin` claim, not by secrecy.
  *
- * ## The claim spec, taken from Apple's own DocC source
+ * ## The claim spec — and what Apple ACTUALLY enforces, measured
  *
- * Re-fetched 2026-07-27 from `creating-and-using-tokens-with-maps-server-api` and
- * `mapkitjs/creating-a-maps-token`, because two of the three things below were wrong in the first version
- * of this file and each would have produced a token that signs cleanly and 401s.
+ * The spec below is from Apple's DocC source, re-fetched 2026-07-27. The enforcement matrix under it was
+ * measured the same day against `cdn.apple-mapkit.com/ma/bootstrap` with the real key (9UN97VBZR8), which
+ * is the only way to know which parts of the spec bite. **They mostly do not**, and the two that do are
+ * not the two you would guess.
  *
+ * Spec:
  * - **`scope`** — "A space-separated list of one or more Apple Maps frameworks you are authorizing the
- *   token to use." The four values are `embed_api`, `mapkit_js`, `server_api`, `web_snapshots`. Apple's
- *   own example payload carries it. The first version of this file omitted the claim entirely.
+ *   token to use", of `embed_api`, `mapkit_js`, `server_api`, `web_snapshots`.
+ * - **`origin`** — "Use a domain pattern such as `*.example.com`, a specific domain such as
+ *   `example.com`, or a comma-separated list of origins for multiple domains such as
+ *   `example.com,*.subdomain.com`." Required whenever the scope runs in a browser.
  *
- * - **`origin` is a BARE DOMAIN, not a URL.** Apple: "Use a domain pattern such as `*.example.com`, a
- *   specific domain such as `example.com`, or a comma-separated list of origins for multiple domains such
- *   as `example.com,*.subdomain.com`." No scheme appears anywhere in Apple's spec or example.
+ * Measured (claim / request Origin / result):
  *
- *   This is the interesting one, because the first version of this file *enforced* a scheme and would have
- *   thrown on `akashic.no` — the documented value — while accepting `https://akashic.no`, which Apple
- *   never documents. The justification written into that guard was the CloudKit trailing-slash trap, where
- *   Allowed Origins is matched against an HTTP `Origin` header and therefore needs the scheme. Same word,
- *   two Apple services, opposite formats. Carrying a lesson across the boundary produced a confident,
- *   precisely-wrong validator — which is worse than no validator, because it rejects the right answer.
+ *     akashic.no              https://akashic.no        200
+ *     akashic.no              https://sub.akashic.no    401 ORIGIN_CHECK_FAILURE   <-- see below
+ *     *.akashic.no            https://akashic.no        401 ORIGIN_CHECK_FAILURE   <-- see below
+ *     akashic.no,*.akashic.no https://akashic.no        200
+ *     akashic.no,*.akashic.no https://www.akashic.no    200
+ *     akashic.no,*.akashic.no https://notakashic.no     401 ORIGIN_CHECK_FAILURE
+ *     akashic.no/             https://akashic.no        401 ORIGIN_CHECK_FAILURE
+ *     https://akashic.no      https://akashic.no        200   (Apple tolerates the scheme)
+ *     (no origin claim)       https://example.com       403   (blocked, but at a CDN layer)
+ *     (no scope claim)        https://akashic.no        200
+ *     akashic.no              (no Origin header)        200   (unrestricted server-side)
  *
- * - **`origin` is REQUIRED, not optional**, whenever the scope includes `mapkit_js`, `web_snapshots` or
- *   `embed_api`. The first version omitted the claim when no origin was given, which would have minted an
- *   unusable browser token without complaint.
+ * **THE ONE THAT WOULD HAVE BROKEN PRODUCTION.** A bare domain does not cover subdomains, and a wildcard
+ * does not cover the apex — they are disjoint. akashic.no serves from BOTH the apex and `www`
+ * (www.akashic.no is a CNAME to chaerem.github.io and resolves today), so either single form leaves half
+ * the visitors looking at an empty box. Only the comma-separated list covers the deployment:
+ *
+ *     --origin akashic.no,*.akashic.no
+ *
+ * No amount of reading the documentation would have surfaced that; it took the real key and eleven
+ * requests.
+ *
+ * **Honest correction to what this file used to claim.** An earlier version said the missing `scope`, the
+ * scheme-form `origin` and the absent `origin` would each produce a token that 401s. Measured, Apple
+ * returns **200 for all three** — they were non-canonical, not broken. The validation below is still
+ * right (write to the spec, not to what the server currently tolerates), and it earns its keep on the one
+ * case that genuinely fails: a trailing slash, which is 401 ORIGIN_CHECK_FAILURE and is exactly the
+ * CloudKit trap wearing a different hat.
+ *
+ * **And the security claim above is weaker than it reads.** "Protected by the `origin` claim, not by
+ * secrecy" holds for a browser, which always sends an `Origin` header. A request with NO `Origin` header
+ * is served 200 regardless of the claim — so a copied token can be used server-side from anywhere, against
+ * the 250,000-map-views-per-day entitlement that is billed per Program membership, not per token. That is
+ * an abuse ceiling worth knowing about, not a reason to hide the token: MapKit JS has no other model.
  *
  * ## The detail that silently produces an invalid signature
  *
@@ -79,11 +108,11 @@ export const DEFAULT_DAYS = 180;
 /**
  * One entry of the `origin` claim: `example.com`, `*.example.com`, or bare `localhost`.
  *
- * `localhost` is allowed as a deliberate exception. It has no dot, so it does not match Apple's
- * "specific domain" shape, and Apple does not document whether MapKit JS accepts it — but `npm run dev`
- * and Playwright serve from `http://localhost:5173`, so there is no other way for the dev loop to
- * authenticate. REMOVAL CONDITION: if MAP-04's verify step shows MapKit rejecting a localhost origin,
- * delete this branch and give dev its own unrestricted token instead of pretending this works.
+ * `localhost` is a deliberate exception — it has no dot, so it does not match Apple's "specific domain"
+ * shape, and Apple documents nothing about it. Allowed because `npm run dev` and Playwright serve from
+ * `http://localhost:5173` and there is no other way for the dev loop to authenticate. No longer a guess:
+ * MEASURED 2026-07-27 against Apple's bootstrap endpoint, both `localhost` alone and `akashic.no,localhost`
+ * return 200 for a request from `http://localhost:5173`. Note the port is not part of the claim.
  */
 const ORIGIN_ENTRY = /^(?:\*\.)?(?:localhost|[a-z0-9-]+(?:\.[a-z0-9-]+)+)$/i;
 

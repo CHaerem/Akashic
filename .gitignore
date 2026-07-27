@@ -46,3 +46,9 @@ scripts/.upload-tracking.json
 
 # CloudKit spike local token override
 spikes/cloudkit-js/config.local.js
+
+# Apple private keys. A .p8 downloads exactly once, is unrecoverable, and is a signing credential --
+# MapKit, APNs, App Store Connect all use this shape. Nothing here should ever hold one; this line exists
+# so that a key parked in the repo "for a second" during setup cannot be committed by accident.
+*.p8
+AuthKey_*
