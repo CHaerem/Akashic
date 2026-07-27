@@ -5,7 +5,7 @@
 
 # Akashic — work ledger
 
-103 tasks · **23 open** (4 agent-doable, 0.9 dev-days · 19 owner-only, 9.1 dev-days) · 80 done · 0 dropped
+103 tasks · **22 open** (4 agent-doable, 0.9 dev-days · 18 owner-only, 8.6 dev-days) · 81 done · 0 dropped
 
 > **`dev-days` are a human-developer estimate, not agent time.** They came from the review
 > that produced these tasks and they are the right unit for deciding whether something is
@@ -33,11 +33,11 @@ node scripts/workplan.mjs next
 
 > Retire Supabase, Cloudflare and R2. Repo-side removal can happen now; the infrastructure deletions are gated on the archive being duplicated and on the Pages cutover. LEG-01 is independent of every gate and should happen today.
 
-9 open of 13 · 3.6 d remaining
+8 open of 13 · 3.1 d remaining
 
 | | Task | Days | Who | Deps | Finish line |
 |---|---|---|---|---|---|
-| ` ` | `LEG-01` **Delete the akashic-media Cloudflare Worker** | 0.5 | owner | — | The endpoint returns no response, and SUPABASE_SERVICE_KEY no longer exists in any Worker env. |
+| `x` | `LEG-01` **Delete the akashic-media Cloudflare Worker** | 0.5 | owner | — | The endpoint returns no response, and SUPABASE_SERVICE_KEY no longer exists in any Worker env. |
 | ` ` | `LEG-02` **Copy the 16 GiB export archive to a second physical medium** | 0.5 | owner | — | 8147 objects and the six table sha256s verify on a second volume that is not the boot disk. |
 | ` ` | `LEG-03` **Decide the fate of the 5080 un-catalogued R2 objects (12.21 GB)** | 0.5 | owner | `LEG-02` | A written decision exists: keep in the archive forever, or discard deliberately. |
 | ` ` | `LEG-04` **Run the T5.1 delta check against live Supabase** | 0.5 | owner | `LEG-02` | Row counts and max(updated_at) per table match manifest.json, or the delta is exported and merged. |
