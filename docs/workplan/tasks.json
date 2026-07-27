@@ -1773,7 +1773,7 @@
       "id": "LEG-12",
       "track": "LEGACY",
       "title": "Delete workers/ from the repo",
-      "status": "TODO",
+      "status": "DONE",
       "effort": 0.25,
       "deps": [
         "LEG-01",
@@ -1784,14 +1784,21 @@
       "why": "Held until the Worker itself is deleted (LEG-01) so the source of the deployed thing outlives it rather than the other way round. 12 files including the 779-line index.ts holding the HS256 bypass, plus its own package.json, tsconfig and vitest config — note vite.config.js:175 currently pulls its 16 tests into the root vitest run, so the web test count drops by 16 when this lands.",
       "files": [
         "workers/**",
-        "vite.config.js"
+        "vite.config.js",
+        "ARCHITECTURE.md",
+        "apple/Akashic/Intents/JourneyQuery.swift"
       ],
       "serialise_with": "QUA-02 also edits vite.config.js",
       "verify": [
         "test ! -d workers",
         "npx vitest --run"
       ],
-      "resume": "Ready to execute the moment its owner dependency clears; no agent work needed beforehand. All other agent tasks in the ledger are DONE as of 2026-07-26."
+      "claim": {
+        "agent": "opus5",
+        "branch": "claude/remote-control-project-review-9462c1",
+        "at": "2026-07-27"
+      },
+      "evidence": "workers/ deleted (10 tracked files including the 779-line index.ts that held the HS256 bypass). Web suite 452 -> 436 tests, exactly the 16 the worker contributed, as the task predicted; typecheck clean, lint 0 errors, build ok, and dist/sw.js no longer names the worker. Native 804 unit tests still pass with 0 warnings. Beyond workers/ I removed the now-dead Workbox runtimeCaching rule in vite.config.js (a CacheFirst rule against a deleted origin only serves stale entries) and fixed two references the deletion orphaned: JourneyQuery.swift cited workers/media-proxy/src/mcp/tools/index.ts as the source of truth for the intent defaults and clamps -- it now says that file is gone, that the Swift side is the only definition, and how to git-log it -- and ARCHITECTURE.md's two Worker rows still said 'pending LEG-01'. Deliberately NOT touched: scripts/export/pullR2Archive.ts, where 'akashic-media' is the R2 BUCKET name and not the worker, and ImportTests.swift's coincidental temp-dir string."
     },
     {
       "id": "LEG-13",

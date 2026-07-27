@@ -36,8 +36,8 @@ database to operate, and no server to run.
 | Database | Supabase PostgreSQL | **Retired from the code.** No source file reaches it. The project is still switched on, read-only, pending deletion (`LEG-04` → `LEG-11`). |
 | Auth | Supabase Auth (Google OAuth) | **Retired from the code** (`T3.4`). Config still exists in the dashboards, pending deletion. |
 | Photo storage | Cloudflare R2 (`akashic-media`) | **Retired from the code.** Bucket still exists with the archived bytes, pending `LEG-03` / `LEG-11`. |
-| Media access proxy | Cloudflare Worker (`workers/media-proxy/`) | **Retired from the code** (`LEG-05` removed the last source reference). Worker still deployed, pending `LEG-01`. |
-| Assistant API | MCP endpoint on the same Worker | **Retired.** Replaced 1:1 by App Intents (D8). Dies with the Worker. |
+| Media access proxy | Cloudflare Worker | **Gone.** Deployment deleted (`LEG-01`, verified by Cloudflare edge error 1042); source removed from the repo (`LEG-12`). |
+| Assistant API | MCP endpoint on the same Worker | **Gone with the Worker.** Replaced 1:1 by App Intents (D8); `Intents/JourneyQuery.swift` now holds the only copy of the tool defaults and clamps. |
 
 The distinction in that second table is the whole point of it: **nothing in the shipped code
 talks to any of those services any more, but several of them are still running and still

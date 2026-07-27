@@ -64,21 +64,10 @@ export default defineConfig({
 				navigateFallback: "/index.html",
 				navigateFallbackDenylist: [/^\/api/, /^\/share-target/],
 				runtimeCaching: [
-					// R2 media - cache photos for offline viewing
-					{
-						urlPattern: /^https:\/\/akashic-media\..*\.workers\.dev\//,
-						handler: "CacheFirst",
-						options: {
-							cacheName: "r2-media",
-							expiration: {
-								maxEntries: 200,
-								maxAgeSeconds: 60 * 60 * 24 * 30, // 30 days
-							},
-							cacheableResponse: {
-								statuses: [0, 200],
-							},
-						},
-					},
+					// LEG-12: the R2-media rule that used to lead this list is gone with the Cloudflare
+					// Worker it cached (`akashic-media.*.workers.dev`, deleted in LEG-01). It had become
+					// dead config — the pattern can no longer match anything, and a `CacheFirst` rule
+					// against a dead origin only serves stale entries until they expire.
 					// Mapbox Style API
 					{
 						urlPattern: /^https:\/\/api\.mapbox\.com\/styles\//,

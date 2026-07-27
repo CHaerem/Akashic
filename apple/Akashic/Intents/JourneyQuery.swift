@@ -21,8 +21,11 @@ enum JourneyResolver {
 
 /// Pure, testable implementation of the 5 MCP tools over an in-memory `[Journey]` snapshot.
 ///
-/// Defaults, clamps and error messages match `workers/media-proxy/src/mcp/tools/index.ts`
-/// exactly. There is no membership/access layer locally — every journey in the store is
+/// Defaults, clamps and error messages were ported 1:1 from the Cloudflare Worker's MCP tools
+/// (`workers/media-proxy/src/mcp/tools/index.ts`). **That file no longer exists** — the Worker was
+/// deleted in LEG-01 and its source in LEG-12, so THIS is now the only definition of those values.
+/// Reach for `git log -- workers/media-proxy/src/mcp/tools/index.ts` if you ever need to see what
+/// they were ported from. There is no membership/access layer locally — every journey in the store is
 /// accessible (CloudKit's private DB is the equivalent scope later), so the MCP's
 /// "Access denied" branch collapses into "Journey not found" when an id/slug does not resolve.
 enum JourneyQuery {
