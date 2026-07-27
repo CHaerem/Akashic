@@ -33,7 +33,7 @@ node scripts/workplan.mjs next
 
 | Task | Agent | Branch | Stopped at |
 |---|---|---|---|
-| `LEG-09` Execute the GitHub Pages + DNS cutover (T4.2, T4.3) | opus5 | `claude/remote-control-project-review-9462c1` | — |
+| `LEG-09` Execute the GitHub Pages + DNS cutover (T4.2, T4.3) | opus5 | `claude/remote-control-project-review-9462c1` | Zone is built and authoritatively verified against ns1.hyp.net; only delegation propagation remains (up to 4h + 24h per Domeneshop). Nothing further to do -- close it when dig +short akashic.no NS shows hyp.net. |
 
 ## LEGACY
 
