@@ -276,7 +276,7 @@
       "title": "Delete deploy.yml, then revoke the Cloudflare and Supabase secrets",
       "status": "TODO",
       "effort": 0.25,
-      "done_when": "No workflow references Cloudflare, and CI is green without those secrets.",
+      "done_when": "The Supabase secrets are pruned immediately; deploy.yml is deleted and the Cloudflare secrets revoked only once the stability month has run, after which no workflow references Cloudflare and CI is green without those secrets.",
       "deps": [
         "LEG-09"
       ],
@@ -284,7 +284,7 @@
         ".github/workflows/deploy.yml"
       ],
       "serialise_with": "QUA-01, QUA-03, QUA-04 also edit .github/workflows/**",
-      "why": "Order matters: revoking CLOUDFLARE_API_TOKEN while deploy.yml still runs turns CI permanently red. It will not take the site down — Pages keeps serving the last deploy — but it makes every push look broken.",
+      "why": "Order matters: revoking CLOUDFLARE_API_TOKEN while deploy.yml still runs turns CI permanently red. It will not take the site down -- Pages keeps serving the last deploy -- but it makes every push look broken.\n\nSEQUENCING CORRECTION (2026-07-27): this task is gated on LEG-09 alone, but docs/github-pages-cutover.md puts deploy.yml's deletion in Phase 5, after the one-month stability gate, and it is right. deploy.yml is what keeps the Cloudflare site FRESH, and the doc's rollback plan is 're-point DNS back to Cloudflare' -- which only works while that site is still current. Delete deploy.yml the day after the cutover and the rollback target goes stale from that moment on, silently, exactly when you would most want it.\n\nSo split the work by risk rather than doing it all at LEG-09:\n  * SAFE IMMEDIATELY: prune VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY. No workflow references either (grep -rn SUPABASE .github/ is empty) and the web client is CloudKit-only, so nothing can break.\n  * HOLD FOR THE STABILITY MONTH: deleting deploy.yml and revoking CLOUDFLARE_API_TOKEN / CLOUDFLARE_ACCOUNT_ID. Both are what make a DNS revert actually useful.",
       "verify": [
         "grep -rln cloudflare .github/workflows/  # expect no hits",
         "gh run list --branch main --limit 5"

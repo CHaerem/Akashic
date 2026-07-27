@@ -46,7 +46,7 @@ node scripts/workplan.mjs next
 | `x` | `LEG-07` **Gate every native-only web write behind one guard** | 1 | agent | — | No web UI offers a write that silently no-ops; each either disappears or shows a native-only notice. |
 | `x` | `LEG-08` **Remove the hardcoded /Users/cher archive path from shipping code** | 0.25 | agent | — | No absolute developer path appears in any non-test Swift file. |
 | ` ` | `LEG-09` **Execute the GitHub Pages + DNS cutover (T4.2, T4.3)** | 0.5 | owner | `SHIP-10A` | akashic.no serves from GitHub Pages, privacy/terms/support resolve, and the AASA file is reachable. |
-| ` ` | `LEG-10` **Delete deploy.yml, then revoke the Cloudflare and Supabase secrets** | 0.25 | agent | `LEG-09` | No workflow references Cloudflare, and CI is green without those secrets. |
+| ` ` | `LEG-10` **Delete deploy.yml, then revoke the Cloudflare and Supabase secrets** | 0.25 | agent | `LEG-09` | The Supabase secrets are pruned immediately; deploy.yml is deleted and the Cloudflare secrets revoked only once the stability month has run, after which no workflow references Cloudflare and CI is green without those secrets. |
 | ` ` | `LEG-11` **Delete the gated infrastructure: Pages project, R2 bucket, DNS zone, Supabase, OAuth** | 0.5 | owner | `LEG-03` `LEG-04` `LEG-09` `LEG-10` | All five are gone from their dashboards and the archive is verified on two media. |
 | `x` | `LEG-12` **Delete workers/ from the repo** | 0.25 | agent | `LEG-01` `LEG-05` | workers/ is gone and no workflow or test references it. |
 | ` ` | `LEG-13` **Delete supabase/** | 0.1 | agent | `LEG-04` | supabase/ is gone from the repo. |
