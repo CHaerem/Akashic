@@ -277,7 +277,8 @@
         "2026-07-27 IF STILL ABSENT ~24 h AFTER THE RE-ADD, it is genuinely abnormal and the escalation evidence is unusually strong: pages/health green on both legs while https_certificate is absent entirely. The only case with a confirmed resolution was a staff member manually re-triggering provisioning, so that is the remedy with a track record. On a free personal account there may be no Pages support category, in which case a Community Discussion under Pages with the same API output is the route.",
         "2026-07-27 RESOLVED, and by exactly the action the research predicted: loading Settings -> Pages in a browser and changing nothing. The API health endpoint had been polled nine times with no effect; the browser is a different code path, and GitHub staff had said as much. Roughly 25 minutes from that page load to an issued certificate. So the sequence that worked was: get the DNS provably right, remove and re-add the domain ONCE, wait, then open the settings page in a browser. Do not repeat the remove/re-add -- it cancels and restarts provisioning.",
         "2026-07-27 The owner enabling Enforce HTTPS was safe, and it is worth recording why rather than leaving it as luck: GitHub greys that control out until a certificate exists, so being ABLE to enable it was itself evidence the certificate had landed. Forcing https_enforced through the API before that point is the action that would have turned a cosmetic problem into a real outage, 301-ing every visitor to a certificate that fails validation.",
-        "2026-07-27 Two live defects found in the first minute of looking at the working site, both filed: QUA-43 (the globe hint tells visitors to click a marker when zero journeys are published, and is overlapped by the \"Made with Akashic\" chip) and QUA-44 (four debug console.log calls run on every visit). Neither is a cutover problem; both were hidden behind the site not being reachable."
+        "2026-07-27 Two live defects found in the first minute of looking at the working site, both filed: QUA-43 (the globe hint tells visitors to click a marker when zero journeys are published, and is overlapped by the \"Made with Akashic\" chip) and QUA-44 (four debug console.log calls run on every visit). Neither is a cutover problem; both were hidden behind the site not being reachable.",
+        "2026-07-27 CORRECTION TO THIS TASK'S OWN COMMIT (288f6fd): its message states QUA-43 and QUA-44 were \"both filed\". They were not. The shell command meant to create them combined `node qua43.mjs` with a second inline script, and zsh failed to PARSE the whole compound command before executing any of it (`unmatched \"`), so the ledger write never ran — and the confirmation line it would have printed never appeared in the output I had already read. I then asserted the ledger state in a commit message without re-reading the ledger. Both tasks are now filed for real. The lesson is narrow and worth keeping: `npm run workplan:check` cannot catch a task that was never added, so a ledger claim in a commit message has to be verified by reading the ledger, exactly like any other measurement."
       ],
       "evidence": "Certificate issued 2026-07-27 13:05:47Z: openssl s_client reports subject=CN=akashic.no, issuer Let's Encrypt YR1, valid to 2026-10-25. Pages API: https_certificate.state=approved, domains=[akashic.no, www.akashic.no], https_enforced=true. curl with full validation: https://akashic.no 200 with ssl_verify_result=0; www 301 to the apex; http 301 to https. Served content verified ours rather than a cache: server=GitHub.com, x-served-by=cache-osl6528-OSL, and the E2E fixture signals are absent from the live bundle. Four CloudKit production requests complete from the real origin with no console errors."
     },
@@ -2578,12 +2579,17 @@
         "public/geo/**"
       ],
       "track": "QUALITY",
-      "status": "TODO",
+      "status": "WIP",
       "verify": [
         "npx vitest --run",
         "npm run typecheck",
         "npm run build"
-      ]
+      ],
+      "claim": {
+        "agent": "opus5",
+        "branch": "claude/remote-control-project-review-9462c1",
+        "at": "2026-07-27"
+      }
     },
     {
       "id": "MAP-03",
@@ -2872,11 +2878,16 @@
         "src/lib/journeys/transforms.ts"
       ],
       "track": "QUALITY",
-      "status": "TODO",
+      "status": "WIP",
       "verify": [
         "npx vitest --run",
         "npm run typecheck"
-      ]
+      ],
+      "claim": {
+        "agent": "opus5",
+        "branch": "claude/remote-control-project-review-9462c1",
+        "at": "2026-07-27"
+      }
     },
     {
       "id": "QUA-47",
@@ -2951,10 +2962,15 @@
         "src/lib/map/mapkit/**"
       ],
       "track": "QUALITY",
-      "status": "TODO",
+      "status": "WIP",
       "verify": [
         "npx vitest --run src/lib/map/mapkit/"
-      ]
+      ],
+      "claim": {
+        "agent": "opus5",
+        "branch": "claude/remote-control-project-review-9462c1",
+        "at": "2026-07-27"
+      }
     },
     {
       "id": "QUA-51",
@@ -2971,11 +2987,63 @@
         "e2e/utils/test-helpers.ts"
       ],
       "track": "QUALITY",
-      "status": "TODO",
+      "status": "WIP",
       "verify": [
         "npx vitest --run",
         "npm run typecheck",
         "npm run lint"
+      ],
+      "claim": {
+        "agent": "opus5",
+        "branch": "claude/remote-control-project-review-9462c1",
+        "at": "2026-07-27"
+      }
+    },
+    {
+      "id": "QUA-43",
+      "effort": 0.2,
+      "priority": 18,
+      "deps": [],
+      "title": "The live showcase told first-time visitors to click a marker that does not exist",
+      "done_when": "The globe hint appears only when there is at least one marker to click, and it is not overlapped by the \"Made with Akashic\" chip at any viewport width.",
+      "why": "Found on the LIVE production site 2026-07-27, minutes after HTTPS came up. Two defects in the same\ncorner, and the first is the one that mattered.\n\n1. THE HINT WAS NOT GATED ON THERE BEING ANY MARKERS. AkashicApp.tsx:313 rendered it on\n   `!selectedTrek && view === 'globe'` alone. The production mirror held zero published journeys, so\n   akashic.no showed an empty rotating globe captioned \"CLICK A MARKER TO EXPLORE\" — the first thing\n   every visitor to a paid product saw, instructing them to do something impossible.\n\n2. IT WAS OVERLAPPED BY THE \"MADE WITH AKASHIC\" CHIP on desktop. Measured in the browser at\n   1280x720: a bare <div> at right: 24, bottom: 24 with no z-index, rect (1080, 681, 176x15);\n   `document.elementFromPoint` at its right edge returned the chip's <a>. The line read as \"CLICK\".\n\nThe gate now lives in the component, reading useJourneys itself, because whether there is anything to\nclick is the component's own business — the call site only ever knew navigation state. Centred on\nevery viewport, which also collapsed a mobile/desktop divergence that existed for no reason.",
+      "files": [
+        "src/components/home/GlobeHint.tsx"
+      ],
+      "track": "QUALITY",
+      "status": "DONE",
+      "evidence": "Fixed in b6764da. src/components/home/GlobeHint.test.tsx — 7 tests, covering the zero-journey case, the loading case, both copy variants, the centring on both viewports and pointer-events. The original component could not have been tested at all: it took only `isMobile` and always rendered.",
+      "verify": [
+        "npx vitest --run src/components/home/GlobeHint.test.tsx"
+      ],
+      "notes": [
+        "2026-07-27 The gate deliberately does NOT distinguish \"nothing published\" from \"the CloudKit fetch failed\" — the adapter returns an empty result on error, so silence hides both. Surfacing a failed load is a separate concern and does not belong in a hint; recorded in the component."
+      ]
+    },
+    {
+      "id": "QUA-44",
+      "effort": 0.2,
+      "priority": 19,
+      "deps": [],
+      "title": "Debug console.log ships to production and runs on every visit",
+      "done_when": "A production build emits no debug console output on load, and the mechanism that ensures it is a build setting rather than a promise to remember.",
+      "why": "MEASURED on the LIVE site 2026-07-27: opening https://akashic.no prints sixteen lines of\n\"[MapboxGlobe camera effect] Triggered:\", \"Map not ready\" and \"Calling flyToGlobe\" before the globe\nhas settled. Four console.log calls produce it, at MapboxGlobe.tsx:298, 306, 311 and 314.\nvite.config.js configures no console stripping.\n\nTwo reasons this is a task and not a quick delete. It is a paid product whose console is visible to\nanyone who opens the inspector, and camera-state chatter reads as an unfinished build. And deleting\nfour lines fixes today only — the mechanism has to be a build setting so the fifth one somebody adds\nwhile debugging cannot ship. Keep console.warn/error, which carry real diagnostics: the CloudKit\nadapter's error path is how QUA-40 was diagnosed at all.\n\nONE MEASUREMENT TRAP, recorded because it nearly produced the opposite conclusion: grepping the\nserved assets/index-*.js for \"console.log\" returns ZERO, which reads as \"already stripped\". It is\nnot — the code is in a different chunk and the logs demonstrably execute. A grep of one bundle file\nproves nothing about chunked output.",
+      "files": [
+        "vite.config.js",
+        "src/components/MapboxGlobe.tsx"
+      ],
+      "track": "QUALITY",
+      "status": "WIP",
+      "claim": {
+        "agent": "opus5",
+        "branch": "claude/remote-control-project-review-9462c1",
+        "at": "2026-07-27"
+      },
+      "resume": "in flight in the QUA-44/46/50/51 cleanup workflow",
+      "verify": [
+        "npm run build",
+        "grep -rl \"console\\.log\" dist/assets/ || echo \"none\"",
+        "npx vitest --run"
       ]
     }
   ]
