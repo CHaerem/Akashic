@@ -199,6 +199,20 @@ right: fix this file in the same commit.
   condition. `.sufficientElementDescription` and `.trait` report **zero**, which is QUA-07/QUA-24's
   labelling work verified by navigation rather than asserted. Exact totals drift — see the
   re-measure command in that file's triage comment, and prefer it to any number written down.
+- **A trailing slash in CloudKit's Allowed Origins silently blocks every real browser.** Console stores
+  the field verbatim — `akashic.no/` is kept as `https://akashic.no/`, and an HTTP `Origin` header never
+  carries a path, so browsers send `https://akashic.no` and get `401 AUTHENTICATION_FAILED`. Measured
+  on the production token: `Origin: https://akashic.no` → 401, `Origin: https://akashic.no/` → 200. The
+  failure mode is nasty because a `curl` written to match the stored value passes, so the token looks
+  fine from the terminal and is broken for every visitor.
+  Two corollaries that cost me an hour of wrong conclusions:
+  * **A request with NO `Origin` header is also rejected** by an origin-restricted token. So never
+    compare two tokens with server-side curl unless you know both origin policies — the old development
+    token is on "Any Domain" and passes without an `Origin`, which made a like-for-like curl comparison
+    look like "the new token is invalid for this container" when it was valid and merely origin-locked.
+  * The token IS environment-scoped (dev token: 200 on development, 401 on production), so a separate
+    Production token is genuinely required. Test it with an explicit `Origin` header, from the exact
+    scheme+host a browser would send.
 - **No Vision ML request works in the simulator, so the whole curation feature has never run in CI —
   and it fails SILENTLY.** Measured on iOS 26.5: `VNGenerateImageFeaturePrintRequest`,
   `VNClassifyImageRequest` and `VNCalculateImageAestheticsScoresRequest` all return *"Failed to create
