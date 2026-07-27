@@ -8,7 +8,7 @@
  */
 
 import { useState, useEffect, useCallback, useRef, useMemo, memo } from 'react';
-import type * as mapboxgl from 'mapbox-gl';
+import type { MapBounds } from '../../lib/map/types';
 import type { TrekData, Photo, Camp, MediaType } from '../../types/trek';
 import { useMedia } from '../../hooks/useMedia';
 import { usePhotoDay } from '../../hooks/usePhotoDay';
@@ -22,7 +22,6 @@ type DayFilter = 'all' | 'unassigned' | number; // 'all', 'unassigned', or a day
 type MediaTypeFilter = 'all' | MediaType;
 type LocationFilter = 'any' | 'geotagged';
 type SortOrder = 'journey' | 'captured';
-type MapBounds = mapboxgl.LngLatBoundsLike | null;
 
 // Pagination settings
 const PHOTOS_PER_PAGE = 24; // Show 24 photos at a time (6 rows of 4)
@@ -153,7 +152,7 @@ interface PhotosTabProps {
      */
     editMode?: boolean;
     onViewPhotoOnMap?: (photo: Photo) => void;
-    mapViewportBounds?: MapBounds;
+    mapViewportBounds?: MapBounds | null;
     mapViewportPhotoIds?: string[] | null;
 }
 
@@ -237,13 +236,10 @@ export function PhotosTab({ trekData, editMode = false, onViewPhotoOnMap, mapVie
             return isLngInRange(west, east) && lat >= south && lat <= north;
         }
 
-        const boundsObj = bounds as mapboxgl.LngLatBounds;
-        if (typeof boundsObj.getWest === 'function') {
-            return isLngInRange(boundsObj.getWest(), boundsObj.getEast())
-                && lat >= boundsObj.getSouth()
-                && lat <= boundsObj.getNorth();
-        }
-
+        // MAP-01: a `LngLatBounds`-object branch stood here, calling getWest()/getEast()/getSouth()/
+        // getNorth(). It was unreachable: the only producer is MapboxGlobe's `bounds.toArray()`, which
+        // always yields the nested tuple handled above, and the tests already passed plain arrays. Naming
+        // the real contract (`MapBounds`) made the cast impossible and the dead branch went with it.
         return false;
     }, []);
 

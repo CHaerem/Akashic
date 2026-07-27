@@ -5,19 +5,19 @@
 
 # Akashic — work ledger
 
-116 tasks · **27 open** (6 agent-doable, 6.9 dev-days · 21 owner-only, 10 dev-days) · 89 done · 0 dropped
+116 tasks · **26 open** (5 agent-doable, 5.9 dev-days · 21 owner-only, 10 dev-days) · 90 done · 0 dropped
 
 > **`dev-days` are a human-developer estimate, not agent time.** They came from the review
 > that produced these tasks and they are the right unit for deciding whether something is
 > worth doing — they are the wrong unit for predicting how long an agent will take, and
 > summing them as "work remaining" overstates it substantially.
 >
-> Measured so far: **87 agent tasks estimated at 62.3 dev-days**,
+> Measured so far: **88 agent tasks estimated at 63.3 dev-days**,
 > closed in roughly one working afternoon across up to three parallel tracks.
 >
 > But that compression is **unmeasured for the large items**: of the tasks closed so far,
 > 7 were 2 dev-days or more. 5 of the
-> 6.9 remaining dev-days sit in 2 such tasks —
+> 5.9 remaining dev-days sit in 2 such tasks —
 > localisation, Swift 6 strict concurrency, a UI test target, the PDF book. Those involve
 > design judgement and broad-blast-radius refactors rather than localised edits, so do not
 > assume the same ratio holds. The cheap band is nearly exhausted:
@@ -146,7 +146,7 @@ node scripts/workplan.mjs next
 
 > Tests, types, CI, localisation, accessibility. Localisation and accessibility are in v1.0 by decision.
 
-7 open of 45 · 8.6 d remaining
+6 open of 45 · 7.6 d remaining
 
 | | Task | Days | Who | Deps | Finish line |
 |---|---|---|---|---|---|
@@ -190,7 +190,7 @@ node scripts/workplan.mjs next
 | ` ` | `QUA-38` **Verify the Vision features on a real device — they cannot run in any simulator** | 0.5 | owner | — | Photo curation (hero pick, best-of, duplicate grouping) and DIFF-05 subject labels are confirmed working on a physical device, with a note recording what was seen. |
 | `x` | `QUA-39` **Bump the GitHub Actions that still target Node 20** | 0.1 | agent | — | Every action the workflows reference DIRECTLY targets Node 24. The residual annotation from inside upload-pages-artifact is upstream's and is out of scope -- see why. |
 | `x` | `ARCH-01` **DECISION: one map layer, Apple MapKit, swapped across both surfaces together** | 0 | agent | — | Recorded in ARCHITECTURE.md. |
-| ` ` | `MAP-01` **A map interface narrow enough that the next vendor swap is one adapter** | 1 | agent | — | Web components speak only to a vendor-neutral map interface; no Mapbox or MapKit type appears outside its adapter. |
+| `x` | `MAP-01` **A map interface narrow enough that the next vendor swap is one adapter** | 1 | agent | — | Web components speak only to a vendor-neutral map interface; no Mapbox or MapKit type appears outside its adapter. |
 | ` ` | `MAP-02` **Draw the landing globe ourselves — MapKit JS provably cannot** | 2 | agent | `MAP-01` | The landing view is a rotating sphere with a pin per published journey, using no map service and no token. |
 | ` ` | `MAP-03` **MapKit JS behind the adapter for the journey view** | 3 | agent | `MAP-01` | Selecting a journey shows its route and days on Apple satellite imagery, with Apple's mandatory attribution correctly placed. |
 | ` ` | `MAP-04` **MapKit JS token: mint it, restrict it, and make its expiry loud** | 1.5 | owner | `MAP-03` | The deployed page authenticates to MapKit, and a build fails or files an issue when the token is within 14 days of expiring. |

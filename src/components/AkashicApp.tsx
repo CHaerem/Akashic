@@ -1,5 +1,4 @@
 import { useCallback, useState, useEffect, useMemo, useRef, useDeferredValue } from 'react';
-import 'mapbox-gl/dist/mapbox-gl.css';
 import { useTrekData } from '../hooks/useTrekData';
 import { useIsMobile } from '../hooks/useMediaQuery';
 import { useMedia } from '../hooks/useMedia';
@@ -9,7 +8,7 @@ import { fetchPhotos, getJourneyIdBySlug, updatePhoto } from '../lib/journeys';
 import { hasPendingShares } from '../lib/shareTarget';
 import { setSheetCoversChrome } from '../lib/sheetOverlay';
 import type { Photo, Camp } from '../types/trek';
-import type * as mapboxgl from 'mapbox-gl';
+import type { MapBounds } from '../lib/map/types';
 import { MapboxGlobe } from './MapboxGlobe';
 import { OfflineIndicator } from './OfflineIndicator';
 import { GlobeHint } from './home/GlobeHint';
@@ -29,7 +28,7 @@ import { ErrorBoundary } from './common/ErrorBoundary';
 export default function AkashicApp() {
     const isMobile = useIsMobile();
     const [photos, setPhotos] = useState<Photo[]>([]);
-    const [mapViewportBounds, setMapViewportBounds] = useState<mapboxgl.LngLatBoundsLike | null>(null);
+    const [mapViewportBounds, setMapViewportBounds] = useState<MapBounds | null>(null);
     const [mapViewportPhotoIds, setMapViewportPhotoIds] = useState<string[] | null>(null);
     // Defer photo updates to prevent re-renders during camera animations
     const deferredPhotos = useDeferredValue(photos);

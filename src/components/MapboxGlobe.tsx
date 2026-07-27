@@ -3,12 +3,13 @@
  */
 
 import { useRef, useEffect, useCallback, useState } from 'react';
-import type * as mapboxgl from 'mapbox-gl';
+import 'mapbox-gl/dist/mapbox-gl.css';   // MAP-01: moved here from AkashicApp — vendor CSS lives with the vendor adapter
+import type { MapSurfaceProps, MapBounds } from '../lib/map/types';
 import { useMapbox } from '../hooks/useMapbox';
 import { useJourneys } from '../contexts/JourneysContext';
 import { MapErrorFallback } from './common/ErrorBoundary';
 import { colors, radius, glassFloating, glassButton } from '../styles/liquidGlass';
-import type { TrekConfig, Camp, ViewMode, Photo, PointOfInterest } from '../types/trek';
+import type { Camp, Photo, PointOfInterest } from '../types/trek';
 
 // POI category display info
 const POI_CATEGORY_INFO: Record<string, { icon: string; label: string; color: string }> = {
@@ -76,22 +77,11 @@ declare global {
     }
 }
 
-interface MapboxGlobeProps {
-    selectedTrek: TrekConfig | null;
-    selectedCamp: Camp | null;
-    onSelectTrek: (trek: TrekConfig) => void;
-    view: ViewMode;
-    photos?: Photo[];
-    onPhotoClick?: (photo: Photo, index: number) => void;
-    flyToPhotoRef?: React.MutableRefObject<((photo: Photo) => void) | null>;
-    recenterRef?: React.MutableRefObject<(() => void) | null>;
-    onCampSelect?: (camp: Camp) => void;
-    getMediaUrl?: (path: string) => string;
-    onViewportChange?: (bounds: mapboxgl.LngLatBoundsLike) => void;
-    onViewportVisiblePhotoIdsChange?: (photoIds: string[]) => void;
-    editMode?: boolean;
-    onPhotoLocationUpdate?: (photoId: string, coordinates: [number, number]) => void;
-}
+/**
+ * MAP-01: the props are the shared `MapSurfaceProps` contract, not a Mapbox-shaped one. A MapKit
+ * component implementing the same interface can replace this file without touching its callers.
+ */
+type MapboxGlobeProps = MapSurfaceProps;
 
 // Generate realistic starfield - seeded positions for consistency
 // Optimized for mobile with fewer stars while maintaining visual quality
@@ -240,7 +230,7 @@ export function MapboxGlobe({ selectedTrek, selectedCamp, onSelectTrek, view, ph
                 // event re-runs this with real bounds.
                 const bounds = mapInstance.getBounds();
                 if (bounds) {
-                    onViewportChange(bounds.toArray());
+                    onViewportChange(bounds.toArray() as MapBounds);
                 }
             }
 

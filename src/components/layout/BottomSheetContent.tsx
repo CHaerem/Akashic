@@ -14,7 +14,7 @@ import { useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { colors, radius } from '../../styles/liquidGlass';
 import type { TrekConfig, TrekData, Camp, ExtendedStats, ElevationProfile, Photo, ViewMode } from '../../types/trek';
-import type * as mapboxgl from 'mapbox-gl';
+import type { MapBounds } from '../../lib/map/types';
 import type { ContentMode } from '../../hooks/useTrekData';
 import { StatsTab } from '../trek/StatsTab';
 import { OverviewTab } from '../trek/OverviewTab';
@@ -51,7 +51,7 @@ interface BottomSheetContentProps {
     onJourneySaved?: () => void;
     editMode?: boolean;
     isMobile?: boolean;
-    mapViewportBounds?: mapboxgl.LngLatBoundsLike | null;
+    mapViewportBounds?: MapBounds | null;
     mapViewportPhotoIds?: string[] | null;
 }
 
@@ -245,7 +245,7 @@ interface TrekViewContentProps {
     onOpenDayGallery: () => void;
     editMode: boolean;
     isMobile: boolean;
-    mapViewportBounds?: mapboxgl.LngLatBoundsLike | null;
+    mapViewportBounds?: MapBounds | null;
     mapViewportPhotoIds?: string[] | null;
 }
 

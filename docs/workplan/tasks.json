@@ -2517,13 +2517,19 @@
         "src/components/trek/PhotosTab.tsx"
       ],
       "track": "QUALITY",
-      "status": "TODO",
+      "status": "DONE",
       "verify": [
         "npx vitest --run",
         "npm run typecheck",
         "npm run build"
       ],
-      "deps": []
+      "deps": [],
+      "claim": {
+        "agent": "opus5",
+        "branch": "claude/remote-control-project-review-9462c1",
+        "at": "2026-07-27"
+      },
+      "evidence": "Vendor-neutral map contract in src/lib/map/types.ts. No file outside the adapter names a map vendor, enforced by src/lib/map/boundary.test.ts -- and that guard was verified to FAIL by injecting an import into OfflineIndicator.tsx, which it caught with file and line, then went green again on revert. 417 web tests (414 + 3 boundary), typecheck clean, lint 0 errors, build ok. Globe verified rendering in the browser: satellite, atmosphere, starfield and correctly-styled glass controls, so the vendor CSS loads from its new home. THE LEAK WAS ONE TYPE, not 2786 lines: MapboxGlobeProps and UseMapboxReturn were already domain-typed (flyToTrek(trek, camp), updatePhotoMarkers(photos)), and the only vendor type crossing the boundary was mapboxgl.LngLatBoundsLike, threaded through four files to tell the photo list which part of the map is visible. That type was also WIDER THAN THE TRUTH -- the single producer calls bounds.toArray() so only the nested tuple is ever sent, while PhotosTab carried an unreachable LngLatBounds branch (getWest/getEast/getSouth/getNorth) and the tests already passed plain arrays. Naming the real contract deleted the dead branch instead of porting it. Moving 'mapbox-gl/dist/mapbox-gl.css' from AkashicApp into the adapter is provably a no-op on output: built CSS is byte-identical before and after, same content hashes, 133,933 bytes both ways."
     },
     {
       "id": "MAP-02",
