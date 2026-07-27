@@ -37,8 +37,8 @@
       "detail": "About three weeks minimum: at least 7 of 10 households creating a journey unaided and 5 finishing and handing one over. The largest calendar item and nothing shortens it. SHIP-17."
     },
     {
-      "name": "One month of stable native use before deleting infrastructure",
-      "detail": "Earliest 2026-08-24 for the native-app clock, and later for hosting since the stable-on-Pages clock cannot start until the cutover lands. Does not apply to LEG-01: nothing reads the Worker."
+      "name": "One month before deleting DATA infrastructure (hosting rollback waived)",
+      "detail": "TWO CLOCKS, and the owner waived one on 2026-07-27.\n  * HOSTING clock — WAIVED. It existed only to keep a DNS revert to Cloudflare useful. The owner does not want a rollback path, so the Cloudflare Pages project, deploy.yml and the Cloudflare tokens go as soon as the cutover is verified. Worst case is akashic.no down for a while and a re-deploy to Pages; no data is at stake.\n  * DATA clock — STANDS, earliest 2026-08-24. This one is not about rollback convenience: R2 holds the 16 GiB / 8147-object archive and Supabase the source rows, and its real gate is LEG-02 (a verified second physical medium), not the calendar. Deleting either before LEG-02 passes is irreversible loss of the family's photographs. Once LEG-02 and LEG-03/LEG-04 are done, whether to also waive the calendar month is the owner's call.\n  Does not apply to LEG-01: nothing reads the Worker."
     },
     {
       "name": "App Review",
@@ -276,7 +276,7 @@
       "title": "Delete deploy.yml, then revoke the Cloudflare and Supabase secrets",
       "status": "TODO",
       "effort": 0.25,
-      "done_when": "The Supabase secrets are pruned immediately; deploy.yml is deleted and the Cloudflare secrets revoked only once the stability month has run, after which no workflow references Cloudflare and CI is green without those secrets.",
+      "done_when": "No workflow references Cloudflare or Supabase, the four secrets are revoked, and CI is green without them.",
       "deps": [
         "LEG-09"
       ],
@@ -284,7 +284,7 @@
         ".github/workflows/deploy.yml"
       ],
       "serialise_with": "QUA-01, QUA-03, QUA-04 also edit .github/workflows/**",
-      "why": "Order matters: revoking CLOUDFLARE_API_TOKEN while deploy.yml still runs turns CI permanently red. It will not take the site down -- Pages keeps serving the last deploy -- but it makes every push look broken.\n\nSEQUENCING CORRECTION (2026-07-27): this task is gated on LEG-09 alone, but docs/github-pages-cutover.md puts deploy.yml's deletion in Phase 5, after the one-month stability gate, and it is right. deploy.yml is what keeps the Cloudflare site FRESH, and the doc's rollback plan is 're-point DNS back to Cloudflare' -- which only works while that site is still current. Delete deploy.yml the day after the cutover and the rollback target goes stale from that moment on, silently, exactly when you would most want it.\n\nSo split the work by risk rather than doing it all at LEG-09:\n  * SAFE IMMEDIATELY: prune VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY. No workflow references either (grep -rn SUPABASE .github/ is empty) and the web client is CloudKit-only, so nothing can break.\n  * HOLD FOR THE STABILITY MONTH: deleting deploy.yml and revoking CLOUDFLARE_API_TOKEN / CLOUDFLARE_ACCOUNT_ID. Both are what make a DNS revert actually useful.",
+      "why": "Order matters: revoking CLOUDFLARE_API_TOKEN while deploy.yml still runs turns CI permanently red. It will not take the site down -- Pages keeps serving the last deploy -- but it makes every push look broken.\n\nThe one-month hold recorded here on 2026-07-27 is GONE: the owner waived hosting rollback the same day. That hold existed only because deploy.yml keeps the Cloudflare site fresh for a DNS revert, and there is no revert to keep fresh. So both halves run as soon as the cutover is verified:\n  * prune VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY (nothing references either; grep -rn SUPABASE .github/ is empty),\n  * delete deploy.yml and revoke CLOUDFLARE_API_TOKEN / CLOUDFLARE_ACCOUNT_ID, in that order.",
       "verify": [
         "grep -rln cloudflare .github/workflows/  # expect no hits",
         "gh run list --branch main --limit 5"
@@ -292,21 +292,41 @@
       "resume": "Ready to execute the moment its owner dependency clears; no agent work needed beforehand. All other agent tasks in the ledger are DONE as of 2026-07-26."
     },
     {
-      "id": "LEG-11",
+      "id": "LEG-11A",
       "track": "LEGACY",
-      "title": "Delete the gated infrastructure: Pages project, R2 bucket, DNS zone, Supabase, OAuth",
+      "title": "Delete the Cloudflare Pages project and the DNS zone",
       "status": "TODO",
-      "effort": 0.5,
-      "done_when": "All five are gone from their dashboards and the archive is verified on two media.",
+      "effort": 0.25,
+      "done_when": "The akashic Pages project and the Cloudflare DNS zone are gone from the dashboard, and akashic.no still resolves via GoDaddy to GitHub Pages.",
       "owner": true,
       "deps": [
-        "LEG-03",
-        "LEG-04",
         "LEG-09",
         "LEG-10"
       ],
       "priority": 90,
-      "why": "All four steps irreversible, in this order: Pages project, R2 bucket, DNS zone, Supabase project, then Google OAuth, then the GitHub secrets. Held behind the 1-month stability gate — earliest ~2026-08-24 for the native-app clock, later for hosting since the 'stable on Pages' clock cannot start until LEG-09 lands.",
+      "why": "The hosting half of the old LEG-11, freed from the stability gate because the owner waived hosting rollback on 2026-07-27. Nothing here holds data: the Pages project is a build output that GitHub Pages now reproduces, and the DNS zone is replaced by GoDaddy. Do it AFTER confirming akashic.no resolves to GitHub's addresses through GoDaddy -- deleting the Cloudflare zone while it is still authoritative takes the domain down until NS propagates. Order: confirm resolution, then Pages project, then zone.",
+      "verify": [
+        "Dashboards show no akashic resources",
+        "Archive verified on two physical media (LEG-02)"
+      ],
+      "refs": [
+        "Also confirm whether the R2 bucket has a public r2.dev URL or custom domain — deleting the Worker does not close that route"
+      ]
+    },
+    {
+      "id": "LEG-11B",
+      "track": "LEGACY",
+      "title": "Delete the R2 bucket, Supabase project and Google OAuth config",
+      "status": "TODO",
+      "effort": 0.25,
+      "done_when": "All three are gone from their dashboards AND the archive has been verified on a second physical medium.",
+      "owner": true,
+      "deps": [
+        "LEG-03",
+        "LEG-04"
+      ],
+      "priority": 91,
+      "why": "The data half of the old LEG-11, and the half that is genuinely irreversible. R2 holds the 16 GiB / 8147-object archive and Supabase the rows it was exported from. The real gate is LEG-02 -- a verified second copy on a volume that is not the boot disk -- and LEG-03/LEG-04, which decide the 5080 un-catalogued objects and confirm no Supabase delta was missed. The calendar month is belt and braces on top of that; the second medium is the part that must not be skipped. Waiving hosting rollback does not touch this task.",
       "verify": [
         "Dashboards show no akashic resources",
         "Archive verified on two physical media (LEG-02)"

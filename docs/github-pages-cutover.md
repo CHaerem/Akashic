@@ -63,9 +63,19 @@ Apex `akashic.no` — four **AAAA** records:
 `www.akashic.no` — one **CNAME** record → `chaerem.github.io.` (trailing dot).
 
 > `.no` domains are registered at Norid-accredited registrars (Cloudflare
-> Registrar does not support `.no`), so only **DNS hosting** moves — from
-> Cloudflare DNS back to the registrar's own DNS (e.g. Domeneshop, free with the
-> domain). The domain registration itself does not move.
+> Registrar does not support `.no`), so only **DNS hosting** moves. The domain
+> registration itself does not move.
+>
+> **Destination: GoDaddy** (2026-07-27) — the owner already hosts other domains
+> there. DNS hosting is independent of registration, so this works even though
+> the `.no` registration stays where it is: change the **nameservers at the Norid
+> registrar** to GoDaddy's, then create the records below in GoDaddy.
+>
+> One thing to confirm in GoDaddy's control panel first: some providers only host
+> DNS for domains registered with them. If GoDaddy will not accept an externally
+> registered `.no`, fall back to the registrar's own DNS — any host that supports
+> four apex A records, four apex AAAA, and a `www` CNAME is sufficient. Nothing
+> about GitHub Pages needs a premium DNS feature.
 
 ---
 
@@ -137,14 +147,35 @@ directly** without moving public DNS, using a local hosts override:
 
 ---
 
-## Rollback plan
+## Rollback plan — WAIVED (2026-07-27)
 
-At any point before you're confident, **re-point DNS back to Cloudflare** using
-the values recorded in Stage 2. Because TTL is already low, users return to the
-Cloudflare Pages site within one TTL window (~5 min). `deploy.yml` is still
-present and still deploying `main`, so the Cloudflare site never went stale —
-rollback is purely a DNS revert. If needed, also clear the custom domain in
-Settings → Pages to stop the `github.io` → akashic.no redirect.
+The owner does not want a rollback path, so the plan below is recorded as history rather than as
+something to keep alive. **What that changes:** `deploy.yml` and the Cloudflare secrets no longer wait
+for a stability month (LEG-10), and the Pages project and DNS zone go as soon as the cutover is
+verified (LEG-11A). What it does NOT change is the R2 bucket and the Supabase project (LEG-11B) —
+those hold the only copy of the family archive until LEG-02 verifies a second physical medium, and
+that gate has nothing to do with rollback.
+
+If the cutover misbehaves, the recovery is forward rather than backward: fix the build and re-run
+`deploy-pages.yml`. The site may be down while you do. That is the trade being made deliberately.
+
+<details><summary>The original rollback plan, for the record</summary>
+
+Re-point DNS back to Cloudflare using the values recorded in Stage 2. Because TTL is already low,
+users return to the Cloudflare Pages site within one TTL window (~5 min). `deploy.yml` is still
+present and still deploying `main`, so the Cloudflare site never went stale — rollback is purely a DNS
+revert. If needed, also clear the custom domain in Settings → Pages to stop the `github.io` →
+akashic.no redirect.
+
+</details>
+
+**Still record the Cloudflare DNS values in Stage 2 anyway** — not for rollback, for reconstruction.
+Once the zone is deleted (LEG-11A) anything you forgot to recreate in GoDaddy is gone with it.
+
+Measured 2026-07-27, which makes this cheaper than it sounds: `akashic.no` has **no MX and no TXT
+records at all** (`dig +short akashic.no MX` and `... TXT` both return nothing, and `_dmarc` is empty).
+So the zone carries nothing but the website's A/AAAA/CNAME, there is no mail to break, and the GoDaddy
+zone only needs the records listed above. Re-check before deleting in case something was added since.
 
 ---
 

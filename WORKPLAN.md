@@ -5,7 +5,7 @@
 
 # Akashic — work ledger
 
-104 tasks · **22 open** (3 agent-doable, 0.6 dev-days · 19 owner-only, 8.6 dev-days) · 82 done · 0 dropped
+105 tasks · **23 open** (3 agent-doable, 0.6 dev-days · 20 owner-only, 8.6 dev-days) · 82 done · 0 dropped
 
 > **`dev-days` are a human-developer estimate, not agent time.** They came from the review
 > that produced these tasks and they are the right unit for deciding whether something is
@@ -33,7 +33,7 @@ node scripts/workplan.mjs next
 
 > Retire Supabase, Cloudflare and R2. Repo-side removal can happen now; the infrastructure deletions are gated on the archive being duplicated and on the Pages cutover. LEG-01 is independent of every gate and should happen today.
 
-7 open of 13 · 2.9 d remaining
+8 open of 14 · 2.9 d remaining
 
 | | Task | Days | Who | Deps | Finish line |
 |---|---|---|---|---|---|
@@ -46,8 +46,9 @@ node scripts/workplan.mjs next
 | `x` | `LEG-07` **Gate every native-only web write behind one guard** | 1 | agent | — | No web UI offers a write that silently no-ops; each either disappears or shows a native-only notice. |
 | `x` | `LEG-08` **Remove the hardcoded /Users/cher archive path from shipping code** | 0.25 | agent | — | No absolute developer path appears in any non-test Swift file. |
 | ` ` | `LEG-09` **Execute the GitHub Pages + DNS cutover (T4.2, T4.3)** | 0.5 | owner | `SHIP-10A` | akashic.no serves from GitHub Pages, privacy/terms/support resolve, and the AASA file is reachable. |
-| ` ` | `LEG-10` **Delete deploy.yml, then revoke the Cloudflare and Supabase secrets** | 0.25 | agent | `LEG-09` | The Supabase secrets are pruned immediately; deploy.yml is deleted and the Cloudflare secrets revoked only once the stability month has run, after which no workflow references Cloudflare and CI is green without those secrets. |
-| ` ` | `LEG-11` **Delete the gated infrastructure: Pages project, R2 bucket, DNS zone, Supabase, OAuth** | 0.5 | owner | `LEG-03` `LEG-04` `LEG-09` `LEG-10` | All five are gone from their dashboards and the archive is verified on two media. |
+| ` ` | `LEG-10` **Delete deploy.yml, then revoke the Cloudflare and Supabase secrets** | 0.25 | agent | `LEG-09` | No workflow references Cloudflare or Supabase, the four secrets are revoked, and CI is green without them. |
+| ` ` | `LEG-11A` **Delete the Cloudflare Pages project and the DNS zone** | 0.25 | owner | `LEG-09` `LEG-10` | The akashic Pages project and the Cloudflare DNS zone are gone from the dashboard, and akashic.no still resolves via GoDaddy to GitHub Pages. |
+| ` ` | `LEG-11B` **Delete the R2 bucket, Supabase project and Google OAuth config** | 0.25 | owner | `LEG-03` `LEG-04` | All three are gone from their dashboards AND the archive has been verified on a second physical medium. |
 | `x` | `LEG-12` **Delete workers/ from the repo** | 0.25 | agent | `LEG-01` `LEG-05` | workers/ is gone and no workflow or test references it. |
 | ` ` | `LEG-13` **Delete supabase/** | 0.1 | agent | `LEG-04` | supabase/ is gone from the repo. |
 
@@ -189,7 +190,10 @@ node scripts/workplan.mjs next
 
 - **Paid Applications agreement, banking and tax** — 1-2 weeks, entirely outside the build queue, and no in-app purchase can go live without it. The one item that can silently add two weeks. SHIP-12.
 - **External beta** — About three weeks minimum: at least 7 of 10 households creating a journey unaided and 5 finishing and handing one over. The largest calendar item and nothing shortens it. SHIP-17.
-- **One month of stable native use before deleting infrastructure** — Earliest 2026-08-24 for the native-app clock, and later for hosting since the stable-on-Pages clock cannot start until the cutover lands. Does not apply to LEG-01: nothing reads the Worker.
+- **One month before deleting DATA infrastructure (hosting rollback waived)** — TWO CLOCKS, and the owner waived one on 2026-07-27.
+  * HOSTING clock — WAIVED. It existed only to keep a DNS revert to Cloudflare useful. The owner does not want a rollback path, so the Cloudflare Pages project, deploy.yml and the Cloudflare tokens go as soon as the cutover is verified. Worst case is akashic.no down for a while and a re-deploy to Pages; no data is at stake.
+  * DATA clock — STANDS, earliest 2026-08-24. This one is not about rollback convenience: R2 holds the 16 GiB / 8147-object archive and Supabase the source rows, and its real gate is LEG-02 (a verified second physical medium), not the calendar. Deleting either before LEG-02 passes is irreversible loss of the family's photographs. Once LEG-02 and LEG-03/LEG-04 are done, whether to also waive the calendar month is the owner's call.
+  Does not apply to LEG-01: nothing reads the Worker.
 - **App Review** — 1-3 days plus a 3-5 day buffer for one rejection round.
 
 ---
