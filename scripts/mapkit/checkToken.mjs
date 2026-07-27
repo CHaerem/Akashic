@@ -109,7 +109,10 @@ for (const site of SITES) {
         status = res.status;
         if (status !== 200) {
             const text = await res.text();
-            note = (text.match(/"errorType":"([A-Z_]+)"/) || [, text.slice(0, 80)])[1];
+            // Apple returns a typed error for the cases we can act on (ORIGIN_CHECK_FAILURE) and bare
+            // HTML for the ones we cannot, so fall back to the raw body rather than reporting nothing.
+            const typed = text.match(/"errorType":"([A-Z_]+)"/);
+            note = typed ? typed[1] : text.slice(0, 80).replace(/\s+/g, ' ');
         }
     } catch (err) {
         note = err.message;

@@ -49,6 +49,24 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Assert E2E fixture mode is off
+        # QUA-40. Since the E2E fixture landed, VITE_E2E_TEST_MODE no longer merely skips the
+        # Apple ID pill — it swaps the whole data layer for a fixture CloudKit container. A
+        # production build made with it set would serve fabricated journeys and never contact
+        # CloudKit, and it would render perfectly, so a smoke check would not notice.
+        #
+        # MEASURED leak path, and it is not the one you would guess: a GitHub *repository
+        # variable* named VITE_E2E_TEST_MODE would NOT reach this build, because repo vars only
+        # exist via an explicit `${{ vars.X }}` reference and nothing here references it. What
+        # does reach the build is the ambient environment — `scripts/build.js` runs
+        # `execSync('vite build', { env: process.env })` — and Vite's own auto-loading of
+        # `.env` / `.env.local`. Hence a check on the environment, before the build.
+        run: |
+          if [ -n "${VITE_E2E_TEST_MODE:-}" ]; then
+            echo "::error::VITE_E2E_TEST_MODE is set for a production build. Refusing to deploy."
+            exit 1
+          fi
+
       - name: Build
         env:
           VITE_MAPBOX_TOKEN: ${{ secrets.VITE_MAPBOX_TOKEN }}
@@ -58,6 +76,18 @@ jobs:
           VITE_CLOUDKIT_ENV: ${{ vars.VITE_CLOUDKIT_ENV || 'development' }}
           VITE_CLOUDKIT_API_TOKEN: ${{ vars.VITE_CLOUDKIT_API_TOKEN || '' }}
         run: npm run build
+
+      - name: Assert the E2E fixture is absent from the bundle
+        # Belt to the previous step's braces, and the one that survives a leak path nobody
+        # anticipated: it greps the BUILT ARTIFACT for three independent fixture signals
+        # rather than trusting that Rollup dropped the dead dynamic import. Same lesson as
+        # asserting against the built Info.plist instead of the XcodeGen spec.
+        #
+        # Verified in both directions: it passes on a flag-off build and FAILS on a
+        # `VITE_E2E_TEST_MODE=true vite build` (which emits assets/e2eCloudKitContainer-*.js).
+        # The first version of the guard had one signal, a decorative reference Rollup inlined
+        # away, and reported "ok" on a build that plainly contained the fixture.
+        run: node scripts/assertNoFixtureInBundle.mjs dist
 
       - name: Create static fallback (404.html)
         # Copy index.html -> 404.html so GitHub Pages serves the app shell for

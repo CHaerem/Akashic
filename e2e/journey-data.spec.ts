@@ -1,95 +1,83 @@
-import { test, expect, Page } from '@playwright/test';
+/**
+ * The data path: records -> mappers -> transforms -> UI.
+ *
+ * This is the spec QUA-40 was failing on. Test 1 collects console errors matching
+ * /supabase|cloudkit/ and asserts zero; with the production token in CI it received
+ * "[cloudkit] Error fetching public journeys" on every run. MEASURED against the REST
+ * endpoint with that token: `Origin: https://akashic.no` -> 200,
+ * `Origin: http://localhost:5173` -> 401, no `Origin` header -> 401. The token is
+ * origin-locked to the apex and CI serves from localhost, so no amount of publishing
+ * records could have turned this green — the 401 precedes any record being considered.
+ *
+ * The records now come from a fixture container (`src/fixtures/e2eCloudKitContainer.ts`),
+ * but they are fed in as CloudKit WIRE FORMAT — TIMESTAMP numbers, LOCATION objects, CKAsset
+ * descriptors, camelCase day content — so `performQueryAll`, every coercion in `records.ts`,
+ * `recordToPublicDbJourney`, `mapWaypoint`, the deterministic sort and
+ * `toTrekConfig`/`toTrekData` are all still exercised end to end. The name kept "CloudKit"
+ * because the CloudKit code really is what is under test; only the transport is fixed.
+ */
 
-const MAP_TIMEOUT = 15000;
-const DATA_TIMEOUT = 8000;
-
-// Helper to wait for map to be ready
-async function waitForMapReady(page: Page, timeout = MAP_TIMEOUT): Promise<boolean> {
-    const startTime = Date.now();
-    let pollInterval = 100;
-
-    while (Date.now() - startTime < timeout) {
-        const ready = await page.evaluate(() => {
-            return window.testHelpers?.isMapReady() && window.testHelpers?.isDataLoaded();
-        }).catch(() => false);
-
-        if (ready) return true;
-
-        await page.waitForTimeout(pollInterval);
-        pollInterval = Math.min(pollInterval * 1.5, 500);
-    }
-
-    return false;
-}
-
-// Helper to select a trek programmatically
-async function selectFirstTrek(page: Page): Promise<boolean> {
-    const selected = await page.evaluate(() => {
-        const treks = window.testHelpers?.getTreks();
-        if (treks && treks.length > 0) {
-            return window.testHelpers?.selectTrek(treks[0].id) || false;
-        }
-        return false;
-    }).catch(() => false);
-
-    if (!selected) return false;
-
-    // Wait for selection panel to appear
-    try {
-        await page.waitForSelector('text="Explore Journey →"', { timeout: 5000 });
-        return true;
-    } catch {
-        return false;
-    }
-}
+import { test, expect } from './fixtures/test';
+import { openApp, selectFirstTrek, getTreks, TIMEOUTS } from './utils/test-helpers';
 
 test.describe('CloudKit Data Loading', () => {
-    // Test app loads with CloudKit data
-    test('app loads with CloudKit data', async ({ page }) => {
+    test('app loads with no CloudKit errors on the console', async ({ page }) => {
         const errors: string[] = [];
-        page.on('console', msg => {
+        page.on('console', (msg) => {
             if (msg.type() === 'error' && /supabase|cloudkit/.test(msg.text().toLowerCase())) {
                 errors.push(msg.text());
             }
         });
 
         await page.goto('/');
-        await page.waitForSelector('canvas', { timeout: MAP_TIMEOUT });
+        await page.waitForSelector('canvas', { timeout: TIMEOUTS.mapInit });
 
-        // App title should appear
-        await expect(page.getByText('Akashic')).toBeVisible({ timeout: DATA_TIMEOUT });
+        await expect(page.getByText('Akashic')).toBeVisible({ timeout: TIMEOUTS.dataLoad });
 
-        // Wait for data to load
-        await waitForMapReady(page);
+        await openApp(page);
 
-        // Hint appears only after data is available (desktop shows "Click", mobile shows "Tap")
-        await expect(page.getByText(/(Click|Tap) a marker to explore/)).toBeVisible({ timeout: DATA_TIMEOUT });
+        // The hint appears only once data is available.
+        await expect(page.getByText(/(Click|Tap) a marker to explore/)).toBeVisible({
+            timeout: TIMEOUTS.dataLoad,
+        });
 
-        // No CloudKit errors
         expect(errors).toHaveLength(0);
     });
 
-    // Test trek data loads from CloudKit
-    test('trek data loads from CloudKit', async ({ page }) => {
-        await page.goto('/');
-        await page.waitForSelector('canvas', { timeout: MAP_TIMEOUT });
-        await waitForMapReady(page);
+    test('more than one journey loads, in deterministic order', async ({ page }) => {
+        // NEW, and it is the assertion the old suite could not make: with live data the
+        // globe's contents were whatever the owner had published, so nothing could check
+        // ordering. The fixture holds two journeys whose query order is the OPPOSITE of
+        // their dateStarted order, so this asserts the deterministic sort at
+        // publicAdapter.ts:223-230 — the one that stopped the globe reshuffling its
+        // journeys between page loads depending on which route asset resolved first.
+        await openApp(page);
 
-        const selected = await selectFirstTrek(page);
-        if (!selected) {
-            console.log('Could not select trek - no treks available');
-            test.skip();
-            return;
-        }
+        const first = await getTreks(page);
+        expect(first.length).toBeGreaterThan(1);
 
-        // Verify trek data is displayed (from CloudKit)
+        await page.reload();
+        await openApp(page);
+        const second = await getTreks(page);
+
+        expect(second.map((t) => t.id)).toEqual(first.map((t) => t.id));
+    });
+
+    test('trek data reaches the overview panel', async ({ page }) => {
+        await openApp(page);
+
+        // Was `if (!selected) { console.log(...); test.skip(); }` — which is how this file
+        // stayed nominally green while proving nothing.
+        await selectFirstTrek(page);
+
         await expect(page.getByText('Summit:')).toBeVisible();
 
-        // Click explore
         await page.getByText('Explore Journey →').click();
 
-        // Verify trek details loaded - the new UI shows stats
-        await expect(page.getByText('DURATION')).toBeVisible({ timeout: 10000 });
+        // BottomSheetContent/Sidebar only render OverviewTab when trekData is non-null, so
+        // these three also prove the selected journey made it into trekDataMap — a journey
+        // present in `treks` but missing from `trekDataMap` renders nothing here.
+        await expect(page.getByText('DURATION')).toBeVisible({ timeout: TIMEOUTS.dataLoad });
         await expect(page.getByText('DISTANCE')).toBeVisible();
         await expect(page.getByText('SUMMIT')).toBeVisible();
     });

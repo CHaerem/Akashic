@@ -2761,14 +2761,63 @@
         ".github/workflows/e2e.yml"
       ],
       "track": "QUALITY",
-      "status": "TODO",
+      "status": "DONE",
       "verify": [
         "VITE_E2E_TEST_MODE=true CI=true npx playwright test --project=chromium --ignore-snapshots",
         "npx vitest --run",
         "npm run typecheck"
       ],
       "notes": [
-        "2026-07-27 CORRECTION: the first version of this entry said SHIP-10A `repointed the showcase` and that nothing gates the fetch on VITE_E2E_TEST_MODE. The second half is true; the first was hand-waving that happened to point at the right commit for the wrong reason -- SHIP-10A`s DIFF touched only deploy-pages.yml and docs, and could not have broken e2e. The cause is the shared repository VARIABLES, which are not in any diff. Written from the commit I had open rather than from the run history, which is the same mistake as the three wrong removal conditions in QUA-08."
+        "2026-07-27 CORRECTION: the first version of this entry said SHIP-10A `repointed the showcase` and that nothing gates the fetch on VITE_E2E_TEST_MODE. The second half is true; the first was hand-waving that happened to point at the right commit for the wrong reason -- SHIP-10A`s DIFF touched only deploy-pages.yml and docs, and could not have broken e2e. The cause is the shared repository VARIABLES, which are not in any diff. Written from the commit I had open rather than from the run history, which is the same mistake as the three wrong removal conditions in QUA-08.",
+        "The seam is getContainer() in src/lib/cloudkit.ts — ONE `if` at the SDK boundary, returning before loadCloudKit(), so neither the cdn.apple-cloudkit.com script nor readCloudKitEnv() is ever reached. Chosen over guarding fetchPublicJourneys because FIVE separate surfaces reach Apple, not one: public journeys, public photos, canUserComment (which has no signed-out guard and mounts per selected day), AuthGuard's probe, and the two auth listeners. Each fails the zero-console-error assertion on its own, so a per-fetch guard would have been whack-a-mole.",
+        "The fixture is loaded by dynamic import so Rollup can drop it whole, and that is ASSERTED AGAINST THE BUILT ARTIFACT rather than trusted — scripts/assertNoFixtureInBundle.mjs greps dist/ for three independent signals. Same lesson as asserting against the built Info.plist instead of the XcodeGen spec. The first version of that guard could never have fired: its marker was a decorative `const MARKER = ...; void MARKER;` which Rollup inlined and dropped, so it reported ok on a build that plainly contained the fixture. The marker is now the prefix of every CKAsset fileChecksum, i.e. returned data.",
+        "THE SUITE WAS LARGELY FAKE, and fixing the 401 is the smaller half of this task. (1) The camera assertions never checked position: hasPendingAnimations clears on the FIRST LINE of the rAF callback, before fitBounds/flyTo is issued, so verifyCameraPosition read getCenter() ~0 ms into a 2200 ms flight and passed only because its 50 km tolerance exceeded the whole Kilimanjaro massif. Now it polls until the centre holds still and asserts RELATIVELY — the settled camera must be strictly closer to the target day than to the day it came from. Measured 1.70-2.55 km to target vs 7.65-13.98 km to origin, so the tolerance is 5 km, chosen from those numbers. (2) Four tests were named for Mount Kenya's off-route day while selecting Kilimanjaro, whose day 5 is on-route, and asserted only getCurrentDay() === 5 — the off-route branch was never exercised at all. (3) Ten test.skip() escapes meant 8 of day-navigation's 9 tests skipped SILENTLY under the 401. (4) mobile.spec.ts's lightbox body was dead: getByRole('tab') matches nothing in src/, so its isVisible() guard was permanently false. A green suite was reporting on work it was not doing.",
+        "Config coupling closed: VITE_CLOUDKIT_ENV and VITE_CLOUDKIT_API_TOKEN are deleted from e2e.yml, so no repository variable reaches that gate. deploy-pages.yml now refuses to deploy if VITE_E2E_TEST_MODE is set, and both deploy-pages.yml and test.yml run the dist guard. One design-doc claim was corrected rather than propagated: a repository VARIABLE named VITE_E2E_TEST_MODE would not reach the production build, because repo vars only exist via an explicit ${{ vars.X }} reference. The real leak paths are scripts/build.js forwarding all of process.env into vite build, and Vite auto-loading .env/.env.local.",
+        "Accurate scope of the claim: the suite is CloudKit-independent and deterministic, NOT offline. Measured over a full page load, the complete set of external hosts it contacts is exactly [\"api.mapbox.com\", \"events.mapbox.com\"] — Mapbox stays a live dependency because every spec waits for a real canvas and mapReady, which needs the style, glyphs and terrain DEM. MAP-05 removes that.",
+        "PROCESS NOTE: six stale snapshot PNGs deleted as part of this work were swept into commit 3f320f9, a ledger-only commit made by the concurrent session, because `git rm` stages itself immediately — the exact hazard CLAUDE.md documents, experienced from the other side. The deletions are correct; only their commit message is wrong about them. Not rewritten: moving six binary deletions between two commits is not worth the risk, and this note is the durable record."
+      ],
+      "evidence": "Verified in the merged tree, not taken from the agent report: 473 unit tests (was 462), typecheck clean, lint 25 warnings 0 errors, build 48 precache entries, VITE_E2E_TEST_MODE=true CI=true npx playwright test --project=chromium => 18 passed / 7 skipped / 0 flaky in 1.3m. The dist guard was checked in BOTH directions: exit 0 on a clean build, exit 1 on a VITE_E2E_TEST_MODE=true build with all three fixture signals matched in dist/assets/e2eCloudKitContainer-*.js."
+    },
+    {
+      "id": "QUA-41",
+      "effort": 0.2,
+      "priority": 17,
+      "deps": [
+        "QUA-40"
+      ],
+      "owner": true,
+      "title": "Replace the CloudKit canary that QUA-40 removed — check the deployed apex, not localhost",
+      "done_when": "A documented owner check exists that fetches the deployed site's CloudKit path with a real Origin header, and it has been run once against akashic.no.",
+      "why": "QUA-40 took every automated test off the real CloudKit container, for good reasons. But be honest\nabout what that removed: nothing automated now touches the production container, so a token rotated\ninto the wrong environment, or the trailing-slash Allowed-Origins failure, would reach akashic.no with\nevery gate green.\n\nThat canary was never usable where it was, which is why removing it was still right. It ran from a CI\nrunner on localhost, and the production token is origin-restricted to the apex -- measured, Origin\nhttps://akashic.no is 200 and http://localhost:5173 is 401 -- so it could only ever report red. A gate\nthat cannot pass is not a canary; it is the \"known red\" state CLAUDE.md warns trains everyone to\nignore CI.\n\nSo the replacement has to run from somewhere that can send the real Origin. That is either the owner\nwith curl, or a browser. It cannot be a CI runner. The check is a POST to\napi.apple-cloudkit.com/database/1/iCloud.no.akashic/production/public/records/query with\nrecordType PublicJourney and an explicit `Origin: https://akashic.no` header; 200 with a records array\nmeans the deployed showcase can read its own data.\n\nWorth pairing with SHIP-10B, which needs the same thing looked at from the browser side.",
+      "files": [],
+      "track": "QUALITY",
+      "status": "TODO",
+      "verify": [
+        "See the why: an owner-run curl with an explicit Origin header against the production container"
+      ]
+    },
+    {
+      "id": "QUA-42",
+      "effort": 0.3,
+      "priority": 46,
+      "deps": [
+        "QUA-40"
+      ],
+      "title": "e2e/ is checked by neither tsc nor eslint, so the specs are verified only by running",
+      "done_when": "A type error or lint error in e2e/ fails a gate without the suite having to run.",
+      "why": "Surfaced by QUA-40, which rewrote all four specs and 700-odd lines of helper. tsconfig has\ninclude: [\"src\"] and eslint.config.js has globalIgnores(['e2e']), so nothing static looks at e2e/ at\nall. The only verification a spec gets is being executed.\n\nThat is a worse gap than it sounds, because of what QUA-40 found in there: a helper file imported by\nno spec, a lightbox assertion whose selector matched nothing in src/ so its guard was permanently\nfalse, and ten test.skip() escapes that let 8 of 9 tests skip silently. Every one of those is the kind\nof thing a type check or an unused-symbol lint rule surfaces in a second, and none of them could fail\na run -- they made the run pass while doing less.\n\nThe e2e suite is also the slowest gate at ~1.3 minutes, so pushing spec errors into a static check is\nthe cheap end of the trade. Note the specs use Playwright globals and a different tsconfig lib set\nthan src/, which is presumably why they were excluded in the first place -- expect to need a second\ntsconfig rather than widening include.",
+      "files": [
+        "tsconfig*.json",
+        "eslint.config.js",
+        "e2e/**",
+        "package.json"
+      ],
+      "track": "QUALITY",
+      "status": "TODO",
+      "verify": [
+        "npm run typecheck",
+        "npm run lint",
+        "VITE_E2E_TEST_MODE=true CI=true npx playwright test --project=chromium --ignore-snapshots"
       ]
     }
   ]

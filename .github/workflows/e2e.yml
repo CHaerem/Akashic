@@ -46,13 +46,36 @@ jobs:
 
       - name: Run E2E tests
         env:
+          # Mapbox stays a genuine live dependency: every spec waits for a real canvas and
+          # `mapReady`, which needs the style, the glyphs and the terrain DEM. MEASURED over a
+          # full page load, the complete set of external hosts this suite contacts is exactly
+          # ["api.mapbox.com", "events.mapbox.com"] — so it is deterministic and
+          # CloudKit-independent, but NOT offline. Claiming offline in the ledger would be false.
           VITE_MAPBOX_TOKEN: ${{ secrets.VITE_MAPBOX_TOKEN }}
-          # CloudKit is the only backend (T3.4). The JS API token is public and
-          # container-scoped — it is baked into the client bundle either way — so
-          # it lives in repo vars, not secrets. Signed-out e2e reads the public
-          # showcase mirror (T3.3) in the Development environment.
-          VITE_CLOUDKIT_ENV: ${{ vars.VITE_CLOUDKIT_ENV || 'development' }}
-          VITE_CLOUDKIT_API_TOKEN: ${{ vars.VITE_CLOUDKIT_API_TOKEN || '' }}
+          # QUA-40: VITE_CLOUDKIT_ENV and VITE_CLOUDKIT_API_TOKEN are deliberately ABSENT.
+          #
+          # They used to be read here as `${{ vars.* }}` — the same two repository variables
+          # the production deploy reads. They were switched to production at
+          # 2026-07-27T06:36 and this gate went red 57 minutes later, with no commit in
+          # between touching the CloudKit fetch path. MEASURED against the CloudKit REST
+          # endpoint with the production token:
+          #     Origin: https://akashic.no      -> HTTP 200
+          #     Origin: http://localhost:5173   -> HTTP 401
+          #     (no Origin header)              -> HTTP 401
+          # The production token is origin-restricted to the apex, and a CI runner serves
+          # the app from localhost, so every CloudKit call 401s. Publishing a journey into
+          # the production mirror would NOT have helped: the 401 is an authorisation
+          # failure that happens before any record is considered.
+          #
+          # Under VITE_E2E_TEST_MODE the app now takes a fixture CloudKit container
+          # (src/fixtures/e2eCloudKitContainer.ts) and never reaches loadCloudKit(),
+          # CloudKit.configure() or the REST endpoint — so these two variables are simply
+          # irrelevant to this job. Leaving them declared and ignored would keep the
+          # coupling in the very file the next person reads. There is now no repository
+          # variable a deployer can change that reaches this gate.
+          #
+          # `e2e/fixtures/test.ts` asserts per run that zero requests reached an Apple host,
+          # so the decoupling is measured on every run rather than assumed here.
           VITE_E2E_TEST_MODE: 'true'
           CI: 'true'
         run: npx playwright test --project=chromium --ignore-snapshots

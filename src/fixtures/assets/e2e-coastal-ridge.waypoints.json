@@ -1,0 +1,35 @@
+[
+  {
+    "id": "coastal-camp-1",
+    "name": "Boathouse",
+    "waypointType": "camp",
+    "dayNumber": 1,
+    "sortOrder": 0,
+    "elevation": 120,
+    "coordinates": [5.33, 60.41],
+    "notes": "A red boathouse at the water's edge.",
+    "highlights": ["Sea level"]
+  },
+  {
+    "id": "coastal-camp-2",
+    "name": "Heather Bench",
+    "waypointType": "camp",
+    "dayNumber": 2,
+    "sortOrder": 1,
+    "elevation": 260,
+    "coordinates": [5.36, 60.42],
+    "notes": "Open heather, with the islands laid out below.",
+    "highlights": ["Island view"]
+  },
+  {
+    "id": "coastal-camp-3",
+    "name": "Ridge Cairn",
+    "waypointType": "camp",
+    "dayNumber": 3,
+    "sortOrder": 2,
+    "elevation": 520,
+    "coordinates": [5.42, 60.44],
+    "notes": "A cairn on the high point of the ridge.",
+    "highlights": ["Cairn"]
+  }
+]

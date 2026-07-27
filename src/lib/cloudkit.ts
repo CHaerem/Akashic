@@ -86,9 +86,44 @@ export function loadCloudKit(): Promise<CloudKitJS.CloudKitStatic> {
 let container: CloudKitJS.Container | null = null;
 
 /**
+ * E2E runs get a fixture container instead of Apple's (QUA-40).
+ *
+ * MEASURED against the CloudKit REST endpoint with the production token:
+ *     Origin: https://akashic.no      -> HTTP 200
+ *     Origin: http://localhost:5173   -> HTTP 401
+ *     (no Origin header)              -> HTTP 401
+ * The production token is origin-restricted to the apex, and a CI runner serves the app
+ * from localhost, so every CloudKit call 401s and the E2E gate could only ever be red.
+ * `.github/workflows/e2e.yml` read the same two repository variables the production
+ * deploy reads, which is how a Console change to the deploy config turned a PR gate red
+ * 57 minutes later with no commit touching the fetch path.
+ *
+ * Note this flag now controls DATA, not only UI. Before this change
+ * `VITE_E2E_TEST_MODE=true npm run dev` showed real CloudKit data with test helpers
+ * attached; it now shows the fixture. See `src/fixtures/e2eCloudKitContainer.ts` for why
+ * the seam is here — one `if` at the SDK boundary, rather than a guard per fetch
+ * function, because there are five separate surfaces that reach Apple, not one.
+ */
+const isE2ETestMode = import.meta.env.VITE_E2E_TEST_MODE === 'true';
+
+/**
  * Get the configured default CloudKit container (configuring it once).
  */
 export async function getContainer(): Promise<CloudKitJS.Container> {
+    if (isE2ETestMode) {
+        // Returns BEFORE loadCloudKit(), so the cdn.apple-cloudkit.com <script> is never
+        // injected and `readCloudKitEnv()` is never called — which is what makes
+        // VITE_CLOUDKIT_ENV and VITE_CLOUDKIT_API_TOKEN irrelevant to the suite. Dynamic
+        // import so the fixture sits behind a boundary Rollup can drop whole; asserted
+        // against the built artifact by scripts/assertNoFixtureInBundle.mjs rather than
+        // trusted (this repo's record on "the build tool removes it" is bad).
+        if (!container) {
+            const { createE2EFixtureContainer } = await import('../fixtures/e2eCloudKitContainer');
+            container = createE2EFixtureContainer(window.location.origin);
+        }
+        return container;
+    }
+
     const CloudKit = await loadCloudKit();
     if (!container) {
         const { environment, apiToken } = readCloudKitEnv();

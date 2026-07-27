@@ -1,0 +1,76 @@
+[
+  {
+    "id": "alpine-camp-1",
+    "name": "Birch Grove Camp",
+    "waypointType": "camp",
+    "dayNumber": 1,
+    "sortOrder": 0,
+    "elevation": 1140,
+    "coordinates": [8.34, 61.624],
+    "notes": "Camp beneath the birches; a meltwater river runs alongside.",
+    "highlights": ["Birch forest", "River crossing"],
+    "routePointIndex": 2,
+    "weather": {
+      "temperatureMax": 13.2,
+      "temperatureMin": 4.1,
+      "precipitationSum": 0.8,
+      "windSpeedMax": 18.5,
+      "weatherCode": 3
+    }
+  },
+  {
+    "id": "alpine-camp-2",
+    "name": "Moraine Camp",
+    "waypointType": "camp",
+    "dayNumber": 2,
+    "sortOrder": 1,
+    "elevation": 1420,
+    "coordinates": [8.4, 61.66],
+    "notes": "Open moraine, with the first clear view of the ridge above.",
+    "highlights": ["Moraine field"],
+    "routePointIndex": 5,
+    "funFacts": [
+      {
+        "id": "fixture-fact-1",
+        "content": "A moraine is the rubble a glacier leaves behind as it retreats.",
+        "category": "nature",
+        "learnMoreUrl": "https://example.invalid/moraine"
+      }
+    ]
+  },
+  {
+    "name": "Glacier Shelf Camp",
+    "waypointType": "camp",
+    "dayNumber": 3,
+    "sortOrder": 2,
+    "elevation": 1780,
+    "coordinates": [8.46, 61.696],
+    "notes": "A flat shelf on bare rock beside the glacier tongue.",
+    "highlights": ["Glacier tongue"],
+    "routeDistanceKm": 13.6
+  },
+  {
+    "id": "alpine-camp-4",
+    "name": "High Col Camp",
+    "waypointType": "camp",
+    "dayNumber": 4,
+    "sortOrder": 3,
+    "elevation": 2180,
+    "coordinates": [8.52, 61.732],
+    "notes": "The high col, cold and windy, one hour below the top.",
+    "highlights": ["Cold night", "Windy col"],
+    "routePointIndex": 11,
+    "routeDistanceKm": 18.7
+  },
+  {
+    "id": "alpine-camp-5",
+    "name": "Fjord Rest Day",
+    "waypointType": "camp",
+    "dayNumber": 5,
+    "sortOrder": 4,
+    "elevation": 40,
+    "coordinates": [8.14, 61.52],
+    "notes": "A day away from the ridge, down at the fjord.",
+    "highlights": ["Fjord water"]
+  }
+]
