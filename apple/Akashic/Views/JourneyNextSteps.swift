@@ -20,14 +20,16 @@ extension Journey {
 struct JourneyNextStepsCard: View {
     struct Step: Identifiable {
         var icon: String
-        var title: String
-        var subtitle: String
+        var title: LocalizedStringKey
+        var subtitle: LocalizedStringKey
         var action: () -> Void
-        var id: String { title }
+        /// The title was the identity; as a `LocalizedStringKey` it no longer can be, and the
+        /// icon is the better choice anyway — it does not change between languages.
+        var id: String { icon }
     }
 
-    var title: String
-    var message: String
+    var title: LocalizedStringKey
+    var message: LocalizedStringKey
     var steps: [Step] = []
 
     var body: some View {
@@ -48,7 +50,7 @@ struct JourneyNextStepsCard: View {
                             HStack(spacing: 12) {
                                 Image(systemName: step.icon)
                                     .font(.title3)
-                                    .foregroundStyle(Theme.accent)
+                                    .foregroundStyle(Theme.accentText)
                                     .frame(width: 26)
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(step.title)

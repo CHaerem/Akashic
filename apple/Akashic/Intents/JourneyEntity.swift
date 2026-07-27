@@ -4,8 +4,8 @@ import AppIntents
 /// slug. Its `id` is the journey id (UUID in CloudKit, slug in Fixtures) — the same value the
 /// MCP tools accept as `journey_id`.
 struct JourneyEntity: AppEntity, Identifiable {
-    static var typeDisplayRepresentation = TypeDisplayRepresentation(name: "Journey")
-    static var defaultQuery = JourneyEntityQuery()
+    static let typeDisplayRepresentation = TypeDisplayRepresentation(name: "Journey")
+    static let defaultQuery = JourneyEntityQuery()
 
     var id: String
     var name: String

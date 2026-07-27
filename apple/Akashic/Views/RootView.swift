@@ -109,7 +109,7 @@ private struct FirstSyncDownloadPromptView: View {
         VStack(spacing: 20) {
             Image(systemName: "icloud.and.arrow.down")
                 .font(.system(size: 44))
-                .foregroundStyle(Theme.accent)
+                .foregroundStyle(Theme.accentText)
                 .padding(.top, 32)
 
             Text("About \(estimateSummary) to download")
@@ -117,8 +117,7 @@ private struct FirstSyncDownloadPromptView: View {
                 .foregroundStyle(Theme.textPrimary)
                 .multilineTextAlignment(.center)
 
-            Text("Your photo archive downloads on this device's first sync. Downloading over "
-                 + "cellular can use a large amount of data — waiting for Wi-Fi is recommended.")
+            Text("Your photo archive downloads on this device's first sync. Downloading over cellular can use a large amount of data — waiting for Wi-Fi is recommended.")
                 .font(.subheadline)
                 .foregroundStyle(Theme.textSecondary)
                 .multilineTextAlignment(.center)

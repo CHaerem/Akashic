@@ -28,11 +28,20 @@ enum ShareRole: String, CaseIterable, Equatable {
     /// May read everything, change nothing.
     case viewer
 
+    /// Row label and Picker option in the sharing sheet. Returns `String`, so it has to arrive
+    /// already localised — the call site hands it to `Text(_:)`, which would render a bare literal
+    /// verbatim (QUA-26). Keep these short: they sit in a trailing accessory next to a name.
     var displayName: String {
         switch self {
-        case .owner:  return "Owner"
-        case .editor: return "Can edit"
-        case .viewer: return "Can view"
+        case .owner:
+            return String(localized: "Owner",
+                          comment: "Sharing sheet: the participant who created the journey.")
+        case .editor:
+            return String(localized: "Can edit",
+                          comment: "Sharing sheet: access level — may add photos, comments and edits.")
+        case .viewer:
+            return String(localized: "Can view",
+                          comment: "Sharing sheet: access level — may read everything, change nothing.")
         }
     }
 
@@ -151,6 +160,7 @@ enum ShareRoleMapping {
         if !name.isEmpty { return name }
         if let emailAddress, !emailAddress.isEmpty { return emailAddress }
         if let phoneNumber, !phoneNumber.isEmpty { return phoneNumber }
-        return "Invited"
+        return String(localized: "Invited",
+                      comment: "Sharing sheet: placeholder name for a participant who has been invited but whose name CloudKit does not know yet.")
     }
 }

@@ -6,11 +6,19 @@ enum MediaFetchError: LocalizedError, Equatable {
     case notFound
     case noBytes
 
+    /// Localised (QUA-26). Surfaced in the full-screen lightbox and during export, whenever an
+    /// original cannot be resolved.
     var errorDescription: String? {
         switch self {
-        case .databaseUnavailable: return "Photo sync is not available in this build."
-        case .notFound:            return "The full-resolution photo is not in iCloud yet."
-        case .noBytes:             return "The full-resolution photo could not be downloaded."
+        case .databaseUnavailable:
+            return String(localized: "Photo sync is not available in this build.",
+                          comment: "Full-resolution photo failure: the running build has no iCloud entitlement. Only reachable in a misconfigured build.")
+        case .notFound:
+            return String(localized: "The full-resolution photo is not in iCloud yet.",
+                          comment: "Full-resolution photo failure: the original has not finished uploading from the device that took it.")
+        case .noBytes:
+            return String(localized: "The full-resolution photo could not be downloaded.",
+                          comment: "Full-resolution photo failure: the record was found but carried no usable bytes.")
         }
     }
 }

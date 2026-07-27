@@ -82,16 +82,23 @@ struct RouteCorrectionSection: View {
         }
     }
 
-    private func row(icon: String, title: String, subtitle: String, action: @escaping () -> Void) -> some View {
+    /// QUA-24: the glyph and the chevron are both decoration — the glyph restates the title and the
+    /// chevron restates the button trait. The subtitle becomes a hint rather than part of the label,
+    /// so the four corrections are distinguishable at a swipe and the explanation follows only if the
+    /// user waits for it.
+    private func row(icon: String, title: LocalizedStringKey, subtitle: LocalizedStringKey, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             HStack(spacing: 12) {
-                Image(systemName: icon).font(.title3).foregroundStyle(Theme.accent).frame(width: 26)
+                Image(systemName: icon).font(.title3).foregroundStyle(Theme.accentText).frame(width: 26)
+                    .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title).font(.subheadline.weight(.semibold)).foregroundStyle(Theme.textPrimary)
                     Text(subtitle).font(.caption2).foregroundStyle(Theme.textTertiary)
+                        .accessibilityHidden(true)
                 }
                 Spacer()
                 Image(systemName: "chevron.right").font(.footnote).foregroundStyle(Theme.textTertiary)
+                    .accessibilityHidden(true)
             }
             .padding(12)
             .frame(maxWidth: .infinity)
@@ -99,6 +106,8 @@ struct RouteCorrectionSection: View {
             .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Theme.hairline, lineWidth: 1))
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(title)
+        .accessibilityHint(subtitle)
     }
 
     // MARK: Build previews
@@ -107,12 +116,14 @@ struct RouteCorrectionSection: View {
         message = nil
         let fixes = RouteCorrection.fixes(from: store.photos(forJourneyID: journey.id))
         guard !fixes.isEmpty else {
-            message = "No geotagged photos to draft a route from."
+            message = String(localized: "No geotagged photos to draft a route from.",
+                             comment: "Route correction: shown when drafting a route from photos finds no GPS data.")
             return
         }
         let result = RouteInference.infer(from: fixes)
         guard !result.isEmpty else {
-            message = "Couldn't draft a route from these photos."
+            message = String(localized: "Couldn't draft a route from these photos.",
+                             comment: "Route correction: shown when drafting a route from photos produces nothing usable.")
             return
         }
         preview = makePreview(newRoute: result.route, gpxWaypoints: [], note: result.confidence.summary)
@@ -132,11 +143,13 @@ struct RouteCorrectionSection: View {
     private func recomputeStats() {
         message = nil
         guard !journey.route.coordinates.isEmpty else {
-            message = "This journey has no route to recompute stats from."
+            message = String(localized: "This journey has no route to recompute stats from.",
+                             comment: "Route correction: shown when Recompute stats is tapped on a journey with no route.")
             return
         }
         preview = makePreview(newRoute: journey.route, gpxWaypoints: [],
-                              note: "Stats only — the route itself is unchanged.")
+                              note: String(localized: "Stats only — the route itself is unchanged.",
+                                     comment: "Route correction: note on the recompute-stats preview."))
     }
 
     private func handleImport(_ result: Result<[URL], Error>) {
@@ -157,8 +170,16 @@ struct RouteCorrectionSection: View {
             let file = try await Task.detached(priority: .userInitiated) {
                 try GPXParser.parse(contentsOf: url)
             }.value
-            var note = "\(file.route.coordinates.count) points · \(file.waypoints.count) waypoints"
-            if file.droppedPointCount > 0 { note += " · \(file.droppedPointCount) skipped" }
+            // Same three plural-varied catalogue entries the new-journey sheet uses for a GPX
+            // provenance line, so the two screens describe an imported track identically.
+            var note = String(localized: "\(file.route.coordinates.count) route points",
+                              comment: "GPX route provenance: how many coordinates the track holds.")
+                     + " · " + String(localized: "\(file.waypoints.count) waypoints",
+                                      comment: "GPX route provenance: how many waypoints became days.")
+            if file.droppedPointCount > 0 {
+                note += " · " + String(localized: "\(file.droppedPointCount) skipped",
+                                       comment: "GPX route provenance: coordinates dropped as unusable.")
+            }
             preview = makePreview(newRoute: file.route, gpxWaypoints: file.waypoints, note: note)
         } catch {
             message = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
@@ -264,6 +285,14 @@ struct RoutePreviewSheet: View {
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(Theme.hairline, lineWidth: 1))
         .onAppear { camera = .region(Self.region(old: preview.oldRoute, new: preview.newRoute)) }
+        // QUA-24: two overlaid polylines are the one thing on this sheet a screen reader genuinely
+        // cannot convey. Saying so is more use than silence — and the diff card below is where the
+        // decision actually gets made, in numbers, which ARE readable.
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(preview.routeChanges
+                            ? "Map comparing the current route with the new one"
+                            : "Map of the current route")
+        .accessibilityHint("The change is stated as numbers below")
     }
 
     private var legend: some View {
@@ -272,15 +301,22 @@ struct RoutePreviewSheet: View {
             legendItem(color: Theme.accent, label: "New")
         }
         .font(.caption2)
+        // A colour key for a map that cannot be read anyway — announcing "Current" and "New" as two
+        // bare words in the middle of the sheet is noise.
+        .accessibilityHidden(true)
     }
 
-    private func legendItem(color: Color, label: String) -> some View {
+    private func legendItem(color: Color, label: LocalizedStringKey) -> some View {
         HStack(spacing: 6) {
             Capsule().fill(color).frame(width: 18, height: 3)
             Text(label).foregroundStyle(Theme.textTertiary)
         }
     }
 
+    /// QUA-24: each diff line is four separate elements — label, before, an arrow glyph, after — so
+    /// "Distance", "35 km", "arrow right", "42 km" were four swipes to learn one fact, and the arrow
+    /// is what carried the direction. Combined into one sentence per line, with the arrow replaced by
+    /// a word and "changed" stated rather than left to bold weight.
     private var diffCard: some View {
         VStack(spacing: 8) {
             ForEach(RouteCorrection.diff(old: preview.oldStats, new: preview.newStats)) { line in
@@ -293,6 +329,10 @@ struct RoutePreviewSheet: View {
                         .font(.subheadline.weight(line.changed ? .bold : .regular))
                         .foregroundStyle(line.changed ? Theme.accent : Theme.textSecondary)
                 }
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(line.changed
+                                    ? Text("\(line.label), changes from \(line.before) to \(line.after)")
+                                    : Text("\(line.label), unchanged at \(line.after)"))
             }
         }
         .padding(14)

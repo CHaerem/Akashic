@@ -30,17 +30,22 @@ enum FixtureLoader {
 
     /// Load one fixture by resource base-name (e.g. "kilimanjaro").
     static func load(named name: String, bundle: Bundle = .main) throws -> Journey {
+        map(try trek(named: name, bundle: bundle))
+    }
+
+    /// The decoded on-disk fixture, before mapping. Callers that need more than the domain `Journey` —
+    /// today, the photo pipeline, which keys its bundled photographs off `trek.slug` — read this
+    /// rather than re-decoding the file themselves.
+    static func trek(named name: String, bundle: Bundle = .main) throws -> FixtureTrek {
         guard let url = resourceURL(named: name, bundle: bundle) else {
             throw FixtureError(description: "Fixture '\(name).json' not found in bundle \(bundle.bundleIdentifier ?? "?")")
         }
         let data = try Data(contentsOf: url)
-        let trek: FixtureTrek
         do {
-            trek = try JSONDecoder().decode(FixtureTrek.self, from: data)
+            return try JSONDecoder().decode(FixtureTrek.self, from: data)
         } catch {
             throw FixtureError(description: "Failed to decode '\(name).json': \(error)")
         }
-        return map(trek)
     }
 
     /// Decode a `Journey` directly from raw fixture JSON data (used by tests).

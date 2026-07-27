@@ -24,7 +24,10 @@ struct LocalChange: Equatable {
 /// Seam over the underlying `CKSyncEngine` so the coordinator's enqueue / flush logic is
 /// testable against a mock. Only the surface the coordinator actually drives is exposed;
 /// the real implementation is `CKSyncEngineAdapter`, tests inject a recording mock.
-protocol SyncEngineProtocol: AnyObject {
+// QUA-08: `Sendable` because `AkashicSyncEngine` hands this across an isolation boundary.
+// The shipping conformer `CKSyncEngineAdapter` holds a single `let engine: CKSyncEngine`, and
+// CloudKit declares `final public class CKSyncEngine: Sendable`, so it satisfies this for free.
+protocol SyncEngineProtocol: AnyObject, Sendable {
     var pendingRecordZoneChanges: [CKSyncEngine.PendingRecordZoneChange] { get }
     var pendingDatabaseChanges: [CKSyncEngine.PendingDatabaseChange] { get }
 
@@ -69,6 +72,13 @@ final class CKSyncEngineAdapter: SyncEngineProtocol {
 /// Seam over the local Core Data store so the coordinator can (a) materialize a `CKRecord`
 /// for a pending upload and (b) apply fetched server records — without the coordinator
 /// knowing Core Data. Implemented by `PersistenceController` (see `PersistenceController+Sync`).
+///
+/// `@MainActor` for exactly the reason `MediaRepackStore` already is (`Media/MediaRepackJob.swift`):
+/// every requirement here is witnessed against `container.viewContext`, a main-QUEUE Core Data
+/// context. All 20 are synchronous, so under Swift 6 a main-actor-isolated witness cannot satisfy a
+/// nonisolated requirement — the protocol has to carry the isolation, not just the conformer.
+/// `AkashicSyncEngine` (the only holder) is already `@MainActor`, so nothing moves threads. (QUA-08)
+@MainActor
 protocol SyncLocalStore: AnyObject {
     /// Build the `CKRecord` for a pending upload by record name; nil if the row is gone
     /// (the coordinator then drops the pending save). `existing` carries a server-provided

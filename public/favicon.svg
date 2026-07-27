@@ -1,11 +1,47 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <!-- Globe - simple wireframe style -->
-  <g fill="none" stroke="#1a1a2e" stroke-width="16" stroke-linecap="round">
-    <!-- Main circle -->
-    <circle cx="256" cy="256" r="180"/>
-    <!-- Horizontal equator -->
-    <ellipse cx="256" cy="256" rx="180" ry="60"/>
-    <!-- Vertical meridian -->
-    <ellipse cx="256" cy="256" rx="60" ry="180"/>
+<!--
+  Akashic web mark — source of truth for every PNG in this directory.
+  Regenerate with: npm run generate-icons
+
+  Deliberately the same globe as the iOS app icon
+  (apple/Akashic/Resources/Assets.xcassets/AppIcon.appiconset/AppIcon.svg), scaled from that
+  file's 1024 grid to 512 — one identity across the App Store listing, the browser tab and the
+  Add-to-Home-Screen tile.
+
+  This file used to be a #1A1A2E hairline (stroke-width 16) on *no background element at all*.
+  Two separate defects came out of that: on transparency, every derived PNG measured
+  hasAlpha=true/isOpaque=false, so the Add-to-Home-Screen tile was a near-black wireframe
+  composited onto whatever ground the OS chose; and #1A1A2E against the #0A0A0F page it sits on
+  measures 1.16:1, i.e. invisible on a dark tab strip. Now the sphere carries the mass in the
+  app's accent periwinkle over an explicit #0B0B19 ground — the gradient stops measure 9.91:1 and
+  6.70:1 against it — and generateIcons.js flattens onto that same ground and strips alpha.
+
+  A hairline also does not survive 16x16: at that size the old 16/512 stroke lands under one
+  device pixel. The filled sphere degrades gracefully instead — the knocked-out graticule thins
+  out and it reads as a solid periwinkle dot, which is still a legible favicon.
+
+  The mark occupies r=176 of a 512 box = 68.75% of the width, inside the 80% safe zone that
+  `purpose: "any maskable"` requires of pwa-512x512.png (see the manifest in vite.config.js),
+  so the maskable crop cannot clip it.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <defs>
+    <!-- Light from the upper left, so the sphere reads as a sphere and not a flat dot.
+         Both stops stay well above 4.5:1 against the ground. -->
+    <linearGradient id="sphere" x1="0.18" y1="0.06" x2="0.82" y2="0.94">
+      <stop offset="0" stop-color="#A9B4FF"/>
+      <stop offset="1" stop-color="#7F8FFA"/>
+    </linearGradient>
+    <!-- The graticule ellipses are as wide/tall as the sphere itself, so their strokes would
+         bleed past the silhouette at the four tangent points. Clipping to the sphere lets each
+         line run to the rim and stop flush, exactly like the wireframe original. -->
+    <clipPath id="sphereClip">
+      <circle cx="256" cy="256" r="176"/>
+    </clipPath>
+  </defs>
+  <rect width="512" height="512" fill="#0B0B19"/>
+  <circle cx="256" cy="256" r="176" fill="url(#sphere)"/>
+  <g clip-path="url(#sphereClip)" fill="none" stroke="#0B0B19" stroke-width="17">
+    <ellipse cx="256" cy="256" rx="176" ry="59"/>
+    <ellipse cx="256" cy="256" rx="59" ry="176"/>
   </g>
 </svg>

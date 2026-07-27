@@ -7,13 +7,16 @@ import XCTest
 /// content invariant, grandfathering, the partial photo-import math, entitlement refresh through
 /// the StoreKit seam (fake transactions — never real StoreKit), and the developer/env override
 /// precedence.
+@MainActor
 final class EntitlementTests: XCTestCase {
 
     // MARK: - Fake seam (no StoreKit)
 
     /// Records what the store asks and returns scripted answers, so the whole store is exercised
     /// without touching StoreKit.
-    final class FakeStoreKitProvider: StoreKitProviding {
+    // QUA-08: `@unchecked` for the same reason as `MockMediaDatabase` in MediaV2Tests — eight
+    // mutable scripting properties, read and written only from sequential main-actor `await`s.
+    final class FakeStoreKitProvider: StoreKitProviding, @unchecked Sendable {
         var entitlement: Entitlement = .free
         var product: StoreProduct? = StoreProduct(
             id: EntitlementPolicy.completeProductID,
@@ -44,7 +47,7 @@ final class EntitlementTests: XCTestCase {
             if let restoreError { throw restoreError }
             if restoreGrantsComplete { entitlement = .complete }
         }
-        func observeTransactionUpdates(_ onChange: @escaping (Entitlement) -> Void) {
+        func observeTransactionUpdates(_ onChange: @escaping @Sendable (Entitlement) -> Void) {
             observeRegistered = true
             lastUpdateHandler = onChange
         }

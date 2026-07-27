@@ -19,8 +19,15 @@ enum MapGeoMath {
     static let globeCenter = CLLocationCoordinate2D(latitude: 15, longitude: 30)
 
     /// Mapbox globe zoom 1.2–1.5 has no MapKit equivalent (MapKit is mercator, not a
-    /// true globe projection). A very large `centerCoordinateDistance` frames the full
-    /// disc: ~6.6 Earth radii from the surface.
+    /// true globe projection). A very large `centerCoordinateDistance` frames the disc as wide as
+    /// MapKit will allow.
+    ///
+    /// **This value is already at MapKit's clamp, and raising it does nothing.** Measured while
+    /// investigating A4-4 (the ocean labels that clip at the screen edges): at 42,000 km the disc
+    /// spans x=0…1205 of a 1206 px screen, and at 52,000 km it spans *exactly the same pixels*. So the
+    /// globe always slightly overflows the width, and no camera change can pull it inside the frame —
+    /// which is why A4-4 cannot be fixed by framing. The previous version of this comment claimed this
+    /// distance "frames the full disc: ~6.6 Earth radii"; it does not, and cannot.
     static let globeDistance: CLLocationDistance = 42_000_000
 
     /// Earth circumference at the equator (WGS-84), used for the zoom→distance mapping.

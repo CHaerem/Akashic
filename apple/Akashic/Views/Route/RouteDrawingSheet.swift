@@ -20,7 +20,7 @@ import MapKit
 struct RouteDrawingSheet: View {
     @Environment(\.dismiss) private var dismiss
 
-    var title: String = "Draw route"
+    var title: LocalizedStringKey = "Draw route"
     /// The journey's current route, drawn dashed underneath as a reference when replacing.
     var referenceRoute: Route?
     /// Where to open when there is no reference route — the region framing the days/photos we know
@@ -47,7 +47,11 @@ struct RouteDrawingSheet: View {
     private struct Drawn {
         var result = RouteDrawing.DrawnRoute(route: .empty, bridgedGaps: 0)
         var coordinates: [CLLocationCoordinate2D] = []
-        var summary: String = "Nothing drawn yet"
+        /// Resolved through the catalogue rather than a bare literal: the other values this
+        /// field takes are formatted measurements from `RouteDrawing.DrawnRoute.summary`, so
+        /// it stays a `String` and only the placeholder needs translating.
+        var summary: String = String(localized: "Nothing drawn yet",
+                                    comment: "Route drawing sheet: shown before the first stroke.")
     }
 
     var body: some View {
@@ -111,6 +115,15 @@ struct RouteDrawingSheet: View {
                     Color.clear
                         .contentShape(Rectangle())
                         .gesture(drawGesture(proxy))
+                        // QUA-24, stated rather than papered over: tracing a route with a finger is
+                        // direct manipulation of a continuous surface, and no label makes that
+                        // operable with VoiceOver — there is no discrete control here to name. What
+                        // this element can honestly do is say what the surface is and where the
+                        // alternatives are, so it is not encountered as an unexplained dead zone.
+                        // Every route this sheet produces is also reachable through Import GPX and
+                        // Draft route from photos, both of which are ordinary buttons.
+                        .accessibilityLabel("Drawing surface")
+                        .accessibilityHint("Tracing a route needs sight and a finger. To set a route without drawing, close this and use Import GPX or Draft route from photos.")
                 }
             }
         }
@@ -142,7 +155,14 @@ struct RouteDrawingSheet: View {
         let result = RouteDrawing.drawnRoute(strokes: strokes)
         drawn = Drawn(result: result,
                       coordinates: result.route.clCoordinates,
-                      summary: result.isUsable ? result.summary : "Nothing drawn yet")
+                      // `String(localized:)`, matching `Drawn`'s own default. This branch had a bare
+                      // literal, so the placeholder was correctly translated when the sheet opened
+                      // and reverted to English the moment the user drew a stroke and undid it —
+                      // exactly the QUA-06 trap, in the one spot where the two forms sat side by side.
+                      summary: result.isUsable
+                          ? result.summary
+                          : String(localized: "Nothing drawn yet",
+                                   comment: "Route drawing sheet: shown before the first stroke."))
     }
 
     // MARK: Overlays
@@ -164,12 +184,17 @@ struct RouteDrawingSheet: View {
                 Label("Move map", systemImage: "hand.draw").tag(Mode.pan)
             }
             .pickerStyle(.segmented)
+            .accessibilityLabel("Map mode")
 
             HStack(spacing: 10) {
                 Text(drawn.summary)
                     .font(.caption)
                     .foregroundStyle(Theme.textSecondary)
                     .frame(maxWidth: .infinity, alignment: .leading)
+                    // The only running statement of what has been drawn — and the two buttons beside
+                    // it are what change it, so it needs to read as a labelled state, not a fragment.
+                    .accessibilityLabel("Drawn so far")
+                    .accessibilityValue(drawn.summary)
                 Button {
                     strokes.removeLast()
                     refold()
@@ -177,6 +202,7 @@ struct RouteDrawingSheet: View {
                     Image(systemName: "arrow.uturn.backward")
                 }
                 .disabled(strokes.isEmpty)
+                .accessibilityLabel("Undo the last stroke")
                 Button {
                     strokes = []
                     current = []
@@ -185,6 +211,7 @@ struct RouteDrawingSheet: View {
                     Image(systemName: "trash")
                 }
                 .disabled(strokes.isEmpty)
+                .accessibilityLabel("Clear everything drawn")
             }
             .font(.subheadline.weight(.semibold))
             .tint(Theme.accent)

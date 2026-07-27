@@ -11,9 +11,13 @@ enum ExportArchive {
     enum ArchiveError: LocalizedError {
         case zipFailed(String)
 
+        /// Localised (QUA-26): this is the alert text when an export fails. The detail is a system
+        /// error string and is interpolated as-is.
         var errorDescription: String? {
             switch self {
-            case .zipFailed(let detail): return "Could not package the export: \(detail)"
+            case .zipFailed(let detail):
+                return String(localized: "Could not package the export: \(detail)",
+                              comment: "Export failure alert: zipping the export folder failed. The placeholder is the underlying system error.")
             }
         }
     }

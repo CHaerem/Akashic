@@ -10,6 +10,8 @@ struct JourneyDetailView: View {
 
     /// Which day (index into `camps`) is shown in the presented `DayDetailSheet`, if any.
     @State private var selectedDayIndex: Int?
+    /// A2 (QUA-18): bumped when a delete succeeds, so the destructive confirm has feedback.
+    @State private var deletedTick = 0
     @State private var showJourneyEdit = false
     @State private var showManageDays = false
     @State private var showEnrich = false
@@ -70,6 +72,11 @@ struct JourneyDetailView: View {
                             RoundedRectangle(cornerRadius: 18, style: .continuous)
                                 .strokeBorder(Theme.hairline, lineWidth: 1)
                         )
+                        // A non-interactive route map. `interactive: false` stops touches but not
+                        // VoiceOver, which walked every annotation before reaching the stats below;
+                        // the stats and the day list are where the same information is readable.
+                        .accessibilityElement(children: .ignore)
+                        .accessibilityLabel(Text("Map of the route, \(live.camps.count) days marked"))
 
                     statsSummary
                     if photoCount > 0 { photosLink }
@@ -86,6 +93,9 @@ struct JourneyDetailView: View {
             .padding(16)
         }
         .background(Theme.background.ignoresSafeArea())
+        // A2 (QUA-18): `.warning`, not `.success` — deleting a journey is not a happy event, and the
+        // view dismisses immediately afterwards so this is the only confirmation it happened.
+        .sensoryFeedback(.warning, trigger: deletedTick)
         .navigationTitle(live.shortName)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -123,6 +133,9 @@ struct JourneyDetailView: View {
                     Image(systemName: "ellipsis.circle")
                 }
                 .tint(Theme.accent)
+                // QUA-07: an unlabelled glyph that is the only route to editing, sharing, exporting,
+                // enriching and deleting this journey — eight actions behind one anonymous button.
+                .accessibilityLabel("Journey options")
             }
         }
         .sheet(isPresented: daySheetPresented) {
@@ -219,6 +232,10 @@ struct JourneyDetailView: View {
 
     private func deleteJourney() {
         guard store.deleteJourney(id: live.id) else { return }
+        // A2 (QUA-18): `.warning` on the destructive confirm, and only once the delete actually
+        // succeeded — a haptic that fires on a failed delete would be telling the user their journey
+        // is gone when it is not. The view dismisses right after, so this is the confirmation.
+        deletedTick += 1
         dismiss()
     }
 
@@ -264,17 +281,20 @@ struct JourneyDetailView: View {
             HStack(spacing: 10) {
                 Image(systemName: "book.pages")
                     .font(.subheadline)
+                    .accessibilityHidden(true)
                 Text("Read this journey")
                     .font(.subheadline.weight(.semibold))
                 Spacer()
                 Image(systemName: "arrow.right")
                     .font(.footnote.weight(.semibold))
+                    .accessibilityHidden(true)
             }
             .foregroundStyle(Theme.onAccent)
             .padding(14)
             .background(Theme.accent, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
         }
         .buttonStyle(.plain)
+        .accessibilityHint("Opens the journey as a day-by-day story")
     }
 
     private var photosLink: some View {
@@ -285,7 +305,8 @@ struct JourneyDetailView: View {
             HStack(spacing: 10) {
                 Image(systemName: "photo.on.rectangle.angled")
                     .font(.subheadline)
-                    .foregroundStyle(Theme.accent)
+                    .foregroundStyle(Theme.accentText)
+                    .accessibilityHidden(true)
                 Text("View all photos")
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(Theme.textPrimary)
@@ -293,6 +314,7 @@ struct JourneyDetailView: View {
                 Image(systemName: "chevron.right")
                     .font(.footnote)
                     .foregroundStyle(Theme.textTertiary)
+                    .accessibilityHidden(true)
             }
             .padding(14)
             .background(Theme.surface, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
@@ -302,6 +324,7 @@ struct JourneyDetailView: View {
             )
         }
         .buttonStyle(.plain)
+        .accessibilityHint(Text("Opens all \(photoCount) photos in this journey"))
     }
 
     private var header: some View {
@@ -310,21 +333,30 @@ struct JourneyDetailView: View {
                 Text(live.shortName)
                     .font(.largeTitle.weight(.bold))
                     .foregroundStyle(Theme.textPrimary)
+                    .accessibilityAddTraits(.isHeader)
                 Spacer()
+                // The country is named in words on the next line.
                 Text(live.countryFlag).font(.system(size: flagSize))
+                    .accessibilityHidden(true)
             }
             HStack(spacing: 8) {
                 Text(live.country).foregroundStyle(Theme.textSecondary)
                 if let dates = Formatters.dateRange(live.dateStarted, live.dateEnded) {
-                    Text("·").foregroundStyle(Theme.textTertiary)
+                    Text("·").foregroundStyle(Theme.textTertiary).accessibilityHidden(true)
                     Text(dates).foregroundStyle(Theme.textSecondary)
                 }
-                if isSample {
-                    Text("·").foregroundStyle(Theme.textTertiary)
+                // The badge goes through `showsSampleBadge` (the SHIP-03 screenshot seam); the
+                // delete copy below deliberately does NOT — it must stay honest in every run.
+                if store.showsSampleBadge(journey.id) {
+                    // Decorative separator: announcing "middle dot" between two real labels is noise.
+                    Text("·").foregroundStyle(Theme.textTertiary).accessibilityHidden(true)
                     SampleBadge()
                 }
             }
             .font(.subheadline)
+            // Country, dates and the sample badge are one subtitle. Three announcements with a
+            // middot between each is how the separator ends up being read aloud.
+            .accessibilityElement(children: .combine)
         }
     }
 
@@ -348,6 +380,11 @@ struct JourneyDetailView: View {
                   value: live.stats.duration > 0 ? "\(live.stats.duration)" : "—",
                   caption: "Days"),
         ])
+        // QUA-07: `StatChipRow` builds its four chips internally and each renders as three elements,
+        // so this row was twelve announcements for four numbers — with each caption arriving after
+        // its value. Combined here because the per-chip fix belongs in `StatChip` itself, in
+        // `Theme.swift`, which this task does not own (reported).
+        .accessibilityElement(children: .combine)
     }
 
     @ViewBuilder
@@ -356,13 +393,14 @@ struct JourneyDetailView: View {
             Text("Days")
                 .font(.title3.weight(.semibold))
                 .foregroundStyle(Theme.textPrimary)
+                .accessibilityAddTraits(.isHeader)
             // A route without days (a bare GPX import, or a drawn route) used to leave this heading
             // standing over nothing.
             if live.camps.isEmpty {
                 Button { showManageDays = true } label: {
                     HStack(spacing: 10) {
                         Image(systemName: "calendar.badge.plus")
-                            .font(.title3).foregroundStyle(Theme.accent).frame(width: 26)
+                            .font(.title3).foregroundStyle(Theme.accentText).frame(width: 26)
                         VStack(alignment: .leading, spacing: 2) {
                             Text(isOwner ? "No days yet" : "No days yet")
                                 .font(.subheadline.weight(.semibold)).foregroundStyle(Theme.textPrimary)
@@ -398,6 +436,10 @@ struct JourneyDetailView: View {
                         Label("Edit day", systemImage: "square.and.pencil")
                     }
                 }
+                // A context menu is reachable through VoiceOver's Actions rotor, but only if the
+                // reader is told there is one — editing a day from this screen was otherwise
+                // undiscoverable.
+                .accessibilityHint("Opens the day. An Edit day action is also available.")
             }
         }
     }
@@ -423,7 +465,8 @@ struct DayRow: View {
                         HStack(spacing: 6) {
                             Image(systemName: "arrow.up.to.line.compact")
                                 .font(.caption2)
-                                .foregroundStyle(Theme.accent)
+                                .foregroundStyle(Theme.accentText)
+                                .accessibilityHidden(true)
                             Text(Formatters.meters(camp.elevation))
                                 .font(.subheadline)
                                 .foregroundStyle(Theme.textSecondary)
@@ -433,6 +476,7 @@ struct DayRow: View {
                                     .foregroundStyle(Theme.textTertiary)
                             }
                         }
+                        .accessibilityElement(children: .combine)
                     }
                     Spacer()
                 }
@@ -461,17 +505,24 @@ struct DayRow: View {
         }
     }
 
+    /// QUA-07: "DAY" over a digit is a two-line visual composition, and VoiceOver read it as two
+    /// elements — an all-caps word it may spell out, then a lone number. One element with the sentence
+    /// it means.
     private var dayBadge: some View {
         VStack(spacing: 0) {
             // Was 8 pt — below the `.caption2` floor; `.caption2` is the smallest this can go.
             Text("DAY").font(.caption2.weight(.bold)).foregroundStyle(Theme.textTertiary)
-            Text("\(camp.dayNumber)").font(.title3.weight(.bold)).foregroundStyle(Theme.accent)
+            Text("\(camp.dayNumber)").font(.title3.weight(.bold)).foregroundStyle(Theme.accentText)
         }
         .frame(width: dayBadgeSize, height: dayBadgeSize)
         .background(Theme.accentSoft, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text("Day \(camp.dayNumber)"))
     }
 
-    private func metric(icon: String, label: String, value: String) -> some View {
+    /// The label sits under the value, which is fine to read and backwards to hear — so name first,
+    /// value as the value, glyph hidden. Same treatment as `StatsView.dayMetric`.
+    private func metric(icon: String, label: LocalizedStringKey, value: String) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             Label(value, systemImage: icon)
                 .font(.caption.weight(.semibold))
@@ -480,6 +531,9 @@ struct DayRow: View {
                 .font(.caption2)
                 .foregroundStyle(Theme.textTertiary)
         }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(label)
+        .accessibilityValue(value)
     }
 }
 
@@ -492,12 +546,17 @@ struct FlowChips: View {
             ForEach(items.prefix(4), id: \.self) { item in
                 Text(item)
                     .font(.caption2.weight(.medium))
-                    .foregroundStyle(Theme.accent)
+                    .foregroundStyle(Theme.accentText)
                     .padding(.vertical, 4)
                     .padding(.horizontal, 9)
                     .background(Theme.accentSoft, in: Capsule())
             }
         }
+        // The chips are one list of a day's highlights, not four unrelated fragments — and the
+        // enclosing `DayRow` is inside a Button, so keeping them separate meant a day with highlights
+        // took four extra swipes to get past.
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(Text("Highlights: \(items.prefix(4).joined(separator: ", "))"))
     }
 }
 

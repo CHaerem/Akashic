@@ -534,23 +534,20 @@ enum RecordCoder {
         return CKAsset(fileURL: URL(fileURLWithPath: path))
     }
 
-    private static let isoFormatter: ISO8601DateFormatter = {
-        let f = ISO8601DateFormatter()
-        f.formatOptions = [.withInternetDateTime]
-        return f
-    }()
+    // QUA-08: was a private static ISO8601DateFormatter. See ISO8601Shared for why these are
+    // serialised centrally rather than annotated nonisolated(unsafe) at each site.
 
     /// Tolerant ISO-8601 parse (with or without fractional seconds).
+    ///
+    /// QUA-08: this used to be a plain static formatter plus a fractional one built per call.
+    /// `ISO8601Shared.date(from:)` already tries both, so the second attempt was dead code once the
+    /// shared helper landed — and the per-call construction it did on the fractional path is gone.
     private static func isoDate(from string: String?) -> Date? {
-        guard let string, !string.isEmpty else { return nil }
-        if let date = isoFormatter.date(from: string) { return date }
-        let withFraction = ISO8601DateFormatter()
-        withFraction.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return withFraction.date(from: string)
+        ISO8601Shared.date(from: string)
     }
 
     private static func isoString(from date: Date?) -> String? {
         guard let date else { return nil }
-        return isoFormatter.string(from: date)
+        return ISO8601Shared.string(from: date)
     }
 }

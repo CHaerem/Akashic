@@ -262,7 +262,10 @@ final class AkashicSyncEngine: NSObject, CKSyncEngineDelegate {
 
         if engine == nil { engine = engineBuilder?() ?? buildRealEngine() }
         guard engine != nil else {
-            status.set(.error("Could not create the CloudKit sync engine"))
+            // Localised (QUA-26): this becomes the `%@` inside "Sync error: %@" on the Settings row,
+            // so leaving it English produced a half-Norwegian sentence.
+            status.set(.error(String(localized: "Could not create the CloudKit sync engine",
+                                     comment: "Settings › iCloud sync status row, after \"Sync error:\" — the sync engine could not be constructed at all.")))
             return
         }
 
@@ -338,7 +341,8 @@ final class AkashicSyncEngine: NSObject, CKSyncEngineDelegate {
             if databaseScope == .private { onFreshInstallDetermined?() }
         } catch {
             SyncLog.error("activate: fetchChanges() threw \(error)")
-            status.set(.error("Initial fetch failed: \(error.localizedDescription)"))
+            status.set(.error(String(localized: "Initial fetch failed: \(error.localizedDescription)",
+                                     comment: "Settings › iCloud sync status row, after \"Sync error:\" — the first fetch after activation threw. The placeholder is the underlying system error.")))
         }
     }
 
@@ -715,6 +719,18 @@ final class AkashicSyncEngine: NSObject, CKSyncEngineDelegate {
                     store.purgeSystemFields(forRecordNames: [failure.record.recordID.recordName])
                 }
                 rebased.append(.saveRecord(failure.record.recordID))
+            case .quotaExceeded:
+                // The owner's iCloud is full (QUA-11). Distinct from `.error` on both counts that
+                // matter: it is not a fault, and no amount of retrying resolves it — only the user
+                // freeing space or buying more does. Before this, the case fell into `default` as
+                // "retryable", so the Settings row went on reading "Syncing · last update 3 min
+                // ago" while every save was being rejected.
+                //
+                // Nothing is lost while this is true: local originals are never pruned, and
+                // `mediaRepackPending()` is state-derived, so a quota-failed photo is retried on
+                // the next activation and lands by itself once space exists. So this is an honesty
+                // fix, not a data-loss fix — which is exactly why it was invisible.
+                status.set(.storageFull)
             case .serverRejectedRequest, .invalidArguments, .unknownItem:
                 // Non-retryable for this record: surface, do not loop.
                 status.set(.error(failure.error.localizedDescription))
@@ -731,7 +747,13 @@ final class AkashicSyncEngine: NSObject, CKSyncEngineDelegate {
         }
         if !revokedDrops.isEmpty { engine?.remove(pendingRecordZoneChanges: revokedDrops) }
         if !rebased.isEmpty { engine?.add(pendingRecordZoneChanges: rebased) }
-        if !saved.isEmpty || !deleted.isEmpty { status.markSynced() }
+        if !saved.isEmpty || !deleted.isEmpty {
+            // A save that actually landed is the only evidence that space exists again, so this is
+            // where `.storageFull` clears — not in `markSynced`, which fetches also call and which
+            // would therefore clear it while uploads were still being rejected (QUA-11).
+            status.clearStorageFullOnSuccessfulSave()
+            status.markSynced()
+        }
     }
 
     /// Materialize the CKRecords for a set of pending changes. Prefers a rebased record from
@@ -741,10 +763,22 @@ final class AkashicSyncEngine: NSObject, CKSyncEngineDelegate {
         -> CKSyncEngine.RecordZoneChangeBatch? {
         guard !changes.isEmpty else { return nil }
         let cache = mergedRecordCache
-        let store = self.store
-        let batch = await CKSyncEngine.RecordZoneChangeBatch(pendingChanges: changes) { recordID in
+        // QUA-08 — this was a real data race, not a warning to satisfy.
+        //
+        // `recordProvider` is `@Sendable` and CloudKit calls it on its OWN queue, so hoisting
+        // `let store = self.store` out and calling `store.makeRecord` inside the closure read the
+        // main-QUEUE Core Data context from a cooperative-pool thread. Core Data does not diagnose
+        // that; it corrupts quietly. It only became visible once `PersistenceController` and
+        // `SyncLocalStore` carried `@MainActor` — which is the whole reason that annotation is worth
+        // more than the warning count it moves.
+        //
+        // The provider is `async`, so the fix is a real hop rather than a suppression: `record(for:)`
+        // below is main-actor isolated, and `CKRecord` is `Sendable` in this SDK so the result may
+        // cross back out. Behaviour is unchanged — still lazy per record ID, so `RecordZoneChangeBatch`
+        // still materializes only what fits CloudKit's per-operation limits and leaves the rest pending.
+        let batch = await CKSyncEngine.RecordZoneChangeBatch(pendingChanges: changes) { [self] recordID in
             if let merged = cache[recordID] { return merged }
-            return store.makeRecord(forRecordName: recordID.recordName, zoneID: recordID.zoneID, existing: nil)
+            return await record(for: recordID)
         }
         // Evict ONLY what the batch actually materialized. `RecordZoneChangeBatch` honors
         // CloudKit's per-operation record/byte limits and leaves the overflow pending, so
@@ -756,6 +790,15 @@ final class AkashicSyncEngine: NSObject, CKSyncEngineDelegate {
             for record in batch.recordsToSave { mergedRecordCache[record.recordID] = nil }
         }
         return batch
+    }
+
+    /// Materialize one pending record on the main actor.
+    ///
+    /// Exists so `nextBatch`'s `@Sendable` provider closure has something main-actor isolated to
+    /// `await` into, instead of reaching a main-queue Core Data context from CloudKit's queue.
+    /// Isolation is inherited from the class — the annotation is not repeated. (QUA-08)
+    private func record(for recordID: CKRecord.ID) -> CKRecord? {
+        store.makeRecord(forRecordName: recordID.recordName, zoneID: recordID.zoneID, existing: nil)
     }
 
     // MARK: - Helpers

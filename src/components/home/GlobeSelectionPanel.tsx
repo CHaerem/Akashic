@@ -1,4 +1,4 @@
-import { motion } from 'framer-motion';
+import { motion, type Variants } from 'framer-motion';
 import type { TrekConfig } from '../../types/trek';
 import { Button } from '../ui/button';
 import { Card } from '../ui/card';
@@ -38,8 +38,11 @@ const MOBILE_GRADIENT = `linear-gradient(
     transparent 100%
 )`;
 
-// Animation variants
-const containerVariants = {
+// Animation variants. The `Variants` annotation is load-bearing: without a contextual type
+// TS widens `ease: 'easeOut'` to `string` and the cubic-bezier tuple to `number[]`, neither of
+// which satisfies framer-motion's `Easing` union. Inline `transition={{...}}` props get that
+// context for free; hoisted constants like these do not.
+const containerVariants: Variants = {
     hidden: { opacity: 0, y: 20 },
     visible: {
         opacity: 1,
@@ -57,7 +60,7 @@ const containerVariants = {
     }
 };
 
-const itemVariants = {
+const itemVariants: Variants = {
     hidden: { opacity: 0, y: 10 },
     visible: {
         opacity: 1,

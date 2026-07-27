@@ -11,7 +11,9 @@ struct DayDiscoveriesView: View {
     var body: some View {
         if total > 0 {
             VStack(alignment: .leading, spacing: 12) {
-                SectionLabel(icon: "🔍", title: "Discoveries", trailing: "\(total) places")
+                SectionLabel(icon: "🔍", title: "Discoveries",
+                             trailing: String(localized: "\(total) places",
+                                              comment: "Day discoveries: count badge over the POI + historical-site list."))
 
                 if !historicalSites.isEmpty {
                     subheader(marker: "★", markerColor: HistoricalSignificance.color(for: "major"),
@@ -31,16 +33,22 @@ struct DayDiscoveriesView: View {
         }
     }
 
-    private func subheader(marker: String, markerColor: Color, title: String) -> some View {
+    private func subheader(marker: String, markerColor: Color, title: LocalizedStringKey) -> some View {
         HStack(spacing: 6) {
+            // "★" and "📍" are bullets. VoiceOver reads them as "white medium star" and "round
+            // pushpin" before the heading they decorate.
             Text(marker)
                 .font(.caption)
                 .foregroundStyle(markerColor == .clear ? Theme.textSecondary : markerColor)
-            Text(title.uppercased())
+                .accessibilityHidden(true)
+            Text(title)
+                .textCase(.uppercase)
                 .font(.caption2.weight(.medium))
                 .tracking(0.5)
                 .foregroundStyle(Theme.textTertiary)
         }
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.isHeader)
     }
 }
 
@@ -70,6 +78,7 @@ private struct ExpandableCard<Content: View>: View {
                         .frame(width: iconBoxSize, height: iconBoxSize)
                         .background(iconColor.opacity(0.16),
                                     in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+                        .accessibilityHidden(true)
                     VStack(alignment: .leading, spacing: 1) {
                         Text(title)
                             .font(.footnote.weight(.medium))
@@ -86,11 +95,21 @@ private struct ExpandableCard<Content: View>: View {
                         .font(.caption2.weight(.semibold))
                         .foregroundStyle(Theme.textTertiary)
                         .rotationEffect(.degrees(expanded ? 180 : 0))
+                        .accessibilityHidden(true)
                 }
                 .padding(12)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            // QUA-07: a rotating chevron is how a sighted reader knows this card opens and whether it
+            // is currently open. There is no accessibility *trait* for expansion (UIKit conveys it
+            // through the value, and `AccessibilityTraits` has no `isExpanded`), so the state is the
+            // value and the consequence is the hint. Without both, every discovery announced as a
+            // plain place name with no sign that a description was behind it.
+            .accessibilityElement(children: .combine)
+            .accessibilityAddTraits(.isButton)
+            .accessibilityValue(expanded ? "Expanded" : "Collapsed")
+            .accessibilityHint(expanded ? "Collapses the details" : "Expands the details")
 
             if expanded {
                 VStack(alignment: .leading, spacing: 0) {
@@ -137,7 +156,7 @@ private struct POICardView: View {
                     .padding(.top, 10)
                 ForEach(Array(tips.enumerated()), id: \.offset) { _, tip in
                     HStack(alignment: .top, spacing: 6) {
-                        Text("•").foregroundStyle(Theme.textTertiary)
+                        Text("•").foregroundStyle(Theme.textTertiary).accessibilityHidden(true)
                         Text(tip)
                             .font(.caption)
                             .foregroundStyle(Theme.textTertiary)
@@ -170,9 +189,11 @@ private struct HistoricalSiteCardView: View {
         ) {
             // Significance badge + summary.
             HStack(spacing: 6) {
+                // The dot repeats the significance in colour only.
                 Circle()
                     .fill(HistoricalSignificance.color(for: site.significance))
                     .frame(width: 7, height: 7)
+                    .accessibilityHidden(true)
                 Text(HistoricalSignificance.label(for: site.significance))
                     .font(.caption2.weight(.semibold))
                     .foregroundStyle(HistoricalSignificance.color(for: site.significance))
@@ -206,10 +227,13 @@ private struct HistoricalSiteCardView: View {
                                     Text(link.label)
                                     Image(systemName: "arrow.up.right")
                                         .font(.caption2)
+                                        .accessibilityHidden(true)
                                 }
                                 .font(.caption)
-                                .foregroundStyle(Theme.accent)
+                                .foregroundStyle(Theme.accentText)
                             }
+                            // The arrow glyph is what tells a sighted reader this leaves the app.
+                            .accessibilityHint("Opens in Safari")
                         }
                     }
                 }
@@ -230,7 +254,7 @@ private struct FlowTags: View {
                 ForEach(tags, id: \.self) { tag in
                     Text(tag)
                         .font(.caption2)
-                        .foregroundStyle(Theme.accent)
+                        .foregroundStyle(Theme.accentText)
                         .padding(.horizontal, 8)
                         .padding(.vertical, 3)
                         .background(Theme.accentSoft,

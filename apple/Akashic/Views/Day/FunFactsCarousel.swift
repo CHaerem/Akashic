@@ -20,6 +20,8 @@ struct FunFactCardView: View {
                     .frame(width: iconBoxSize, height: iconBoxSize)
                     .background(style.color.opacity(0.16),
                                 in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                    // The category is spelled out in the label beside it.
+                    .accessibilityHidden(true)
                 Text(style.label.uppercased())
                     .font(.caption2.weight(.semibold))
                     .tracking(0.8)
@@ -40,6 +42,10 @@ struct FunFactCardView: View {
                     .foregroundStyle(Theme.textTertiary)
             }
         }
+        // One fact is one card and one thing to read — category, the fact, and where it came from.
+        // Three elements meant the category arrived as a lone uppercase word and the source as a
+        // dangling attribution.
+        .accessibilityElement(children: .combine)
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
         // Was a two-stop white-opacity gradient tuned for the fixed dark background this card
@@ -89,25 +95,41 @@ struct FunFactsCarousel: View {
 /// A small uppercase section header with a leading emoji (shared across day sections).
 struct SectionLabel: View {
     let icon: String
-    let title: String
+    let title: LocalizedStringKey
+    /// Stays a `String`: every caller passes a already-formatted count ("12", "4 places"), not
+    /// prose. The prose ones are built with `Formatters` so they localise at their source.
     var trailing: String?
 
     var body: some View {
         HStack(spacing: 6) {
-            Text(icon).font(.subheadline)
-            Text(title.uppercased())
+            // QUA-07: an emoji is a decorative bullet here, and VoiceOver reads its full CLDR name —
+            // "light bulb", "magnifying glass tilted left", "sparkles" — before every section title
+            // in a day.
+            Text(icon).font(.subheadline).accessibilityHidden(true)
+            // `.textCase(.uppercase)` rather than `title.uppercased()` — see `GlassField`: the
+            // `String` form made every section header ("Photos", "Comments", "Highlights",
+            // "Discoveries", "Did you know?") invisible to the string catalogue.
+            Text(title)
+                .textCase(.uppercase)
                 .font(.caption2.weight(.semibold))
                 .tracking(0.8)
                 .foregroundStyle(Theme.textTertiary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
             Spacer(minLength: 0)
             if let trailing {
                 Text(trailing)
                     .font(.caption2.weight(.medium))
-                    .foregroundStyle(Theme.accent)
+                    .foregroundStyle(Theme.accentText)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 2)
                     .background(Theme.accentSoft, in: Capsule())
             }
         }
+        // Title and count are one header ("Photos, 12"), and it is a header: this is what makes a day
+        // navigable by section instead of by swiping through every fact and photo in it. Five sections
+        // per day share this component, so this one change is what gives a day structure.
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.isHeader)
     }
 }

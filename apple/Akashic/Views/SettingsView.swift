@@ -50,9 +50,15 @@ struct SettingsView: View {
         Form {
             consumerSections
 
+            // SHIP-09: compiled out of Release entirely, not merely hidden. `DeveloperTools`
+            // already returns false there, so this is the second of two independent guards — the
+            // point being that the workshop should not be *present* in a customer's binary, so
+            // there is nothing for a future refactor to accidentally re-expose.
+            #if DEBUG
             if developerUnlocked {
                 developerSections
             }
+            #endif
         }
         .scrollContentBackground(.hidden)
         // D2: a `Form` has no natural width cap of its own and otherwise runs the full width of
@@ -111,7 +117,7 @@ struct SettingsView: View {
                     networkPolicy.grantOneOccasionCellularDownload()
                 } label: {
                     Label("Download now over cellular", systemImage: "arrow.down.circle")
-                        .foregroundStyle(Theme.accent)
+                        .foregroundStyle(Theme.accentText)
                 }
             }
             // v2 one-time photo-storage repack progress, while it runs (MAPPING §13).
@@ -152,20 +158,19 @@ struct SettingsView: View {
 
         Section {
             Label {
-                Text("Export a journey from its ⋯ menu — it bundles the route, photos, and notes "
-                     + "into a file you can share or back up.")
+                Text("Export a journey from its ⋯ menu — it bundles the route, photos, and notes into a file you can share or back up.")
                     .font(.footnote)
                     .foregroundStyle(Theme.textSecondary)
             } icon: {
                 Image(systemName: "square.and.arrow.up")
-                    .foregroundStyle(Theme.accent)
+                    .foregroundStyle(Theme.accentText)
             }
 
             Button {
                 onboarding.replay()
             } label: {
                 Label("Replay intro", systemImage: "sparkles")
-                    .foregroundStyle(Theme.accent)
+                    .foregroundStyle(Theme.accentText)
             }
         } header: {
             Text("Your journeys")
@@ -183,7 +188,10 @@ struct SettingsView: View {
                     Label("Akashic Complete", systemImage: "star.circle")
                         .foregroundStyle(Theme.textPrimary)
                     Spacer()
-                    Text(entitlements.isComplete ? "Complete ✓" : "Free")
+                    // QUA-15: "Free" is a claim, and on a cold launch it is one we cannot make yet.
+                    Text(entitlements.isEntitlementDetermined
+                         ? (entitlements.isComplete ? "Complete ✓" : "Free")
+                         : "Checking…")
                         .foregroundStyle(entitlements.isComplete ? Theme.accent : Theme.textSecondary)
                     if !entitlements.isComplete {
                         Image(systemName: "chevron.right")
@@ -193,6 +201,9 @@ struct SettingsView: View {
                 }
             }
             .disabled(entitlements.isComplete)
+            // QUA-10: the paywall's `.settings` entry point, and the only one reachable without
+            // first filling the free tier — so it is where the paywall-state tests start. See `A11yID`.
+            .accessibilityIdentifier(A11yID.settingsComplete)
         } header: {
             Text("Membership")
         } footer: {
@@ -220,8 +231,10 @@ struct SettingsView: View {
         }
     }
 
-    /// Version row + the seven-tap unlock gesture for the developer section.
+    /// Version row. In DEBUG it also carries the seven-tap unlock gesture for the developer
+    /// section; in Release it is an ordinary row, because there is nothing to unlock (SHIP-09).
     private var versionRow: some View {
+        #if DEBUG
         labelled("Version", AppInfo.versionDisplay)
             .contentShape(Rectangle())
             .onTapGesture {
@@ -232,9 +245,12 @@ struct SettingsView: View {
                     developerUnlocked = true
                 }
             }
+        #else
+        labelled("Version", AppInfo.versionDisplay)
+        #endif
     }
 
-    private func linkRow(_ title: String, systemImage: String) -> some View {
+    private func linkRow(_ title: LocalizedStringKey, systemImage: String) -> some View {
         HStack {
             Label(title, systemImage: systemImage)
                 .foregroundStyle(Theme.textPrimary)
@@ -290,7 +306,7 @@ struct SettingsView: View {
                 Config.setPersistenceModeOverride(nil)
                 showRelaunchNote = true
             }
-            .foregroundStyle(Theme.accent)
+            .foregroundStyle(Theme.accentText)
 
             Button(role: .destructive) {
                 DeveloperTools.setUnlocked(false)
@@ -501,7 +517,7 @@ struct SettingsView: View {
             }
 
             Button("Choose folder…") { showFolderPicker = true }
-                .foregroundStyle(Theme.accent)
+                .foregroundStyle(Theme.accentText)
 
             Button {
                 Task {
@@ -533,7 +549,7 @@ struct SettingsView: View {
                     ImportBrowserView()
                 } label: {
                     Label("Browse imported photos", systemImage: "photo.on.rectangle.angled")
-                        .foregroundStyle(Theme.accent)
+                        .foregroundStyle(Theme.accentText)
                 }
             }
         } header: {
@@ -581,7 +597,7 @@ struct SettingsView: View {
         Config.importMediaRoot = mediaRoot
     }
 
-    private func labelled(_ title: String, _ value: String) -> some View {
+    private func labelled(_ title: LocalizedStringKey, _ value: String) -> some View {
         HStack {
             Text(title).foregroundStyle(Theme.textSecondary)
             Spacer()

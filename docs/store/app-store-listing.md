@@ -1,37 +1,32 @@
 # App Store Listing — Akashic Journeys
 
-> ## ⚠️ REVISION REQUIRED before this copy is entered (2026-07-25)
->
-> Two decisions landed after this file was written, and one of them makes the
-> current description **factually wrong**:
->
-> 1. **The free tier now includes finishing** (COMMERCIALIZATION-PLAN §5). Publishing
->    and export are no longer paywalled. Every place this copy says Complete unlocks
->    "unlimited journeys, publishing and export" must become **"unlimited journeys and
->    photos"** — otherwise the store description advertises a paywall that doesn't
->    exist, which App Review can falsify against the build.
-> 2. **Price is kr 149**, not kr 99.
->
-> And the positioning sharpened (§5b): the product is now framed as *the story of your
-> trip, told — without the work*. Three claims belong high in the description because
-> **Polarsteps structurally cannot make them**, and their paid tier sells what our free
-> tier opens with (3D maps, advanced stats):
->
-> - your trips live in **your own iCloud** — we run no servers and never see them;
-> - there is **no account to create** (your Apple ID is the account);
-> - **one price, once** — not a subscription.
->
-> Two hard rules for the copy: **never write "photo book"** (it promises print, and the
-> app cannot print — that is a guaranteed one-star), and **never name a competitor**.
-> Make the claims and let the reader do the comparison. Also state the Apple-only
-> constraint plainly — a family that discovers it after paying is a refund and a
-> one-star, and it is cheaper to say it up front.
->
-> The subtitle ("Your treks on a living globe") still reads trek-only. It is a good
-> line; decide deliberately whether the wedge audience (trekkers) or the wider job
-> (any trip worth remembering) should own 30 characters, and remember the demo journey
-> and screenshots should show **both** a trek and a photos-only trip (DESIGN-PLAN D9).
+> **Revision applied 2026-07-26 (DOC-08).** The paywall copy in §2/§3 now matches
+> `EntitlementPolicy`: Akashic Complete unlocks **unlimited journeys and photos, plus
+> Akashic Intelligence** — exporting and publishing are free-tier capabilities
+> (`canPublish`/`canExport` return `true` unconditionally), so advertising them as paid
+> was copy App Review could falsify against the binary. Price is the **kr 149** tier
+> (COMMERCIALIZATION-PLAN §5). No paid-tier claim in this file should be edited without
+> re-reading `apple/Akashic/Store/Entitlements.swift` and the paywall benefit list in
+> `apple/Akashic/Views/Store/PaywallView.swift` — those three must always agree.
 
+> **Rules for anyone editing this copy**
+>
+> - **Never write "photo book."** It promises print, the app cannot print, and that is
+>   a guaranteed one-star.
+> - **Never name a competitor.** Make the claim and let the reader do the comparison.
+>   The three claims that carry the positioning (§5b — *the story of your trip, told,
+>   without the work*) are already high in the description and stay there: your trips
+>   live in **your own iCloud** and we run no servers; there is **no account to create**;
+>   **one price, once**, not a subscription.
+> - **State the Apple-only constraint plainly** (see "THE HONEST FINE PRINT"). A family
+>   that discovers it after paying is a refund and a one-star; saying it up front is
+>   cheaper.
+
+> **Open owner decision — the subtitle.** "Your treks on a living globe" reads
+> trek-only. It is a good line; decide deliberately whether the wedge audience
+> (trekkers) or the wider job (any trip worth remembering) should own those 30
+> characters. Either way the demo journey and screenshots should show **both** a trek
+> and a photos-only trip (DESIGN-PLAN D9).
 
 Draft metadata for App Store Connect. Paste-ready. Every feature claim below is
 true of the app **today** unless tagged `[v1.0 — in progress]` (journey creation
@@ -145,9 +140,12 @@ archive may need an iCloud+ plan. Everyone you share with needs an Apple ID;
 relatives on other platforms can still view any journey you publish to the web.
 
 FREE TO START
-Keep your first journey free, with the full experience and family sharing included.
-Unlock Akashic Complete once — one payment, shared with your family — for unlimited
-journeys, publishing and export.
+Keep your first journey free — the full experience, family sharing included, and a
+journey you can actually finish: publishing it to the web and exporting it are free
+too. Unlock Akashic Complete once — one payment, no subscription, shared with your
+family — for unlimited journeys and photos, plus Akashic Intelligence: on-device
+drafting of day notes, day names and grounded facts about the places you passed,
+wherever Apple Intelligence is available.
 ```
 
 > `[v1.0 — in progress]` reality check on the description: the free-tier/"Akashic
@@ -229,9 +227,12 @@ kan trenge et iCloud+-abonnement. Alle du deler med trenger en Apple-ID; slektni
 på andre plattformer kan likevel se reiser du publiserer på nett.
 
 GRATIS Å STARTE
-Behold din første reise gratis, med hele opplevelsen og familiedeling inkludert. Lås
-opp Akashic Complete én gang — én betaling, delt med familien — for ubegrenset antall
-reiser, publisering og eksport.
+Behold din første reise gratis — hele opplevelsen, familiedeling inkludert, og en
+reise du faktisk kan fullføre: å publisere den på nett og å eksportere den er også
+gratis. Lås opp Akashic Complete én gang — én betaling, ikke abonnement, delt med
+familien — for ubegrenset antall reiser og bilder, pluss Akashic Intelligence: notater,
+dagsnavn og etterprøvbare fakta om stedene du passerte, skrevet på enheten, der
+Apple Intelligence er tilgjengelig.
 ```
 
 ---
@@ -303,9 +304,14 @@ Result: **4+**.
 
 - **Widgets** — a `JourneyStatsWidget` exists but is dormant (`COMMERCIALIZATION
   -PLAN.md §3`). Not advertised until it is enabled and polished.
-- **Apple Intelligence / "Akashic Intelligence"** — a v1.1 story (§10). No AI
-  claims in the v1.0 listing; adding them later is a promo-text update, not fluff
-  now.
+- **Apple Intelligence beyond the three shipped rungs** — day-note drafting, smart
+  day naming and grounded fun-facts are built, gated behind Complete and reachable
+  from real UI today (`COMMERCIALIZATION-PLAN.md §10`), so the paid-tier line names
+  "Akashic Intelligence" and nothing more. Everything further up the ladder
+  (photo-grounded notes, hero curation, journey narrative, natural-language search)
+  is v1.1+ and must stay out until it ships. The claim is qualified with "wherever
+  Apple Intelligence is available" because the features are runtime-gated to iOS 26
+  on Apple-Intelligence-capable hardware and are simply absent elsewhere.
 - **"Award-winning", statistics, testimonials** — none. Nothing that isn't true.
 - **Route drawing on the map** — v1.1 (`§4.1`/§8 risk row). The copy says "the
   route drawn… where you walked it" (describes viewing an existing route, true

@@ -77,14 +77,26 @@ struct StatsView: View {
                         .foregroundStyle(Theme.textSecondary)
                 }
             }
+            // QUA-07: the hero is one fact — the trip's high point — laid out as a label, a number
+            // and a place name. Three announcements made the headline figure of the whole tab arrive
+            // as "Summit", "5 895 m", "Uhuru Peak" with a swipe between each.
+            .accessibilityElement(children: .combine)
         }
     }
 
+    /// QUA-07: `StatChip` renders an icon, a value and a caption as three elements, so this row was
+    /// six announcements for three numbers — and the caption comes *after* the value, so a reader
+    /// heard "3 d" before learning it was the duration. Combining at the row rather than per chip is
+    /// deliberate: these three are the journey's headline together, and `StatChip` itself lives in
+    /// `Theme.swift`, which this task does not own (reported).
     private var headerChips: some View {
         HStack(spacing: 12) {
             StatChip(icon: "calendar", value: "\(journey.stats.duration) d", caption: "Duration")
+                .accessibilityElement(children: .combine)
             StatChip(icon: "figure.walk", value: Formatters.distanceKm(journey.stats.totalDistance), caption: "Distance")
+                .accessibilityElement(children: .combine)
             StatChip(icon: "arrow.up.forward", value: "+\(Formatters.meters(journey.stats.totalElevationGain))", caption: "Ascent")
+                .accessibilityElement(children: .combine)
         }
     }
 
@@ -130,6 +142,8 @@ struct StatsView: View {
                         .font(.subheadline).foregroundStyle(Theme.textSecondary)
                         .lineLimit(1).minimumScaleFactor(0.7)
                 }
+                .accessibilityElement(children: .combine)
+                .accessibilityAddTraits(.isHeader)
                 HStack(spacing: 0) {
                     dayMetric("Distance", Formatters.distanceKm(camp.dayDistance), "figure.walk")
                     dayMetric("Ascent", "+\(camp.elevationGainFromPrevious)m", "arrow.up.forward")
@@ -151,14 +165,21 @@ struct StatsView: View {
         .transition(.opacity)
     }
 
-    private func dayMetric(_ label: String, _ value: String, _ icon: String) -> some View {
+    /// The label comes *below* the value visually, which is fine to look at and wrong to hear — so
+    /// the accessibility label states the name first and the value as the value, and the glyph (a
+    /// third element that only restates the label) is hidden.
+    private func dayMetric(_ label: LocalizedStringKey, _ value: String, _ icon: String) -> some View {
         VStack(alignment: .leading, spacing: 3) {
-            Image(systemName: icon).font(.caption2).foregroundStyle(Theme.accent)
+            Image(systemName: icon).font(.caption2).foregroundStyle(Theme.accentText)
+                .accessibilityHidden(true)
             Text(value).font(.subheadline.weight(.semibold)).foregroundStyle(Theme.textPrimary)
                 .lineLimit(1).minimumScaleFactor(0.7)
             Text(label).font(.caption2).foregroundStyle(Theme.textTertiary)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(label)
+        .accessibilityValue(value)
     }
 
     // MARK: - Extended stats grids (web StatsTab parity)
@@ -211,8 +232,15 @@ struct StatsView: View {
             VStack(alignment: .leading, spacing: 6) {
                 sectionLabel("Rating")
                 HStack(spacing: 8) {
+                    // The dot repeats the rating in colour only — nothing for a screen reader, and
+                    // nothing for a colour-blind reader either, which is why the word is beside it.
                     Circle().fill(color).frame(width: 10, height: 10)
-                    Text(extended.difficulty)
+                        .accessibilityHidden(true)
+                    // `extended.difficulty` is a stable English token (see
+                    // `ExtendedStatsCalculator.localizedDifficulty`), so it has to be translated
+                    // here at the display seam — `Text(extended.difficulty)` rendered the raw
+                    // token verbatim and could never have been localised.
+                    Text(ExtendedStatsCalculator.localizedDifficulty(extended.difficulty))
                         .font(.title3.weight(.semibold))
                         .foregroundStyle(color)
                 }
@@ -220,19 +248,27 @@ struct StatsView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(color.opacity(0.4)))
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Difficulty rating")
+        .accessibilityValue(Text(ExtendedStatsCalculator.localizedDifficulty(extended.difficulty)))
     }
 
     // MARK: - Building blocks
 
-    private func sectionLabel(_ text: String) -> some View {
+    private func sectionLabel(_ text: LocalizedStringKey) -> some View {
         // Was a fixed 10 pt at `Theme.textTertiary` (40% white) — small size and low contrast
         // compounded into the least readable text in the tab. `.caption2` is the size floor;
         // `textSecondary` (62% white) is the fix for a *label*, as opposed to a de-emphasised
         // value, sitting at that size.
-        Text(text.uppercased())
+        Text(text)
+            .textCase(.uppercase)
             .font(.caption2.weight(.medium))
             .tracking(1.4)
             .foregroundStyle(Theme.textSecondary)
+            // These five labels are the tab's structure, so they are the right rotor stops: heading
+            // navigation jumps Summit → Elevation Profile → Journey Stats → Elevation → Difficulty
+            // instead of swiping through fourteen stat cards to reach the next section.
+            .accessibilityAddTraits(.isHeader)
     }
 
     @ViewBuilder
@@ -280,9 +316,13 @@ struct StatsView: View {
 /// A single stat cell mirroring the web `StatItem`: uppercase label, large light value,
 /// optional accent colour and sublabel.
 struct StatItem: View {
-    let label: String
+    let label: LocalizedStringKey
     let value: String
-    var sublabel: String?
+    /// Prose after all. This was left as a `String` on the assumption that callers pass formatted
+    /// measurements — but both of them pass "Day \(n)", which rendered "Day 2" under the Norwegian
+    /// "LENGSTE DAG" heading. Caught by looking at the Stats tab in nb rather than by the compiler,
+    /// which is the argument for actually running the app in the language.
+    var sublabel: LocalizedStringKey?
     var color: Color?
 
     var body: some View {
@@ -291,10 +331,17 @@ struct StatItem: View {
                 // Same fix as `StatsView.sectionLabel`: a 10 pt label at `textTertiary` is small
                 // and low-contrast together. `value` below keeps `textTertiary` as its fallback —
                 // it's a de-emphasised number, not a label, so out of scope for the lift.
-                Text(label.uppercased())
+                // `.textCase(.uppercase)` rather than `label.uppercased()`, which forced `String`
+                // and so kept all fourteen extended-stat labels out of the catalogue. Two lines
+                // are allowed now: "Avg. Daily Distance" is "Gj.sn. dagsdistanse" in Norwegian
+                // and does not fit one line in a two-column grid at this size.
+                Text(label)
+                    .textCase(.uppercase)
                     .font(.caption2.weight(.medium))
                     .tracking(1.0)
                     .foregroundStyle(Theme.textSecondary)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
                 Text(value)
                     .font(.title3.weight(.light))
                     .foregroundStyle(color ?? Theme.textPrimary)
@@ -307,6 +354,14 @@ struct StatItem: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
+        // QUA-07: ten of these fill the Stats tab, each three separate elements, so reading the
+        // extended stats was thirty swipes for ten numbers. `children: .combine` rather than an
+        // explicit label so the optional sublabel ("Day 4") is carried without this view having to
+        // know whether it is there — and the label/value split is kept, because the value is what a
+        // reader wants repeated when they focus a cell again.
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(label)
+        .accessibilityValue(sublabel.map { Text("\(value), \(Text($0))") } ?? Text(value))
     }
 }
 
@@ -314,6 +369,8 @@ struct StatItem: View {
 struct StatsTabView: View {
     @EnvironmentObject private var store: JourneyStore
     @State private var selectedID: String?
+    /// One-shot latch for `centreSelectedChip` — see its doc comment.
+    @State private var didCentreSelectedChip = false
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
 
     private var selected: Journey? {
@@ -353,16 +410,44 @@ struct StatsTabView: View {
     // selected/unselected language as the globe strip's day pills (`DayNavigationView`) rather
     // than a `Menu`, so the picker stays visually consistent with the rest of the app's chrome
     // instead of hiding the journey list behind a tap.
+    /// Scrolled so the SELECTED chip is visible on arrival. Without this the row always opens at
+    /// its leading edge, so a selection that is not the first journey — `AKASHIC_STATS_JOURNEY`, or
+    /// simply the second journey the user last looked at — starts off-screen or clipped mid-word,
+    /// and the screen reads as though nothing is selected at all. Grows with the archive: at ten
+    /// journeys the selected chip is usually nowhere near the leading edge.
     private var journeyChipRow: some View {
+        ScrollViewReader { proxy in
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
                 ForEach(store.journeys) { journey in
                     journeyChip(journey)
+                        .id(journey.id)
                 }
             }
             // Room for the selected chip's stroke/shadow at the scroll edges.
             .padding(.horizontal, 2)
         }
+        // Both hooks, deliberately. A child's `.onAppear` runs BEFORE its parent's, so on the very
+        // first render `selectedID` is still nil — the enclosing view's `.onAppear` (which calls
+        // `resolveInitialJourneyID`) has not run yet — and centring here alone would silently
+        // always centre the *first* journey. `.onChange` catches the resolution a moment later.
+        .onAppear { centreSelectedChip(proxy) }
+        .onChange(of: selectedID) { _, _ in centreSelectedChip(proxy) }
+        }
+    }
+
+    /// Bring the selected chip into view, once per presentation. `.center` rather than `.leading`:
+    /// the leading edge would push every earlier journey out of reach on a first read, hiding that
+    /// there are any. Guarded so a later chip TAP is never yanked around under the finger — the row
+    /// settles once, on arrival, and is the user's to scroll after that.
+    ///
+    /// Reads `selectedID`, NOT `selected` — `selected` falls back to the first journey while the
+    /// real selection is still unresolved, so keying off it would spend the one-shot latch centring
+    /// the leading chip (which never moves) and then decline to centre the actual one.
+    private func centreSelectedChip(_ proxy: ScrollViewProxy) {
+        guard !didCentreSelectedChip, let id = selectedID else { return }
+        didCentreSelectedChip = true
+        proxy.scrollTo(id, anchor: .center)
     }
 
     private func journeyChip(_ journey: Journey) -> some View {

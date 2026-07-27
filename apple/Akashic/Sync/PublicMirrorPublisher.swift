@@ -41,7 +41,11 @@ struct PublicMirrorCursor {
 }
 
 /// The subset of `CKDatabase` the public-mirror publisher needs, in async form.
-protocol PublicMirrorDatabase {
+///
+/// QUA-36: `Sendable`, which is what lets `PublicMirrorPublisher`'s own conformance be CHECKED rather
+/// than `@unchecked`. `CKDatabase` satisfies it for free — CloudKit marks it `NS_SWIFT_SENDABLE` — so
+/// the entire cost fell on the test double, and turned out to be one word rather than an actor.
+protocol PublicMirrorDatabase: Sendable {
     /// Save/delete a batch of public records. Non-atomic: a per-record failure must not roll
     /// back the records that saved, so a re-publish only has to overwrite what already landed.
     func ckModifyRecords(
@@ -260,20 +264,16 @@ enum PublicMirrorBuilder {
         for entry in entries { try? fileManager.removeItem(at: entry) }
     }
 
-    private static let isoFormatter: ISO8601DateFormatter = {
-        let f = ISO8601DateFormatter()
-        f.formatOptions = [.withInternetDateTime]
-        return f
-    }()
+    // QUA-08: was a private static ISO8601DateFormatter. See ISO8601Shared for why these are
+    // serialised centrally rather than annotated nonisolated(unsafe) at each site.
 
     /// Tolerant ISO-8601 parse (with or without fractional seconds), then bare `yyyy-MM-dd`.
+    ///
+    /// QUA-08: `ISO8601Shared.date(from:)` covers both ISO shapes, so the fractional formatter this
+    /// built per call is gone. The `DateOnly` fallback stays — that is a different format, not a
+    /// different formatter.
     private static func isoDate(from string: String?) -> Date? {
-        guard let string, !string.isEmpty else { return nil }
-        if let date = isoFormatter.date(from: string) { return date }
-        let withFraction = ISO8601DateFormatter()
-        withFraction.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        if let date = withFraction.date(from: string) { return date }
-        return DateOnly.date(from: string)
+        ISO8601Shared.date(from: string) ?? DateOnly.date(from: string)
     }
 }
 
@@ -285,6 +285,29 @@ struct PublicMirrorConfig: Equatable {
     var maxRecordsPerBatch = 50
     /// Page size when querying existing `PublicPhoto` IDs for the stale diff / unpublish.
     var queryPageSize = 200
+
+    /// Most `PublicPhoto` thumbnails one journey may put on the world-readable showcase (QUA-25).
+    ///
+    /// **Why a bound exists at all.** The public database is billed to *us*, not to the customer
+    /// (COMMERCIALIZATION-PLAN §2): a signed-out visitor scrolling a showcase spends our egress,
+    /// and nothing else in the model works that way. Uploads are bounded — `EntitlementPolicy`
+    /// caps a free account at one journey of 100 photos — but reads were bounded by nothing, and a
+    /// paid account published unlimited journeys of unlimited size. The success mode and the
+    /// cost-blow-up mode are the same event, so the bound has to exist before the traffic does.
+    ///
+    /// **Why 200.** A published thumbnail budgets ~60 KB, so 200 is ~12 MB per fully-scrolled
+    /// journey view. Kilimanjaro — a real journey, 939 photos — is ~56 MB uncapped, so this cuts
+    /// the worst real case to about 21 % of its egress and turns "~45 full views a day at 1 000
+    /// customers before overage" into roughly 210. The two inputs that fix the number:
+    ///   * It must be **at least 100**, the free tier's per-journey photo cap, or a free account
+    ///     could not publish its one journey whole — and publishing is deliberately free (§5).
+    ///   * Doubling it to **200** keeps the paid tier meaningfully better at the thing the
+    ///     showcase is selling, while the saving curve has already flattened: 400 would only be a
+    ///     2.3× reduction against 200's 4.7×, so most of the benefit is in the first cut.
+    ///
+    /// Raising this is a cost decision, not a product one — check the CloudKit Console usage panel
+    /// first (see `docs/store/launch-checklist.md`).
+    var maxPublishedPhotos = 200
 
     static let `default` = PublicMirrorConfig()
 }
@@ -303,11 +326,25 @@ struct PublicMirrorReport: Equatable {
     var photosPublished = 0
     /// Photos skipped because their thumbnail bytes were not on disk (never a hard failure).
     var skippedNoThumb = 0
+    /// Photos the per-journey cap held back (QUA-25). Zero for every journey under the cap, which
+    /// is nearly all of them. Non-zero is not a failure: the publish succeeded and this many
+    /// photos are simply not on the showcase, which the UI has to say out loud rather than let the
+    /// owner believe the mirror is complete.
+    var photosHeldBack = 0
     /// `PublicPhoto` records deleted — stale ones on update, or all of them on unpublish.
     var deleted = 0
     /// Per-record save/delete failures (surfaced, not thrown).
     var failures: [RecordFailure] = []
     var wasCancelled = false
+
+    /// The slug the mirror was actually written under — the only reliable basis for a share link.
+    ///
+    /// `publish` resolves this at publish time and it is **not** always `journey.slug`: a
+    /// cross-owner collision moves the mirror to `kilimanjaro-a1b2c3` while the local journey keeps
+    /// the pretty slug. A link built from `journey.slug` would therefore 404 in precisely the case
+    /// the disambiguation exists to handle, so the resolved value has to travel back to the caller
+    /// rather than be guessed at the UI. Nil for unpublish, and nil when nothing was published.
+    var publishedSlug: String?
 
     /// Total records written (journey metadata + photos).
     var published: Int { photosPublished + (journeyPublished ? 1 : 0) }
@@ -317,7 +354,7 @@ struct PublicMirrorReport: Equatable {
     var summary: String {
         let head = wasCancelled ? "CANCELLED" : (succeeded ? "OK" : "COMPLETED WITH FAILURES")
         return "\(head) — published \(published), skipped (no thumb) \(skippedNoThumb), "
-             + "deleted \(deleted), failed \(failed)"
+             + "held back (cap) \(photosHeldBack), deleted \(deleted), failed \(failed)"
     }
 }
 
@@ -327,15 +364,32 @@ struct PublicMirrorReport: Equatable {
 /// can be unit-tested against a fake that fails on demand — the concrete `PublicMirrorPublisher`
 /// talks to a real (or mock) `PublicMirrorDatabase`, but the view model's ordering + failure
 /// handling (flip the `isPublic` flag only AFTER the network op succeeds) is what needs coverage.
-protocol PublicMirrorPublishing {
+// QUA-08: `Sendable` so `any PublicMirrorPublishing` can cross into the showcase view model's
+// async work. The concrete publisher documents its own conformance below; the test double takes
+// `@unchecked`. Refining the protocol is what fixes the existential — annotating only the class
+// leaves `sending 'publisher'` standing, because the call site holds the protocol type.
+protocol PublicMirrorPublishing: Sendable {
     func publish(journey: Journey, photos: [Photo],
-                 progress: ((PublicMirrorProgress) -> Void)?) async -> PublicMirrorReport
+                 progress: (@Sendable (PublicMirrorProgress) -> Void)?) async -> PublicMirrorReport
     func unpublish(slug: String,
-                   progress: ((PublicMirrorProgress) -> Void)?) async -> PublicMirrorReport
+                   progress: (@Sendable (PublicMirrorProgress) -> Void)?) async -> PublicMirrorReport
 }
 
 /// Executes publish / unpublish against a `PublicMirrorDatabase`. Not main-actor: pure record
 /// building + async DB calls. The caller (a `@MainActor` view model) marshals `progress`.
+///
+/// ## `Sendable`, checked (QUA-36)
+///
+/// `JourneyShowcaseSheet`'s `@MainActor` view model hands this instance into its own async work, so
+/// the type has to be `Sendable` — and the compiler now verifies it rather than being told to trust
+/// us: all three stored properties are `let`, `PublicMirrorConfig` is three `Int`s, and
+/// `PublicMirrorDatabase` is `Sendable` (see above).
+///
+/// This carried `@unchecked` for a few hours, with a removal condition predicting the cost would be
+/// turning `MockPublicDatabase` into an `actor` and adding `await` to ~30 assertions. It was not:
+/// this class contains no `TaskGroup`, no `async let`, no `Task` — every database call is sequential
+/// within one task — so the double's scripting state is never touched concurrently and `@unchecked`
+/// on the double is a truthful promise of the same kind the five other doubles in that target make.
 final class PublicMirrorPublisher: PublicMirrorPublishing {
 
     private let database: PublicMirrorDatabase
@@ -376,6 +430,68 @@ final class PublicMirrorPublisher: PublicMirrorPublishing {
         }
     }
 
+    // MARK: The published-photo cap (QUA-25)
+
+    /// Choose at most `limit` photos to publish, spread across the journey's days, and report how
+    /// many were held back. Pure + static so the boundary behaviour is unit-tested directly.
+    ///
+    /// ## Why not simply `prefix(limit)`
+    /// `sortOrder` is journey-global and chronological, so a flat prefix on a 7-day trek publishes
+    /// days 1–3 and nothing after. A visitor scrolling to day 6 would find an *empty* day rather
+    /// than a smaller one — the showcase would look broken instead of abridged. So this round-robins
+    /// one rank at a time across days: every day contributes its best photo before any day
+    /// contributes its second.
+    ///
+    /// ## Why `sortOrder` is the right ranking, and why `PhotoCuration` is not called here
+    /// The task is to prefer the *best* photos, and `PhotoCuration` (DIFF-04) is exactly the layer
+    /// that ranks them — but it does not fit at this seam, for three reasons:
+    ///   * It consumes `[PhotoScore]`, which only `VisionPhotoScorer` produces. That is an async
+    ///     Vision pass over every photo, and putting one on the critical path of a user-initiated
+    ///     network operation would mean scoring 939 images before the first byte uploads.
+    ///   * It caps **per day** (six, a screenful in the day gallery), not per journey. A 7-day trek
+    ///     would publish 42 photos regardless of this cap and a 1-day trek 6 — the wrong shape for
+    ///     an egress budget, which has to be a whole-journey number.
+    ///   * Its `hero` and `duplicateGroups` outputs are *proposals* for the user to accept. The
+    ///     publisher must not silently act on curation decisions nobody was shown.
+    ///
+    /// It does not need to. When the user *has* accepted a best-of proposal,
+    /// `PhotoCurationService.applyingBestOf` reorders `sortOrder` **within the day** so the chosen
+    /// photos lead — so "lowest `sortOrder` first, within each day" already *is* "curated-best
+    /// first", at no cost and with no second pass. On an uncurated journey it degrades to
+    /// chronological, which is the app's default order everywhere else.
+    static func capped(_ photos: [Photo], limit: Int,
+                       dayOf: (Photo) -> Int?) -> (kept: [Photo], heldBack: Int) {
+        guard limit > 0 else { return ([], photos.count) }
+        guard photos.count > limit else { return (photos, 0) }
+
+        // Unassigned photos share one bucket keyed `Int.max`, so they compete with each other for a
+        // single round-robin slot and sort *after* every real day — a day-assigned photo is the
+        // more useful thing to put on a showcase.
+        let unassignedKey = Int.max
+        var byDay: [Int: [Photo]] = [:]
+        for photo in photos { byDay[dayOf(photo) ?? unassignedKey, default: []].append(photo) }
+        for key in byDay.keys { byDay[key]?.sort { $0.sortOrder < $1.sortOrder } }
+
+        // Ascending day order so a tie at the cap boundary always resolves to the earlier day.
+        // Never iterate the dictionary directly: its order is not stable across runs.
+        let days = byDay.keys.sorted()
+        let deepest = byDay.values.map(\.count).max() ?? 0
+        var kept: [Photo] = []
+        kept.reserveCapacity(limit)
+        var rank = 0
+        while kept.count < limit && rank < deepest {
+            for day in days {
+                guard kept.count < limit else { break }
+                guard let dayPhotos = byDay[day], rank < dayPhotos.count else { continue }
+                kept.append(dayPhotos[rank])
+            }
+            rank += 1
+        }
+
+        // Publish in journey order, so the mirror reads chronologically like every other surface.
+        return (kept.sorted { $0.sortOrder < $1.sortOrder }, photos.count - kept.count)
+    }
+
     // MARK: Publish (upsert + stale-photo reconciliation)
 
     /// Publish (or re-publish) a journey to the mirror.
@@ -386,7 +502,7 @@ final class PublicMirrorPublisher: PublicMirrorPublishing {
     @discardableResult
     func publish(journey: Journey,
                  photos: [Photo],
-                 progress: ((PublicMirrorProgress) -> Void)? = nil) async -> PublicMirrorReport {
+                 progress: (@Sendable (PublicMirrorProgress) -> Void)? = nil) async -> PublicMirrorReport {
         var report = PublicMirrorReport()
         defer { PublicMirrorBuilder.purgeAssetScratch() }
 
@@ -398,19 +514,31 @@ final class PublicMirrorPublisher: PublicMirrorPublishing {
 
         let matcher = PhotoDayMatcher(journey: journey)
 
-        // Build the desired PublicPhoto set (skipping thumbless photos), tracking their IDs for
-        // the stale diff.
+        // Thumbless photos can never be published, so they are excluded BEFORE the cap — otherwise a
+        // journey with missing bytes would spend cap slots on photos that get skipped anyway and
+        // publish fewer than the cap allows. `photoRecord` returns nil for exactly this reason and
+        // nothing else, so the two agree by construction.
+        let publishable = photos.filter { PublicMirrorBuilder.strictThumbURL(for: $0) != nil }
+        report.skippedNoThumb = photos.count - publishable.count
+
+        // QUA-25: bound what one journey can put on the world-readable showcase. Held-back photos
+        // are reported, never fatal — a capped publish is a successful publish.
+        let capped = Self.capped(publishable, limit: config.maxPublishedPhotos,
+                                 dayOf: { matcher.day(for: $0) })
+        report.photosHeldBack = capped.heldBack
+
+        // Build the desired PublicPhoto set, tracking their IDs for the stale diff. Anything the cap
+        // held back is therefore absent from `desiredPhotoNames`, so the reconciliation pass below
+        // also *removes* it from the mirror if a previous, uncapped publish had put it there.
         var photoRecords: [CKRecord] = []
         var desiredPhotoNames: Set<String> = []
-        for photo in photos {
-            if let record = PublicMirrorBuilder.photoRecord(for: photo,
-                                                            journeySlug: effectiveSlug,
-                                                            dayNumber: matcher.day(for: photo)) {
-                photoRecords.append(record)
-                desiredPhotoNames.insert(photo.id)
-            } else {
-                report.skippedNoThumb += 1
-            }
+        for photo in capped.kept {
+            guard let record = PublicMirrorBuilder.photoRecord(for: photo,
+                                                              journeySlug: effectiveSlug,
+                                                              dayNumber: matcher.day(for: photo))
+            else { continue }
+            photoRecords.append(record)
+            desiredPhotoNames.insert(photo.id)
         }
 
         let totalToSave = 1 + photoRecords.count
@@ -420,16 +548,23 @@ final class PublicMirrorPublisher: PublicMirrorPublishing {
             progress?(PublicMirrorProgress(fraction: frac, phase: phase))
         }
 
-        reportSave("Publishing metadata")
+        reportSave(String(localized: "Publishing metadata",
+                          comment: "Showcase publish progress phase: writing the journey's route, notes and hero images."))
 
         // 1. The metadata record (its own op — it carries the heavy route/waypoints/hero assets).
         if Task.isCancelled { report.wasCancelled = true; return report }
         let journeyRecord = PublicMirrorBuilder.journeyRecord(for: journey, photos: photos)
         let metaOutcome = await save([journeyRecord])
-        if metaOutcome.saved.contains(journey.slug) { report.journeyPublished = true }
+        if metaOutcome.saved.contains(journey.slug) {
+            report.journeyPublished = true
+            // `journey.slug` is the effective slug here — reassigned at the top of this method —
+            // so this is the value a share link must use, not the domain journey's pretty slug.
+            report.publishedSlug = journey.slug
+        }
         report.failures.append(contentsOf: metaOutcome.failures)
         savedUnits += 1
-        reportSave("Publishing metadata")
+        reportSave(String(localized: "Publishing metadata",
+                          comment: "Showcase publish progress phase: writing the journey's route, notes and hero images."))
 
         // 2. Photo thumbnails, chunked.
         for chunk in Self.chunked(photoRecords, size: config.maxRecordsPerBatch) {
@@ -438,12 +573,15 @@ final class PublicMirrorPublisher: PublicMirrorPublishing {
             report.photosPublished += outcome.saved.count
             report.failures.append(contentsOf: outcome.failures)
             savedUnits += chunk.count
-            reportSave("Publishing photos (\(report.photosPublished)/\(photoRecords.count))")
+            reportSave(String(localized: "Publishing photos (\(report.photosPublished)/\(photoRecords.count))",
+                              comment: "Showcase publish progress phase: uploading photo thumbnails. Placeholders are photos done / total."))
         }
 
         // 3. Reconcile: delete PublicPhotos that no longer exist locally.
         if Task.isCancelled { report.wasCancelled = true; return report }
-        progress?(PublicMirrorProgress(fraction: 0.92, phase: "Cleaning up removed photos"))
+        progress?(PublicMirrorProgress(fraction: 0.92,
+                                       phase: String(localized: "Cleaning up removed photos",
+                                                     comment: "Showcase publish progress phase: deleting showcase photos that no longer exist on this device.")))
         do {
             let existing = try await allExistingPhotoIDs(slug: journey.slug)
             let stale = existing.filter { !desiredPhotoNames.contains($0.recordName) }
@@ -461,31 +599,64 @@ final class PublicMirrorPublisher: PublicMirrorPublishing {
                                                  message: "stale-photo query failed: \(error)"))
         }
 
-        progress?(PublicMirrorProgress(fraction: 1.0, phase: "Done"))
+        progress?(PublicMirrorProgress(fraction: 1.0,
+                                       phase: String(localized: "Done",
+                                                     comment: "Showcase publish progress phase: finished.")))
         return report
     }
 
     // MARK: Unpublish
 
+    /// Every slug under which this owner could have published `slug`.
+    ///
+    /// `publish` does not necessarily write under the journey's pretty slug: `resolveEffectiveSlug`
+    /// moves the mirror to an owner-scoped `kilimanjaro-a1b2c3` when another family already holds
+    /// `kilimanjaro` in the shared public keyspace, and the local journey deliberately keeps the
+    /// pretty one. Unpublishing only the pretty slug therefore found nothing, and because `delete`
+    /// treats an already-absent record as success, it reported OK — so the caller flipped `isPublic`
+    /// to false and the Remove button disappeared while the real records stayed world-readable,
+    /// GPS and timestamps included, with no UI left to remove them.
+    ///
+    /// Sweeping both is enough and needs no persisted state: `disambiguatedSlug` is deterministic
+    /// for a given (slug, owner) pair, so the variant can always be recomputed. It is also the
+    /// robust choice over re-running `resolveEffectiveSlug` at unpublish time — that asks "is the
+    /// pretty slug taken by someone else *now*", which can answer differently than it did at
+    /// publish time and would send the sweep to the wrong slug again.
+    func candidateSlugs(for slug: String) -> [String] {
+        guard let ownerRecordName else { return [slug] }
+        let disambiguated = PublicMirrorBuilder.disambiguatedSlug(slug, ownerRecordName: ownerRecordName)
+        return disambiguated == slug ? [slug] : [slug, disambiguated]
+    }
+
     /// Remove a journey from the mirror entirely: delete every `PublicPhoto` for the slug
-    /// (following query cursors), then the `PublicJourney` record.
+    /// (following query cursors), then the `PublicJourney` record — for every slug this owner
+    /// could have published under (see `candidateSlugs`).
     @discardableResult
     func unpublish(slug: String,
-                   progress: ((PublicMirrorProgress) -> Void)? = nil) async -> PublicMirrorReport {
+                   progress: (@Sendable (PublicMirrorProgress) -> Void)? = nil) async -> PublicMirrorReport {
         var report = PublicMirrorReport()
-        progress?(PublicMirrorProgress(fraction: 0.0, phase: "Finding published photos"))
+        progress?(PublicMirrorProgress(fraction: 0.0,
+                                       phase: String(localized: "Finding published photos",
+                                                     comment: "Showcase removal progress phase: querying which photos are currently on the showcase.")))
 
-        let existing: [CKRecord.ID]
-        do {
-            existing = try await allExistingPhotoIDs(slug: slug)
-        } catch is CancellationError {
-            report.wasCancelled = true
-            return report
-        } catch {
-            report.failures.append(RecordFailure(recordName: slug, recordType: PublicMirrorBuilder.photoType,
-                                                 zoneName: "_defaultZone", code: Self.code(of: error),
-                                                 message: "photo query failed: \(error)"))
-            return report
+        let slugs = candidateSlugs(for: slug)
+
+        // Collect across every candidate slug before deleting anything, so the progress
+        // denominator is the true total and a cursor failure on one slug does not leave the
+        // other half-swept.
+        var existing: [CKRecord.ID] = []
+        for candidate in slugs {
+            do {
+                existing.append(contentsOf: try await allExistingPhotoIDs(slug: candidate))
+            } catch is CancellationError {
+                report.wasCancelled = true
+                return report
+            } catch {
+                report.failures.append(RecordFailure(recordName: candidate, recordType: PublicMirrorBuilder.photoType,
+                                                     zoneName: "_defaultZone", code: Self.code(of: error),
+                                                     message: "photo query failed: \(error)"))
+                return report
+            }
         }
 
         let chunks = Self.chunked(existing, size: config.maxRecordsPerBatch)
@@ -497,17 +668,24 @@ final class PublicMirrorPublisher: PublicMirrorPublishing {
             report.failures.append(contentsOf: outcome.failures)
             done += chunk.count
             let frac = existing.isEmpty ? 0.9 : Double(done) / Double(existing.count) * 0.9
-            progress?(PublicMirrorProgress(fraction: frac, phase: "Removing photos (\(done)/\(existing.count))"))
+            progress?(PublicMirrorProgress(fraction: frac,
+                                           phase: String(localized: "Removing photos (\(done)/\(existing.count))",
+                                                         comment: "Showcase removal progress phase: deleting photo thumbnails. Placeholders are photos done / total.")))
         }
 
-        // Finally the metadata record.
+        // Finally the metadata records — one per candidate slug. An absent one is a no-op, which
+        // is why sweeping both is safe rather than merely thorough.
         if Task.isCancelled { report.wasCancelled = true; return report }
-        progress?(PublicMirrorProgress(fraction: 0.95, phase: "Removing metadata"))
-        let metaOutcome = await delete([PublicMirrorBuilder.journeyRecordID(slug: slug)])
+        progress?(PublicMirrorProgress(fraction: 0.95,
+                                       phase: String(localized: "Removing metadata",
+                                                     comment: "Showcase removal progress phase: deleting the journey record itself.")))
+        let metaOutcome = await delete(slugs.map { PublicMirrorBuilder.journeyRecordID(slug: $0) })
         report.deleted += metaOutcome.deleted
         report.failures.append(contentsOf: metaOutcome.failures)
 
-        progress?(PublicMirrorProgress(fraction: 1.0, phase: "Done"))
+        progress?(PublicMirrorProgress(fraction: 1.0,
+                                       phase: String(localized: "Done",
+                                                     comment: "Showcase publish progress phase: finished.")))
         return report
     }
 

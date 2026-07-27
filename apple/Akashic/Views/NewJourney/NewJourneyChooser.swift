@@ -70,6 +70,14 @@ struct NewJourneyChooser: View {
                  promoted: true)
         }
         .buttonStyle(.plain)
+        // QUA-24: a `PhotosPicker` is not a `Button`, so it does not carry the button trait its
+        // three sibling cards get for free — without this it is announced as static text, and the
+        // first and least-friction way into the app reads as unactionable.
+        .accessibilityAddTraits(.isButton)
+        .accessibilityHint("Opens your photo library")
+        // QUA-10: see `A11yID`. Each card's label is its title AND subtitle concatenated, so a
+        // label query here is ambiguous in a way an identifier is not.
+        .accessibilityIdentifier(A11yID.chooserPhotos)
     }
 
     private var gpxCard: some View {
@@ -93,6 +101,8 @@ struct NewJourneyChooser: View {
         }
         .buttonStyle(.plain)
         .disabled(isImportingGPX)
+        .accessibilityHint("Opens the file picker so you can choose a GPX track")
+        .accessibilityIdentifier(A11yID.chooserGPX)
     }
 
     private var nameOnlyCard: some View {
@@ -103,12 +113,20 @@ struct NewJourneyChooser: View {
                  promoted: false)
         }
         .buttonStyle(.plain)
+        .accessibilityIdentifier(A11yID.chooserNameOnly)
     }
 
     /// One chooser card. `promoted` gives the photos card the filled accent surface the redesign
     /// calls for; the other two stay visually equal to each other — GPX and just-a-name are both
     /// ordinary, valid starting points, neither more "correct" than the other.
-    private func card(icon: String, title: String, subtitle: String,
+    // QUA-08: `nonisolated` so `PhotosPicker`'s nonisolated label builder can call it.
+    //
+    // Hoisting the built card out of the closure — the trick that works for `NewJourneySheet`'s
+    // label — does NOT work here: that hoists a `Text`, which is `Sendable`, whereas this returns
+    // `some View`, which is not, so the capture just moves the warning. Making the builder
+    // nonisolated is the real answer, and it is honest: this function reads nothing but its own
+    // parameters and `Theme`'s immutable `Color` statics.
+    nonisolated private func card(icon: String, title: LocalizedStringKey, subtitle: LocalizedStringKey,
                        promoted: Bool, isLoading: Bool = false) -> some View {
         HStack(alignment: .top, spacing: 14) {
             ZStack {
@@ -122,10 +140,13 @@ struct NewJourneyChooser: View {
                     // render pale-on-pale in Light Mode exactly like the CTA buttons `onAccent`
                     // was introduced for.
                     ProgressView().tint(promoted ? Theme.onAccent : Theme.accent)
+                        .accessibilityLabel("Reading the file")
                 } else {
                     Image(systemName: icon)
                         .font(.title3)
                         .foregroundStyle(promoted ? Theme.onAccent : Theme.accent)
+                        // The glyph restates the card's own title; the title is the announcement.
+                        .accessibilityHidden(true)
                 }
             }
             VStack(alignment: .leading, spacing: 4) {

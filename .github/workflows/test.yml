@@ -14,16 +14,36 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # The work ledger is the project's only true statement of status. This gate fails if
+  # docs/workplan/tasks.json is invalid, if two in-flight tasks own overlapping files, or
+  # if WORKPLAN.md has drifted from the ledger — which is what stops progress being made
+  # without the plan being updated. No dependencies, so it runs in seconds.
+  workplan:
+    name: Work Ledger
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: '20'
+
+      - name: Validate ledger and check WORKPLAN.md is in sync
+        run: node scripts/workplan.mjs check
+
   unit:
     name: Unit Tests
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: '20'
           cache: 'npm'
@@ -35,7 +55,7 @@ jobs:
         run: npm test -- --run --reporter=github-actions
 
       - name: Upload coverage
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         if: always()
         with:
           name: coverage-report
@@ -48,10 +68,10 @@ jobs:
     timeout-minutes: 5
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: '20'
           cache: 'npm'
@@ -62,20 +82,64 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      # A real gate as of QUA-02. It carried `continue-on-error: true  # Informational - many
+      # pre-existing type issues` from the day it was added, which is precisely how the count
+      # reached 110 unnoticed. Those 110 are now zero (41 were one missing jest-dom types entry
+      # in tsconfig.json; the rest were stale test fixtures and ~15 genuine source defects,
+      # including a crash on Mapbox getBounds() returning null and a `getDifficultyColor` import
+      # of a symbol that exists nowhere). Do not reintroduce continue-on-error here — if this
+      # step is red, the fix is the type error, not the flag.
       - name: Type check
-        run: npx tsc --noEmit
-        continue-on-error: true  # Informational - many pre-existing type issues
+        run: npm run typecheck
 
+  # This gate is a real gate: it fails the build on any high-or-worse advisory, with no
+  # `continue-on-error` and no lowered `--audit-level`. It was red for months, so if you
+  # find it red again, read this before reaching for an exception.
+  #
+  # It was red because of GHSA-mh99-v99m-4gvg (brace-expansion DoS via unbounded expansion
+  # length): 12 high advisories, all of them the one root cause reached through three
+  # separate chains — eslint -> @eslint/config-array + @eslint/eslintrc -> minimatch,
+  # vite-plugin-pwa -> workbox-build -> ejs -> jake -> filelist -> minimatch, and
+  # @vitest/coverage-v8 -> test-exclude -> minimatch.
+  #
+  # The advisory's vulnerable range is `<=5.0.7`, and the fix (EXPANSION_MAX_LENGTH) shipped
+  # ONLY in brace-expansion 5.0.8. The 1.x and 2.x maintenance lines — 1.1.16 and 2.1.2, the
+  # newest releases on each — contain no expansion limit at all. That is why the previous
+  # `overrides` block pinning `brace-expansion@1` and `brace-expansion@2` was ineffective:
+  # there is no non-vulnerable 1.x or 2.x to pin to, so the pins were inside the vulnerable
+  # range by construction. npm's only offered automatic fix was `eslint@4`, a seven-major
+  # downgrade, which is not a fix.
+  #
+  # brace-expansion 5.0.8's CommonJS entry exports `{ EXPANSION_MAX, EXPANSION_MAX_LENGTH,
+  # expand }` rather than a callable default. minimatch 3.x/5.x call the module directly and
+  # 9.x takes `.default`, so all three crash on it; only minimatch >=10 uses the named
+  # `expand`. So the two overrides in package.json move together — brace-expansion to ^5.0.8
+  # and minimatch to ^10.2.5 — and neither works without the other.
+  #
+  # minimatch 3 -> 10 is seven majors under eslint, which declares `minimatch: ^3.1.2`, so it
+  # was checked rather than assumed. Every pattern in eslint.config.js plus the `.ts`/`.tsx`
+  # patterns QUA-02 will need were matched against 26 representative repo paths under both
+  # 3.1.5 and 10.2.5 with eslint's own options (`{ dot: true, matchBase: true }`): 364
+  # pattern-by-path pairs, zero differences. `npm run lint` lints the same 16 files with the
+  # same 0 errors / 0 warnings, `npx vitest --run` still reports 402, and `npm run build`
+  # still emits an identical 49-entry Workbox precache manifest.
+  #
+  # TO REMOVE THESE OVERRIDES: they exist only to reach a patched brace-expansion through
+  # dependencies that have not caught up. Drop both from package.json once
+  # `npm ls minimatch --all` shows nothing in the range 2.0.0 - 10.0.2 and
+  # `npm ls brace-expansion --all` shows nothing <=5.0.7 — i.e. once eslint, workbox-build
+  # and test-exclude have shipped updated chains — then re-run `npm audit --audit-level=high`
+  # to confirm it is still clean without them.
   security:
     name: Security Audit
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: '20'
           cache: 'npm'
@@ -92,10 +156,10 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: '20'
           cache: 'npm'
@@ -111,7 +175,7 @@ jobs:
         run: npm run build
 
       - name: Upload build artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: build-output
           path: dist/

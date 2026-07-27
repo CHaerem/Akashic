@@ -5,6 +5,30 @@ import Combine
 import FoundationModels
 #endif
 
+// QUA-05 — the tripwire for a silent failure mode.
+//
+// Every Foundation Models call site in this app sits inside `#if canImport(FoundationModels)`,
+// which means the whole paid-tier AI family compiles to nothing on a toolchain without the iOS 26
+// SDK — silently, with no warning, and with a green build. CI runs `macos-15` (Xcode 16.4), so
+// ~517 lines across the four Intelligence files are type-checked by nothing automated. A typo or an
+// API rename in there would not show up until someone archived on a newer Xcode.
+//
+// Making CI fail on that would be wrong: `macos-15` genuinely does not have the framework, so the
+// honest place for a hard guarantee is the ARCHIVE — the build that actually reaches a customer,
+// produced locally on Xcode 26.6 by `apple/Scripts/testflight-upload.sh`, which passes
+// `AKASHIC_REQUIRE_INTELLIGENCE`. If that build ever loses the framework, this stops it.
+//
+// Deliberately NOT keyed on `!DEBUG`: CI builds `Release-CloudKit` too (QUA-01), and failing there
+// would just re-create the permanently-red gate that QUA-03 spent a day removing.
+#if AKASHIC_REQUIRE_INTELLIGENCE && !canImport(FoundationModels)
+#error("""
+    This archive was built against an SDK without FoundationModels, so every Akashic Intelligence \
+    feature would compile out and ship absent — while the store listing and the paywall both \
+    advertise them. Build with Xcode 26 or newer, or drop AKASHIC_REQUIRE_INTELLIGENCE from \
+    Scripts/testflight-upload.sh and accept shipping without the paid AI features.
+    """)
+#endif
+
 /// M6 — the Akashic Intelligence groundwork (COMMERCIALIZATION-PLAN §10).
 ///
 /// This file is the **single gate** for the whole on-device-model feature family. Every piece of

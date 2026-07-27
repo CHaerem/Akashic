@@ -20,6 +20,11 @@ final class SyncStatus: ObservableObject {
         case unavailable         // couldNotDetermine / temporarilyUnavailable
         case active              // engine running
         case waitingForWiFi      // a heavy download is deferred by the Wi-Fi-only policy
+        // The owner's iCloud is full, so the server is rejecting saves (CKError.quotaExceeded).
+        // Its own state rather than `.error` because it is not a fault and it is not transient:
+        // nothing retries its way out of a full account, the user has to free space or buy more,
+        // and until they do the honest thing to say is "waiting", not "syncing". QUA-11.
+        case storageFull
         case error(String)
     }
 
@@ -37,28 +42,65 @@ final class SyncStatus: ObservableObject {
     @Published var repackProgress: MediaRepackProgress?
 
     /// One-line Settings string for an in-progress repack, or nil when there is nothing to show.
+    ///
+    /// The paused variant is a whole separate key rather than the plain one plus a suffix: a
+    /// translator needs to move "waiting for Wi-Fi" around the count, and concatenation forbids it.
     var repackSummary: String? {
         guard let p = repackProgress, p.total > 0, p.done < p.total else { return nil }
-        let base = "Optimizing photo storage · \(p.done)/\(p.total)"
-        return p.isPaused ? base + " (waiting for Wi-Fi)" : base
+        if p.isPaused {
+            return String(localized: "Optimizing photo storage · \(p.done)/\(p.total) (waiting for Wi-Fi)",
+                          comment: "Settings › iCloud sync status row: the one-time photo-storage repack is paused until the device is on Wi-Fi. Placeholders are photos done / total.")
+        }
+        return String(localized: "Optimizing photo storage · \(p.done)/\(p.total)",
+                      comment: "Settings › iCloud sync status row: the one-time photo-storage repack is running. Placeholders are photos done / total.")
     }
 
     /// Human-readable one-liner for a Settings row.
+    ///
+    /// Every branch goes through `String(localized:)` — this property returns `String`, so a bare
+    /// literal here would reach a Norwegian Settings screen in English and be invisible to
+    /// extraction. Keep the strings short: these land in a narrow Form row and Norwegian runs
+    /// 10–30 % longer than English.
     var summary: String {
         switch state {
-        case .disabled:        return "Off (local store)"
-        case .notEntitled:     return "Rebuild with the CloudKit configuration to sync"
-        case .checkingAccount: return "Checking iCloud account…"
-        case .noAccount:       return "Sign in to iCloud to sync"
-        case .restricted:      return "iCloud is restricted on this device"
-        case .unavailable:     return "iCloud temporarily unavailable"
+        case .disabled:
+            return String(localized: "Off (local store)",
+                          comment: "Settings › iCloud sync status row: sync is off and the app is running against the on-device store only.")
+        // Only reachable in a build without the CloudKit entitlement, which no customer ever
+        // installs — but it is a user-facing string in a Form row, so it should not read like a
+        // build instruction if a configuration is ever mixed up (D5).
+        case .notEntitled:
+            return String(localized: "Syncing is unavailable in this build",
+                          comment: "Settings › iCloud sync status row: this build cannot sync at all.")
+        case .checkingAccount:
+            return String(localized: "Checking iCloud account…",
+                          comment: "Settings › iCloud sync status row: transient state while the iCloud account status is being queried.")
+        case .noAccount:
+            return String(localized: "Sign in to iCloud to sync",
+                          comment: "Settings › iCloud sync status row: no iCloud account is signed in on this device.")
+        case .restricted:
+            return String(localized: "iCloud is restricted on this device",
+                          comment: "Settings › iCloud sync status row: iCloud is blocked by a configuration profile or parental controls.")
+        case .unavailable:
+            return String(localized: "iCloud temporarily unavailable",
+                          comment: "Settings › iCloud sync status row: iCloud could not be reached right now; it is expected to recover on its own.")
         case .active:
             if let date = lastSyncDate {
-                return "Syncing · last update \(Self.relative.localizedString(for: date, relativeTo: Date()))"
+                let relative = Self.relativeString(for: date)
+                return String(localized: "Syncing · last update \(relative)",
+                              comment: "Settings › iCloud sync status row: sync is running. The placeholder is an already-localised relative time, e.g. \"2 min ago\".")
             }
-            return "Syncing with iCloud"
-        case .waitingForWiFi:  return "Waiting for Wi-Fi to download"
-        case .error(let message): return "Sync error: \(message)"
+            return String(localized: "Syncing with iCloud",
+                          comment: "Settings › iCloud sync status row: sync is running but has not completed a round trip yet, so there is no timestamp to show.")
+        case .storageFull:
+            return String(localized: "Your iCloud is full — new photos are waiting to upload",
+                          comment: "Settings › iCloud sync status row: the owner's iCloud account is out of space, so uploads are rejected until they free space or buy more.")
+        case .waitingForWiFi:
+            return String(localized: "Waiting for Wi-Fi to download",
+                          comment: "Settings › iCloud sync status row: a heavy download is deferred by the user's Wi-Fi-only preference.")
+        case .error(let message):
+            return String(localized: "Sync error: \(message)",
+                          comment: "Settings › iCloud sync status row: sync failed. The placeholder is the underlying failure description.")
         }
     }
 
@@ -67,9 +109,25 @@ final class SyncStatus: ObservableObject {
 
     func set(_ newState: State) { state = newState }
 
+    /// Record a successful sync round trip.
+    ///
+    /// `.storageFull` deliberately survives this (QUA-11). `markSynced` is called from four fetch
+    /// paths as well as the save path, and **fetching keeps working perfectly when the account is
+    /// full** — only saves are rejected. So without this guard the sequence "save rejected for
+    /// quota, then any successful fetch" put the row straight back to "Syncing · last update just
+    /// now", which is how a permanently-stuck upload managed to look healthy. The timestamp is
+    /// still updated, because the fetch genuinely did happen; only the state is held.
+    ///
+    /// The state clears when a save actually succeeds — see `clearStorageFullOnSuccessfulSave`.
     func markSynced(_ date: Date = Date()) {
         lastSyncDate = date
-        state = .active
+        if state != .storageFull { state = .active }
+    }
+
+    /// Called when a save round trip succeeds, which is the only real evidence that space exists
+    /// again. Kept separate from `markSynced` precisely because a fetch is not that evidence.
+    func clearStorageFullOnSuccessfulSave() {
+        if state == .storageFull { state = .active }
     }
 
     /// Map a raw `CKAccountStatus` to the corresponding non-active state. `.available`
@@ -85,11 +143,21 @@ final class SyncStatus: ObservableObject {
         }
     }
 
-    private static let relative: RelativeDateTimeFormatter = {
+    /// QUA-08: built per call rather than held as a shared static.
+    ///
+    /// `RelativeDateTimeFormatter` is not `Sendable` — and unlike `DateFormatter`, which Apple marks
+    /// `NS_SWIFT_SENDABLE` with a comment about its locks, Apple declined to vouch for this one (see
+    /// `ISO8601Shared` for the full note). `SyncStatus` is a plain `ObservableObject` with no
+    /// isolation, so a shared instance here would be genuinely unprotected.
+    ///
+    /// Not worth a lock: this is reached only from the Settings sync-status row's description, once
+    /// per status change, so construction cost is invisible — where `ISO8601Shared` is on a
+    /// per-photo path and had to keep its instances.
+    private static func relativeString(for date: Date) -> String {
         let f = RelativeDateTimeFormatter()
         f.unitsStyle = .short
-        return f
-    }()
+        return f.localizedString(for: date, relativeTo: Date())
+    }
 }
 
 // MARK: - Account status seam

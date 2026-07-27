@@ -21,8 +21,14 @@ describe('useMedia', () => {
         expect(result.current.getMediaUrl(assetUrl)).toBe(assetUrl);
     });
 
-    it('still resolves legacy relative photo paths', () => {
+    /**
+     * A photo whose asset fields are missing maps to `url: ''` (`recordToPhoto`), and
+     * every caller passes `photo.thumbnail_url || photo.url`. That must stay an empty
+     * `<img>` rather than becoming a request to the retired media Worker. LEG-05.
+     */
+    it('resolves an unusable reference to nothing, not to a host', () => {
         const { result } = renderHook(() => useMedia());
-        expect(result.current.getPhotoUrl('j-1', 'p-1')).toContain('journeys/j-1/photos/p-1.jpg');
+        expect(result.current.getMediaUrl('')).toBe('');
+        expect(result.current.getMediaUrl('journeys/j-1/photos/p-1.jpg')).toBe('');
     });
 });

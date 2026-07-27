@@ -91,7 +91,7 @@ One structural gap goes on the §8 risk register rather than into v1.0: **there 
 | **S3** | ✅ **The user's own words, made first-class.** `Camp.notes` already exists, syncs and renders well — but it is buried behind Edit → `WaypointEditSheet`. The words are the only thing that distinguishes a book from a slideshow, and today the app treats them as metadata. Give the day sheet and S1's chapters an inline, inviting notes affordance with a prompt-style empty state. Costs almost nothing and ranks **first** on the "actual value" list, above any AI feature. | beta |
 | **S4** | **Cabin-diary presentation, inferred not declared.** Do *not* ask the user to pick a taxonomy at creation — C1's whole design is one decision, then review a proposal. Instead infer: no route and ≤3 days ⇒ land on the story view instead of the trek map, drop ascent/summit chrome, keep POIs and weather, and set `journeyType = "diary"` so the field eventually means something. Most of this is already emergent from the honesty work (`isEmptyShell`, `Route.hasElevation`, "—" instead of 0). A separate authoring flow would fork the surface the beta is about to validate. | v1.1 |
 | **S5** | **PDF / printable book export** of the story view — the true photo-book-alternative payoff and a fat paid feature. Note that `pdf-data/` at the repo root already holds per-journey PDFs from the web era; something in this project's history produced them, so look there when scoping. | v1.1 |
-| **S6** | **Interview-mode drafting.** Reframe §10's flagship from "draft my day note" to "ask, then draft": the model asks two grounded questions ("who came along?", "what surprised you?") and weaves the answers into a draft the user edits. With Private Cloud Compute and vision now available free (§10), the questions can be grounded in what is actually *in* the photo rather than only in metadata. Note it slightly weakens the "photos never leave the device" sentence — still nothing we can see, but a different claim. | v1.1 |
+| **S6** | **Interview-mode drafting.** *Start from what exists:* day-note drafting, grounded fact drafting and day naming already ship — `Akashic/Intelligence/{DayNoteDrafter,FactDrafter,DayNamer,KnowledgeRetrieval,IntelligenceAvailability}.swift`, reachable from `WaypointEditSheet` and `NewJourneySheet`, gated on `Intelligence.isAvailable && entitlements.isComplete`. S6 reframes that flagship from "draft my day note" to "ask, then draft": the model asks two grounded questions ("who came along?", "what surprised you?") and weaves the answers into a draft the user edits. Grounding the questions in what is actually *in* the photo needs **Vision (absent from the codebase today)** and, for the frontier-model variant, **Private Cloud Compute — which is developer-preview-only until production PCC ships with iOS 27 in autumn 2026** (COMMERCIALIZATION-PLAN §10). That is a second reason this is v1.1 and not v1.0. Note the photo grounding slightly weakens the "photos never leave the device" sentence — still nothing we can see, but a different claim. | v1.1 |
 | **S7** | **People / companions.** A photo book is full of people; participants exist today for *sharing*, not as who was on the trip. Additive schema, so explicitly deferred to v1.1 and designed calmly rather than in the three weeks before submission. | v1.1 |
 
 ### Backlog changes from this round
@@ -149,14 +149,103 @@ But measured against the things Apple treats as non-negotiable, four gaps are *a
 | **D6** | ✅ **Photo-grid duplicate thumbnails — verify, then fix or close.** `screenshot-photo-grid.png` shows identical thumbnails repeated across rows for distinct photos. Reproduce on the current build with real imported data; if it reproduces it is a cache/identity bug in `Photos/PhotosGridView.swift`. **Done when:** a 58-photo day shows 58 distinct thumbnails, or the finding is closed as a stale screenshot with a note here. **RESOLVED 2026-07-25 — reproduced, but not a PhotosGridView bug; closed as a data issue, not code.** Reproduced live: launched with `AKASHIC_IMPORT_ON_LAUNCH=1` against the real recovered export (`/Users/cher/Privat/AkashicExport-20260722`, 1538 real photos, no fixtures), then opened Kilimanjaro Day 1 (58 photos) via the `AKASHIC_SCREEN=photogrid` seam — the same repeated-thumbnail pattern from the screenshot appears today. Root-caused via the Core Data store and the on-disk R2 export: every `Photo` row has its own distinct `id` and its own distinct thumbnail *file* (`Views/Photos/PhotosGridView.swift`'s `GridThumbnail` keys correctly, one file per row — this rules out a cache/identity bug in the view). But hashing those files (MD5) shows the *bytes* repeat: across Kilimanjaro's 939 photo rows, only 449 are unique images — 293 pairs, 20 triples, 52 quadruples, all confirmed by matching `kMDItemContentCreationDate` EXIF capture timestamps down to the second on the duplicate members. `supabase/photos.json` has zero duplicate `url` values, so these are not two rows pointing at one file — they are the *same source photo uploaded more than once*, each upload minted its own UUID and its own R2 copy, back when this data lived in the pre-migration Supabase/web app. The iOS import (`Import/LocalImporter.swift` / `ExportMapper.swift`) faithfully preserves those original Postgres UUIDs (by design, for idempotent re-import) and has no reason to deduplicate — it is reproducing upstream data debt, not introducing it. **No PhotosGridView/Domain.swift change made** — there is no code defect to fix here. Flagged as a follow-up, not undertaken now (out of scope for D6): a content-hash dedup pass, either one-time against the recovered bundle or ongoing at import time in `LocalImporter`, would need a product decision on which duplicate to keep (soonest-imported? highest-resolution original?) and isn't a "few focused hours" fix. | submission |
 | **D7** | **Elevation-profile accessibility.** `Charts/InteractiveElevationProfileView.swift`: add `accessibilityChartDescriptor` (audio graph) or per-marker elements announcing "Day 2, 4,150 m, kilometre 18". | v1.1 |
 | **D8** | **Trek-mode chrome slimming + palette tidy.** Merge the journey pill and the Overview/Globe row in `DayNavigationView` (title pill gains a trailing globe button) — four stacked bottom layers today, squeezing Maps attribution. Replace cyan text kickers ("8 days", DAY N) with `Theme.accent`, reserving cyan for map geometry. Reconsider `statusBarHidden(true)` on the primary screen — users lose clock and battery on the screen they live in, and Apple Maps doesn't do that. **Done when:** ≤3 stacked bottom layers and the only cyan pixels are on the map. | v1.1 |
-| **D9** | ✅ **SHIPPED 2026-07-26. Bundled demo journey** (COMMERCIALIZATION-PLAN §4.2) — one read-only, deletable showcase journey so the empty globe sells the product. Both reviewers rate this the biggest conversion lever on the list; it is v1.1 only because the plan already tracks it and creation now works. | v1.1 |
+| **D9** | ⚠️ **PARTLY SHIPPED 2026-07-26 — the mechanism, not the content. Bundled demo journey** (COMMERCIALIZATION-PLAN §4.2) — one read-only, deletable showcase journey so the empty globe sells the product. Both reviewers rate this the biggest conversion lever on the list. **What is real:** the seeding path exists and is careful — `Persistence/PersistenceController.swift:221` `seedDemoJourneyIfFreshInstall` seeds once ever on a fresh install, re-mints every id (`remapToDemoIdentity`) so the demo cannot collide with the real family archive, respects `AKASHIC_EMPTY=1`, is excluded from the free-tier count (`JourneyStore.swift:429`) and from sync (`SyncSeam.swift:146`), and is badged and honestly worded on delete. **What is not:** it seeds `FixtureLoader.load(named: "kilimanjaro")`, and `apple/Fixtures/recovered/kilimanjaro.json` **has no `photos` key at all** — `Fixtures/FixtureLoader.swift` and `FixtureModels.swift` contain zero occurrences of "photo", so the fixture pipeline has no photo path to fill one. A first launch therefore shows a route, days, stats and day content, and **not one photograph, in a photo-memory app.** As the "biggest conversion lever" this is not yet done: a demo with no photos demonstrates the map, which is the half the free tier already gives away, and not the story, which is what §5's kr 149 is for. Also unmet from the note under "Backlog changes": show **both** a trek and a photos-only trip. **Still needed:** bundle real thumbnail bytes with the demo journey (a handful of days' worth is enough) and a second photos-only sample. Gate moved v1.1 → submission by the 2026-07-25 round; the row's old `v1.1` gate contradicted its own "SHIPPED". | submission |
+
+### What the D1 / D3 ticks do and do not mean (measured 2026-07-26)
+
+Both ticks are **real for the files they name**, and were re-verified rather than
+trusted:
+
+- **D1 — done.** Trek-mode chrome carries no `.system(size:)` at all now
+  (`DayNavigationView`, `GlobeMapComponents` = 0; `GlobeExperienceView`'s one case is a
+  `@ScaledMetric` flag size). The ≥44 pt requirement is met — 21 `minWidth: 44` /
+  `minHeight: 44` / `contentShape` sites under `Views/Map/`, including the chevrons
+  (`DayNavigationView.swift:213-215`). The overlay cap exists and wraps the day
+  navigator (`GlobeExperienceView.swift:528`, `.dynamicTypeSize(...xxLarge)`). Every
+  label D1 asked for by name exists: journey pins (`GlobeMapComponents.swift:170`),
+  camp badges (`:212`), photo markers (`:259`), the day pill
+  (`DayNavigationView.swift:168` — "Day 3, Barranco Camp" verbatim) and the
+  previous/next chevrons (`:220`).
+- **D3 — done for its named files.** Repo-wide `.system(size:)` is **32**, down from
+  108, and the survivors sit almost entirely in files D3 never listed: the widget
+  views (9), `Views/Charts/` (7 — that is D7's territory, v1.1), `Views/Edit/` (4),
+  plus deliberate display sizes in `OnboardingView`, `RootView`, `PaywallView`,
+  `PhotoPlacementSheet` and `JourneyNextSteps`. In the files D3 *did* name the only
+  remaining cases are justified `@ScaledMetric` sizes (`WeatherRow` symbol,
+  `JourneyDetailView`/`JourneyListView` flags). `@ScaledMetric` now appears in 12
+  view files. The lightbox close/share/edit labels D3 asked for are present
+  (`PhotoLightboxView.swift:176,186,220`).
+
+**What neither tick claims, and what nobody should read into them:** the app is not
+broadly accessible. There are **15 `accessibilityLabel`s against ~218 interactive
+sites** across `Akashic/`, and the labels are concentrated exactly where D1 and D3
+put them. Measured per directory:
+
+| `Views/` subtree | `accessibilityLabel` | Interactive sites |
+|---|---|---|
+| `Map/` (D1) | 7 | — |
+| `Photos/` (D3) | 3 | 22 |
+| `Day/`, `Comments/`, `Showcase/`, root | 5 | — |
+| **`Edit/`** | **0** | **59** |
+| **`NewJourney/`** | **0** | **25** |
+| **`Sharing/`** | **0** | 8 |
+| **`Store/`** (paywall) | **0** | 7 |
+| **`Export/`** | **0** | 4 |
+| **`Route/`** | **0** | 4 |
+| **`Story/`** | **0** | 1 |
+| **`Charts/`** | **0** | 2 (D7, v1.1) |
+
+So VoiceOver completes the globe → journey → day → next-day path D1 specified, and
+falls apart in creation, editing, sharing and the paywall. That is a genuine gap,
+it is **not** a regression in D1 or D3, and it is not currently a task on this
+list — the only related open item, D7, covers one chart. Route drawing's missing
+VoiceOver path is an accepted deviation (see the decisions table); the paywall
+and the creation sheet are not, and a screen-reader user cannot currently buy the
+product. Worth one task before submission; scoped honestly, it is a labelling
+sweep over `Edit/`, `NewJourney/` and `Store/`, not a redesign.
 
 ---
+
+## A4 — "Would Apple ship this screen?" (reviewed 2026-07-26)
+
+Reviewed after A1 (accessibility floor), A2 (haptics), QUA-07/QUA-24 (accessibility app-wide) and
+QUA-19 (app icon) landed, which were its stated preconditions.
+
+**What was reviewed how, stated plainly.** The onboarding first page and the globe were reviewed
+*by looking at the running app* — installed the Debug build on a booted simulator with a clean
+status bar and read the screenshots. Everything else was reviewed **by reading code**, because two
+of the `AKASHIC_SCREEN` seams did not take effect in my run (see the last finding). A design review
+of a screen nobody looked at is a code review with a misleading name, so the distinction is kept
+per finding below.
+
+### Findings
+
+| # | Screen | Finding | Verified | Disposition |
+|---|---|---|---|---|
+| A4-1 | Globe | **"Kilimanjaro" truncates to "Kilima…"** on the journey card, because the SAMPLE badge takes width from the title. SHIP-03 added `AKASHIC_HIDE_SAMPLE_BADGE` so store screenshots look right — that is a *screenshot* fix. A customer with the bundled sample sees the truncation. | Seen | **Open** — QUA-30 |
+| A4-2 | Globe | **The status bar is hidden on the screen users live in.** No clock, no battery, no signal. D8 recorded this and it is still true. Apple's own map apps do not do it, and the immersion gained is small against what is given up. | Seen | **Open** — D8 stands |
+| A4-3 | Globe | **The journey card and the tab bar share no alignment.** The card is bottom-left at roughly half width; the tab bar is centred. They read as two unrelated floating objects rather than one bottom chrome. | Seen | **Fixed** — QUA-30. Measured 12 pt vs 64 pt on a 402 pt screen; the strip now takes the same 64 pt leading inset via `GlobeExperienceView.bottomChromeInset`, verified at 192 px vs 193 px. Inset on the scroll CONTENT, so the half-visible next card still says "scroll me". |
+| A4-4 | Globe | **MapKit's ocean labels clip at the screen edges** — "orth lantic cean", "Indian Ocea". It is MapKit's labelling at this camera rather than our text, but it reads as unfinished. Worth trying a slightly tighter camera or suppressing ocean labels at this altitude. | Seen | **Not fixable as framed — owner's aesthetic call.** Both suggestions tested and ruled out. Camera: `centerCoordinateDistance` is already at MapKit's clamp, so 42,000 km and 52,000 km produce PIXEL-IDENTICAL output (disc spans x=0…1205 of 1206 in both) — the disc always overflows the width and no camera value pulls it in. Labels: ocean names are base-map labels, not POIs, so `pointsOfInterest: .excludingAll` cannot touch them and MapKit exposes no other control. What remains is `.imagery` instead of `.hybrid`, which removes ALL labels including EUROPE/AFRICA/ASIA — those genuinely aid orientation on a globe, so this is a taste trade rather than a fix. Recorded at `MapGeoMath.globeDistance`. |
+| A4-5 | Onboarding | **The page indicator sits inside a filled pill.** Not an iOS idiom; a paging indicator floats. Small, and on the first screen a new customer ever sees. | Seen | **Fixed** — QUA-30. Bigger than described: inside the pill the ACTIVE dot was white and the inactive ones dark grey, so in Light Mode the current page was the *least* visible — correct styling for the dark-only app it was written for, broken by the Light Mode migration. Hand-drawn floating dots now; all four states measured ≥3:1. |
+| A4-6 | Onboarding | **The hero glyph is an SF Symbol globe, not the app's own mark** — which was redrawn to 8.57:1 in QUA-19 and is now good. The one moment brand continuity is guaranteed to be seen is the one place it is absent. | Seen | **Fixed** — QUA-30. New `AkashicMark.imageset`: the icon's geometry minus its ground, viewBox tightened to the sphere. Needs no light/dark variant because the graticule only falls inside the sphere. Later cards keep SF Symbols on purpose — they illustrate a concept, not the app. |
+| A4-7 | App-wide | **Zero iOS 26 material adoption**: 0 `glassEffect`, 0 `GlassEffectContainer`, 0 `buttonStyle(.glass)`, 0 `tabBarMinimizeBehavior`, against 48 `.ultraThinMaterial` sites, `.tabItem`/`.tag` TabView, no `NavigationSplitView`, no `.searchable`, no `@Observable`. The app's own chrome is a generation behind the system chrome it sits beside. | Code | **Deliberate for v1.0** — deployment target is 17.0, so adopting it means either raising the floor or `#available`-forking every surface. Recorded, not fixed. |
+| A4-8 | Tooling | **`AKASHIC_SCREEN=settings` and `=paywall` did not take effect** in my run, falling through to the globe, while `AKASHIC_SKIP_ONBOARDING` in the same launch *did* — so the environment reached the app. I did not diagnose it and am not calling it broken. It matters because SHIP-03's twenty-four screenshots depend on these seams, and a seam that silently falls through to a different screen is worse than one that fails loudly. | Seen | **Open** — QUA-31 |
+
+### The judgement A4 was for
+
+Nothing here is a ship blocker. The app is coherent, it is now accessible, it speaks Norwegian, and
+its icon is good. What the pass actually surfaces is that the *polish* items cluster on one screen —
+the globe, which is both the first thing a customer sees after onboarding and the screen the store
+listing leads with. Four of the six seen findings are there. That is where an hour of design time
+returns the most, and it is a better use of it than adopting Liquid Glass on an iOS 17 floor.
+
 
 ## Estimate
 
 **Before the external beta:** C1–C7 — the critical path is C1 → C2.
-**Before App Store submission:** D1–D6, of which D2 (iPad) is the largest single item.
-**v1.1:** C8–C11, D7, D8, S4–S7. (D9 shipped 2026-07-26.)
+**Before App Store submission:** D1–D6 and D9, of which D2 (iPad) is the largest
+single item. D9's seeding mechanism ships; its *content* does not (no photos) —
+see the row.
+**v1.1:** C8–C11, D7, D8, S4–S7.
 
 Roughly a week of focused agent work for everything gated at submission, assuming the parallelism in the sequencing diagram above.

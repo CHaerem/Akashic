@@ -33,12 +33,18 @@ struct PhotosGridView: View {
                         title: "Day \(day)",
                         subtitle: camp(in: journey, day: day)?.name,
                         photos: grouped.byDay[day] ?? [],
-                        dayLabel: "Day \(day)",
+                        // Resolved here, not passed as a literal: `dayLabel` is a `String` (it ends
+                        // up in `Text(verbatim:)`-equivalent position inside the lightbox), so the
+                        // same literal that localises fine as `title` above would ship English.
+                        dayLabel: String(localized: "Day \(day)",
+                                         comment: "Photo lightbox: badge naming the day a photo belongs to."),
                         journey: journey
                     )
                 }
                 if !grouped.unassigned.isEmpty {
-                    section(title: "Unassigned", subtitle: "Not matched to a day",
+                    section(title: "Unassigned",
+                            subtitle: String(localized: "Not matched to a day",
+                                             comment: "Photo grid: subtitle of the section holding photos with no day."),
                             photos: grouped.unassigned, dayLabel: nil, journey: journey)
                 }
             }
@@ -54,6 +60,7 @@ struct PhotosGridView: View {
                     Image(systemName: "plus")
                 }
                 .tint(Theme.accent)
+                .accessibilityLabel(Text("Add photos", comment: "Photo grid toolbar button."))
             }
         }
         .fullScreenCover(item: $lightbox) { data in
@@ -98,7 +105,10 @@ struct PhotosGridView: View {
                 set: { if !$0 { photoPendingDelete = nil } })
     }
 
-    private func section(title: String, subtitle: String?, photos: [Photo],
+    /// `subtitle` stays a `String?`: in the per-day sections it is the camp's own name, which is
+    /// the customer's data and must not go near the catalogue. Only the Unassigned section passes
+    /// prose, and it resolves it at the call site.
+    private func section(title: LocalizedStringKey, subtitle: String?, photos: [Photo],
                          dayLabel: String?, journey: Journey?) -> some View {
         Section {
             LazyVGrid(columns: columns, spacing: 4) {
@@ -109,6 +119,13 @@ struct PhotosGridView: View {
                         GridThumbnail(photo: photo)
                     }
                     .buttonStyle(.plain)
+                    // A thumbnail button announces nothing on its own. The caption is the only thing
+                    // that tells one photograph from another, and the position is what keeps a
+                    // VoiceOver user oriented in a grid of hundreds — so both, and the video/hero
+                    // state as traits rather than words baked into the label.
+                    .accessibilityLabel(photoLabel(photo, index: index, of: photos.count))
+                    .accessibilityHint(Text("Opens full screen.",
+                                            comment: "Photo grid cell hint."))
                     .contextMenu { photoMenu(photo, journey: journey) }
                 }
             }
@@ -125,6 +142,31 @@ struct PhotosGridView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(Theme.background)
         }
+    }
+
+    /// What a screen reader says for one grid cell.
+    ///
+    /// Caption first when there is one, because it is the only thing that identifies the photograph;
+    /// otherwise the position carries it. "Video" is stated rather than left to a trait because
+    /// whether tapping starts playback is the thing a user most needs to know before tapping.
+    private func photoLabel(_ photo: Photo, index: Int, of total: Int) -> Text {
+        let position = String(localized: "Photo \(index + 1) of \(total)",
+                              comment: "Photo grid cell accessibility label: position within the grid.")
+        var parts: [String] = []
+        if let caption = photo.caption?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !caption.isEmpty {
+            parts.append(caption)
+        }
+        parts.append(position)
+        if photo.isVideo {
+            parts.append(String(localized: "Video",
+                                comment: "Photo grid cell accessibility label: this item is a video."))
+        }
+        if photo.isHero {
+            parts.append(String(localized: "Cover photo",
+                                comment: "Photo grid cell accessibility label: this is the journey's hero image."))
+        }
+        return Text(parts.joined(separator: ", "))
     }
 
     @ViewBuilder

@@ -62,16 +62,40 @@ Apex `akashic.no` — four **AAAA** records:
 
 `www.akashic.no` — one **CNAME** record → `chaerem.github.io.` (trailing dot).
 
-> `.no` domains are registered at Norid-accredited registrars (Cloudflare
-> Registrar does not support `.no`), so only **DNS hosting** moves — from
-> Cloudflare DNS back to the registrar's own DNS (e.g. Domeneshop, free with the
-> domain). The domain registration itself does not move.
+> **Registrar confirmed by whois 2026-07-27: Domeneshop AS** (`REG42-NORID`, Oslo). This section used
+> to guess at that, and the guess was right. `.no` requires a Norid-accredited registrar, so the
+> registration itself is not moving — Cloudflare Registrar does not support `.no` and never held it.
+> Only **DNS hosting** moves.
+>
+> **Destination: Domeneshop's own DNS, not GoDaddy.** The owner asked about GoDaddy (already used for
+> other domains) and it would work, but Domeneshop is the better answer here:
+>
+> * **One vendor.** The NS delegation lives at Domeneshop regardless — that is where nameservers are
+>   changed. Putting DNS there too keeps the domain managed in one place instead of splitting
+>   registration and DNS across two consoles, which is how "which one is authoritative?" incidents start.
+> * **Free with the domain**, same as GoDaddy. No saving either way.
+> * **No account-wide API key.** GoDaddy's API keys cannot be scoped to a single domain, so automating
+>   DNS through them would mean handing over control of every other domain in that account — a bad
+>   trade for nine records.
+> * **Less to mistype.** "Use our DNS" at the registrar is usually one switch that sets the NS records
+>   correctly itself. Entering a third party's nameservers by hand is one typo away from a dark domain
+>   for the length of the delegation TTL.
+>
+> GoDaddy is the right choice only if a single console for all domains is worth the two-vendor split.
 
 ---
 
 ## Recommended cutover sequence (zero-downtime)
 
 ### Stage 0 — Prep on GitHub (no DNS change; users still served by Cloudflare)
+
+> **Measured 2026-07-27 — the artifact's `CNAME` does not set the custom domain.** With
+> `build_type: workflow`, `dist/CNAME` rides along in the upload and is ignored: after a green
+> `deploy-pages.yml` run, the Pages API still reported `cname: null` and Pages answered
+> *"Site not found"* for `Host: akashic.no`, which also makes the Stage 1 `--resolve` check 404.
+> Set the domain explicitly (step 5 below, or `gh api -X PUT repos/OWNER/REPO/pages -f
+> cname=akashic.no`), then allow **~45 seconds** of edge propagation. A 404 in the first seconds
+> after setting it is propagation, not a failed deploy — retry before debugging.
 
 1. **Merge** the branch that adds `deploy-pages.yml` and `public/CNAME` to
    `main`. `deploy.yml` is untouched, so Cloudflare keeps serving akashic.no.
@@ -137,24 +161,51 @@ directly** without moving public DNS, using a local hosts override:
 
 ---
 
-## Rollback plan
+## Rollback plan — WAIVED (2026-07-27)
 
-At any point before you're confident, **re-point DNS back to Cloudflare** using
-the values recorded in Stage 2. Because TTL is already low, users return to the
-Cloudflare Pages site within one TTL window (~5 min). `deploy.yml` is still
-present and still deploying `main`, so the Cloudflare site never went stale —
-rollback is purely a DNS revert. If needed, also clear the custom domain in
-Settings → Pages to stop the `github.io` → akashic.no redirect.
+The owner does not want a rollback path, so the plan below is recorded as history rather than as
+something to keep alive. **What that changes:** `deploy.yml` and the Cloudflare secrets no longer wait
+for a stability month (LEG-10), and the Pages project and DNS zone go as soon as the cutover is
+verified (LEG-11A). What it does NOT change is the R2 bucket and the Supabase project (LEG-11B) —
+those hold the only copy of the family archive until LEG-02 verifies a second physical medium, and
+that gate has nothing to do with rollback.
+
+If the cutover misbehaves, the recovery is forward rather than backward: fix the build and re-run
+`deploy-pages.yml`. The site may be down while you do. That is the trade being made deliberately.
+
+<details><summary>The original rollback plan, for the record</summary>
+
+Re-point DNS back to Cloudflare using the values recorded in Stage 2. Because TTL is already low,
+users return to the Cloudflare Pages site within one TTL window (~5 min). `deploy.yml` is still
+present and still deploying `main`, so the Cloudflare site never went stale — rollback is purely a DNS
+revert. If needed, also clear the custom domain in Settings → Pages to stop the `github.io` →
+akashic.no redirect.
+
+</details>
+
+**Still record the Cloudflare DNS values in Stage 2 anyway** — not for rollback, for reconstruction.
+Once the zone is deleted (LEG-11A) anything you forgot to recreate in GoDaddy is gone with it.
+
+Measured 2026-07-27, which makes this cheaper than it sounds: `akashic.no` has **no MX and no TXT
+records at all** (`dig +short akashic.no MX` and `... TXT` both return nothing, and `_dmarc` is empty).
+So the zone carries nothing but the website's A/AAAA/CNAME, there is no mail to break, and the GoDaddy
+zone only needs the records listed above. Re-check before deleting in case something was added since.
 
 ---
 
 ## Phase 5 — what gets deleted (only after ≥1 month stable on Pages)
 
-- **`.github/workflows/deploy.yml`** — the Cloudflare Pages workflow.
-- **`netlify.toml`** — legacy alternate-host config (SPA redirect), unused.
-- **GitHub secrets:** `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`. (Per the
-  migration plan, `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` are pruned later
-  once the CloudKit backend replaces Supabase.)
+- **`.github/workflows/deploy.yml`** — the Cloudflare Pages workflow. Still
+  present today, and it is the only workflow that consumes the two Cloudflare
+  secrets below (`deploy.yml:45-46`).
+- **GitHub secrets:** `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`. Also
+  `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` **if they are still set** — the
+  web client is CloudKit-only and no workflow references either key any more
+  (`grep -rn SUPABASE .github/` returns nothing), so they can be pruned in the
+  same pass rather than deferred. The only remaining Supabase references are the
+  one-shot legacy scripts `scripts/migrateR2Photos.js` and
+  `scripts/backfillThumbnails.ts`, which read their own local env vars, never CI
+  secrets.
 - **Cloudflare resources** (per plan Phase 5): the `akashic` Pages project, the
   `akashic-media` Worker + R2 bucket, and the Cloudflare DNS zone.
 - **`deploy-pages.yml` trigger:** ensure it's on `push: [branches: main]` and
@@ -171,12 +222,16 @@ native app (plan Open Q5), the site must serve an Apple App Site Association
 (no file extension, JSON body). Vite copies `public/` into `dist/` verbatim, so the
 deployed artifact carries it at `https://akashic.no/.well-known/apple-app-site-association`.
 
-**Before it works, two placeholders must be filled (see runbook §4):**
+**Status of the two prerequisites (see runbook §4):**
 
-1. Replace `<TEAMID>` in the file so `appIDs` reads `<TEAMID>.no.akashic.app`
-   (Team ID is on the Apple Developer *Membership* page).
-2. Add the **Associated Domains** capability to the `Akashic` app target with the
-   entry `applinks:akashic.no`.
+1. ✅ **Done.** The Team ID placeholder is already filled — `appIDs` reads
+   `9LVCB72DT8.no.akashic.app` in the committed file. Nothing to replace.
+2. ⬜ **Still outstanding.** Add the **Associated Domains** capability to the
+   `Akashic` app target with the entry `applinks:akashic.no`. Verify with
+   `grep -rn applinks apple/` — it returns **no hits today**, so neither
+   `apple/project.yml` nor any of the three entitlements files under
+   `apple/Akashic/Support/` declares it, and Universal Links cannot work until
+   this lands.
 
 The AASA uses the modern `components` matcher (iOS 14+; the app minimum is iOS 17):
 it matches path `/` with a non-empty `journey` query value (`"?": { "journey": "?*" }`),
@@ -232,8 +287,9 @@ Cloudflare's shared **`staging.akashic.pages.dev`** preview (produced by
 `deploy.yml` on every PR) **goes away** with the Cloudflare deploy.
 
 - **Interim:** `.github/workflows/test.yml`'s `build` job already runs
-  `npm run build` on every PR and uploads the `dist/` artifact (1-day
-  retention). Download it and serve locally for QA:
+  `npm run build` on every PR and uploads the `dist/` artifact as
+  **`build-output`** (1-day retention, `test.yml:133-138`). Download it, unzip,
+  and serve locally for QA:
   ```
   npx serve dist   # or: python3 -m http.server -d dist
   ```

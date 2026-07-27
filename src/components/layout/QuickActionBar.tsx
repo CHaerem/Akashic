@@ -91,7 +91,9 @@ function QuickActionButton({ icon, label, onClick, isMobile, active, subtle, sho
         ...glassButton,
         width: isPill ? 'auto' : size,
         height: size,
-        borderRadius: isPill ? radius.full : radius.lg,
+        // Was `radius.full`, which does not exist on the radius scale — so this evaluated to
+        // undefined and the labelled pill variant rendered with square corners.
+        borderRadius: isPill ? radius.pill : radius.lg,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',

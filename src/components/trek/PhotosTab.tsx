@@ -1,18 +1,20 @@
 /**
- * Media tab for viewing and uploading journey photos and videos
- * Allows family members to collaboratively add media to journeys
+ * Media tab for browsing journey photos and videos.
+ *
+ * Read-only. Uploading, reordering, captioning and deleting all ran through stubbed
+ * CloudKit writes that returned `false`, and this tab updated its own state anyway — so a
+ * reorder looked saved until the next fetch put it back (LEG-07). Adding media is
+ * native-only; edit mode shows a `NativeOnlyNotice` here instead.
  */
 
 import { useState, useEffect, useCallback, useRef, useMemo, memo } from 'react';
-import type mapboxgl from 'mapbox-gl';
+import type * as mapboxgl from 'mapbox-gl';
 import type { TrekData, Photo, Camp, MediaType } from '../../types/trek';
-import type { UploadResult } from '../../lib/media';
 import { useMedia } from '../../hooks/useMedia';
 import { usePhotoDay } from '../../hooks/usePhotoDay';
-import { fetchPhotos, createPhoto, deletePhoto, getJourneyIdBySlug, updatePhoto } from '../../lib/journeys';
-import { PhotoUpload } from './PhotoUpload';
+import { fetchPhotos, getJourneyIdBySlug } from '../../lib/journeys';
 import { PhotoLightbox } from '../common/PhotoLightbox';
-import { PhotoEditModal } from './PhotoEditModal';
+import { NativeOnlyNotice } from '../common/NativeOnlyNotice';
 import { SkeletonPhotoGrid } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 
@@ -55,33 +57,15 @@ function PlayIcon({ className }: { className?: string }) {
 interface PhotoGridItemProps {
     photo: Photo;
     index: number;
-    editMode: boolean;
-    isDragOver: boolean;
-    isDragged: boolean;
     getMediaUrl: (path: string) => string;
     onPhotoClick: (index: number) => void;
-    onDragStart: (index: number) => void;
-    onDragOver: (e: React.DragEvent, index: number) => void;
-    onDragLeave: () => void;
-    onDrop: (index: number) => void;
-    onDragEnd: () => void;
-    onEditPhoto: (photo: Photo) => void;
 }
 
 const PhotoGridItem = memo(function PhotoGridItem({
     photo,
     index,
-    editMode,
-    isDragOver,
-    isDragged,
     getMediaUrl,
     onPhotoClick,
-    onDragStart,
-    onDragOver,
-    onDragLeave,
-    onDrop,
-    onDragEnd,
-    onEditPhoto,
 }: PhotoGridItemProps) {
     const isVideo = photo.media_type === 'video';
     const mediaLabel = isVideo ? 'Video' : 'Photo';
@@ -92,15 +76,9 @@ const PhotoGridItem = memo(function PhotoGridItem({
     return (
         <div
             onClick={() => onPhotoClick(index)}
-            draggable={editMode}
-            onDragStart={() => editMode && onDragStart(index)}
-            onDragOver={(e) => editMode && onDragOver(e, index)}
-            onDragLeave={() => editMode && onDragLeave()}
-            onDrop={() => editMode && onDrop(index)}
-            onDragEnd={() => editMode && onDragEnd()}
             role="button"
             tabIndex={0}
-            aria-label={editMode ? `${label}. Drag to reorder.` : label}
+            aria-label={label}
             onKeyDown={(e) => {
                 if (e.key === 'Enter' || e.key === ' ') {
                     e.preventDefault();
@@ -110,10 +88,8 @@ const PhotoGridItem = memo(function PhotoGridItem({
             className={cn(
                 "aspect-square rounded-lg overflow-hidden relative bg-white/5 light:bg-black/5 group",
                 "transition-all duration-150 m-2", // margin for iOS Safari gap compatibility
-                editMode ? "cursor-grab" : "cursor-pointer",
-                photo.is_hero && "ring-2 ring-amber-400",
-                isDragOver && "ring-2 ring-blue-500 scale-[1.02]",
-                isDragged && "opacity-50"
+                "cursor-pointer",
+                photo.is_hero && "ring-2 ring-amber-400"
             )}
         >
             <img
@@ -142,23 +118,6 @@ const PhotoGridItem = memo(function PhotoGridItem({
                 </div>
             )}
 
-            {/* Edit button in edit mode - subtle icon */}
-            {editMode && (
-                <button
-                    onClick={(e) => {
-                        e.stopPropagation();
-                        onEditPhoto(photo);
-                    }}
-                    className="absolute top-1.5 right-1.5 w-7 h-7 bg-black/40 backdrop-blur-sm rounded-full flex items-center justify-center text-white/80 cursor-pointer hover:bg-black/60 hover:text-white transition-colors z-10"
-                    aria-label="Edit photo"
-                >
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/>
-                        <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
-                    </svg>
-                </button>
-            )}
-
             {/* Location indicator */}
             {photo.coordinates && !isVideo && (
                 <div className={cn(
@@ -183,22 +142,27 @@ const PhotoGridItem = memo(function PhotoGridItem({
 
 interface PhotosTabProps {
     trekData: TrekData;
-    isMobile: boolean;
+    /**
+     * Unused since the edit affordances went away (LEG-07); the grid is responsive by
+     * breakpoint. Kept so the two call sites in `BottomSheetContent` need no change.
+     */
+    isMobile?: boolean;
+    /**
+     * True when a signed-in family member has edit mode on. Used only to explain that
+     * media is added in the app — this tab offers no writes (LEG-07).
+     */
     editMode?: boolean;
     onViewPhotoOnMap?: (photo: Photo) => void;
     mapViewportBounds?: MapBounds;
     mapViewportPhotoIds?: string[] | null;
 }
 
-export function PhotosTab({ trekData, isMobile, editMode = false, onViewPhotoOnMap, mapViewportBounds = null, mapViewportPhotoIds = null }: PhotosTabProps) {
+export function PhotosTab({ trekData, editMode = false, onViewPhotoOnMap, mapViewportBounds = null, mapViewportPhotoIds = null }: PhotosTabProps) {
     const [photos, setPhotos] = useState<Photo[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [journeyDbId, setJourneyDbId] = useState<string | null>(null);
     const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
-    const [editingPhoto, setEditingPhoto] = useState<Photo | null>(null);
-    const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
-    const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
     const [dayFilter, setDayFilter] = useState<DayFilter>('all');
     const [mediaTypeFilter, setMediaTypeFilter] = useState<MediaTypeFilter>('all');
     const [locationFilter, setLocationFilter] = useState<LocationFilter>('any');
@@ -206,7 +170,6 @@ export function PhotosTab({ trekData, isMobile, editMode = false, onViewPhotoOnM
     const [searchQuery, setSearchQuery] = useState('');
     const [mapScopeEnabled, setMapScopeEnabled] = useState(false);
     const [visibleCount, setVisibleCount] = useState(PHOTOS_PER_PAGE);
-    const dragTimeoutRef = useRef<number | null>(null);
     const gridContainerRef = useRef<HTMLDivElement>(null);
     const scrollContainerRef = useRef<HTMLDivElement>(null);
     const { getMediaUrl, loading: tokenLoading } = useMedia();
@@ -370,117 +333,12 @@ export function PhotosTab({ trekData, isMobile, editMode = false, onViewPhotoOnM
         loadPhotos();
     }, [journeyDbId]);
 
-    const handleUploadComplete = useCallback(async (result: UploadResult) => {
-        if (!journeyDbId) return;
-
-        try {
-            // Create photo record in database with extracted metadata and thumbnail
-            const photo = await createPhoto({
-                journey_id: journeyDbId,
-                url: result.path,
-                thumbnail_url: result.thumbnailPath,
-                coordinates: result.coordinates,
-                taken_at: result.takenAt?.toISOString(),
-            });
-
-            if (photo) {
-                setPhotos(prev => [...prev, photo]);
-            }
-        } catch (err) {
-            console.error('Error saving photo:', err);
-            setError('Photo uploaded but failed to save record');
-        }
-    }, [journeyDbId]);
-
-    const handleUploadError = useCallback((errorMsg: string) => {
-        setError(errorMsg);
-        setTimeout(() => setError(null), 5000);
-    }, []);
-
     const handlePhotoClick = useCallback((index: number) => {
         setLightboxIndex(index);
     }, []);
 
     const closeLightbox = useCallback(() => {
         setLightboxIndex(null);
-    }, []);
-
-    const handleDeletePhoto = useCallback(async (photo: Photo) => {
-        try {
-            await deletePhoto(photo.id);
-            setPhotos(prev => prev.filter(p => p.id !== photo.id));
-        } catch (err) {
-            console.error('Error deleting photo:', err);
-            setError('Failed to delete photo');
-        }
-    }, []);
-
-    const handleEditPhoto = useCallback((photo: Photo) => {
-        setEditingPhoto(photo);
-    }, []);
-
-    const handlePhotoUpdated = useCallback((updatedPhoto: Photo) => {
-        setPhotos(prev => prev.map(p =>
-            p.id === updatedPhoto.id ? updatedPhoto : p
-        ));
-    }, []);
-
-    // Drag and drop handlers for reordering
-    const handleDragStart = useCallback((index: number) => {
-        setDraggedIndex(index);
-    }, []);
-
-    const handleDragOver = useCallback((e: React.DragEvent, index: number) => {
-        e.preventDefault();
-        if (draggedIndex !== null && draggedIndex !== index) {
-            setDragOverIndex(index);
-        }
-    }, [draggedIndex]);
-
-    const handleDragLeave = useCallback(() => {
-        if (dragTimeoutRef.current) {
-            clearTimeout(dragTimeoutRef.current);
-        }
-        dragTimeoutRef.current = window.setTimeout(() => {
-            setDragOverIndex(null);
-        }, 50);
-    }, []);
-
-    const handleDrop = useCallback(async (targetIndex: number) => {
-        if (draggedIndex === null || draggedIndex === targetIndex) {
-            setDraggedIndex(null);
-            setDragOverIndex(null);
-            return;
-        }
-
-        const newPhotos = [...photos];
-        const [draggedPhoto] = newPhotos.splice(draggedIndex, 1);
-        newPhotos.splice(targetIndex, 0, draggedPhoto);
-
-        const updatedPhotos = newPhotos.map((photo, index) => ({
-            ...photo,
-            sort_order: index
-        }));
-
-        setPhotos(updatedPhotos);
-        setDraggedIndex(null);
-        setDragOverIndex(null);
-
-        try {
-            await Promise.all(
-                updatedPhotos.map((photo, index) =>
-                    updatePhoto(photo.id, { sort_order: index })
-                )
-            );
-        } catch (err) {
-            console.error('Error saving photo order:', err);
-            setError('Failed to save photo order');
-        }
-    }, [draggedIndex, photos]);
-
-    const handleDragEnd = useCallback(() => {
-        setDraggedIndex(null);
-        setDragOverIndex(null);
     }, []);
 
     const baseCount = dayScopedPhotos.length;
@@ -572,19 +430,13 @@ export function PhotosTab({ trekData, isMobile, editMode = false, onViewPhotoOnM
                 </div>
             )}
 
-            {/* Upload section - only show in edit mode */}
-            {editMode && journeyDbId && (
-                <div className="mb-6">
-                    <h3 className="text-white/90 light:text-slate-900 text-sm font-medium mb-3 uppercase tracking-[0.1em]">
-                        Add Photos
-                    </h3>
-                    <PhotoUpload
-                        journeyId={journeyDbId}
-                        onUploadComplete={handleUploadComplete}
-                        onUploadError={handleUploadError}
-                        isMobile={isMobile}
-                    />
-                </div>
+            {/* Where the uploader used to be. It threw on every file; the record it would
+                have created was a stubbed write anyway. */}
+            {editMode && (
+                <NativeOnlyNotice
+                    what="Adding, captioning, reordering and deleting media"
+                    className="mb-6"
+                />
             )}
 
             {/* Day filter tabs and media filters */}
@@ -825,11 +677,6 @@ export function PhotosTab({ trekData, isMobile, editMode = false, onViewPhotoOnM
                             </p>
                         )}
                     </div>
-                    {editMode && filteredPhotos.length > 1 && (
-                        <span className="text-[11px] text-white/40 light:text-slate-400">
-                            Drag to reorder
-                        </span>
-                    )}
                 </div>
 
                 {filteredPhotos.length > 0 && (
@@ -847,17 +694,8 @@ export function PhotosTab({ trekData, isMobile, editMode = false, onViewPhotoOnM
                                     key={photo.id}
                                     photo={photo}
                                     index={index}
-                                    editMode={editMode}
-                                    isDragOver={dragOverIndex === index}
-                                    isDragged={draggedIndex === index}
                                     getMediaUrl={getMediaUrl}
                                     onPhotoClick={handlePhotoClick}
-                                    onDragStart={handleDragStart}
-                                    onDragOver={handleDragOver}
-                                    onDragLeave={handleDragLeave}
-                                    onDrop={handleDrop}
-                                    onDragEnd={handleDragEnd}
-                                    onEditPhoto={handleEditPhoto}
                                 />
                             ))}
                         </div>
@@ -899,8 +737,8 @@ export function PhotosTab({ trekData, isMobile, editMode = false, onViewPhotoOnM
                     </p>
                     <p className="m-0 text-xs">
                         {mapScopeEnabled && mapViewportBounds
-                            ? 'Pan or zoom the map to explore nearby uploads.'
-                            : 'Adjust the filters or add new uploads to fill this space.'
+                            ? 'Pan or zoom the map to explore nearby media.'
+                            : 'Adjust the filters to widen what is shown.'
                         }
                     </p>
                     {hasNonDefaultView && (
@@ -924,12 +762,14 @@ export function PhotosTab({ trekData, isMobile, editMode = false, onViewPhotoOnM
                 <div className="text-center py-10 text-white/40 light:text-slate-400">
                     <p className="m-0 mb-2">No photos yet</p>
                     <p className="m-0 text-xs">
-                        Be the first to add photos to this journey!
+                        Photos added in the Akashic app for iPhone show up here.
                     </p>
                 </div>
             )}
 
-            {/* Lightbox - uses filtered photos for navigation within selected day */}
+            {/* Lightbox - uses filtered photos for navigation within selected day.
+                No onEdit/onDelete: both were stubbed writes, so the lightbox keeps only
+                viewing and "show on map". */}
             {/* Key prop forces remount when clicking different photo, ensuring correct initial index */}
             <PhotoLightbox
                 key={lightboxIndex !== null ? `lightbox-${lightboxIndex}` : 'lightbox-closed'}
@@ -938,29 +778,9 @@ export function PhotosTab({ trekData, isMobile, editMode = false, onViewPhotoOnM
                 isOpen={lightboxIndex !== null}
                 onClose={closeLightbox}
                 getMediaUrl={getMediaUrl}
-                onDelete={editMode ? handleDeletePhoto : undefined}
-                editMode={editMode}
                 onViewOnMap={onViewPhotoOnMap}
-                onEdit={editMode ? handleEditPhoto : undefined}
                 journeySlug={trekData.id}
             />
-
-            {/* Photo edit modal */}
-            {editingPhoto && (
-                <PhotoEditModal
-                    photo={editingPhoto}
-                    trekData={trekData}
-                    isOpen={true}
-                    onClose={() => setEditingPhoto(null)}
-                    onSave={handlePhotoUpdated}
-                    onDelete={editMode ? (photoId) => {
-                        setPhotos(prev => prev.filter(p => p.id !== photoId));
-                        setEditingPhoto(null);
-                    } : undefined}
-                    getMediaUrl={getMediaUrl}
-                    isMobile={isMobile}
-                />
-            )}
         </div>
     );
 }

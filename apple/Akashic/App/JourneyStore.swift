@@ -113,6 +113,70 @@ final class JourneyStore: ObservableObject {
         return matcher.photos(forDay: day, from: persistence.loadPhotos(forJourneyID: id))
     }
 
+    // MARK: - Curation (DIFF-04)
+
+    /// Look at a journey's photographs and propose a hero, a best-of per day, and any groups of
+    /// near-identical shots.
+    ///
+    /// Nothing is applied here — the result is a *proposal*, on the same accept-or-dismiss contract
+    /// every other suggestion in the app honours. Scoring runs on thumbnails off the main actor;
+    /// this method is `async` and the store only touches its own state after it returns.
+    ///
+    /// Degrades rather than disappearing: below iOS 18 there are no aesthetics scores and the
+    /// ranking falls back to `sortOrder`, which is exactly the current behaviour.
+    func curationProposal(forJourneyID id: String,
+                          service: PhotoCurationService = PhotoCurationService()) async -> CurationResult {
+        guard let journey = journey(withID: id) else { return CurationResult() }
+        let photos = persistence.loadPhotos(forJourneyID: id)
+        return await service.curate(photos: photos, journey: journey)
+    }
+
+    /// How many distinct images a journey actually holds, and how many rows are redundant (DIFF-06).
+    ///
+    /// Kilimanjaro is 939 photo rows for about 449 unique images — the data debt D6 identified and
+    /// deliberately punted. It matters beyond tidiness because it gates the book: a 939-photo journey
+    /// with 449 unique images lays out into something nobody wants.
+    ///
+    /// This *reports* and does not collapse. Deleting a photograph on the strength of a distance
+    /// heuristic is not a decision to take on the user's behalf, so the redundant ids are handed back
+    /// for a surface to offer — the same accept-or-dismiss contract the rest of curation honours.
+    func duplicateReport(forJourneyID id: String,
+                         service: PhotoCurationService = PhotoCurationService())
+        async -> (unique: Int, redundant: Int, groups: [[String]]) {
+        let total = persistence.loadPhotos(forJourneyID: id).count
+        let result = await curationProposal(forJourneyID: id, service: service)
+        let groups = result.duplicateGroups.keys.sorted().compactMap { result.duplicateGroups[$0] }
+        return (unique: total - result.redundantCount,
+                redundant: result.redundantCount,
+                groups: groups)
+    }
+
+    /// Accept a curation proposal's best-of for one day: the chosen photographs lead the day.
+    ///
+    /// Non-destructive by design — nothing is deleted or hidden, only reordered, and only within the
+    /// day's own `sortOrder` slots so another day cannot be disturbed.
+    @discardableResult
+    func acceptCuratedBestOf(_ result: CurationResult, day: Int, journeyID: String) -> Int {
+        let photos = persistence.loadPhotos(forJourneyID: journeyID)
+        let reordered = PhotoCurationService.applyingBestOf(day: day, result, to: photos,
+                                                           dayOf: { [weak self] photo in
+            guard let journey = self?.journey(withID: journeyID) else { return nil }
+            return PhotoDayMatcher(journey: journey).day(for: photo)
+        })
+        let orders = Dictionary(reordered.map { ($0.id, $0.sortOrder) }, uniquingKeysWith: { a, _ in a })
+        let changed = persistence.updatePhotoSortOrders(orders)
+        if changed > 0 { reload() }
+        return changed
+    }
+
+    /// Accept a curation proposal's hero. Goes through `setPhotoHero`, which already enforces the
+    /// single-hero invariant across the journey, so this is only deciding *which* photo.
+    @discardableResult
+    func acceptCuratedHero(_ result: CurationResult) -> Photo? {
+        guard let hero = result.hero else { return nil }
+        return setPhotoHero(true, forPhoto: hero)
+    }
+
     // MARK: - Import
 
     /// Run the local importer against an export bundle on disk, then reload the UI.
@@ -443,4 +507,28 @@ final class JourneyStore: ObservableObject {
     func isSampleJourney(_ id: String) -> Bool {
         persistence.isSeededFixture(journeyID: id)
     }
+
+    /// Whether the "SAMPLE" pill should be *drawn* for a journey — `isSampleJourney` gated by the
+    /// screenshot seam below. Every place that draws the badge goes through this; nothing else does,
+    /// and in particular the delete confirmation's copy still reads `isSampleJourney` directly.
+    func showsSampleBadge(_ id: String,
+                          badgesVisible: Bool = JourneyStore.sampleBadgesVisible) -> Bool {
+        isSampleJourney(id) && badgesVisible
+    }
+
+    /// Screenshot seam: `AKASHIC_HIDE_SAMPLE_BADGE=1` suppresses the "SAMPLE" pill (SHIP-03).
+    ///
+    /// A store-screenshot run loads the bundled fixtures, so *every* journey on screen is a seeded
+    /// sample and every card would carry the pill — which advertises the product as a demo instead
+    /// of as the archive a customer's own journeys live in, and steals enough width from the globe
+    /// cards to truncate the journey names too. Deliberately the narrowest possible seam: it hides
+    /// the badge and nothing else. `isSampleJourney` itself stays truthful, so the free-tier
+    /// exemption (`billableOwnedJourneyCount`), the sync exclusion (`isSeededFixture`) and the
+    /// honest delete copy are all unaffected by it. No effect on a normal launch.
+    static func sampleBadgesVisible(environment env: [String: String]) -> Bool {
+        env["AKASHIC_HIDE_SAMPLE_BADGE"] != "1"
+    }
+
+    static let sampleBadgesVisible =
+        sampleBadgesVisible(environment: ProcessInfo.processInfo.environment)
 }

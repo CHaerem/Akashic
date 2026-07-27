@@ -47,7 +47,7 @@ struct JourneyShowcaseSheet: View {
             .interactiveDismissDisabled(model.isWorking)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("Done") { dismiss() }.tint(Theme.accent)
+                    Button("Done") { dismiss() }.tint(Theme.accentText)
                         .disabled(model.isWorking)
                 }
             }
@@ -57,8 +57,7 @@ struct JourneyShowcaseSheet: View {
                 Button("Publish anyway") { performPublish() }
                 Button("Wait for Wi-Fi", role: .cancel) {}
             } message: {
-                Text("About \(ByteCount.string(estimatedPublishBytes)) of thumbnails and metadata "
-                     + "will upload over cellular. Full-resolution photos are never uploaded.")
+                Text("About \(ByteCount.string(estimatedPublishBytes)) of thumbnails and metadata will upload over cellular. Full-resolution photos are never uploaded.")
             }
         }
     }
@@ -153,13 +152,17 @@ struct JourneyShowcaseSheet: View {
                 VStack(alignment: .leading, spacing: 8) {
                     ProgressView(value: model.progress?.fraction ?? 0)
                         .tint(Theme.accent)
-                    Text(model.progress?.phase ?? "Working…")
+                    // `phase` is supplied by the publish service; the fallback is ours and so is
+                    // the one that needs the catalogue.
+                    Text(model.progress?.phase
+                         ?? String(localized: "Working…",
+                                   comment: "Showcase publish: placeholder before any phase is reported."))
                         .font(.caption).foregroundStyle(Theme.textSecondary)
                 }
 
             case .done(let report):
                 resultView(report)
-                Button("Done") { model.reset() }.foregroundStyle(Theme.accent)
+                Button("Done") { model.reset() }.foregroundStyle(Theme.accentText)
             }
         } header: {
             Text(live.isPublic ? "Manage" : "Publish")
@@ -191,20 +194,49 @@ struct JourneyShowcaseSheet: View {
                  : (report.succeeded ? "Showcase updated" : "Finished with some failures"))
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(report.succeeded ? Theme.textPrimary : Theme.warning)
-            labelled("Published", "\(report.published) record\(report.published == 1 ? "" : "s")")
+            labelled("Published", String(localized: "\(report.published) records",
+                                     comment: "Showcase publish report: how many records reached the public mirror."))
             if report.skippedNoThumb > 0 {
                 labelled("Skipped (no thumbnail)", "\(report.skippedNoThumb)")
             }
             if report.deleted > 0 {
                 labelled("Removed", "\(report.deleted)")
             }
+            // QUA-25: the per-journey cap holds photographs back rather than failing the publish, so
+            // the owner has to be told which ones did not go. Silently publishing 200 of 939 would be
+            // the same class of dishonesty as the unpublish that reported success (DIFF-01).
+            if report.photosHeldBack > 0 {
+                labelled("Not published",
+                         String(localized: "\(report.photosHeldBack) photos over the showcase limit",
+                                comment: "Showcase publish report: photographs the per-journey cap held back."))
+            }
             if report.failed > 0 {
                 labelled("Failed", "\(report.failed)")
+            }
+            // The point of publishing. Without this the owner had no way to obtain the URL at all,
+            // which left the growth loop — every published journey is meant to be a shareable page —
+            // with no first step. Built from `report.publishedSlug` rather than `target.slug`,
+            // because a cross-owner collision publishes under an owner-scoped variant and a link
+            // made from the pretty slug would 404 for exactly the second family to publish.
+            if let slug = report.publishedSlug, let url = AppInfo.showcaseURL(slug: slug) {
+                Divider().padding(.vertical, 6)
+                ShareLink(item: url) {
+                    Label("Share the link", systemImage: "square.and.arrow.up")
+                        .font(.subheadline.weight(.medium))
+                }
+                .buttonStyle(.borderedProminent)
+                Text(url.absoluteString)
+                    .font(.caption2.monospaced())
+                    .foregroundStyle(Theme.textSecondary)
+                    .textSelection(.enabled)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                    .accessibilityLabel("Showcase link, \(url.absoluteString)")
             }
         }
     }
 
-    private func labelled(_ title: String, _ value: String) -> some View {
+    private func labelled(_ title: LocalizedStringKey, _ value: String) -> some View {
         HStack {
             Text(title).font(.caption).foregroundStyle(Theme.textSecondary)
             Spacer()
@@ -307,7 +339,8 @@ final class ShowcaseViewModel: ObservableObject {
         #endif
     }
 
-    static let notOwnerMessage = "Only the journey's owner can manage the public showcase."
+    static let notOwnerMessage = String(localized: "Only the journey's owner can manage the public showcase.",
+                                        comment: "Showcase: shown to someone a journey was shared with.")
 
     func reset() {
         guard !isWorking else { return }
@@ -363,7 +396,9 @@ final class ShowcaseViewModel: ObservableObject {
                      setPublic: @escaping (Bool) -> Bool,
                      _ body: @escaping (PublicMirrorPublishing) async -> PublicMirrorReport) {
         phase = .working
-        progress = PublicMirrorProgress(fraction: 0, phase: "Starting")
+        progress = PublicMirrorProgress(fraction: 0,
+                                        phase: String(localized: "Starting",
+                                                      comment: "Showcase publish: first progress phase."))
         task = Task {
             switch await self.resolveMirror() {
             case .unavailable(let message):
@@ -385,10 +420,12 @@ final class ShowcaseViewModel: ObservableObject {
         }
     }
 
-    static let publishFlagWriteFailed =
-        "The showcase was updated, but this device could not save the Public flag locally. The journey may still show as Private here — reopen and try again."
-    static let removeFlagWriteFailed =
-        "The showcase was removed, but this device could not save the Private flag locally. The journey may still show as Public here — reopen and try again."
+    static let publishFlagWriteFailed = String(
+        localized: "The showcase was updated, but this device could not save the Public flag locally. The journey may still show as Private here — reopen and try again.",
+        comment: "Showcase: publish succeeded remotely but the local flag write failed.")
+    static let removeFlagWriteFailed = String(
+        localized: "The showcase was removed, but this device could not save the Private flag locally. The journey may still show as Public here — reopen and try again.",
+        comment: "Showcase: unpublish succeeded remotely but the local flag write failed.")
 
     /// Production resolver: build the public database behind the entitlement gate and confirm an
     /// available iCloud account.
@@ -397,7 +434,8 @@ final class ShowcaseViewModel: ObservableObject {
         let container = CKContainer(identifier: Config.cloudKitContainerIdentifier)
         let status = (try? await container.accountStatus()) ?? .couldNotDetermine
         guard status == .available else {
-            return .unavailable("No iCloud account available. Sign in (Settings → iCloud) and try again.")
+            return .unavailable(String(localized: "No iCloud account available. Sign in (Settings → iCloud) and try again.",
+                                   comment: "Showcase: shown when publishing needs an iCloud account."))
         }
         // The current user's record name lets the publisher detect a cross-user slug collision in
         // the global public keyspace and publish under a disambiguated slug. (quality gate: slug

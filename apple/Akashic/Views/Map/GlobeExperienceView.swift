@@ -449,7 +449,10 @@ struct GlobeExperienceView: View {
         let data = LightboxData(
             photos: list.isEmpty ? journeyPhotos : list,
             startIndex: index,
-            dayLabel: mapPhoto.dayNumber.map { "Day \($0)" }
+            dayLabel: mapPhoto.dayNumber.map {
+                String(localized: "Day \($0)",
+                       comment: "Photo lightbox: badge naming the day a photo belongs to.")
+            }
         )
         // Route to the day cover (presented from the sheet) when a day sheet is up, else the
         // overview cover on the map overlays.
@@ -483,7 +486,9 @@ struct GlobeExperienceView: View {
             let dayPhotos = journeyPhotos.filter { photoDayByID[$0.id] == day }
             let list = dayPhotos.isEmpty ? journeyPhotos : dayPhotos
             if !list.isEmpty {
-                let data = LightboxData(photos: list, startIndex: 0, dayLabel: "Day \(day)")
+                let label = String(localized: "Day \(day)",
+                                   comment: "Photo lightbox: badge naming the day a photo belongs to.")
+                let data = LightboxData(photos: list, startIndex: 0, dayLabel: label)
                 if controller.selectedDayIndex != nil {
                     dayLightbox = data
                 } else {
@@ -562,6 +567,7 @@ struct GlobeExperienceView: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .accessibilityHint("Opens the list of every journey")
         }
         .padding(.horizontal, 12)
     }
@@ -589,10 +595,26 @@ struct GlobeExperienceView: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            // QUA-10: `AkashicUITests` drives the create flow from here. An identifier rather
+            // than the visible label, because the label is a localised catalogue string and a UI
+            // test that stops finding its element still PASSES — it just never taps anything.
+            // Identifiers are invisible to VoiceOver and never enter the string catalogue.
+            .accessibilityIdentifier(A11yID.globeCreateFirstJourney)
         }
         .padding(.horizontal, 20)
         .frame(maxWidth: .infinity)
     }
+
+    /// Leading inset shared by the bottom chrome, so the journey strip and the tab bar sit on one
+    /// vertical line instead of two. (A4-3 / QUA-30)
+    ///
+    /// **Matched by measurement, not by API**, because the tab bar's floating capsule is laid out by
+    /// the system and exposes no metric. On a 402 pt screen the capsule's leading edge lands at 64 pt
+    /// (x = 193 px of 1206 at @3x). Re-measure with a screenshot if the system chrome changes — a row
+    /// through the tab bar and a row through the strip, comparing the first non-black pixel:
+    ///
+    ///     xs = [x for x in range(w) if sum(im.getpixel((x, y))) > 40]
+    static let bottomChromeInset: CGFloat = 64
 
     // MARK: Globe journey selector strip
 
@@ -603,12 +625,20 @@ struct GlobeExperienceView: View {
                     Button {
                         controller.selectJourney(journey)
                     } label: {
-                        JourneyGlobeCard(journey: journey, isSample: store.isSampleJourney(journey.id))
+                        JourneyGlobeCard(journey: journey, isSample: store.showsSampleBadge(journey.id))
                     }
                     .buttonStyle(.plain)
                 }
             }
-            .padding(.horizontal, 12)
+            // A4-3 (QUA-30): 12 pt left the strip and the tab bar sharing no alignment — measured
+            // on a 402 pt screen, the first card started at 12 pt while the tab bar's capsule starts
+            // at 64 pt, so they read as two unrelated floating objects instead of one bottom chrome.
+            //
+            // `Self.bottomChromeInset` is that measurement, named once. It is deliberately an inset on
+            // the SCROLL CONTENT, not on the ScrollView: the strip still bleeds to both screen edges,
+            // so a half-visible next card remains the affordance that says "scroll me". Only the
+            // resting position of the first card moves.
+            .padding(.horizontal, Self.bottomChromeInset)
         }
     }
 }
@@ -627,30 +657,43 @@ private struct JourneyGlobeCard: View {
 
     var body: some View {
         HStack(spacing: 10) {
+            // QUA-07: the country is named in words on the second line, so the flag is the same fact
+            // as a picture — and VoiceOver announces it as its own element before the journey's name.
             Text(journey.countryFlag)
                 .font(.system(size: flagSize))
+                .accessibilityHidden(true)
             // On-map card (see the note on `topBar`): fixed `MapPalette` labels, not the
             // adaptive `Theme` ones, because this card floats over the immersive map in every
             // appearance. The SAMPLE badge is the one exception — `Theme.accent`/`.onAccent`
             // already sit on the map elsewhere (the "Start your first journey" CTA), so reusing
             // them here doesn't add a second on-map palette.
             VStack(alignment: .leading, spacing: 2) {
+                // A4-1: the badge used to sit beside the title inside a hard 200 pt card, which left
+                // "Kilimanjaro" rendering as "Kilima…" for anyone with the bundled sample — the
+                // journey's name losing a fight with a label about the journey not being theirs.
+                // Moved to the second line, where it competes with the country and day count instead:
+                // both are secondary, and the title now gets the full width it needs.
+                Text(journey.shortName)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(MapPalette.label)
+                    .lineLimit(1)
                 HStack(spacing: 6) {
-                    Text(journey.shortName)
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(MapPalette.label)
+                    Text("\(journey.country) · \(journey.stats.duration) days")
+                        .font(.caption2)
+                        .foregroundStyle(MapPalette.labelSecondary)
                         .lineLimit(1)
                     if isSample { SampleBadge() }
                 }
-                Text("\(journey.country) · \(journey.stats.duration) days")
-                    .font(.caption2)
-                    .foregroundStyle(MapPalette.labelSecondary)
-                    .lineLimit(1)
             }
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
-        .frame(width: 200, alignment: .leading)
+        // A4-1: was a hard 200 pt, which truncated something on every sample journey — first the
+        // title, then (once the badge moved to line 2) the day count. A range lets the card stay
+        // compact for a short name and take what it needs for "Kilimanjaro" plus a badge, while the
+        // ceiling keeps it from running across a screen it is meant to float over.
+        .frame(minWidth: 200, maxWidth: 260, alignment: .leading)
+        .fixedSize(horizontal: true, vertical: false)
         .mapOverlayMaterial(RoundedRectangle(cornerRadius: 16, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
@@ -658,6 +701,10 @@ private struct JourneyGlobeCard: View {
         )
         .frame(minHeight: 44)
         .contentShape(Rectangle())
+        // Name, sample badge, country and day count are one card describing one journey — four
+        // elements each was four swipes per journey along the strip.
+        .accessibilityElement(children: .combine)
+        .accessibilityHint("Flies the globe into this journey")
     }
 }
 

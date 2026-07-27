@@ -36,9 +36,11 @@ import StoreKit
 
 /// What the current user (family) is entitled to.
 enum Entitlement: String, Equatable {
-    /// The free tier: one owned journey, 100 photos per owned journey, no export/publish.
+    /// The free tier: one owned journey, 100 photos per owned journey — and that journey IS
+    /// finishable: publishing to the showcase and exporting are both included (see the file header).
     case free
-    /// Akashic Complete: unlimited journeys/photos, export, showcase publishing.
+    /// Akashic Complete: unlimited owned journeys and photos. Export and publishing are not part of
+    /// this — they are free-tier capabilities too.
     case complete
 }
 
@@ -206,7 +208,11 @@ enum EntitlementOverride {
 /// can inject fake entitlement states, products, and transaction updates without ever touching
 /// StoreKit — mirroring the `SyncEngineProtocol` / `SyncLocalStore` seam pattern. The real
 /// implementation is `StoreKitProvider`; tests inject a recording fake.
-protocol StoreKitProviding {
+// QUA-08: `Sendable` because `Entitlements` sends its provider across isolation boundaries
+// (four `sending 'self.provider'` sites). The shipping conformer is stateless over StoreKit 2's
+// own Sendable API; the test fake is scripting state and takes `@unchecked`, as this target
+// already does for `MockMediaDatabase` and `RecordingAccepter`.
+protocol StoreKitProviding: Sendable {
     /// Load the Complete product (for its localized price/name), or `nil` if the store has no such
     /// product configured yet (offline, or App Store Connect not populated). Never bricks the UI.
     func loadProduct() async throws -> StoreProduct?
@@ -223,14 +229,14 @@ protocol StoreKitProviding {
 
     /// Observe live transaction updates (`Transaction.updates`), calling back with the freshly
     /// resolved entitlement. Called once at launch.
-    func observeTransactionUpdates(_ onChange: @escaping (Entitlement) -> Void)
+    func observeTransactionUpdates(_ onChange: @escaping @Sendable (Entitlement) -> Void)
 }
 
 /// StoreKit-free description of the product, so the paywall and tests share one shape.
 struct StoreProduct: Equatable {
     let id: String
     let displayName: String
-    /// Localized, currency-formatted price string from the App Store, e.g. "kr 99,00".
+    /// Localized, currency-formatted price string from the App Store, e.g. "kr 149,00".
     let displayPrice: String
     let description: String
 }
@@ -260,12 +266,15 @@ struct StoreKitProvider: StoreKitProviding {
         case productUnavailable
         case unverified
 
+        /// Localised (QUA-26). The paywall shows this verbatim when a purchase or restore fails.
         var errorDescription: String? {
             switch self {
             case .productUnavailable:
-                return "Akashic Complete is not available on the App Store right now."
+                return String(localized: "Akashic Complete is not available on the App Store right now.",
+                              comment: "Purchase failure alert: StoreKit returned no product for the configured identifier. \"Akashic Complete\" is the product name and stays untranslated.")
             case .unverified:
-                return "The purchase could not be verified with the App Store."
+                return String(localized: "The purchase could not be verified with the App Store.",
+                              comment: "Purchase failure alert: StoreKit could not verify the transaction signature.")
             }
         }
     }
@@ -310,7 +319,10 @@ struct StoreKitProvider: StoreKitProviding {
         try await AppStore.sync()
     }
 
-    func observeTransactionUpdates(_ onChange: @escaping (Entitlement) -> Void) {
+    // QUA-08: `@Sendable` — this is handed to `Task.detached` below, so the closure and everything
+    // it captures genuinely cross an isolation boundary. Annotating the parameter checks the
+    // callers' captures instead of trusting them.
+    func observeTransactionUpdates(_ onChange: @escaping @Sendable (Entitlement) -> Void) {
         let productID = self.productID
         Task.detached {
             for await update in Transaction.updates {
@@ -363,6 +375,19 @@ final class EntitlementStore: ObservableObject {
     /// The real StoreKit entitlement (before any override). Published so capability reads refresh.
     @Published private(set) var realEntitlement: Entitlement = .free
 
+    /// Whether `realEntitlement` reflects an actual answer from StoreKit yet (QUA-15).
+    ///
+    /// It starts `.free` because there is no third case to start it in, which means on every cold
+    /// launch a paying customer looks free-tier until `refreshEntitlement()` returns — and
+    /// indefinitely if it never does. That is the worst possible first impression in a paid app, so
+    /// the UI needs to be able to tell "free" from "not known yet" and say *checking* rather than
+    /// putting up a wall the customer already paid to remove.
+    ///
+    /// Deliberately does NOT loosen any capability gate. Treating unknown as entitled would let a
+    /// genuinely free account create a second journey whenever StoreKit was slow, which trades one
+    /// wrong answer for another. The gates stay strict; only what is *shown* changes.
+    @Published private(set) var hasResolvedEntitlement = false
+
     /// The loaded product (price/name for the paywall), or nil while loading / if unavailable.
     @Published private(set) var product: StoreProduct?
 
@@ -398,6 +423,13 @@ final class EntitlementStore: ObservableObject {
     }
 
     var isComplete: Bool { current == .complete }
+
+    /// True once the entitlement is known — either StoreKit answered, or an override is in force
+    /// (overrides are deterministic by construction, which is the point of them).
+    var isEntitlementDetermined: Bool {
+        hasResolvedEntitlement
+            || EntitlementOverride.resolvedOverride(defaults: defaults, environment: environment) != nil
+    }
 
     private var policy: EntitlementPolicy { EntitlementPolicy(entitlement: current) }
 
@@ -442,6 +474,9 @@ final class EntitlementStore: ObservableObject {
     /// Re-read the verified entitlement (launch + after purchase/restore).
     func refreshEntitlement() async {
         realEntitlement = await provider.currentEntitlement()
+        // Set after the assignment and never reset: once StoreKit has answered once, "free" is a
+        // real answer rather than the initial placeholder (QUA-15).
+        hasResolvedEntitlement = true
     }
 
     /// Load the product for its price/name, with graceful failure so an offline launch never

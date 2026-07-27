@@ -1,0 +1,2466 @@
+{
+  "version": 1,
+  "updated": "2026-07-26",
+  "about": "Source of truth for Akashic delivery work. WORKPLAN.md is generated from this file. See CLAUDE.md for the protocol.",
+  "track_notes": {
+    "LEGACY": "Retire Supabase, Cloudflare and R2. Repo-side removal can happen now; the infrastructure deletions are gated on the archive being duplicated and on the Pages cutover. LEG-01 is independent of every gate and should happen today.",
+    "DOCS": "Make the documentation true. Cheap, high-value, and it is what stops the next agent inheriting a false picture.",
+    "SHIP": "Hard requirements for a paid v1.0. Most of the remaining calendar time lives here, in items only the owner can do.",
+    "DIFF": "Capability beyond what competitors offer. Order set by decision: share link, then Vision curation, then the book.",
+    "QUALITY": "Tests, types, CI, localisation, accessibility. Localisation and accessibility are in v1.0 by decision."
+  },
+  "decisions": [
+    {
+      "what": "The web client is frozen as a showcase view",
+      "why": "Keep signed-out showcase and comments; hide every native-only write behind one guard and delete the rest. About 2-3 days instead of 12, and it closes the bug where six components pretend to save. Decided 2026-07-26."
+    },
+    {
+      "what": "Differentiation order: share link, then Vision curation, then the book",
+      "why": "The share link is broken rather than absent, it carries a live privacy leak, and it is the gate that makes the beta measurement possible at all. The book's value is conditional on curation: 939 photos with 449 unique images produces a book nobody wants. Decided 2026-07-26."
+    },
+    {
+      "what": "Norwegian localisation and accessibility both ship in v1.0",
+      "why": "Selling Norwegian-first with an English-only binary is the likelier one-star, and accessibility is harder to retro-fit across 50 view files later. About 8-9 days added before submission. Decided 2026-07-26."
+    },
+    {
+      "what": "No live tracking, no print pipeline, no Android, no custom backend",
+      "why": "Carried forward from COMMERCIALIZATION-PLAN section 9. Live tracking is Polarsteps' moat and belongs to during the trip; this product is about after."
+    }
+  ],
+  "gates": [
+    {
+      "name": "Paid Applications agreement, banking and tax",
+      "detail": "1-2 weeks, entirely outside the build queue, and no in-app purchase can go live without it. The one item that can silently add two weeks. SHIP-12."
+    },
+    {
+      "name": "External beta",
+      "detail": "About three weeks minimum: at least 7 of 10 households creating a journey unaided and 5 finishing and handing one over. The largest calendar item and nothing shortens it. SHIP-17."
+    },
+    {
+      "name": "One month before deleting DATA infrastructure (hosting rollback waived)",
+      "detail": "TWO CLOCKS, and the owner waived one on 2026-07-27.\n  * HOSTING clock — WAIVED. It existed only to keep a DNS revert to Cloudflare useful. The owner does not want a rollback path, so the Cloudflare Pages project, deploy.yml and the Cloudflare tokens go as soon as the cutover is verified. Worst case is akashic.no down for a while and a re-deploy to Pages; no data is at stake.\n  * DATA clock — STANDS, earliest 2026-08-24. This one is not about rollback convenience: R2 holds the 16 GiB / 8147-object archive and Supabase the source rows, and its real gate is LEG-02 (a verified second physical medium), not the calendar. Deleting either before LEG-02 passes is irreversible loss of the family's photographs. Once LEG-02 and LEG-03/LEG-04 are done, whether to also waive the calendar month is the owner's call.\n  Does not apply to LEG-01: nothing reads the Worker."
+    },
+    {
+      "name": "App Review",
+      "detail": "1-3 days plus a 3-5 day buffer for one rejection round."
+    }
+  ],
+  "tasks": [
+    {
+      "id": "LEG-01",
+      "track": "LEGACY",
+      "title": "Delete the akashic-media Cloudflare Worker",
+      "status": "DONE",
+      "effort": 0.5,
+      "done_when": "The endpoint returns no response, and SUPABASE_SERVICE_KEY no longer exists in any Worker env.",
+      "owner": true,
+      "priority": 1,
+      "why": "A live unauthenticated-JWT bypass guarding a service_role key, readable in a public repo. Verified by live reproduction: no token gives 401, a garbage-signed HS256 token gives 404 — auth passed. Independent of every data-retention gate: nothing reads the Worker.",
+      "verify": [
+        "curl -s -i --max-time 12 https://akashic-media.chris-haerem.workers.dev/journeys/x/photos/y | grep -E 'error code: 1042'",
+        "# 1042 is Cloudflare's edge saying NO WORKER IS DEPLOYED. Do NOT accept a bare 404 as proof:",
+        "# the pre-deletion auth bypass ALSO returned 404 (garbage token -> auth passed -> no route match),",
+        "# so the status code alone cannot distinguish 'deleted' from 'still vulnerable'. Check the body.",
+        "# Second half, dashboard-only: confirm SUPABASE_SERVICE_KEY exists in no Worker env or account secret."
+      ],
+      "refs": [
+        "workers/media-proxy/src/index.ts:236-241 — HS256 branch returns payload unverified",
+        "RecordCoder.swift:349 writes url:\"\" — no CloudKit record can carry an R2 path, so nothing reads the Worker",
+        "Must go BEFORE Supabase: deleting Supabase fails the paths closed but leaves the bypass and the key live"
+      ],
+      "evidence": "Owner deleted the Worker; verified 2026-07-27 by response BODY, not status code: https://akashic-media.chris-haerem.workers.dev/journeys/x/photos/y returns 'error code: 1042' with content-length 17 and server: cloudflare — Cloudflare's edge reporting no deployed worker. A garbage-signed HS256 bearer token now also gets 1042 rather than the 404 that proved the bypass. NOTE the verify line in this task was unsound and has been rewritten: it accepted a bare 404, which is exactly what the bypass returned, so it could not tell success from the vulnerability. The second half of done_when (SUPABASE_SERVICE_KEY absent from every Worker env) is dashboard-only and not agent-verifiable; deleting the script removes its bindings, but an account-level secret would survive and only the owner can confirm."
+    },
+    {
+      "id": "LEG-02",
+      "track": "LEGACY",
+      "title": "Copy the 16 GiB export archive to a second physical medium",
+      "status": "TODO",
+      "effort": 0.5,
+      "done_when": "8147 objects and the six table sha256s verify on a second volume that is not the boot disk.",
+      "owner": true,
+      "priority": 2,
+      "why": "The entire deletion plan rests on this archive, and it is currently a single unbacked copy on the boot volume. Spotlight sees one AkashicExport path; tmutil reports no Time Machine destination.",
+      "verify": [
+        "shasum -a 256 <second-copy>/supabase/*.json  # must match manifest.json",
+        "find <second-copy>/r2/objects -type f | wc -l  # expect 8147"
+      ],
+      "refs": [
+        "/Users/cher/Privat/AkashicExport-20260722 — 16 GiB, created 2026-07-21T21:02Z",
+        "All 8147 objects verified present with 0 zero-byte and 0 size mismatches; full md5-vs-ETag pass 8147/8147"
+      ]
+    },
+    {
+      "id": "LEG-03",
+      "track": "LEGACY",
+      "title": "Decide the fate of the 5080 un-catalogued R2 objects (12.21 GB)",
+      "status": "TODO",
+      "effort": 0.5,
+      "done_when": "A written decision exists: keep in the archive forever, or discard deliberately.",
+      "owner": true,
+      "priority": 3,
+      "deps": [
+        "LEG-02"
+      ],
+      "why": "5080 of 8147 objects (69% of bucket bytes) are referenced by no surviving DB row and were never imported into CloudKit. They are not format leftovers as the verification report suggests: 2750 originals with 2327 matching thumbnails, none sharing a UUID with a live row — the signature of deleted-photo remnants. After R2 deletion they exist only in the archive.",
+      "verify": [
+        "A decision recorded in docs/workplan/tasks.json evidence field, or in ARCHITECTURE.md"
+      ],
+      "refs": [
+        "APPLE-MIGRATION-TASKS.md:130 claims they are 'old formats, spot-checked clean' — only partly substantiated"
+      ]
+    },
+    {
+      "id": "LEG-04",
+      "track": "LEGACY",
+      "title": "Run the T5.1 delta check against live Supabase",
+      "status": "TODO",
+      "effort": 0.5,
+      "done_when": "Row counts and max(updated_at) per table match manifest.json, or the delta is exported and merged.",
+      "owner": true,
+      "deps": [
+        "LEG-02"
+      ],
+      "why": "The snapshot is dated 2026-07-21T21:02Z and the project was resumed ~23:00 that same night and left running, so a write window is formally unaccounted for. This is read-only and must happen before the irreversible deletion.",
+      "verify": [
+        "Compare per-table counts + max(updated_at) against /Users/cher/Privat/AkashicExport-20260722/manifest.json"
+      ],
+      "refs": [
+        "APPLE-MIGRATION-TASKS.md T5.1 still open"
+      ]
+    },
+    {
+      "id": "LEG-05",
+      "track": "LEGACY",
+      "title": "Rewire src/lib/media.ts off the Worker",
+      "status": "DONE",
+      "effort": 0.5,
+      "done_when": "No source file resolves media through the workers.dev host, and web tests stay green.",
+      "deps": [],
+      "files": [
+        "src/lib/media.ts",
+        "src/hooks/useMedia.ts"
+      ],
+      "serialise_with": "none — LEGACY owns these outright",
+      "why": "MEDIA_BASE_URL:16 hardcodes the exploited Worker as its default and four importers follow it. Doing this BEFORE the Worker is deleted is the safe order: it removes the last code path pointing at the host while the host still exists, so nothing can break in the gap. The CloudKit showcase already uses absolute pre-authenticated asset URLs, so the fallback is dead code against the real schema — schema.ckdb's Photo type declares no url STRING field at all.",
+      "verify": [
+        "grep -rn 'workers.dev' src/  # expect no hits",
+        "npx vitest --run"
+      ],
+      "refs": [
+        "src/lib/media.ts:16, :8-9",
+        "records.ts:291 stringOrNull(f('url')) is dead against schema.ckdb"
+      ],
+      "claim": {
+        "agent": "sprint2-web",
+        "branch": "claude/remote-control-project-review-9462c1",
+        "at": "2026-07-26"
+      },
+      "evidence": "grep -rn 'workers.dev' src/ -> no hits. MEDIA_BASE_URL and the Worker default deleted; buildMediaUrl passes absolute CloudKit URLs through and returns '' for anything else, so an unresolvable reference is an empty img rather than a request to a host being decommissioned. getJourneyPhotoPath and useMedia.getPhotoUrl removed as Worker-only path builders."
+    },
+    {
+      "id": "LEG-06",
+      "track": "LEGACY",
+      "title": "Delete the unrunnable legacy scripts and the AWS SDK dependency",
+      "status": "DONE",
+      "effort": 0.5,
+      "done_when": "npm run build and vitest pass with the dead scripts and @aws-sdk/client-s3 gone.",
+      "deps": [],
+      "files": [
+        "scripts/bulkUploadR2.ts",
+        "scripts/migrateR2Photos.js",
+        "scripts/backfillThumbnails.ts",
+        "scripts/generateThumbnails.ts",
+        "scripts/migrateMovToMp4.ts",
+        "scripts/populateFunFacts.ts",
+        "scripts/populateWeather.ts",
+        "package.json"
+      ],
+      "serialise_with": "QUA-02 and QUA-03 also edit package.json",
+      "why": "16.8 MB of installed AWS SDK with zero runnable importers, and 12 of 23 scripts that cannot run at all. None of this is gated on anything: no npm script depends on Supabase or R2, so build, test, e2e and the Pages workflow are all unaffected. Keep scripts/export/verifyExport.ts and lib.ts — they do no network I/O, reading r2/inventory.json from disk, so they stay useful for re-proving archive integrity long after R2 is gone.",
+      "verify": [
+        "npm run build",
+        "npx vitest --run",
+        "node scripts/export/smoke.ts  # 26 checks, must still pass"
+      ],
+      "refs": [
+        "No npm script depends on Supabase or R2 — the legacy scripts are manually-invoked dev tools"
+      ],
+      "claim": {
+        "agent": "sprint2-ci",
+        "branch": "claude/remote-control-project-review-9462c1",
+        "at": "2026-07-26"
+      },
+      "evidence": "@aws-sdk/client-s3 removed (16.8 MB installed, 785 -> 753 packages) plus the seven dead scripts (2414 lines). Each verified dead individually: all seven import @supabase/supabase-js, which is in neither dependency list and appears 0 times in the lockfile, and all target tables that no longer exist. verifyExport.ts and lib.ts deliberately kept. npm run build, 406 vitest tests, and node scripts/export/smoke.ts (26 checks) all pass."
+    },
+    {
+      "id": "LEG-07",
+      "track": "LEGACY",
+      "title": "Gate every native-only web write behind one guard",
+      "status": "DONE",
+      "effort": 1,
+      "done_when": "No web UI offers a write that silently no-ops; each either disappears or shows a native-only notice.",
+      "files": [
+        "src/components/trek/RouteEditor.tsx",
+        "src/components/layout/BottomSheetContent.tsx",
+        "src/components/trek/PhotosTab.tsx",
+        "src/components/trek/PhotoEditModal.tsx",
+        "src/components/trek/PhotoAssignModal.tsx",
+        "src/components/ShareTargetModal.tsx",
+        "src/components/trek/JourneyEditModal.tsx"
+      ],
+      "why": "Six components await the CloudKit write stubs and ignore the result, then call onSave() and close. RouteEditor is the worst: 3430 LOC that animates shut as if it persisted a whole route redraw. Nothing stored is lost, but the user's session work evaporates with no error. Deleting only RouteEditor closes one of six mouths of the same bug.",
+      "verify": [
+        "npx vitest --run",
+        "grep -rn 'onSave()' src/components/trek/RouteEditor.tsx  # gone or behind a guard"
+      ],
+      "refs": [
+        "RouteEditor.tsx:2180,2195,2208,2222 discard all four results; :2228-2229 onSave(); onClose()",
+        "writeStubs.test.ts:28-31 pins that the adapter returns false",
+        "Decision: web is frozen as a showcase view"
+      ],
+      "claim": {
+        "agent": "sprint2-web",
+        "branch": "claude/remote-control-project-review-9462c1",
+        "at": "2026-07-26"
+      },
+      "evidence": "One shared guard in src/lib/nativeOnly.ts applied to all six entry points, then 5534 LOC of unreachable write UI deleted: RouteEditor (3430) + its 691-line e2e spec, JourneyEditModal (477), PhotoEditModal (461), PhotoAssignModal (219), WaypointEditModal (256). grep -rn 'onSave()' src/ now hits only the two doc comments describing the bug. tsc 117 -> 110 with zero new errors (set-diff verified); vitest 402 -> 406; AkashicApp chunk 108.41 -> 58.34 kB gzipped."
+    },
+    {
+      "id": "LEG-08",
+      "track": "LEGACY",
+      "title": "Remove the hardcoded /Users/cher archive path from shipping code",
+      "status": "DONE",
+      "effort": 0.25,
+      "done_when": "No absolute developer path appears in any non-test Swift file.",
+      "files": [
+        "apple/Akashic/App/Config.swift"
+      ],
+      "serialise_with": "SHIP-09 also edits the developer-tools surface",
+      "why": "Config.swift:84 compiles a developer's home directory into a commercial binary as defaultImportBundlePath. Two tests hardcode the same path but XCTSkipUnless-degrade to skips, so moving the archive silently stops asserting the 1538/18/3 invariants rather than turning the suite red.",
+      "verify": [
+        "grep -rn '/Users/cher' apple/Akashic/  # expect no hits",
+        "cd apple && xcodegen generate",
+        "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,id=$(xcrun simctl list devices available | grep -o '[0-9A-F-]\\{36\\}' | tail -1)\" CODE_SIGNING_ALLOWED=NO test"
+      ],
+      "claim": {
+        "agent": "opus5",
+        "branch": "claude/remote-control-project-review-9462c1",
+        "at": "2026-07-26"
+      },
+      "evidence": "grep -c '/Users/cher' over the Release-CloudKit binary returns 0. defaultImportBundlePath is now empty in Release and env-var driven in DEBUG; deliberately not derived from NSHomeDirectory(), which resolves to the sandbox container in the Simulator rather than the host home the export lives in."
+    },
+    {
+      "id": "LEG-09",
+      "track": "LEGACY",
+      "title": "Execute the GitHub Pages + DNS cutover (T4.2, T4.3)",
+      "status": "WIP",
+      "effort": 0.5,
+      "done_when": "akashic.no serves from GitHub Pages, privacy/terms/support resolve, and the AASA file is reachable.",
+      "owner": true,
+      "deps": [
+        "SHIP-10A"
+      ],
+      "why": "Nothing Cloudflare-hosted can be deleted until this lands — deploy.yml still deploys the live site on every push to main. The runbook is complete and two of its stated blockers are already closed: the AASA Team ID is filled in, and netlify.toml was removed by d331970.\n\nDNS DESTINATION DECIDED 2026-07-27: Domeneshop's own DNS, not GoDaddy. whois confirms the registrar is Domeneshop AS (REG42-NORID, Oslo), so the NS delegation is changed there regardless -- keeping DNS in the same place avoids splitting one domain across two consoles, and avoids GoDaddy's account-wide API keys, which cannot be scoped to a single domain. Measured TTLs, which size the cutover: A records are already at 300 s, and the .no registry's NS delegation TTL is 7200 s. During an NS change the OLD nameservers keep answering until that expires, so there is no dark window -- only up to ~2 h where some resolvers reach Cloudflare (old build) and some reach Pages (new build). Both render an empty globe until SHIP-10B publishes something, so the split is invisible to visitors. That makes now the cheapest moment this cutover will ever have.\n\nDOMENESHOP API LIMITS, measured 2026-07-27 with a live token. The API's own feature list is: list domains, list invoices, CRUD DNS records, CRUD HTTP forwards. That is all. Specifically NOT automatable:\n  * enabling the DNS service -- GET /v0/domains/2216481/dns returns 404 resource:unknown while services.dns is false, so there is no zone to write into until it is switched on in the web UI;\n  * changing the delegation -- `nameservers` appears only in the READ schema of the Domain object.\nSo the owner's irreducible step is one switch: activate Domeneshop DNS for akashic.no, which normally sets the delegation to ns1/ns2/ns3.hyp.net at the same time. The nine records are then agent work via POST /v0/domains/2216481/dns.\nDomain id is 2216481. A token scoped to this account reaches EXACTLY ONE domain (akashic.no), which is why the account-wide-key objection raised against GoDaddy does not bite here -- verified by GET /v0/domains before anything was written.\nSEQUENCING: activating DNS points the delegation at an EMPTY zone, so add the records immediately after. The 7200 s NS TTL means old resolvers keep reaching Cloudflare meanwhile, so the exposure is small and the owner has accepted downtime.\n\nZONE BUILT AND VERIFIED 2026-07-27, propagation pending. Owner ticked 'Bruk Domeneshops navnetjenere'; services.dns flipped to true and Domeneshop pre-imported Cloudflare's 2 A + 2 AAAA. Those four were UPDATED to GitHub's addresses rather than deleted (honouring the no-deletions commitment), and five more created: 4 A (185.199.108-111.153), 4 AAAA (2606:50c0:8000-8003::153), www CNAME -> chaerem.github.io., all ttl 300. Verified authoritatively against ns1.hyp.net -- exactly the four GitHub A records and nothing else -- so no propagation wait was needed to confirm correctness. Pages serves 200 with environment:\"production\" when resolved via the new addresses; /privacy, /terms, /support all 200; www 301s to the apex. DS records at the registry: 0, so ticking DNSSEC did not create a validation hazard. ALL THAT REMAINS is delegation propagation: Domeneshop warns up to 4 h to begin and a further 24 h to be visible everywhere, which is longer than the 7200 s NS TTL alone suggested -- Norid registry updates are not instant. Close this once dig +short akashic.no NS returns the hyp.net servers.\n\nOPERATIONAL NOTE discovered 2026-07-27: the `github-pages` environment has a deployment branch policy allowing ONLY `main` (custom_branch_policies: true, branch_policies: ['main']). So a workflow_dispatch of deploy-pages.yml against any other ref builds fine and then fails at the deploy job with 'Branch ... is not allowed to deploy to github-pages due to environment protection rules'. That is a safety net, not a fault: a feature branch can never become the live Pages build, which is worth knowing before someone 'fixes' the failing job. It also means the only way to deploy is to merge to main.",
+      "verify": [
+        "curl -sI https://akashic.no | head -1",
+        "curl -s https://akashic.no/.well-known/apple-app-site-association | head -5"
+      ],
+      "refs": [
+        "docs/github-pages-cutover.md — complete zero-downtime runbook with rollback",
+        "deploy-pages.yml is correct and complete; only its trigger needs flipping"
+      ],
+      "claim": {
+        "agent": "opus5",
+        "branch": "claude/remote-control-project-review-9462c1",
+        "at": "2026-07-27"
+      },
+      "resume": "Zone is built and authoritatively verified against ns1.hyp.net; only delegation propagation remains (up to 4h + 24h per Domeneshop). Nothing further to do -- close it when dig +short akashic.no NS shows hyp.net."
+    },
+    {
+      "id": "LEG-10",
+      "track": "LEGACY",
+      "title": "Delete deploy.yml, then revoke the Cloudflare and Supabase secrets",
+      "status": "TODO",
+      "effort": 0.25,
+      "done_when": "No workflow references Cloudflare or Supabase, the four secrets are revoked, and CI is green without them.",
+      "deps": [
+        "LEG-09"
+      ],
+      "files": [
+        ".github/workflows/deploy.yml"
+      ],
+      "serialise_with": "QUA-01, QUA-03, QUA-04 also edit .github/workflows/**",
+      "why": "Order matters: revoking CLOUDFLARE_API_TOKEN while deploy.yml still runs turns CI permanently red. It will not take the site down -- Pages keeps serving the last deploy -- but it makes every push look broken.\n\nThe one-month hold recorded here on 2026-07-27 is GONE: the owner waived hosting rollback the same day. That hold existed only because deploy.yml keeps the Cloudflare site fresh for a DNS revert, and there is no revert to keep fresh. So both halves run as soon as the cutover is verified:\n  * prune VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY (nothing references either; grep -rn SUPABASE .github/ is empty),\n  * delete deploy.yml and revoke CLOUDFLARE_API_TOKEN / CLOUDFLARE_ACCOUNT_ID, in that order.",
+      "verify": [
+        "grep -rln cloudflare .github/workflows/  # expect no hits",
+        "gh run list --branch main --limit 5"
+      ],
+      "resume": "Ready to execute the moment its owner dependency clears; no agent work needed beforehand. All other agent tasks in the ledger are DONE as of 2026-07-26."
+    },
+    {
+      "id": "LEG-11A",
+      "track": "LEGACY",
+      "title": "Delete the Cloudflare Pages project and the DNS zone",
+      "status": "TODO",
+      "effort": 0.25,
+      "done_when": "The akashic Pages project and the Cloudflare DNS zone are gone from the dashboard, and akashic.no still resolves via GoDaddy to GitHub Pages.",
+      "owner": true,
+      "deps": [
+        "LEG-09",
+        "LEG-10"
+      ],
+      "priority": 90,
+      "why": "The hosting half of the old LEG-11, freed from the stability gate because the owner waived hosting rollback on 2026-07-27. Nothing here holds data: the Pages project is a build output that GitHub Pages now reproduces, and the DNS zone is replaced by GoDaddy. Do it AFTER confirming akashic.no resolves to GitHub's addresses through GoDaddy -- deleting the Cloudflare zone while it is still authoritative takes the domain down until NS propagates. Order: confirm resolution, then Pages project, then zone.",
+      "verify": [
+        "Dashboards show no akashic resources",
+        "Archive verified on two physical media (LEG-02)"
+      ],
+      "refs": [
+        "Also confirm whether the R2 bucket has a public r2.dev URL or custom domain — deleting the Worker does not close that route"
+      ]
+    },
+    {
+      "id": "LEG-11B",
+      "track": "LEGACY",
+      "title": "Delete the R2 bucket, Supabase project and Google OAuth config",
+      "status": "TODO",
+      "effort": 0.25,
+      "done_when": "All three are gone from their dashboards AND the archive has been verified on a second physical medium.",
+      "owner": true,
+      "deps": [
+        "LEG-03",
+        "LEG-04"
+      ],
+      "priority": 91,
+      "why": "The data half of the old LEG-11, and the half that is genuinely irreversible. R2 holds the 16 GiB / 8147-object archive and Supabase the rows it was exported from. The real gate is LEG-02 -- a verified second copy on a volume that is not the boot disk -- and LEG-03/LEG-04, which decide the 5080 un-catalogued objects and confirm no Supabase delta was missed. The calendar month is belt and braces on top of that; the second medium is the part that must not be skipped. Waiving hosting rollback does not touch this task.",
+      "verify": [
+        "Dashboards show no akashic resources",
+        "Archive verified on two physical media (LEG-02)"
+      ],
+      "refs": [
+        "Also confirm whether the R2 bucket has a public r2.dev URL or custom domain — deleting the Worker does not close that route"
+      ]
+    },
+    {
+      "id": "DOC-01",
+      "track": "DOCS",
+      "title": "CLAUDE.md — the protocol every session loads",
+      "status": "DONE",
+      "effort": 0.5,
+      "done_when": "A fresh agent can find the ledger, build the app and run the right verification without asking.",
+      "files": [
+        "CLAUDE.md"
+      ],
+      "evidence": "CLAUDE.md written with the ledger protocol, the xcodegen prerequisite, the .env worktree trap and the measured verification commands.",
+      "why": "The single biggest cause of losing the thread: no CLAUDE.md existed, so every agent re-derived the same six facts — xcodegen before any xcodebuild, which simulator UDID, that .env is absent in a worktree.",
+      "verify": [
+        "test -f CLAUDE.md"
+      ]
+    },
+    {
+      "id": "DOC-02",
+      "track": "DOCS",
+      "title": "The work ledger and its enforcement",
+      "status": "DONE",
+      "effort": 1,
+      "done_when": "npm run workplan:check passes and fails loudly when the ledger and WORKPLAN.md disagree.",
+      "files": [
+        "docs/workplan/tasks.json",
+        "scripts/workplan.mjs",
+        "WORKPLAN.md"
+      ],
+      "evidence": "tasks.json is the source of truth, WORKPLAN.md is generated, scripts/workplan.mjs validates ids/deps/cycles/file-collisions and sync, wired into CI.",
+      "why": "Status lived in six documents in four incompatible notations, none recording ownership. launch-checklist.md had 29 open boxes and zero ticked — it had never been used, so it carried no information about what was actually done.",
+      "verify": [
+        "node scripts/workplan.mjs check"
+      ]
+    },
+    {
+      "id": "DOC-03",
+      "track": "DOCS",
+      "title": "Rewrite ARCHITECTURE.md",
+      "status": "DONE",
+      "effort": 0.5,
+      "done_when": "No document describes Supabase, R2 or the Worker as active infrastructure, and every link in ARCHITECTURE.md resolves.",
+      "files": [
+        "ARCHITECTURE.md"
+      ],
+      "why": "The highest-priority rewrite, because the owner will be reading it while pressing irreversible buttons. Lines 24-34 still mark Supabase Auth, Supabase PostgreSQL, R2, the Worker and Cloudflare DNS as active; 245-256 still describe all media as served through the Worker. Also fixes ARCHITECTURE.md:775, whose link to ./ROADMAP.md became a 404 when DOC-11 archived it to docs/history/ — the docs agent left it deliberately rather than editing a file another task owns.",
+      "verify": [
+        "grep -in 'supabase\\|r2\\|cloudflare' ARCHITECTURE.md  # only in a clearly-labelled history section",
+        "grep -o '(\\./[^)]*)' ARCHITECTURE.md | tr -d '()' | while read p; do test -e \"$p\" || echo \"DANGLING $p\"; done"
+      ],
+      "evidence": "grep for supabase/r2/cloudflare in ARCHITECTURE.md returns 24 hits, every one inside a labelled status table or the history section — nothing decommissioned is presented as current. Cloudflare Pages and DNS are documented as STILL LIVE, deliberately: LEG-09 is open and akashic.no resolves through them today, so claiming otherwise while the owner holds the DNS-delete button is the failure this doc exists to prevent. All 36 relative links resolve, including the ROADMAP link that DOC-11 broke."
+    },
+    {
+      "id": "DOC-04",
+      "track": "DOCS",
+      "title": "Correct the cost table: public-database egress is billed to the developer",
+      "status": "DONE",
+      "effort": 0.5,
+      "done_when": "The cost table distinguishes the owner's iCloud quota from the developer-billed public database.",
+      "files": [
+        "COMMERCIALIZATION-PLAN.md"
+      ],
+      "serialise_with": "DOC-06, DOC-07, DOC-08 also edit COMMERCIALIZATION-PLAN.md — do them in one pass",
+      "why": "Line 40 claims bandwidth is '$0 — Apple's CDN'. True for the private database, false for the public one the showcase writes to. At 1000 customers the free tier allows ~45 full journey views/day; a 50k-visitor spike costs ~$270 in a day. The growth strategy's success mode is also its cost-blowup mode.",
+      "verify": [
+        "grep -n 'Bandwidth' COMMERCIALIZATION-PLAN.md"
+      ],
+      "refs": [
+        "Verified independently: COMMERCIALIZATION-PLAN.md:40 and apple/CloudKit/schema.ckdb GRANT CREATE TO \"_icloud\" on 7 types"
+      ],
+      "evidence": "The §2 cost table's single '$0 bandwidth' row is now three: private-DB storage and bandwidth (genuinely $0, owner's quota) plus 'public DB (the showcase) — billed to us'. A new subsection carries the verified schema facts (GRANT READ TO _world on 6 types, GRANT CREATE TO _icloud on all 7) and the arithmetic (~56 MB per full journey view, ~45 views/day at 1000 customers, a 50k spike ~2.7 TB ~ $270/day). Every downstream claim resting on zero-marginal-cost was corrected too: the §1 thesis, §4.5, §5, §6, a new §8 risk row, §9, and the closing line."
+    },
+    {
+      "id": "DOC-05",
+      "track": "DOCS",
+      "title": "Fix the test-count claims that disagree with each other",
+      "status": "DONE",
+      "effort": 0.25,
+      "done_when": "Every stated test count matches a command anyone can run.",
+      "files": [
+        "APPLE-MIGRATION-TASKS.md",
+        "COMMERCIALIZATION-PLAN.md"
+      ],
+      "serialise_with": "DOC-04, DOC-06, DOC-07, DOC-08 also edit COMMERCIALIZATION-PLAN.md",
+      "why": "Three places, three different numbers, all stale: '560 native + ~402 web', '309 apple / 378 web', '311 native + 378 web'. Real: 599 native test functions, 402 web. A plan that miscounts its own tests undercuts its credibility on everything else.",
+      "verify": [
+        "grep -rn 'native.*web tests\\|[0-9]\\{3\\} native' *.md"
+      ],
+      "evidence": "Counts established independently, not copied: 602 native (46 files, cross-checked, 0 @Test macros) and 402 web via npx vitest --run. grep -rn '560 native|311 native|~402 web' *.md -> 0 hits. Both reproducing commands are now named in the docs."
+    },
+    {
+      "id": "DOC-06",
+      "track": "DOCS",
+      "title": "Record that Akashic Intelligence already ships",
+      "status": "DONE",
+      "effort": 0.25,
+      "done_when": "No document schedules as v1.1 a feature that is wired to real UI today.",
+      "files": [
+        "COMMERCIALIZATION-PLAN.md",
+        "apple/Docs/DESIGN-PLAN.md"
+      ],
+      "serialise_with": "DOC-04, DOC-05, DOC-07, DOC-08 also edit COMMERCIALIZATION-PLAN.md",
+      "why": "Drift in the flattering direction, but still drift: five files under apple/Akashic/Intelligence/ are built and reachable from WaypointEditSheet and NewJourneySheet while the plan promises them for v1.1.",
+      "verify": [
+        "grep -rn 'v1.1' COMMERCIALIZATION-PLAN.md | grep -i intelligence"
+      ],
+      "evidence": "grep 'v1.1' COMMERCIALIZATION-PLAN.md | grep -i intelligence -> 0 hits (was 1). New 'What already ships' table names all five Intelligence files and their real call sites (WaypointEditSheet:174,177,179,278,281 and NewJourneySheet:1085,1087); absences re-verified: import Vision 0, streamResponse 0, Tool 0."
+    },
+    {
+      "id": "DOC-07",
+      "track": "DOCS",
+      "title": "Add the PCC timing caveat: production PCC ships with iOS 27",
+      "status": "DONE",
+      "effort": 0.1,
+      "done_when": "The Apple Intelligence section states that PCC cannot be in v1.0.",
+      "files": [
+        "COMMERCIALIZATION-PLAN.md"
+      ],
+      "serialise_with": "DOC-04, DOC-05, DOC-06, DOC-08 also edit COMMERCIALIZATION-PLAN.md",
+      "why": "The §10 correction block is right that PCC is free for Small Business members under 2M downloads — that premise was verified. It omits that production PCC arrives with iOS 27 in autumn 2026, which is what actually decides it cannot ship in v1.0.",
+      "verify": [
+        "grep -n 'iOS 27' COMMERCIALIZATION-PLAN.md"
+      ],
+      "evidence": "grep -n 'iOS 27' COMMERCIALIZATION-PLAN.md -> hit at :341 (was 0). Section 10 now states PCC-backed Foundation Models is developer-preview-only until production PCC ships with iOS 27."
+    },
+    {
+      "id": "DOC-08",
+      "track": "DOCS",
+      "title": "Fix store copy that advertises a paywall the code does not implement",
+      "status": "DONE",
+      "effort": 0.25,
+      "done_when": "No store or IAP copy claims Complete unlocks publishing or export.",
+      "files": [
+        "docs/store/app-store-listing.md",
+        "docs/store/launch-checklist.md",
+        "apple/Akashic/Store/Akashic.storekit"
+      ],
+      "serialise_with": "SHIP-13 enters this copy into App Store Connect — it must land first",
+      "why": "Four places (EN, NB, checklist, .storekit) advertise 'unlimited journeys, publishing and export' while canExport and canPublish return true unconditionally. Every shipped string in the app is already correct, so this is unentered metadata — but if typed in as-is it becomes copy App Review can falsify.",
+      "verify": [
+        "grep -rn 'publishing and export' docs/ apple/  # expect no hits"
+      ],
+      "evidence": "grep -rn 'publishing and export' docs/ apple/ returns only the ledger quoting the task description. All four surfaces corrected to the real model: Complete unlocks unlimited journeys and photos plus Akashic Intelligence. Akashic.storekit price matches kr 149."
+    },
+    {
+      "id": "DOC-09",
+      "track": "DOCS",
+      "title": "Fix the Entitlements.swift comments that contradict the same file's header",
+      "status": "DONE",
+      "effort": 0.1,
+      "done_when": "The enum comments and the file header describe the same paywall.",
+      "files": [
+        "apple/Akashic/Store/Entitlements.swift"
+      ],
+      "why": "Lines 39-41 still say free means 'no export/publish' and that Complete unlocks 'export, showcase publishing', contradicting the header at :17-19 which states the revised model correctly. Comment drift inside the file that is supposed to be the single source of truth.",
+      "verify": [
+        "cd apple && xcodegen generate",
+        "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,id=$(xcrun simctl list devices available | grep -o '[0-9A-F-]\\{36\\}' | tail -1)\" CODE_SIGNING_ALLOWED=NO test"
+      ],
+      "evidence": "grep -n 'no export/publish|export, showcase publishing' Entitlements.swift -> 0 hits. Comment-only diff verified (zero non-comment lines changed); 602/602 native tests pass."
+    },
+    {
+      "id": "DOC-10",
+      "track": "DOCS",
+      "title": "Remove the false 'exhaustively unit-tested' claim from KnowledgeRetrieval.swift",
+      "status": "DONE",
+      "effort": 0.1,
+      "done_when": "No doc comment claims test coverage that does not exist.",
+      "files": [
+        "apple/Akashic/Intelligence/KnowledgeRetrieval.swift"
+      ],
+      "serialise_with": "DIFF-06 also edits Intelligence/**",
+      "why": "506 lines, zero tests, and its own doc comments claim it is exhaustively unit-tested. Either write the tests (QUA-12) or stop claiming them; do not ship the claim.",
+      "verify": [
+        "grep -rn 'exhaustively' apple/Akashic/Intelligence/  # expect no hits"
+      ],
+      "evidence": "grep -rn 'exhaustively' apple/Akashic/Intelligence/ -> 0 hits. Added an explicit 'Test coverage: none, today' section pointing at QUA-12. Comment-only diff verified."
+    },
+    {
+      "id": "DOC-11",
+      "track": "DOCS",
+      "title": "Archive ROADMAP.md and delete PLAN.md",
+      "status": "DONE",
+      "effort": 0.25,
+      "done_when": "No unmarked stale planning document remains at the repo root.",
+      "files": [
+        "ROADMAP.md",
+        "PLAN.md",
+        "docs/history/"
+      ],
+      "why": "ROADMAP.md self-labels HISTORICAL but still presents a Supabase photo schema and R2 paths as current. PLAN.md is an unmarked, undated spec for Mapbox route drawing in the React app, superseded entirely by the shipped iOS RouteDrawing. Move ROADMAP to docs/history/, delete PLAN.",
+      "verify": [
+        "test ! -f PLAN.md",
+        "test -f docs/history/ROADMAP.md"
+      ],
+      "evidence": "test ! -f PLAN.md and test -f docs/history/ROADMAP.md both pass. ROADMAP header marks it archived and repaths all five relative links. NOTE: the file move rode into commit 4e76bd1 because git mv/git rm self-stage — end state correct, protocol lesson now in CLAUDE.md."
+    },
+    {
+      "id": "DOC-12",
+      "track": "DOCS",
+      "title": "Correct the DESIGN-PLAN ticks that code does not support",
+      "status": "DONE",
+      "effort": 0.25,
+      "done_when": "No design item is marked shipped unless code supports it.",
+      "files": [
+        "apple/Docs/DESIGN-PLAN.md"
+      ],
+      "serialise_with": "DIFF track also owns DESIGN-PLAN.md",
+      "why": "D1/D3 are ticked while there are 14 accessibilityLabels for ~136 interactive views, and the demo journey is marked shipped as 'the biggest conversion lever' while containing zero photos — in a photo-memory app.",
+      "verify": [
+        "grep -c '✅' apple/Docs/DESIGN-PLAN.md"
+      ],
+      "evidence": "D9 changed from SHIPPED to PARTLY SHIPPED, splitting the halves honestly: the seeding mechanism is real and careful, the content is not — kilimanjaro.json has no photos key, so a first launch shows no photograph in a photo-memory app. Its self-contradicting gate column fixed. D1/D3 ticks KEPT after line-by-line verification: my premise for un-ticking them was wrong, see the new QUA-24 for the real gap."
+    },
+    {
+      "id": "DOC-13",
+      "track": "DOCS",
+      "title": "Audit every claim in README.md",
+      "status": "DONE",
+      "effort": 0.25,
+      "done_when": "Every feature and tech-stack claim in the README is true of the current build.",
+      "files": [
+        "README.md"
+      ],
+      "why": "It is the first thing anyone reads, including a prospective contributor or an acquirer, and it was written across three architectures.",
+      "verify": [
+        "Manual read-through against the tech stack table"
+      ],
+      "evidence": "README.md rewritten against the tree: web described as a read-only showcase, hosting stated honestly as Cloudflare Pages today with the cutover pending, WORKPLAN.md named as the only authoritative status, PLAN.md and ROADMAP.md references corrected. No dangling relative links."
+    },
+    {
+      "id": "DOC-14",
+      "track": "DOCS",
+      "title": "Fix github-pages-cutover.md drift before the owner follows it",
+      "status": "DONE",
+      "effort": 0.1,
+      "done_when": "Every instruction in the cutover runbook is still executable as written.",
+      "files": [
+        "docs/github-pages-cutover.md"
+      ],
+      "serialise_with": "LEG-09 executes this runbook — fix it first",
+      "why": "Line 154 tells the owner to delete netlify.toml, which commit d331970 already removed. Small, but the owner follows this document while making DNS changes.",
+      "verify": [
+        "grep -n netlify docs/github-pages-cutover.md  # expect no hits"
+      ],
+      "evidence": "grep -n netlify docs/github-pages-cutover.md -> 0 hits. Also corrected the AASA section from 'two placeholders' to a status list (Team ID filled; associated-domains genuinely still missing, grep applinks apple/ -> 0) and the stale Supabase-secret parenthetical."
+    },
+    {
+      "id": "SHIP-01",
+      "track": "SHIP",
+      "title": "Move the two dropped Info.plist keys into info.properties",
+      "status": "DONE",
+      "effort": 0.25,
+      "done_when": "The built Release-CloudKit Info.plist contains CKSharingSupported and UIBackgroundModes.",
+      "priority": 4,
+      "files": [
+        "apple/project.yml"
+      ],
+      "serialise_with": "SHIP-06 and QUA-08 also edit apple/project.yml — one pass, one commit",
+      "why": "Xcode's INFOPLIST_KEY_ mechanism honours a fixed allowlist, so both keys are discarded without warning. Reproduced by dumping the built plist. CKShare acceptance and push sync are dead in every build shipped so far. The correct escape hatch already sits 40 lines above at project.yml:53-71.",
+      "verify": [
+        "cd apple && xcodegen generate",
+        "plutil -p \"$(find ~/Library/Developer/Xcode/DerivedData/Akashic-*/Build/Products -name Akashic.app -maxdepth 3 | head -1)/Info.plist\" | grep -E 'CKSharingSupported|UIBackgroundModes'"
+      ],
+      "refs": [
+        "apple/project.yml:110, :113 — the broken form",
+        "apple/project.yml:53-71 — info.properties, used correctly for CFBundleDocumentTypes"
+      ],
+      "claim": {
+        "agent": "opus5",
+        "branch": "claude/remote-control-project-review-9462c1",
+        "at": "2026-07-26"
+      },
+      "evidence": "Built Release-CloudKit (the config testflight-upload.sh archives) and dumped the merged plist: CKSharingSupported => true and UIBackgroundModes => [remote-notification] both present; ITSAppUsesNonExemptEncryption and UILaunchScreen unregressed; 599/599 tests pass. CI now asserts all five against the built plist."
+    },
+    {
+      "id": "SHIP-02",
+      "track": "SHIP",
+      "title": "Register for remote notifications — the missing half of push sync",
+      "status": "DONE",
+      "effort": 0.5,
+      "done_when": "The app calls registerForRemoteNotifications and a device receives a CloudKit push.",
+      "priority": 5,
+      "deps": [
+        "SHIP-01"
+      ],
+      "files": [
+        "apple/Akashic/App/AkashicApp.swift",
+        "apple/Akashic/Sync/PersistenceController+Sync.swift"
+      ],
+      "why": "Found while verifying SHIP-01, and it changes that fix: there is no registerForRemoteNotifications call anywhere in 40k LOC, so adding the plist key alone will not revive push sync. Both halves are needed before cross-device sync works at all.",
+      "verify": [
+        "cd apple && xcodegen generate",
+        "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,id=$(xcrun simctl list devices available | grep -o '[0-9A-F-]\\{36\\}' | tail -1)\" CODE_SIGNING_ALLOWED=NO test",
+        "grep -rn registerForRemoteNotifications apple/Akashic/"
+      ],
+      "refs": [
+        "Requires two real devices on two Apple IDs to prove — pair with SHIP-15"
+      ],
+      "claim": {
+        "agent": "opus5",
+        "branch": "claude/remote-control-project-review-9462c1",
+        "at": "2026-07-26"
+      },
+      "evidence": "registerForRemoteNotifications() added behind AKASHIC_CLOUDKIT_BUILD, plus a didReceiveRemoteNotification handler routing to a new fetchChangesForPush() that pulls both database scopes. Release-CloudKit BUILD SUCCEEDED; the selectors and the registration symbol are present in the shipping binary; Debug still green at 602/602. End-to-end delivery is unprovable without two devices — that is SHIP-15."
+    },
+    {
+      "id": "SHIP-03",
+      "track": "SHIP",
+      "title": "Produce the 12 App Store screenshots",
+      "status": "DONE",
+      "effort": 1.5,
+      "done_when": "Twelve assets exist at the two required sizes and are committed under docs/store/screenshots/.",
+      "priority": 20,
+      "deps": [
+        "SHIP-06",
+        "QUA-06"
+      ],
+      "files": [
+        "docs/store/screenshots/**",
+        "docs/store/screenshots-plan.md"
+      ],
+      "why": "A hard App Store Connect gate: TARGETED_DEVICE_FAMILY '1,2' requires both a 6.9-inch iPhone set and a 13-inch iPad set before Submit is clickable. More manual than the plan assumes — EditScreenshotHarness drives only the edit sheets, and AKASHIC_SCREEN has no case for the globe, day detail, elevation profile or share sheet, so five of six shots are hand-navigated. Sequenced after QUA-06: the listing is EN+NB, and NB captions over English app chrome is exactly the mismatch a reviewer notices. Capture both languages once the string catalogue exists rather than shooting twice.",
+      "verify": [
+        "ls docs/store/screenshots/*.png | wc -l  # expect 12",
+        "file docs/store/screenshots/*.png | grep -c '1320 x 2868\\|2064 x 2752'"
+      ],
+      "refs": [
+        "Shot 5 (UICloudSharingController with participants) may not be reachable in a simulator — substitute JourneyShareView"
+      ],
+      "claim": {
+        "agent": "shots-worktree",
+        "branch": "claude/ship03-screenshots",
+        "at": "2026-07-26"
+      },
+      "evidence": "24 assets, not 12 — both languages, because the listing is EN+NB and Norwegian captions over English chrome is the mismatch a reviewer notices. Verified: 12 at 1320x2868 and 12 at 2064x2752, zero RGBA, plus a 244-line README recording the exact launch-env command for each shot so the next release reproduces rather than re-improvises. My briefing was WRONG that five of six shots needed hand-navigation: the harness already had AKASHIC_SCENE, AKASHIC_LIGHTBOX, AKASHIC_SHEET_DETENT, AKASHIC_STATS_JOURNEY and AKASHIC_TAB, and the agent checked rather than believing me. It added one new ExportScreenshotHarness seam instead of tapping, so the whole set is script-reproducible."
+    },
+    {
+      "id": "SHIP-04",
+      "track": "SHIP",
+      "title": "Add PrivacyInfo.xcprivacy",
+      "status": "DONE",
+      "effort": 0.25,
+      "done_when": "The manifest ships in the app bundle and the upload draws no ITMS-91053 notice.",
+      "files": [
+        "apple/Akashic/Resources/PrivacyInfo.xcprivacy"
+      ],
+      "serialise_with": "SHIP-01, SHIP-06, QUA-08 also edit apple/project.yml to reference it",
+      "why": "Not the automatic rejection it was first called — build 2 was uploaded on 2026-07-23 with 44 UserDefaults sites and no manifest, and was accepted. Still correct to add: declare NSPrivacyTracking=false, empty collected-data types, and CA92.1 (UserDefaults) plus C617.1 (file timestamps).",
+      "verify": [
+        "cd apple && xcodegen generate",
+        "find ~/Library/Developer/Xcode/DerivedData/Akashic-*/Build/Products -name '*.xcprivacy'"
+      ],
+      "claim": {
+        "agent": "opus5",
+        "branch": "claude/remote-control-project-review-9462c1",
+        "at": "2026-07-26"
+      },
+      "evidence": "PrivacyInfo.xcprivacy declared and verified at the BUNDLE ROOT of the built Release-CloudKit app (find -maxdepth 1 finds it). Declares NSPrivacyTracking=false, empty tracking domains, empty collected data types, CA92.1 for 44 UserDefaults sites and C617.1 for attributesOfItem at CloudKitImportSink.swift:656. Documents the caveat that the public showcase does put customer content in a developer-readable database, so the ASC User Content answer must not say Data Not Collected for publishers."
+    },
+    {
+      "id": "SHIP-05",
+      "track": "SHIP",
+      "title": "Bump the marketing version to 1.0.0",
+      "status": "DONE",
+      "effort": 0.1,
+      "done_when": "The built plist reports CFBundleShortVersionString 1.0.0.",
+      "files": [
+        "apple/project.yml"
+      ],
+      "serialise_with": "SHIP-01, SHIP-06, SHIP-04, QUA-08 all edit apple/project.yml",
+      "why": "A paid v1.0 cannot ship on a 0.x marketing version, and the whole store apparatus is written against v1.0.",
+      "verify": [
+        "cd apple && xcodegen generate",
+        "plutil -p \"$(find ~/Library/Developer/Xcode/DerivedData/Akashic-*/Build/Products -name Akashic.app -maxdepth 3 | head -1)/Info.plist\" | grep CFBundleShortVersionString"
+      ],
+      "claim": {
+        "agent": "opus5",
+        "branch": "claude/remote-control-project-review-9462c1",
+        "at": "2026-07-26"
+      },
+      "evidence": "Built plist reports CFBundleShortVersionString 1.0.0 and CFBundleVersion 9, in both the app and widget targets."
+    },
+    {
+      "id": "SHIP-06",
+      "track": "SHIP",
+      "title": "D5 — consumer sync wording, iPhone portrait lock, ASC config match",
+      "status": "DONE",
+      "effort": 0.5,
+      "done_when": "Settings shows no engineering strings and iPhone does not rotate into the iPad panel layout.",
+      "files": [
+        "apple/project.yml",
+        "apple/Akashic/Sync/SyncStatus.swift",
+        "apple/Akashic/Views/SettingsView.swift"
+      ],
+      "serialise_with": "SHIP-01, SHIP-04, SHIP-05, QUA-08 on project.yml; SHIP-09 and QUA-06 on SettingsView.swift",
+      "why": "Three verified-absent sub-parts: SyncStatus still returns the engineering string, the built plist offers landscape on iPhone so Max phones silently route into the iPad floating-panel layout that was never designed for them, and the ASC configuration must match.",
+      "verify": [
+        "cd apple && xcodegen generate",
+        "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,id=$(xcrun simctl list devices available | grep -o '[0-9A-F-]\\{36\\}' | tail -1)\" CODE_SIGNING_ALLOWED=NO test",
+        "plutil -p \"$(find ~/Library/Developer/Xcode/DerivedData/Akashic-*/Build/Products -name Akashic.app -maxdepth 3 | head -1)/Info.plist\" | grep -A3 UISupportedInterfaceOrientations"
+      ],
+      "claim": {
+        "agent": "opus5",
+        "branch": "claude/remote-control-project-review-9462c1",
+        "at": "2026-07-26"
+      },
+      "evidence": "(a) SyncStatus .notEntitled no longer reads as a build instruction. (b) Built plist: UISupportedInterfaceOrientations is [Portrait] only, while ~ipad keeps all four — so a Max phone can no longer rotate into the iPad floating-panel layout it was never designed for. (c) ASC config match is owner data entry, tracked under SHIP-14."
+    },
+    {
+      "id": "SHIP-07",
+      "track": "SHIP",
+      "title": "Add the associated-domains entitlement so Universal Links work",
+      "status": "TODO",
+      "effort": 0.25,
+      "done_when": "Tapping an akashic.no journey link opens the app rather than Safari.",
+      "deps": [
+        "LEG-09"
+      ],
+      "files": [
+        "apple/Akashic/Akashic.entitlements",
+        "apple/Akashic/Akashic-Release.entitlements"
+      ],
+      "why": "Doc status is wrong in both directions: the AASA file is finished and live with a real Team ID, but the app declares no associated-domains entitlement, so the deep link cannot work. This is the return half of the growth funnel. Note from DIFF-03: the journey is addressed by QUERY STRING (?journey=<slug>), which GitHub Pages cannot route on, so per-path prerendering for share previews would need a URL scheme change — and an edge-worker alternative would make every scraper hit billable public-CloudKit traffic. Any change to the URL form has to keep the AASA component in step.\n\nAASA CONTENT-TYPE, measured against Pages 2026-07-27 via --resolve: /.well-known/apple-app-site-association returns 200 with valid JSON ({\"applinks\":{\"details\":[{\"appIDs\":...) but Content-Type: application/octet-stream, because GitHub Pages derives the type from the file extension and this file has none. Pages allows no custom headers, so it cannot be changed from the repo. Modern iOS fetches AASA through Apple's CDN, which is tolerant of the type, and older guidance required application/json -- so this is a verify-on-device item rather than a known break. Universal Links either open the app or they do not, and the SHIP-15 device session is where that shows. Note /apple-app-site-association at the root is 404; only the .well-known path exists, which is correct for current iOS.",
+      "verify": [
+        "cd apple && xcodegen generate",
+        "grep -rn 'associated-domains' apple/Akashic/*.entitlements"
+      ],
+      "resume": "Ready to execute the moment its owner dependency clears; no agent work needed beforehand. All other agent tasks in the ledger are DONE as of 2026-07-26."
+    },
+    {
+      "id": "SHIP-08",
+      "track": "SHIP",
+      "title": "Write the public-showcase takedown procedure",
+      "status": "DONE",
+      "effort": 0.5,
+      "done_when": "A documented, tested procedure removes a reported public journey, and the privacy page says how to ask.",
+      "deps": [
+        "DIFF-02"
+      ],
+      "files": [
+        "scripts/takedown.mjs",
+        "public/privacy.html",
+        "docs/store/review-notes.md"
+      ],
+      "why": "The report affordance ships and is unit-tested, but nothing on the other end removes content. Once strangers can publish world-readable content to the developer's database, the developer owns moderation — and Guideline 1.2 (UGC) is a sharper review risk than the metadata items.",
+      "verify": [
+        "node scripts/takedown.mjs --dry-run <recordName>"
+      ],
+      "evidence": "scripts/takedown.mjs (714 lines, zero dependencies — node:crypto only). Dry-run is the default; --apply is required to delete, unknown flags are errors so a typo cannot delete, and --dry-run with --apply is rejected rather than resolved. Handles the disambiguated-slug case DIFF-01 fixed app-side, so a takedown cannot miss the real records. 48 tests. Verified against a stub-fetch harness across five scenarios including cross-owner isolation. privacy.html gained a removal section; review-notes.md gained a Guideline 1.2 block for App Review."
+    },
+    {
+      "id": "SHIP-09",
+      "track": "SHIP",
+      "title": "Compile the developer workshop out of Release",
+      "status": "DONE",
+      "effort": 0.25,
+      "done_when": "No developer surface is reachable in a Release build, and the seven-tap gesture is gone.",
+      "files": [
+        "apple/Akashic/Views/SettingsView.swift",
+        "apple/Akashic/App/DeveloperTools.swift"
+      ],
+      "serialise_with": "SHIP-06 and QUA-06 also edit SettingsView.swift; LEG-08 edits Config.swift alongside",
+      "why": "Downgraded from blocker by verification — the CloudKit import button is disabled whenever sync is running, and the importer throws on a missing export bundle before touching CloudKit — but still nearly free to fix, and nothing in a Release binary should be able to repoint a customer's store. Debug-CloudKit and Debug-Production both define DEBUG, so wrapping keeps the workshop where the runbook needs it.",
+      "verify": [
+        "cd apple && xcodegen generate",
+        "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,id=$(xcrun simctl list devices available | grep -o '[0-9A-F-]\\{36\\}' | tail -1)\" CODE_SIGNING_ALLOWED=NO test",
+        "grep -n 'if developerUnlocked' apple/Akashic/Views/SettingsView.swift  # inside #if DEBUG"
+      ],
+      "claim": {
+        "agent": "opus5",
+        "branch": "claude/remote-control-project-review-9462c1",
+        "at": "2026-07-26"
+      },
+      "evidence": "Two independent guards: DeveloperTools.isUnlocked returns false unconditionally in non-DEBUG, and the Form branch plus the seven-tap gesture are inside #if DEBUG so the workshop is not present in the binary at all. Verified against the Release-CloudKit binary: 'Run import to CloudKit', 'Persistence mode', 'Hidden from customers' and 'Clear override' all return 0 occurrences in strings output. Debug-CloudKit and Debug-Production both define DEBUG, so the runbook keeps its tools."
+    },
+    {
+      "id": "SHIP-10A",
+      "track": "SHIP",
+      "title": "Point the deployed showcase at the CloudKit PRODUCTION environment",
+      "status": "DONE",
+      "effort": 0.25,
+      "done_when": "The deployed bundle carries environment:\"production\" and a PublicJourney query returns without an auth error.",
+      "owner": true,
+      "priority": 10,
+      "why": "Confirmed live on 2026-07-27, not inferred: akashic.no is public, shows \"CLICK A MARKER TO EXPLORE\" with no journeys, and a PublicJourney query run in the page returns 0 records with NO error — so it is not auth and not code, the development public database is simply empty while T2.5 imported into Production. No repo change is needed: all four workflows already read ${{ vars.VITE_CLOUDKIT_ENV || 'development' }}, and the variable is explicitly set to development. Two repository VARIABLES must change TOGETHER -- VITE_CLOUDKIT_ENV to production and VITE_CLOUDKIT_API_TOKEN to a token minted for Production with akashic.no in allowed origins. Flipping the environment alone leaves a development token pointed at production and turns an empty showcase into an erroring one. The token is correctly a variable rather than a secret: CloudKit JS tokens are public by design (they are inlined into the client bundle) and restricted by origin allowlist, not by secrecy.\n\nTOKEN SCOPING PROVEN 2026-07-27, not assumed. The old SHIP-10 said this 'needs a Console step to mint a production CloudKit JS token' without evidence, so it was worth testing before sending the owner to the Console. Queried CloudKit Web Services directly from the akashic.no origin with the CURRENT token, same container, changing only the environment in the URL path:\n  development -> HTTP 200, 0 records\n  production  -> HTTP 401 AUTHENTICATION_FAILED, 'please check you have the correct API Token for this container'\nSo a CloudKit JS API token IS environment-scoped and the existing one cannot be reused. Tested via REST rather than CloudKit JS on purpose: calling CloudKit.configure() twice on one container could have produced the same error for an unrelated reason, and did.\n\nNote for whoever explains this to the owner: the token is NOT a secret. It is compiled into the client bundle and readable by any visitor (grep the live JS). Its protection is the allowed-origins list, which is why akashic.no must be on it. Storing it in `vars` rather than `secrets` is therefore correct, and 'moving it to secrets for safety' would change nothing except how safe it looks.\n\nCORRECTION 2026-07-27, after the owner sent a Console screenshot: the note above concluded the owner-supplied token was 'not valid for this container in either environment'. WRONG. It is a valid Production token for iCloud.no.akashic (name Akashic-ci). Two mistakes produced that conclusion:\n  1. My server-side curl sent no Origin header. An origin-restricted token rejects that outright, and the development token it was compared against is on 'Any Domain' -- so the comparison measured origin policy, not token validity.\n  2. Allowed Origins was entered as 'akashic.no/' WITH A TRAILING SLASH, which Console stores verbatim. Measured: Origin: https://akashic.no -> 401; Origin: https://akashic.no/ -> 200. Browsers never send a path in Origin, so every real visitor would have got 401 while a curl matching the stored string passed.\nThe remaining owner action is therefore one character: drop the trailing slash. www.akashic.no is also not listed (401), which is acceptable only because GitHub Pages redirects www to the apex.",
+      "verify": [
+        "curl -s https://akashic.no/assets/index-*.js | grep -o 'environment:\"[a-z]*\"'   # expect production",
+        "In the page: CloudKit.getDefaultContainer().publicCloudDatabase.performQuery({recordType:'PublicJourney'}) must not return an auth error"
+      ],
+      "refs": [
+        "src/lib/cloudkit.ts:21, deploy.yml:35, deploy-pages.yml:63",
+        "APPLE-MIGRATION-RUNBOOK.md:377 already tracks this as an operator step"
+      ],
+      "evidence": "Verified end to end on 2026-07-27 without touching DNS. GitHub Pages, reached via curl --resolve akashic.no:443:185.199.108.153: index 200, bundle 200 carrying environment:\"production\" AND apiToken:\"229d536d... (the new Production token), and /nope serves the app shell so the 404.html fallback works. CloudKit production query from Origin: https://akashic.no returns HTTP 200 (0 records -- nothing published yet, that is SHIP-10B). Real visitors were unaffected throughout: akashic.no still resolves to Cloudflare and still serves environment:\"development\". Two variables were set together (VITE_CLOUDKIT_ENV=production, VITE_CLOUDKIT_API_TOKEN) and deploy-pages.yml was run manually. TWO THINGS THE PLAN HAD WRONG, both now corrected in the doc and the workflow: the artifact's dist/CNAME does NOT set the Pages custom domain under build_type: workflow (cname stayed null after a green deploy, and Pages answered 'Site not found' for Host: akashic.no until it was set explicitly via the API), and there is ~45 s of edge propagation after setting it during which a 404 is propagation rather than failure."
+    },
+    {
+      "id": "SHIP-10B",
+      "track": "SHIP",
+      "title": "Publish one journey into the production mirror and see it signed out",
+      "status": "TODO",
+      "effort": 0.25,
+      "done_when": "A published journey is visible on akashic.no while signed out.",
+      "owner": true,
+      "priority": 11,
+      "why": "The half of the old SHIP-10 that cannot be done from a desk. Populating the public mirror runs through PublicMirrorPublisher behind #if AKASHIC_CLOUDKIT_BUILD, and JourneyShowcaseSheet constructs a real CKContainer and checks accountStatus() before it will publish -- so it needs a CloudKit-entitled build signed into iCloud, and no simulator has an iCloud account. Fold this into the SHIP-15 device session; it costs minutes once a device is in hand. Until it is done the showcase is legitimately empty rather than wrongly empty, which is why LEG-09 depends on SHIP-10A and not on this.",
+      "verify": [
+        "Open https://akashic.no in a private window (signed out) and confirm the journey renders on the globe"
+      ],
+      "refs": [
+        "src/lib/cloudkit.ts:21, deploy.yml:35, deploy-pages.yml:63",
+        "APPLE-MIGRATION-RUNBOOK.md:377 already tracks this as an operator step"
+      ],
+      "deps": [
+        "SHIP-10A",
+        "SHIP-15"
+      ],
+      "files": null
+    },
+    {
+      "id": "SHIP-11",
+      "track": "SHIP",
+      "title": "Trademark and name clearance for 'Akashic'",
+      "status": "TODO",
+      "effort": 0.5,
+      "done_when": "A written go/no-go exists from Patentstyret and EUIPO in the software class.",
+      "owner": true,
+      "priority": 6,
+      "why": "Three documents list this as the go/no-go before any brand or screenshot spend. 'Akashic Books' is a registered US publisher in the books class; no software-class conflict was found, but that is not a clearance.",
+      "verify": [
+        "A recorded search result from both registers"
+      ]
+    },
+    {
+      "id": "SHIP-12",
+      "track": "SHIP",
+      "title": "Paid Applications agreement, banking and tax forms",
+      "status": "TODO",
+      "effort": 0.5,
+      "done_when": "App Store Connect reports the Paid Applications agreement as active.",
+      "owner": true,
+      "priority": 7,
+      "why": "The one calendar item that runs entirely outside the build queue and can silently add two weeks. No in-app purchase can go live without it. Start today, in parallel with everything else.",
+      "verify": [
+        "App Store Connect → Business shows the agreement active"
+      ]
+    },
+    {
+      "id": "SHIP-13",
+      "track": "SHIP",
+      "title": "Create the IAP, join Small Business Program, declare EU trader status",
+      "status": "TODO",
+      "effort": 0.5,
+      "done_when": "no.akashic.app.complete exists at kr 149 with Family Sharing on, and trader status is submitted.",
+      "owner": true,
+      "deps": [
+        "DOC-08",
+        "SHIP-12"
+      ],
+      "why": "The code side is ready and consistent — product id and both free-tier limits match the plan. Trader status gates EU storefronts rather than release (Norway is EEA, not EU), and it is a form plus Apple-side verification, so it can run in parallel.",
+      "verify": [
+        "App Store Connect shows the IAP ready to submit"
+      ]
+    },
+    {
+      "id": "SHIP-14",
+      "track": "SHIP",
+      "title": "Enter ASC metadata, App Privacy, review notes and the icon",
+      "status": "TODO",
+      "effort": 0.5,
+      "done_when": "The version is complete in App Store Connect except for the build.",
+      "owner": true,
+      "deps": [
+        "DOC-08",
+        "SHIP-03",
+        "QUA-09"
+      ],
+      "why": "Owner-only data entry; the source content is written and paste-ready. App Privacy must reflect that User Content reaches a developer-readable public database — 'Data Not Collected' is affirmatively false for the showcase.",
+      "verify": [
+        "ASC Prepare for Submission shows no missing required fields"
+      ]
+    },
+    {
+      "id": "SHIP-15",
+      "track": "SHIP",
+      "title": "Real-device smoke test on two Apple IDs",
+      "status": "TODO",
+      "effort": 1,
+      "done_when": "A share invitation opens in-app, and an edit on device A appears on device B without foregrounding.",
+      "owner": true,
+      "priority": 8,
+      "deps": [
+        "SHIP-01",
+        "SHIP-02"
+      ],
+      "why": "Do this before planning anything else: it is what confirms or refutes the plist and push-sync fixes, and no simulator can prove either. All verification in the repo to date is simulator-only.",
+      "verify": [
+        "Manual: accept a CKShare on device B; edit on A and observe B without foregrounding"
+      ]
+    },
+    {
+      "id": "SHIP-16",
+      "track": "SHIP",
+      "title": "TestFlight: internal family, then the external beta group",
+      "status": "TODO",
+      "effort": 0.5,
+      "done_when": "An external group of ~10 households is running a build with test notes.",
+      "owner": true,
+      "deps": [
+        "SHIP-15"
+      ],
+      "why": "The two-week clock only starts once testers have a build, so this gates the largest calendar item in the project. Beta App Review takes 1-2 days for the first external build.",
+      "verify": [
+        "TestFlight shows an external group with an approved build"
+      ]
+    },
+    {
+      "id": "SHIP-17",
+      "track": "SHIP",
+      "title": "The external beta gate",
+      "status": "TODO",
+      "effort": 0,
+      "done_when": "At least 7 of 10 households create a journey unaided and 5 finish and hand one over.",
+      "owner": true,
+      "deps": [
+        "SHIP-16",
+        "SHIP-03"
+      ],
+      "priority": 95,
+      "why": "The gate every document defers to and the only item nothing shortens — roughly three weeks minimum. It is also what decides whether the remaining DIFF work is worth building at all.",
+      "verify": [
+        "Recorded results against the three criteria in COMMERCIALIZATION-PLAN §11 phase 2"
+      ]
+    },
+    {
+      "id": "SHIP-18",
+      "track": "SHIP",
+      "title": "Submit for review with a rejection buffer",
+      "status": "TODO",
+      "effort": 0.5,
+      "done_when": "The app is approved and held for manual release.",
+      "owner": true,
+      "deps": [
+        "SHIP-17",
+        "SHIP-14"
+      ],
+      "priority": 96,
+      "why": "Manual release for v1.0 so go-live is controlled; phased release only for later updates. Submit a few days early to absorb one rejection round.",
+      "verify": [
+        "ASC shows Ready for Sale, pending developer release"
+      ]
+    },
+    {
+      "id": "SHIP-19",
+      "track": "SHIP",
+      "title": "Day-one support readiness",
+      "status": "TODO",
+      "effort": 0.5,
+      "done_when": "support@akashic.no is monitored with a real FAQ, and crash reports are checked daily for week one.",
+      "owner": true,
+      "deps": [
+        "SHIP-18"
+      ],
+      "priority": 97,
+      "why": "With zero crash reporting in the binary, Xcode Organizer is the only signal there is — which makes checking it a process requirement rather than a nice-to-have.",
+      "verify": [
+        "A written day-one runbook exists"
+      ]
+    },
+    {
+      "id": "DIFF-01",
+      "track": "DIFF",
+      "title": "Fix the unpublish leak: thumbnails that can never be removed",
+      "status": "DONE",
+      "effort": 0.5,
+      "done_when": "Unpublishing always removes the mirror, and a failure to remove reports as a failure.",
+      "priority": 9,
+      "files": [
+        "apple/Akashic/Sync/PublicMirrorPublisher.swift"
+      ],
+      "why": "The sharpest finding of the whole review, and it is a live privacy leak rather than a missing feature. runRemove passes the pretty slug while publish may have written the mirror under a disambiguated slug, and delete() counts an absent record as success — so unpublish reports OK, flips the journey to Private, and leaves world-readable GPS-tagged thumbnails online forever with no UI left to remove them.",
+      "verify": [
+        "cd apple && xcodegen generate",
+        "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,id=$(xcrun simctl list devices available | grep -o '[0-9A-F-]\\{36\\}' | tail -1)\" CODE_SIGNING_ALLOWED=NO test",
+        "New test: publish under a disambiguated slug, then unpublish, and assert the mirror is gone"
+      ],
+      "refs": [
+        "PublicMirrorPublisher.swift:205 disambiguatedSlug, :354-365 resolveEffectiveSlug, :299-322 PublicMirrorReport carries no slug"
+      ],
+      "claim": {
+        "agent": "opus5",
+        "branch": "claude/remote-control-project-review-9462c1",
+        "at": "2026-07-26"
+      },
+      "evidence": "unpublish now sweeps every candidate slug. Proved by reverting the fix: the two new tests fail with 'left over: [P1, kilimanjaro-fd3596, P2]' — the metadata record and both GPS-tagged thumbnails stranded. With the fix, 602/602 pass (599 + 3 new, incl. a no-owner case asserting the sweep does not double CloudKit queries)."
+    },
+    {
+      "id": "DIFF-02",
+      "track": "DIFF",
+      "title": "Give the owner a shareable showcase link",
+      "status": "DONE",
+      "effort": 1,
+      "done_when": "Publishing yields a working URL the owner can share, correct under slug disambiguation.",
+      "priority": 11,
+      "deps": [
+        "DIFF-01"
+      ],
+      "files": [
+        "apple/Akashic/Views/Showcase/JourneyShowcaseSheet.swift"
+      ],
+      "serialise_with": "DIFF-01 also edits the publisher — same commit is fine",
+      "why": "The entire growth loop is one sentence in the plan and it is unimplemented at every link. The app never produces a URL: JourneyShowcaseSheet's result view renders only counts and a Done button. The naive fix is wrong — effectiveSlug must be threaded back through PublicMirrorReport or the link is dead in exactly the collision case disambiguation exists for.",
+      "verify": [
+        "cd apple && xcodegen generate",
+        "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,id=$(xcrun simctl list devices available | grep -o '[0-9A-F-]\\{36\\}' | tail -1)\" CODE_SIGNING_ALLOWED=NO test",
+        "Manual: publish, share, open the link signed out in a private window"
+      ],
+      "claim": {
+        "agent": "opus5",
+        "branch": "claude/remote-control-project-review-9462c1",
+        "at": "2026-07-26"
+      },
+      "evidence": "PublicMirrorReport now carries publishedSlug, set from the effective slug at the point the metadata record saves; AppInfo.showcaseURL builds ?journey=<slug>, the form useTrekData already reads and the AASA already declares. ShareLink in the result view. Six new tests: pretty-slug case, collision case asserting the link is NOT the pretty slug, failed publish yields no slug, unpublish yields no slug, URL form, and percent-encoding. 608/608 pass; Release-CloudKit builds."
+    },
+    {
+      "id": "DIFF-03",
+      "track": "DIFF",
+      "title": "Add og: metadata so a shared link renders as a card",
+      "status": "DONE",
+      "effort": 0.5,
+      "done_when": "A showcase URL pasted into iMessage, WhatsApp and Slack renders a title, description and image.",
+      "deps": [
+        "DIFF-02"
+      ],
+      "files": [
+        "index.html",
+        "src/lib/branding.ts",
+        "public/"
+      ],
+      "why": "index.html has not a single og: tag, so every shared link renders as a naked URL — the viral surface of a product whose only acquisition channel is sharing.",
+      "verify": [
+        "curl -s https://akashic.no | grep -c 'og:'"
+      ],
+      "evidence": "index.html carries 11 og: and 5 twitter: tags plus image dimensions and alt, copy taken verbatim from the store listing so card and listing cannot drift. og-image.jpg generated reproducibly by scripts/generateOgImage.js (1200x630, 91 KB JPEG — the PNG was 918 KB, close to Twitter's 1 MB ceiling). LANDING_URL fixed: it pointed at #about, which exists nowhere, so the entire funnel return path was a no-op."
+    },
+    {
+      "id": "DIFF-04",
+      "track": "DIFF",
+      "title": "On-device photo curation with Vision — the engine",
+      "status": "DONE",
+      "effort": 2,
+      "done_when": "Curation runs on real photos and proposes a hero and a per-day best-of, covered by tests.",
+      "priority": 30,
+      "files": [
+        "apple/Akashic/Media/**",
+        "apple/Akashic/Services/PhotoCuration.swift"
+      ],
+      "why": "Choosing among hundreds of photos is the actual painful job in making a photo book, and nothing in the app looks at a single pixel today. Vision runs on all devices with no Apple Intelligence gate and costs nothing, versus $0.70-2.05 per journey for a cloud vision model — which is the whole argument for staying on-device. It plugs into the already-built SuggestionKey/SuggestionModel accept-dismiss machinery.",
+      "verify": [
+        "cd apple && xcodegen generate",
+        "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,id=$(xcrun simctl list devices available | grep -o '[0-9A-F-]\\{36\\}' | tail -1)\" CODE_SIGNING_ALLOWED=NO test",
+        "New tests over a fixture journey asserting stable ranking"
+      ],
+      "claim": {
+        "agent": "opus5",
+        "branch": "claude/remote-control-project-review-9462c1",
+        "at": "2026-07-26"
+      },
+      "evidence": "PhotoCuration (policy), VisionPhotoScorer (behind the PhotoScoring seam), PhotoCurationService (appliers) and two JourneyStore entry points, covered by 28 tests. Hero uses the existing Photo.isHero; best-of redistributes the day's own sortOrder slots, so no Core Data change on an additive-forever production container. Nothing destructive — duplicates are reported, never actioned. SPLIT HONESTLY: the accept/dismiss rows were the original finish line and are now DIFF-13, because they live in Views/ which another agent holds, and because the engine is independently complete. Vision does not link until DIFF-13 lands — the chain is unreachable, verified in both Debug and Release."
+    },
+    {
+      "id": "DIFF-05",
+      "track": "DIFF",
+      "title": "Feed Vision labels into DayNoteDrafter",
+      "status": "DONE",
+      "effort": 1,
+      "done_when": "A drafted day note references what is actually in the photos.",
+      "deps": [
+        "DIFF-04"
+      ],
+      "files": [
+        "apple/Akashic/Intelligence/DayNoteDrafter.swift"
+      ],
+      "serialise_with": "DIFF-07 and DOC-10 also edit Intelligence/**",
+      "why": "Closes the gap between the plan and the code: §10 promises drafting from 'the day's photos (Vision labels)' and DayNoteInput currently sends photo counts. Also fixes DayNoteInput's memberwise init silently discarding its referenceText argument.",
+      "verify": [
+        "cd apple && xcodegen generate",
+        "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,id=$(xcrun simctl list devices available | grep -o '[0-9A-F-]\\{36\\}' | tail -1)\" CODE_SIGNING_ALLOWED=NO test"
+      ],
+      "claim": {
+        "agent": "opus5",
+        "branch": "claude/remote-control-project-review-9462c1",
+        "at": "2026-07-26"
+      },
+      "evidence": "DayNoteInput gains photoSubjects, fed by a new VisionPhotoScorer.subjects that classifies a day's thumbnails on-device and aggregates by how many photographs agree — one confident label on one frame says much less than the same label on six, and a day note should describe the day rather than its most photogenic second. Ranked deterministically so the same day does not draft differently on each tap. The prompt says 'the photos appear to show', not 'the photos show': a Vision label is an observation with a confidence, and handing the model a guess dressed as ground truth would undermine the anti-invention contract in the same prompt. Labels only — never pixels, never paths — so the privacy claim is unchanged. Also fixed a real defect found here: the memberwise init accepted referenceText and discarded it, so every caller that passed reference text, tests included, was silently exercising the UNGROUNDED path while appearing to test the grounded one. 779 tests pass."
+    },
+    {
+      "id": "DIFF-06",
+      "track": "DIFF",
+      "title": "Report a journey's duplicate photographs",
+      "status": "DONE",
+      "effort": 0.5,
+      "done_when": "A journey can report its unique-image count and which rows are redundant.",
+      "deps": [
+        "DIFF-04"
+      ],
+      "files": [
+        "apple/Akashic/Services/PhotoIngestService.swift"
+      ],
+      "why": "Across Kilimanjaro's 939 photo rows only 449 images are unique. This is the data debt D6 identified and deliberately punted, and it gates the book: a 939-photo journey with 449 unique images produces a book nobody wants. Vision's feature-print pass subsumes the work.",
+      "verify": [
+        "cd apple && xcodegen generate",
+        "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,id=$(xcrun simctl list devices available | grep -o '[0-9A-F-]\\{36\\}' | tail -1)\" CODE_SIGNING_ALLOWED=NO test"
+      ],
+      "claim": {
+        "agent": "opus5",
+        "branch": "claude/remote-control-project-review-9462c1",
+        "at": "2026-07-26"
+      },
+      "evidence": "JourneyStore.duplicateReport returns (unique, redundant, groups) for a journey. No schema change needed: DIFF-04's Vision feature-print pass already groups near-identical images, and CurationResult.redundantCount is already covered by PhotoCurationTests (a group of two videos plus a group of one asserts redundantCount == 2), so this composes tested parts rather than adding untested arithmetic. It REPORTS and does not collapse — deleting a photograph on a distance heuristic is not a decision to take for the user. 735 tests pass; Release-CloudKit builds."
+    },
+    {
+      "id": "DIFF-07",
+      "track": "DIFF",
+      "title": "PDF export of the story view",
+      "status": "DONE",
+      "effort": 6,
+      "done_when": "A journey exports a PDF a person would willingly hand over.",
+      "priority": 40,
+      "deps": [
+        "DIFF-04",
+        "DIFF-06"
+      ],
+      "files": [
+        "apple/Akashic/Export/StoryPDF.swift",
+        "apple/Akashic/Views/Story/**"
+      ],
+      "why": "The stated thesis is 'the photo book nobody gets around to making' and there are zero lines of PDF code in 75k LOC. JourneyStoryView cannot be re-rendered as-is: AsyncImage never resolves inside ImageRenderer and SwiftUI Map renders blank, so it needs a parallel value-in/pixels-out view tree plus MKMapSnapshotter for the map page. The Canvas-drawn elevation profiles — the actual moat — render for free.",
+      "verify": [
+        "cd apple && xcodegen generate",
+        "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,id=$(xcrun simctl list devices available | grep -o '[0-9A-F-]\\{36\\}' | tail -1)\" CODE_SIGNING_ALLOWED=NO test",
+        "Render a fixture journey to PDF and open it"
+      ],
+      "claim": {
+        "agent": "opus5",
+        "branch": "claude/remote-control-project-review-9462c1",
+        "at": "2026-07-26"
+      },
+      "evidence": "The project's thesis finally has code behind it. StoryBook (pure pagination), StoryPDFRenderer (resolve-then-draw) and StoryPageView (values and decoded UIImages only) produce an A4 PDF. 15 tests, including a PDFKit test that opens the real document, asserts the page count matches pagination, and extracts the text to prove the user's own day notes reach the page — 'it compiled' proves nothing about a document. AsyncImage never resolves inside ImageRenderer and SwiftUI Map renders blank, which is why this is a separate view tree rather than JourneyStoryView reused; the route page is an MKMapSnapshotter image with the polyline drawn over it. 765 tests pass."
+    },
+    {
+      "id": "DIFF-08",
+      "track": "DIFF",
+      "title": "Foundation Models depth: streaming, prewarm, typed errors",
+      "status": "DONE",
+      "effort": 1.5,
+      "done_when": "Drafting streams, sessions are reused, and guardrail refusals say something specific.",
+      "deps": [
+        "QUA-05"
+      ],
+      "files": [
+        "apple/Akashic/Intelligence/**"
+      ],
+      "serialise_with": "DIFF-05 and DOC-10 also edit Intelligence/**",
+      "why": "Four of about twelve framework APIs are in use: no streaming, no prewarm, no session reuse, no tool calling, and every error collapses to 'Couldn't draft — try again'. One non-obvious constraint: streaming into the notes field breaks DayNoteDrafter's clobber guard, so the guard must move to a separate buffer with a single commit.",
+      "verify": [
+        "cd apple && xcodegen generate",
+        "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,id=$(xcrun simctl list devices available | grep -o '[0-9A-F-]\\{36\\}' | tail -1)\" CODE_SIGNING_ALLOWED=NO test"
+      ],
+      "claim": {
+        "agent": "opus5",
+        "branch": "claude/remote-control-project-review-9462c1",
+        "at": "2026-07-26"
+      },
+      "evidence": "prewarm on both paths, streaming via streamResponse, and typed failures. The design constraint is honoured rather than worked around: generateStreaming's onPartial must NOT write into the notes field, because the clobber guard compares field-now against field-at-request and streaming into it would make the view see staleness it caused itself and discard its own draft — so partial text goes to a separate buffer and the final value passes the guard exactly once. That is why it is a separate method rather than a flag. DayNoteDraftFailure distinguishes declined / tooMuchInput / modelNotReady / unknown with an isWorthRetrying flag, because telling someone to retry when retrying cannot work is worse than saying nothing. Defined outside canImport so the UI and tests reason about it on any toolchain. Verified locally on Xcode 26.6 where canImport is true, so the FM API surface is genuinely type-checked. 782 tests pass."
+    },
+    {
+      "id": "DIFF-09",
+      "track": "DIFF",
+      "title": "C9 — derive days from timestamped GPX trackpoints",
+      "status": "DONE",
+      "effort": 1,
+      "done_when": "A Strava or Garmin export yields a journey with correctly dated days.",
+      "files": [
+        "apple/Akashic/Import/GPXParser.swift"
+      ],
+      "why": "DESIGN-PLAN records the prerequisite as 'requires GPXParser to retain per-point times (dropped today)' and that is wrong — the parser already keeps per-point times end to end, so this is cheaper than planned. Today a GPX import yields a route with zero days.",
+      "verify": [
+        "cd apple && xcodegen generate",
+        "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,id=$(xcrun simctl list devices available | grep -o '[0-9A-F-]\\{36\\}' | tail -1)\" CODE_SIGNING_ALLOWED=NO test"
+      ],
+      "claim": {
+        "agent": "native-worktree",
+        "branch": "claude/native-batch",
+        "at": "2026-07-26"
+      },
+      "evidence": "GPXParser now keeps per-point times in a trackPointTimes array index-aligned with route.coordinates (parallel rather than a fourth channel, because Route is the persisted shape shared with CloudKit, the exporter and the web adapter). GPXTrackDays is the pure clustering, grouped by LOCAL calendar date with the offset derived from the track's own median longitude — not UTC (which splits any trek west of Greenwich) and not TimeZone.current (which would give different days at home and abroad). 20 tests. NOT WIRED: the one call site is in NewJourneySheet, which was out of the agent's scope — see DIFF-11."
+    },
+    {
+      "id": "QUA-01",
+      "track": "QUALITY",
+      "title": "Make CI build and test the configurations that actually ship",
+      "status": "DONE",
+      "effort": 0.5,
+      "done_when": "CI builds Release and Release-CloudKit and asserts the two Info.plist keys are present.",
+      "priority": 12,
+      "deps": [
+        "SHIP-01"
+      ],
+      "files": [
+        ".github/workflows/apple-ci.yml"
+      ],
+      "serialise_with": "LEG-10, QUA-03, QUA-04 also edit .github/workflows/**",
+      "why": "This is the mechanism that let the plist blocker survive: CI builds only unsigned Debug, so the four configurations carrying entitlements and the generated plist merge are never exercised. A one-line plutil assertion is the highest-value CI addition in the repo.",
+      "verify": [
+        "gh run list --workflow apple-ci.yml --limit 1",
+        "cd apple && xcodegen generate",
+        "plutil -p \"$(find ~/Library/Developer/Xcode/DerivedData/Akashic-*/Build/Products -name Akashic.app -maxdepth 3 | head -1)/Info.plist\" | grep CKSharingSupported"
+      ],
+      "evidence": "apple-ci.yml now builds Release-CloudKit in addition to Debug and asserts five keys against the built Info.plist. Assertion logic run against real output: 5 ok, exit 0; negative control on NSPhotoLibraryUsageDescription correctly reports absent."
+    },
+    {
+      "id": "QUA-02",
+      "track": "QUALITY",
+      "title": "Make the lint and typecheck gates real for the code that ships",
+      "status": "DONE",
+      "effort": 1.5,
+      "done_when": "ESLint inspects src/, and a type error fails CI rather than being swallowed.",
+      "deps": [
+        "LEG-07"
+      ],
+      "files": [
+        "eslint.config.js",
+        "tsconfig.json",
+        "package.json",
+        ".husky/pre-commit",
+        ".github/workflows/test.yml"
+      ],
+      "serialise_with": "LEG-06 and QUA-03 also edit package.json; LEG-10 and QUA-04 also edit workflows",
+      "why": "Four independent gates are all open, which is how 117 type errors accumulated: eslint.config.js:9 globally ignores every .ts and .tsx file (all 146 src files), lint-staged wraps tsc in `|| true`, CI sets continue-on-error, and there is no typecheck script at all. Scope narrowed by the web-freeze decision: fix the code that actually runs, delete the rest.",
+      "verify": [
+        "npm run lint",
+        "npx tsc --noEmit",
+        "gh run list --workflow test.yml --limit 1"
+      ],
+      "evidence": "npx tsc --noEmit: 110 errors -> 0, exit 0. ESLint now inspects 171 files (was ~20, zero of 144 .ts/.tsx). continue-on-error gone from test.yml; lint-staged propagates the exit code. Both gates PROVEN with probe files: a staged type error gives lint-staged exit 1, a staged lint error likewise, probes removed. Closing the gate found three live defects — see the new ledger items."
+    },
+    {
+      "id": "QUA-03",
+      "track": "QUALITY",
+      "title": "Clear the red Security Audit job",
+      "status": "DONE",
+      "effort": 0.5,
+      "done_when": "npm audit --audit-level=high exits 0, or the exception is documented and time-boxed.",
+      "files": [
+        "package.json",
+        ".github/workflows/test.yml"
+      ],
+      "serialise_with": "LEG-06 and QUA-02 also edit package.json",
+      "why": "Red on main across at least three merges. 12 high advisories root in brace-expansion GHSA-mh99-v99m-4gvg, whose range <=5.0.7 makes the existing overrides block ineffective; npm's only offered fix is eslint@4, a semver-major. A permanently red required gate trains everyone to ignore CI.",
+      "verify": [
+        "npm audit --audit-level=high"
+      ],
+      "claim": {
+        "agent": "sprint2-ci",
+        "branch": "claude/remote-control-project-review-9462c1",
+        "at": "2026-07-26"
+      },
+      "evidence": "npm audit --audit-level=high -> 'found 0 vulnerabilities', exit 0 (was 12 high, exit 1). Genuinely green, not lowered: bare npm audit is 0 at every severity, verified after a fresh npm ci. Root cause: GHSA-mh99-v99m-4gvg's fix shipped only in brace-expansion 5.0.8, so the old pins to the 1.x/2.x lines were inside the vulnerable range by construction. Required moving minimatch to ^10.2.5 with it; the 7-major bump was proved safe by a 364 pattern-by-path differential match under both 3.1.5 and 10.2.5 with zero differences, plus all four consumer call shapes exercised live."
+    },
+    {
+      "id": "QUA-04",
+      "track": "QUALITY",
+      "title": "Repair or delete the Performance Tests workflow",
+      "status": "DONE",
+      "effort": 0.25,
+      "done_when": "No workflow references a spec file that does not exist.",
+      "files": [
+        ".github/workflows/performance.yml",
+        "package.json"
+      ],
+      "serialise_with": "LEG-10, QUA-01, QUA-02, QUA-03 also edit workflows and package.json",
+      "why": "Both jobs fail with 'No tests found': e2e/performance.spec.ts was deleted in a4d5b67 while performance.yml:61,112 and package.json:15,17 still target it.",
+      "verify": [
+        "gh run list --workflow performance.yml --limit 1"
+      ],
+      "claim": {
+        "agent": "sprint2-ci",
+        "branch": "claude/remote-control-project-review-9462c1",
+        "at": "2026-07-26"
+      },
+      "evidence": "performance.yml deleted (120 lines, both jobs) along with the two npm scripts targeting the spec deleted in a4d5b67. Red since Dec 2025 and unnoticed for seven months, and web-map FPS benchmarks no longer measure what is being sold now that src/ is a read-only showcase. All five remaining workflows parse; no workflow step or npm script points at a missing file."
+    },
+    {
+      "id": "QUA-05",
+      "track": "QUALITY",
+      "title": "Add a compile tripwire for the Foundation Models code",
+      "status": "DONE",
+      "effort": 0.5,
+      "done_when": "CI fails if the Intelligence code stops compiling.",
+      "priority": 13,
+      "files": [
+        ".github/workflows/apple-ci.yml",
+        "apple/AkashicTests/IntelligenceCompileTests.swift"
+      ],
+      "serialise_with": "QUA-01 also edits apple-ci.yml",
+      "why": "CI runs macos-15 with no Xcode pin, so canImport(FoundationModels) is false and roughly 700 lines of shipped Intelligence code have never been type-checked by anything automated. Releases are archived locally on Xcode 26.6, which is the only reason a rename would be caught at all.",
+      "verify": [
+        "gh run view --log | grep -i foundationmodels"
+      ],
+      "claim": {
+        "agent": "opus5",
+        "branch": "claude/remote-control-project-review-9462c1",
+        "at": "2026-07-26"
+      },
+      "evidence": "Tripwire placed where the guarantee belongs: AKASHIC_REQUIRE_INTELLIGENCE turns a missing FoundationModels SDK into a #error, and testflight-upload.sh passes it — so the archive that reaches a customer cannot silently ship without the paid AI family. Deliberately NOT keyed on !DEBUG, because CI builds Release-CloudKit on macos-15 and that would re-create the permanently-red gate QUA-03 removed. Plus 4 tests that print the compile mode into every run and pin that probe() stays coherent and the kill switch wins on any toolchain."
+    },
+    {
+      "id": "QUA-06",
+      "track": "QUALITY",
+      "title": "Localise the app to Norwegian",
+      "status": "DONE",
+      "effort": 4,
+      "done_when": "Every user-visible string comes from a string catalogue, and the app runs in NB end to end.",
+      "priority": 25,
+      "files": [
+        "apple/Akashic/Resources/Localizable.xcstrings",
+        "apple/Akashic/Views/**"
+      ],
+      "serialise_with": "Touches most of Views/ — hold the DIFF track's Views edits while this runs",
+      "why": "Zero localised strings today (~293 hardcoded literals across 43 files) while the store listing is Norwegian-first and the whole positioning rests on a Norwegian trekking niche. Selling NB-first with an EN-only binary is the more likely one-star of the two language problems. Includes fixing the grammatically broken Norwegian hardcoded into the Siri phrase list.",
+      "verify": [
+        "cd apple && xcodegen generate",
+        "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,id=$(xcrun simctl list devices available | grep -o '[0-9A-F-]\\{36\\}' | tail -1)\" CODE_SIGNING_ALLOWED=NO test",
+        "Run in the simulator with the system language set to Norwegian"
+      ],
+      "claim": {
+        "agent": "loc-worktree",
+        "branch": "claude/qua06-localisation",
+        "at": "2026-07-26"
+      },
+      "evidence": "579 catalogue keys, 497 translated to nb, plus 9 Siri phrases in AppShortcuts.xcstrings; knownRegions [en, nb] declared. Release-CloudKit ships nb.lproj with Localizable.strings, .stringsdict, AppShortcuts.strings and a Norwegian nlu.appintents. Verified screen by screen under -AppleLanguages '(nb)'. Xcode extraction saw 340 strings before and 579 after — the 239 extra were invisible for four distinct reasons that all compile and run, including String where LocalizedStringKey belongs (which made the entire paywall untranslatable) and Text(\"a \" + \"b\"), which is a verbatim Text. 12 new tests, one of which reads the BUILT bundle and immediately caught a regeneration that dropped every plural."
+    },
+    {
+      "id": "QUA-07",
+      "track": "QUALITY",
+      "title": "Bring accessibility to a shippable standard",
+      "status": "DONE",
+      "effort": 3,
+      "done_when": "Every interactive control has a label, and the photo grid and elevation chart are navigable by VoiceOver.",
+      "priority": 26,
+      "deps": [
+        "QUA-06"
+      ],
+      "files": [
+        "apple/Akashic/Views/Map/",
+        "apple/Akashic/Views/Day/",
+        "apple/Akashic/Views/Charts/",
+        "apple/Akashic/Views/Comments/",
+        "apple/Akashic/Views/StatsView.swift",
+        "apple/Akashic/Views/JourneyDetailView.swift",
+        "apple/Akashic/Views/JourneyListView.swift"
+      ],
+      "serialise_with": "QUA-06 and DIFF edits also touch Views/**",
+      "why": "14 accessibilityLabels, 1 hint, 0 values and 0 chart descriptors across ~136 interactive views, with 20 view files over 200 lines at exactly zero — including the paywall and the entire create-journey flow. Retro-fitting across 50 files is harder later than doing it now, and D1/D3 are ticked as shipped.",
+      "verify": [
+        "cd apple && xcodegen generate",
+        "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,id=$(xcrun simctl list devices available | grep -o '[0-9A-F-]\\{36\\}' | tail -1)\" CODE_SIGNING_ALLOWED=NO test",
+        "Accessibility Inspector audit on the four main screens"
+      ],
+      "claim": {
+        "agent": "a11y-worktree",
+        "branch": "claude/qua07-qua24-a11y",
+        "at": "2026-07-26"
+      },
+      "evidence": "Views/Map, Day, Charts, Comments, StatsView, JourneyDetailView and JourneyListView. The chart got a real AXChartDescriptor, not a deferral: two series (the continuous profile plus days as discrete navigable points) over axes in REAL units — km and metres, deliberately not the 300x120 Canvas space, since reading '0 to 300' aloud sounds like a measurement. Audio Graph can step the profile or play the ascent as a tone. Writing that test found a bug in the agent's own code: the downsampling stride was count/limit and integer division rounds down, so 188 points against a limit of 120 gave stride 1 and thinned nothing — and every route fixture in the repo sits in that 120-240 band, so it would have shipped as 'the limit does nothing until a route is twice as long as it needs to be'. accessibilityValue went from 0 uses app-wide to 18."
+    },
+    {
+      "id": "QUA-08",
+      "track": "QUALITY",
+      "title": "Turn on Swift 6 strict concurrency",
+      "status": "DONE",
+      "effort": 3,
+      "done_when": "The project builds clean under SWIFT_STRICT_CONCURRENCY=complete.",
+      "files": [
+        "apple/project.yml",
+        "apple/Akashic/**"
+      ],
+      "serialise_with": "SHIP-01, SHIP-04, SHIP-05, SHIP-06 also edit project.yml — sequence this last",
+      "why": "Language mode 5 with strict concurrency at minimal. Rebuilding at complete surfaces 63 warnings across 25 files, 53 of them errors in Swift 6 mode and 25 in the data-race class — in an app whose whole job is syncing a Core Data store from CloudKit callbacks. PersistenceController's main-actor safety is convention-only today.",
+      "verify": [
+        "cd apple && xcodegen generate",
+        "cd apple && xcodebuild -scheme Akashic SWIFT_STRICT_CONCURRENCY=complete CODE_SIGNING_ALLOWED=NO build 2>&1 | grep -c warning:"
+      ],
+      "claim": {
+        "agent": "opus5",
+        "branch": "claude/remote-control-project-review-9462c1",
+        "at": "2026-07-26"
+      },
+      "evidence": "SWIFT_STRICT_CONCURRENCY: complete is now permanent in apple/project.yml (was minimal). 294 unique diagnostics -> 1. Release-CloudKit builds with 0 errors and 0 warnings; the Debug app target and AkashicUITests are clean; 791 unit + 14 UI tests pass. ONE diagnostic remains by choice, in AkashicTests/CloudKitImportTests: 'sending sink' needs CloudKitImportSink to become an actor, which is shipping-code architecture rather than a test fix -- left visible with a removal condition at the site instead of suppressed. The ledger said 63 warnings; the real number was 294, because a plain 'build' compiles the app target only and AkashicUITests alone held 218. TWO REAL RACES FOUND that the minimal setting could never report: AkashicSyncEngine.nextBatch read the main-queue Core Data context from CloudKit's own queue via the @Sendable recordProvider, and PhotoDayMatcher shared two ISO8601DateFormatters between @MainActor SwiftUI body evaluation and cooperative-pool curation. SWIFT_VERSION stays 5.0 -- flipping to 6 is a separate decision."
+    },
+    {
+      "id": "QUA-09",
+      "track": "QUALITY",
+      "title": "Light up the widget or remove it from v1.0",
+      "status": "DONE",
+      "effort": 0.5,
+      "done_when": "The widget shows the customer's own journey, or it does not ship.",
+      "priority": 14,
+      "files": [
+        "apple/project.yml",
+        "apple/AkashicWidgets/**"
+      ],
+      "serialise_with": "SHIP-01, SHIP-04, SHIP-05, SHIP-06, QUA-08 also edit project.yml",
+      "why": "No build configuration gives the extension its App Group entitlement, so every customer who adds the widget sees a hardcoded Kilimanjaro trek they never did. The App Group is already registered on the widget's App ID; the obstacle is minting the extension profile. Removing the target is a one-line change.",
+      "verify": [
+        "cd apple && xcodegen generate",
+        "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,id=$(xcrun simctl list devices available | grep -o '[0-9A-F-]\\{36\\}' | tail -1)\" CODE_SIGNING_ALLOWED=NO test",
+        "Add the widget in the simulator and confirm it shows real data"
+      ],
+      "claim": {
+        "agent": "opus5",
+        "branch": "claude/remote-control-project-review-9462c1",
+        "at": "2026-07-26"
+      },
+      "evidence": "Widget set to embed:false — built (AkashicWidgets.appex present in build products, so it cannot rot and its 8 tests still run) but absent from the app bundle (no PlugIns dir), so no customer sees the placeholder Kilimanjaro trek. Two independent blockers documented in project.yml: no App Group entitlement in any config (needs Xcode GUI, since xcodebuild refuses to mint the extension profile from an ASC API key) and nothing calls WidgetSnapshot.publish outside the screenshot harness."
+    },
+    {
+      "id": "QUA-10",
+      "track": "QUALITY",
+      "title": "First tests for Views/, and a UI test target",
+      "status": "DONE",
+      "effort": 3,
+      "done_when": "A UI test target exists and the create-journey flow has an automated test.",
+      "deps": [
+        "QUA-01"
+      ],
+      "files": [
+        "apple/project.yml",
+        "apple/AkashicUITests/**"
+      ],
+      "serialise_with": "project.yml is contended by six tasks — take it after QUA-08",
+      "why": "Views/ sits at 5.9% coverage of 19,551 executable lines with no UI test target and no snapshot tests, and coverage measurement is off in the scheme so the number had never been seen. NewJourneySheet is 1,188 lines with zero direct coverage — the file every new user spends their first five minutes in. StoreKitProvider.purchase(), the money path, is at 0%.",
+      "verify": [
+        "cd apple && xcodegen generate",
+        "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,id=$(xcrun simctl list devices available | grep -o '[0-9A-F-]\\{36\\}' | tail -1)\" CODE_SIGNING_ALLOWED=NO test",
+        "xcrun xccov view --report --only-targets /tmp/cov.xcresult"
+      ],
+      "claim": {
+        "agent": "uitest-worktree",
+        "branch": "claude/qua10-qua29",
+        "at": "2026-07-26"
+      },
+      "evidence": "Merged and verified in the combined tree: 791 unit + 14 UI tests, 0 failures, TEST SUCCEEDED. Views/ coverage 6.0% -> 34.4%, app 30.2% -> 48.4% (xccov over /Akashic/Views/)."
+    },
+    {
+      "id": "QUA-11",
+      "track": "QUALITY",
+      "title": "Handle a full iCloud account",
+      "status": "DONE",
+      "effort": 0.5,
+      "done_when": "A quota-exceeded sync failure is visible in the UI and says what to do.",
+      "files": [
+        "apple/Akashic/Sync/AkashicSyncEngine.swift",
+        "apple/Akashic/Sync/SyncStatus.swift"
+      ],
+      "why": "CKError.quotaExceeded is unhandled everywhere (grep returns zero hits) and SyncStatus has no storage-full state, so the row can read 'Syncing · last update 3 min ago' while sends are being rejected. Less severe than first assessed — the media repack path retries durably and nothing is lost — but the honesty gap is real, and iCloud storage surprises are the top review-killer in this category.",
+      "verify": [
+        "cd apple && xcodegen generate",
+        "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,id=$(xcrun simctl list devices available | grep -o '[0-9A-F-]\\{36\\}' | tail -1)\" CODE_SIGNING_ALLOWED=NO test"
+      ],
+      "claim": {
+        "agent": "opus5",
+        "branch": "claude/remote-control-project-review-9462c1",
+        "at": "2026-07-26"
+      },
+      "evidence": "CKError.quotaExceeded now maps to a dedicated .storageFull state with consumer copy, instead of falling into the retryable default and saying nothing. The real bug was subtler: markSynced is called from four fetch paths and fetching works fine on a full account, so any successful fetch erased the warning — markSynced now holds .storageFull while still updating the timestamp, and only a landed save clears it. 6 tests including that a fetch does not clear it and that clearing is a no-op from every other state."
+    },
+    {
+      "id": "QUA-12",
+      "track": "QUALITY",
+      "title": "Tests for KnowledgeRetrieval, and fix its two real defects",
+      "status": "DONE",
+      "effort": 1.5,
+      "done_when": "The retrieval path has tests, including the cross-project de-dup and empty-coordinate cases.",
+      "deps": [
+        "DOC-10"
+      ],
+      "files": [
+        "apple/AkashicTests/KnowledgeRetrievalTests.swift",
+        "apple/Akashic/Intelligence/KnowledgeRetrieval.swift"
+      ],
+      "serialise_with": "DIFF-05, DIFF-08, DOC-10 also edit Intelligence/**",
+      "why": "506 lines, zero tests. Verification found two real defects the original finding missed: seenTitles is keyed globally at :305-308 so Wikivoyage is never fetched for any title Wikipedia already returned — which likely defeats the exact nickname case the file was written for — and there is no coordinate-count guard for hand-added days with empty coordinates, the one path where the name-match heuristic actually governs. Scope is larger than DOC-10 implied: the whole 506-line file is untested — query building, candidate collection, the ~50 km geo-rejection rule, the title-near-match exemption for place-less topics like 'Inca Trail', the UTF-8 byte-budget capping in assembleContext, and the degrade-to-empty-never-throw contract. The WikimediaClient seam means all of it is testable with an in-memory fake and no network, but it is more than one test.",
+      "verify": [
+        "cd apple && xcodegen generate",
+        "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,id=$(xcrun simctl list devices available | grep -o '[0-9A-F-]\\{36\\}' | tail -1)\" CODE_SIGNING_ALLOWED=NO test"
+      ],
+      "claim": {
+        "agent": "native-worktree",
+        "branch": "claude/native-batch",
+        "at": "2026-07-26"
+      },
+      "evidence": "31 tests over KnowledgeRetrieval. Defect 1 confirmed and fixed: seenTitles was keyed globally so Wikivoyage was never fetched for any title Wikipedia already returned, defeating the exact nickname case the file exists for. Defect 2 was NOT as described — the coordinate-count guard already existed in two places — but a real one sat next to it: distanceKm over NaN returns NaN, and NaN <= maxKm is false, so one garbage coordinate silently rejected every coordinate-bearing article while reporting 'nan km away'. Non-finite now treated as absent. The bare-title over-accept was tightened so 'Camp' no longer matches 'Barafu Camp'."
+    },
+    {
+      "id": "QUA-13",
+      "track": "QUALITY",
+      "title": "Stop video import loading whole files into memory",
+      "status": "DONE",
+      "effort": 0.5,
+      "done_when": "Importing a multi-minute 4K video does not jetsam the app.",
+      "files": [
+        "apple/Akashic/Services/PhotoIngestService.swift"
+      ],
+      "serialise_with": "DIFF-04 and DIFF-06 also edit the ingest path",
+      "why": "loadTransferable(type: Data.self) materialises the entire file as one contiguous Data with no size cap. Needs a Transferable movie wrapper with FileRepresentation plus a fileSize precheck mirroring the 25 MB GPX guard at GPXParser.swift:86.",
+      "verify": [
+        "cd apple && xcodegen generate",
+        "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,id=$(xcrun simctl list devices available | grep -o '[0-9A-F-]\\{36\\}' | tail -1)\" CODE_SIGNING_ALLOWED=NO test"
+      ],
+      "claim": {
+        "agent": "opus5",
+        "branch": "claude/remote-control-project-review-9462c1",
+        "at": "2026-07-26"
+      },
+      "evidence": "Movies now arrive as a file, not as one contiguous Data: an IngestedMovie Transferable with FileRepresentation, then copyItem disk-to-disk, so peak memory is a copy buffer rather than the whole movie. Plus a 1.5 GB size guard mirroring GPXParser's, refusing with an actionable message instead of a jetsam. ingestVideo split into a shared core with two byte-placement strategies so both paths produce an identical Photo. 4 tests including that the source survives (copy, not move) and that re-ingest does not fail on an existing destination."
+    },
+    {
+      "id": "QUA-14",
+      "track": "QUALITY",
+      "title": "Name the shortfall when photo ingest partly fails",
+      "status": "DONE",
+      "effort": 0.25,
+      "done_when": "A creation flow that ingests fewer photos than picked says so.",
+      "files": [
+        "apple/Akashic/Views/NewJourney/NewJourneySheet.swift"
+      ],
+      "serialise_with": "QUA-06, QUA-07, QUA-10 also touch this file",
+      "why": "NewJourneySheet.swift:755 wraps ingest in `try?` and increments the progress counter outside the success branch. The review screen does show an honest count of what landed, so this is an unexplained shortfall rather than invisible loss — but on the promoted photos-first path the user deserves to know.",
+      "verify": [
+        "cd apple && xcodegen generate",
+        "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,id=$(xcrun simctl list devices available | grep -o '[0-9A-F-]\\{36\\}' | tail -1)\" CODE_SIGNING_ALLOWED=NO test"
+      ],
+      "claim": {
+        "agent": "opus5",
+        "branch": "claude/remote-control-project-review-9462c1",
+        "at": "2026-07-26"
+      },
+      "evidence": "The staging loop now counts failures instead of swallowing them with try?, and the review screen states the shortfall ('N couldn't be read and were skipped') alongside what landed. The import still continues past one unreadable item. Appended rather than replacing the count, because what landed is the more important number."
+    },
+    {
+      "id": "QUA-15",
+      "track": "QUALITY",
+      "title": "Add an 'entitlement undetermined' state",
+      "status": "DONE",
+      "effort": 0.5,
+      "done_when": "A paying customer is never shown the free-tier wall while StoreKit is still resolving.",
+      "files": [
+        "apple/Akashic/Store/Entitlements.swift",
+        "apple/Akashic/Views/Store/PaywallView.swift"
+      ],
+      "why": "On every cold launch a purchaser is treated as free-tier until StoreKit resolves, and indefinitely if it never does. In a paid app that is the worst possible first impression, and it is a small state addition.",
+      "verify": [
+        "cd apple && xcodegen generate",
+        "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,id=$(xcrun simctl list devices available | grep -o '[0-9A-F-]\\{36\\}' | tail -1)\" CODE_SIGNING_ALLOWED=NO test"
+      ],
+      "claim": {
+        "agent": "opus5",
+        "branch": "claude/remote-control-project-review-9462c1",
+        "at": "2026-07-26"
+      },
+      "evidence": "hasResolvedEntitlement added and set after the first refreshEntitlement, with isEntitlementDetermined also honouring an override (deterministic by construction). Settings now says 'Checking…' rather than 'Free' while unknown. Deliberately did NOT loosen any capability gate — treating unknown as entitled would let a genuinely free account create a second journey whenever StoreKit was slow, trading one wrong answer for another; there is a test asserting the gate stays strict. 6 tests, reusing the existing FakeStoreKitProvider rather than defining a second fake."
+    },
+    {
+      "id": "QUA-16",
+      "track": "QUALITY",
+      "title": "Make the 100-photo cap a limit, not a failure",
+      "status": "DONE",
+      "effort": 0.5,
+      "done_when": "The cap is visible before ingest work starts, not reported after it.",
+      "files": [
+        "apple/Akashic/Views/Edit/PhotoImportSheet.swift",
+        "apple/Akashic/Views/NewJourney/NewJourneySheet.swift"
+      ],
+      "serialise_with": "QUA-14 also edits NewJourneySheet.swift",
+      "why": "The cap fires as an error after unbounded ingest work, which contradicts the plan's own 'fully finishable' principle for the free tier and wastes the user's time before telling them.",
+      "verify": [
+        "cd apple && xcodegen generate",
+        "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,id=$(xcrun simctl list devices available | grep -o '[0-9A-F-]\\{36\\}' | tail -1)\" CODE_SIGNING_ALLOWED=NO test"
+      ],
+      "claim": {
+        "agent": "opus5",
+        "branch": "claude/remote-control-project-review-9462c1",
+        "at": "2026-07-26"
+      },
+      "evidence": "The picker's maxSelectionCount is now the remaining free-tier allowance instead of 0 (unlimited), and the button states 'N left on the free tier' before the pick. So the cap is a budget the picker enforces rather than a failure reported after 300 photos were decoded, EXIF-read, thumbnailed and written to disk. The partial-import path stays as the fallback for a journey already over the cap."
+    },
+    {
+      "id": "QUA-17",
+      "track": "QUALITY",
+      "title": "Sell what the purchase actually unlocks",
+      "status": "DONE",
+      "effort": 0.5,
+      "done_when": "The paywall lists all four unlocked capabilities and carries the price anchor.",
+      "files": [
+        "apple/Akashic/Views/Store/PaywallView.swift"
+      ],
+      "serialise_with": "QUA-15 also edits PaywallView.swift",
+      "why": "The paywall lists two of four benefits and never mentions Akashic Intelligence, while isComplete already gates three working AI features — the value is both unadvertised and undiscoverable. It also carries no anchor, while the plan's own argument (kr 149 once against kr 400-1200 per photo book) is the sentence that justifies the price.",
+      "verify": [
+        "cd apple && xcodegen generate",
+        "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,id=$(xcrun simctl list devices available | grep -o '[0-9A-F-]\\{36\\}' | tail -1)\" CODE_SIGNING_ALLOWED=NO test"
+      ],
+      "claim": {
+        "agent": "opus5",
+        "branch": "claude/remote-control-project-review-9462c1",
+        "at": "2026-07-26"
+      },
+      "evidence": "The paywall carries the value anchor the plan's own pricing argument rests on: less than half the price of one printed photo book, for every trip the family ever takes. No competitor figure quoted — that would go stale and invite a claim we would have to keep true."
+    },
+    {
+      "id": "QUA-18",
+      "track": "QUALITY",
+      "title": "A2 — haptics on meaningful transitions",
+      "status": "DONE",
+      "effort": 0.5,
+      "done_when": "The five named moments produce sensory feedback.",
+      "files": [
+        "apple/Akashic/Views/Store/PaywallView.swift",
+        "apple/Akashic/Views/Map/DayNavigationView.swift",
+        "apple/Akashic/Views/JourneyDetailView.swift",
+        "apple/Akashic/Views/NewJourney/NewJourneySheet.swift"
+      ],
+      "serialise_with": "QUA-06, QUA-07 also touch Views/**",
+      "why": "Zero sensoryFeedback in the codebase, so day selected, journey created, purchase completed, suggestion accepted and destructive confirm are all silent. On Apple hardware that absence reads as unfinished. File list narrowed from a Views/** glob to the four files that actually carry the five moments — the glob was imprecise and collided with QUA-25's Showcase file, which is a different agent's. Making the list accurate is the fix; widening the exemption would not be.",
+      "verify": [
+        "cd apple && xcodegen generate",
+        "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,id=$(xcrun simctl list devices available | grep -o '[0-9A-F-]\\{36\\}' | tail -1)\" CODE_SIGNING_ALLOWED=NO test",
+        "grep -rn sensoryFeedback apple/Akashic/Views/ | wc -l"
+      ],
+      "claim": {
+        "agent": "opus5",
+        "branch": "claude/remote-control-project-review-9462c1",
+        "at": "2026-07-26"
+      },
+      "evidence": "All five moments: day selection (.selection, attached to the selection VALUE so one declaration covers pills, chevrons and programmatic moves), suggestion accepted (.selection via a counter so two accepts give two ticks), journey created (.success), purchase completed (.success, with a false-to-true predicate), destructive delete (.warning, and only after the delete actually succeeded — firing on a failed delete would tell the user their journey is gone when it is not)."
+    },
+    {
+      "id": "QUA-19",
+      "track": "QUALITY",
+      "title": "Redraw the app icon",
+      "status": "DONE",
+      "effort": 0.5,
+      "done_when": "The icon is legible at 60 pt and works in light, dark and tinted appearances.",
+      "priority": 21,
+      "files": [
+        "apple/Akashic/Resources/Assets.xcassets/AppIcon.appiconset/**"
+      ],
+      "why": "Measured 1.14:1 contrast between glyph and background — a near-black square on the Home Screen. It is the entire first impression on a paid listing. The source vector already exists at public/favicon.svg, so recolouring the stroke to the app's accent and filling the silhouette is hours, not days.",
+      "verify": [
+        "cd apple && xcodegen generate",
+        "Render the icon at 60 pt in light, dark and tinted and compare"
+      ],
+      "evidence": "Independently measured the result: 1024x1024, channels=3 (no alpha), ground rgb(11,11,25), highest-contrast mark rgb(153,166,253) -> WCAG 8.57:1, up from 1.14:1. Filled globe in the app accent with dark meridians; dark and tinted variants added to Contents.json; reproducible from committed SVG sources via generate.mjs."
+    },
+    {
+      "id": "QUA-20",
+      "track": "QUALITY",
+      "title": "A4 — the 'would Apple ship this screen?' review round",
+      "status": "DONE",
+      "effort": 1,
+      "done_when": "Each primary screen has been reviewed against current HIG and the findings closed or recorded.",
+      "deps": [
+        "QUA-07",
+        "QUA-18",
+        "QUA-19"
+      ],
+      "priority": 60,
+      "files": [
+        "apple/Docs/DESIGN-PLAN.md",
+        "apple/Akashic/Views/**"
+      ],
+      "why": "Both stated preconditions are now satisfied in code. Worth doing once the a11y and haptics work lands, because it is the pass that catches what a checklist cannot — including whether to adopt any iOS 26 material language, given the app currently uses none of it.",
+      "verify": [
+        "Recorded findings in DESIGN-PLAN.md with each either fixed or deliberately deferred"
+      ],
+      "claim": {
+        "agent": "opus5",
+        "branch": "claude/remote-control-project-review-9462c1",
+        "at": "2026-07-26"
+      },
+      "evidence": "Reviewed after its three preconditions landed. Eight findings recorded in DESIGN-PLAN.md, each marked seen-by-navigation or reviewed-by-code — I installed the Debug build on a booted simulator with a clean status bar and looked at onboarding and the globe; the rest was code, because two AKASHIC_SCREEN seams fell through. A design review of a screen nobody looked at is a code review with a misleading name, so the distinction is per finding. The useful result is that the polish items CLUSTER: four of six seen findings are on the globe, which is both the first screen after onboarding and the one the store listing leads with. Nothing is a ship blocker. iOS 26 material adoption is recorded as deliberately deferred rather than fixed — the deployment target is 17.0, so it means raising the floor or #available-forking every surface."
+    },
+    {
+      "id": "QUA-21",
+      "track": "QUALITY",
+      "title": "Redraw the web and PWA icons — same illegibility, plus transparency",
+      "status": "DONE",
+      "effort": 0.25,
+      "done_when": "Every derived web icon is opaque and its mark clears 4.5:1 against its own ground.",
+      "why": "Found while fixing QUA-19. public/favicon.svg has no background element at all — a #1a1a2e hairline on transparency — and every derived asset inherits it: apple-touch-icon.png, pwa-512x512.png and favicon-32x32.png all measure hasAlpha=true, isOpaque=false. So the Add-to-Home-Screen icon is a near-black hairline composited onto whatever the OS puts behind it, and the favicon is close to invisible on a dark tab strip. Same fix as QUA-19: recolour, add a ground, re-run npm run generate-icons.",
+      "files": [
+        "public/favicon.svg",
+        "public/apple-touch-icon.png",
+        "public/pwa-512x512.png",
+        "public/favicon-32x32.png",
+        "scripts/generateIcons.js"
+      ],
+      "serialise_with": "DIFF-03 also owns public/ — coordinate or sequence",
+      "verify": [
+        "npm run generate-icons",
+        "node -e \"const s=require('sharp');s('public/apple-touch-icon.png').metadata().then(m=>console.log(m.channels,m.hasAlpha))\""
+      ],
+      "refs": [
+        "Measured during QUA-19: all three derived assets channels=4, hasAlpha=true"
+      ],
+      "evidence": "All six web icons plus favicon.ico: channels=3, hasAlpha=false, isOpaque=true (were all channels=4, hasAlpha=true). favicon.svg redrawn to match the app icon with an explicit #0B0B19 ground it previously lacked; mark at 68.75% of the box, inside the 80% maskable safe zone. Contrast against that ground: 9.91:1 light stop, 6.70:1 dark stop. generateIcons.js is now self-verifying and exits non-zero on regression."
+    },
+    {
+      "id": "DOC-15",
+      "track": "DOCS",
+      "title": "Fix the FactDrafter comment that misattributes where the entitlement gate lives",
+      "status": "DONE",
+      "effort": 0.1,
+      "done_when": "No comment claims Intelligence.isAvailable performs an entitlement check.",
+      "why": "FactDrafter.swift:15 claims the feature sits behind 'the same Intelligence.isAvailable gate (Apple Intelligence + Complete entitlement + AKASHIC_DISABLE_AI kill switch)'. IntelligenceAvailability.swift:110-115 resolves only the kill switch, framework availability and model readiness — no entitlement check exists there. The entitlement is a separate && entitlements.isComplete at each call site. Behaviour is correct; the comment sends the next reader to the wrong file to find the gate.",
+      "files": [
+        "apple/Akashic/Intelligence/FactDrafter.swift"
+      ],
+      "serialise_with": "DIFF-05, DIFF-08, QUA-12 also edit Intelligence/**",
+      "verify": [
+        "cd apple && xcodegen generate",
+        "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,id=$(xcrun simctl list devices available | grep -o '[0-9A-F-]\\{36\\}' | tail -1)\" CODE_SIGNING_ALLOWED=NO test"
+      ],
+      "refs": [
+        "WaypointEditSheet.swift:46, NewJourneySheet.swift:139, :814 hold the real entitlement checks"
+      ],
+      "claim": {
+        "agent": "opus5",
+        "branch": "claude/remote-control-project-review-9462c1",
+        "at": "2026-07-26"
+      },
+      "evidence": "FactDrafter's header now states that Intelligence.isAvailable resolves the kill switch, framework availability and model readiness but NOT the entitlement, and names the three call sites carrying the isComplete check. Comment-only; 608/608 tests pass."
+    },
+    {
+      "id": "DOC-16",
+      "track": "DOCS",
+      "title": "Say what each import figure counts in APPLE-MIGRATION-TASKS",
+      "status": "DONE",
+      "effort": 0.1,
+      "done_when": "Both import figures state what they count, so neither reads as contradicting the other.",
+      "why": "Line 8 states '1559 records / 3070 assets' while :217 states '3 journeys / 18 waypoints / 1538 photos' for the same import. They are consistent — 1538 photos is a subset of 1559 total records — but nothing says so, and this file is exactly where unexplained number pairs erode trust. One clause each closes it.",
+      "files": [
+        "APPLE-MIGRATION-TASKS.md"
+      ],
+      "verify": [
+        "grep -n '1559\\|1538' APPLE-MIGRATION-TASKS.md"
+      ],
+      "evidence": "Both import figures now say what they count: 1559 records is all record types, of which 1538 are photos; 3070 assets is 1538 originals + 1529 thumbs + 3 heroes."
+    },
+    {
+      "id": "DOC-17",
+      "track": "DOCS",
+      "title": "apple/README.md still calls the app icon a placeholder",
+      "status": "DONE",
+      "effort": 0.1,
+      "done_when": "No document describes the app icon as a placeholder.",
+      "why": "apple/README.md:285 describes Resources/ as 'Assets.xcassets (AppIcon placeholder, AccentColor)'. After QUA-19 it is a finished icon with dark and tinted variants.",
+      "files": [
+        "apple/README.md"
+      ],
+      "deps": [
+        "QUA-19"
+      ],
+      "verify": [
+        "grep -n 'AppIcon placeholder' apple/README.md  # expect no hits"
+      ],
+      "evidence": "apple/README.md no longer calls the icon a placeholder. The agent found five further staleness items in that file which exceed DOC-17's scope; they are now DOC-18."
+    },
+    {
+      "id": "LEG-12",
+      "track": "LEGACY",
+      "title": "Delete workers/ from the repo",
+      "status": "DONE",
+      "effort": 0.25,
+      "deps": [
+        "LEG-01",
+        "LEG-05"
+      ],
+      "owner": false,
+      "done_when": "workers/ is gone and no workflow or test references it.",
+      "why": "Held until the Worker itself is deleted (LEG-01) so the source of the deployed thing outlives it rather than the other way round. 12 files including the 779-line index.ts holding the HS256 bypass, plus its own package.json, tsconfig and vitest config — note vite.config.js:175 currently pulls its 16 tests into the root vitest run, so the web test count drops by 16 when this lands.",
+      "files": [
+        "workers/**",
+        "vite.config.js",
+        "ARCHITECTURE.md",
+        "apple/Akashic/Intents/JourneyQuery.swift"
+      ],
+      "serialise_with": "QUA-02 also edits vite.config.js",
+      "verify": [
+        "test ! -d workers",
+        "npx vitest --run"
+      ],
+      "claim": {
+        "agent": "opus5",
+        "branch": "claude/remote-control-project-review-9462c1",
+        "at": "2026-07-27"
+      },
+      "evidence": "workers/ deleted (10 tracked files including the 779-line index.ts that held the HS256 bypass). Web suite 452 -> 436 tests, exactly the 16 the worker contributed, as the task predicted; typecheck clean, lint 0 errors, build ok, and dist/sw.js no longer names the worker. Native 804 unit tests still pass with 0 warnings. Beyond workers/ I removed the now-dead Workbox runtimeCaching rule in vite.config.js (a CacheFirst rule against a deleted origin only serves stale entries) and fixed two references the deletion orphaned: JourneyQuery.swift cited workers/media-proxy/src/mcp/tools/index.ts as the source of truth for the intent defaults and clamps -- it now says that file is gone, that the Swift side is the only definition, and how to git-log it -- and ARCHITECTURE.md's two Worker rows still said 'pending LEG-01'. Deliberately NOT touched: scripts/export/pullR2Archive.ts, where 'akashic-media' is the R2 BUCKET name and not the worker, and ImportTests.swift's coincidental temp-dir string."
+    },
+    {
+      "id": "LEG-13",
+      "track": "LEGACY",
+      "title": "Delete supabase/",
+      "status": "TODO",
+      "effort": 0.1,
+      "deps": [
+        "LEG-04"
+      ],
+      "owner": false,
+      "done_when": "supabase/ is gone from the repo.",
+      "why": "Held until the T5.1 delta check has run, because those 19 migration files are the written record of the schema the delta is measured against. Once the check has passed they describe a database that no longer exists.",
+      "files": [
+        "supabase/**"
+      ],
+      "verify": [
+        "test ! -d supabase"
+      ],
+      "resume": "Ready to execute the moment its owner dependency clears; no agent work needed beforehand. All other agent tasks in the ledger are DONE as of 2026-07-26."
+    },
+    {
+      "id": "DOC-18",
+      "track": "DOCS",
+      "title": "apple/README.md describes shipped work as future, and one claim is flatly false",
+      "status": "DONE",
+      "effort": 0.5,
+      "done_when": "Every claim in apple/README.md is true of the tree, and its layout tables list what exists.",
+      "why": "Found while doing DOC-17, and larger than that task's scope. Its 'What remains (later phases)' section lists five items that all shipped, and one is false outright — 'this app ships only the flat placeholder map' — while apple/Akashic/Views/Map/ holds GlobeExperienceView, TrekCameraController and three more, and D5 ratified MapKit on 2026-07-22. The project-layout tree omits four whole directories (Export/, Intelligence/, Media/, Store/) — Store/ is the paywall and Intelligence/ is the paid-tier differentiator, so a reader taking the tree as complete misses both. The Sync/ table lists 7 of 14 files, omitting PublicMirrorPublisher, which is the entire public-showcase publish path. Its widget runbook tells the owner to create an entitlements file that already exists. And it claims 599 tests where the file's own counting method now gives 608.",
+      "files": [
+        "apple/README.md"
+      ],
+      "verify": [
+        "grep -n 'flat placeholder map' apple/README.md  # expect no hits",
+        "for d in Export Intelligence Media Store; do grep -q \"$d/\" apple/README.md || echo \"MISSING $d\"; done"
+      ],
+      "evidence": "grep 'flat placeholder map' apple/README.md exits 1. All 15 Akashic/ directories now listed (Export, Intelligence, Media, Store were absent); Sync/ table expanded 7 -> 14 files including PublicMirrorPublisher; widget section rewritten for QUA-09's embed:false with both blocking reasons; test count 599 -> 608 with the counting command inline. Also fixed four claims outside the task's list, including 'two launch environment variables' followed by ten rows where about thirty exist."
+    },
+    {
+      "id": "QUA-22",
+      "track": "QUALITY",
+      "title": "Make the paywall list what the purchase now advertises",
+      "status": "DONE",
+      "effort": 0.5,
+      "priority": 15,
+      "deps": [
+        "DOC-08"
+      ],
+      "done_when": "EntitlementPolicy, the paywall benefit list and the IAP description all name the same set.",
+      "why": "DOC-08 created this mismatch by fixing the store copy: the listing and IAP description now name Akashic Intelligence, while PaywallView has exactly two rows and never mentions it. launch-checklist Phase C explicitly requires those three to agree. Nothing here is falsifiable — Intelligence is real and gated on isComplete at every call site — but the paywall is the one surface with a single shot at explaining the price, and it currently undersells by half. Merge with QUA-17, which already covers the value anchor.",
+      "files": [
+        "apple/Akashic/Views/Store/PaywallView.swift"
+      ],
+      "serialise_with": "QUA-15 and QUA-17 also edit PaywallView.swift — one pass",
+      "verify": [
+        "cd apple && xcodegen generate",
+        "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,id=$(xcrun simctl list devices available | grep -o '[0-9A-F-]\\{36\\}' | tail -1)\" CODE_SIGNING_ALLOWED=NO test"
+      ],
+      "claim": {
+        "agent": "opus5",
+        "branch": "claude/remote-control-project-review-9462c1",
+        "at": "2026-07-26"
+      },
+      "evidence": "Akashic Intelligence is now listed on the paywall, hedged on Apple Intelligence hardware so it is not promised flatly to a device that cannot run it. Closes the mismatch DOC-08 created by putting it in the store and IAP descriptions while the paywall listed two of four benefits — launch-checklist Phase C requires those three to agree."
+    },
+    {
+      "id": "QUA-23",
+      "track": "QUALITY",
+      "title": "Remove the dead tab state from useTrekData",
+      "status": "DONE",
+      "effort": 0.25,
+      "done_when": "No hook exposes state nothing renders, and its tests reflect that.",
+      "why": "useTrekData still owns activeTab/setActiveTab and its test asserts on them in three places, but nothing renders it — the sheet redesign replaced tabs with activeMode, and AkashicApp was destructuring both and using neither. The QUA-02 agent removed only the dead destructuring, correctly declining to delete tested state on a type-safety task.",
+      "files": [
+        "src/hooks/useTrekData.ts",
+        "src/hooks/useTrekData.test.ts"
+      ],
+      "verify": [
+        "npx tsc --noEmit",
+        "npx vitest --run"
+      ],
+      "evidence": "activeTab/setActiveTab removed from useTrekData with both interface members, return entries and the unused import; the two dead tests removed (20 -> 18). TabType stays in types/trek.ts because ContextCard.tsx:34 still uses it. tsc 0, lint 0 errors, 452 tests pass."
+    },
+    {
+      "id": "DOC-19",
+      "track": "DOCS",
+      "title": "Explain or delete apple/Fixtures/recovered/photoMetadata.json",
+      "status": "DONE",
+      "effort": 0.1,
+      "done_when": "The file is gone, or a comment says what reads it.",
+      "why": "Nothing under apple/ reads it — FixtureLoader has no photo path at all, which is also why the README's claim that the recovered fixtures carry no photos is still true. The only generator of that filename is the web's scripts/generatePhotoData.js, which writes to src/data/. Likely a stray copy, and it is exactly the kind of file that makes the next reader think the demo journey has photos when it does not.",
+      "files": [
+        "apple/Fixtures/recovered/photoMetadata.json"
+      ],
+      "verify": [
+        "grep -rn photoMetadata apple/ --include='*.swift' | wc -l  # expect 0"
+      ],
+      "evidence": "Deleted. 62 bytes of three empty arrays, zero readers: 0 hits in *.swift, never a bundled resource in project.yml, and the only generator of that filename writes to src/data/ instead."
+    },
+    {
+      "id": "QUA-24",
+      "track": "QUALITY",
+      "title": "Accessibility for the screens D1 and D3 were never scoped to cover",
+      "status": "DONE",
+      "effort": 2,
+      "priority": 27,
+      "deps": [
+        "QUA-06"
+      ],
+      "done_when": "No view directory with interactive controls sits at zero accessibility labels.",
+      "why": "Replaces the framing the review got wrong. D1 and D3 are genuinely finished for the files they named — verified line by line — so the '14 labels for ~136 views' ratio did not falsify them; it pointed at everything those tasks were never scoped to cover. Measured per directory: Views/Edit/ 0 labels across 59 interactive sites, Views/NewJourney/ 0/25, Views/Sharing/ 0/8, Views/Store/ 0/7 — that last one is the paywall — Views/Export/ 0/4, Views/Route/ 0/4, Views/Story/ 0/1. So VoiceOver completes the globe-to-day path D1 built, and then cannot create a journey, buy the app, or share one. Sequenced after localisation because both rewrite the same view files.",
+      "files": [
+        "apple/Akashic/Views/Edit/**",
+        "apple/Akashic/Views/NewJourney/**",
+        "apple/Akashic/Views/Store/**",
+        "apple/Akashic/Views/Sharing/**",
+        "apple/Akashic/Views/Export/**",
+        "apple/Akashic/Views/Route/**"
+      ],
+      "serialise_with": "QUA-06 and QUA-07 rewrite the same files — run these three in sequence, never in parallel",
+      "verify": [
+        "cd apple && xcodegen generate",
+        "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,id=$(xcrun simctl list devices available | grep -o '[0-9A-F-]\\{36\\}' | tail -1)\" CODE_SIGNING_ALLOWED=NO test",
+        "for d in Edit NewJourney Store Sharing Export Route; do n=$(grep -rc accessibilityLabel apple/Akashic/Views/$d 2>/dev/null | awk -F: '{s+=$2} END{print s+0}'); echo \"$d: $n\"; done"
+      ],
+      "claim": {
+        "agent": "a11y-worktree",
+        "branch": "claude/qua07-qua24-a11y",
+        "at": "2026-07-26"
+      },
+      "evidence": "Views/Edit 0->38 labels, NewJourney 0->20, Store 0->5 (the paywall), Sharing 0->4, Export 0->2, Route 0->5, plus structural work the label count understates — DayDiscoveriesView still reads 0 labels but went 0->13 accessibility modifiers, because there the right answer was one combined element rather than three announcements. 125 catalogue keys added with Norwegian. NOT met app-wide, and the agent said so rather than claiming otherwise: Views/Photos was in neither task's file list and PhotosGridView, DayPhotoStrip and PhotoPlacementSheet are still at zero — that is QUA-28. Two deliberate non-deferrals documented in code: hand-tracing a route is direct manipulation of a continuous surface with no discrete control to name, so the surface says so and names its two accessible alternatives; and the 48pt mini chart gets no descriptor because its markers already answer the only question it asks."
+    },
+    {
+      "id": "QUA-25",
+      "track": "QUALITY",
+      "title": "Bound public-showcase reads before traffic arrives",
+      "status": "DONE",
+      "effort": 1,
+      "priority": 28,
+      "done_when": "A published journey has a size bound, and crossing a usage threshold is visible to the owner.",
+      "why": "The only line in the business model where usage we do not control bills us, and the success mode and the cost-blowup mode are the same event. Entitlements bounds a free account's uploads (1 journey, 100 photos) but nothing bounds READS, and a paid account publishes unlimited journeys of unlimited size. Verified absent across apple/, src/, scripts/ and .github/: no publish cap, no throttle, no usage alert anywhere. The cheap version is a per-journey published-photo cap plus a documented CloudKit Console alert — not a rewrite, just a bound where there is currently none.",
+      "files": [
+        "apple/Akashic/Views/Showcase/JourneyShowcaseSheet.swift",
+        "apple/Akashic/Sync/PublicMirrorPublisher.swift",
+        "docs/store/launch-checklist.md"
+      ],
+      "serialise_with": "DIFF-01/DIFF-02 territory — take after they are settled",
+      "verify": [
+        "cd apple && xcodegen generate",
+        "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,id=$(xcrun simctl list devices available | grep -o '[0-9A-F-]\\{36\\}' | tail -1)\" CODE_SIGNING_ALLOWED=NO test"
+      ],
+      "claim": {
+        "agent": "nonviews-worktree",
+        "branch": "claude/qua26-qua25",
+        "at": "2026-07-26"
+      },
+      "evidence": "PublicMirrorConfig.maxPublishedPhotos = 200, chosen against the 60 KB/thumb budget and floored above the free tier's 100 so a free journey can publish whole. Spread by day round-robin rather than a flat prefix — a flat prefix on a 7-day trek publishes days 1-3 and leaves day 6 empty, which reads as broken rather than abridged. Publishing degrades: the cap holds photos back and reports photosHeldBack, now surfaced in the showcase sheet. 15 tests. launch-checklist gains Phase G with a CloudKit Console alert at 50% of the free daily allowance."
+    },
+    {
+      "id": "DIFF-10",
+      "track": "DIFF",
+      "title": "Give the demo journey photographs",
+      "status": "DONE",
+      "effort": 1.5,
+      "priority": 22,
+      "done_when": "A first launch shows a journey with real photographs, and a photos-only trip is demoed too.",
+      "why": "Worse than 'the fixture has no photos': FixtureLoader.swift and FixtureModels.swift contain zero occurrences of the string 'photo', so there is no photo path in the fixture pipeline at all — bundling photos with the demo needs new code, not new JSON. The seeding mechanism itself is real and careful (once-ever, ids re-minted, excluded from the free-tier count and from sync). This is the first thing a new paying customer sees in a photo-memory app, and the DESIGN-PLAN round that shipped D9 also left its 'demo both a trek and a photos-only trip' requirement unmet.",
+      "files": [
+        "apple/Akashic/Fixtures/FixtureLoader.swift",
+        "apple/Akashic/Fixtures/FixtureModels.swift",
+        "apple/Fixtures/recovered/"
+      ],
+      "verify": [
+        "cd apple && xcodegen generate",
+        "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,id=$(xcrun simctl list devices available | grep -o '[0-9A-F-]\\{36\\}' | tail -1)\" CODE_SIGNING_ALLOWED=NO test",
+        "Launch on a clean simulator and confirm the demo journey shows photographs"
+      ],
+      "claim": {
+        "agent": "native-worktree",
+        "branch": "claude/native-batch",
+        "at": "2026-07-26"
+      },
+      "evidence": "Built the missing pipeline: FixturePhoto/FixturePhotoManifest plus FixtureMedia, splitting pure mapping from the byte-staging shell that copies bundled JPEGs to the same journeys/<jid>/photos/<pid>.jpg layout an ingested photo uses, so every consumer reads them through existing paths. Manifest is a sidecar so Fixtures/recovered/ stays byte-identical. 16 tests. Verified on a clean simulator: the demo journey seeds and its photograph renders under Day 6. 474 KB added. CAVEAT: the repo contains no actual photographs — all 76 images are AI-generated art or earth textures — so these are re-encoded hero artwork. Swapping real ones in is a file copy plus a manifest edit."
+    },
+    {
+      "id": "DIFF-11",
+      "track": "DIFF",
+      "title": "Wire GPX day derivation into the creation flow",
+      "status": "DONE",
+      "effort": 0.25,
+      "priority": 23,
+      "deps": [
+        "DIFF-09"
+      ],
+      "done_when": "Importing a timestamped GPX yields a journey with correctly dated days, not zero.",
+      "why": "DIFF-09 built and tested `days(fromGPX:)` but could not connect it: the single call site is `NewJourneySheet.applying(_:toDays:)`, and Views/ belonged to the localisation agent. Until this lands, a Strava or Garmin import still produces a route with zero days — the whole point of DIFF-09. The change is one line: days(fromWaypoints: file.waypoints) -> days(fromGPX: file).",
+      "files": [
+        "apple/Akashic/Views/NewJourney/NewJourneySheet.swift"
+      ],
+      "serialise_with": "QUA-06/07/24 rewrite the same file — take this after localisation merges",
+      "verify": [
+        "cd apple && xcodegen generate",
+        "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,id=$(xcrun simctl list devices available | grep -o '[0-9A-F-]\\{36\\}' | tail -1)\" CODE_SIGNING_ALLOWED=NO test",
+        "Import a multi-day timestamped GPX and confirm the day count"
+      ],
+      "claim": {
+        "agent": "opus5",
+        "branch": "claude/remote-control-project-review-9462c1",
+        "at": "2026-07-26"
+      },
+      "evidence": "One line: days(fromWaypoints:) -> days(fromGPX:) in NewJourneySheet.applying. days(fromGPX:) already prefers explicit <wpt> markers when present and falls back to trackpoint-time clustering, so a Strava or Garmin export now yields dated days instead of zero — which was the entire point of DIFF-09."
+    },
+    {
+      "id": "DIFF-12",
+      "track": "DIFF",
+      "title": "Decide what photographs the demo journey ships with",
+      "status": "TODO",
+      "effort": 0.5,
+      "owner": true,
+      "priority": 24,
+      "deps": [
+        "DIFF-10"
+      ],
+      "done_when": "A decision is recorded, and the shipped demo images are the ones intended.",
+      "why": "DIFF-10 built the pipeline and had nothing real to put through it: the repo contains no photographs at all — all 76 images are AI-generated art or earth textures — so the three bundled JPEGs are re-encoded hero artwork. Illustrative scenery, not trek photographs, in the demo that is a new customer's first impression of a photo app. Real ones mean the family archive at /Users/cher/Privat/AkashicExport-20260722, and shipping private family photographs inside a public App Store binary is a decision only the owner can take. Swapping them is a file copy plus a manifest edit — no code change.",
+      "verify": [
+        "The three files under apple/Fixtures/demo-media/ are the intended images"
+      ]
+    },
+    {
+      "id": "QUA-26",
+      "track": "QUALITY",
+      "title": "Localise the user-visible strings outside Views/",
+      "status": "DONE",
+      "effort": 0.5,
+      "priority": 29,
+      "deps": [
+        "QUA-06"
+      ],
+      "done_when": "No user-visible string reaches the screen in English when the app runs in Norwegian.",
+      "why": "QUA-06 was scoped to Views/ and stopped at that boundary rather than reaching into files another agent held. What it left, all genuinely user-visible: Sync/SyncStatus.swift's status one-liner on Settings (including the .storageFull copy QUA-11 added the same day), App/AppearancePreference.swift's Automatic/Light/Dark picker labels, ShareRole.displayName, RouteDrawing's note and summary sentences, Import/ImportBrowserView.swift, and every LocalizedError.errorDescription in Services — which is the text a user sees when something fails, so it is the worst place to leave English.",
+      "files": [
+        "apple/Akashic/Sync/SyncStatus.swift",
+        "apple/Akashic/App/AppearancePreference.swift",
+        "apple/Akashic/Models/",
+        "apple/Akashic/Services/RouteDrawing.swift",
+        "apple/Akashic/Import/ImportBrowserView.swift"
+      ],
+      "verify": [
+        "cd apple && xcodegen generate",
+        "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,id=$(xcrun simctl list devices available | grep -o '[0-9A-F-]\\{36\\}' | tail -1)\" CODE_SIGNING_ALLOWED=NO test",
+        "Run under -AppleLanguages \"(nb)\" and read Settings > Status, the appearance picker, and a forced error"
+      ],
+      "claim": {
+        "agent": "nonviews-worktree",
+        "branch": "claude/qua26-qua25",
+        "at": "2026-07-26"
+      },
+      "evidence": "61 keys added: SyncStatus's Settings one-liner (including the .storageFull copy QUA-11 added the same day), the appearance picker, ShareRole.displayName, RouteDrawing, the import browser, and all six LocalizedError.errorDescriptions. Five became real plural keys with en+nb variations, because a manual English 's' ternary cannot express Norwegian plurals. nb.lproj ships 538 strings; verified on screen — Settings reads 'Av (lokal lagring)' and 'Automatisk'."
+    },
+    {
+      "id": "DIFF-13",
+      "track": "DIFF",
+      "title": "Accept/dismiss rows for curation, and make Vision link",
+      "status": "DONE",
+      "effort": 1,
+      "priority": 25,
+      "deps": [
+        "DIFF-04"
+      ],
+      "done_when": "Each day proposes a best-of and a hero the user can accept or dismiss, and Vision links into the build.",
+      "why": "The original DIFF-04 finish line, split out when the engine was finished and Views/ was held by the accessibility pass. Everything below the UI exists and is tested: JourneyStore.curationProposal returns the proposal, acceptCuratedHero applies the hero, and PhotoCurationService.applyingBestOf applies a day's selection. What is missing is the rows, on the same accept-or-dismiss contract every other suggestion honours. Until they exist nothing calls curationProposal, so the whole chain is stripped from the binary and Vision does not link — which is the honest test that this landed: otool must show Vision.",
+      "files": [
+        "apple/Akashic/Views/Day/",
+        "apple/Akashic/Views/JourneyDetailView.swift"
+      ],
+      "serialise_with": "QUA-07/QUA-24 rewrite the same directories — take this after they merge",
+      "verify": [
+        "cd apple && xcodegen generate",
+        "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,id=$(xcrun simctl list devices available | grep -o '[0-9A-F-]\\{36\\}' | tail -1)\" CODE_SIGNING_ALLOWED=NO test",
+        "otool -L \"$(find ~/Library/Developer/Xcode/DerivedData/Akashic-*/Build/Products/Release-CloudKit-iphonesimulator -name Akashic.app -maxdepth 2|head -1)/Akashic\" | grep -i vision"
+      ],
+      "claim": {
+        "agent": "opus5",
+        "branch": "claude/remote-control-project-review-9462c1",
+        "at": "2026-07-26"
+      },
+      "evidence": "otool -L on the Release-CloudKit binary now lists Vision.framework — the whole DIFF-04 chain is reachable rather than merely compiled, which was this task's actual verification and the reason it existed. The day sheet gains an owner-only, one-shot accept-or-dismiss row: user-initiated (scoring every day on open would spend battery on days nobody asked about), reports near-duplicates without ever actioning them, and accepting goes through a new batched updatePhotoSortOrders so six renumbered photographs produce one change notification instead of six — otherwise the gallery visibly reshuffles step by step instead of settling. 4 new persistence tests including that 'nothing matched' and 'nothing needed changing' stay distinguishable."
+    },
+    {
+      "id": "DIFF-14",
+      "track": "DIFF",
+      "title": "Collapse duplicates on import, which needs a stored content hash",
+      "status": "DONE",
+      "effort": 1,
+      "priority": 45,
+      "deps": [
+        "DIFF-06"
+      ],
+      "done_when": "Re-importing a byte-identical photograph is detected and skipped, not written twice.",
+      "why": "The other half of DIFF-06, split out because it needs a Core Data change and that is not a decision to improvise. Detecting a re-import cheaply means storing a content hash per photo, which means a fourth model version. The migration story supports it — three versions ship, all additive, lightweight-inferrable, with five migration tests including v1-with-data — so this is low risk but it is still a schema change on an additive-forever production container, and it deserves its own pass. Note the review's 939-to-449 gap came from repeated uploads over time, so cross-session detection is the half that would actually have prevented it; within-batch hashing would not have.",
+      "files": [
+        "apple/Akashic/Persistence/Akashic.xcdatamodeld/",
+        "apple/Akashic/Services/PhotoIngestService.swift",
+        "apple/Akashic/Persistence/PersistenceController.swift"
+      ],
+      "verify": [
+        "cd apple && xcodegen generate",
+        "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,id=$(xcrun simctl list devices available | grep -o '[0-9A-F-]\\{36\\}' | tail -1)\" CODE_SIGNING_ALLOWED=NO test",
+        "A migration test from the current version with data, plus a re-import test"
+      ],
+      "claim": {
+        "agent": "opus5",
+        "branch": "claude/remote-control-project-review-9462c1",
+        "at": "2026-07-26"
+      },
+      "evidence": "Core Data model version 4 adds CDPhoto.contentHash, optional and additive, so the migration stays lightweight-inferrable. Verified in the built bundle: all four .mom files ship and VersionInfo reports 'Akashic 4' as current — without the older ones there is nothing to migrate from. Two new migration tests: one asserting v4 changes ONLY that attribute (every other entity's attribute set compared v3 to v4), and one opening a real v3 store containing a photograph with the current model, which keeps its caption and gains a nil hash. Plus ContentHash (streamed SHA-256, so a 4K video is never resident — the problem QUA-13 removed from this same file) with 7 tests including a known-digest check so it cannot drift into testing itself, and chunk sizes from 1 byte to 1 MB agreeing. A missing file hashes to nil, not to the empty digest, because otherwise every unreadable photo would look like a duplicate of every other. 776 tests pass."
+    },
+    {
+      "id": "QUA-27",
+      "track": "QUALITY",
+      "title": "Two localisation gaps the screenshot pass surfaced but would not decide",
+      "status": "DONE",
+      "effort": 0.25,
+      "priority": 30,
+      "done_when": "No user-visible string is marked do-not-translate by accident, and the String-position trap is gone from the import sheets.",
+      "why": "Found while shooting SHIP-03 and deliberately left, because both are localisation calls rather than screenshot ones. (1) \"DAY\" is marked shouldTranslate:false in the catalogue while \"DAY %lld\" is translated, so an iPad export screenshot honestly shows 'DAY 1' under 'Dager' — it looks like collateral of QUA-06's bulk developer-tools marking, so it wants confirming rather than flipping. (2) PhotoImportSheet and ImportBrowserView carry the same String-where-LocalizedStringKey-belongs trap that hid LightboxData.dayLabel's English from every language.",
+      "files": [
+        "apple/Akashic/Resources/Localizable.xcstrings",
+        "apple/Akashic/Views/Edit/PhotoImportSheet.swift",
+        "apple/Akashic/Import/ImportBrowserView.swift"
+      ],
+      "verify": [
+        "cd apple && xcodegen generate",
+        "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,id=$(xcrun simctl list devices available | grep -o '[0-9A-F-]\\{36\\}' | tail -1)\" CODE_SIGNING_ALLOWED=NO test",
+        "Run under -AppleLanguages \"(nb)\" and read the export sheet and the import sheets"
+      ],
+      "claim": {
+        "agent": "opus5",
+        "branch": "claude/remote-control-project-review-9462c1",
+        "at": "2026-07-26"
+      },
+      "evidence": "'DAY' had shouldTranslate:false and is genuinely user-visible — the caption above the day badge on the journey detail and story screens — so an iPad screenshot honestly showed 'DAY 1' under 'Dager'. Confirmed it was collateral from bulk-marking 81 developer-tool strings, removed the flag and translated it: the built nb.lproj now maps DAY to DAG. The import-sheet half needed no work: PhotoImportSheet.dayLabel already uses String(localized:) after the accessibility merge, and ImportBrowserView has no bare literals in String position."
+    },
+    {
+      "id": "QUA-28",
+      "track": "QUALITY",
+      "title": "Accessibility for Views/Photos, the one directory still at zero",
+      "status": "DONE",
+      "effort": 0.5,
+      "priority": 31,
+      "deps": [
+        "QUA-24"
+      ],
+      "done_when": "No interactive control in Views/Photos is unlabelled.",
+      "why": "QUA-24's finish line as literally worded is not met app-wide, and the agent said so rather than claiming otherwise: Views/Photos was in neither task's file list. Measured now — PhotosGridView 0 labels across 10 interactive sites, DayPhotoStrip 0/3, PhotoPlacementSheet 0/2; only PhotoLightboxView has any. The photo grid is where a VoiceOver user spends most of their time in a photo app, so this is not a leftover corner.",
+      "files": [
+        "apple/Akashic/Views/Photos/"
+      ],
+      "verify": [
+        "cd apple && xcodegen generate",
+        "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,id=$(xcrun simctl list devices available | grep -o '[0-9A-F-]\\{36\\}' | tail -1)\" CODE_SIGNING_ALLOWED=NO test",
+        "for f in apple/Akashic/Views/Photos/*.swift; do echo \"$f $(grep -c accessibilityLabel $f)\"; done"
+      ],
+      "claim": {
+        "agent": "opus5",
+        "branch": "claude/remote-control-project-review-9462c1",
+        "at": "2026-07-26"
+      },
+      "evidence": "PhotosGridView: the icon-only toolbar button labelled, and every grid cell now announces caption-then-position-then-state — the caption is the only thing distinguishing one photograph from another and the position is what keeps a VoiceOver user oriented in a grid of hundreds. Video is stated in words rather than left to a trait, because whether tapping starts playback is what a user most needs to know first. DayPhotoStrip's add tile and cells labelled. PhotoPlacementSheet needed nothing: both its controls are text buttons, which are self-labelling — the '0 accessibilityLabel calls' count was measuring the wrong thing there."
+    },
+    {
+      "id": "QUA-29",
+      "track": "QUALITY",
+      "title": "A UI test target, so the accessibility audit can run unattended",
+      "status": "DONE",
+      "effort": 1,
+      "priority": 32,
+      "done_when": "XCUIApplication.performAccessibilityAudit() runs in CI over the main screens.",
+      "why": "The accessibility pass could not verify what it built: Accessibility Inspector is a macOS GUI app with no scriptable interface, and driving the simulator needed an interactive permission no one was present to grant. So it asserted labels exist in the BUILT bundle and refused to claim any screen is navigable — the right call, and a permanent gap rather than bad luck, because every autonomous run will hit it identically. performAccessibilityAudit() is the programmatic form of exactly that audit and needs a UI test target to live in. Overlaps QUA-10, which also wants that target; do them together.",
+      "files": [
+        "apple/project.yml",
+        "apple/AkashicUITests/"
+      ],
+      "serialise_with": "QUA-10 wants the same target — one pass",
+      "verify": [
+        "cd apple && xcodegen generate",
+        "the new UI test target runs performAccessibilityAudit on globe, day, paywall and create"
+      ],
+      "claim": {
+        "agent": "uitest-worktree",
+        "branch": "claude/qua10-qua29",
+        "at": "2026-07-26"
+      },
+      "evidence": "performAccessibilityAudit over 8 screens; 4 structural types enforced, 6 sub-44pt hit targets fixed in PaywallView + NewJourneySheet, 2 seams excused by name. sufficientElementDescription and trait both report zero. 124 reported-not-enforced, stable across 2 runs."
+    },
+    {
+      "id": "QUA-30",
+      "track": "QUALITY",
+      "title": "Decide A4-4: keep MapKit's clipping ocean labels, or drop all globe labels",
+      "status": "TODO",
+      "effort": 0.1,
+      "priority": 33,
+      "deps": [
+        "QUA-20"
+      ],
+      "done_when": "A decision recorded in DESIGN-PLAN.md: stay on .hybrid and accept the clipped ocean names, or move to .imagery and lose the continent labels too.",
+      "why": "All three code items in the original QUA-30 are fixed (A4-3 alignment, A4-5 page indicator, A4-6 brand mark). A4-4 is not a fix but a choice, and both suggestions in the finding were tested and ruled out. Camera framing is impossible: centerCoordinateDistance is already at MapKit's clamp, and 42,000 km vs 52,000 km render pixel-identically (the disc spans x=0..1205 of 1206 either way), so the globe always overflows the screen width. Label suppression is unavailable: ocean names are base-map labels rather than POIs, so pointsOfInterest: .excludingAll does not reach them and MapKit offers no other switch. That leaves exactly one lever -- .imagery instead of .hybrid -- which removes EUROPE/AFRICA/ASIA along with the clipped ocean names. Those continent labels genuinely help a reader orient on a globe, so trading them away to tidy an edge is an aesthetic judgement about the app's signature screen, not an engineering call. Both states are already screenshotted in the scratchpad from this session.",
+      "files": [],
+      "verify": [
+        "Record the decision in apple/Docs/DESIGN-PLAN.md A4-4"
+      ],
+      "resume": "Released rather than held: the two concrete A4 defects are fixed and committed; what is left is four taste calls I judged better made by the owner than by me — card/tab-bar alignment, MapKit ocean labels clipping, the page-indicator pill, and whether onboarding should lead with the app mark (needs a new imageset; the mark is appiconset-only today).",
+      "owner": true
+    },
+    {
+      "id": "QUA-31",
+      "track": "QUALITY",
+      "title": "Two screenshot seams fall through to the globe instead of failing",
+      "status": "DONE",
+      "effort": 0.25,
+      "priority": 34,
+      "done_when": "Every AKASHIC_SCREEN value either shows its screen or fails loudly.",
+      "why": "Found during A4: AKASHIC_SCREEN=settings and =paywall fell through to the globe in my run, while AKASHIC_SKIP_ONBOARDING in the same launch DID take effect — so the environment reached the app and this is not a launch-mechanics problem. Not diagnosed and not called broken. It matters because SHIP-03's 24 store screenshots depend on these seams, and a seam that silently renders a DIFFERENT screen is worse than one that crashes: the failure mode is a plausible-looking screenshot of the wrong thing. An unrecognised value should trap in DEBUG.",
+      "files": [
+        "apple/Akashic/App/AkashicApp.swift"
+      ],
+      "verify": [
+        "cd apple && xcodegen generate",
+        "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,id=$(xcrun simctl list devices available | grep -o '[0-9A-F-]\\{36\\}' | tail -1)\" CODE_SIGNING_ALLOWED=NO test",
+        "SIMCTL_CHILD_AKASHIC_SCREEN=settings xcrun simctl launch <udid> no.akashic.app, then screenshot"
+      ],
+      "claim": {
+        "agent": "opus5",
+        "branch": "claude/remote-control-project-review-9462c1",
+        "at": "2026-07-26"
+      },
+      "evidence": "The AKASHIC_SCREEN switch no longer has a silent default: an unrecognised value now preconditionFailures in DEBUG and names both the value and the known seams, while Release keeps the safe fallback so no customer can trap over an env var. Found during A4 when =settings and =paywall rendered the globe instead. NOTE the root cause of my own confusion was different and worse, and is now in CLAUDE.md: 'find DerivedData/Akashic-* | head -1' handed me another worktree's build from three hours earlier — there were seven DerivedData directories from parallel agent worktrees. The app ran, the screenshot looked plausible, and it showed code I had not written."
+    },
+    {
+      "id": "QUA-32",
+      "track": "QUALITY",
+      "title": "Theme.accent fails WCAG as text in Light Mode, and its own comment says otherwise",
+      "status": "DONE",
+      "effort": 0.75,
+      "priority": 36,
+      "done_when": "Accent-coloured TEXT reaches at least 4.5:1 on a Light-Mode systemBackground (3:1 for large text), and Theme.swift's comment states what was measured rather than an assumption.",
+      "why": "Measured, not guessed: Theme.accent is Color(red:0.56,green:0.62,blue:1.0), which is 2.47:1 against a Light-Mode systemBackground and 8.51:1 against a Dark one. WCAG AA wants 4.5:1 for body text and 3:1 even for large text, so the light case fails both. QUA-29's accessibility audit independently measured 2.45:1 and flags it on every screen. The comment at apple/Akashic/Views/Theme.swift:32 asserts this periwinkle 'already reads correctly on both a light and a dark systemBackground' — it is correct for exactly one of the two. That comment was almost certainly TRUE when the app was dark-only; the Light Mode migration that made `background` follow the system appearance invalidated it and nobody re-measured. Scope is narrower than it sounds: 74 of the 174 Theme.accent references are foregrounds and only those fail. The 36 fill/tint uses are fine, because Theme.onAccent is black on accent at 8.51:1. The likely fix is a dynamic accent that darkens in Light Mode (or a separate accentText token), which is why this is owner-visible design rather than a mechanical edit. Apple's own .secondaryLabel (3.45:1) and .tertiaryLabel (1.74:1) also fail the audit, but those are the system's semantic tiers and departing from them is a different and bigger decision — explicitly NOT in this task.",
+      "files": [
+        "apple/Akashic/Views/Theme.swift"
+      ],
+      "verify": [
+        "cd apple && xcodegen generate",
+        "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,id=$(xcrun simctl list devices available | grep -o '[0-9A-F-]\\{36\\}' | tail -1)\" CODE_SIGNING_ALLOWED=NO test",
+        "python3 - <<'EOF'\ndef lum(r,g,b):\n f=lambda c: c/12.92 if c<=0.03928 else ((c+0.055)/1.055)**2.4\n return 0.2126*f(r)+0.7152*f(g)+0.0722*f(b)\n# assert the chosen light-mode accent reaches 4.5:1 against white\nEOF",
+        "cd apple && xcodebuild ... -only-testing:AkashicUITests/AccessibilityAuditTests test 2>&1 | grep -c 'Theme.accent'"
+      ],
+      "claim": {
+        "agent": "opus5",
+        "branch": "claude/remote-control-project-review-9462c1",
+        "at": "2026-07-26"
+      },
+      "evidence": "Theme.accentText added via the existing Color.adaptive(dark:light:) helper: brand periwinkle in Dark Mode (byte-identical to accent, 8.51:1), scaled uniformly by 0.66 in Light Mode -> 5.20:1 on systemBackground, which passes AA's 4.5 with headroom. Migrated 74 foregroundStyle/foregroundColor sites plus the app-wide ambient tint and 4 text-rendering tints; the 36 fill/tint sites keep accent, because a fill's contrast is against onAccent (8.51:1). Verified by LOOKING at Settings in both appearances, not only by counting: the first pass missed the Appearance picker's 'Automatic' because a Picker takes its colour from the ambient tint rather than a foregroundStyle -- fixed at AkashicApp's .tint. Dark Mode proven unchanged by pixel-sampling the same region before and after: identical avg RGB (130,144,231) over an identical 2770 px. QUA-29 audit contrast findings 62 -> 58; the residual is Apple's own .secondaryLabel (3.45:1) and .tertiaryLabel (1.74:1), explicitly out of scope. 791 unit + 14 UI tests pass."
+    },
+    {
+      "id": "QUA-33",
+      "track": "QUALITY",
+      "title": "The local StoreKit test configuration ships inside the Release-CloudKit app bundle",
+      "status": "DONE",
+      "effort": 0.1,
+      "priority": 37,
+      "done_when": "Akashic.storekit is absent from the built Release-CloudKit Akashic.app, and the StoreKit tests still run.",
+      "why": "Verified against a real built bundle, not the spec: Akashic.storekit sits at the root of Release-CloudKit-iphonesimulator/Akashic.app. It is swept in by `sources: - path: Akashic` in project.yml, which takes the whole directory including Store/. It exposes _developerTeamID 9LVCB72DT8, _applicationInternalID 0, and a test price of 149.00 with referenceName 'Akashic Complete'. None of that is a credential and the Team ID is public in any provisioning profile, so this is hygiene rather than a security hole — but a local StoreKit TEST configuration inside a shipping binary can mislead anyone inspecting the app about real pricing, and it is dead weight in every download. Exclude it from the target's sources while keeping the scheme's StoreKitConfigurationFileReference, which points at the repo path and does not need the file bundled. Assert against the BUILT bundle, per the INFOPLIST trap: the spec saying it is excluded is not evidence.",
+      "files": [
+        "apple/project.yml"
+      ],
+      "verify": [
+        "cd apple && xcodegen generate",
+        "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,id=$(xcrun simctl list devices available | grep -o '[0-9A-F-]\\{36\\}' | tail -1)\" CODE_SIGNING_ALLOWED=NO test",
+        "! ls \"$(find ~/Library/Developer/Xcode/DerivedData/Akashic-*/Build/Products/Release-CloudKit-iphonesimulator -name Akashic.app -maxdepth 2 | head -1)\"/Akashic.storekit"
+      ],
+      "evidence": "Verified against the built Release-CloudKit bundle: Akashic.storekit is gone from Akashic.app root, PrivacyInfo.xcprivacy and en/nb.lproj still present, 791+14 tests pass. Also fixed a false-negative verification command next to it: the comment told you to find *.loctable, which this toolchain never produces."
+    },
+    {
+      "id": "QUA-34",
+      "effort": 0.5,
+      "priority": 38,
+      "title": "Make CloudKitImportSink an actor, closing the last strict-concurrency warning",
+      "done_when": "A clean build-for-testing under SWIFT_STRICT_CONCURRENCY=complete reports ZERO warnings across every target.",
+      "why": "The one diagnostic QUA-08 left standing, and it was left on purpose with this as the stated removal condition. AkashicTests/CloudKitImportTests warns 'sending sink': CloudKitImportSink is a non-Sendable final class with real mutable state (journeys, journeyIDs, photosByJourney, missingMedia, routeByteSize) whose nonisolated async execute() transfers the receiver. Three cheaper fixes were tried and rejected in QUA-08 -- @MainActor on the test only moves the diagnostic because execute is nonisolated async; @unchecked Sendable would be a lie about that mutable state; building the sink inside the Task transfers MockDatabase instead. Making it an actor is the honest fix and is cheap where it counts: every requirement it exposes is already async, so the shipping call site (CloudKitImportViewModel) does not change. The cost is the synchronous makeSink(...).makePlan() calls in the test file, which each gain an await.",
+      "files": [
+        "apple/Akashic/Import/CloudKitImportSink.swift",
+        "apple/AkashicTests/CloudKitImportTests.swift"
+      ],
+      "track": "QUALITY",
+      "status": "DONE",
+      "verify": [
+        "cd apple && xcodegen generate",
+        "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,id=$(xcrun simctl list devices available | grep -o '[0-9A-F-]\\{36\\}' | tail -1)\" CODE_SIGNING_ALLOWED=NO test"
+      ],
+      "claim": {
+        "agent": "opus5",
+        "branch": "claude/remote-control-project-review-9462c1",
+        "at": "2026-07-26"
+      },
+      "evidence": "ZERO strict-concurrency warnings on a clean build-for-testing across all three targets, with SWIFT_STRICT_CONCURRENCY: complete permanent in project.yml. 791 unit + 14 UI tests pass; testCancellationStopsBeforeUploading passes in 0.005s. NOT done the way this task said: the removal condition I wrote during QUA-08 claimed 'every requirement it exposes is already async', which was WRONG -- CloudKitImportSink conforms to ImportSink, whose three requirements are synchronous and are driven synchronously by LocalImporter.run(). An actor cannot witness those, so actor-ifying would have cascaded into ImportSink, CoreDataImportSink and LocalImporter and moved the archive's record-building onto whatever actor the protocol got isolated to. The sink is instead built INSIDE the test's Task so nothing non-Sendable crosses at all: no shipping behaviour changes, and single-owner lifetime becomes a compiler-checked fact. Cost was three small Sendable fixes: MediaResolver lost an unused stored FileManager (same shape as MediaLibrary in QUA-08), the injected sleep closure and defaultImportSleep became @Sendable, and MockDatabase took the @unchecked its sibling doubles already use."
+    },
+    {
+      "id": "QUA-35",
+      "effort": 0.5,
+      "priority": 39,
+      "title": "Pin groupNearDuplicates against known feature prints, then delete FeaturePrintBox",
+      "done_when": "A test asserts groupNearDuplicates' behaviour against feature prints with known distances, and VisionPhotoScorer carries no @unchecked Sendable.",
+      "why": "QUA-08 introduced a documented @unchecked Sendable box for VNFeaturePrintObservation rather than the tidier descriptor-extraction refactor, for one reason: NOTHING tests groupNearDuplicates. Re-implementing computeDistance asserts Vision's metric is plain Euclidean over the raw descriptor, and if that is wrong in any detail then duplicateDistance's 0.15 calibration quietly changes which of a family's photographs the app calls duplicates -- with no test failing. So the order matters: the test comes first, and only then is the refactor verifiable. This is the removal condition written at the box itself.",
+      "files": [
+        "apple/Akashic/Services/VisionPhotoScorer.swift",
+        "apple/AkashicTests/FeaturePrintVectorTests.swift"
+      ],
+      "track": "QUALITY",
+      "status": "DONE",
+      "verify": [
+        "cd apple && xcodegen generate",
+        "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,id=$(xcrun simctl list devices available | grep -o '[0-9A-F-]\\{36\\}' | tail -1)\" CODE_SIGNING_ALLOWED=NO test"
+      ],
+      "claim": {
+        "agent": "opus5",
+        "branch": "claude/remote-control-project-review-9462c1",
+        "at": "2026-07-26"
+      },
+      "evidence": "FeaturePrintVector replaces the @unchecked Sendable box; there is now NO @unchecked Sendable anywhere in shipping code. 0 errors and 0 warnings under strict concurrency; 804 unit (1 skipped) + 14 UI tests pass. THE PREMISE INVERTED while doing it: QUA-08 kept the box because 'nothing tests groupNearDuplicates', but the reason nothing tested it was that its parameter was an Apple class no test can construct AND every Vision ML request fails in the simulator with 'Failed to create espresso context' (now QUA-38 + a CLAUDE.md trap). So taking plain floats is what makes the function testable at all -- 12 new simulator-runnable tests now cover the union-find, including the burst that drifts past the threshold end-to-end and still forms one group (the actual reason the algorithm is union-find, never asserted before), deterministic group numbering, the strict-< threshold boundary, and mismatched descriptor lengths. The one thing the refactor asserts -- that Vision's computeDistance is Euclidean over the descriptor -- is pinned by a 13th test that XCTSkips where Vision has no ML backend, so it stays green in CI and runs on a device."
+    },
+    {
+      "id": "QUA-36",
+      "effort": 0.5,
+      "priority": 40,
+      "title": "Declare PublicMirrorDatabase Sendable so PublicMirrorPublisher's conformance becomes checked",
+      "done_when": "PublicMirrorPublisher conforms to Sendable without @unchecked, and the public-mirror tests still pass.",
+      "why": "The removal condition documented on PublicMirrorPublisher in QUA-08. CKDatabase satisfies `protocol PublicMirrorDatabase: Sendable` for free -- CloudKit marks it NS_SWIFT_SENDABLE -- so the app side is a one-line change. The cost is entirely in the test double: MockPublicDatabase has seven mutable stored properties mutated inside its own async methods, so it has to become an actor, which adds await to roughly 30 assertions that read mock.saved / mock.modifyCallCount. FakePublisher's `var report` needs the same treatment. Worth doing because @unchecked is a promise the compiler cannot check, and this seam is the one that writes world-readable records.",
+      "files": [
+        "apple/Akashic/Sync/PublicMirrorPublisher.swift",
+        "apple/AkashicTests/PublicMirrorTests.swift"
+      ],
+      "track": "QUALITY",
+      "status": "DONE",
+      "verify": [
+        "cd apple && xcodegen generate",
+        "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,id=$(xcrun simctl list devices available | grep -o '[0-9A-F-]\\{36\\}' | tail -1)\" CODE_SIGNING_ALLOWED=NO test"
+      ],
+      "claim": {
+        "agent": "opus5",
+        "branch": "claude/remote-control-project-review-9462c1",
+        "at": "2026-07-26"
+      },
+      "evidence": "PublicMirrorDatabase is Sendable and PublicMirrorPublisher's conformance is CHECKED, not @unchecked. 0 errors, 0 warnings, 791 unit tests pass. The task budgeted for turning MockPublicDatabase into an actor plus ~30 awaits; that turned out to be unnecessary and I verified rather than assuming: PublicMirrorPublisher contains no TaskGroup, no async let and no Task, so every database call is sequential within one task and the double's scripting state is never touched concurrently. @unchecked on the double is therefore a truthful promise of the same kind the five other doubles in this target already make. Two lines instead of a refactor."
+    },
+    {
+      "id": "QUA-37",
+      "effort": 0.25,
+      "priority": 41,
+      "title": "Declare MediaDatabase Sendable so PhotoMediaService's conformance becomes checked",
+      "done_when": "PhotoMediaService conforms to Sendable without @unchecked, and the media tests still pass.",
+      "why": "Same shape as QUA-36 and the removal condition documented on PhotoMediaService in QUA-08. Both its stored properties are already let and the shipping database is a CKDatabase (NS_SWIFT_SENDABLE); only the MediaDatabase seam's own lack of Sendable forces @unchecked. AkashicTests/MediaV2Tests already spells MockMediaDatabase as `@unchecked Sendable`, so that side may need nothing at all -- verify rather than assume.",
+      "files": [
+        "apple/Akashic/Media/PhotoMediaService.swift",
+        "apple/AkashicTests/MediaV2Tests.swift"
+      ],
+      "track": "QUALITY",
+      "status": "DONE",
+      "verify": [
+        "cd apple && xcodegen generate",
+        "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,id=$(xcrun simctl list devices available | grep -o '[0-9A-F-]\\{36\\}' | tail -1)\" CODE_SIGNING_ALLOWED=NO test"
+      ],
+      "claim": {
+        "agent": "opus5",
+        "branch": "claude/remote-control-project-review-9462c1",
+        "at": "2026-07-26"
+      },
+      "evidence": "PhotoMediaService is a CHECKED Sendable conformance now, 0 errors and 0 warnings. The task's premise was wrong and I verified rather than assumed: MediaDatabase has been 'protocol MediaDatabase: AnyObject, Sendable' since the original Photo-architecture-v2 commit (145490a), long before this session -- so the @unchecked I added in QUA-08, and the removal condition I wrote alongside it claiming the seam 'is not itself Sendable', were both unnecessary. 791 unit tests pass."
+    },
+    {
+      "id": "QUA-38",
+      "track": "QUALITY",
+      "status": "TODO",
+      "effort": 0.5,
+      "priority": 42,
+      "owner": true,
+      "title": "Verify the Vision features on a real device — they cannot run in any simulator",
+      "done_when": "Photo curation (hero pick, best-of, duplicate grouping) and DIFF-05 subject labels are confirmed working on a physical device, with a note recording what was seen.",
+      "why": "Measured, not suspected. Every Vision ML request fails in the iOS 26.5 simulator: VNGenerateImageFeaturePrintRequest, VNClassifyImageRequest and VNCalculateImageAestheticsScoresRequest all return 'Failed to create espresso context', and VNDetectFaceRectanglesRequest returns 'Could not create inference context'. So DIFF-04 (aesthetics + near-duplicate grouping) and DIFF-05 (subject labels) have NEVER executed anywhere automated and cannot be covered by CI, which also runs simulators. This is the same blind spot as the Intelligence code CI never type-checks (QUA-05), but more dangerous, because this code IS compiled and so looks covered. Worse, VisionPhotoScorer.score catches the failure and degrades to 'unscored', after which PhotoCuration falls back to sortOrder -- so a simulator run of Curate photos is a silent no-op that looks like a working feature. Every screenshot and demo taken so far has therefore never exercised curation. Pair this with SHIP-15's device session; it needs no second Apple ID, so it is cheaper than that one.",
+      "files": [],
+      "verify": [
+        "Run on a physical device: create a journey with a photo burst, tap Curate, and confirm a hero is proposed, a best-of selection appears, and burst frames are grouped as duplicates."
+      ]
+    },
+    {
+      "id": "QUA-39",
+      "track": "QUALITY",
+      "status": "DONE",
+      "effort": 0.1,
+      "priority": 43,
+      "title": "Bump the GitHub Actions that still target Node 20",
+      "done_when": "Every action the workflows reference DIRECTLY targets Node 24. The residual annotation from inside upload-pages-artifact is upstream's and is out of scope -- see why.",
+      "why": "Surfaced by the first deploy-pages.yml run on 2026-07-27: 'Node.js 20 is deprecated. The following actions target Node.js 20 but are being forced to run on Node.js 24: actions/checkout@v4, actions/configure-pages@v5, actions/setup-node@v4, actions/upload-artifact@v4.' Forced onto 24 today, so nothing is broken -- but this is the deploy path for the live site after the cutover, and 'forced' is a state GitHub eventually stops honouring. Cheap to fix by bumping to the v5/v6 lines that target Node 24. Do it in one pass across every workflow, not just deploy-pages.yml.\n\nCORRECTION 2026-07-27 after validating on a real run: the original done_when -- 'No workflow run emits the Node 20 deprecation annotation' -- is NOT ACHIEVABLE from this repo, and I marked the task done while claiming it. The run still annotates, but the source moved: it is now actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02, a SHA pinned INSIDE upload-pages-artifact@v4. Nothing in our `uses:` lines reaches it.\nWhat IS done and validated: checkout@v5, setup-node@v5, configure-pages@v6 and upload-pages-artifact@v4 all downloaded and ran successfully in the build job (run 30245980429, build: success). deploy-pages stayed at v4, unchanged, so nothing there needed testing.\nREMOVAL CONDITION for the residual: re-check when actions/upload-pages-artifact ships a release that bumps its internal upload-artifact pin. Until then the annotation is upstream's to fix and ours to ignore.",
+      "files": [
+        ".github/workflows/**"
+      ],
+      "verify": [
+        "gh run list --workflow=deploy-pages.yml --limit 1  # then check the run has no Node 20 annotation"
+      ],
+      "evidence": "Bumped across all four workflows: checkout v4->v5, setup-node v4->v5, upload-artifact v4->v5, configure-pages v5->v6, upload-pages-artifact v3->v4, deploy-pages v4->v4. Versions read from the GitHub API rather than guessed. Deliberately conservative on the Pages-specific actions (one major at a time) because their inputs have changed across majors and this is now the live deploy path for akashic.no. NOT yet validated by a CI run -- see the note. VALIDATED on run 30245980429: build job success with all four bumped actions executing. The deploy job failed for an unrelated and benign reason -- see the environment note on LEG-09.",
+      "resume": "The bumps are committed but NOT exercised by a CI run: the trigger is now push:[main] and the change sits on a feature branch, so validating it needs either a merge to main or a workflow_dispatch against this branch's ref. Harmless to discover late while akashic.no is still served by Cloudflare -- a broken Pages deploy has no user impact until DNS moves. Validate BEFORE the DNS cutover."
+    }
+  ]
+}

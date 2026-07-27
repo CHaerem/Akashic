@@ -7,6 +7,22 @@ options:
   developmentLanguage: en
   groupSortPosition: top
 
+# QUA-06. Without `knownRegions` the generated project lists only `en` + `Base`, so Xcode
+# compiles `Localizable.xcstrings` for English only: `nb.lproj/Localizable.strings` is never
+# produced and the app falls back to English on a Norwegian device even though the catalogue
+# holds every translation. XcodeGen infers regions from `.lproj` directories in the source tree,
+# and a String Catalog has none — it is a single file — so the list has to be declared.
+#
+# `CFBundleLocalizations` in the built plist is what iOS reads to decide which languages the app
+# claims, and the App Store listing's language list is derived from it. Assert against the BUILT
+# plist, never this file:
+#   plutil -p "$(...)/Akashic.app/Info.plist" | grep -A4 CFBundleLocalizations
+#   ls "$(...)/Akashic.app" | grep lproj        # expect en.lproj and nb.lproj
+knownRegions:
+  - en
+  - nb
+  - Base
+
 # Build configurations.
 #   Debug / Release  -> no code signing, no team required (default simulator builds + CI).
 #   Debug-CloudKit   -> debug build WITH the CloudKit + Push entitlements, for running the
@@ -33,7 +49,23 @@ settings:
     CODE_SIGN_IDENTITY: ""
     DEVELOPMENT_TEAM: ""
     ENABLE_USER_SCRIPT_SANDBOXING: "YES"
-    SWIFT_STRICT_CONCURRENCY: minimal
+    # QUA-08. Was `minimal`, which hid 294 diagnostics — 53 of them errors in Swift 6 language mode,
+    # in an app whose whole job is syncing a Core Data store from CloudKit callbacks. Turning it on
+    # found two real races the `minimal` setting could never have reported:
+    #
+    #   * `AkashicSyncEngine.nextBatch` read the main-queue Core Data context from CloudKit's own
+    #     queue, via the `@Sendable` `recordProvider` closure.
+    #   * `PhotoDayMatcher.parseDate` shared two `ISO8601DateFormatter`s between `@MainActor`
+    #     SwiftUI body evaluation and cooperative-pool curation/publishing.
+    #
+    # `complete` rather than `targeted` deliberately: `targeted` would have flagged neither, because
+    # both live in code that predates any explicit isolation. The app and UI-test targets are clean;
+    # ONE diagnostic remains, in `AkashicTests/CloudKitImportTests`, and it is left visible on purpose
+    # rather than suppressed — see the comment at that test for what closing it requires.
+    #
+    # `SWIFT_VERSION` stays "5.0". Flipping to 6 is the next step and a separate decision: every
+    # remaining diagnostic becomes an error, and SE-0411/SE-0470 behaviours change with it.
+    SWIFT_STRICT_CONCURRENCY: complete
 
 targets:
   Akashic:
@@ -69,8 +101,71 @@ targets:
         # We copy and parse (GPXParser) rather than edit in place, so the system should never
         # offer in-place editing for a file we open.
         LSSupportsOpeningDocumentsInPlace: false
+        # These two live here, NOT as INFOPLIST_KEY_* settings, and that distinction is
+        # load-bearing: Xcode's INFOPLIST_KEY_ mechanism only merges keys on a fixed
+        # allowlist, and neither of these is on it. Declared as INFOPLIST_KEY_* they were
+        # silently discarded — absent from every build shipped through build 8 — which left
+        # CKShare acceptance and push-driven sync dead in the binary while project.yml
+        # claimed both were carried. Assert against the BUILT plist, never the spec:
+        #   plutil -p "$(...)/Akashic.app/Info.plist" | grep CKSharingSupported
+        # apple-ci.yml does exactly that now, so this cannot silently regress (QUA-01).
+        #
+        # Required for CloudKit share invitations to open in the app (T2.8). Without it iOS
+        # hands the link to Safari instead of giving the metadata to the app delegate.
+        CKSharingSupported: true
+        # CloudKit delivers "the server changed" as a silent push, and CKSyncEngine logs
+        # "BUG IN CLIENT OF CLOUDKIT: CloudKit push notifications require the
+        # 'remote-notification' background mode" without this. Harmless in non-CloudKit
+        # configs — nothing registers for pushes there. Note the key alone is not enough:
+        # the app must also call registerForRemoteNotifications (SHIP-02).
+        UIBackgroundModes:
+          - remote-notification
     sources:
       - path: Akashic
+        excludes:
+          # QUA-33: the local StoreKit test configuration was being swept into the app by this
+          # `path: Akashic` sweep and shipped at the BUNDLE ROOT of Release-CloudKit — verified in
+          # a built .app, not inferred from this file. It carries `_developerTeamID`,
+          # `_applicationInternalID` and a test price, none of which is a credential, but a StoreKit
+          # *test* config inside a shipping binary misleads anyone inspecting the app about real
+          # pricing and is dead weight in every download.
+          #
+          # Excluding it does NOT break the StoreKit tests: `storeKitConfiguration` in the scheme
+          # (below) is a path into the REPO, resolved by Xcode at launch, so the file never needed
+          # to be in the bundle to work.
+          #
+          # Assert against the built bundle, per the INFOPLIST_KEY trap — this file claiming the
+          # exclusion is not evidence that it happened:
+          #   ! ls "$(...)/Akashic.app"/Akashic.storekit
+          - "Store/Akashic.storekit"
+      # Privacy manifest (SHIP-04). Must land at the BUNDLE ROOT, not inside Resources/, which is
+      # why it is listed explicitly with `buildPhase: resources` rather than picked up by the
+      # `path: Akashic` sweep — Apple's tooling looks for PrivacyInfo.xcprivacy at the top level of
+      # the .app. Verify after any project change with:
+      #   find "$(...)/Akashic.app" -maxdepth 1 -name '*.xcprivacy'
+      - path: Akashic/Resources/PrivacyInfo.xcprivacy
+        buildPhase: resources
+      # QUA-06: the string catalogues. Both are inside `path: Akashic` above and so are already
+      # swept up, but they are listed explicitly for two reasons: the sweep classifies by
+      # extension and a silently-misclassified `.xcstrings` produces an app that builds, runs, and
+      # is simply never translated; and `AppShortcuts.xcstrings` MUST be named exactly that — App
+      # Intents phrase localisation looks for that filename and nothing else, so a rename would
+      # break Siri's Norwegian without breaking the build.
+      #
+      # Verify both reached the bundle. This comment used to say they compile to "a single
+      # .loctable per language" and to look for `-name '*.loctable'` — that command finds NOTHING
+      # on this toolchain, which is a false negative and worse than no command at all: it reports a
+      # broken localisation when localisation is fine. String Catalogues compile to per-language
+      # .lproj directories here, so ask for what is actually produced:
+      #   ls "$(...)/Akashic.app"/*.lproj        # expect en.lproj and nb.lproj
+      #   ls "$(...)/Akashic.app"/nb.lproj       # Localizable.strings, .stringsdict, AppShortcuts.strings
+      # Note AppShortcuts.strings appears only under nb.lproj: English is the development language,
+      # so its phrases come from source and only the translation needs a file. Its ABSENCE from
+      # en.lproj is correct and is not the bug it looks like.
+      - path: Akashic/Resources/Localizable.xcstrings
+        buildPhase: resources
+      - path: Akashic/Resources/AppShortcuts.xcstrings
+        buildPhase: resources
       # Fixture JSON recovered from git history — bundled so the app runs on
       # fixtures by default (before CloudKit is wired up). Owned by another agent;
       # referenced read-only here.
@@ -80,17 +175,48 @@ targets:
         buildPhase: resources
       - path: Fixtures/recovered/incaTrail.json
         buildPhase: resources
+      # DIFF-10: photographs for the bundled fixtures + the once-ever demo journey, and the sidecar
+      # manifest that maps them to journey slugs and days (FixtureMedia). Kept OUT of
+      # Fixtures/recovered/ so that recovered archive stays byte-identical. ~474 KB of JPEG total.
+      - path: Fixtures/demo-media/demo-photos.json
+        buildPhase: resources
+      - path: Fixtures/demo-media/demo-kilimanjaro-summit.jpg
+        buildPhase: resources
+      - path: Fixtures/demo-media/demo-mount-kenya.jpg
+        buildPhase: resources
+      - path: Fixtures/demo-media/demo-inca-trail.jpg
+        buildPhase: resources
     dependencies:
-      # WidgetKit extension, embedded in the app bundle. Builds unsigned for the simulator
-      # (inherits the project's CODE_SIGNING_ALLOWED=NO base), so CI stays team-free.
+      # WidgetKit extension — BUILT but deliberately NOT EMBEDDED for v1.0 (QUA-09).
+      #
+      # The widget cannot display real data, for two independent reasons that both have to be
+      # fixed before it is worth shipping:
+      #   1. It has no App Group entitlement in any configuration, so `AppGroup.containerURL`
+      #      never resolves and it cannot read a snapshot. That is deliberate and documented on
+      #      the AkashicWidgets target below — adding the entitlement needs the capability added
+      #      in Xcode's GUI, because `xcodebuild -allowProvisioningUpdates` refuses to mint the
+      #      extension's profile from an App Store Connect API key, and carrying an unusable
+      #      entitlement blocked archiving outright.
+      #   2. Nothing calls `WidgetSnapshot.publish` anywhere in the app. Its only caller is
+      #      WidgetGalleryHarness, which exists for screenshots.
+      #
+      # So embedded, it would appear in every customer's widget gallery and render its bundled
+      # Kilimanjaro placeholder — a stranger's trek, permanently, on the home screen of someone
+      # who paid. `embed: false` keeps the target compiling as part of every app build, so the
+      # code cannot rot and its 8 tests keep running, while nothing ships to a customer.
+      #
+      # To ship it: add the App Group capability in Xcode (see
+      # AkashicWidgets/AkashicWidgets.entitlements, kept as the reference), restore
+      # CODE_SIGN_ENTITLEMENTS on both widget configs, wire `WidgetSnapshot.publish` into the
+      # store's reload path, then set this back to `embed: true`.
       - target: AkashicWidgets
-        embed: true
+        embed: false
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: no.akashic.app
         PRODUCT_NAME: Akashic
-        MARKETING_VERSION: "0.1.0"
-        CURRENT_PROJECT_VERSION: "8"
+        MARKETING_VERSION: "1.0.0"
+        CURRENT_PROJECT_VERSION: "9"
         TARGETED_DEVICE_FAMILY: "1,2"
         GENERATE_INFOPLIST_FILE: "YES"
         INFOPLIST_KEY_CFBundleDisplayName: Akashic
@@ -101,16 +227,18 @@ targets:
         INFOPLIST_KEY_ITSAppUsesNonExemptEncryption: "NO"
         INFOPLIST_KEY_UIApplicationSceneManifest_Generation: "YES"
         INFOPLIST_KEY_UILaunchScreen_Generation: "YES"
-        INFOPLIST_KEY_UISupportedInterfaceOrientations: "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
+        # iPhone is portrait-only (D5). Landscape shipped unlocked and untested, and on a Max phone
+        # it silently routes into the `.regular` width branch — the iPad floating-panel layout in
+        # GlobeExperienceView, which was designed for a 13-inch canvas and never for a phone held
+        # sideways. Locking it is the honest fix for v1.0; supporting it properly is its own task.
+        # iPad keeps all four orientations (see the _iPad key below), which is where the panel
+        # layout belongs.
+        INFOPLIST_KEY_UISupportedInterfaceOrientations: "UIInterfaceOrientationPortrait"
         INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad: "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
-        # CloudKit delivers "the server changed" as a silent push, and CKSyncEngine logs
-        # "BUG IN CLIENT OF CLOUDKIT: CloudKit push notifications require the
-        # 'remote-notification' background mode" without this. Harmless in non-CloudKit
-        # configs (nothing registers for pushes there).
-        INFOPLIST_KEY_UIBackgroundModes: remote-notification
-        # Required for CloudKit share invitations to open in the app (T2.8). Without it iOS
-        # opens the share link in Safari instead of handing the metadata to the app delegate.
-        INFOPLIST_KEY_CKSharingSupported: "YES"
+        # NOTE: CKSharingSupported and UIBackgroundModes are deliberately NOT here. Xcode
+        # drops non-allowlisted INFOPLIST_KEY_* settings without warning; both now live in
+        # the `info: properties:` block above, which is the only form that reaches the
+        # built plist.
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
         SWIFT_EMIT_LOC_STRINGS: "YES"
@@ -176,12 +304,53 @@ targets:
         buildPhase: resources
       - path: Fixtures/recovered/incaTrail.json
         buildPhase: resources
+      # DIFF-10 fixture photographs + manifest, so the photo pipeline is unit-testable from the
+      # test bundle without the host app's layout.
+      - path: Fixtures/demo-media/demo-photos.json
+        buildPhase: resources
+      - path: Fixtures/demo-media/demo-kilimanjaro-summit.jpg
+        buildPhase: resources
+      - path: Fixtures/demo-media/demo-mount-kenya.jpg
+        buildPhase: resources
+      - path: Fixtures/demo-media/demo-inca-trail.jpg
+        buildPhase: resources
     dependencies:
       - target: Akashic
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: no.akashic.app.tests
         GENERATE_INFOPLIST_FILE: "YES"
+
+  # QUA-10 / QUA-29 — the UI test target. The project had exactly one test target and it was a
+  # `bundle.unit-test`, so nothing automated had ever driven the app's UI: `Views/` sat at 6.0%
+  # coverage of 21,384 executable lines, and today's accessibility pass could verify none of what
+  # it built by NAVIGATION (Accessibility Inspector is a macOS GUI app with no scriptable
+  # interface). `XCUIApplication.performAccessibilityAudit()` is the programmatic form of exactly
+  # that audit, and it needs a `bundle.ui-testing` target to live in — which is why the two tasks
+  # were one pass.
+  #
+  # A UI test target runs OUT of process: it does not link the app, so it cannot see `Journey`,
+  # `EntitlementPolicy` or any other app symbol. Everything it knows about the app it learns by
+  # launching it (`AKASHIC_*` launch environment, see apple/README.md) and reading the
+  # accessibility tree — which is why `AkashicUITests/Support/` has its own tiny copies of the
+  # few constants it asserts against.
+  AkashicUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    deploymentTarget: "17.0"
+    sources:
+      - path: AkashicUITests
+    dependencies:
+      - target: Akashic
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: no.akashic.app.uitests
+        GENERATE_INFOPLIST_FILE: "YES"
+        # XcodeGen infers this from the `Akashic` dependency above, but a UI test bundle with no
+        # TEST_TARGET_NAME builds fine and then fails at RUN time with "no target application"
+        # — a failure that reads like a broken simulator rather than a missing build setting. It
+        # is cheap to state and expensive to rediscover.
+        TEST_TARGET_NAME: Akashic
 
   # WidgetKit extension. Data reaches it via a WidgetSnapshot JSON in the App-Group container
   # (see AppGroup / WidgetDataStore); with no App Group configured (unsigned simulator build)
@@ -203,8 +372,8 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: no.akashic.app.widgets
         PRODUCT_NAME: AkashicWidgets
-        MARKETING_VERSION: "0.1.0"
-        CURRENT_PROJECT_VERSION: "8"
+        MARKETING_VERSION: "1.0.0"
+        CURRENT_PROJECT_VERSION: "9"
         TARGETED_DEVICE_FAMILY: "1,2"
         INFOPLIST_FILE: AkashicWidgets/Info.plist
         GENERATE_INFOPLIST_FILE: "NO"
@@ -251,13 +420,32 @@ schemes:
       targets:
         Akashic: all
         AkashicTests: [test]
+        AkashicUITests: [test]
     run:
       config: Debug
+      # QUA-10: the local StoreKit configuration, so the paywall's PRICED state exists at all
+      # without an App Store connection. Without it `Product.products(for:)` returns an empty array
+      # on a simulator, `EntitlementStore.product` stays nil, and the paywall renders its "isn't
+      # available here yet" row — a real state, but not the one a customer sees.
+      #
+      # This reaches the RUN action only, and that is a limitation rather than a choice: XcodeGen
+      # 2.45.4 writes `StoreKitConfigurationFileReference` into the scheme's `<LaunchAction>` and
+      # has no equivalent key for `<TestAction>` (verified by generating and reading the
+      # `.xcscheme`; `shouldUseLaunchSchemeArgsEnv` carries arguments and environment, not this).
+      # So `xcodebuild test` — and therefore the UI tests — run with no local store, and
+      # `AkashicUITests/PaywallUITests` documents which paywall branch that leaves unreachable
+      # instead of pretending to cover it. Adding it under `test:` here would be a silently
+      # ignored key, which is the precise failure mode the INFOPLIST_KEY_* note above exists for.
+      storeKitConfiguration: Akashic/Store/Akashic.storekit
     test:
       config: Debug
       gatherCoverageData: false
       targets:
         - AkashicTests
+        # QUA-29's finish line is the audit running unattended, so the UI tests are in the SHARED
+        # scheme's test action rather than a separate one: `xcodebuild ... test` — the exact
+        # command apple-ci.yml runs — picks them up.
+        - AkashicUITests
     profile:
       config: Release
     analyze:

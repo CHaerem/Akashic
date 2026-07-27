@@ -22,6 +22,16 @@ struct DayDetailSheet: View {
     @State private var showImport = false
     @State private var editingPhoto: Photo?
 
+    /// DIFF-13 — the curation proposal for this day, and whether it is being computed.
+    ///
+    /// Nil means "not asked yet"; a non-nil result with nothing in it means "asked, nothing worth
+    /// proposing" — and the row shows nothing in that case rather than an empty suggestion, which
+    /// would read as the feature being broken.
+    @State private var curation: CurationResult?
+    @State private var isCurating = false
+    /// Set once the user accepts or dismisses, so a re-open does not re-propose what they answered.
+    @State private var curationAnswered = false
+
     /// The header chevrons were sized to fit a fixed 15 pt glyph in a fixed 40 pt circle; now
     /// that the glyph scales with Dynamic Type (`.subheadline`), the circle needs to scale too
     /// or the glyph outgrows it (same reasoning as D1's `DayNavigationView.chevronBoxSize`).
@@ -51,12 +61,18 @@ struct DayDetailSheet: View {
                         onPhotoTap: { index in
                             lightbox = LightboxData(
                                 photos: dayPhotos, startIndex: index,
-                                dayLabel: "Day \(camp.dayNumber)", dateLabel: dateLabel(camp)
+                                dayLabel: String(localized: "Day \(camp.dayNumber)",
+                                                 comment: "Photo lightbox: badge naming the day a photo belongs to."),
+                                dateLabel: dateLabel(camp)
                             )
                         },
                         onAddPhoto: { showImport = true },
                         onEditPhoto: { editingPhoto = $0 }
                     )
+
+                    if isOwner, !curationAnswered {
+                        curationRow(camp)
+                    }
 
                     // Day comments (web parity: DayCommentsSection). Self-contained view.
                     DayCommentsSection(camp: camp, journeyId: journey.id)
@@ -122,7 +138,7 @@ struct DayDetailSheet: View {
             Button { showWaypointEdit = true } label: {
                 Label("Edit day", systemImage: "slider.horizontal.3")
                     .font(.caption.weight(.semibold))
-                    .foregroundStyle(Theme.accent)
+                    .foregroundStyle(Theme.accentText)
                     .padding(.vertical, 6).padding(.horizontal, 12)
                     .background(Theme.accentSoft, in: Capsule())
             }
@@ -135,7 +151,8 @@ struct DayDetailSheet: View {
     private func header(_ camp: Camp) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 12) {
-                chevron("chevron.left", enabled: dayIndex > 0) { onSelectDay(dayIndex - 1) }
+                chevron("chevron.left", label: "Previous day",
+                        enabled: dayIndex > 0) { onSelectDay(dayIndex - 1) }
 
                 VStack(spacing: 2) {
                     Text("DAY \(camp.dayNumber)")
@@ -149,8 +166,15 @@ struct DayDetailSheet: View {
                         .lineLimit(2)
                 }
                 .frame(maxWidth: .infinity)
+                // QUA-07: the day number is set in all-caps with letter tracking for looks; heard as
+                // its own element it is "D-A-Y 3". One element, and the heading trait so the rotor can
+                // jump straight back to it after reading a long day.
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(Text("Day \(camp.dayNumber), \(camp.name)"))
+                .accessibilityAddTraits(.isHeader)
 
-                chevron("chevron.right", enabled: dayIndex < journey.camps.count - 1) {
+                chevron("chevron.right", label: "Next day",
+                        enabled: dayIndex < journey.camps.count - 1) {
                     onSelectDay(dayIndex + 1)
                 }
             }
@@ -164,10 +188,17 @@ struct DayDetailSheet: View {
             .font(.caption)
             .foregroundStyle(Theme.textSecondary)
             .frame(maxWidth: .infinity)
+            // The date and the elevation are the day's subtitle, one line on screen and one fact to
+            // hear.
+            .accessibilityElement(children: .combine)
         }
     }
 
-    private func chevron(_ system: String, enabled: Bool, action: @escaping () -> Void) -> some View {
+    /// QUA-07: `label` is required. Both of these were bare `Image(systemName: "chevron.left")` inside
+    /// a `Button`, which is announced as nothing useful — and they are the only way to move between
+    /// days from this sheet, so a reader could open day 1 and not leave it.
+    private func chevron(_ system: String, label: LocalizedStringKey, enabled: Bool,
+                         action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: system)
                 .font(.subheadline.weight(.semibold))
@@ -178,9 +209,103 @@ struct DayDetailSheet: View {
         }
         .buttonStyle(.plain)
         .disabled(!enabled)
+        .accessibilityLabel(label)
     }
 
     // MARK: - Helpers
+
+    // MARK: - Curation (DIFF-13)
+
+    /// The accept-or-dismiss row for this day's photo curation.
+    ///
+    /// This is the surface that makes the whole Vision chain reachable. Until it existed nothing
+    /// called `JourneyStore.curationProposal`, so the optimiser stripped the entire feature and
+    /// `otool` showed Vision was not even linked into the binary — the engine was written, tested,
+    /// and absent from the app. That is why DIFF-13's verification is `otool | grep -i vision`
+    /// rather than a screenshot.
+    ///
+    /// Owner-only and one-shot per open: a suggestion the user has answered must not come back, which
+    /// is the same discipline `SuggestionModel` enforces for the creation flow.
+    @ViewBuilder
+    private func curationRow(_ camp: Camp) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            if let curation, !curation.isEmpty {
+                let picks = curation.bestOfByDay[camp.dayNumber] ?? []
+                Text("Suggested for this day")
+                    .font(.caption.weight(.semibold))
+                    .tracking(0.8)
+                    .textCase(.uppercase)
+                    .foregroundStyle(Theme.textSecondary)
+
+                if !picks.isEmpty {
+                    Text("\(picks.count) photos stand out. Accepting puts them first.")
+                        .font(.subheadline)
+                        .foregroundStyle(Theme.textPrimary)
+                }
+                if curation.redundantCount > 0 {
+                    // Reported, never actioned — a near-duplicate is a distance heuristic, and a
+                    // false positive would cost someone a photograph.
+                    Text("\(curation.redundantCount) look like near-duplicates.")
+                        .font(.footnote)
+                        .foregroundStyle(Theme.textSecondary)
+                }
+
+                HStack(spacing: 12) {
+                    Button {
+                        acceptCuration(camp)
+                    } label: {
+                        Label("Use these", systemImage: "checkmark")
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(picks.isEmpty)
+
+                    Button {
+                        curationAnswered = true
+                    } label: {
+                        Text("Not now")
+                    }
+                    .foregroundStyle(Theme.textSecondary)
+                }
+            } else if isCurating {
+                HStack(spacing: 8) {
+                    ProgressView().controlSize(.small)
+                    Text("Looking at this day's photos…")
+                        .font(.footnote)
+                        .foregroundStyle(Theme.textSecondary)
+                }
+            } else if curation == nil, dayPhotos.count > 1 {
+                // Explicitly user-initiated. Scoring every day's photographs on open would spend
+                // battery on days nobody asked about, and Vision on a large day is not free.
+                Button {
+                    Task { await runCuration() }
+                } label: {
+                    Label("Suggest the best photos", systemImage: "sparkles")
+                        .font(.subheadline)
+                }
+                .foregroundStyle(Theme.accentText)
+                .accessibilityHint(Text("Looks at this day's photographs on your device and suggests which stand out."))
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func runCuration() async {
+        isCurating = true
+        defer { isCurating = false }
+        // Whole-journey proposal, then this day's slice is read from it — the hero is a
+        // journey-level decision and cannot be judged from one day in isolation.
+        curation = await store.curationProposal(forJourneyID: journey.id)
+    }
+
+    private func acceptCuration(_ camp: Camp) {
+        guard let curation else { return }
+        // One batched save rather than one per photograph, so the gallery settles once instead of
+        // visibly reshuffling six times.
+        store.acceptCuratedBestOf(curation, day: camp.dayNumber, journeyID: journey.id)
+        store.acceptCuratedHero(curation)
+        curationAnswered = true
+        loadPhotos()
+    }
 
     private func loadPhotos() {
         guard let camp else { dayPhotos = []; return }

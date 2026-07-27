@@ -15,6 +15,61 @@ final class AkashicAppDelegate: NSObject, UIApplicationDelegate {
             await PersistenceController.shared.acceptShare(metadata)
         }
     }
+
+    /// Ask APNs for a device token so CloudKit can deliver "the server changed".
+    ///
+    /// This is the half of push sync that was missing. `CKSyncEngine` with
+    /// `automaticallySync = true` creates and owns its database subscription, but a subscription
+    /// only describes *what* to send — it cannot make iOS hand the app a push it never registered
+    /// to receive. Without this call every change arrived only on the next foreground activation,
+    /// which reads as "sync is slow" rather than as a missing API call. (The other half was the
+    /// `remote-notification` background mode, which XcodeGen was silently dropping from the built
+    /// Info.plist — see SHIP-01 and the note in `project.yml`.)
+    ///
+    /// No user-visible permission is involved: this is a silent-push registration, not
+    /// `UNUserNotificationCenter.requestAuthorization`, so nothing is prompted and nothing is
+    /// shown. Only entitled CloudKit builds register — in a plain Debug build there is no
+    /// container, so a token would have nothing to subscribe to.
+    func application(_ application: UIApplication,
+                     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
+        #if AKASHIC_CLOUDKIT_BUILD
+        application.registerForRemoteNotifications()
+        #endif
+        return true
+    }
+
+    func application(_ application: UIApplication,
+                     didFailToRegisterForRemoteNotificationsWithError error: Error) {
+        // Not fatal and not worth telling the user about: sync still works, it just falls back to
+        // fetching on activation. Logged because a silent permanent failure here looks exactly
+        // like the bug this method exists to fix.
+        SyncLog.error("APNs registration failed — sync falls back to fetch-on-activation: \(error)")
+    }
+
+    /// Handle a CloudKit database change push.
+    ///
+    /// `CKSyncEngine` also observes pushes itself, so this is belt-and-braces rather than the
+    /// primary path — but declaring the `remote-notification` background mode without
+    /// implementing this method leaves iOS with no completion handler to wait on, which makes
+    /// background delivery less reliable and is the kind of thing App Review notices. Fetching is
+    /// idempotent (the engine drives it from its own change tokens), so a redundant fetch after
+    /// the engine has already handled the push costs one cheap no-op round trip.
+    func application(_ application: UIApplication,
+                     didReceiveRemoteNotification userInfo: [AnyHashable: Any],
+                     fetchCompletionHandler completionHandler: @escaping (UIBackgroundFetchResult) -> Void) {
+        #if AKASHIC_CLOUDKIT_BUILD
+        guard CKNotification(fromRemoteNotificationDictionary: userInfo) != nil else {
+            completionHandler(.noData)      // not ours
+            return
+        }
+        Task { @MainActor in
+            await PersistenceController.shared.fetchChangesForPush()
+            completionHandler(.newData)
+        }
+        #else
+        completionHandler(.noData)
+        #endif
+    }
 }
 
 @main
@@ -81,7 +136,16 @@ struct AkashicApp: App {
                 // leaves the system in charge, which is the default — see `AppearancePreference`
                 // for why a viewer app earns an override that most apps should not have.
                 .preferredColorScheme(appearance.colorScheme)
-                .tint(Theme.accent)
+                // QUA-32: `accentText`, not `accent`. The ambient tint is what colours bar
+                // buttons, `Picker` values and links — all of which render as TEXT, where the brand
+                // periwinkle measures 2.47:1 on a Light-Mode background and fails AA. Found by
+                // looking at Settings in Light Mode: "Replay intro" had been migrated and read
+                // cleanly, while the Appearance picker's "Automatic" was still visibly pale,
+                // because a picker takes its colour from here rather than from a `foregroundStyle`.
+                //
+                // Filled controls are unaffected: every `Toggle` and `ProgressView` that wants the
+                // brand fill sets `.tint(Theme.accent)` at its own call site, which overrides this.
+                .tint(Theme.accentText)
                 // First-run onboarding (§4.2): a full-screen cover shown once. The coordinator
                 // owns the "show once" state (seeded from OnboardingState.shouldShow, which
                 // honors AKASHIC_SKIP_ONBOARDING and no-ops under XCTest), and the "Replay intro"
@@ -172,22 +236,47 @@ struct AkashicApp: App {
     /// or a journey's photo grid without touching `RootView`.
     ///   AKASHIC_SCREEN=photos                         — imported-photos journey list
     ///   AKASHIC_SCREEN=photogrid + AKASHIC_PHOTOS_JOURNEY=<id> — that journey's thumbnail grid
+    ///   AKASHIC_SCREEN=settings                       — Settings, for locale screenshots
+    ///   AKASHIC_SCREEN=exportsheet                    — JourneyExportSheet (store screenshot)
     @ViewBuilder
     private var rootScreen: some View {
         let env = ProcessInfo.processInfo.environment
         switch env["AKASHIC_SCREEN"] {
         case "photos":
             NavigationStack { ImportBrowserView() }
+        case "settings":
+            // Settings is otherwise three taps deep behind first-run onboarding, which makes
+            // "does this row read Norwegian?" impossible to verify from a script (QUA-26). It is
+            // the screen that carries the sync-status one-liner and the appearance picker, so it
+            // is the one a localisation change most needs a screenshot of.
+            NavigationStack { SettingsView() }
         case "photogrid":
             NavigationStack { JourneyPhotosView(journeyID: env["AKASHIC_PHOTOS_JOURNEY"] ?? "") }
         case "editsheet":
             // Screenshot harness for the Phase 3 editing sheets (see EditScreenshotHarness).
             EditScreenshotHarness(kind: env["AKASHIC_EDIT_SCREENSHOT"] ?? "photo")
+        case "exportsheet":
+            // SHIP-03 store screenshot: JourneyExportSheet has no headlessly reachable route of
+            // its own (see ExportScreenshotHarness).
+            ExportScreenshotHarness()
         case "widgets":
             // Debug harness that renders the WidgetKit views for screenshots (see WidgetGallery).
             WidgetGalleryHarness(snapshots: store.journeys.map { WidgetSnapshot.make(from: $0) })
-        default:
+        case .none:
             RootView()
+        case let .some(unrecognised):
+            // QUA-31: an unrecognised value used to fall through to RootView, so a typo produced a
+            // plausible-looking screenshot of the WRONG screen — which is worse than a crash, because
+            // nothing about the result says it is wrong. SHIP-03's 24 store assets depend on these
+            // seams, so in DEBUG this is fatal and names the value; a Release build keeps the safe
+            // fallback, since no customer should ever reach a trap over an env var.
+            #if DEBUG
+            let known = ["photos", "photogrid", "settings", "editsheet", "exportsheet", "widgets"]
+            preconditionFailure(
+                "AKASHIC_SCREEN=\(unrecognised) is not a known screenshot seam. Known: \(known.joined(separator: ", ")).")
+            #else
+            RootView()
+            #endif
         }
     }
 

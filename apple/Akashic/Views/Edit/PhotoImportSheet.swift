@@ -79,12 +79,11 @@ struct PhotoImportSheet: View {
     /// rest. Never a silent drop — the remainder is always named.
     private var partialImportBanner: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Label("\(partialRemainder) photo\(partialRemainder == 1 ? "" : "s") couldn't be added",
+            Label("\(partialRemainder) photos couldn't be added",
                   systemImage: "exclamationmark.triangle.fill")
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(Theme.warning)
-            Text("The free tier holds up to \(EntitlementPolicy.freePhotosPerOwnedJourney) photos per journey. "
-                 + "We added the ones that fit. Akashic Complete lifts the cap so the rest can come too.")
+            Text("The free tier holds up to \(EntitlementPolicy.freePhotosPerOwnedJourney) photos per journey. We added the ones that fit. Akashic Complete lifts the cap so the rest can come too.")
                 .font(.caption)
                 .foregroundStyle(Theme.textSecondary)
             Button {
@@ -92,31 +91,66 @@ struct PhotoImportSheet: View {
             } label: {
                 Label("Unlock with Akashic Complete", systemImage: "star.circle")
                     .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(Theme.accent)
+                    .foregroundStyle(Theme.accentText)
             }
             .buttonStyle(.plain)
+            .accessibilityHint("Opens the Akashic Complete purchase sheet")
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Theme.surface, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Theme.hairline, lineWidth: 1))
+        .accessibilityElement(children: .contain)
     }
 
     // MARK: Picker
 
+    /// How many more photos this journey may take, or nil when there is no cap (QUA-16).
+    ///
+    /// Free tier, owned journey only — a shared-in journey is never gated, and Complete lifts the
+    /// cap entirely. Nil means "no limit", which is not the same as 0.
+    private var remainingAllowance: Int? {
+        guard !entitlements.isComplete else { return nil }
+        guard store.isOwnedByCurrentUser(journeyID: journey.id) else { return nil }
+        let existing = store.photos(forJourneyID: journey.id).count
+        return max(0, EntitlementPolicy.freePhotosPerOwnedJourney - existing)
+    }
+
     private var picker: some View {
-        PhotosPicker(
+        // QUA-08: `PhotosPicker`'s label builder is nonisolated, so `pending` and `remainingAllowance`
+        // are read out here on this main-actor `View` and only the results go inside. `label` is a
+        // `Text` (Sendable) rather than a `LocalizedStringKey` (not), so the two literals are still
+        // resolved inside `Text(...)` and stay extractable for the string catalogue — the same reason
+        // `NewJourneySheet.photosSection` hoists a `Text`.
+        let label = Text(pending.isEmpty ? "Select photos or videos" : "Select more")
+        let allowance = remainingAllowance
+        return PhotosPicker(
             selection: $selection,
-            maxSelectionCount: 0,
+            // QUA-16: the cap is a limit the picker enforces, not a failure reported afterwards.
+            // It used to be 0 (unlimited), so a free-tier user could pick 300 photos, wait while
+            // every one of them was decoded, EXIF-read, thumbnailed and written to disk, and only
+            // then be told 200 were dropped. The partial-import path below still exists — it has to,
+            // for a journey already over the cap and for anything the picker cannot bound — but it
+            // is now the fallback rather than the normal experience.
+            maxSelectionCount: remainingAllowance ?? 0,
             matching: .any(of: [.images, .videos]),
             photoLibrary: .shared()
         ) {
             HStack(spacing: 10) {
                 Image(systemName: "photo.badge.plus")
-                    .font(.title3).foregroundStyle(Theme.accent)
-                Text(pending.isEmpty ? "Select photos or videos" : "Select more")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(Theme.textPrimary)
+                    .font(.title3).foregroundStyle(Theme.accentText)
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 2) {
+                    label
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(Theme.textPrimary)
+                    // Stated up front, so the number is a budget rather than a surprise.
+                    if let remaining = allowance {
+                        Text("\(remaining) left on the free tier")
+                            .font(.caption2)
+                            .foregroundStyle(Theme.textSecondary)
+                    }
+                }
                 Spacer()
             }
             .padding(16)
@@ -127,20 +161,25 @@ struct PhotoImportSheet: View {
                     .strokeBorder(Theme.accent.opacity(0.4), style: StrokeStyle(lineWidth: 1, dash: [5, 4]))
             )
         }
+        // A `PhotosPicker` is not a `Button` and carries no button trait — see `NewJourneyChooser`.
+        .accessibilityAddTraits(.isButton)
+        .accessibilityHint("Opens your photo library")
     }
 
     // MARK: Review row
 
     private func reviewRow(_ item: Binding<PendingIngest>) -> some View {
-        HStack(spacing: 12) {
-            EditablePhotoThumb(photo: item.wrappedValue.photo, size: 64)
+        let photo = item.wrappedValue.photo
+        return HStack(spacing: 12) {
+            EditablePhotoThumb(photo: photo, size: 64)
             VStack(alignment: .leading, spacing: 4) {
-                if item.wrappedValue.photo.isVideo {
+                if photo.isVideo {
                     Label("Video", systemImage: "play.circle").font(.caption).foregroundStyle(Theme.textSecondary)
                 }
-                if let coords = item.wrappedValue.photo.coordinates, coords.count >= 2 {
+                if let coords = photo.coordinates, coords.count >= 2 {
                     Label(String(format: "%.3f, %.3f", coords[1], coords[0]), systemImage: "mappin")
                         .font(.caption2).foregroundStyle(Theme.textTertiary)
+                        .accessibilityLabel(Text("Latitude \(String(format: "%.3f", coords[1])), longitude \(String(format: "%.3f", coords[0]))"))
                 }
                 dayMenu(item)
             }
@@ -151,6 +190,12 @@ struct PhotoImportSheet: View {
                 Image(systemName: "xmark.circle.fill").foregroundStyle(Theme.textTertiary)
             }
             .buttonStyle(.plain)
+            // QUA-24: one of these per staged item, all identical and all destructive. Naming the day
+            // it is assigned to is the only thing that distinguishes them, since a photo picked
+            // moments ago has no caption yet.
+            .accessibilityLabel(photo.isVideo
+                                ? Text("Remove this video from the import, \(dayLabel(item.wrappedValue.waypointID))")
+                                : Text("Remove this photo from the import, \(dayLabel(item.wrappedValue.waypointID))"))
         }
         .padding(10)
         .background(Theme.surface, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
@@ -178,17 +223,28 @@ struct PhotoImportSheet: View {
                 Text(dayLabel(item.wrappedValue.waypointID)).font(.caption.weight(.medium))
                 Image(systemName: "chevron.down").font(.system(size: 8))
             }
-            .foregroundStyle(Theme.accent)
+            .foregroundStyle(Theme.accentText)
             .padding(.vertical, 4).padding(.horizontal, 8)
             .background(Theme.accentSoft, in: Capsule())
         }
+        // The pill's text alone ("Day 3") is a fact, not a control — it never said this is the day
+        // assignment, nor that it can be changed.
+        .accessibilityLabel("Assigned day")
+        .accessibilityValue(dayLabel(item.wrappedValue.waypointID))
     }
 
+    /// `String(localized:)`, not a bare literal. This is a `String` return type, so it lands in
+    /// `Text` through the verbatim overload — both of these were English no matter what the catalogue
+    /// held, which is the QUA-06 trap and now also the accessibility value of the day pill above.
+    /// Both keys ("Unassigned", "Day %lld") were already in the catalogue and translated; nothing was
+    /// reaching them.
     private func dayLabel(_ waypointID: String?) -> String {
         guard let waypointID, let camp = journey.camps.first(where: { $0.id == waypointID }) else {
-            return "Unassigned"
+            return String(localized: "Unassigned",
+                          comment: "Photo import: the day pill for a photo not assigned to any day.")
         }
-        return "Day \(camp.dayNumber)"
+        return String(localized: "Day \(camp.dayNumber)",
+                      comment: "Photo import: the day pill for a photo assigned to a day.")
     }
 
     // MARK: Ingest

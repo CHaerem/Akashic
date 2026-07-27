@@ -37,7 +37,8 @@ export const JourneyTimeline = memo(function JourneyTimeline({
     onCampSelect,
     onDayChange,
     onPhotoClick,
-    isMobile,
+    // isMobile stays in the props contract (callers pass it) but nothing in this
+    // component reads it any more.
 }: JourneyTimelineProps) {
     const [lightboxPhotos, setLightboxPhotos] = useState<Photo[]>([]);
     const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
@@ -92,7 +93,7 @@ export const JourneyTimeline = memo(function JourneyTimeline({
     }, [segments]);
 
     // Handle photo click - open lightbox with all photos from that day
-    const handlePhotoClick = useCallback((camp: Camp, photo: Photo, index: number) => {
+    const handlePhotoClick = useCallback((camp: Camp, _photo: Photo, index: number) => {
         const dayPhotos = photosByDay[camp.dayNumber] || [];
         setLightboxPhotos(dayPhotos);
         setLightboxIndex(index);

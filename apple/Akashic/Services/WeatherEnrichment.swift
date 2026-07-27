@@ -26,7 +26,7 @@ import WeatherKit
 // MARK: - Seam
 
 /// Fetch one day's daily-aggregate weather for a coordinate, or nil when unavailable.
-protocol HistoricalWeatherProviding {
+protocol HistoricalWeatherProviding: Sendable {
     func dailyWeather(lng: Double, lat: Double, date: Date) async throws -> WeatherData?
 }
 
@@ -49,7 +49,10 @@ struct WeatherSuggestion: Equatable {
 
 // MARK: - Service
 
-struct WeatherEnrichment {
+// QUA-08: `Sendable` because `JourneySuggestionCoordinator` is `@MainActor` and awaits these
+// off the main actor, so the value crosses an isolation boundary on every call. Genuinely
+// immutable — only `let`s and injected seams, no reference storage.
+struct WeatherEnrichment: Sendable {
     let provider: HistoricalWeatherProviding
     /// Serial courtesy delay between per-day queries (nanoseconds). 0 in tests.
     let interCallDelayNanos: UInt64

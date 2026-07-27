@@ -48,7 +48,8 @@ struct JourneyStoryView: View {
                         onNotesSave: { saveNotes($0, camp: camp) },
                         onPhotoTap: { photos, index in
                             lightbox = LightboxData(photos: photos, startIndex: index,
-                                                    dayLabel: "Day \(camp.dayNumber)",
+                                                    dayLabel: String(localized: "Day \(camp.dayNumber)",
+                                                                     comment: "Photo lightbox: badge naming the day a photo belongs to."),
                                                     dateLabel: Formatters.dayDate(dateStarted: live.dateStarted,
                                                                                   dayNumber: camp.dayNumber))
                         }
@@ -157,9 +158,11 @@ struct JourneyStoryView: View {
     }
 
     private func summaryLine(_ live: Journey) -> String {
-        var parts = ["\(live.stats.duration) day\(live.stats.duration == 1 ? "" : "s")"]
+        var parts = [String(localized: "\(live.stats.duration) days",
+                            comment: "Journey story header: how many days the trip lasted.")]
         if let summit = live.stats.highestPoint {
-            parts.append("Summit: \(Formatters.meters(summit.elevation))")
+            parts.append(String(localized: "Summit: \(Formatters.meters(summit.elevation))",
+                                comment: "Journey story header: the highest point reached, e.g. \"Summit: 5 895 m\"."))
         }
         return parts.joined(separator: " · ")
     }
@@ -290,7 +293,7 @@ private struct StoryChapterHeader: View {
     private var dayBadge: some View {
         VStack(spacing: 0) {
             Text("DAY").font(.caption2.weight(.bold)).foregroundStyle(Theme.textTertiary)
-            Text("\(camp.dayNumber)").font(.title3.weight(.bold)).foregroundStyle(Theme.accent)
+            Text("\(camp.dayNumber)").font(.title3.weight(.bold)).foregroundStyle(Theme.accentText)
         }
         .frame(width: dayBadgeSize, height: dayBadgeSize)
         .background(Theme.accentSoft, in: RoundedRectangle(cornerRadius: 12, style: .continuous))

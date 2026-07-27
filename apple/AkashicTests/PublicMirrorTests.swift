@@ -1,4 +1,5 @@
 import XCTest
+import os
 import CloudKit
 import CoreLocation
 @testable import Akashic
@@ -15,18 +16,38 @@ final class PublicMirrorTests: XCTestCase {
 
     // MARK: - Mock public database
 
-    final class MockPublicDatabase: PublicMirrorDatabase {
+    // QUA-36: `@unchecked` for the reason the other doubles in this target use it — the mutable
+    // properties below are scripting state, written before `publish` runs and read after it returns.
+    // `PublicMirrorPublisher` uses no concurrency primitives at all, so nothing here is ever touched
+    // from two places at once. Verified by grep rather than assumed, because the alternative on offer
+    // was an actor and ~30 `await`s.
+    final class MockPublicDatabase: PublicMirrorDatabase, @unchecked Sendable {
         private(set) var saved: [CKRecord.ID: CKRecord] = [:]
         private(set) var deleted: Set<CKRecord.ID> = []
         private(set) var lastSavePolicy: CKModifyRecordsOperation.RecordSavePolicy?
         private(set) var modifyCallCount = 0
         private(set) var queryCallCount = 0
+        /// Every slug the publisher asked about, in order — lets a test assert *which* keyspace
+        /// was swept, not merely that something was deleted.
+        private(set) var queriedSlugs: [String] = []
 
         /// Pages of `PublicPhoto` IDs to hand back, consumed in order (cursor = next page index).
+        /// Slug-agnostic: every slug sees these pages.
         var photoIDPages: [[CKRecord.ID]] = []
+
+        /// Pages keyed by the slug they are stored under. Needed to express the case where the
+        /// mirror lives under a disambiguated slug while the caller only knows the pretty one —
+        /// a slug-agnostic mock cannot tell a correct sweep from a sweep of the wrong keyspace.
+        /// Takes precedence over `photoIDPages` when the queried slug has an entry.
+        var photoIDPagesBySlug: [String: [[CKRecord.ID]]] = [:]
 
         /// slug -> creatorUserRecordID.recordName of an existing PublicJourney (for collision tests).
         var existingJourneyCreators: [String: String] = [:]
+
+        /// Make every save fail per-record (not by throwing), which is the shape CloudKit actually
+        /// returns for a partial failure. Lets a test assert what the report says when nothing
+        /// landed — e.g. that no share link is offered for a page that does not exist.
+        var failSaves = false
 
         func ckModifyRecords(
             saving recordsToSave: [CKRecord],
@@ -38,6 +59,10 @@ final class PublicMirrorTests: XCTestCase {
             lastSavePolicy = savePolicy
             var saveResults: [CKRecord.ID: Result<CKRecord, Error>] = [:]
             for record in recordsToSave {
+                if failSaves {
+                    saveResults[record.recordID] = .failure(CKError(.networkFailure))
+                    continue
+                }
                 saved[record.recordID] = record
                 saveResults[record.recordID] = .success(record)
             }
@@ -56,11 +81,13 @@ final class PublicMirrorTests: XCTestCase {
             resultsLimit: Int
         ) async throws -> (ids: [CKRecord.ID], cursor: PublicMirrorCursor?) {
             queryCallCount += 1
+            queriedSlugs.append(slug)
+            let pages = photoIDPagesBySlug[slug] ?? photoIDPages
             let page = (cursor?.underlying as? Int) ?? 0
-            guard page < photoIDPages.count else { return ([], nil) }
-            let next: PublicMirrorCursor? = (page + 1 < photoIDPages.count)
+            guard page < pages.count else { return ([], nil) }
+            let next: PublicMirrorCursor? = (page + 1 < pages.count)
                 ? PublicMirrorCursor(underlying: page + 1) : nil
-            return (photoIDPages[page], next)
+            return (pages[page], next)
         }
 
         func ckExistingPublicJourneyCreator(slug: String) async throws -> String? {
@@ -364,10 +391,17 @@ final class PublicMirrorTests: XCTestCase {
 
     func testPublishReportsProgressToOne() async {
         let mock = MockPublicDatabase()
-        var last: PublicMirrorProgress?
-        _ = await PublicMirrorPublisher(database: mock).publish(journey: makeJourney(), photos: makePhotos()) { last = $0 }
-        XCTAssertEqual(last?.fraction, 1.0)
-        XCTAssertEqual(last?.phase, "Done")
+        // QUA-08: `progress` is `@Sendable` now, so a plain captured `var` would be "mutation of
+        // captured var in concurrently-executing code". The publisher calls progress sequentially
+        // from its own task, so a locked box is honest and keeps the assertion exactly as it was.
+        let last = OSAllocatedUnfairLock<PublicMirrorProgress?>(initialState: nil)
+        _ = await PublicMirrorPublisher(database: mock)
+            .publish(journey: makeJourney(), photos: makePhotos()) { p in
+                last.withLock { $0 = p }
+            }
+        let final = last.withLock { $0 }
+        XCTAssertEqual(final?.fraction, 1.0)
+        XCTAssertEqual(final?.phase, "Done")
     }
 
     // MARK: - Unpublish
@@ -391,6 +425,121 @@ final class PublicMirrorTests: XCTestCase {
         let report = await PublicMirrorPublisher(database: mock).unpublish(slug: "kilimanjaro")
         XCTAssertEqual(report.deleted, 1, "just the PublicJourney record")
         XCTAssertTrue(mock.deleted.contains(CKRecord.ID(recordName: "kilimanjaro")))
+    }
+
+    // MARK: - The share link must use the slug that was published (DIFF-02)
+
+    func testPublishReportsThePrettySlugWhenThereIsNoCollision() async {
+        let mock = MockPublicDatabase()
+        let report = await PublicMirrorPublisher(database: mock, ownerRecordName: "ownerA")
+            .publish(journey: makeJourney(), photos: makePhotos())
+        XCTAssertEqual(report.publishedSlug, "kilimanjaro")
+    }
+
+    /// The case a naive `ShareLink(item: journey.slug)` gets wrong: the mirror lives under the
+    /// owner-scoped variant, so a link built from the domain object 404s for the second family.
+    func testPublishReportsTheDisambiguatedSlugUnderACollision() async {
+        let mock = MockPublicDatabase()
+        mock.existingJourneyCreators["kilimanjaro"] = "someoneElse"
+        let owner = "ownerA"
+        let report = await PublicMirrorPublisher(database: mock, ownerRecordName: owner)
+            .publish(journey: makeJourney(), photos: makePhotos())
+
+        let expected = PublicMirrorBuilder.disambiguatedSlug("kilimanjaro", ownerRecordName: owner)
+        XCTAssertEqual(report.publishedSlug, expected)
+        XCTAssertNotEqual(report.publishedSlug, "kilimanjaro",
+                          "a link built from the pretty slug would 404 for the second family")
+    }
+
+    func testFailedPublishReportsNoSlugSoNoLinkIsOffered() async {
+        let mock = MockPublicDatabase()
+        mock.failSaves = true
+        let report = await PublicMirrorPublisher(database: mock).publish(journey: makeJourney(),
+                                                                        photos: makePhotos())
+        XCTAssertNil(report.publishedSlug, "no metadata record saved means there is no page to link to")
+    }
+
+    func testUnpublishReportsNoSlug() async {
+        let mock = MockPublicDatabase()
+        let report = await PublicMirrorPublisher(database: mock).unpublish(slug: "kilimanjaro")
+        XCTAssertNil(report.publishedSlug)
+    }
+
+    func testShowcaseURLIsTheFormTheWebClientAndAASABothRead() {
+        // `?journey=<slug>` is what useTrekData.parseUrlParams reads and what the AASA declares.
+        XCTAssertEqual(AppInfo.showcaseURL(slug: "kilimanjaro")?.absoluteString,
+                       "https://akashic.no/?journey=kilimanjaro")
+    }
+
+    func testShowcaseURLPercentEncodesASlugThatNeedsIt() {
+        // Slugs are locally minted, so an unencoded one would silently truncate the query.
+        XCTAssertEqual(AppInfo.showcaseURL(slug: "a b&c")?.absoluteString,
+                       "https://akashic.no/?journey=a%20b%26c")
+    }
+
+    // MARK: - Unpublish must sweep the slug it actually published under (DIFF-01)
+
+    /// The leak this closes: `publish` moves the mirror to an owner-scoped slug when another family
+    /// already holds the pretty one, but the Showcase sheet only ever knows `journey.slug`. The old
+    /// `unpublish` swept the pretty slug, found nothing, and — because `delete` treats an absent
+    /// record as success — reported OK. The caller then flipped `isPublic` to false, which removed
+    /// the Remove button, leaving GPS-tagged world-readable thumbnails online with no way back.
+    func testUnpublishSweepsTheDisambiguatedSlugItActuallyPublishedUnder() async {
+        let mock = MockPublicDatabase()
+        let owner = "ownerA"
+        // Another family already owns the pretty slug, so publish resolves to the variant.
+        mock.existingJourneyCreators["kilimanjaro"] = "someoneElse"
+        let effective = PublicMirrorBuilder.disambiguatedSlug("kilimanjaro", ownerRecordName: owner)
+        XCTAssertNotEqual(effective, "kilimanjaro", "precondition: the slugs must differ")
+
+        // The mirror's photos live under the disambiguated slug; the pretty slug holds nothing.
+        mock.photoIDPagesBySlug[effective] = [[CKRecord.ID(recordName: "P1"),
+                                               CKRecord.ID(recordName: "P2")]]
+        mock.photoIDPagesBySlug["kilimanjaro"] = []
+
+        // The caller passes the PRETTY slug — that is all JourneyShowcaseSheet has.
+        let report = await PublicMirrorPublisher(database: mock, ownerRecordName: owner)
+            .unpublish(slug: "kilimanjaro")
+
+        XCTAssertTrue(mock.queriedSlugs.contains(effective),
+                      "the disambiguated keyspace must be swept, not just the pretty slug")
+        XCTAssertTrue(mock.deleted.contains(CKRecord.ID(recordName: "P1")),
+                      "the world-readable thumbnail must actually be deleted")
+        XCTAssertTrue(mock.deleted.contains(CKRecord.ID(recordName: "P2")))
+        XCTAssertTrue(mock.deleted.contains(CKRecord.ID(recordName: effective)),
+                      "the metadata record that was really published must be removed")
+        XCTAssertTrue(report.succeeded)
+    }
+
+    /// Round trip: whatever `publish` wrote, `unpublish` must be able to remove using only the
+    /// pretty slug. Guards the pairing rather than either half in isolation.
+    func testPublishThenUnpublishLeavesNothingBehindUnderACollidedSlug() async {
+        let mock = MockPublicDatabase()
+        let owner = "ownerA"
+        mock.existingJourneyCreators["kilimanjaro"] = "someoneElse"
+        let publisher = PublicMirrorPublisher(database: mock, ownerRecordName: owner)
+
+        let photos = makePhotos()
+        _ = await publisher.publish(journey: makeJourney(), photos: photos)
+        let publishedNames = Set(mock.saved.keys.map(\.recordName))
+        XCTAssertFalse(publishedNames.isEmpty, "precondition: publish wrote something")
+
+        // Feed the mirror's real contents back as the query result, keyed by the slug used.
+        let effective = PublicMirrorBuilder.disambiguatedSlug("kilimanjaro", ownerRecordName: owner)
+        mock.photoIDPagesBySlug[effective] = [photos.map { CKRecord.ID(recordName: $0.id) }]
+
+        _ = await publisher.unpublish(slug: "kilimanjaro")
+
+        XCTAssertTrue(mock.saved.isEmpty,
+                      "every record publish created must be gone — left over: \(mock.saved.keys.map(\.recordName))")
+    }
+
+    /// With no owner identity (dev and test paths) there is only ever one keyspace, so the sweep
+    /// must not invent a second query — that would double the CloudKit calls for every unpublish.
+    func testUnpublishQueriesOneSlugWhenThereIsNoOwnerIdentity() async {
+        let mock = MockPublicDatabase()
+        _ = await PublicMirrorPublisher(database: mock).unpublish(slug: "kilimanjaro")
+        XCTAssertEqual(mock.queriedSlugs, ["kilimanjaro"])
     }
 
     // MARK: - Cross-user slug collision in the global public keyspace (quality gate)
@@ -453,6 +602,227 @@ final class PublicMirrorTests: XCTestCase {
         XCTAssertTrue(mock.deleted.contains(CKRecord.ID(recordName: "P2")))
         XCTAssertTrue(report.failures.isEmpty)
     }
+
+    // MARK: - The per-journey published-photo cap (QUA-25)
+    //
+    // The public database is billed to us, not to the customer, so a published journey needs a size
+    // bound. These pin the boundary (at, under, over), the day-spread that stops a flat prefix from
+    // emptying the later days, and that a capped publish still SUCCEEDS and reports the shortfall.
+
+    /// `n` photos with thumbnail bytes, `sortOrder` ascending, spread round-robin over `days`
+    /// waypoints so `PhotoDayMatcher` resolves a real day for each one.
+    private func makeCappablePhotos(_ n: Int, days: Int = 1) -> [Photo] {
+        (0..<n).map { i in
+            var photo = Photo(id: "P\(i)", journeyId: "J1",
+                              waypointId: "W\((i % days) + 1)", url: "", sortOrder: i)
+            photo.localThumbPath = makeThumbFile()
+            return photo
+        }
+    }
+
+    func testCapLeavesAJourneyExactlyAtTheLimitUntouched() {
+        let photos = makeCappablePhotos(10)
+        let result = PublicMirrorPublisher.capped(photos, limit: 10, dayOf: { _ in 1 })
+        XCTAssertEqual(result.heldBack, 0)
+        XCTAssertEqual(result.kept.map(\.id), photos.map(\.id), "at the cap, nothing moves")
+    }
+
+    func testCapLeavesAJourneyUnderTheLimitUntouched() {
+        let photos = makeCappablePhotos(9)
+        let result = PublicMirrorPublisher.capped(photos, limit: 10, dayOf: { _ in 1 })
+        XCTAssertEqual(result.heldBack, 0)
+        XCTAssertEqual(result.kept.count, 9)
+    }
+
+    func testCapHoldsBackTheExcessOnePastTheLimit() {
+        let photos = makeCappablePhotos(11)
+        let result = PublicMirrorPublisher.capped(photos, limit: 10, dayOf: { _ in 1 })
+        XCTAssertEqual(result.kept.count, 10)
+        XCTAssertEqual(result.heldBack, 1)
+        XCTAssertFalse(result.kept.contains { $0.id == "P10" },
+                       "within one day the cap keeps the leading sortOrder — which is where "
+                       + "PhotoCurationService.applyingBestOf puts the curated picks")
+    }
+
+    /// The reason this is not `prefix(limit)`: a flat prefix over journey-global `sortOrder` would
+    /// publish the first days and leave the later ones empty.
+    func testCapSpreadsAcrossDaysRatherThanTakingTheFirstN() {
+        // 40 photos over 4 days, interleaved, capped at 8 → 2 from each day, not 8 from day 1.
+        let photos = makeCappablePhotos(40, days: 4)
+        let dayOf: (Photo) -> Int? = { photo in
+            (Int(photo.id.dropFirst()) ?? 0) % 4 + 1
+        }
+        let result = PublicMirrorPublisher.capped(photos, limit: 8, dayOf: dayOf)
+        XCTAssertEqual(result.kept.count, 8)
+        XCTAssertEqual(result.heldBack, 32)
+        let perDay = Dictionary(grouping: result.kept, by: { dayOf($0)! }).mapValues(\.count)
+        XCTAssertEqual(perDay, [1: 2, 2: 2, 3: 2, 4: 2], "every day contributes equally")
+    }
+
+    /// An uneven trek: a fat day must not starve a thin one, and the leftover budget must flow back
+    /// to whoever still has photos rather than going unused.
+    func testCapGivesEveryDaySomethingAndSpendsTheWholeBudget() {
+        var photos: [Photo] = []
+        var dayByID: [String: Int] = [:]
+        // Day 1: 30 photos · day 2: 1 · day 3: 4
+        for (day, count) in [(1, 30), (2, 1), (3, 4)] {
+            for i in 0..<count {
+                var photo = Photo(id: "D\(day)-\(i)", journeyId: "J1", url: "",
+                                  sortOrder: day * 100 + i)
+                photo.localThumbPath = makeThumbFile()
+                dayByID[photo.id] = day
+                photos.append(photo)
+            }
+        }
+        let result = PublicMirrorPublisher.capped(photos, limit: 10, dayOf: { dayByID[$0.id] })
+        XCTAssertEqual(result.kept.count, 10, "the whole budget is spent")
+        XCTAssertEqual(result.heldBack, 25)
+        let perDay = Dictionary(grouping: result.kept, by: { dayByID[$0.id]! }).mapValues(\.count)
+        XCTAssertEqual(perDay[2], 1, "the thin day keeps its only photo")
+        XCTAssertEqual(perDay[3], 4, "the small day keeps all four")
+        XCTAssertEqual(perDay[1], 5, "the fat day absorbs the rest, it does not take it first")
+    }
+
+    /// Unassigned photos share ONE bucket. That is the guarantee that matters: however many loose
+    /// photos a journey has, they compete with each other for a single day's worth of the budget
+    /// instead of each claiming a round-robin slot and crowding out the days a visitor navigates to.
+    /// So the split does not move when the loose pile grows.
+    func testUnassignedPhotosShareOneBucketSoTheirCountCannotSkewTheSplit() {
+        func photos(loose: Int) -> [Photo] {
+            var all: [Photo] = []
+            for i in 0..<3 {
+                var photo = Photo(id: "DAY-\(i)", journeyId: "J1", url: "", sortOrder: i)
+                photo.localThumbPath = makeThumbFile()
+                all.append(photo)
+            }
+            for i in 0..<loose {
+                var photo = Photo(id: "LOOSE-\(i)", journeyId: "J1", url: "", sortOrder: 100 + i)
+                photo.localThumbPath = makeThumbFile()
+                all.append(photo)
+            }
+            return all
+        }
+        let dayOf: (Photo) -> Int? = { $0.id.hasPrefix("DAY") ? 1 : nil }
+
+        // Ten loose photos and a hundred produce the same 2/2 split: one day bucket, one loose
+        // bucket. Weighting by photo count would have handed the hundred-photo pile ~97 % of it.
+        for loose in [10, 100] {
+            let result = PublicMirrorPublisher.capped(photos(loose: loose), limit: 4, dayOf: dayOf)
+            XCTAssertEqual(result.kept.count, 4)
+            XCTAssertEqual(result.kept.filter { $0.id.hasPrefix("DAY") }.count, 2,
+                           "the day keeps its share regardless of \(loose) loose photos")
+            XCTAssertEqual(result.kept.filter { $0.id.hasPrefix("LOOSE") }.count, 2)
+        }
+    }
+
+    /// A journey whose photos have no day assignment at all — a fresh import before day matching —
+    /// must still publish up to the cap rather than degrade to one bucket's worth.
+    func testAJourneyWithNoDayAssignmentAtAllStillFillsTheBudget() {
+        let photos = makeCappablePhotos(30)
+        let result = PublicMirrorPublisher.capped(photos, limit: 12, dayOf: { _ in nil })
+        XCTAssertEqual(result.kept.count, 12)
+        XCTAssertEqual(result.heldBack, 18)
+        XCTAssertEqual(result.kept.map(\.sortOrder), Array(0..<12),
+                       "one bucket degrades to leading sortOrder, the app's default order")
+    }
+
+    func testCapIsStableAcrossRuns() {
+        let photos = makeCappablePhotos(60, days: 5)
+        let dayOf: (Photo) -> Int? = { (Int($0.id.dropFirst()) ?? 0) % 5 + 1 }
+        let first = PublicMirrorPublisher.capped(photos, limit: 17, dayOf: dayOf).kept.map(\.id)
+        for _ in 0..<5 {
+            XCTAssertEqual(PublicMirrorPublisher.capped(photos, limit: 17, dayOf: dayOf).kept.map(\.id),
+                           first, "the selection must not depend on dictionary iteration order")
+        }
+    }
+
+    func testCapKeepsThePublishedSetInJourneyOrder() {
+        let photos = makeCappablePhotos(20, days: 4)
+        let dayOf: (Photo) -> Int? = { (Int($0.id.dropFirst()) ?? 0) % 4 + 1 }
+        let kept = PublicMirrorPublisher.capped(photos, limit: 8, dayOf: dayOf).kept
+        XCTAssertEqual(kept.map(\.sortOrder), kept.map(\.sortOrder).sorted(),
+                       "the mirror reads chronologically like every other surface")
+    }
+
+    /// The whole point of the design: a journey over the cap still publishes.
+    func testAPublishOverTheCapSucceedsAndReportsTheShortfall() async {
+        let mock = MockPublicDatabase()
+        var config = PublicMirrorConfig.default
+        config.maxPublishedPhotos = 25
+        let publisher = PublicMirrorPublisher(database: mock, config: config)
+
+        let report = await publisher.publish(journey: makeJourney(),
+                                             photos: makeCappablePhotos(80, days: 2))
+
+        XCTAssertTrue(report.succeeded, "a capped publish is a SUCCESSFUL publish, never a failure")
+        XCTAssertTrue(report.journeyPublished)
+        XCTAssertEqual(report.photosPublished, 25, "exactly the cap reached the mirror")
+        XCTAssertEqual(report.photosHeldBack, 55)
+        XCTAssertEqual(report.skippedNoThumb, 0, "held back is not the same thing as thumbless")
+        XCTAssertTrue(report.failures.isEmpty)
+        XCTAssertNotNil(report.publishedSlug, "a capped publish still yields a shareable link")
+    }
+
+    func testAPublishUnderTheCapReportsNothingHeldBack() async {
+        let mock = MockPublicDatabase()
+        let report = await PublicMirrorPublisher(database: mock)
+            .publish(journey: makeJourney(), photos: makePhotos())
+        XCTAssertEqual(report.photosHeldBack, 0, "three photos are nowhere near 200")
+        XCTAssertEqual(report.photosPublished, 2)
+        XCTAssertEqual(report.skippedNoThumb, 1)
+    }
+
+    /// Thumbless photos are excluded BEFORE the cap, so they do not spend cap slots and the mirror
+    /// receives the full budget it is allowed.
+    func testThumblessPhotosDoNotConsumeCapSlots() async {
+        let mock = MockPublicDatabase()
+        var config = PublicMirrorConfig.default
+        config.maxPublishedPhotos = 5
+        var photos = makeCappablePhotos(5)
+        for i in 0..<20 {   // 20 photos with no bytes at all
+            photos.append(Photo(id: "NOBYTES\(i)", journeyId: "J1", url: "", sortOrder: 500 + i))
+        }
+        let report = await PublicMirrorPublisher(database: mock, config: config)
+            .publish(journey: makeJourney(), photos: photos)
+        XCTAssertEqual(report.photosPublished, 5, "the full budget is spent on publishable photos")
+        XCTAssertEqual(report.skippedNoThumb, 20)
+        XCTAssertEqual(report.photosHeldBack, 0, "nothing publishable was held back")
+    }
+
+    /// A journey published before the cap existed must shrink on the next publish: held-back photos
+    /// are absent from the desired set, so the reconciliation pass deletes them from the mirror.
+    func testRepublishingUnderTheCapDeletesTheNowExcessPhotosFromTheMirror() async {
+        let mock = MockPublicDatabase()
+        // The mirror already holds P0…P9 from an earlier, uncapped publish.
+        mock.photoIDPages = [(0..<10).map { CKRecord.ID(recordName: "P\($0)") }]
+        var config = PublicMirrorConfig.default
+        config.maxPublishedPhotos = 4
+
+        let report = await PublicMirrorPublisher(database: mock, config: config)
+            .publish(journey: makeJourney(), photos: makeCappablePhotos(10))
+
+        XCTAssertEqual(report.photosPublished, 4)
+        XCTAssertEqual(report.photosHeldBack, 6)
+        XCTAssertEqual(report.deleted, 6, "the six now-excess photos leave the showcase")
+        XCTAssertTrue(mock.deleted.contains(CKRecord.ID(recordName: "P9")))
+        XCTAssertFalse(mock.deleted.contains(CKRecord.ID(recordName: "P0")))
+    }
+
+    func testDefaultCapIsAtLeastTheFreeTierPhotoAllowance() {
+        // A free account may hold 100 photos in its one journey and publishing is free (§5), so a
+        // cap below that would make a free journey unpublishable in full.
+        XCTAssertGreaterThanOrEqual(PublicMirrorConfig.default.maxPublishedPhotos,
+                                    EntitlementPolicy.freePhotosPerOwnedJourney)
+        XCTAssertEqual(PublicMirrorConfig.default.maxPublishedPhotos, 200)
+    }
+
+    /// Degenerate configuration must not publish an unbounded journey by accident.
+    func testACapOfZeroPublishesNoPhotosRatherThanAllOfThem() {
+        let photos = makeCappablePhotos(10)
+        let result = PublicMirrorPublisher.capped(photos, limit: 0, dayOf: { _ in 1 })
+        XCTAssertTrue(result.kept.isEmpty)
+        XCTAssertEqual(result.heldBack, 10)
+    }
 }
 
 // MARK: - ShowcaseViewModel: flag flips only after the network op, and only for the owner
@@ -464,17 +834,17 @@ final class PublicMirrorTests: XCTestCase {
 final class ShowcaseViewModelTests: XCTestCase {
 
     /// Fake mirror publisher: returns a preset report and records which op ran.
-    final class FakePublisher: PublicMirrorPublishing {
+    final class FakePublisher: PublicMirrorPublishing, @unchecked Sendable {
         var report: PublicMirrorReport
         private(set) var publishCalled = false
         private(set) var unpublishCalled = false
         init(_ report: PublicMirrorReport) { self.report = report }
         func publish(journey: Journey, photos: [Photo],
-                     progress: ((PublicMirrorProgress) -> Void)?) async -> PublicMirrorReport {
+                     progress: (@Sendable (PublicMirrorProgress) -> Void)?) async -> PublicMirrorReport {
             publishCalled = true; return report
         }
         func unpublish(slug: String,
-                       progress: ((PublicMirrorProgress) -> Void)?) async -> PublicMirrorReport {
+                       progress: (@Sendable (PublicMirrorProgress) -> Void)?) async -> PublicMirrorReport {
             unpublishCalled = true; return report
         }
     }

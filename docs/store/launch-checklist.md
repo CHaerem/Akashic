@@ -58,10 +58,15 @@ parallel:
   - **Type:** Non-Consumable (one-time unlock — matches §5 "buy once")
   - **Reference name:** `Akashic Complete`
   - **Display name (EN):** `Akashic Complete` · **(NB):** `Akashic Complete`
-  - **Description (EN):** "Unlock unlimited journeys, publishing and export. One
-    purchase, shared with your whole family."
-  - **Description (NB):** "Lås opp ubegrenset antall reiser, publisering og eksport.
-    Ett kjøp, delt med hele familien."
+  - **Description (EN):** "Unlock unlimited journeys and photos, plus Akashic
+    Intelligence. One purchase, shared with your whole family."
+  - **Description (NB):** "Lås opp ubegrenset antall reiser og bilder, pluss Akashic
+    Intelligence. Ett kjøp, delt med hele familien."
+  - ⚠️ **Do not write "publishing" or "export" into this description.** Both are
+    free-tier capabilities (`EntitlementPolicy.canPublish`/`canExport` return `true`
+    unconditionally, §5 revised) — advertising them as paid is a claim App Review can
+    falsify against the binary. This description, the paywall benefit list in
+    `PaywallView.swift` and `app-store-listing.md §2/§3` must all say the same thing.
   - **Family Sharing: ON** — required; one purchase covering the family is core to
     the product (§5). Toggle it before first submission (turning it on later is
     fine, but set it now).
@@ -76,7 +81,7 @@ parallel:
       instead of 30%). This roughly doubles net margin; do it before first sale.
 - [ ] **Free tier is enforced locally** (1 journey, 100-photo cap) — no server
       receipt check needed (§4.4). **Revised 2026-07-25: the free journey is fully
-      finishable — publishing and export are NOT paywalled.** The wall falls only on
+      finishable — neither publishing nor exporting is paywalled.** The wall falls only on
       the *second* journey. Confirm `EntitlementPolicy`, the paywall benefit list and
       the IAP description in Connect all agree on that, or the paywall makes a claim
       App Review can falsify.
@@ -150,6 +155,60 @@ aren't the developer. Gate to proceed: **≥7 complete a journey without help.**
 
 ---
 
+## Phase G — Public-database cost watch (QUA-25)
+
+**Why this phase exists.** Every other cost in the model is $0 or fixed: journeys and
+photos live in the *customer's* iCloud, on the customer's quota. The public showcase is
+the one exception — `PublicJourney` and `PublicPhoto` are in **our** CloudKit container,
+so every signed-out visitor who scrolls a showcase page spends our egress
+(`COMMERCIALIZATION-PLAN.md` §2). The success mode and the cost-blow-up mode are the
+same event: the Product Hunt / HN spike that sells app units is also the bill.
+
+The app now bounds the write side. What is left is the operator side, and neither of
+these can be set from code.
+
+- [x] **Per-journey published-photo cap — done in code.**
+      `PublicMirrorConfig.maxPublishedPhotos = 200`
+      (`apple/Akashic/Sync/PublicMirrorPublisher.swift`). At the app's own ~60 KB
+      thumbnail budget that is ~12 MB per fully-scrolled journey view, against ~56 MB
+      for a 939-photo journey uncapped. The cap is spread across the journey's days
+      rather than taken off the front, so a long trek's later days are smaller, not
+      empty. A journey over the cap still publishes and the report says how many photos
+      were held back. Raising the number is a **cost** decision — read the usage panel
+      below first.
+
+- [ ] **Set the CloudKit Console usage alert.** CloudKit Console →
+      `iCloud.no.akashic` → **Telemetry** (Production) → the public-database
+      *Data Transfer* metric → add an alert.
+      **Threshold: 50 % of the current free daily transfer allowance**, alerting to the
+      developer's email.
+      Why 50 % and not 80 %: the free allowance scales with active users, so the
+      absolute number moves under you, and the traffic shape here is a *spike* rather
+      than a ramp — a threshold that only fires once you are nearly out gives no time
+      to react. 50 % of the day's allowance is the point at which "today is unusual" is
+      true and nothing has been billed yet.
+      Set the same alert on **Database Requests** — a scripted scraper hits request
+      count long before it hits bytes.
+
+- [ ] **Record the baseline the first week after launch.** Note the normal daily public
+      transfer and request count in this file once real traffic exists. Every threshold
+      above is reasoned from the plan's arithmetic, not measured, and the first real
+      week replaces the estimate.
+
+- [ ] **Know the two levers before you need them.** Neither is automatic:
+      1. Lower `maxPublishedPhotos` and ship an update (bounds future publishes; already
+         published mirrors shrink on their owner's next publish, because held-back
+         photos are absent from the desired set and the reconciliation pass deletes
+         them).
+      2. Reduce the published thumbnail dimension/quality (400 px q0.8 today) — this
+         cuts every existing journey's egress on the next publish, and is the bigger
+         lever of the two.
+      A per-slug or per-account read throttle does not exist and cannot be built with
+      CloudKit's public database alone; it is the trigger for the object-storage + CDN
+      migration the plan reserves as the escape hatch (§8).
+
+---
+
 ## Quick reference — decisions baked in
 
 | Item | Value |
@@ -163,3 +222,5 @@ aren't the developer. Gate to proceed: **≥7 complete a journey without help.**
 | First release | Manual release (control go-live); phased rollout for later updates |
 | Categories | Travel (primary), Photo & Video (secondary) |
 | Age rating | 4+ |
+| Published photos per journey | **200** (`PublicMirrorConfig.maxPublishedPhotos`) — ~12 MB per full showcase view |
+| Public-DB usage alert | 50 % of the free daily allowance, on both Data Transfer and Database Requests |

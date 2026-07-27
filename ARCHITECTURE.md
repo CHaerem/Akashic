@@ -1,775 +1,398 @@
 # Akashic Architecture
 
-> **⚠️ Migration in progress (2026-07):** Akashic is moving to an Apple-platform architecture (CloudKit + native iOS app + GitHub Pages). See [APPLE-MIGRATION-PLAN.md](./APPLE-MIGRATION-PLAN.md) (target architecture & decisions), [APPLE-MIGRATION-TASKS.md](./APPLE-MIGRATION-TASKS.md) (task breakdown & status), and [APPLE-MIGRATION-RUNBOOK.md](./APPLE-MIGRATION-RUNBOOK.md) (manual/operator steps). Those documents supersede the "Target Architecture" here.
->
-> **⚠️ Status caveat (updated 2026-07-22):** the Supabase project below had been **paused** (not deleted); it was **resumed on 2026-07-21** and the full data rescue is **complete** — Postgres export (3 journeys · 18 waypoints · 1538 photos) + a complete R2 archive (8 147 objects · 16.41 GB), verification passed, bundle at `/Users/cher/Privat/AkashicExport-20260722`; **akashic.no is live again**. Supabase + R2 are now treated **read-only until Phase 5**. Meanwhile the **native iOS app has moved well beyond the Phase-1 MVP** (globe/fly-in map, day content, photos, elevation/stats, a dormant widget, and live Spotlight indexing). **As of 2026-07-22 the web app no longer talks to Supabase at all** (T3.4: CloudKit is the only backend; the services themselves stay up, read-only, until the Phase-5 decommission gate). The "Active"/"Target Architecture" sections below describe the *legacy* Supabase/Cloudflare stack — for the authoritative target and status see [APPLE-MIGRATION-PLAN.md](./APPLE-MIGRATION-PLAN.md), [APPLE-MIGRATION-TASKS.md](./APPLE-MIGRATION-TASKS.md), and [APPLE-MIGRATION-RUNBOOK.md](./APPLE-MIGRATION-RUNBOOK.md).
+Akashic is an iOS-first family-journey app. A SwiftUI app under [`apple/`](./apple) is the
+primary and only editing client; a read-only static web showcase under [`src/`](./src) is the
+face of `akashic.no`. **All data lives in Apple CloudKit.** There is no backend of ours, no
+database to operate, and no server to run.
 
-## Vision
-
-An interactive platform to explore family travel journeys with photos, routes, and memories displayed on an immersive 3D globe. Designed to eventually support multiple users creating and sharing their own journeys.
-
-### Journey Types
-
-The platform should support different types of journeys:
-
-1. **Treks/Hikes** (primary focus) - Multi-day adventures with routes, camps, elevation data
-2. **Vacations** (future) - Location-based trips without a specific route (e.g., "Paris 2024")
-3. **Road Trips** (future) - Route-based but with different waypoint semantics
-
-The data model is designed to be flexible - routes, camps, and structured waypoints are all optional.
+> **Read this before you delete anything.** This document describes what exists on
+> **2026-07-26**. [`WORKPLAN.md`](./WORKPLAN.md) is the only authoritative statement of status;
+> where the two disagree, the ledger wins. The `LEG-*` track in the ledger is the ordered
+> decommission plan, and its dependency edges are load-bearing — `LEG-11` (deleting the
+> Cloudflare Pages project, the R2 bucket, the DNS zone, Supabase and the Google OAuth config)
+> is gated on `LEG-09`, the GitHub Pages + DNS cutover, because **akashic.no still resolves
+> through Cloudflare DNS to Cloudflare Pages today**. Deleting the DNS zone before the cutover
+> takes the site down.
 
 ---
 
-## Current State
+## What is live right now
 
-| Component | Service | Status |
-|-----------|---------|--------|
-| Hosting | Cloudflare Pages | ✅ Active |
-| Auth | Supabase Auth (Google OAuth) | ✅ Active |
-| Media Storage | Cloudflare R2 (`akashic-media`) | ✅ Active |
-| Media API | Cloudflare Worker (authenticated) | ✅ Active |
-| MCP API | Cloudflare Worker (JSON-RPC) | ✅ Active |
-| Database | Supabase PostgreSQL | ✅ Active (data migrated) |
-| Domain | akashic.no | ✅ Active (Cloudflare DNS) |
+| Concern | What serves it | Status |
+|---|---|---|
+| Data (journeys, waypoints, photos, comments) | CloudKit container `iCloud.no.akashic` — private DB per family | **Live.** The only backend. |
+| Identity / auth | The device Apple ID on iOS; CloudKit JS Apple ID sign-in on web; anonymous for public reads | **Live.** No account system of ours. |
+| Photo bytes | `CKAsset` in the owner's private DB, on the owner's iCloud quota | **Live.** No object store of ours. |
+| Access control | CloudKit itself — `CKShare` on a per-journey record zone | **Live.** Enforced by Apple, not by us. |
+| Public journeys | A mirror in the container's **public** database, written by the app on publish | **Live.** Metadata + thumbnails only. |
+| Assistant / automation | App Intents (Siri, Shortcuts) inside the app | **Live.** |
+| iOS app native maps | MapKit `.hybrid(elevation: .realistic)` | **Live.** No token, no vendor. |
+| Web maps | Mapbox GL JS (globe projection, 3D terrain) | **Live.** |
+| Web hosting | **Cloudflare Pages**, via [`.github/workflows/deploy.yml`](./.github/workflows/deploy.yml) | **Live, and scheduled to move.** GitHub Pages is staged but dormant — see [Hosting and DNS](#hosting-and-dns). |
+| DNS for `akashic.no` | **Cloudflare DNS** | **Live, and scheduled to move** to the registrar at the same cutover (`LEG-09`). |
 
----
+| Concern | Former owner | Status |
+|---|---|---|
+| Database | Supabase PostgreSQL | **Retired from the code.** No source file reaches it. The project is still switched on, read-only, pending deletion (`LEG-04` → `LEG-11`). |
+| Auth | Supabase Auth (Google OAuth) | **Retired from the code** (`T3.4`). Config still exists in the dashboards, pending deletion. |
+| Photo storage | Cloudflare R2 (`akashic-media`) | **Retired from the code.** Bucket still exists with the archived bytes, pending `LEG-03` / `LEG-11`. |
+| Media access proxy | Cloudflare Worker | **Gone.** Deployment deleted (`LEG-01`, verified by Cloudflare edge error 1042); source removed from the repo (`LEG-12`). |
+| Assistant API | MCP endpoint on the same Worker | **Gone with the Worker.** Replaced 1:1 by App Intents (D8); `Intents/JourneyQuery.swift` now holds the only copy of the tool defaults and clamps. |
 
-## Target Architecture
-
-### Guiding Principles
-
-1. **Minimal vendor lock-in** - Use open-source and portable solutions
-2. **Multi-user ready** - Architecture supports multiple users from day one
-3. **Expandable** - Easy to scale when free tiers are exceeded
-4. **Simple** - Prefer managed services over self-hosting for now
-
-### Target Stack
-
-| Layer | Service | Why |
-|-------|---------|-----|
-| **Hosting** | Cloudflare Pages | 500 builds/mo, low lock-in, excellent CDN |
-| **Auth** | Supabase Auth | Open source, self-hostable, replaces Auth0 |
-| **Database** | Supabase PostgreSQL | Standard SQL, Row Level Security, exportable |
-| **Storage** | Cloudflare R2 | S3-compatible API, 10GB free, zero egress |
-
-### Free Tier Limits
-
-| Service | Limit | Sufficient For |
-|---------|-------|----------------|
-| Cloudflare Pages | 500 builds/month | Heavy development |
-| Supabase Auth | 50,000 MAU | Plenty |
-| Supabase DB | 500 MB | ~100k+ journey records |
-| Cloudflare R2 | 10 GB | ~2,000-3,000 photos |
+The distinction in that second table is the whole point of it: **nothing in the shipped code
+talks to any of those services any more, but several of them are still running and still
+billable.** They are live resources awaiting an owner action, not architecture. See
+[What this replaced](#what-this-replaced-history).
 
 ---
 
-## Data Model
-
-### Users (Supabase Auth)
-
-Managed by Supabase Auth - provides:
-- Email/password authentication
-- Social logins (Google, GitHub, etc.)
-- User metadata
-
-### Database Schema
-
-```sql
--- User profiles (synced from auth.users via trigger)
-CREATE TABLE profiles (
-  id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
-  email TEXT NOT NULL,
-  display_name TEXT,
-  avatar_url TEXT,
-  created_at TIMESTAMPTZ DEFAULT now()
-);
-
--- Journey membership with role-based access
-CREATE TABLE journey_members (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  journey_id UUID REFERENCES journeys(id) ON DELETE CASCADE,
-  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
-  role TEXT NOT NULL CHECK (role IN ('owner', 'editor', 'viewer')),
-  invited_by UUID REFERENCES auth.users(id),
-  created_at TIMESTAMPTZ DEFAULT now(),
-  UNIQUE(journey_id, user_id)
-);
-
--- Journeys: A trek/trip/vacation
-CREATE TABLE journeys (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  created_by UUID REFERENCES auth.users(id),  -- Original creator
-
-  -- Basic info
-  name TEXT NOT NULL,
-  slug TEXT UNIQUE NOT NULL,
-  description TEXT,
-  country TEXT,
-  journey_type TEXT DEFAULT 'trek',
-
-  -- Trek-specific (optional)
-  summit_elevation INTEGER,
-  total_distance NUMERIC,
-  total_days INTEGER,
-  date_started DATE,
-  date_ended DATE,
-
-  -- Media (R2 paths use journey UUID, not slug)
-  hero_image_url TEXT,
-  gpx_url TEXT,
-
-  -- Map settings
-  center_coordinates JSONB,
-  default_zoom NUMERIC,
-  preferred_bearing NUMERIC,
-  preferred_pitch NUMERIC DEFAULT 60,
-
-  -- Route data
-  route JSONB,
-  stats JSONB,
-
-  -- Metadata
-  is_public BOOLEAN DEFAULT false,
-  created_at TIMESTAMPTZ DEFAULT now(),
-  updated_at TIMESTAMPTZ DEFAULT now()
-);
-
--- Waypoints with route position data
-CREATE TABLE waypoints (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  journey_id UUID REFERENCES journeys(id) ON DELETE CASCADE,
-  name TEXT NOT NULL,
-  waypoint_type TEXT DEFAULT 'camp',
-  day_number INTEGER,
-  coordinates JSONB NOT NULL,
-  elevation INTEGER,
-  description TEXT,
-  highlights TEXT[],
-  sort_order INTEGER,
-  route_distance_km NUMERIC,     -- Distance along route (from RouteEditor)
-  route_point_index INTEGER,     -- Index in route array
-  created_at TIMESTAMPTZ DEFAULT now()
-);
-
--- Photos with uploader attribution
-CREATE TABLE photos (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  journey_id UUID REFERENCES journeys(id) ON DELETE CASCADE,
-  waypoint_id UUID REFERENCES waypoints(id) ON DELETE SET NULL,
-  url TEXT NOT NULL,             -- R2 path: journeys/{journey_uuid}/photos/{id}.jpg
-  thumbnail_url TEXT,
-  caption TEXT,
-  coordinates JSONB,
-  taken_at TIMESTAMPTZ,
-  is_hero BOOLEAN DEFAULT false,
-  sort_order INTEGER,
-  uploaded_by UUID REFERENCES auth.users(id),  -- Who uploaded
-  created_at TIMESTAMPTZ DEFAULT now()
-);
-
--- Helper function for membership-based access checks
-CREATE FUNCTION user_has_journey_access(journey_uuid UUID, required_role TEXT DEFAULT 'viewer')
-RETURNS BOOLEAN AS $$
-  SELECT EXISTS (
-    SELECT 1 FROM journey_members
-    WHERE journey_id = journey_uuid
-    AND user_id = auth.uid()
-    AND (
-      CASE required_role
-        WHEN 'viewer' THEN role IN ('owner', 'editor', 'viewer')
-        WHEN 'editor' THEN role IN ('owner', 'editor')
-        WHEN 'owner' THEN role = 'owner'
-      END
-    )
-  );
-$$ LANGUAGE sql SECURITY DEFINER;
-
--- RLS Policies (membership-based)
-ALTER TABLE journeys ENABLE ROW LEVEL SECURITY;
-ALTER TABLE waypoints ENABLE ROW LEVEL SECURITY;
-ALTER TABLE photos ENABLE ROW LEVEL SECURITY;
-ALTER TABLE journey_members ENABLE ROW LEVEL SECURITY;
-ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
-
--- Journeys: public OR member with viewer+ role
-CREATE POLICY "Journey access" ON journeys
-  FOR SELECT USING (is_public = true OR user_has_journey_access(id));
-CREATE POLICY "Journey modify" ON journeys
-  FOR ALL USING (user_has_journey_access(id, 'editor'));
-
--- Waypoints/Photos: inherit from journey membership OR public journey
-CREATE POLICY "Waypoint access" ON waypoints
-  FOR SELECT USING (
-    user_has_journey_access(journey_id)
-    OR EXISTS (SELECT 1 FROM journeys WHERE id = journey_id AND is_public = true)
-  );
-CREATE POLICY "Waypoint modify" ON waypoints FOR ALL USING (user_has_journey_access(journey_id, 'editor'));
-CREATE POLICY "Photo access" ON photos
-  FOR SELECT USING (
-    user_has_journey_access(journey_id)
-    OR EXISTS (SELECT 1 FROM journeys WHERE id = journey_id AND is_public = true)
-  );
-CREATE POLICY "Photo modify" ON photos FOR ALL USING (user_has_journey_access(journey_id, 'editor'));
-
--- Members: owners can manage, members can view
-CREATE POLICY "Member view" ON journey_members FOR SELECT USING (user_has_journey_access(journey_id));
-CREATE POLICY "Member manage" ON journey_members FOR ALL USING (user_has_journey_access(journey_id, 'owner'));
-
--- Profiles: all authenticated users can view (for member dropdown)
-CREATE POLICY "Profile view" ON profiles FOR SELECT USING (auth.role() = 'authenticated');
-
--- Triggers: auto-create profile, auto-add creator as owner
--- (See migration file for full implementation)
-```
-
-### Roles
-
-| Role | Permissions |
-|------|-------------|
-| **owner** | Full control - edit journey, manage members, delete journey |
-| **editor** | Edit journey details, upload/edit photos, edit waypoints |
-| **viewer** | Read-only access to journey, photos, and waypoints |
-
-### Storage Structure (R2)
-
-**Bucket**: `akashic-media`
+## System shape
 
 ```
-akashic-media/
-└── journeys/
-    └── {journey_uuid}/
-        └── photos/
-            ├── {photo_id}.jpg
-            └── {photo_id}_thumb.jpg
+                     ┌──────────────────────────────────────────┐
+                     │      CloudKit container                  │
+                     │      iCloud.no.akashic                   │
+                     │                                          │
+                     │  Private DB   one zone per journey       │
+                     │               journey-<uuid>             │
+                     │               + journey-<uuid>-media     │
+                     │  Shared DB    the same zones, seen by    │
+                     │               CKShare participants       │
+                     │  Public DB    showcase mirror —          │
+                     │               metadata + thumbs only     │
+                     └────────┬───────────────────┬─────────────┘
+                              │                   │
+                   CKSyncEngine + CKDatabase   CloudKit JS
+                   (native SDK, entitled       (Apple ID web sign-in,
+                    build only)                 anonymous public reads)
+                              │                   │
+              ┌───────────────┴────┐   ┌──────────┴──────────────────┐
+              │  iOS / iPadOS app  │   │  Web showcase (React SPA)   │
+              │  SwiftUI + MapKit  │   │  READ-ONLY                  │
+              │  PRIMARY CLIENT    │   │  viewing + day comments,    │
+              │  the only writer   │   │  nothing else               │
+              │                    │   │                             │
+              │  App Intents ──────┼─► │  static bundle on           │
+              │  (Siri/Shortcuts)  │   │  akashic.no                 │
+              └────────────────────┘   └─────────────────────────────┘
+
+     Nothing is self-hosted. No servers, no workers, no database to operate.
+     All data lives in CloudKit; all access control is enforced by Apple.
 ```
-
-**Access**: All R2 content is served through an authenticated Cloudflare Worker (`workers/media-proxy/`). The Worker:
-- Verifies Supabase JWT tokens using JWKS (public key)
-- Checks journey membership via `journey_members` table
-- Role-based access: owner, editor, viewer
-- Public journeys accessible without authentication
-
-**Worker URL**: `https://akashic-media.chris-haerem.workers.dev`
-
-**Frontend utilities**:
-- `src/lib/media.ts` - URL building helpers
-- `src/hooks/useMedia.ts` - React hook for authenticated media URLs
-
-### MCP (Model Context Protocol) API
-
-The media Worker also exposes an MCP endpoint for AI assistant integration (e.g., Claude Desktop).
-
-**Endpoint**: `POST /mcp`
-
-**Protocol**: JSON-RPC 2.0 over HTTP
-
-**Available Tools**:
-
-| Tool | Description | Auth Required |
-|------|-------------|---------------|
-| `list_journeys` | List user's accessible journeys | Yes |
-| `get_journey_details` | Full journey with camps, route, stats | Yes |
-| `search_journeys` | Search by name/country/description | Yes |
-| `get_journey_stats` | Computed difficulty, times, elevation | Yes |
-| `get_journey_photos` | Photos with GPS and dates | Yes |
-
-**Authentication**: All tool calls require a valid Supabase JWT token in the `Authorization: Bearer <token>` header.
-
-**Example Usage**:
-
-```bash
-# List available tools
-curl -X POST https://akashic-media.chris-haerem.workers.dev/mcp \
-  -H "Content-Type: application/json" \
-  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
-
-# Call a tool (requires auth)
-curl -X POST https://akashic-media.chris-haerem.workers.dev/mcp \
-  -H "Authorization: Bearer <jwt_token>" \
-  -H "Content-Type: application/json" \
-  -d '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"list_journeys","arguments":{}}}'
-```
-
-**Claude Desktop Integration**:
-
-Add to your MCP settings (`~/Library/Application Support/Claude/claude_desktop_config.json`):
-
-```json
-{
-  "mcpServers": {
-    "akashic": {
-      "type": "http",
-      "url": "https://akashic-media.chris-haerem.workers.dev/mcp"
-    }
-  }
-}
-```
-
-**Source**: `workers/media-proxy/src/mcp/`
 
 ---
 
-## UI Components
+## The CloudKit data model
 
-### Design System
+### Container and schema
 
-The UI uses a **Liquid Glass** design system inspired by iOS/macOS glass morphism:
+- Container: `iCloud.no.akashic`, with the usual Development and Production environments.
+- The schema is **hand-authored** at [`apple/CloudKit/schema.ckdb`](./apple/CloudKit/schema.ckdb)
+  and imported with `cktool`; Dev → Prod promotion is treated like a database migration. See
+  [`apple/CloudKit/README.md`](./apple/CloudKit/README.md).
+- The authoritative field-by-field mapping — including the historical Postgres correspondence
+  that explains several field names — is [`apple/CloudKit/MAPPING.md`](./apple/CloudKit/MAPPING.md).
 
-| Layer | Purpose |
-|-------|---------|
-| `src/styles/liquidGlass.ts` | Core design tokens (colors, blur, shadows) |
-| `src/components/ui/` | shadcn/ui components with glass theme |
-| `src/contexts/ThemeContext.tsx` | Dark mode (Liquid Glass is dark-only) |
+### Record types
 
-### Navigation (Find My-Inspired UI)
+| Record type | Database | Holds |
+|---|---|---|
+| `Journey` | private / shared | Zone root. Name, slug, country, dates, distance/days/summit, camera preferences, `centerLocation`, `statsJSON`, `routeJSON` (`CKAsset`), `heroImage`/`heroThumb`, `mediaShareURL` |
+| `Waypoint` | private / shared | One per day/camp. `journeyRef`, coordinates, elevation, description, `highlights` (`LIST<STRING>`), and the day-content payloads `weatherJSON`, `funFactsJSON`, `pointsOfInterestJSON`, `historicalSitesJSON` |
+| `Photo` | private / shared | Metadata plus `thumb` (`CKAsset`). `journeyRef`, optional `waypointRef`, `takenAt`, coordinates, `isHero`, rotation, media type |
+| `DayComment` | private / shared | Per-day family comments; `content`, `createdAt`/`modifiedAt`, `authorDisplayName` |
+| `PhotoMedia` | private / shared, **separate media zone** | The full-resolution `original` only. Never fetched by the sync engines |
+| `PublicJourney` | **public** | The showcase mirror of one published journey: metadata, `statsJSON`, `routeJSON`, `waypointsJSON` (both `CKAsset`), `heroThumb` |
+| `PublicPhoto` | **public** | One published thumbnail: `journeySlug`, `thumb`, caption, `takenAt`, `dayNumber`, `sortOrder` |
 
-The UI follows Apple's "Find My" iOS app pattern: full-screen map with a draggable bottom sheet.
+`journey_members` and `profiles`, the two Postgres tables that carried access control, have no
+CloudKit equivalent and no replacement: `CKShare` participants *are* the membership model, and
+participant identities come from CloudKit.
 
-```
-src/components/layout/
-├── BottomSheet.tsx         # iOS-style draggable sheet with snap points
-├── BottomSheetContent.tsx  # Routes content based on view + mode
-└── QuickActionBar.tsx      # Top-right floating action buttons
+### Zones and sharing
 
-src/components/nav/
-├── NavigationPill.tsx      # Day selector + mode switcher in sheet header
-└── ContextCard.tsx         # Day info context card
-```
+- One custom zone per journey in the owner's private database: `journey-<uuid>`. The zone root
+  record is the `Journey`; every child record lives in the same zone.
+- Sharing is `CKShare(recordZoneID:)` — zone-level, not hierarchical. A hierarchical share
+  would require every child to hold an owning reference back to the root, and CloudKit caps
+  those at roughly 750 per record; Kilimanjaro alone has 939 photos. Zone-wide sharing has no
+  equivalent limit. Full reasoning in [`apple/Docs/sharing.md`](./apple/Docs/sharing.md).
+- Roles flatten CloudKit's (role, permission) pair to three the family recognises: **Owner**,
+  **Can edit** (`.readWrite`), **Can view** (`.readOnly`). An unknown permission maps to
+  viewer, never editor.
+- `CKSyncEngine` binds to exactly one database, so participation needs **two engines** — one on
+  the private database, one on the shared — with separate state files. `CDJourney.zoneOwnerName`
+  routes each journey to exactly one of them; `nil` means "mine".
 
-**BottomSheet Features:**
-- **Three snap points**: minimized (10vh), half (45vh), expanded (88vh)
-- **Spring animations**: iOS-native feel with velocity-based snapping
-- **Scroll locking**: Content scrolls only when sheet is expanded
-- **Safe area support**: Works with notched devices
+### Media: why originals live in their own zone
 
-**QuickActionBar Actions:**
-- **Globe button**: Return to globe view
-- **Edit mode toggle**: Enable editing (waypoints, photos, journey details)
-- **Recenter**: Fly camera to current camp/trek
+First sync used to mean pulling every original — 11.2 GB for the family archive. Photo
+architecture v2 splits the bytes:
 
-**Content Modes:**
-- `day`: Current day details with photo strip
-- `photos`: Full photo grid with edit/assign
-- `stats`: Elevation profile and journey statistics
-- `info`: Journey overview
+- `Photo.thumb` syncs with the metadata, so a fresh install is ~97 MB rather than ~11.2 GB.
+- `PhotoMedia.original` lives in a **separate `journey-<uuid>-media` zone that both sync
+  engines deliberately exclude from every fetch**, and is read on demand by record name via
+  `CKDatabase.records(for:)`. Writes and deletes go direct through `CKDatabase` (chunked
+  `modifyRecords`), never through the engine, so the engine's bookkeeping stays purely
+  metadata.
+- The media zone gets its own `CKShare`, whose URL is published on `Journey.mediaShareURL` so a
+  participant accepting a journey auto-accepts its media. A participant who cannot accept it
+  degrades to thumbnails with a quiet log, never a dialog.
 
-**Edit Mode:**
-When enabled via QuickActionBar, edit buttons appear in:
-- Globe view: "Edit Journey Details" button
-- Trek day view: "Edit Day" and "Assign Photos" buttons
+The seam is [`apple/Akashic/Media/MediaDatabase.swift`](./apple/Akashic/Media/MediaDatabase.swift);
+`MAPPING.md` §13 is the specification.
 
-### Tab Components
+### The public showcase mirror
 
-Content cards render these tab components:
+Publishing is an explicit owner action. The app writes `PublicJourney` + `PublicPhoto` records
+into the container's public database
+([`apple/Akashic/Sync/PublicMirrorPublisher.swift`](./apple/Akashic/Sync/PublicMirrorPublisher.swift)),
+reconciles stale photos, and can unpublish. One rule has its own tests: **originals never leave
+the private database** — the publisher refuses `Photo.thumbnailFileURL`'s display-time fallback
+to original bytes. Only thumbnails and the story go out.
 
-| Component | Purpose |
-|-----------|---------|
-| `StatsTab` | Journey stats, uses extracted sub-components |
-| `JourneyTab` | Day-by-day breakdown with segments |
-| `OverviewTab` | Trek description and key stats |
-| `PhotosTab` | Photo gallery with upload |
-
-**Extracted Trek Components** (`src/components/trek/`):
-
-| Component | Purpose |
-|-----------|---------|
-| `InteractiveElevationProfile` | SVG elevation chart with zoom/pan/touch |
-| `HistoricalSiteCard` | Expandable historical site info |
-| `DayPhotos` | Photo grid for a single day |
-| `SegmentInfo` | Hiking segment details between camps |
-
-### Shared Hooks
-
-| Hook | Location | Purpose |
-|------|----------|---------|
-| `usePhotoDay` | `src/hooks/usePhotoDay.ts` | Photo-day matching with 4-tier strategy |
-| `useMedia` | `src/hooks/useMedia.ts` | Authenticated media URL generation |
-| `useOnlineStatus` | `src/hooks/useOnlineStatus.ts` | Network status, cache status, storage usage |
-| `useMapbox` | `src/hooks/mapbox/` | Mapbox GL integration (modular) |
-
-### Modular Code Structure
-
-Large files have been refactored into focused modules for maintainability:
-
-**`src/lib/journeys/`** - Supabase data layer (split from 960-line journeys.ts)
-```
-journeys/
-├── index.ts          # Barrel file with re-exports
-├── types.ts          # DbJourney, DbWaypoint interfaces
-├── transforms.ts     # toTrekConfig, toTrekData helpers
-├── journeyAPI.ts     # Journey CRUD + cache management
-├── photoAPI.ts       # Photo operations
-├── waypointAPI.ts    # Waypoint CRUD
-└── memberAPI.ts      # Member management
-```
-
-**`src/hooks/mapbox/`** - Mapbox GL hook (extracted types and configs)
-```
-mapbox/
-├── index.ts          # Barrel file with re-exports
-├── types.ts          # Hook interfaces and types
-├── layerConfigs.ts   # Mapbox layer paint configurations
-└── useMapbox.ts      # Core hook logic
-```
-
-**Backwards Compatibility**: Original files (`src/lib/journeys.ts`, `src/hooks/useMapbox.ts`) re-export from the modular structure, preserving all existing imports.
-
-### Utilities
-
-| File | Purpose |
-|------|---------|
-| `src/utils/dates.ts` | Date formatting and photo-day matching |
-| `src/utils/formatting.ts` | Distance, elevation, duration formatting |
-| `src/utils/geography.ts` | Haversine distance, bearing calculations |
-| `src/utils/routeUtils.ts` | Route segments, difficulty, hiking time |
-
-### Icons Library
-
-Reusable icons in `src/components/icons/index.tsx`:
-- CalendarIcon, InfoIcon, PhotoIcon, StatsIcon
-- CloseIcon, ChevronIcon, PencilIcon, MapPinIcon
-- ExpandIcon, TrashIcon, DownloadIcon
-
-### Component Library (shadcn/ui)
-
-Base components in `src/components/ui/`:
-
-- `Button` - 5 variants, 44px mobile touch targets
-- `Card` - Glass morphism cards
-- `Dialog` - Modal dialogs
-- `Sheet` - Bottom sheets for mobile
-- `Tabs` - Tab navigation
-- Form components: `Input`, `Textarea`, `Select`, `Label`
-- `Skeleton` - Loading states
+> **The public database is billed to us, not to the customer.** Private-database traffic rides
+> on the user's own iCloud; the public mirror does not. Anything that increases showcase traffic
+> has a real cost line. This is the one place where the "no servers, no costs" story has a
+> caveat.
 
 ---
 
-## Migration Plan
+## The native app (`apple/`)
 
-### Phase 1: Infrastructure Setup ✅
+The primary client and the only writer. Start at [`apple/README.md`](./apple/README.md), which
+covers the XcodeGen setup, persistence modes, the sync layer file-by-file, and the activation
+path for an entitled build.
 
-1. **Cloudflare Pages** ✅
-   - ✅ Create Cloudflare account
-   - ✅ Connect GitHub repo
-   - ✅ Configure build settings
-   - ✅ Point akashic.no DNS to Cloudflare
-   - ✅ Remove Netlify
+The shape, briefly:
 
-2. **Supabase** ✅
-   - ✅ Create Supabase project
-   - ✅ Create database schema (journeys, waypoints, photos tables)
-   - ✅ Configure auth providers (Google OAuth)
-   - ✅ Set up Row Level Security
-   - ✅ Add route/stats JSONB columns for trek data
+- **Local store** is Core Data (on-disk SQLite). CloudKit is a sync peer, not the store.
+- **Sync** is `CKSyncEngine` with custom record types (decision D4), one zone per journey.
+  [`apple/Akashic/Sync/RecordCoder.swift`](./apple/Akashic/Sync/RecordCoder.swift) is the single
+  domain ↔ `CKRecord` contract, shared with the importer, written to `schema.ckdb` exactly.
+  [`apple/Akashic/Sync/AkashicSyncEngine.swift`](./apple/Akashic/Sync/AkashicSyncEngine.swift)
+  is the coordinator, behind a `SyncEngineProtocol` seam so the whole layer is unit-testable
+  against a mock engine.
+- **Conflict policy** is last-writer-wins, server-authoritative. On a send conflict the local
+  edit is rebased onto the server record so the resend carries the correct change tag.
+- **`NSPersistentCloudKitContainer` was rejected**, not merely unused: it generates its own
+  `CD_`-prefixed schema in the single default zone, which would invalidate the hand-authored
+  schema, the imported records, the web adapter's queries, and zone-per-journey sharing all at
+  once. `MAPPING.md` §12 has the trade-off analysis.
+- **The entitlement is the first safety gate, not the account check.** A `CKContainer`
+  instantiated in a binary *without* `com.apple.developer.icloud-services` traps (SIGTRAP). So
+  every CloudKit touchpoint sits behind `#if AKASHIC_CLOUDKIT_BUILD`, a compilation condition
+  defined only by the signed `Debug-CloudKit` / `Release-CloudKit` configurations. In a default
+  build the sync layer compiles but never constructs a container.
+- **Paid tier**: a one-time non-consumable IAP verified with StoreKit 2. The capability rules
+  live in exactly one place,
+  [`apple/Akashic/Store/Entitlements.swift`](./apple/Akashic/Store/Entitlements.swift) — free is
+  one owned journey and 100 photos per owned journey, and that journey is fully finishable
+  (publishing and export are **not** gated on any tier). Shared-in content is never gated.
 
-3. **Cloudflare R2** ✅
-   - ✅ Create R2 bucket (`akashic-media`)
-   - ✅ Create authenticated media Worker
-   - ✅ JWT verification via Supabase JWKS
-   - ✅ Frontend utilities for authenticated URLs
+### Assistant integration (App Intents)
 
-### Phase 2: Code Migration ✅
-
-4. **Replace Auth0 with Supabase Auth** ✅
-   - ✅ Install `@supabase/supabase-js`
-   - ✅ Remove `@auth0/auth0-react`
-   - ✅ Update AuthGuard component
-   - ✅ Update login flow
-   - ✅ Configure allowed users (sign-ups disabled)
-
-5. **Migrate Data to Database** ✅
-   - ✅ Create Supabase client (`src/lib/supabase.ts`)
-   - ✅ Create data fetching layer (`src/lib/journeys.ts`)
-   - ✅ Create JourneysContext for async data loading
-   - ✅ Run migration script (3 journeys, 18 waypoints, routes + stats)
-   - ✅ Update hooks to use context (`useTrekData`, `useMapbox`)
-   - ✅ Remove old JSON data files
-   - ✅ Add e2e tests for Supabase data loading
-
-6. **Photo Upload System** ✅
-   - ✅ Upload endpoint in media Worker (`POST /upload/journeys/{slug}/photos`)
-   - ✅ Photo CRUD operations in `src/lib/journeys.ts`
-   - ✅ PhotosTab component with drag-and-drop upload
-   - ✅ Photo grid + lightbox display
-   - ✅ EXIF metadata extraction (GPS, date via `bulkUploadR2.ts`)
-   - ⏳ Photo map markers (pending)
-
-### Phase 3: Multi-user Foundation ✅
-
-7. **Database Schema** ✅
-   - ✅ `profiles` table with auth.users sync trigger
-   - ✅ `journey_members` table with role-based access
-   - ✅ RLS policies using `user_has_journey_access()` helper
-   - ✅ Auto-create owner membership on journey creation
-
-8. **Member Management** ✅
-   - ✅ Add/remove journey members
-   - ✅ Role management (owner, editor, viewer)
-   - ✅ Member management UI in JourneyEditModal
-   - ✅ R2 paths migrated from slug to UUID
-
-### Phase 4: Multi-user Features (Future)
-
-9. **User Dashboard**
-   - View own journeys
-   - Create new journey
-   - Edit journey details
-
-10. **Journey Editor**
-    - Add/edit camps
-    - Upload photos
-    - Draw/import GPX routes
-
-11. **Sharing**
-    - Public/private toggle
-    - Share links
-    - Embed support
+[`apple/Akashic/Intents/`](./apple/Akashic/Intents) reproduces the retired MCP Worker's
+five-tool surface 1:1 as App Intents — `list_journeys`, `search_journeys`,
+`get_journey_details`, `get_journey_stats`, `get_journey_photos` — including the exact JSON wire
+shapes, so Siri, Shortcuts and a future system-level MCP bridge all hit one query surface.
+Every intent goes through `JourneyStore` → `PersistenceController`, never straight to Core Data.
 
 ---
 
-## Environment Variables
+## The web showcase (`src/`)
 
-### Frontend (.env)
+A React 19 + TypeScript + Vite single-page bundle. Mapbox GL JS for the globe and terrain.
+CloudKit JS is the data layer: Apple ID sign-in for the family (private and shared databases),
+anonymous reads against the public database for everyone else.
+
+**It is read-only.** As of 2026-07-26 every capability that mutates a journey is native-only.
+[`src/lib/nativeOnly.ts`](./src/lib/nativeOnly.ts) is the one place that decides this, and it is
+a constant rather than a flag on purpose: every mutating function in the CloudKit adapter is
+already a warn-and-return-false stub, pinned by
+[`src/lib/journeys/adapters/cloudkit/writeStubs.test.ts`](./src/lib/journeys/adapters/cloudkit/writeStubs.test.ts).
+A web control that offered a write could not perform one — it could only *look* like it had. So
+the affordances are gone, replaced by a native-only notice, and any code path that still reaches
+an upload or delete throws rather than resolving.
+
+Day comments and caption edits are the deliberate exception, and they round-trip live.
+
+```
+src/
+├── components/       AkashicApp, AuthGuard, MapboxGlobe, and feature folders
+│                     (home, trek, journey, photos, comments, public, layout, nav, ui)
+├── contexts/         AuthContext, JourneysContext, ThemeContext
+├── hooks/            useMapbox (modular, under hooks/mapbox/), useTrekData, usePhotoDay,
+│                     usePhotoOriginals, useMedia, useOnlineStatus, gesture hooks
+├── lib/              cloudkit.ts (CDN load + auth facade), journeys/ (API + CloudKit
+│                     adapters), media.ts, nativeOnly.ts, exif.ts, mapMatching.ts
+├── styles/           liquidGlass.ts design tokens
+├── types/            shared TypeScript types
+└── utils/            dates, formatting, geography, routeUtils, stats, countryFlags
+```
+
+### Media URLs on the web
+
+There is nothing to sign and nothing to proxy. CloudKit hands back complete, pre-authenticated
+`CKAsset` download URLs, so [`src/lib/media.ts`](./src/lib/media.ts) passes absolute URLs
+through untouched and resolves everything else to `''`. There is no relative-path fallback: the
+schema declares no URL strings on `Photo` (only `original`/`thumb` assets), so no record can
+carry a relative object path. Removing the fallback retired the last source reference to the
+media Worker *before* the Worker is deleted, which is the only order that cannot break.
+
+### UI conventions
+
+The web UI follows Apple's "Find My" pattern — full-screen map with a draggable bottom sheet
+(snap points at 10 / 45 / 88 vh, velocity-based spring snapping, scroll locking, safe-area
+aware). Content modes are `day`, `photos`, `stats` and `info`. The visual language is the
+"Liquid Glass" token set in `src/styles/liquidGlass.ts` over shadcn/ui primitives.
+
+The rapid-day-switching behaviour is worth knowing about because it looks like a bug when it
+regresses: every day switch cancels **all** pending camera work (`map.stop()`, RAF callbacks,
+style-load handlers, timeouts) and re-verifies that the selection has not changed before
+applying camera movement or route highlighting. `isStyleLoaded()` returns `false` during
+`fitBounds`/`flyTo`, so checking it invents problems; once `mapReady` is true the style is
+loaded. See [`src/hooks/mapbox/useMapbox.ts`](./src/hooks/mapbox/useMapbox.ts).
+
+---
+
+## Hosting and DNS
+
+**Today:** `akashic.no` resolves through **Cloudflare DNS** to a **Cloudflare Pages** site,
+deployed on every push to `main` by
+[`.github/workflows/deploy.yml`](./.github/workflows/deploy.yml).
+
+**Staged:** [`.github/workflows/deploy-pages.yml`](./.github/workflows/deploy-pages.yml) deploys
+the same bundle to GitHub Pages. It is deliberately `workflow_dispatch`-only so the two hosts
+never build the same commit in parallel. `public/CNAME` carries `akashic.no`; `404.html` is
+copied from `index.html` in CI and never committed (the app has no client-side router —
+navigation is `?journey=&day=` query params).
+
+**The cutover** is `LEG-09` (= migration tasks T4.2 + T4.3): configure the custom domain, run
+the Pages workflow, verify with a hosts override or `curl --resolve` (**not** on the
+`github.io` URL — once a custom domain is set it 301s to `akashic.no`, which still resolves to
+Cloudflare, and `base: "/"` breaks the subpath render anyway), then flip DNS at the registrar,
+switch the workflow trigger to `push`, and delete `deploy.yml`. Rollback is re-pointing DNS.
+The full sequence is [`docs/github-pages-cutover.md`](./docs/github-pages-cutover.md).
+
+Only after that does deleting the Cloudflare DNS zone and Pages project become safe.
+
+---
+
+## Environment variables
+
+The web bundle needs two things and no secrets of ours. See [`.env.example`](./.env.example).
 
 ```env
-VITE_MAPBOX_TOKEN=xxx
-VITE_SUPABASE_URL=xxx
-VITE_SUPABASE_ANON_KEY=xxx
-VITE_MEDIA_URL=https://akashic-media.chris-haerem.workers.dev  # Optional, has default
+VITE_MAPBOX_TOKEN=…            # required — globe and terrain
+VITE_CLOUDKIT_ENV=development  # 'development' (default) | 'production'
+VITE_CLOUDKIT_API_TOKEN=…      # container-scoped, public — for anonymous public-DB reads
+VITE_E2E_TEST_MODE=true        # optional — disables auth for Playwright
 ```
 
-### Media Worker (workers/media-proxy/)
+CloudKit JS itself is loaded from Apple's CDN. There are no Supabase, R2 or Worker variables
+left in the code; the `VITE_MEDIA_URL` line still present in `.env.example` is dead and should
+go with the Worker.
 
-Secrets set via `wrangler secret put`:
-- `SUPABASE_ANON_KEY` - For querying journey access
-
-Environment variables in `wrangler.toml`:
-- `SUPABASE_URL` - Supabase project URL
-
----
-
-## GitHub Secrets Setup
-
-The following secrets must be configured in your GitHub repository for CI/CD:
-
-### Required Secrets
-
-| Secret | Description | How to Get |
-|--------|-------------|------------|
-| `VITE_MAPBOX_TOKEN` | Mapbox API token for globe/map | [Mapbox Dashboard](https://account.mapbox.com/access-tokens/) |
-| `CLOUDFLARE_API_TOKEN` | Cloudflare API token for deployment | See below |
-| `CLOUDFLARE_ACCOUNT_ID` | Your Cloudflare account ID | See below |
-
-### Getting Cloudflare Credentials
-
-1. **Account ID**:
-   - Go to [Cloudflare Dashboard](https://dash.cloudflare.com/)
-   - Select your account
-   - Account ID is shown in the right sidebar (or URL)
-
-2. **API Token**:
-   - Go to [API Tokens](https://dash.cloudflare.com/profile/api-tokens)
-   - Click "Create Token"
-   - Use the "Edit Cloudflare Workers" template OR create custom token with:
-     - Account > Cloudflare Pages > Edit
-     - Account > Account Settings > Read
-   - Copy the generated token
-
-### Adding Secrets to GitHub
-
-1. Go to your repository on GitHub
-2. Navigate to Settings → Secrets and variables → Actions
-3. Click "New repository secret"
-4. Add each secret with its name and value
+CI secrets still in use: `VITE_MAPBOX_TOKEN`. `CLOUDFLARE_API_TOKEN` and
+`CLOUDFLARE_ACCOUNT_ID` are used only by `deploy.yml` and are revoked in `LEG-10`.
 
 ---
 
 ## Testing
 
-### E2E Testing (Playwright)
+| What | Command | Expected |
+|---|---|---|
+| Web unit tests | `npx vitest --run` | 406 tests (measured 2026-07-26) |
+| Web build | `npm run build` | ~4 s, no env needed |
+| Web e2e | `VITE_E2E_TEST_MODE=true CI=true npx playwright test --project=chromium --ignore-snapshots` | needs `.env.local` |
+| Native build + tests | see [`CLAUDE.md`](./CLAUDE.md) for the full invocation | — |
+| Ledger | `npm run workplan:check` | ok |
 
-End-to-end tests verify critical user flows and UI interactions. Tests run in E2E test mode (`VITE_E2E_TEST_MODE=true`) which disables authentication for automated testing.
+**[`CLAUDE.md`](./CLAUDE.md) is the maintained list — prefer it over this table**, which will
+drift. It carries the exact native invocation and its expected counts, which commands currently
+fail and why (web typecheck does; three quality gates are open at once, which is how that
+happened), and which commands must never be run because they mutate things or need the owner's
+credentials.
 
-**Test Files:**
-- `e2e/app.spec.ts` - Core app flows (globe view, trek selection, navigation)
-- `e2e/day-navigation.spec.ts` - Day switching, rapid navigation scenarios
-
-**Test Helpers** (`src/components/MapboxGlobe.tsx`):
-
-Exposed on `window.testHelpers` for programmatic control:
-```typescript
-interface TestHelpers {
-  selectTrek(id: string): boolean;         // Select a trek by slug
-  getTreks(): Array<{id, name}>;           // Get all available treks
-  selectDay(dayNumber: number): boolean;   // Switch to a specific day
-  getCurrentDay(): number | null;          // Get current selected day
-  getCamps(): Array<Camp>;                 // Get camps for current trek
-  isMapReady(): boolean;                   // Check if map is initialized
-  isDataLoaded(): boolean;                 // Check if journey data loaded
-}
-```
-
-**Running Tests:**
-```bash
-# Run all E2E tests
-VITE_E2E_TEST_MODE=true npm run build
-npx playwright test
-
-# Run specific test file
-npx playwright test e2e/day-navigation.spec.ts
-
-# Run with UI
-npx playwright test --ui
-```
-
-**Browser Support:**
-- Chromium ✅
-- Mobile Chrome ✅
-- Safari (requires `npx playwright install webkit`)
-
-**Key Test Scenarios:**
-- Rapid day switching (prevents stale camera animations)
-- Forward/backward navigation through days
-- Off-route waypoint navigation (e.g., Safari day)
-- Console error detection during navigation
-
-### Rapid Day Switching Implementation
-
-**Challenge:** When users quickly switch between days (e.g., Day 1 → 2 → 3), map camera animations can overlap, causing the camera to get stuck at intermediate days or show stale highlighting.
-
-**Solution:** Simplified cancellation approach in `flyToTrek` function:
-
-1. **Cancel ALL pending operations** on every day switch:
-   - `map.stop()` - Cancel any Mapbox camera animations
-   - Cancel RAF (requestAnimationFrame) callbacks
-   - Clear style load handlers
-   - Clear pending timeouts
-
-2. **Verify selection hasn't changed** before applying camera movements and route highlighting
-
-3. **Key insight:** Once `mapReady` is true, the style is loaded. The `isStyleLoaded()` check returns `false` during `fitBounds`/`flyTo` animations, creating false problems. We removed 70+ lines of complex retry logic by recognizing this.
-
-**Result:** Clean, fast, reliable - code reduced by 85%, all edge cases handled correctly.
-
-See implementation: [`src/hooks/mapbox/useMapbox.ts:954-988`](src/hooks/mapbox/useMapbox.ts#L954-L988)
+E2E tests run with `VITE_E2E_TEST_MODE=true`, which disables auth. `window.testHelpers` on
+`MapboxGlobe` exposes `selectTrek`, `getTreks`, `selectDay`, `getCurrentDay`, `getCamps`,
+`isMapReady`, `isDataLoaded` for programmatic control. Specs live in [`e2e/`](./e2e).
 
 ---
 
-## Long-term Goals
+## Cost, and the exit
 
-### Features
+Running cost is close to zero by construction:
 
-- [ ] Multiple journeys per user
-- [ ] Photo galleries with lightbox
-- [ ] Elevation profiles from GPX
-- [ ] Journey statistics (distance, elevation gain, etc.)
-- [ ] Timeline view of journey
-- [ ] Photo map markers
-- [ ] Journey sharing (public links)
-- [ ] Embed widget for blogs
-- [ ] Mobile app (PWA improvements)
-- [ ] Offline support
+- Apple Developer Program **$99/yr**; `akashic.no` ~150–200 NOK/yr. Both already paid.
+- CloudKit private-database storage is the **user's own iCloud quota** — a large photo archive
+  may need an iCloud+ plan, which the onboarding says plainly because discovering it later is a
+  refund and a one-star.
+- Share participants consume nothing of their own.
+- GitHub Pages/Actions are free for public repos; MapKit is free in native apps.
+- The public showcase database is the one line billed to us (see above).
 
-### Scale Considerations
-
-When free tiers are exceeded:
-
-| Service | Upgrade Path | Est. Cost |
-|---------|--------------|-----------|
-| Supabase | Pro plan | $25/month |
-| Cloudflare R2 | Pay-as-you-go | ~$0.015/GB/month |
-| Cloudflare Pages | Pro plan (if needed) | $20/month |
-
-### Exit Strategy
-
-If needing to migrate away:
-
-- **Supabase** → Self-host Supabase or migrate to any PostgreSQL
-- **Cloudflare R2** → Any S3-compatible storage (AWS, Backblaze, MinIO)
-- **Cloudflare Pages** → Any static host (Vercel, GitHub Pages, self-hosted)
+**The exit door is built in and shipped**, which is what makes accepting Apple lock-in
+defensible (decision D10): any journey exports from the app as GPX + JSON + every original
+photo, via [`apple/Akashic/Export/`](./apple/Akashic/Export). GPX and JSON open anywhere. The
+data is portable formats all the way down; only the sync mechanism is Apple's.
 
 ---
 
-## Development Notes
+## What this replaced (history)
 
-### Local Development
+Everything below is **historical**. It is here because it explains why several things are
+shaped the way they are, and because the decommission is not finished — some of these services
+are still switched on. None of it is current architecture.
 
-```bash
-# Install dependencies
-npm install
+Akashic was built twice before this. The relevant residue:
 
-# Start dev server
-npm run dev
+| Was | Became | Why the shape survives |
+|---|---|---|
+| Supabase PostgreSQL (`journeys`, `waypoints`, `photos`, `day_comments`, `journey_members`, `profiles`) | CloudKit record types | CloudKit field names still mirror the Postgres columns 1:1 — that is deliberate, and `MAPPING.md` is the mapping. The migrations are still in [`supabase/migrations/`](./supabase/migrations) as the reference for what the old schema *was* (`LEG-13` deletes them) |
+| Supabase Auth (Google OAuth), `journey_members` + RLS policies | The device Apple ID; `CKShare` participants | The owner/editor/viewer trio in the UI is the old role model, kept because it survived contact with the family |
+| Cloudflare R2 (`akashic-media`), paths `journeys/{journey_uuid}/photos/{photo_id}.jpg` | `CKAsset` on `Photo`/`PhotoMedia` | Record names are the **original Postgres UUIDs**. The importer preserved them precisely because they were the R2 path keys, and preserving them made the import idempotent |
+| Cloudflare Worker `media-proxy` — Supabase JWT verification via JWKS, membership checks, public-journey bypass | Nothing. CloudKit asset URLs are pre-authenticated | The Worker's job does not exist any more; there is no proxy to replace it with |
+| The same Worker's `/mcp` JSON-RPC endpoint (5 tools) | App Intents (D8) | The intents reproduce the wire shapes exactly, including snake_case keys and the string-typed stat fields, so an MCP bridge can be dropped in front of them |
+| Auth0 | Supabase Auth, then nothing | Gone twice over |
+| Netlify | Cloudflare Pages, then GitHub Pages | Gone twice over |
 
-# Run tests
-npm test
+**The data rescue.** The Supabase project was *paused*, not deleted, and was resumed on
+2026-07-21. A full export followed — Postgres (3 journeys, 18 waypoints, 1538 photos) plus a
+complete R2 archive (8147 objects, 16.41 GB), verification passed, bundle held offline. The
+tooling is [`scripts/export/`](./scripts/export) (do not run `verifyExport.ts`: it overwrites
+the dated report inside the archive bundle). The archive being duplicated onto a second
+physical medium (`LEG-02`) is a hard gate on every deletion.
 
-# Build for production
-npm run build
-```
+**The import.** The family archive went into **Production** as 1559 `CKRecord`s of all types
+(3 journeys + 18 waypoints + 1538 photos) carrying 3070 `CKAsset`s (1538 originals + 1529
+thumbnails + 3 journey heroes), with 0 failures. Verified live and written up in
+[`apple/Docs/sync-verification.md`](./apple/Docs/sync-verification.md); the browser-side
+verification is [`docs/cloudkit-js-verification.md`](./docs/cloudkit-js-verification.md).
 
-### Deployment
-
-Automatic via GitHub → Cloudflare Pages on push to `main`.
-
-### Testing Auth Locally
-
-Supabase provides a local emulator:
-
-```bash
-npx supabase start
-```
-
----
-
-## Scripts
-
-Utility scripts in `scripts/` for data management and operations.
-
-### Photo Management
-
-| Script | Purpose | Usage |
-|--------|---------|-------|
-| `bulkUploadR2.ts` | Bulk upload photos to R2 with EXIF extraction | `SUPABASE_SERVICE_KEY="..." npx tsx scripts/bulkUploadR2.ts <folder> <journey-slug>` |
-| `generateThumbnails.ts` | Generate thumbnails for photos | `npx tsx scripts/generateThumbnails.ts` |
-
-**bulkUploadR2.ts features:**
-- Direct R2 upload via wrangler CLI (bypasses worker auth)
-- EXIF extraction: GPS coordinates, date taken
-- Duplicate detection (skips existing photos)
-- Supports: `.jpg`, `.jpeg`, `.png`, `.heic`, `.heif`, `.webp`
-
-**Prerequisites:** `exiftool` installed, wrangler configured with R2 access
-
-### Data Import
-
-| Script | Purpose |
-|--------|---------|
-| `importGpx.js` | Import GPX route files |
-| `combineGpx.js` | Merge multiple GPX files |
-| `migrateToSupabase.js` | One-time migration to Supabase |
-| `migrateR2Photos.js` | Migrate photos from slug to UUID paths |
-
-### Build & Assets
-
-| Script | Purpose |
-|--------|---------|
-| `build.js` | Production build helper |
-| `generateIcons.js` | Generate app icons |
-| `generateSplashScreens.js` | Generate PWA splash screens |
-| `generatePhotoData.js` | Generate photo metadata JSON |
+**Still running, still billable, awaiting an owner action** — the Cloudflare Worker, the R2
+bucket, the Cloudflare Pages project, the Cloudflare DNS zone, the Supabase project and the
+Google OAuth config. `LEG-01` (the Worker) is independent of every gate. The rest are ordered in
+the ledger for a reason; the ordering is in the note at the top of this file.
 
 ---
 
-## References
+## Related documents
 
-- [Supabase Docs](https://supabase.com/docs)
-- [Cloudflare Pages Docs](https://developers.cloudflare.com/pages)
-- [Cloudflare R2 Docs](https://developers.cloudflare.com/r2)
-- [Mapbox GL JS](https://docs.mapbox.com/mapbox-gl-js)
-
----
-
-## Related Documents
-
-- [ROADMAP.md](./ROADMAP.md) - Feature roadmap and development phases
+- [`WORKPLAN.md`](./WORKPLAN.md) — the only authoritative statement of what is done
+- [`CLAUDE.md`](./CLAUDE.md) — working agreement, verified commands, and the traps that have
+  already cost real time
+- [`APPLE-MIGRATION-PLAN.md`](./APPLE-MIGRATION-PLAN.md) — the target architecture and the
+  numbered decisions D1–D10 referenced throughout this file
+- [`APPLE-MIGRATION-TASKS.md`](./APPLE-MIGRATION-TASKS.md) — the migration task breakdown and
+  what remains (operator work only)
+- [`APPLE-MIGRATION-RUNBOOK.md`](./APPLE-MIGRATION-RUNBOOK.md) — the manual steps only the owner
+  can do
+- [`COMMERCIALIZATION-PLAN.md`](./COMMERCIALIZATION-PLAN.md) — the v1.0 product and business plan
+- [`apple/README.md`](./apple/README.md) — the native app in detail
+- [`apple/CloudKit/MAPPING.md`](./apple/CloudKit/MAPPING.md) — the authoritative schema mapping
+- [`apple/Docs/DESIGN-PLAN.md`](./apple/Docs/DESIGN-PLAN.md) — the design and submission review
+- [`docs/store/app-store-listing.md`](./docs/store/app-store-listing.md) — store metadata
+- [`docs/history/ROADMAP.md`](./docs/history/ROADMAP.md) — the archived pre-migration roadmap
+  (historical; superseded by `WORKPLAN.md`)

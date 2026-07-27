@@ -3,7 +3,7 @@
  * Extracted from useMapbox for better organization
  */
 
-import type mapboxgl from 'mapbox-gl';
+import type * as mapboxgl from 'mapbox-gl';
 
 /**
  * Fog configuration for globe view (transparent space for CSS starfield)

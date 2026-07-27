@@ -1,14 +1,20 @@
 /**
- * Modal for handling photos shared via PWA Share Target
- * Shows photo previews with metadata and lets user select a journey
+ * What the user sees after sharing photos into the installed web app.
+ *
+ * It used to offer "Upload N Photos": pick a journey, then for each file call
+ * `uploadPhoto` (which throws — there is no R2 upload any more) and `createPhoto` (a
+ * stubbed CloudKit write that returns `false`). On the happy path it cleared the shared
+ * files and closed as though the photos had landed. Bringing photos in is native-only
+ * (LEG-07), so this now says so, shows what was shared so the user can recognise it, and
+ * offers only "Done" — which clears the queue, the one thing it can honestly do.
+ *
+ * The PWA share_target itself still exists in the manifest; retiring that entry is a
+ * separate change (it lives outside this component).
  */
 
 import { useState, useEffect, useCallback } from 'react';
 import { getPendingSharedFiles, clearSharedFiles, type SharedFile } from '../lib/shareTarget';
-import { extractPhotoMetadata, type PhotoMetadata } from '../lib/exif';
-import { uploadPhoto, type UploadResult } from '../lib/media';
-import { createPhoto, getJourneyIdBySlug } from '../lib/journeys';
-import { useJourneys } from '../contexts/JourneysContext';
+import { NativeOnlyNotice } from './common/NativeOnlyNotice';
 import {
     Dialog,
     DialogContent,
@@ -18,58 +24,46 @@ import {
     DialogFooter,
 } from './ui/dialog';
 import { Button } from './ui/button';
-import { Label } from './ui/label';
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from './ui/select';
 
 interface PhotoPreview {
     sharedFile: SharedFile;
     previewUrl: string;
-    metadata: PhotoMetadata;
 }
 
 interface ShareTargetModalProps {
     isOpen: boolean;
     onClose: () => void;
+    /**
+     * Kept for the caller. Nothing is uploaded here, so there is nothing to refetch and
+     * this is never called.
+     */
     onUploadComplete?: () => void;
 }
 
-export function ShareTargetModal({ isOpen, onClose, onUploadComplete }: ShareTargetModalProps) {
-    const { treks } = useJourneys();
+export function ShareTargetModal({ isOpen, onClose }: ShareTargetModalProps) {
     const [photos, setPhotos] = useState<PhotoPreview[]>([]);
-    const [selectedJourney, setSelectedJourney] = useState<string>('');
-    const [uploading, setUploading] = useState(false);
-    const [uploadProgress, setUploadProgress] = useState<{ current: number; total: number } | null>(null);
     const [error, setError] = useState<string | null>(null);
 
-    // Load shared files and extract metadata
+    // Load shared files for preview. No EXIF extraction: the metadata only ever fed the
+    // upload, and reading it off every file is not free.
     useEffect(() => {
         if (!isOpen) return;
+
+        let revoked = false;
+        const created: string[] = [];
 
         async function loadSharedFiles() {
             try {
                 const sharedFiles = await getPendingSharedFiles();
+                if (revoked) return;
 
-                // Process each file: create preview and extract metadata
-                const previews = await Promise.all(
-                    sharedFiles.map(async (sf) => {
-                        const previewUrl = URL.createObjectURL(sf.file);
-                        const metadata = await extractPhotoMetadata(sf.file);
-                        return { sharedFile: sf, previewUrl, metadata };
-                    })
-                );
+                const previews = sharedFiles.map((sf) => {
+                    const previewUrl = URL.createObjectURL(sf.file);
+                    created.push(previewUrl);
+                    return { sharedFile: sf, previewUrl };
+                });
 
                 setPhotos(previews);
-
-                // Auto-select first journey if only one exists
-                if (treks.length === 1) {
-                    setSelectedJourney(treks[0].id);
-                }
             } catch (err) {
                 console.error('Failed to load shared files:', err);
                 setError('Failed to load shared photos');
@@ -78,88 +72,28 @@ export function ShareTargetModal({ isOpen, onClose, onUploadComplete }: ShareTar
 
         loadSharedFiles();
 
-        // Cleanup preview URLs on unmount
         return () => {
-            photos.forEach(p => URL.revokeObjectURL(p.previewUrl));
+            revoked = true;
+            created.forEach((url) => URL.revokeObjectURL(url));
         };
-    }, [isOpen, treks]);
+    }, [isOpen]);
 
-    const handleUpload = useCallback(async () => {
-        if (!selectedJourney || photos.length === 0) return;
-
-        setUploading(true);
-        setError(null);
-        setUploadProgress({ current: 0, total: photos.length });
-
-        try {
-            // Get the database ID for the selected journey
-            const journeyDbId = await getJourneyIdBySlug(selectedJourney);
-            if (!journeyDbId) {
-                throw new Error('Journey not found');
-            }
-
-            // Upload each photo
-            for (let i = 0; i < photos.length; i++) {
-                const photo = photos[i];
-                setUploadProgress({ current: i + 1, total: photos.length });
-
-                // Upload to R2 (includes thumbnail generation)
-                const result: UploadResult = await uploadPhoto(journeyDbId, photo.sharedFile.file);
-
-                // Create photo record in database with metadata and thumbnail
-                await createPhoto({
-                    journey_id: journeyDbId,
-                    url: result.path,
-                    thumbnail_url: result.thumbnailPath,
-                    coordinates: photo.metadata.coordinates,
-                    taken_at: photo.metadata.takenAt?.toISOString(),
-                });
-            }
-
-            // Clear shared files from IndexedDB
-            await clearSharedFiles();
-
-            // Cleanup preview URLs
-            photos.forEach(p => URL.revokeObjectURL(p.previewUrl));
-
-            // Notify completion
-            onUploadComplete?.();
-            onClose();
-        } catch (err) {
-            console.error('Upload failed:', err);
-            setError(err instanceof Error ? err.message : 'Upload failed');
-        } finally {
-            setUploading(false);
-            setUploadProgress(null);
-        }
-    }, [selectedJourney, photos, onClose, onUploadComplete]);
-
-    const handleCancel = useCallback(async () => {
-        // Clear shared files
+    const handleDismiss = useCallback(async () => {
+        // Clearing the queue is the only write this modal can actually perform: it is
+        // local IndexedDB, not CloudKit.
         await clearSharedFiles();
-        // Cleanup preview URLs
         photos.forEach(p => URL.revokeObjectURL(p.previewUrl));
+        setPhotos([]);
         onClose();
     }, [photos, onClose]);
 
-    const formatDate = (date?: Date) => {
-        if (!date) return 'Unknown date';
-        return date.toLocaleDateString(undefined, {
-            year: 'numeric',
-            month: 'short',
-            day: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit',
-        });
-    };
-
     return (
-        <Dialog open={isOpen} onOpenChange={(open) => !open && !uploading && handleCancel()}>
+        <Dialog open={isOpen} onOpenChange={(open) => !open && handleDismiss()}>
             <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
-                    <DialogTitle>Upload Shared Photos</DialogTitle>
+                    <DialogTitle>Shared Photos</DialogTitle>
                     <DialogDescription>
-                        {photos.length} photo{photos.length !== 1 ? 's' : ''} ready to upload
+                        {photos.length} photo{photos.length !== 1 ? 's' : ''} arrived here
                     </DialogDescription>
                 </DialogHeader>
 
@@ -170,28 +104,9 @@ export function ShareTargetModal({ isOpen, onClose, onUploadComplete }: ShareTar
                         </div>
                     )}
 
-                    {/* Journey selector */}
-                    <div className="space-y-2">
-                        <Label>Select Journey</Label>
-                        <Select
-                            value={selectedJourney}
-                            onValueChange={setSelectedJourney}
-                            disabled={uploading}
-                        >
-                            <SelectTrigger>
-                                <SelectValue placeholder="Choose a journey..." />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {treks.map((trek) => (
-                                    <SelectItem key={trek.id} value={trek.id}>
-                                        {trek.name}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                    </div>
+                    <NativeOnlyNotice what="Adding photos to a journey" />
 
-                    {/* Photo grid */}
+                    {/* Photo grid — so the user can see which photos this was about */}
                     <div className="grid grid-cols-3 gap-2">
                         {photos.map((photo, index) => (
                             <div
@@ -203,78 +118,14 @@ export function ShareTargetModal({ isOpen, onClose, onUploadComplete }: ShareTar
                                     alt={`Photo ${index + 1}`}
                                     className="w-full h-full object-cover"
                                 />
-
-                                {/* Metadata indicators */}
-                                <div className="absolute bottom-0 left-0 right-0 p-1 bg-gradient-to-t from-black/70 to-transparent flex gap-1 justify-end">
-                                    {/* Location indicator */}
-                                    {photo.metadata.coordinates && (
-                                        <div
-                                            className="w-5 h-5 rounded-full bg-blue-500/80 flex items-center justify-center"
-                                            title="Has GPS location"
-                                        >
-                                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5">
-                                                <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z" />
-                                                <circle cx="12" cy="10" r="3" />
-                                            </svg>
-                                        </div>
-                                    )}
-
-                                    {/* Date indicator */}
-                                    {photo.metadata.takenAt && (
-                                        <div
-                                            className="w-5 h-5 rounded-full bg-green-500/80 flex items-center justify-center"
-                                            title={formatDate(photo.metadata.takenAt)}
-                                        >
-                                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5">
-                                                <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
-                                                <line x1="16" y1="2" x2="16" y2="6" />
-                                                <line x1="8" y1="2" x2="8" y2="6" />
-                                                <line x1="3" y1="10" x2="21" y2="10" />
-                                            </svg>
-                                        </div>
-                                    )}
-                                </div>
                             </div>
                         ))}
                     </div>
-
-                    {/* Metadata summary */}
-                    {photos.length > 0 && (
-                        <div className="p-3 rounded-lg bg-white/5 light:bg-black/5 text-xs text-white/50 light:text-slate-500">
-                            <div className="flex gap-4">
-                                <span>
-                                    <span className="text-blue-400">
-                                        {photos.filter(p => p.metadata.coordinates).length}
-                                    </span>{' '}
-                                    with GPS
-                                </span>
-                                <span>
-                                    <span className="text-green-400">
-                                        {photos.filter(p => p.metadata.takenAt).length}
-                                    </span>{' '}
-                                    with date
-                                </span>
-                            </div>
-                        </div>
-                    )}
                 </div>
 
                 <DialogFooter>
-                    <Button
-                        variant="subtle"
-                        onClick={handleCancel}
-                        disabled={uploading}
-                    >
-                        Cancel
-                    </Button>
-                    <Button
-                        variant="primary"
-                        onClick={handleUpload}
-                        disabled={!selectedJourney || uploading || photos.length === 0}
-                    >
-                        {uploading
-                            ? `Uploading ${uploadProgress?.current}/${uploadProgress?.total}...`
-                            : `Upload ${photos.length} Photo${photos.length !== 1 ? 's' : ''}`}
+                    <Button variant="primary" onClick={handleDismiss}>
+                        Done
                     </Button>
                 </DialogFooter>
             </DialogContent>

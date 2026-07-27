@@ -6,6 +6,7 @@ import CoreData
 /// path and must land `coordinates` + `locationSource = "manual"`; the placement sheet's start
 /// resolution prefers the photo's own coordinate, then a fallback; and drafted facts append onto a
 /// day's waypoint without clobbering existing content.
+@MainActor
 final class PlacementTests: XCTestCase {
 
     private var bundleForTests: Bundle { Bundle(for: type(of: self)) }

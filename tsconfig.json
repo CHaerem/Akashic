@@ -14,6 +14,14 @@
     "noEmit": true,
     "jsx": "react-jsx",
 
+    /* Ambient types. `@testing-library/jest-dom/vitest` is what teaches tsc about
+       toBeInTheDocument/toHaveAttribute etc. vitest.setup.js imports the plain
+       '@testing-library/jest-dom' entry, which augments Jest's expect, not Vitest's —
+       and the setup file sits outside `include` anyway, so nothing in src/ ever saw
+       the augmentation. That is what produced 41 of the 110 errors this config used
+       to swallow. Keep this list in sync with vitest.setup.js. */
+    "types": ["vitest/globals", "@testing-library/jest-dom/vitest"],
+
     /* Linting */
     "strict": true,
     "noUnusedLocals": true,

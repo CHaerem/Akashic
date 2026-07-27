@@ -1,0 +1,96 @@
+{
+  "sourceLanguage": "en",
+  "version": "1.0",
+  "strings": {
+    "Get ${journey} photos in ${applicationName}": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hent bildene fra ${journey} i ${applicationName}"
+          }
+        }
+      }
+    },
+    "Get ${journey} statistics in ${applicationName}": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hent statistikken for ${journey} i ${applicationName}"
+          }
+        }
+      }
+    },
+    "Get details for ${journey} in ${applicationName}": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hent detaljer om ${journey} i ${applicationName}"
+          }
+        }
+      }
+    },
+    "List my journeys in ${applicationName}": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vis turene mine i ${applicationName}"
+          }
+        }
+      }
+    },
+    "Search journeys in ${applicationName}": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Søk i turene mine i ${applicationName}"
+          }
+        }
+      }
+    },
+    "Show journey details for ${journey} in ${applicationName}": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vis detaljer om ${journey} i ${applicationName}"
+          }
+        }
+      }
+    },
+    "Show my journeys in ${applicationName}": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vis turene mine i ${applicationName}"
+          }
+        }
+      }
+    },
+    "Show photos for ${journey} in ${applicationName}": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vis bildene fra ${journey} i ${applicationName}"
+          }
+        }
+      }
+    },
+    "Show stats for ${journey} in ${applicationName}": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vis statistikk for ${journey} i ${applicationName}"
+          }
+        }
+      }
+    }
+  }
+}

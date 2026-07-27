@@ -6,6 +6,7 @@ describe('stats utilities', () => {
     describe('calculateStats', () => {
         const mockTrekData: TrekData = {
             id: 'test-trek',
+            uuid: '00000000-0000-4000-8000-000000000001',
             name: 'Test Trek',
             country: 'Test Country',
             description: 'Test description',
@@ -16,11 +17,11 @@ describe('stats utilities', () => {
                 highestPoint: { name: 'Peak', elevation: 5000 }
             },
             camps: [
-                { id: 'c1', name: 'Camp 1', dayNumber: 1, elevation: 2000, coordinates: [0, 0], elevationGainFromPrevious: 500, notes: '' },
-                { id: 'c2', name: 'Camp 2', dayNumber: 2, elevation: 2500, coordinates: [0, 0], elevationGainFromPrevious: 800, notes: '' },
-                { id: 'c3', name: 'Camp 3', dayNumber: 3, elevation: 3000, coordinates: [0, 0], elevationGainFromPrevious: 300, notes: '' },
-                { id: 'c4', name: 'Camp 4', dayNumber: 4, elevation: 4000, coordinates: [0, 0], elevationGainFromPrevious: 1200, notes: '' },
-                { id: 'c5', name: 'Camp 5', dayNumber: 5, elevation: 4200, coordinates: [0, 0], elevationGainFromPrevious: 200, notes: '' }
+                { id: 'c1', name: 'Camp 1', dayNumber: 1, elevation: 2000, coordinates: [0, 0], elevationGainFromPrevious: 500, elevationLossFromPrevious: 0, dayDistance: 0, notes: '' },
+                { id: 'c2', name: 'Camp 2', dayNumber: 2, elevation: 2500, coordinates: [0, 0], elevationGainFromPrevious: 800, elevationLossFromPrevious: 0, dayDistance: 0, notes: '' },
+                { id: 'c3', name: 'Camp 3', dayNumber: 3, elevation: 3000, coordinates: [0, 0], elevationGainFromPrevious: 300, elevationLossFromPrevious: 0, dayDistance: 0, notes: '' },
+                { id: 'c4', name: 'Camp 4', dayNumber: 4, elevation: 4000, coordinates: [0, 0], elevationGainFromPrevious: 1200, elevationLossFromPrevious: 0, dayDistance: 0, notes: '' },
+                { id: 'c5', name: 'Camp 5', dayNumber: 5, elevation: 4200, coordinates: [0, 0], elevationGainFromPrevious: 200, elevationLossFromPrevious: 0, dayDistance: 0, notes: '' }
             ],
             route: {
                 type: 'LineString',
@@ -47,8 +48,8 @@ describe('stats utilities', () => {
             const flatTrek: TrekData = {
                 ...mockTrekData,
                 camps: [
-                    { id: 'c1', name: 'Camp 1', dayNumber: 1, elevation: 2000, coordinates: [0, 0], elevationGainFromPrevious: 0, notes: '' },
-                    { id: 'c2', name: 'Camp 2', dayNumber: 2, elevation: 2000, coordinates: [0, 0], elevationGainFromPrevious: 0, notes: '' }
+                    { id: 'c1', name: 'Camp 1', dayNumber: 1, elevation: 2000, coordinates: [0, 0], elevationGainFromPrevious: 0, elevationLossFromPrevious: 0, dayDistance: 0, notes: '' },
+                    { id: 'c2', name: 'Camp 2', dayNumber: 2, elevation: 2000, coordinates: [0, 0], elevationGainFromPrevious: 0, elevationLossFromPrevious: 0, dayDistance: 0, notes: '' }
                 ]
             };
             const stats = calculateStats(flatTrek);
@@ -165,8 +166,8 @@ describe('stats utilities', () => {
                 [37.2, -3.2, 2800]
             ];
             const camps = [
-                { id: 'c1', name: 'Camp 1', dayNumber: 1, elevation: 2000, coordinates: [37.05, -3.05] as [number, number], elevationGainFromPrevious: 200, notes: '' },
-                { id: 'c2', name: 'Camp 2', dayNumber: 2, elevation: 2400, coordinates: [37.15, -3.15] as [number, number], elevationGainFromPrevious: 400, notes: '' }
+                { id: 'c1', name: 'Camp 1', dayNumber: 1, elevation: 2000, coordinates: [37.05, -3.05] as [number, number], elevationGainFromPrevious: 200, elevationLossFromPrevious: 0, dayDistance: 0, notes: '' },
+                { id: 'c2', name: 'Camp 2', dayNumber: 2, elevation: 2400, coordinates: [37.15, -3.15] as [number, number], elevationGainFromPrevious: 400, elevationLossFromPrevious: 0, dayDistance: 0, notes: '' }
             ];
 
             const profile = generateElevationProfile(coords, camps);
@@ -194,8 +195,8 @@ describe('stats utilities', () => {
             ];
             // Provide camps in reverse order
             const camps = [
-                { id: 'c2', name: 'Camp 2', dayNumber: 2, elevation: 2800, coordinates: [37.2, -3.2] as [number, number], elevationGainFromPrevious: 600, notes: '' },
-                { id: 'c1', name: 'Camp 1', dayNumber: 1, elevation: 2200, coordinates: [37.1, -3.1] as [number, number], elevationGainFromPrevious: 400, notes: '' }
+                { id: 'c2', name: 'Camp 2', dayNumber: 2, elevation: 2800, coordinates: [37.2, -3.2] as [number, number], elevationGainFromPrevious: 600, elevationLossFromPrevious: 0, dayDistance: 0, notes: '' },
+                { id: 'c1', name: 'Camp 1', dayNumber: 1, elevation: 2200, coordinates: [37.1, -3.1] as [number, number], elevationGainFromPrevious: 400, elevationLossFromPrevious: 0, dayDistance: 0, notes: '' }
             ];
 
             const profile = generateElevationProfile(coords, camps);
@@ -213,7 +214,7 @@ describe('stats utilities', () => {
             ];
             // Camp is 10 degrees away - way too far from route
             const camps = [
-                { id: 'c1', name: 'Far Camp', dayNumber: 1, elevation: 2000, coordinates: [47.0, -3.0] as [number, number], elevationGainFromPrevious: 200, notes: '' }
+                { id: 'c1', name: 'Far Camp', dayNumber: 1, elevation: 2000, coordinates: [47.0, -3.0] as [number, number], elevationGainFromPrevious: 200, elevationLossFromPrevious: 0, dayDistance: 0, notes: '' }
             ];
 
             const profile = generateElevationProfile(coords, camps);

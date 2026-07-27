@@ -168,6 +168,10 @@ enum CoreDataMapping {
         cd.duration = Int64(photo.duration ?? 0)
         cd.localOriginalPath = photo.localOriginalPath
         cd.localThumbPath = photo.localThumbPath
+        // DIFF-14. Written outside the `created` guard on purpose: unlike a caption it is not a
+        // user edit but a fact about the bytes, so a re-import that finally computes one must be
+        // able to fill it in — while an existing hash is never overwritten with nil.
+        if let hash = photo.contentHash { cd.contentHash = hash }
         // User-editable fields: seed on create only so a re-import never clobbers native edits.
         if created {
             cd.waypointId = photo.waypointId
@@ -201,18 +205,16 @@ enum CoreDataMapping {
             duration: cd.duration == 0 ? nil : Int(cd.duration),
             locationSource: cd.locationSource,
             localOriginalPath: cd.localOriginalPath,
-            localThumbPath: cd.localThumbPath)
+            localThumbPath: cd.localThumbPath,
+            contentHash: cd.contentHash)
     }
 
-    private static let isoFormatter: ISO8601DateFormatter = {
-        let f = ISO8601DateFormatter()
-        f.formatOptions = [.withInternetDateTime]
-        return f
-    }()
+    // QUA-08: was a private static ISO8601DateFormatter. See ISO8601Shared for why these are
+    // serialised centrally rather than annotated nonisolated(unsafe) at each site.
 
     private static func isoString(from date: Date?) -> String? {
         guard let date else { return nil }
-        return isoFormatter.string(from: date)
+        return ISO8601Shared.string(from: date)
     }
 
     private static func camp(from wp: CDWaypoint) -> Camp {

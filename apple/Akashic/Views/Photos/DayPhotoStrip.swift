@@ -20,12 +20,20 @@ struct DayPhotoStrip: View {
                         if let onAdd {
                             Button(action: onAdd) { AddTile() }
                                 .buttonStyle(.plain)
+                                .accessibilityLabel(Text("Add photos to this day",
+                                                         comment: "Day photo strip: the add tile."))
                         }
                         ForEach(Array(photos.enumerated()), id: \.element.id) { index, photo in
                             Button { onTap(index) } label: {
                                 StripThumbnail(photo: photo)
                             }
                             .buttonStyle(.plain)
+                            // Position carries this one: the strip is a horizontal row where a
+                            // VoiceOver user has no other way to know where they are in it.
+                            .accessibilityLabel(Text("Photo \(index + 1) of \(photos.count)",
+                                                     comment: "Day photo strip cell: position in the strip."))
+                            .accessibilityHint(Text("Opens full screen.",
+                                                    comment: "Day photo strip cell hint."))
                             .contextMenu {
                                 if let onEditPhoto {
                                     Button { onEditPhoto(photo) } label: {
@@ -51,7 +59,7 @@ private struct AddTile: View {
             RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .strokeBorder(Theme.accent.opacity(0.5), style: StrokeStyle(lineWidth: 1, dash: [5, 4]))
             VStack(spacing: 6) {
-                Image(systemName: "photo.badge.plus").font(.title3).foregroundStyle(Theme.accent)
+                Image(systemName: "photo.badge.plus").font(.title3).foregroundStyle(Theme.accentText)
                 Text("Add").font(.caption2).foregroundStyle(Theme.textSecondary)
             }
         }

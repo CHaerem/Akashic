@@ -1,12 +1,13 @@
 import { describe, it, expect } from 'vitest';
 import { renderHook } from '@testing-library/react';
 import { usePhotoDay } from './usePhotoDay';
-import type { TrekData, Photo, Camp } from '../types/trek';
+import type { TrekData, Photo } from '../types/trek';
 
 // Helper to create mock trek data
 function createMockTrekData(overrides: Partial<TrekData> = {}): TrekData {
     return {
         id: 'test-trek',
+        uuid: '00000000-0000-4000-8000-000000000001',
         name: 'Test Trek',
         country: 'Test Country',
         description: 'A test trek',
@@ -24,6 +25,8 @@ function createMockTrekData(overrides: Partial<TrekData> = {}): TrekData {
                 elevation: 2000,
                 coordinates: [37.0, -3.0],
                 elevationGainFromPrevious: 0,
+                elevationLossFromPrevious: 0,
+                dayDistance: 0,
                 notes: '',
                 highlights: [],
                 routeDistanceKm: 0,
@@ -36,6 +39,8 @@ function createMockTrekData(overrides: Partial<TrekData> = {}): TrekData {
                 elevation: 3000,
                 coordinates: [37.1, -3.1],
                 elevationGainFromPrevious: 1000,
+                elevationLossFromPrevious: 0,
+                dayDistance: 0,
                 notes: '',
                 highlights: [],
                 routeDistanceKm: 10,
@@ -48,6 +53,8 @@ function createMockTrekData(overrides: Partial<TrekData> = {}): TrekData {
                 elevation: 4000,
                 coordinates: [37.2, -3.2],
                 elevationGainFromPrevious: 1000,
+                elevationLossFromPrevious: 0,
+                dayDistance: 0,
                 notes: '',
                 highlights: [],
                 routeDistanceKm: 20,
@@ -337,6 +344,8 @@ describe('usePhotoDay', () => {
                         elevation: 5000,
                         coordinates: [37.3, -3.3],
                         elevationGainFromPrevious: 1000,
+                        elevationLossFromPrevious: 0,
+                        dayDistance: 0,
                         notes: '',
                         highlights: [],
                     },

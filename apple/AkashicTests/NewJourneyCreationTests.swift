@@ -5,6 +5,7 @@ import CoreData
 /// Creating a journey from a draft (§4.1) lands it in the store as a journey + its waypoints,
 /// and the sync layer can enumerate those records — proving a locally created journey will
 /// upload (zone + records) through the same seam imports and edits use.
+@MainActor
 final class NewJourneyCreationTests: XCTestCase {
 
     private var bundle: Bundle { Bundle(for: type(of: self)) }

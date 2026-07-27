@@ -3,25 +3,20 @@ name: Deploy to GitHub Pages
 # =============================================================================
 # GitHub Pages deploy - Phase 4 / D7 of APPLE-MIGRATION-PLAN.md.
 #
-# DORMANT during migration prep. This workflow runs ONLY on manual dispatch, so
-# it does NOT interfere with the live Cloudflare Pages deploy driven by
-# .github/workflows/deploy.yml. Both workflows can coexist on `main` safely
-# because only one of them (Cloudflare) is triggered by pushes today.
+# LIVE. Every push to `main` deploys akashic.no from here.
 #
-# CUTOVER (Phase 4, see docs/github-pages-cutover.md): once GitHub Pages serves
-# akashic.no correctly, replace the trigger below with:
-#
-#   on:
-#     push:
-#       branches: [main]
-#
-# ...and then DELETE .github/workflows/deploy.yml (the Cloudflare workflow) so
-# the two hosts never build and deploy the same commit in parallel.
+# CUTOVER DONE (LEG-09, 2026-07-27). This is the live deploy path for akashic.no.
+# `deploy.yml` (Cloudflare) was deleted in the same commit. The owner waived
+# hosting rollback, so there is deliberately no second host kept warm.
 # =============================================================================
 
 on:
-  # Manual-only while prepping the cutover. Switch to `push: branches: [main]`
-  # at cutover (see header) and delete deploy.yml at Phase 5.
+  # Cutover done (LEG-09): this is the live deploy path for akashic.no. `deploy.yml`
+  # (Cloudflare) was deleted in the same commit, so the two hosts never build the
+  # same commit in parallel — which is exactly what the header used to warn about.
+  push:
+    branches: [main]
+  # Kept so a deploy can still be forced without an empty commit.
   workflow_dispatch:
 
 # GITHUB_TOKEN scopes the GitHub Pages deployment needs.
@@ -43,10 +38,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: '20'
           cache: 'npm'
@@ -73,13 +68,20 @@ jobs:
         run: cp dist/index.html dist/404.html
 
       - name: Configure Pages
-        uses: actions/configure-pages@v5
+        uses: actions/configure-pages@v6
 
       - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@v4
         with:
-          # public/CNAME is copied into dist/ by Vite, so the uploaded artifact
-          # carries the akashic.no custom-domain marker (see cutover doc).
+          # public/CNAME is copied into dist/ by Vite and rides along in the artifact.
+          # MEASURED 2026-07-27: that does NOT set the Pages custom domain. After a
+          # successful run of this workflow, `gh api repos/.../pages` still reported
+          # `cname: null`, and Pages answered "Site not found" for Host: akashic.no.
+          # With `build_type: workflow` the CNAME file is not honoured — the domain has
+          # to be set in Settings → Pages (or `gh api -X PUT .../pages -f cname=...`).
+          # It is set now. Expect ~45 s of edge propagation after setting it before
+          # akashic.no starts resolving to the site; a 404 in the first seconds is not
+          # a failed deploy.
           path: dist
 
   deploy:

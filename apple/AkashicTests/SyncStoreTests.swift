@@ -6,6 +6,7 @@ import CloudKit
 /// `PersistenceController` as a `SyncLocalStore`: materializing CKRecords from stored rows and
 /// applying fetched server records into Core Data. Uses an in-memory `.fixtures` controller;
 /// the sync-apply methods operate on the view context regardless of mode.
+@MainActor
 final class SyncStoreTests: XCTestCase {
 
     private var bundle: Bundle { Bundle(for: type(of: self)) }

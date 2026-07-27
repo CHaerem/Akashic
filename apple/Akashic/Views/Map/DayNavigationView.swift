@@ -45,6 +45,13 @@ struct DayNavigationView: View {
             dayStrip
             controlRow
         }
+        // A2 (QUA-18): moving between days is the most-repeated interaction in the app, and it was
+        // silent. Attached to the selection VALUE rather than to each tap, so one declaration covers
+        // the day pills, both chevrons and any programmatic move — three call sites would have
+        // drifted apart. `.selection` is the light tick this deserves; a heavier style would grate
+        // on the tenth day of a trek. Honouring Reduce Motion is not needed here: the system already
+        // suppresses haptics under the accessibility settings that ask for it.
+        .sensoryFeedback(.selection, trigger: controller.selectedDayIndex)
         .padding(.horizontal, 12)
         .padding(.bottom, 6)
     }
@@ -182,7 +189,7 @@ struct DayNavigationView: View {
         }
     }
 
-    private func controlButton(_ title: String, system: String, active: Bool, action: @escaping () -> Void) -> some View {
+    private func controlButton(_ title: LocalizedStringKey, system: String, active: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Label(title, systemImage: system)
                 .font(.footnote.weight(.semibold))
@@ -206,7 +213,7 @@ struct DayNavigationView: View {
 
     // MARK: - Bits
 
-    private func chevron(_ system: String, label: String, enabled: Bool, action: @escaping () -> Void) -> some View {
+    private func chevron(_ system: String, label: LocalizedStringKey, enabled: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: system)
                 .font(.subheadline.weight(.semibold))

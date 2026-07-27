@@ -35,7 +35,7 @@ struct MovePhotoToDaySheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }.foregroundStyle(Theme.accent)
+                    Button("Cancel") { dismiss() }.foregroundStyle(Theme.accentText)
                 }
             }
         }
@@ -43,7 +43,7 @@ struct MovePhotoToDaySheet: View {
         .presentationDetents([.medium, .large])
     }
 
-    private func dayButton(title: String, subtitle: String?, isSelected: Bool, action: @escaping () -> Void) -> some View {
+    private func dayButton(title: LocalizedStringKey, subtitle: String?, isSelected: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             HStack(spacing: 10) {
                 VStack(alignment: .leading, spacing: 2) {
@@ -54,11 +54,16 @@ struct MovePhotoToDaySheet: View {
                 }
                 Spacer()
                 if isSelected {
-                    Image(systemName: "checkmark").font(.subheadline.weight(.bold)).foregroundStyle(Theme.accent)
+                    Image(systemName: "checkmark").font(.subheadline.weight(.bold)).foregroundStyle(Theme.accentText)
+                        // QUA-24: the tick is what marks the photo's current day, and it announced
+                        // as a stray "checkmark" on one row out of a dozen. `.isSelected` is the
+                        // trait VoiceOver already has a word for, so the state is spoken as state.
+                        .accessibilityHidden(true)
                 }
             }
         }
         .listRowBackground(Theme.surface)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 
     private func move(to waypointID: String?) {

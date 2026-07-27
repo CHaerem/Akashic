@@ -16,16 +16,22 @@ final class CloudKitJourneySharing: JourneySharingService {
         case notOwner
         case unknownParticipant
 
+        /// `errorDescription` is what the user reads in an alert when sharing fails, so every branch
+        /// is localised (QUA-26) — this is the worst possible place to leave English.
         var errorDescription: String? {
             switch self {
             case .notEntitled:
-                return "This build cannot share journeys — rebuild with the CloudKit configuration."
+                return String(localized: "This build cannot share journeys — rebuild with the CloudKit configuration.",
+                              comment: "Sharing failure alert: the running build has no iCloud entitlement. Only reachable in a misconfigured build, never by a customer.")
             case .notShared:
-                return "This journey is not shared yet."
+                return String(localized: "This journey is not shared yet.",
+                              comment: "Sharing failure alert: an operation needed an existing share and there is none.")
             case .notOwner:
-                return "Only the owner of a journey can manage who it is shared with."
+                return String(localized: "Only the owner of a journey can manage who it is shared with.",
+                              comment: "Sharing failure alert: the journey was shared with this user, so they cannot change its participants.")
             case .unknownParticipant:
-                return "That person is no longer part of this share."
+                return String(localized: "That person is no longer part of this share.",
+                              comment: "Sharing failure alert: the participant being changed or removed has already left the share.")
             }
         }
     }

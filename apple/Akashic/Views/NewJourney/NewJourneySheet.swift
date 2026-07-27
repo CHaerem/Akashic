@@ -88,6 +88,16 @@ struct NewJourneySheet: View {
     @State private var isStagingPhotos = false
     @State private var photoStageTotal = 0
     @State private var photoStageDone = 0
+    /// How many picked photos failed to import in the last pass (QUA-14). Surfaced on the
+    /// review screen so a shortfall is explained rather than silently absorbed.
+    @State private var photoStageFailed = 0
+    /// A2 (QUA-18): increments on every accepted suggestion so `.sensoryFeedback` fires per accept.
+    /// A counter rather than a flag or the model's own state, because two accepts in a row must
+    /// produce two ticks and an equatable state would coalesce them into one.
+    @State private var acceptTick = 0
+    /// Set once when the journey is actually created, so creation lands as a success rather than a
+    /// tick. Separate from `acceptTick` because they deserve different feedback styles.
+    @State private var createdTick = 0
     @State private var photoDayCount = 0
 
     @State private var isSaving = false
@@ -157,10 +167,17 @@ struct NewJourneySheet: View {
         /// `RouteConfidence.summary` and `RouteDrawing.DrawnRoute.summary`.
         var provenanceLine: String {
             if let drawnNote { return drawnNote }
-            var s = "\(pointCount) point\(pointCount == 1 ? "" : "s") · \(Formatters.distanceKm(distanceKm))"
-                  + " · \(waypointCount) waypoint\(waypointCount == 1 ? "" : "s")"
+            // Each count is its own plural-varied catalogue entry, joined with the middot. The
+            // previous form appended "s" inline, which is English-only morphology hardcoded into
+            // a view model where no translation could reach it.
+            var s = String(localized: "\(pointCount) route points",
+                           comment: "GPX route provenance: how many coordinates the track holds.")
+                  + " · \(Formatters.distanceKm(distanceKm))"
+                  + " · " + String(localized: "\(waypointCount) waypoints",
+                                   comment: "GPX route provenance: how many waypoints became days.")
             if droppedCount > 0 {
-                s += " · \(droppedCount) skipped"
+                s += " · " + String(localized: "\(droppedCount) skipped",
+                                    comment: "GPX route provenance: coordinates dropped as unusable.")
             }
             return s
         }
@@ -190,7 +207,8 @@ struct NewJourneySheet: View {
         if let range = JourneyDraft.dateRange(fromGPX: file) {
             draft.dateStarted = range.start
             draft.dateEnded = range.end
-            provenance = "from your GPX file"
+            provenance = String(localized: "from your GPX file",
+                                comment: "Caption under the dates row when the dates came from an imported GPX track.")
         }
         _draft = State(initialValue: draft)
         _routeSummary = State(initialValue: applied.summary)
@@ -200,6 +218,10 @@ struct NewJourneySheet: View {
     }
 
     var body: some View {
+        // A2 (QUA-18). Two triggers with two styles, on the Group so they survive the phase switch:
+        // accepting a suggestion is a nudge, creating the journey is the event the whole sheet exists
+        // for. The sheet dismisses immediately after creating, so the haptic is the last thing the
+        // user gets from it.
         Group {
             switch phase {
             case .chooser:
@@ -216,6 +238,12 @@ struct NewJourneySheet: View {
                 reviewBody
             }
         }
+        // A2 (QUA-18): two triggers, two styles. Accepting a suggestion is a nudge; creating the
+        // journey is the event this whole sheet exists for, and since the sheet dismisses straight
+        // afterwards the haptic is the last thing the user gets from it. Counters rather than flags,
+        // so two accepts in a row give two ticks instead of coalescing into one.
+        .sensoryFeedback(.selection, trigger: acceptTick)
+        .sensoryFeedback(.success, trigger: createdTick)
         // Lives above the phase switch because the photo picker itself is presented from the
         // chooser card, but its result must be handled the same way regardless of which phase is
         // on screen (the review screen's own "Days from photos" section reuses this exact binding
@@ -296,7 +324,12 @@ struct NewJourneySheet: View {
     private var nameSection: some View {
         VStack(alignment: .leading, spacing: 16) {
             GlassField(label: "Name", systemImage: "flag") {
-                GlassTextField(placeholder: "e.g. Kilimanjaro — Lemosho Route", text: $draft.name)
+                // QUA-24: `accessibilityLabel` because the placeholder is an EXAMPLE. SwiftUI takes
+                // a placeholder as the field's label, so this one announced as "e. g. Kilimanjaro —
+                // Lemosho Route" — a plausible-sounding value read as if it were the field's name,
+                // on the one field the journey cannot be created without.
+                GlassTextField(placeholder: "e.g. Kilimanjaro — Lemosho Route", text: $draft.name,
+                               accessibilityLabel: "Journey name")
                     .focused($isNameFieldFocused)
                     // Set just after APPEARANCE, not at the moment the chooser hands off: the
                     // field doesn't exist yet when "Start with just a name" is tapped (review is
@@ -310,6 +343,9 @@ struct NewJourneySheet: View {
                             isNameFieldFocused = true
                         }
                     }
+                    // QUA-10: the one field the journey cannot be created without, so it is the
+                    // one the create-flow UI test has to type into. See `A11yID`.
+                    .accessibilityIdentifier(A11yID.newJourneyName)
             }
             // C3: a one-tap name suggestion once we know the country and the trip's first dated day
             // — "Use \"Tanzania, September 2023\"". `JourneyDraft.nameSuggestion` itself guards on the
@@ -321,12 +357,13 @@ struct NewJourneySheet: View {
                 } label: {
                     Label("Use \"\(suggestion)\"", systemImage: "sparkles")
                         .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(Theme.accent)
+                        .foregroundStyle(Theme.accentText)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(12)
                         .background(Theme.accentSoft, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel(Text("Use the suggested name, \(suggestion)"))
             }
         }
     }
@@ -341,7 +378,8 @@ struct NewJourneySheet: View {
     private var countrySection: some View {
         GlassField(label: "Country", systemImage: "globe") {
             VStack(alignment: .leading, spacing: 4) {
-                GlassTextField(placeholder: "Country", text: countryBinding)
+                GlassTextField(placeholder: "Country", text: countryBinding,
+                               accessibilityLabel: "Country")
                 // C3: country is structural (from the route/photo centroid) and applied directly —
                 // this caption is the "visibly" half of "applied by default, visibly, reversibly".
                 // Reversal is just editing the field, which is why there's no separate Remove here
@@ -373,14 +411,20 @@ struct NewJourneySheet: View {
             VStack(alignment: .leading, spacing: 10) {
                 if isEditingDates {
                     VStack(spacing: 10) {
-                        dateRow(label: "Start", isOn: $hasStart, date: $startDate)
-                        dateRow(label: "End", isOn: $hasEnd, date: $endDate)
+                        dateRow(label: "Start", isOn: $hasStart, date: $startDate,
+                                toggleLabel: "Set a start date", pickerLabel: "Start date")
+                        dateRow(label: "End", isOn: $hasEnd, date: $endDate,
+                                toggleLabel: "Set an end date", pickerLabel: "End date")
                     }
                     .padding(12)
                     .background(Theme.surface, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                     .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Theme.hairline, lineWidth: 1))
                     Button("Done") { isEditingDates = false }
-                        .font(.caption.weight(.semibold)).foregroundStyle(Theme.accent)
+                        .font(.caption.weight(.semibold)).foregroundStyle(Theme.accentText)
+                        .accessibilityLabel("Done editing dates")
+                        // QUA-29: same sub-44 pt `.caption` text button as "Edit" below — see there.
+                        .frame(minWidth: 44, minHeight: 44)
+                        .contentShape(Rectangle())
                 } else {
                     HStack(alignment: .top) {
                         VStack(alignment: .leading, spacing: 2) {
@@ -390,9 +434,20 @@ struct NewJourneySheet: View {
                                 Text(datesProvenance).font(.caption2).foregroundStyle(Theme.textTertiary)
                             }
                         }
+                        // The range and where it came from are one fact ("29 Sep – 9 Oct 2023, from
+                        // your photos"), and the provenance is meaningless read on its own.
+                        .accessibilityElement(children: .combine)
                         Spacer()
+                        // Bare "Edit" beside three other sections that could equally be edited.
                         Button("Edit", action: beginEditingDates)
-                            .font(.caption.weight(.semibold)).foregroundStyle(Theme.accent)
+                            .font(.caption.weight(.semibold)).foregroundStyle(Theme.accentText)
+                            .accessibilityLabel("Edit dates")
+                            // QUA-29: `performAccessibilityAudit` measured this at 23.3 × 14.3 pt —
+                            // a four-letter `.caption` word, and the only way into the date editor.
+                            // The frame grows the hit area without moving the glyph or the text;
+                            // `contentShape` is what makes the grown frame actually tappable.
+                            .frame(minWidth: 44, minHeight: 44)
+                            .contentShape(Rectangle())
                     }
                 }
             }
@@ -403,7 +458,8 @@ struct NewJourneySheet: View {
     /// `Formatters.dateRange` already uses elsewhere for a journey's dates.
     private var datesSummary: String {
         Formatters.dateRange(DateOnly.string(from: draft.dateStarted), DateOnly.string(from: draft.dateEnded))
-            ?? "Add dates"
+            ?? String(localized: "Add dates",
+                      comment: "New journey: the collapsed dates row when neither end is set.")
     }
 
     /// Seed the expanded editor from whatever the draft currently holds — including a derived range
@@ -416,16 +472,28 @@ struct NewJourneySheet: View {
         isEditingDates = true
     }
 
-    private func dateRow(label: String, isOn: Binding<Bool>, date: Binding<Date>) -> some View {
+    /// QUA-24: `toggleLabel` / `pickerLabel` exist because the visible `label` is a one-word column
+    /// heading ("Start", "End") shared by the toggle beside it and the picker beside that — and the
+    /// picker's own label used to be `""`. A `DatePicker` with an empty label announces the date it
+    /// holds and nothing about which date that is, so a VoiceOver user editing the trip's dates heard
+    /// "29 September 2023, date picker" twice and could not tell start from end.
+    ///
+    /// The fix is a real label plus `.labelsHidden()`, not `""` plus `.accessibilityLabel` —
+    /// `.labelsHidden()` removes the label from the layout while leaving it as the control's
+    /// accessibility label, which is what the modifier is for. It also keeps `""` out of the string
+    /// catalogue, where an empty key is noise no translator can act on.
+    private func dateRow(label: LocalizedStringKey, isOn: Binding<Bool>, date: Binding<Date>,
+                         toggleLabel: LocalizedStringKey, pickerLabel: LocalizedStringKey) -> some View {
         HStack {
             Toggle(isOn: isOn) {
                 Text(label).font(.subheadline).foregroundStyle(Theme.textPrimary)
             }
             .tint(Theme.accent)
             .fixedSize()
+            .accessibilityLabel(toggleLabel)
             Spacer()
             if isOn.wrappedValue {
-                DatePicker("", selection: date, displayedComponents: .date)
+                DatePicker(pickerLabel, selection: date, displayedComponents: .date)
                     .labelsHidden()
                     .environment(\.timeZone, TimeZone(identifier: "UTC")!)
             }
@@ -557,8 +625,13 @@ struct NewJourneySheet: View {
             distanceKm: JourneyDraft.totalDistanceKm(route: file.route.coordinates),
             waypointCount: file.waypoints.count,
             droppedCount: file.droppedPointCount)
+        // DIFF-11: `days(fromGPX:)` rather than `days(fromWaypoints:)`. It still prefers explicit
+        // `<wpt>` markers when the file has them — those are human-named camps — and falls back to
+        // clustering the track's own timestamps when it does not. Before this line changed, a Strava
+        // or Garmin export (all trackpoints, no waypoints) produced a route with ZERO days and the
+        // user built every one by hand, which was the entire point of DIFF-09.
         let days = (currentDays.isEmpty || JourneyDraft.daysAreAllAutoSeeded(currentDays))
-            ? JourneyDraft.days(fromWaypoints: file.waypoints)
+            ? JourneyDraft.days(fromGPX: file)
             : currentDays
         return (file.route, summary, days)
     }
@@ -582,7 +655,8 @@ struct NewJourneySheet: View {
         guard !datesTouched, let range = JourneyDraft.dateRange(fromGPX: file) else { return }
         draft.dateStarted = range.start
         draft.dateEnded = range.end
-        datesProvenance = "from your GPX file"
+        datesProvenance = String(localized: "from your GPX file",
+                                 comment: "Caption under the dates row when the dates came from an imported GPX track.")
     }
 
     // MARK: Draw on map
@@ -641,7 +715,17 @@ struct NewJourneySheet: View {
     // MARK: Photos (stage via PhotoIngestService, cluster from the SAME ingested photos)
 
     private var photosSection: some View {
-        GlassField(label: "Days from photos", systemImage: "photo.on.rectangle.angled") {
+        // QUA-08: `PhotosPicker`'s label builder is a nonisolated closure, so reading
+        // `isStagingPhotos` or `photoPickerLabel` inside it warns. Both are hoisted out here, where
+        // this main-actor `View` member can read them.
+        //
+        // `pickerLabel` is a `Text`, NOT the `LocalizedStringKey`: `Text` is `Sendable` and a
+        // `LocalizedStringKey` is not. Resolution still happens inside `Text(...)`, so the QUA-06
+        // catalogue extraction that `photoPickerLabel`'s three literals depend on is untouched —
+        // which hoisting the key itself would not have preserved.
+        let staging = isStagingPhotos
+        let pickerLabel = Text(photoPickerLabel)
+        return GlassField(label: "Days from photos", systemImage: "photo.on.rectangle.angled") {
             VStack(alignment: .leading, spacing: 10) {
                 PhotosPicker(
                     selection: $photoSelection,
@@ -650,12 +734,13 @@ struct NewJourneySheet: View {
                     photoLibrary: .shared()
                 ) {
                     HStack(spacing: 10) {
-                        if isStagingPhotos {
+                        if staging {
                             ProgressView().tint(Theme.accent)
                         } else {
-                            Image(systemName: "calendar.badge.plus").font(.title3).foregroundStyle(Theme.accent)
+                            Image(systemName: "calendar.badge.plus").font(.title3).foregroundStyle(Theme.accentText)
+                                .accessibilityHidden(true)
                         }
-                        Text(photoPickerLabel)
+                        pickerLabel
                             .font(.subheadline.weight(.semibold))
                             .foregroundStyle(Theme.textPrimary)
                         Spacer()
@@ -669,10 +754,18 @@ struct NewJourneySheet: View {
                     )
                 }
                 .disabled(isStagingPhotos)
+                // A `PhotosPicker` carries no button trait of its own — see `NewJourneyChooser`.
+                .accessibilityAddTraits(.isButton)
+                .accessibilityHint("Opens your photo library")
 
                 if isStagingPhotos {
                     ProgressView(value: Double(photoStageDone), total: Double(max(photoStageTotal, 1)))
                         .tint(Theme.accent)
+                        // A determinate `ProgressView` announces a bare percentage. The counts are
+                        // what the user is waiting on, and a long import is where they most need to
+                        // know something is still happening.
+                        .accessibilityLabel("Preparing photos")
+                        .accessibilityValue(Text("\(photoStageDone) of \(photoStageTotal)"))
                 }
                 if !stagedPhotos.isEmpty {
                     Text(stagedPhotosSummary)
@@ -681,22 +774,37 @@ struct NewJourneySheet: View {
                 if partialRemainder > 0 {
                     partialImportBanner
                 }
-                Text("Reads capture dates, location and the photos themselves — they're added to the "
-                     + "journey, on the day they belong to, the moment you create it.")
+                Text("Reads capture dates, location and the photos themselves — they're added to the journey, on the day they belong to, the moment you create it.")
                     .font(.caption2).foregroundStyle(Theme.textTertiary)
             }
         }
     }
 
-    private var photoPickerLabel: String {
+    /// `LocalizedStringKey`, not `String`. As a `String` these three literals were handed to
+    /// `Text` already-resolved, so they never entered the catalogue — the silent half of QUA-06.
+    private var photoPickerLabel: LocalizedStringKey {
         if isStagingPhotos { return "Preparing photos… \(photoStageDone) of \(photoStageTotal)" }
         return stagedPhotos.isEmpty ? "Pick photos to propose days" : "Pick more photos"
     }
 
     private var stagedPhotosSummary: String {
-        let base = "\(stagedPhotos.count) photo\(stagedPhotos.count == 1 ? "" : "s") ready"
-        guard photoDayCount > 0 else { return base }
-        return "\(base) · grouped into \(photoDayCount) day(s) by capture date"
+        // Both counts are plural-varied in the catalogue. The day count in particular used to read
+        // "grouped into 3 day(s)" — the parenthesised "(s)" that English writers reach for when
+        // they have not decided, and which no other language can even imitate.
+        let base = String(localized: "\(stagedPhotos.count) photos ready",
+                          comment: "New journey: how many picked photos are staged and ready to import.")
+        // QUA-14: a shortfall is stated, not absorbed. Appended rather than replacing the count,
+        // because what landed is still the more important number.
+        let shortfall = photoStageFailed > 0
+            ? String(localized: "\(photoStageFailed) couldn't be read and were skipped",
+                     comment: "New journey: appended when some picked photos failed to import.")
+            : nil
+        guard photoDayCount > 0 else {
+            return [base, shortfall].compactMap { $0 }.joined(separator: " · ")
+        }
+        let grouped = String(localized: "grouped into \(photoDayCount) days by capture date",
+                             comment: "New journey: appended to the staged-photo count when capture dates produced days.")
+        return [base, grouped, shortfall].compactMap { $0 }.joined(separator: " · ")
     }
 
     /// Shown after a free-tier partial import: what landed, what didn't, and the way to unlock the
@@ -704,12 +812,11 @@ struct NewJourneySheet: View {
     /// `PhotoImportSheet`'s banner (same contract, same wording) rather than inventing a second one.
     private var partialImportBanner: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Label("\(partialRemainder) photo\(partialRemainder == 1 ? "" : "s") couldn't be added",
+            Label("\(partialRemainder) photos couldn't be added",
                   systemImage: "exclamationmark.triangle.fill")
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(Theme.warning)
-            Text("The free tier holds up to \(EntitlementPolicy.freePhotosPerOwnedJourney) photos per journey. "
-                 + "We added the ones that fit. Akashic Complete lifts the cap so the rest can come too.")
+            Text("The free tier holds up to \(EntitlementPolicy.freePhotosPerOwnedJourney) photos per journey. We added the ones that fit. Akashic Complete lifts the cap so the rest can come too.")
                 .font(.caption)
                 .foregroundStyle(Theme.textSecondary)
             Button {
@@ -717,14 +824,18 @@ struct NewJourneySheet: View {
             } label: {
                 Label("Unlock with Akashic Complete", systemImage: "star.circle")
                     .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(Theme.accent)
+                    .foregroundStyle(Theme.accentText)
             }
             .buttonStyle(.plain)
+            .accessibilityHint("Opens the Akashic Complete purchase sheet")
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Theme.surface, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Theme.hairline, lineWidth: 1))
+        // The count and the explanation are one message; splitting them puts "12 photos couldn't be
+        // added" on its own with no reason attached.
+        .accessibilityElement(children: .contain)
     }
 
     /// Stage each picked item through `PhotoIngestService.ingest(pickerItem:journeyId:sortOrder:)`,
@@ -751,8 +862,11 @@ struct NewJourneySheet: View {
 
         let service = PhotoIngestService()
         var order = stagedPhotos.count
+        var failed = 0
         for item in items {
-            if let photo = try? await service.ingest(pickerItem: item, journeyId: draft.id, sortOrder: order) {
+            do {
+                let photo = try await service.ingest(pickerItem: item, journeyId: draft.id,
+                                                     sortOrder: order)
                 if stagingCancelled {
                     // The sheet was cancelled while this item was still loading — its bytes were
                     // just written, so delete them immediately rather than leaving them orphaned.
@@ -761,9 +875,17 @@ struct NewJourneySheet: View {
                     stagedPhotos.append(photo)
                     order += 1
                 }
+            } catch {
+                // QUA-14: this was `try?`, so a photo that failed to import simply was not there.
+                // The review screen's count is honest about what landed, but an unexplained
+                // shortfall — six picked, four ready — reads as the app losing photos, which is the
+                // exact C2 failure this flow was built to avoid. Count them and say so; the import
+                // itself still continues, because one unreadable item must not abandon the rest.
+                failed += 1
             }
             photoStageDone += 1
         }
+        photoStageFailed = stagingCancelled ? 0 : failed
         guard !stagingCancelled else { return }
 
         // Route-inference fixes come from the SAME ingested photos — no altitude (`Photo` doesn't
@@ -802,7 +924,8 @@ struct NewJourneySheet: View {
         guard !datesTouched, let range = JourneyDraft.dateRange(fromDays: draft.days) else { return }
         draft.dateStarted = range.start
         draft.dateEnded = range.end
-        datesProvenance = "from your photos"
+        datesProvenance = String(localized: "from your photos",
+                                 comment: "Caption under the dates row when the dates came from photo capture dates.")
     }
 
     // MARK: Suggestions orchestration
@@ -837,11 +960,15 @@ struct NewJourneySheet: View {
     private func accept(_ key: SuggestionKey) {
         suggestions.accept(key, into: &draft)
         syncRouteSummaryFromDraft()
+        acceptTick += 1
     }
 
     private func acceptAllSuggestions() {
         suggestions.acceptAll(into: &draft)
         syncRouteSummaryFromDraft()
+        // One tick for the batch, not one per suggestion — a dozen accepts firing together would
+        // be a buzz rather than a confirmation.
+        acceptTick += 1
     }
 
     /// Refresh the route summary card when the draft's route no longer matches it — after a
@@ -881,6 +1008,7 @@ struct NewJourneySheet: View {
                     HStack(spacing: 8) {
                         if suggestions.isRunning {
                             ProgressView().controlSize(.small).tint(Theme.accent)
+                                .accessibilityHidden(true)
                             Text("Looking for suggestions…")
                                 .font(.caption).foregroundStyle(Theme.textTertiary)
                         }
@@ -888,7 +1016,8 @@ struct NewJourneySheet: View {
                         if pending.count > 1 {
                             Button("Accept all", action: acceptAllSuggestions)
                                 .font(.caption.weight(.semibold))
-                                .foregroundStyle(Theme.accent)
+                                .foregroundStyle(Theme.accentText)
+                                .accessibilityLabel(Text("Accept all \(pending.count) suggestions"))
                         }
                     }
                     ForEach(pending, id: \.self) { key in
@@ -903,10 +1032,15 @@ struct NewJourneySheet: View {
         }
     }
 
+    /// QUA-24: the two controls here are the whole point of the suggestions panel and were two
+    /// unlabelled glyphs. With four or five suggestions pending, VoiceOver read the list as a wall of
+    /// identical anonymous buttons — and the destructive one (dismiss) came first, so the cheapest
+    /// guess was also the wrong one. Each now names the suggestion it acts on.
     private func suggestionRow(_ key: SuggestionKey) -> some View {
-        HStack(spacing: 10) {
+        let title = suggestions.title(for: key, in: draft)
+        return HStack(spacing: 10) {
             VStack(alignment: .leading, spacing: 2) {
-                Text(suggestions.title(for: key, in: draft))
+                Text(title)
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(Theme.textPrimary)
                 if let subtitle = suggestions.subtitle(for: key, in: draft), !subtitle.isEmpty {
@@ -915,17 +1049,31 @@ struct NewJourneySheet: View {
                         .lineLimit(2)
                 }
             }
+            .accessibilityElement(children: .combine)
             Spacer()
-            Button { suggestions.dismiss(key) } label: {
-                Image(systemName: "xmark.circle.fill").foregroundStyle(Theme.textTertiary)
+            // QUA-29: the same 17 × 17 pt glyph pair as `dayRow`, and the same reasoning — the
+            // destructive one (dismiss) comes first, so a mistap discards the suggestion the user
+            // was reaching to accept. Not flagged by the audit only because no provider had resolved
+            // on the audited screen; the defect is identical.
+            HStack(spacing: 0) {
+                Button { suggestions.dismiss(key) } label: {
+                    Image(systemName: "xmark.circle.fill").foregroundStyle(Theme.textTertiary)
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(Text("Dismiss \(title)"))
+                Button { accept(key) } label: {
+                    Image(systemName: "checkmark.circle.fill").foregroundStyle(Theme.accentText)
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(Text("Accept \(title)"))
             }
-            .buttonStyle(.plain)
-            Button { accept(key) } label: {
-                Image(systemName: "checkmark.circle.fill").foregroundStyle(Theme.accent)
-            }
-            .buttonStyle(.plain)
         }
-        .padding(10)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 2)
         .background(Theme.accentSoft, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 
@@ -933,14 +1081,12 @@ struct NewJourneySheet: View {
 
     /// C6: the empty-days caption is context-specific where the reason is knowable, rather than one
     /// generic sentence for every "no days" cause.
-    private var daysEmptyMessage: String {
+    private var daysEmptyMessage: LocalizedStringKey {
         if gpxHadNoWaypoints {
-            return "This file had no waypoints, so no days were proposed — add days, or pick photos "
-                 + "to propose them."
+            return "This file had no waypoints, so no days were proposed — add days, or pick photos to propose them."
         }
         if photosHadNoReadableDates {
-            return "We couldn't read dates from these photos. They'll be added to the journey; you "
-                 + "can build days later."
+            return "We couldn't read dates from these photos. They'll be added to the journey; you can build days later."
         }
         return "No days yet — import a GPX with waypoints, seed from photos, or add days below."
     }
@@ -977,49 +1123,78 @@ struct NewJourneySheet: View {
                 }
                 Button(action: addDay) {
                     HStack(spacing: 8) {
-                        Image(systemName: "plus.circle.fill").foregroundStyle(Theme.accent)
-                        Text("Add day").font(.subheadline.weight(.semibold)).foregroundStyle(Theme.accent)
+                        Image(systemName: "plus.circle.fill").foregroundStyle(Theme.accentText)
+                            .accessibilityHidden(true)
+                        Text("Add day").font(.subheadline.weight(.semibold)).foregroundStyle(Theme.accentText)
                         Spacer()
                     }
                     .padding(12)
                     .background(Theme.accentSoft, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                 }
                 .buttonStyle(.plain)
+                .accessibilityIdentifier(A11yID.newJourneyAddDay)
             }
         }
     }
 
+    /// QUA-24: three unlabelled glyph buttons per day, repeated once per day. On a ten-day trip that
+    /// was thirty anonymous "button" announcements in a row, and one of them deletes a day. Each is
+    /// now scoped to the day it acts on, and the number bubble is folded into the name field's label
+    /// rather than being read as a lone digit before it.
     private func dayRow(index: Int, day: Binding<DraftDay>) -> some View {
         HStack(spacing: 10) {
             Text("\(index + 1)")
                 .font(.caption.weight(.bold))
-                .foregroundStyle(Theme.accent)
+                .foregroundStyle(Theme.accentText)
                 .frame(width: 24, height: 24)
                 .background(Theme.accentSoft, in: Circle())
+                .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
                 TextField("Day name", text: day.name)
                     .textFieldStyle(.plain)
                     .foregroundStyle(Theme.textPrimary)
+                    .accessibilityLabel(Text("Name of day \(index + 1)"))
                 if let label = day.wrappedValue.dateLabel {
                     Text(label).font(.caption2).foregroundStyle(Theme.textTertiary)
                 }
             }
             Spacer()
-            Button { move(from: index, by: -1) } label: {
-                Image(systemName: "chevron.up").foregroundStyle(index == 0 ? Theme.textTertiary : Theme.textSecondary)
+            // QUA-29: all three of these were 17 × 17 pt glyphs — `performAccessibilityAudit`
+            // measured "Remove day 1" at exactly that, and it DELETES a day. Three sub-minimum
+            // targets 10 pt apart is also how a mistap lands on the wrong one, which on this row
+            // means removing a day when you meant to reorder it. `spacing: 0` on their own HStack
+            // because each button now carries its own 44 pt frame, so the gap between the glyphs is
+            // the frames, not extra spacing on top of them — otherwise three 44 pt buttons plus
+            // 10 pt gaps would squeeze the day-name field they sit beside.
+            HStack(spacing: 0) {
+                Button { move(from: index, by: -1) } label: {
+                    Image(systemName: "chevron.up").foregroundStyle(index == 0 ? Theme.textTertiary : Theme.textSecondary)
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain).disabled(index == 0)
+                .accessibilityLabel(Text("Move day \(index + 1) earlier"))
+                Button { move(from: index, by: 1) } label: {
+                    Image(systemName: "chevron.down")
+                        .foregroundStyle(index == draft.days.count - 1 ? Theme.textTertiary : Theme.textSecondary)
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain).disabled(index == draft.days.count - 1)
+                .accessibilityLabel(Text("Move day \(index + 1) later"))
+                Button { removeDay(at: index) } label: {
+                    Image(systemName: "xmark.circle.fill").foregroundStyle(Theme.textTertiary)
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(Text("Remove day \(index + 1)"))
             }
-            .buttonStyle(.plain).disabled(index == 0)
-            Button { move(from: index, by: 1) } label: {
-                Image(systemName: "chevron.down")
-                    .foregroundStyle(index == draft.days.count - 1 ? Theme.textTertiary : Theme.textSecondary)
-            }
-            .buttonStyle(.plain).disabled(index == draft.days.count - 1)
-            Button { removeDay(at: index) } label: {
-                Image(systemName: "xmark.circle.fill").foregroundStyle(Theme.textTertiary)
-            }
-            .buttonStyle(.plain)
         }
-        .padding(10)
+        // The three controls above now supply the row's height, so the vertical padding that used to
+        // give a 17 pt glyph some room would only make an already-44 pt row taller.
+        .padding(.horizontal, 10)
+        .padding(.vertical, 2)
         .background(Theme.surface, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Theme.hairline, lineWidth: 1))
     }
@@ -1046,10 +1221,10 @@ struct NewJourneySheet: View {
                     if isSuggestingNames {
                         ProgressView().controlSize(.small).tint(Theme.accent)
                     } else {
-                        Image(systemName: "apple.intelligence").foregroundStyle(Theme.accent)
+                        Image(systemName: "apple.intelligence").foregroundStyle(Theme.accentText)
                     }
                     Text(isSuggestingNames ? "Suggesting names…" : "Suggest names")
-                        .font(.subheadline.weight(.semibold)).foregroundStyle(Theme.accent)
+                        .font(.subheadline.weight(.semibold)).foregroundStyle(Theme.accentText)
                     Spacer()
                 }
                 .padding(12)
@@ -1057,6 +1232,9 @@ struct NewJourneySheet: View {
             }
             .buttonStyle(.plain)
             .disabled(isSuggestingNames)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(isSuggestingNames ? "Suggesting names" : "Suggest names for every day")
+            .accessibilityAddTraits(.isButton)
             if suggestNamesFailed {
                 Text("Couldn't suggest names — try again")
                     .font(.caption2).foregroundStyle(Theme.textTertiary)
@@ -1120,7 +1298,8 @@ struct NewJourneySheet: View {
         // either derived automatically or kept current by `userEditedDates()` on every picker change.
         guard let created = store.createJourney(from: draft) else {
             isSaving = false
-            saveError = "Could not save the journey. Please try again."
+            saveError = String(localized: "Could not save the journey. Please try again.",
+                               comment: "New journey sheet: shown when the save fails.")
             return
         }
         isSaving = false
@@ -1158,6 +1337,7 @@ struct NewJourneySheet: View {
     /// Land the user in their new journey via the existing deep-link path (the globe observes
     /// `pendingJourneySelection` and flies to it).
     private func finish(_ journey: Journey) {
+        createdTick += 1
         store.requestJourneySelection(journey.id)
         onCreated(journey)
         dismiss()

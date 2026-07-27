@@ -96,6 +96,15 @@ struct PhotoEditSheet: View {
             .frame(height: 200)
             .frame(maxWidth: .infinity)
             .background(Theme.surface, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            // QUA-24: rotation is the one edit on this sheet with no visible text at all — the two
+            // buttons say what they will do, and nothing said what the current state was. So the
+            // preview carries it as a `value`, which is what makes "Rotate left" checkable by
+            // someone who cannot see the result. (`accessibilityValue` had zero uses in the app.)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(photo.isVideo ? "Video preview" : "Photo preview")
+            .accessibilityValue(rotation == 0
+                                ? Text("Not rotated")
+                                : Text("Rotated \(rotation) degrees"))
 
             HStack(spacing: 12) {
                 rotateButton(system: "rotate.left", label: "Rotate left") { rotation = normalize(rotation - 90) }
@@ -104,7 +113,7 @@ struct PhotoEditSheet: View {
         }
     }
 
-    private func rotateButton(system: String, label: String, action: @escaping () -> Void) -> some View {
+    private func rotateButton(system: String, label: LocalizedStringKey, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Label(label, systemImage: system)
                 .font(.subheadline.weight(.medium))
@@ -121,7 +130,7 @@ struct PhotoEditSheet: View {
 
     private var captionSection: some View {
         GlassField(label: "Caption", systemImage: "text.alignleft") {
-            GlassTextEditor(text: $caption, minHeight: 80)
+            GlassTextEditor(text: $caption, minHeight: 80, label: "Caption")
         }
     }
 
@@ -150,19 +159,29 @@ struct PhotoEditSheet: View {
                     Spacer()
                     Image(systemName: "chevron.up.chevron.down")
                         .font(.caption).foregroundStyle(Theme.textTertiary)
+                        .accessibilityHidden(true)
                 }
                 .padding(12)
                 .background(Theme.surface, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                 .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Theme.hairline, lineWidth: 1))
             }
+            // The menu's own label is just the current selection, so it announced "Day 3 — Barafu"
+            // with nothing to say that this is the day assignment or that it can be changed.
+            .accessibilityLabel("Day")
+            .accessibilityValue(assignmentLabel)
         }
     }
 
+    /// `String(localized:)`, not bare literals — this is a `String`, so `Text(assignmentLabel)` takes
+    /// the verbatim overload and neither of these ever reached the catalogue (the QUA-06 trap). Both
+    /// keys were already there and translated.
     private var assignmentLabel: String {
         guard let waypointID, let camp = journey.camps.first(where: { $0.id == waypointID }) else {
-            return "Unassigned"
+            return String(localized: "Unassigned",
+                          comment: "Photo editor: the day menu's value when the photo belongs to no day.")
         }
-        return "Day \(camp.dayNumber) — \(camp.name)"
+        return String(localized: "Day \(camp.dayNumber) — \(camp.name)",
+                      comment: "Photo editor: the day menu's value — day number and the day's name.")
     }
 
     // MARK: Hero
@@ -191,6 +210,11 @@ struct PhotoEditSheet: View {
                                 (currentSource ?? "unknown").capitalized))
                         .font(.footnote.monospaced())
                         .foregroundStyle(Theme.textSecondary)
+                        // QUA-24: the monospaced readout is two bare numbers and a middot. VoiceOver
+                        // reads it as one run of digits with no idea which is which — so the label
+                        // names them and drops the separator.
+                        .accessibilityLabel(Text("Latitude \(String(format: "%.5f", coords[1])), longitude \(String(format: "%.5f", coords[0]))"))
+                        .accessibilityValue(Text(locationSourceDescription))
                 } else {
                     Text("No location").font(.footnote).foregroundStyle(Theme.textTertiary)
                 }
@@ -201,7 +225,7 @@ struct PhotoEditSheet: View {
                     Label(currentCoordinates == nil ? "Place on map" : "Adjust location",
                           systemImage: "mappin.and.ellipse")
                         .font(.subheadline.weight(.medium))
-                        .foregroundStyle(Theme.accent)
+                        .foregroundStyle(Theme.accentText)
                 }
                 .buttonStyle(.plain)
                 if currentCoordinates != nil {
@@ -214,6 +238,20 @@ struct PhotoEditSheet: View {
             .padding(12)
             .background(Theme.surface, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Theme.hairline, lineWidth: 1))
+        }
+    }
+
+    /// The stored `locationSource` token in words. `Domain.Photo.locationSource` is persisted,
+    /// exported and synced as one of "exif" / "estimated" / "manual", so it stays an English token in
+    /// the data and becomes prose only here — the same split `StringCatalogTests` pins for the
+    /// difficulty rating. The visible readout still shows the capitalised token; this is what a
+    /// screen reader gets instead of "Exif".
+    private var locationSourceDescription: LocalizedStringKey {
+        switch currentSource {
+        case "exif": return "From the photo's own GPS data"
+        case "manual": return "Placed by hand"
+        case "estimated": return "Estimated from the route"
+        default: return "Source unknown"
         }
     }
 
@@ -245,7 +283,12 @@ struct PhotoEditSheet: View {
         Button(role: .destructive) {
             confirmingDelete = true
         } label: {
-            Label("Delete \(photo.isVideo ? "video" : "photo")", systemImage: "trash")
+            // Two whole keys, not one key with the noun interpolated into it. The old form
+            // ("Delete \(isVideo ? "video" : "photo")") produced the catalogue key "Delete %@" and
+            // substituted the English noun into it verbatim, so a Norwegian read "Slett photo" —
+            // a half-translated sentence, which is worse than either language alone. Interpolating
+            // a *word* into a `LocalizedStringKey` is always this bug; only values belong there.
+            Label(photo.isVideo ? "Delete video" : "Delete photo", systemImage: "trash")
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(.red)
                 .frame(maxWidth: .infinity)
@@ -253,7 +296,7 @@ struct PhotoEditSheet: View {
                 .background(Color.red.opacity(0.12), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
         }
         .buttonStyle(.plain)
-        .confirmationDialog("Delete this \(photo.isVideo ? "video" : "photo")?",
+        .confirmationDialog(photo.isVideo ? "Delete this video?" : "Delete this photo?",
                             isPresented: $confirmingDelete, titleVisibility: .visible) {
             Button("Delete", role: .destructive, action: performDelete)
             Button("Cancel", role: .cancel) {}

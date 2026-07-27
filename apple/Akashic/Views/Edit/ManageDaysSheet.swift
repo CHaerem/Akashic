@@ -35,6 +35,11 @@ struct ManageDaysSheet: View {
                                     Label("Delete day", systemImage: "trash")
                                 }
                             }
+                            // QUA-24: swipe actions and a context menu are the ONLY way to delete or
+                            // insert a day, and VoiceOver reaches both through its Actions rotor —
+                            // which is discoverable, but only if the user is told the row has any.
+                            // Without this, this screen looks like a read-only list of days.
+                            .accessibilityHint("Actions available: add a day after this one, or delete it")
                     }
                     .onMove(perform: move)
                 } footer: {
@@ -45,7 +50,7 @@ struct ManageDaysSheet: View {
                 Section {
                     Button { addDay(after: nil) } label: {
                         Label("Add day", systemImage: "plus.circle.fill")
-                            .foregroundStyle(Theme.accent)
+                            .foregroundStyle(Theme.accentText)
                     }
                 }
             }
@@ -56,13 +61,14 @@ struct ManageDaysSheet: View {
             .environment(\.editMode, $editMode)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Done") { dismiss() }.foregroundStyle(Theme.accent)
+                    Button("Done") { dismiss() }.foregroundStyle(Theme.accentText)
                 }
                 ToolbarItem(placement: .primaryAction) {
                     Button(editMode.isEditing ? "Done reordering" : "Reorder") {
                         withAnimation { editMode = editMode.isEditing ? .inactive : .active }
                     }
-                    .foregroundStyle(Theme.accent)
+                    .foregroundStyle(Theme.accentText)
+                    .accessibilityLabel(editMode.isEditing ? "Done reordering days" : "Reorder days")
                 }
             }
             .confirmationDialog("Delete this day?",
@@ -83,7 +89,7 @@ struct ManageDaysSheet: View {
     private func row(_ camp: Camp) -> some View {
         HStack(spacing: 12) {
             Text("\(camp.dayNumber)")
-                .font(.caption.weight(.bold)).foregroundStyle(Theme.accent)
+                .font(.caption.weight(.bold)).foregroundStyle(Theme.accentText)
                 .frame(width: 28, height: 28)
                 .background(Theme.accentSoft, in: Circle())
             VStack(alignment: .leading, spacing: 2) {
@@ -95,6 +101,12 @@ struct ManageDaysSheet: View {
             Spacer()
         }
         .listRowBackground(Theme.surface)
+        // A day is one thing. Left as three elements, the number bubble read as a lone digit before
+        // the name and the elevation as a lone measurement after it.
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(camp.elevation > 0
+                            ? Text("Day \(camp.dayNumber), \(camp.name), \(Formatters.meters(camp.elevation))")
+                            : Text("Day \(camp.dayNumber), \(camp.name)"))
     }
 
     // MARK: Operations
@@ -114,7 +126,13 @@ struct ManageDaysSheet: View {
     }
 
     private func addDay(after dayNumber: Int?) {
-        let name = "Day \((store.journey(withID: journeyID)?.camps.count ?? 0) + 1)"
+        // The default name for a freshly added day is text the customer reads and then edits, so
+        // it is localised at the point of creation — the same way the system names a new folder in
+        // the user's language. It is persisted from here on and never re-derived, so a later
+        // language change leaves existing days alone, which is the behaviour you want: a name the
+        // user may have kept or edited is their data, not a label.
+        let name = String(localized: "Day \((store.journey(withID: journeyID)?.camps.count ?? 0) + 1)",
+                          comment: "Default name for a day added from Manage days, e.g. \"Day 4\".")
         _ = store.addDay(toJourney: journeyID, name: name, afterDayNumber: dayNumber)
         sync()
     }

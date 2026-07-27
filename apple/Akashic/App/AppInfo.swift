@@ -13,6 +13,23 @@ enum AppInfo {
     static let termsURL = URL(string: "https://akashic.no/terms.html")!
     static let supportURL = URL(string: "https://akashic.no/support.html")!
 
+    /// The public showcase page for a published journey.
+    ///
+    /// `?journey=<slug>` is already the form the web client reads (`useTrekData.parseUrlParams`)
+    /// and the form declared in `public/.well-known/apple-app-site-association`, so this one URL
+    /// serves both jobs: a page for anyone with the link, and — once the associated-domains
+    /// entitlement lands (SHIP-07) — a Universal Link that opens the journey in the app instead.
+    ///
+    /// **Pass the slug the mirror was published under**, i.e. `PublicMirrorReport.publishedSlug`,
+    /// never `journey.slug`. A cross-owner collision publishes to an owner-scoped variant while the
+    /// local journey keeps its pretty slug, so building this from the domain object produces a link
+    /// that 404s in exactly the case the disambiguation exists for.
+    static func showcaseURL(slug: String) -> URL? {
+        var components = URLComponents(string: "https://akashic.no/")
+        components?.queryItems = [URLQueryItem(name: "journey", value: slug)]
+        return components?.url
+    }
+
     // MARK: - Version
 
     /// Marketing version, e.g. "0.1.0" (from `CFBundleShortVersionString`).

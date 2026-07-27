@@ -19,13 +19,27 @@ final class SyncScheduler {
     /// an edit to a journey shared with us routes to the shared database and ours do not.
     private let engines: [WeakEngine]
     private let isApplyingRemoteChanges: () -> Bool
-    private var observer: NSObjectProtocol?
+    /// QUA-08: an `ObserverToken` rather than a bare `NSObjectProtocol?`. A `@MainActor` type's
+    /// `deinit` is nonisolated and may not READ its isolated stored properties — but it may destroy
+    /// them, so the `removeObserver` call moves into the token's own deinit.
+    private var observer: ObserverToken?
 
     /// Holder so the scheduler keeps the same non-owning reference semantics it had with a
     /// single `weak var` — `PersistenceController` owns the engines.
     private final class WeakEngine {
         weak var engine: AkashicSyncEngine?
         init(_ engine: AkashicSyncEngine) { self.engine = engine }
+    }
+
+    /// Owns the `NSManagedObjectContextDidSave` token and removes it when released.
+    ///
+    /// Deliberately NOT `@MainActor`: its deinit touches only its own storage, and
+    /// `NotificationCenter.removeObserver` is thread-safe, so it is correct on whichever thread
+    /// releases the scheduler. Nothing else can reach the token at that point, so no race exists.
+    private final class ObserverToken {
+        private let token: NSObjectProtocol
+        init(_ token: NSObjectProtocol) { self.token = token }
+        deinit { NotificationCenter.default.removeObserver(token) }
     }
 
     convenience init(context: NSManagedObjectContext,
@@ -39,16 +53,20 @@ final class SyncScheduler {
          isApplyingRemoteChanges: @escaping () -> Bool) {
         self.engines = engines.map(WeakEngine.init)
         self.isApplyingRemoteChanges = isApplyingRemoteChanges
-        observer = NotificationCenter.default.addObserver(
+        observer = ObserverToken(NotificationCenter.default.addObserver(
             forName: .NSManagedObjectContextDidSave,
             object: context,
             queue: nil) { [weak self] note in
+                // `queue: nil` delivers this SYNCHRONOUSLY on the saving thread, and the saving
+                // context is the main-queue view context — which is exactly what `assumeIsolated`
+                // asserts, and traps on if that ever stops being true. `Notification` is not
+                // Sendable because its `userInfo` carries `Set<NSManagedObject>`, and those have to
+                // be read on the main queue anyway, so there is nothing worth extracting at the
+                // boundary. QUA-08: the `nonisolated(unsafe)` capture is what the annotation below
+                // documents rather than hides.
+                nonisolated(unsafe) let note = note
                 MainActor.assumeIsolated { self?.handleSave(note) }
-            }
-    }
-
-    deinit {
-        if let observer { NotificationCenter.default.removeObserver(observer) }
+            })
     }
 
     private func handleSave(_ note: Notification) {

@@ -76,12 +76,12 @@ struct LocalSearchResult: Equatable {
 // MARK: - Seams
 
 /// Reverse-geocode a `[lng, lat]` to a flattened placemark, or nil when nothing resolves.
-protocol ReverseGeocoding {
+protocol ReverseGeocoding: Sendable {
     func reverseGeocode(lng: Double, lat: Double) async throws -> GeocodedPlace?
 }
 
 /// Natural-language POI search around a coordinate.
-protocol LocalPOISearching {
+protocol LocalPOISearching: Sendable {
     func search(query: String, lng: Double, lat: Double, radiusMeters: Double) async throws -> [LocalSearchResult]
 }
 
@@ -113,7 +113,10 @@ struct DayPOISuggestions: Equatable {
 
 /// Composes the seams into the three enrichment products. Stateless apart from the injected
 /// providers and the courtesy delay.
-struct PlaceEnrichment {
+// QUA-08: `Sendable` because `JourneySuggestionCoordinator` is `@MainActor` and awaits these
+// off the main actor, so the value crosses an isolation boundary on every call. Genuinely
+// immutable — only `let`s and injected seams, no reference storage.
+struct PlaceEnrichment: Sendable {
     let geocoder: ReverseGeocoding
     let search: LocalPOISearching
     /// Serial courtesy delay between provider calls (nanoseconds). 0 in tests.

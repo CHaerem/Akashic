@@ -8,8 +8,8 @@ import SwiftUI
 /// Standard sheet scaffold: adaptive background, inline title, Cancel + a primary action button.
 /// `isSaving` swaps the action for a spinner; `saveDisabled` gates it.
 struct EditSheetScaffold<Content: View>: View {
-    let title: String
-    var saveTitle: String = "Save"
+    let title: LocalizedStringKey
+    var saveTitle: LocalizedStringKey = "Save"
     var saveDisabled: Bool = false
     var isSaving: Bool = false
     let onCancel: () -> Void
@@ -32,6 +32,10 @@ struct EditSheetScaffold<Content: View>: View {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel", action: onCancel)
                         .foregroundStyle(Theme.textSecondary)
+                        // QUA-10: see `A11yID`. `saveTitle` alone varies per sheet AND per state
+                        // ("Save" / "Create" / "Done"), so the affirmative control of whichever
+                        // sheet is on screen needs a stable handle for the UI tests.
+                        .accessibilityIdentifier(A11yID.editSheetCancel)
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     if isSaving {
@@ -41,6 +45,7 @@ struct EditSheetScaffold<Content: View>: View {
                             .fontWeight(.semibold)
                             .foregroundStyle(saveDisabled ? Theme.textTertiary : Theme.accent)
                             .disabled(saveDisabled)
+                            .accessibilityIdentifier(A11yID.editSheetSave)
                     }
                 }
             }
@@ -51,7 +56,7 @@ struct EditSheetScaffold<Content: View>: View {
 
 /// A labelled section wrapping arbitrary field content in a glass surface card.
 struct GlassField<Content: View>: View {
-    let label: String
+    let label: LocalizedStringKey
     var systemImage: String?
     @ViewBuilder var content: () -> Content
 
@@ -59,12 +64,30 @@ struct GlassField<Content: View>: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 6) {
                 if let systemImage {
-                    Image(systemName: systemImage).font(.caption2).foregroundStyle(Theme.accent)
+                    // QUA-24: the glyph restates the label ("flag" beside NAME, "globe" beside
+                    // COUNTRY) — decoration, and SF Symbols carry their own accessibility
+                    // descriptions, so leaving it visible makes VoiceOver announce the field twice.
+                    Image(systemName: systemImage).font(.caption2).foregroundStyle(Theme.accentText)
+                        .accessibilityHidden(true)
                 }
-                Text(label.uppercased())
+                // `.textCase(.uppercase)`, not `label.uppercased()`. The old form forced the
+                // label to be a `String` — and a `String` handed to `Text` is displayed verbatim,
+                // so every one of these field labels ("Name", "Country", "Elevation (m)") was
+                // unreachable by localisation no matter what the catalogue said. The modifier
+                // uppercases at render time and also does it locale-correctly.
+                Text(label)
+                    .textCase(.uppercase)
                     .font(.system(size: 11, weight: .semibold))
                     .tracking(0.8)
                     .foregroundStyle(Theme.textTertiary)
+                    // "Summit elevation (m)" is already near the sheet width in English; the
+                    // Norwegian "Topphøyde (m)" is shorter, but "Points of interest" ->
+                    // "Interessepunkter" and "Historical sites" -> "Historiske steder" are not.
+                    .fixedSize(horizontal: false, vertical: true)
+                    // QUA-24: these labels are the structure of every edit sheet, so they are the
+                    // right rotor stops — heading navigation jumps field to field instead of
+                    // swiping through every control in between.
+                    .accessibilityAddTraits(.isHeader)
             }
             content()
         }
@@ -72,10 +95,18 @@ struct GlassField<Content: View>: View {
 }
 
 /// A single-line glass text field.
+///
+/// `accessibilityLabel` exists because the visible placeholder is frequently NOT a usable name for
+/// the field: `GlassField(label: "Summit elevation (m)")` wraps a field whose placeholder is "0",
+/// and the weather grid's are all "—". SwiftUI takes a `TextField`'s placeholder as its
+/// accessibility label, so those announced as "0", "1" and "dash" — the enclosing `GlassField`
+/// label is a sibling `Text` and never reaches the control. Pass the field's real name here
+/// whenever the placeholder is an example or a stand-in rather than a name.
 struct GlassTextField: View {
-    let placeholder: String
+    let placeholder: LocalizedStringKey
     @Binding var text: String
     var keyboard: UIKeyboardType = .default
+    var accessibilityLabel: LocalizedStringKey?
 
     var body: some View {
         TextField(placeholder, text: $text)
@@ -88,13 +119,19 @@ struct GlassTextField: View {
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
                     .strokeBorder(Theme.hairline, lineWidth: 1)
             )
+            .modifier(OptionalAccessibilityLabel(key: accessibilityLabel))
     }
 }
 
 /// A multi-line glass text editor.
+///
+/// A `TextEditor` has no placeholder at all, so it has no accessibility label either — VoiceOver
+/// announces bare "text field" for the journey description and every day's notes. `label` is not
+/// optional here for that reason.
 struct GlassTextEditor: View {
     @Binding var text: String
     var minHeight: CGFloat = 96
+    var label: LocalizedStringKey = "Text"
 
     var body: some View {
         TextEditor(text: $text)
@@ -107,6 +144,25 @@ struct GlassTextEditor: View {
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
                     .strokeBorder(Theme.hairline, lineWidth: 1)
             )
+            .accessibilityLabel(label)
+    }
+}
+
+/// Applies `.accessibilityLabel` only when there is one, leaving SwiftUI's own derived label
+/// (a `TextField`'s placeholder) in place otherwise.
+///
+/// `.accessibilityLabel(key ?? placeholder)` cannot express that: `LocalizedStringKey` is not
+/// `Equatable` or inspectable, so "no override" has to be the absence of the modifier rather than a
+/// value passed through it.
+private struct OptionalAccessibilityLabel: ViewModifier {
+    let key: LocalizedStringKey?
+
+    func body(content: Content) -> some View {
+        if let key {
+            content.accessibilityLabel(key)
+        } else {
+            content
+        }
     }
 }
 
@@ -124,7 +180,7 @@ struct HighlightChipsEditor: View {
                         HStack(spacing: 6) {
                             Text(item)
                                 .font(.caption.weight(.medium))
-                                .foregroundStyle(Theme.accent)
+                                .foregroundStyle(Theme.accentText)
                             Button {
                                 items.remove(at: index)
                             } label: {
@@ -133,6 +189,10 @@ struct HighlightChipsEditor: View {
                                     .foregroundStyle(Theme.textTertiary)
                             }
                             .buttonStyle(.plain)
+                            // QUA-24: names what it removes. A chip row's delete used to be an
+                            // unlabelled glyph, so a screenful of highlights was a screenful of
+                            // identical "button" announcements with no way to tell them apart.
+                            .accessibilityLabel(Text("Remove \(item)"))
                         }
                         .padding(.vertical, 5)
                         .padding(.horizontal, 10)
@@ -161,6 +221,7 @@ struct HighlightChipsEditor: View {
                 .buttonStyle(.plain)
                 .disabled(draft.trimmingCharacters(in: .whitespaces).isEmpty)
                 .opacity(draft.trimmingCharacters(in: .whitespaces).isEmpty ? 0.5 : 1)
+                .accessibilityLabel("Add highlight")
             }
         }
     }
@@ -249,6 +310,10 @@ struct EditablePhotoThumb: View {
                     .font(.caption2).foregroundStyle(.white).padding(3).shadow(radius: 2)
             }
         }
+        // QUA-24: the row this sits in already announces "Video" and the day assignment, and the
+        // image itself is a thumbnail no screen reader can describe — so it is decoration here
+        // rather than a second, emptier announcement of the same item.
+        .accessibilityHidden(true)
     }
 
     private var placeholder: some View {

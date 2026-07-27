@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Privacy manifest (SHIP-04).
+
+  This is the machine-readable half of the App Privacy declaration. The prose half lives in
+  docs/store/app-store-listing.md and App Store Connect; this file is what Apple's tooling reads,
+  and what turns "we collect nothing" from a marketing claim into something checkable.
+
+  Note on urgency, since it was originally filed as a submission blocker and is not one: build 2
+  was uploaded on 2026-07-23 with 44 UserDefaults call sites and no manifest, and App Store
+  Connect accepted it. So the absence does not stop an upload. It is still correct to declare,
+  both because the required-reason APIs genuinely are in use and because a missing manifest makes
+  the nutrition label unverifiable.
+
+  NSPrivacyTracking is false and NSPrivacyTrackingDomains is empty because there is no tracking
+  anywhere in the app: no analytics SDK, no crash reporter, no third-party SDK of any kind
+  (`grep` for the usual vendors returns nothing). NSPrivacyCollectedDataTypes is empty because the
+  vendor receives nothing — journeys and photos live in the customer's own iCloud, which the
+  developer cannot read.
+
+  One honest caveat that belongs with the App Store Connect answers rather than here: publishing a
+  journey to the public showcase writes thumbnails and metadata into the developer's own CloudKit
+  PUBLIC database, which the developer can read. That is owner-initiated, explicitly consented, and
+  world-readable by design — but it means the Connect questionnaire's User Content section must not
+  be answered "Data Not Collected" for customers who publish. This manifest describes what the app
+  collects on its own initiative, which is nothing.
+-->
+<plist version="1.0">
+<dict>
+  <key>NSPrivacyTracking</key>
+  <false/>
+
+  <key>NSPrivacyTrackingDomains</key>
+  <array/>
+
+  <key>NSPrivacyCollectedDataTypes</key>
+  <array/>
+
+  <key>NSPrivacyAccessedAPITypes</key>
+  <array>
+    <!--
+      UserDefaults — 44 call sites across 11 files. All of it is this app's own state: the sync
+      engine's serialized CKSyncEngine state, the onboarding and demo-seed flags, the appearance
+      preference, the developer-tools unlock, comment author name. Never another app's data and
+      never read from a shared container for identification purposes, which is exactly what
+      CA92.1 declares.
+    -->
+    <dict>
+      <key>NSPrivacyAccessedAPIType</key>
+      <string>NSPrivacyAccessedAPICategoryUserDefaults</string>
+      <key>NSPrivacyAccessedAPITypeReasons</key>
+      <array>
+        <string>CA92.1</string>
+      </array>
+    </dict>
+
+    <!--
+      File timestamps — FileManager.attributesOfItem at Import/CloudKitImportSink.swift:656.
+      Reads only the file's own size/attributes for import accounting, on files inside the app's
+      own container. C617.1 is the "inside the app container" reason.
+    -->
+    <dict>
+      <key>NSPrivacyAccessedAPIType</key>
+      <string>NSPrivacyAccessedAPICategoryFileTimestamp</string>
+      <key>NSPrivacyAccessedAPITypeReasons</key>
+      <array>
+        <string>C617.1</string>
+      </array>
+    </dict>
+  </array>
+</dict>
+</plist>

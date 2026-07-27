@@ -28,11 +28,31 @@ struct GPXFile: Equatable {
     var name: String?
     var time: Date?
     var droppedPointCount: Int
+    /// Each track point's `<time>`, **index-aligned with `route.coordinates`**: same count, `nil`
+    /// where that point carried no (or an unparseable) `<time>`. A dropped point (out-of-range
+    /// coordinate) contributes to neither array, so the alignment holds by construction.
+    ///
+    /// Kept as a parallel array rather than a fourth coordinate channel because `Route` is the
+    /// *persisted* domain shape (`[lng, lat, ele?]`, GeoJSON) shared with CloudKit, the exporter and
+    /// the web adapter — widening it to carry a timestamp would change every one of those contracts
+    /// for a signal only the importer needs. This array is parse-time-only: it feeds
+    /// `JourneyDraft.days(fromTrackPoints:times:)` and is never stored.
+    var trackPointTimes: [Date?] = []
 
     /// True when the document produced neither a route nor any waypoints.
     var isEmpty: Bool { route.coordinates.isEmpty && waypoints.isEmpty }
 
     var trackPointCount: Int { route.coordinates.count }
+
+    /// The track points that carry a usable time, as `(coordinate, time)` pairs in document order.
+    /// Empty for a track with no `<time>` at all — which is exactly the signal day-derivation needs
+    /// to decline rather than invent days.
+    var timedTrackPoints: [(coordinate: [Double], time: Date)] {
+        zip(route.coordinates, trackPointTimes).compactMap { coordinate, time in
+            guard let time, coordinate.count >= 2 else { return nil }
+            return (coordinate, time)
+        }
+    }
 }
 
 /// Typed, user-presentable failures. The messages are safe to show verbatim in a sheet.
@@ -46,17 +66,23 @@ enum GPXParseError: Error, LocalizedError, Equatable {
     /// The file is larger than the import cap (protects the UI from a multi-hundred-MB pick).
     case tooLarge(maxBytes: Int)
 
+    /// Localised (QUA-26). These reach the screen whenever a GPX pick or a shared-in `.gpx` fails,
+    /// which is the most common import failure there is.
     var errorDescription: String? {
         switch self {
         case .empty:
-            return "This file is empty."
+            return String(localized: "This file is empty.",
+                          comment: "GPX import failure alert: the picked file had no bytes.")
         case .malformed:
-            return "This doesn't look like a valid GPX file — the XML couldn't be read."
+            return String(localized: "This doesn't look like a valid GPX file — the XML couldn't be read.",
+                          comment: "GPX import failure alert: the document is not well-formed XML.")
         case .noContent:
-            return "This GPX file has no track points or waypoints to import."
+            return String(localized: "This GPX file has no track points or waypoints to import.",
+                          comment: "GPX import failure alert: the file parsed but carried no route and no waypoints.")
         case let .tooLarge(maxBytes):
-            return "This GPX file is too large to import (over \(maxBytes / (1024 * 1024)) MB). "
-                 + "Try a simplified or trimmed track."
+            // One key, not a concatenation: a translator needs the whole sentence to reorder it.
+            return String(localized: "This GPX file is too large to import (over \(maxBytes / (1024 * 1024)) MB). Try a simplified or trimmed track.",
+                          comment: "GPX import failure alert: the file exceeds the import size cap. The placeholder is the cap in whole megabytes.")
         }
     }
 }
@@ -140,6 +166,8 @@ final class GPXParserDelegate: NSObject, XMLParserDelegate {
 
     // Output accumulators.
     private var routeCoordinates: [[Double]] = []
+    /// Index-aligned with `routeCoordinates` — see `GPXFile.trackPointTimes`.
+    private var routePointTimes: [Date?] = []
     private var waypoints: [GPXWaypoint] = []
     private var metadataName: String?
     private var metadataTime: Date?
@@ -164,6 +192,9 @@ final class GPXParserDelegate: NSObject, XMLParserDelegate {
     private var pendingWaypoint: PendingPoint?
     /// Coordinates of the current `<trkseg>`, flushed into `routeCoordinates` on `</trkseg>`.
     private var currentSegment: [[Double]] = []
+    /// Times of the current `<trkseg>`, flushed alongside `currentSegment` so the two arrays stay
+    /// index-aligned through every flush path (`</trkseg>`, `</rte>`, and the `</trk>` fallback).
+    private var currentSegmentTimes: [Date?] = []
     private var trackName: String?
 
     func makeFile() -> GPXFile {
@@ -171,7 +202,8 @@ final class GPXParserDelegate: NSObject, XMLParserDelegate {
                 waypoints: waypoints,
                 name: metadataName ?? trackName,
                 time: metadataTime,
-                droppedPointCount: droppedPointCount)
+                droppedPointCount: droppedPointCount,
+                trackPointTimes: routePointTimes)
     }
 
     // MARK: Element start
@@ -198,6 +230,7 @@ final class GPXParserDelegate: NSObject, XMLParserDelegate {
         case "trkseg", "rte":
             // A <rte> is a route (a LineString of <rtept>) with no <trkseg>; buffer it the same way.
             currentSegment = []
+            currentSegmentTimes = []
         default:
             break
         }
@@ -256,16 +289,14 @@ final class GPXParserDelegate: NSObject, XMLParserDelegate {
             finishWaypoint()
 
         case "trkseg", "rte":
-            routeCoordinates.append(contentsOf: currentSegment)
-            currentSegment = []
+            flushSegment()
 
         case "trk":
             // Flush any points that were emitted directly under <trk> without a wrapping <trkseg>
             // (a schema-invalid but real producer quirk). Without this, those parsed points would
             // be stranded in `currentSegment` and the file wrongly reported as having "no content".
             // (quality gate: trkpt outside a trkseg is silently discarded.)
-            routeCoordinates.append(contentsOf: currentSegment)
-            currentSegment = []
+            flushSegment()
 
         default:
             break
@@ -274,6 +305,14 @@ final class GPXParserDelegate: NSObject, XMLParserDelegate {
 
     // MARK: Point finishing
 
+    /// Move the buffered segment into the route, keeping coordinates and times index-aligned.
+    private func flushSegment() {
+        routeCoordinates.append(contentsOf: currentSegment)
+        routePointTimes.append(contentsOf: currentSegmentTimes)
+        currentSegment = []
+        currentSegmentTimes = []
+    }
+
     private func finishTrackPoint() {
         defer { pendingTrackPoint = nil }
         guard let point = pendingTrackPoint,
@@ -281,6 +320,9 @@ final class GPXParserDelegate: NSObject, XMLParserDelegate {
                                           ele: point.elevation)
         else { droppedPointCount += 1; return }
         currentSegment.append(coordinate)
+        // Appended unconditionally (nil included) on exactly the path that appended a coordinate —
+        // that pairing is what keeps the two arrays aligned.
+        currentSegmentTimes.append(point.time)
     }
 
     private func finishWaypoint() {
@@ -325,16 +367,8 @@ final class GPXParserDelegate: NSObject, XMLParserDelegate {
 
     // MARK: Time parsing
 
-    private static let isoWithFraction: ISO8601DateFormatter = {
-        let f = ISO8601DateFormatter()
-        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return f
-    }()
-    private static let iso: ISO8601DateFormatter = {
-        let f = ISO8601DateFormatter()
-        f.formatOptions = [.withInternetDateTime]
-        return f
-    }()
+    // QUA-08: was a private static ISO8601DateFormatter. See ISO8601Shared for why these are
+    // serialised centrally rather than annotated nonisolated(unsafe) at each site.
 
     /// Lenient fallback for GPX writers that emit a zone-less `<time>` ("2023-09-29T06:00:00" with
     /// no Z/offset — nonconformant but real). `xsd:dateTime` allows the timezone to be absent, so
@@ -357,8 +391,7 @@ final class GPXParserDelegate: NSObject, XMLParserDelegate {
 
     static func parseTime(_ string: String) -> Date? {
         guard !string.isEmpty else { return nil }
-        return iso.date(from: string)
-            ?? isoWithFraction.date(from: string)
+        return ISO8601Shared.date(from: string)
             ?? zonelessLocal.date(from: string)
             ?? zonelessLocalFraction.date(from: string)
     }

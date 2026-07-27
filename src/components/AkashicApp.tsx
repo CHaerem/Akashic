@@ -9,7 +9,7 @@ import { fetchPhotos, getJourneyIdBySlug, updatePhoto } from '../lib/journeys';
 import { hasPendingShares } from '../lib/shareTarget';
 import { setSheetCoversChrome } from '../lib/sheetOverlay';
 import type { Photo, Camp } from '../types/trek';
-import type mapboxgl from 'mapbox-gl';
+import type * as mapboxgl from 'mapbox-gl';
 import { MapboxGlobe } from './MapboxGlobe';
 import { OfflineIndicator } from './OfflineIndicator';
 import { GlobeHint } from './home/GlobeHint';
@@ -64,7 +64,6 @@ export default function AkashicApp() {
         view,
         selectedTrek,
         selectedCamp,
-        activeTab,
         trekData,
         extendedStats,
         elevationProfile,
@@ -74,7 +73,9 @@ export default function AkashicApp() {
         // Edit mode
         editMode,
         toggleEditMode,
-        setActiveTab,
+        // activeTab/setActiveTab are deliberately not destructured: the Find My sheet
+        // redesign replaced tabs with `activeMode`, so nothing renders them. The state
+        // still lives in useTrekData and is still tested — see the note in QUA-02.
         setSheetSnapPoint,
         setActiveMode,
         selectTrek,

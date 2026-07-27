@@ -64,11 +64,16 @@ struct RouteConfidence: Equatable {
     var gapCount: Int
 
     /// One-line, plain-language summary for the suggestion row.
+    ///
+    /// Localised per clause with real plural rules rather than an English `"s"` ternary — see the
+    /// same note on `RouteDrawing.DrawnRoute.summary` (QUA-26).
     var summary: String {
-        var s = "Route drafted from \(sourcePointCount) photo location\(sourcePointCount == 1 ? "" : "s")"
+        var s = String(localized: "Route drafted from \(sourcePointCount) photo locations",
+                       comment: "Route provenance line: how many geotagged photos the drafted route was inferred from.")
         if gapCount > 0 {
             let hrs = Int(largestGapHours.rounded())
-            s += " · \(gapCount) gap\(gapCount == 1 ? "" : "s") (up to \(hrs) h without GPS)"
+            s += " · " + String(localized: "\(gapCount) gaps (up to \(hrs) h without GPS)",
+                                comment: "Route provenance line: stretches with no photo location at all. First placeholder is how many gaps, second is the longest one in whole hours.")
         }
         return s
     }

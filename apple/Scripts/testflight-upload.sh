@@ -34,7 +34,10 @@ cd "$APPLE_DIR"
 echo "==> Generating project"
 xcodegen generate
 
-echo "==> Archiving ($CONFIG)"
+# AKASHIC_REQUIRE_INTELLIGENCE turns a missing FoundationModels SDK into a build error instead of
+# silently compiling the whole paid AI family out of the shipping binary. See the tripwire at the
+# top of Akashic/Intelligence/IntelligenceAvailability.swift for why it lives here and not in CI.
+echo "==> Archiving ($CONFIG) with the Intelligence tripwire armed"
 xcodebuild -project Akashic.xcodeproj \
     -scheme "$SCHEME" \
     -configuration "$CONFIG" \
@@ -45,6 +48,7 @@ xcodebuild -project Akashic.xcodeproj \
     -authenticationKeyID "$ASC_KEY_ID" \
     -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
     DEVELOPMENT_TEAM="$TEAM_ID" \
+    SWIFT_ACTIVE_COMPILATION_CONDITIONS='$(inherited) AKASHIC_REQUIRE_INTELLIGENCE' \
     archive
 
 if [ "${1:-}" = "--archive-only" ]; then

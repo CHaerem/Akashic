@@ -81,13 +81,13 @@ struct WaypointEditSheet: View {
             onSave: save
         ) {
             GlassField(label: "Name", systemImage: "mappin") {
-                GlassTextField(placeholder: "Camp name", text: $name)
+                GlassTextField(placeholder: "Camp name", text: $name, accessibilityLabel: "Camp name")
             }
             GlassField(label: "Description", systemImage: "text.alignleft") {
                 if showsDraftButton {
                     draftButton
                 }
-                GlassTextEditor(text: $description)
+                GlassTextEditor(text: $description, label: "Day description")
             }
             GlassField(label: "Highlights", systemImage: "sparkles") {
                 HighlightChipsEditor(items: $highlights)
@@ -96,11 +96,16 @@ struct WaypointEditSheet: View {
                 factsField
             }
             HStack(spacing: 12) {
+                // The placeholders here are "0" and "1" — SwiftUI would announce these two fields as
+                // "0, text field" and "1, text field", side by side, which reads as two values
+                // rather than two named fields.
                 GlassField(label: "Elevation (m)", systemImage: "mountain.2") {
-                    GlassTextField(placeholder: "0", text: $elevation, keyboard: .numberPad)
+                    GlassTextField(placeholder: "0", text: $elevation, keyboard: .numberPad,
+                                   accessibilityLabel: "Elevation in metres")
                 }
                 GlassField(label: "Day number", systemImage: "number") {
-                    GlassTextField(placeholder: "1", text: $dayNumber, keyboard: .numberPad)
+                    GlassTextField(placeholder: "1", text: $dayNumber, keyboard: .numberPad,
+                                   accessibilityLabel: "Day number")
                 }
             }
             funFactsField
@@ -134,10 +139,13 @@ struct WaypointEditSheet: View {
                     Text(isDrafting ? "Drafting…" : "Draft with Apple Intelligence")
                         .font(.caption.weight(.semibold))
                 }
-                .foregroundStyle(Theme.accent)
+                .foregroundStyle(Theme.accentText)
             }
             .buttonStyle(.plain)
             .disabled(isDrafting)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(isDrafting ? "Drafting the day's notes" : "Draft the day's notes with Apple Intelligence")
+            .accessibilityAddTraits(.isButton)
             if draftFailed {
                 Text("Couldn't draft — try again")
                     .font(.caption2)
@@ -215,10 +223,13 @@ struct WaypointEditSheet: View {
                         Text(isDraftingFacts ? "Drafting facts…" : "Draft facts")
                             .font(.caption.weight(.semibold))
                     }
-                    .foregroundStyle(Theme.accent)
+                    .foregroundStyle(Theme.accentText)
                 }
                 .buttonStyle(.plain)
                 .disabled(isDraftingFacts)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(isDraftingFacts ? "Drafting facts" : "Draft facts with Apple Intelligence")
+                .accessibilityAddTraits(.isButton)
 
                 if let facts = pendingFacts, !facts.isEmpty {
                     ForEach(facts.funFacts) { fact in
@@ -229,9 +240,11 @@ struct WaypointEditSheet: View {
                     }
                     HStack(spacing: 12) {
                         Button("Add to day") { addPendingFacts() }
-                            .font(.caption.weight(.semibold)).foregroundStyle(Theme.accent)
+                            .font(.caption.weight(.semibold)).foregroundStyle(Theme.accentText)
+                            .accessibilityLabel("Add the drafted facts to this day")
                         Button("Discard") { pendingFacts = nil }
                             .font(.caption).foregroundStyle(Theme.textTertiary)
+                            .accessibilityLabel("Discard the drafted facts")
                     }
                 }
                 if factsFailed {
@@ -245,7 +258,8 @@ struct WaypointEditSheet: View {
 
     private func factPreview(icon: String, text: String) -> some View {
         HStack(alignment: .top, spacing: 6) {
-            Image(systemName: icon).font(.caption2).foregroundStyle(Theme.accent)
+            Image(systemName: icon).font(.caption2).foregroundStyle(Theme.accentText)
+                .accessibilityHidden(true)
             Text(text).font(.caption2).foregroundStyle(Theme.textSecondary)
         }
     }
@@ -310,7 +324,7 @@ struct WaypointEditSheet: View {
         GlassField(label: "Fun facts", systemImage: "lightbulb") {
             VStack(alignment: .leading, spacing: 8) {
                 ForEach($funFacts) { $fact in
-                    contentRow(text: $fact.content, placeholder: "Fact") {
+                    contentRow(text: $fact.content, placeholder: "Fact", deleteLabel: "Delete this fact") {
                         funFacts.removeAll { $0.id == fact.id }
                     }
                 }
@@ -328,7 +342,8 @@ struct WaypointEditSheet: View {
         GlassField(label: "Points of interest", systemImage: "mappin.and.ellipse") {
             VStack(alignment: .leading, spacing: 8) {
                 ForEach($pointsOfInterest) { $poi in
-                    contentRow(text: $poi.name, placeholder: "Place name") {
+                    contentRow(text: $poi.name, placeholder: "Place name",
+                               deleteLabel: "Delete this point of interest") {
                         pointsOfInterest.removeAll { $0.id == poi.id }
                     }
                 }
@@ -350,7 +365,8 @@ struct WaypointEditSheet: View {
             VStack(alignment: .leading, spacing: 8) {
                 ForEach($historicalSites) { $site in
                     VStack(alignment: .leading, spacing: 6) {
-                        contentRow(text: $site.name, placeholder: "Site name") {
+                        contentRow(text: $site.name, placeholder: "Site name",
+                                   deleteLabel: "Delete this historical site") {
                             historicalSites.removeAll { $0.id == site.id }
                         }
                         GlassTextField(placeholder: "Summary", text: Binding(
@@ -379,12 +395,12 @@ struct WaypointEditSheet: View {
         GlassField(label: "Weather", systemImage: "cloud.sun") {
             VStack(alignment: .leading, spacing: 10) {
                 HStack(spacing: 12) {
-                    weatherNumber("High °C", $wTempMax)
-                    weatherNumber("Low °C", $wTempMin)
+                    weatherNumber("High °C", $wTempMax, label: "Highest temperature in degrees Celsius")
+                    weatherNumber("Low °C", $wTempMin, label: "Lowest temperature in degrees Celsius")
                 }
                 HStack(spacing: 12) {
-                    weatherNumber("Precip mm", $wPrecip)
-                    weatherNumber("Wind km/h", $wWind)
+                    weatherNumber("Precip mm", $wPrecip, label: "Precipitation in millimetres")
+                    weatherNumber("Wind km/h", $wWind, label: "Wind speed in kilometres per hour")
                 }
                 if !weatherIsEmpty {
                     Button(role: .destructive) {
@@ -399,15 +415,30 @@ struct WaypointEditSheet: View {
         }
     }
 
-    private func weatherNumber(_ label: String, _ text: Binding<String>) -> some View {
+    /// QUA-24: `label` spelled out rather than reusing the visible caption. All four of these fields
+    /// have the placeholder "—", so VoiceOver announced four adjacent fields as "dash, text field" —
+    /// and the abbreviated captions above them ("Precip mm") are compressed for a 4-across grid, not
+    /// written to be read aloud.
+    private func weatherNumber(_ caption: LocalizedStringKey, _ text: Binding<String>,
+                               label: LocalizedStringKey) -> some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text(label.uppercased()).font(.system(size: 10, weight: .semibold))
+            Text(caption).textCase(.uppercase).font(.system(size: 10, weight: .semibold))
                 .tracking(0.6).foregroundStyle(Theme.textTertiary)
-            GlassTextField(placeholder: "—", text: text, keyboard: .numbersAndPunctuation)
+                .lineLimit(1).minimumScaleFactor(0.8)
+                .accessibilityHidden(true)
+            GlassTextField(placeholder: "—", text: text, keyboard: .numbersAndPunctuation,
+                           accessibilityLabel: label)
         }
     }
 
-    private func contentRow(text: Binding<String>, placeholder: String, onDelete: @escaping () -> Void) -> some View {
+    /// QUA-24: `deleteLabel` is required rather than defaulted. This row is reused for facts, points
+    /// of interest and historical sites, and its delete was an unlabelled trash glyph — so a day with
+    /// two facts and three POIs presented five identical, destructive, anonymous buttons and no way
+    /// to tell which list any of them belonged to. A shared default ("Delete") would have kept that
+    /// bug; making the caller name the row is what stops it coming back.
+    private func contentRow(text: Binding<String>, placeholder: LocalizedStringKey,
+                            deleteLabel: LocalizedStringKey,
+                            onDelete: @escaping () -> Void) -> some View {
         HStack(spacing: 8) {
             GlassTextField(placeholder: placeholder, text: text)
             Button(action: onDelete) {
@@ -416,13 +447,14 @@ struct WaypointEditSheet: View {
                     .background(Color.red.opacity(0.12), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
             }
             .buttonStyle(.plain)
+            .accessibilityLabel(deleteLabel)
         }
     }
 
-    private func addRowButton(_ title: String, action: @escaping () -> Void) -> some View {
+    private func addRowButton(_ title: LocalizedStringKey, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Label(title, systemImage: "plus.circle.fill")
-                .font(.caption.weight(.semibold)).foregroundStyle(Theme.accent)
+                .font(.caption.weight(.semibold)).foregroundStyle(Theme.accentText)
         }
         .buttonStyle(.plain)
         .frame(maxWidth: .infinity, alignment: .leading)

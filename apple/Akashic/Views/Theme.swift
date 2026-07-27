@@ -28,12 +28,40 @@ import UIKit
 ///  - **Reduce Motion** has no colour to swap and isn't handled here — see
 ///    `TrekCameraController` and `GlobeExperienceView`, where the motion actually lives.
 enum Theme {
-    /// The one brand colour this file keeps. Fixed across both appearances on purpose: this
-    /// periwinkle already reads correctly on both a light and a dark `systemBackground` —
-    /// inventing a second "light-mode accent" would be exactly the palette-growing this
-    /// rewrite is supposed to avoid.
+    /// The one brand colour this file keeps. Fixed across both appearances on purpose, and correct
+    /// for what it is actually used for: a **fill**. Against `onAccent` (black) it measures 8.51:1.
+    ///
+    /// This comment used to claim the periwinkle "already reads correctly on both a light and a dark
+    /// `systemBackground`". Measured, it is 8.51:1 on dark and **2.47:1 on light** — so it was true
+    /// for exactly one of the two. It was almost certainly true when written, because the app was
+    /// dark-only; the Light Mode migration that made `background` follow the system appearance
+    /// invalidated it and nothing re-measured. Use `accentText` for foregrounds. (QUA-32)
     static let accent = Color(red: 0.56, green: 0.62, blue: 1.0)
     static let accentSoft = accent.opacity(0.16)
+
+    /// `accent` for TEXT and icons — the same hue, darkened in Light Mode so it passes WCAG AA.
+    ///
+    /// Not the "second light-mode accent" the note above warned against: it is the brand periwinkle
+    /// scaled uniformly by 0.66, so the hue is unchanged and there is one brand colour with two
+    /// renderings, not two brand colours. Measured:
+    ///
+    /// | | on Light `systemBackground` | on Dark |
+    /// |---|---|---|
+    /// | `accent` | 2.47:1 — fails AA *and* AA-large | 8.51:1 |
+    /// | `accentText` | **5.20:1** — passes AA (4.5) | 8.51:1, identical to `accent` |
+    ///
+    /// Dark Mode is byte-identical to `accent`, so the appearance the owner designed is untouched;
+    /// only the previously-failing light case changes. QUA-29's audit flags every `accent` foreground
+    /// on every screen, which is how this was found.
+    ///
+    /// Fills keep using `accent`: a fill's contrast is against `onAccent`, which already passes.
+    ///
+    /// Built with `Color.adaptive(dark:light:)` below rather than a fourth hand-rolled
+    /// `UIColor { traits in … }` — that helper exists because this pattern had already been written
+    /// twice independently.
+    static let accentText = Color.adaptive(
+        dark: accent,
+        light: Color(red: 0.3696, green: 0.4092, blue: 0.66))
 
     /// Foreground for text/icons drawn on an `accent`-filled control (the app's primary CTA
     /// buttons). This used to just reuse `background` — which only worked because `background`
@@ -210,8 +238,16 @@ struct StatChipRow: View {
     struct Item: Identifiable {
         var icon: String
         var value: String
-        var caption: String
-        var id: String { caption }
+        /// `LocalizedStringKey`, not `String`: the caption is the only user-visible prose here
+        /// (`value` is a formatted number and `icon` an SF Symbol name). As a `String` it reached
+        /// `Text` already-resolved and never entered the string catalogue at all — the silent
+        /// failure QUA-06 exists to remove.
+        var caption: LocalizedStringKey
+        /// The caption used to be the identity, which no longer type-checks now that it is a
+        /// `LocalizedStringKey` — and would have been wrong anyway, since two translations can
+        /// collide where two English captions did not. Every row builds its chips with distinct
+        /// symbols, so the icon is the stable identity.
+        var id: String { icon }
     }
 
     let items: [Item]
@@ -244,14 +280,14 @@ struct StatChipRow: View {
 struct StatChip: View {
     let icon: String
     let value: String
-    let caption: String
+    let caption: LocalizedStringKey
 
     var body: some View {
         VStack(alignment: .leading, spacing: 3) {
             HStack(spacing: 5) {
                 Image(systemName: icon)
                     .font(.caption2)
-                    .foregroundStyle(Theme.accent)
+                    .foregroundStyle(Theme.accentText)
                 Text(value)
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(Theme.textPrimary)
@@ -261,6 +297,14 @@ struct StatChip: View {
             Text(caption)
                 .font(.caption2)
                 .foregroundStyle(Theme.textTertiary)
+                // The caption was unconstrained while it was always an English word. Norwegian
+                // runs longer — "Descent" becomes "Nedstigning", "Duration" becomes "Varighet" —
+                // and an unconstrained caption would either wrap (making one chip in a row taller
+                // than its neighbours) or push the chip past the width `StatChipRow`'s
+                // `ViewThatFits` is measuring, flipping a row that fits into two columns. One
+                // line that shrinks a little keeps both the row height and that decision stable.
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
         }
         .padding(.vertical, 8)
         .padding(.horizontal, 12)

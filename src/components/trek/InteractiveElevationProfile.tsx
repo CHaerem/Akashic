@@ -93,7 +93,9 @@ export const InteractiveElevationProfile = memo(function InteractiveElevationPro
     }, [handleWheel]);
 
     // Pinch-to-zoom handlers
-    const getTouchDistance = (touches: TouchList) => {
+    // React.TouchList, not the DOM TouchList: every caller passes `e.touches` off a React
+    // synthetic TouchEvent, and the two types are structurally incompatible.
+    const getTouchDistance = (touches: React.TouchList) => {
         if (touches.length < 2) return 0;
         const dx = touches[0].clientX - touches[1].clientX;
         const dy = touches[0].clientY - touches[1].clientY;

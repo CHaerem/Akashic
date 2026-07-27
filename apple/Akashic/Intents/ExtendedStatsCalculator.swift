@@ -213,4 +213,23 @@ enum ExtendedStatsCalculator {
         if score >= 2 { return "Moderate" }
         return "Easy"
     }
+
+    /// The customer-facing wording for a difficulty rating.
+    ///
+    /// `calculateDifficultyRating` above deliberately keeps returning the **English token**, and
+    /// this is the seam where it becomes prose. The token is not display text: it is persisted in
+    /// the export/CloudKit JSON that `IntentModels.ExtendedStats` decodes, it is what
+    /// `StatsView.difficultyColor` switches on to pick the badge colour, and it is what a
+    /// Shortcuts automation built on `GetJourneyStatsIntent` compares against. Translating it at
+    /// the source would have silently turned the badge green for every Norwegian journey
+    /// (`difficultyColor`'s `default:` case is Easy) and broken any saved shortcut — a localisation
+    /// change with two non-localisation regressions hiding behind it.
+    static func localizedDifficulty(_ token: String) -> LocalizedStringResource {
+        switch token {
+        case "Extreme": return LocalizedStringResource("Extreme", comment: "Journey difficulty rating, hardest of four.")
+        case "Hard": return LocalizedStringResource("Hard", comment: "Journey difficulty rating.")
+        case "Moderate": return LocalizedStringResource("Moderate", comment: "Journey difficulty rating.")
+        default: return LocalizedStringResource("Easy", comment: "Journey difficulty rating, easiest of four.")
+        }
+    }
 }

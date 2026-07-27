@@ -3,7 +3,7 @@
  */
 
 import { useRef, useEffect, useCallback, useState } from 'react';
-import type mapboxgl from 'mapbox-gl';
+import type * as mapboxgl from 'mapbox-gl';
 import { useMapbox } from '../hooks/useMapbox';
 import { useJourneys } from '../contexts/JourneysContext';
 import { MapErrorFallback } from './common/ErrorBoundary';
@@ -30,6 +30,23 @@ const isE2ETestMode = import.meta.env.VITE_E2E_TEST_MODE === 'true';
 // Delay before starting globe rotation (ms) - allows user to see the globe stationary first
 const ROTATION_START_DELAY_MS = 3500;
 
+/**
+ * What window.testHelpers.getTrekData actually returns: a flattened projection of TrekData for
+ * E2E assertions, not TrekData itself. Named so the difference is visible at the call site.
+ */
+interface TrekDataSummary {
+    id: string;
+    name: string;
+    campCount: number;
+    camps: Array<{
+        id: string;
+        name: string;
+        dayNumber: number;
+        elevation: number;
+        coordinates: [number, number];
+    }>;
+}
+
 // Test helpers interface for E2E testing
 interface TestHelpers {
     selectTrek: (id: string) => boolean;
@@ -39,7 +56,7 @@ interface TestHelpers {
     getCurrentDay: () => number | null;
     getCamps: () => Array<{ id: string; name: string; dayNumber: number }>;
     getTrekDataKeys: () => string[]; // Debug: see what trek IDs are in trekDataMap
-    getTrekData: (id: string) => any; // Debug: get full trek data
+    getTrekData: (id: string) => TrekDataSummary | null; // Debug: get a trek-data projection
     isMapReady: () => boolean;
     isDataLoaded: () => boolean;
     // Map state inspection for visual verification
@@ -198,7 +215,7 @@ export function MapboxGlobe({ selectedTrek, selectedCamp, onSelectTrek, view, ph
         }
     }, [onCampSelect]);
 
-    const { map, mapReady, error, flyToGlobe, flyToTrek, updatePhotoMarkers, updateCampMarkers, updatePOIMarkers, flyToPhoto, flyToPOI, startRotation, stopRotation, isRotating, getMapCenter, getMapStateForTesting } = useMapbox({
+    const { map, mapReady, error, flyToGlobe, flyToTrek, updatePhotoMarkers, updateCampMarkers, updatePOIMarkers, flyToPhoto, flyToPOI, startRotation, stopRotation, isRotating, getMapStateForTesting } = useMapbox({
         containerRef,
         onTrekSelect: onSelectTrek,
         onPhotoClick: handlePhotoClick,
@@ -218,8 +235,13 @@ export function MapboxGlobe({ selectedTrek, selectedCamp, onSelectTrek, view, ph
 
         const emitViewportInfo = () => {
             if (onViewportChange) {
-                const bounds = mapInstance.getBounds().toArray();
-                onViewportChange(bounds);
+                // getBounds() is null until the map has a valid transform — calling
+                // .toArray() on it threw. Skip the emit instead; the next move/idle
+                // event re-runs this with real bounds.
+                const bounds = mapInstance.getBounds();
+                if (bounds) {
+                    onViewportChange(bounds.toArray());
+                }
             }
 
             if (onViewportVisiblePhotoIdsChange) {

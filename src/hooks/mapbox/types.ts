@@ -3,7 +3,7 @@
  */
 
 import type { RefObject, MutableRefObject } from 'react';
-import type mapboxgl from 'mapbox-gl';
+import type * as mapboxgl from 'mapbox-gl';
 import type { TrekConfig, TrekData, Camp, Photo, PointOfInterest } from '../../types/trek';
 
 /**
@@ -49,6 +49,18 @@ export interface PlaybackState {
 }
 
 /**
+ * Camera/animation snapshot exposed for e2e assertions (window.__mapState).
+ * Every field is nullable because the map may not be constructed yet.
+ */
+export interface MapStateForTesting {
+    cameraCenter: [number, number] | null;
+    cameraZoom: number | null;
+    cameraBearing: number | null;
+    pendingHighlightCampId: string | null;
+    hasPendingAnimations: boolean;
+}
+
+/**
  * Return type for useMapbox hook
  */
 export interface UseMapboxReturn {
@@ -71,6 +83,8 @@ export interface UseMapboxReturn {
     startPlayback: (trekData: TrekData, onCampReached?: (camp: Camp) => void) => void;
     stopPlayback: () => void;
     playbackState: PlaybackState;
+    /** e2e-only camera snapshot. useMapbox has always returned it; the interface just never said so. */
+    getMapStateForTesting: () => MapStateForTesting;
 }
 
 /**

@@ -3,7 +3,7 @@ import Foundation
 
 /// Default backoff sleep for the importer (real `Task.sleep`). A file-scope function so it can
 /// be a default argument without tripping the "covariant Self in default argument" rule.
-func defaultImportSleep(_ seconds: TimeInterval) async {
+@Sendable func defaultImportSleep(_ seconds: TimeInterval) async {
     try? await Task.sleep(nanoseconds: UInt64(max(0, seconds) * 1_000_000_000))
 }
 
@@ -143,7 +143,7 @@ final class CloudKitImportSink: ImportSink {
     let environment: CloudKitImportEnvironment
 
     /// Injected so tests run backoff with zero real delay.
-    private let sleep: (TimeInterval) async -> Void
+    private let sleep: @Sendable (TimeInterval) async -> Void
 
     /// Comments keyed by journey (mapped to domain `DayComment` with migrated `authorName`).
     private let commentsByJourney: [String: [DayComment]]
@@ -164,7 +164,7 @@ final class CloudKitImportSink: ImportSink {
          containerID: String = "iCloud.no.akashic",
          environment: CloudKitImportEnvironment = .development,
          config: CloudKitImportConfig = .default,
-         sleep: @escaping (TimeInterval) async -> Void = defaultImportSleep) {
+         sleep: @escaping @Sendable (TimeInterval) async -> Void = defaultImportSleep) {
         self.database = database
         self.mediaResolver = mediaResolver
         self.commentsByJourney = Dictionary(grouping: commentRows.map { row -> DayComment in
@@ -189,7 +189,7 @@ final class CloudKitImportSink: ImportSink {
                            containerID: String = "iCloud.no.akashic",
                            environment: CloudKitImportEnvironment = .development,
                            config: CloudKitImportConfig = .default,
-                           sleep: @escaping (TimeInterval) async -> Void = defaultImportSleep) throws -> CloudKitImportSink {
+                           sleep: @escaping @Sendable (TimeInterval) async -> Void = defaultImportSleep) throws -> CloudKitImportSink {
         let bundle = try ExportBundle.load(exportRoot: exportRoot)
         return fromBundle(database: database, bundle: bundle,
                           mediaResolver: MediaResolver(root: mediaRoot),
@@ -204,7 +204,7 @@ final class CloudKitImportSink: ImportSink {
                            containerID: String = "iCloud.no.akashic",
                            environment: CloudKitImportEnvironment = .development,
                            config: CloudKitImportConfig = .default,
-                           sleep: @escaping (TimeInterval) async -> Void = defaultImportSleep) -> CloudKitImportSink {
+                           sleep: @escaping @Sendable (TimeInterval) async -> Void = defaultImportSleep) -> CloudKitImportSink {
         let sink = CloudKitImportSink(
             database: database, mediaResolver: mediaResolver,
             commentRows: bundle.comments, profileNamesByID: bundle.profileNamesByID,
@@ -349,7 +349,7 @@ final class CloudKitImportSink: ImportSink {
     /// cancellation is honored between ops (cancel the enclosing `Task`).
     @discardableResult
     func execute(dryRun: Bool,
-                 progress: ((CloudKitImportProgress) -> Void)? = nil) async -> CloudKitImportReport {
+                 progress: (@Sendable (CloudKitImportProgress) -> Void)? = nil) async -> CloudKitImportReport {
         let start = Date()
         let plan = makePlan()
         var report = CloudKitImportReport(dryRun: dryRun, environment: environment,
@@ -476,7 +476,7 @@ final class CloudKitImportSink: ImportSink {
 
     private func finish(_ report: inout CloudKitImportReport, _ prog: inout CloudKitImportProgress,
                         _ start: Date, cancelled: Bool,
-                        progress: ((CloudKitImportProgress) -> Void)?) -> CloudKitImportReport {
+                        progress: (@Sendable (CloudKitImportProgress) -> Void)?) -> CloudKitImportReport {
         purgeRouteAssetsIfNeeded(report)
         report.wasCancelled = cancelled
         report.elapsed = Date().timeIntervalSince(start)
@@ -665,15 +665,11 @@ final class CloudKitImportSink: ImportSink {
         }
     }
 
-    private static let isoWithFraction: ISO8601DateFormatter = {
-        let f = ISO8601DateFormatter(); f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]; return f
-    }()
-    private static let isoPlain: ISO8601DateFormatter = {
-        let f = ISO8601DateFormatter(); f.formatOptions = [.withInternetDateTime]; return f
-    }()
+    // QUA-08: was a private static ISO8601DateFormatter. See ISO8601Shared for why these are
+    // serialised centrally rather than annotated nonisolated(unsafe) at each site.
     static func parseISO(_ string: String?) -> Date? {
         guard let s = string, !s.isEmpty else { return nil }
-        return isoWithFraction.date(from: s) ?? isoPlain.date(from: s) ?? DateOnly.date(from: s)
+        return ISO8601Shared.date(from: s) ?? DateOnly.date(from: s)
     }
 
     // MARK: Error classification

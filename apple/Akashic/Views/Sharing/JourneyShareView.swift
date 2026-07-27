@@ -26,6 +26,7 @@ struct JourneyShareView: View {
             Group {
                 if isLoading {
                     ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .accessibilityLabel("Reading who this journey is shared with")
                 } else {
                     content
                 }
@@ -35,7 +36,7 @@ struct JourneyShareView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("Done") { dismiss() }.tint(Theme.accent)
+                    Button("Done") { dismiss() }.tint(Theme.accentText)
                 }
             }
         }
@@ -89,6 +90,13 @@ struct JourneyShareView: View {
                         }
                     }
                     .disabled(isPreparingShare)
+                    // QUA-24: preparing a CKShare is a network round trip, and the spinner was the
+                    // only sign of it. Announced as part of the label so the state is heard on the
+                    // control itself rather than as a separate "in progress" with no subject.
+                    .accessibilityLabel(isPreparingShare
+                                        ? "Preparing the invitation"
+                                        : (state?.isShared == true ? "Invite more people" : "Invite people"))
+                    .accessibilityHint("Opens the system sheet for sending an invitation")
 
                     if state?.isShared == true {
                         Button(role: .destructive) {
@@ -98,8 +106,7 @@ struct JourneyShareView: View {
                         }
                     }
                 } footer: {
-                    Text("Everyone you invite sees this journey's days, photos and comments. "
-                         + "Editors can add photos and comments; viewers can only read.")
+                    Text("Everyone you invite sees this journey's days, photos and comments. Editors can add photos and comments; viewers can only read.")
                 }
             } else if state?.isShared == true {
                 Section {
@@ -116,8 +123,7 @@ struct JourneyShareView: View {
             Button("Stop sharing", role: .destructive) { Task { await stopSharing() } }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("Everyone else loses access. Nothing is deleted — the journey stays yours, "
-                 + "and copies already on their devices remain there.")
+            Text("Everyone else loses access. Nothing is deleted — the journey stays yours, and copies already on their devices remain there.")
         }
     }
 
@@ -136,6 +142,13 @@ struct JourneyShareView: View {
                 .font(.caption)
                 .foregroundStyle(Theme.textSecondary)
             }
+            // QUA-24: who has access and at what level is one fact about one person, and it is the
+            // fact this screen exists to state. Three announcements — a name, a role, and a bare
+            // "· Invited" — put the middot in the middle of the family's privacy settings.
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(participant.acceptance == .pending
+                                ? Text("\(participant.displayName), \(participant.role.displayName), invitation not accepted yet")
+                                : Text("\(participant.displayName), \(participant.role.displayName)"))
             Spacer()
             if canManage, participant.isMutable {
                 Menu {
@@ -157,8 +170,12 @@ struct JourneyShareView: View {
                         Label("Remove access", systemImage: "person.badge.minus")
                     }
                 } label: {
-                    Image(systemName: "ellipsis.circle").tint(Theme.accent)
+                    Image(systemName: "ellipsis.circle").tint(Theme.accentText)
                 }
+                // An unlabelled glyph, once per participant, and the menu behind it can revoke
+                // someone's access to the family's photos.
+                .accessibilityLabel(Text("Manage \(participant.displayName)"))
+                .accessibilityHint("Change their access level, or remove them")
             }
         }
     }
@@ -244,6 +261,7 @@ struct CloudSharingSheet: UIViewControllerRepresentable {
     func updateUIViewController(_ controller: UICloudSharingController, context: Context) {}
 
     final class Coordinator: NSObject, UICloudSharingControllerDelegate {
+        /// The journey's own name, not prose — nothing to localise here.
         private let title: String
         init(title: String) { self.title = title }
 

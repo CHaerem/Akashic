@@ -78,6 +78,13 @@ struct DayCommentsSection: View {
                                 .strokeBorder(Theme.hairline, lineWidth: 1)
                         )
                         .disabled(isSending)
+                        // QUA-07: the counter that appears near the limit is a separate element
+                        // floating inside the field's own frame, so it was announced after the field
+                        // rather than as part of it — and only over 1 800 characters, exactly when it
+                        // matters. As the field's value it arrives with the field.
+                        .accessibilityValue(isNearLimit
+                                            ? Text("\(draft.count) of \(CommentService.maxLength) characters")
+                                            : Text(draft))
 
                     if isNearLimit {
                         Text("\(draft.count)/\(CommentService.maxLength)")
@@ -85,6 +92,7 @@ struct DayCommentsSection: View {
                             .foregroundStyle(isOverLimit ? commentDanger : Theme.textTertiary)
                             .padding(.trailing, 10)
                             .padding(.bottom, 8)
+                            .accessibilityHidden(true)
                     }
                 }
 
@@ -208,10 +216,30 @@ private struct CommentRow: View {
         ZStack(alignment: .trailing) {
             if swipeEnabled {
                 swipeActions
+                    // QUA-07: these two buttons sit *behind* the card and are revealed by a custom
+                    // horizontal `DragGesture`. VoiceOver cannot perform that drag, so as elements
+                    // they were two unlabelled glyphs at a screen position with nothing on it — while
+                    // the real affordance, editing or deleting your own comment, was unreachable. The
+                    // named actions below are the accessible equivalent: they appear in the Actions
+                    // rotor on the comment itself, which is where a reader looks for them.
+                    .accessibilityHidden(true)
             }
             cardWithSwipe
         }
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: offset)
+        .accessibilityActions {
+            if comment.isMine, !isEditing {
+                Button("Edit comment") {
+                    editText = comment.content
+                    isEditing = true
+                    resetOffset()
+                }
+                Button("Delete comment") { confirmingDelete = true }
+            }
+        }
+        .accessibilityHint(comment.isMine && !isEditing
+                           ? "Edit and Delete actions are available"
+                           : "")
         .confirmationDialog("Delete this comment?", isPresented: $confirmingDelete, titleVisibility: .visible) {
             Button("Delete", role: .destructive) { onDelete() }
             Button("Cancel", role: .cancel) { resetOffset() }
@@ -251,6 +279,8 @@ private struct CommentRow: View {
                 }
                 Spacer(minLength: 0)
             }
+            // Author, when, and whether it was edited are one attribution line.
+            .accessibilityElement(children: .combine)
 
             if isEditing {
                 editor
@@ -277,6 +307,9 @@ private struct CommentRow: View {
             .foregroundStyle(Theme.textSecondary)
             .frame(width: avatarSize, height: avatarSize)
             .background(Theme.accentSoft, in: Circle())
+            // A single initial standing in for a face. The name is spelled out beside it, so this
+            // adds a stray letter and nothing else.
+            .accessibilityHidden(true)
     }
 
     // MARK: Inline editor
@@ -304,7 +337,7 @@ private struct CommentRow: View {
                     isEditing = false
                 }
                 .font(.caption.weight(.semibold))
-                .foregroundStyle(Theme.accent)
+                .foregroundStyle(Theme.accentText)
                 .disabled(editText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
 
                 Button("Cancel") { isEditing = false }
@@ -361,23 +394,47 @@ private struct CommentRow: View {
 // MARK: - Relative time (web parity: CommentItem.formatRelativeTime)
 
 enum CommentTime {
-    /// "just now" / "Xm ago" / "Xh ago" / "Xd ago" (≤ 30 days), else a short "MMM d" date.
-    static func relative(_ date: Date, now: Date = Date()) -> String {
+    /// "just now" / "2 min ago" / "5 hr ago" / "3 days ago" (≤ 30 days), else a short date.
+    ///
+    /// The four relative forms come from `RelativeDateTimeFormatter`, not from hand-built strings.
+    /// The previous version composed "\(minutes)m ago" itself, which is untranslatable twice over:
+    /// the word "ago" is a literal no catalogue could see, and the "m"/"h"/"d" abbreviations and
+    /// their position relative to the number are language-specific (Norwegian says "for 5 min
+    /// siden" — the marker goes *before* the number). Foundation already knows this for every
+    /// language Apple ships, including the plural rules, so the only thing left to decide here is
+    /// the *unit* to express the gap in.
+    static func relative(_ date: Date, now: Date = Date(), locale: Locale = .current) -> String {
         let seconds = Int(now.timeIntervalSince(date))
-        if seconds < 60 { return "just now" }
+        if seconds < 60 {
+            return String(localized: "just now",
+                          comment: "Comment timestamp for something posted less than a minute ago.")
+        }
+        let f = relativeFormatter(locale)
         let minutes = seconds / 60
-        if minutes < 60 { return "\(minutes)m ago" }
+        if minutes < 60 { return f.localizedString(from: DateComponents(minute: -minutes)) }
         let hours = minutes / 60
-        if hours < 24 { return "\(hours)h ago" }
+        if hours < 24 { return f.localizedString(from: DateComponents(hour: -hours)) }
         let days = hours / 24
-        if days <= 30 { return "\(days)d ago" }
-        return shortDateFormatter.string(from: date)
+        if days <= 30 { return f.localizedString(from: DateComponents(day: -days)) }
+        return shortDate(locale).string(from: date)
     }
 
-    private static let shortDateFormatter: DateFormatter = {
-        let f = DateFormatter()
-        f.locale = Locale(identifier: "en_US_POSIX")
-        f.dateFormat = "MMM d"
+    private static func relativeFormatter(_ locale: Locale) -> RelativeDateTimeFormatter {
+        let f = RelativeDateTimeFormatter()
+        f.locale = locale
+        // `.short` keeps the compactness the abbreviations were there for ("5 min ago" rather than
+        // "5 minutes ago") without hardcoding what "short" looks like in any one language.
+        f.unitsStyle = .short
         return f
-    }()
+    }
+
+    /// A day-and-month date for comments older than a month. Built from a template so the locale
+    /// picks the order and the separator: `en_US` "Sep 29", `en_GB` "29 Sep", `nb` "29. sep.".
+    /// The old fixed "MMM d" against `en_US_POSIX` gave every language the American form.
+    private static func shortDate(_ locale: Locale) -> DateFormatter {
+        let f = DateFormatter()
+        f.locale = locale
+        f.setLocalizedDateFormatFromTemplate("dMMM")
+        return f
+    }
 }
