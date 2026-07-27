@@ -26,8 +26,8 @@ database to operate, and no server to run.
 | Access control | CloudKit itself — `CKShare` on a per-journey record zone | **Live.** Enforced by Apple, not by us. |
 | Public journeys | A mirror in the container's **public** database, written by the app on publish | **Live.** Metadata + thumbnails only. |
 | Assistant / automation | App Intents (Siri, Shortcuts) inside the app | **Live.** |
-| iOS app native maps | MapKit `.hybrid(elevation: .realistic)` | **Live.** No token, no vendor. |
-| Web maps | Mapbox GL JS (globe projection, 3D terrain) | **Live.** The largest third-party runtime dependency — 1626 KB of a 2380 KB bundle. Removal is designed but not chosen; see `QUA-40`. |
+| Web maps | Mapbox GL JS (globe projection, 3D terrain) | **Live, and being replaced by Apple MapKit** — see the decision below. 1626 KB of a 2380 KB bundle; `MAP-05` removes it last. |
+| iOS app native maps | MapKit `.hybrid(elevation: .realistic)` | **Live, and staying.** Free, on-device, no token, no vendor. |
 | Web fonts | **Google Fonts** (`fonts.googleapis.com`, `fonts.gstatic.com`) — Roboto + Playfair Display | **Live, and missed by the first dependency audit** because that audit grepped the compiled JS and not `index.html`. Every visitor's IP reaches Google before any of the family's content renders, on a page whose selling point is that the data never leaves the owner's iCloud. `LEG-17` self-hosts them. |
 | Web hosting | **GitHub Pages**, via [`.github/workflows/deploy-pages.yml`](./.github/workflows/deploy-pages.yml) | **Live.** Cut over 2026-07-27; `deploy.yml` (Cloudflare) is deleted. Only `main` may deploy — the `github-pages` environment restricts it. |
 | DNS for `akashic.no` | **Domeneshop** (also the registrar) | **Live.** Zone rebuilt 2026-07-27: 4 apex A + 4 AAAA at GitHub Pages, `www` CNAME. Cloudflare DNS is redundant and awaiting deletion (`LEG-11A`). |
@@ -39,6 +39,39 @@ database to operate, and no server to run.
 | Photo storage | Cloudflare R2 (`akashic-media`) | **Retired from the code.** Bucket still holds the archive — and 5080 of its objects (12.21 GB) exist **only** there and in the local export, never having been imported. That is why `LEG-11B` waits on `LEG-02`/`LEG-03` rather than on a calendar. |
 | Media access proxy | Cloudflare Worker | **Gone.** Deployment deleted (`LEG-01`, verified by Cloudflare edge error 1042); source removed from the repo (`LEG-12`). |
 | Assistant API | MCP endpoint on the same Worker | **Gone with the Worker.** Replaced 1:1 by App Intents (D8); `Intents/JourneyQuery.swift` now holds the only copy of the tool defaults and clamps. |
+
+### One map layer, swapped together (ARCH-01, 2026-07-27)
+
+**The map is one architectural choice, not two.** Apple MapKit on both surfaces: the native app already
+uses it, so alignment is reached by moving only the web.
+
+If a different vendor ever fits better, the correct move is to swap **both surfaces as a single job** so
+they cannot drift. That imposes a requirement on the web work rather than being a slogan: the map has to
+sit behind an interface narrow enough that the next swap is one adapter. Today's `useMapbox.ts` is 1810
+lines with Mapbox concepts (`addLayer`, `setPaintProperty`, `setTerrain`) leaking through its own surface,
+and three components import Mapbox types directly — rebuilding that shape against MapKit would spend ten
+days to arrive at the same trap. `MAP-01` therefore comes first, before any MapKit code.
+
+**What the web gives up, measured rather than assumed.** An agent downloaded the shipped MapKit JS binary
+(v5.81.65) and grepped it: `pitch` 0 hits, `tilt` 0, `globe` 0, `orthographic` 0. Apple's web map has no
+3D and no globe at any price. So the web loses camera pitch, terrain relief, atmosphere and the blurred
+glow on the active day. **Satellite imagery is kept** for the journey view — the screen a shared link
+actually lands on — and the landing globe is drawn by us instead (`MAP-02`), which also means it survives
+the day a MapKit token lapses.
+
+**What was rejected.** A vendored-geometry or WebGL globe (14–14.5 d) never needs a token but abandons
+satellite entirely, which is maximum divergence from the app. Dropping the web map is cheapest and
+contradicts a product called "Your treks, on a living globe". Lowering *native* to a shared custom
+renderer was proposed and was bad advice: MapKit on iOS is free, tokenless and already inside the
+Apple-only constraint, so trading satellite and 3D terrain on the app's signature screen for cosmetic
+parity with a shop window is the tail wagging the dog. Consistency is a means, not a goal.
+
+**The dangerous part is the token** (`MAP-04`). It is public by design and protected by domain
+restriction, not secrecy — that is fine. Its one-year maximum validity is not: there is no backend to
+mint a replacement, so expiry breaks the journey map until a human pushes a build. A CI check that fails
+below 14 days remaining is the feature, not a nicety, and a `schedule:` workflow must not be trusted to
+rotate it — GitHub disables schedules after 60 days of repository inactivity, which is exactly the quiet
+period the guard exists for.
 
 The distinction in that second table is the whole point of it: **nothing in the shipped code
 talks to any of those services any more, but several of them are still running and still

@@ -2487,18 +2487,136 @@
       ]
     },
     {
-      "id": "QUA-40",
+      "id": "ARCH-01",
+      "track": "QUALITY",
+      "status": "DONE",
+      "effort": 0,
+      "priority": 44,
+      "title": "DECISION: one map layer, Apple MapKit, swapped across both surfaces together",
+      "done_when": "Recorded in ARCHITECTURE.md.",
+      "why": "Owner decision 2026-07-27, after a four-option design round with adversarial review (see MAP-01..MAP-04).\n\n**Apple MapKit on BOTH surfaces.** Native already uses it, so alignment is reached by moving only the web -- the cheapest possible path to the stated goal, and the reason this option beat the alternatives.\n\nThe owner's reasoning, which is the durable part: the map is ONE architectural choice, not two independent ones. If a different vendor later fits better, the right move is to swap both surfaces as a single job so they never drift. That imposes a design requirement on the web work -- the map must sit behind an interface narrow enough that the next swap is one adapter, not another 2786-line rewrite. Today's useMapbox.ts is 1810 LOC of hook with Mapbox concepts (addLayer, setPaintProperty, setTerrain) leaking through it; reproducing that shape against MapKit would spend 10 days to arrive at the same trap.\n\nWHAT WAS REJECTED AND WHY:\n  * Vendored TopoJSON / WebGL globe (14-14.5 d, zero external calls, no token ever) -- abandons satellite imagery entirely, which is MAXIMUM divergence from the app. Correct if 'can never break' outranks 'looks like the app'; the owner's priority is the reverse.\n  * Dropping the map from the web (7 d, 5 KB) -- the product is called 'Your treks, on a living globe'.\n  * Lowering native to a shared custom renderer -- I proposed this as 'the only option that gives you both' and it was bad advice, correctly challenged by the owner. MapKit on iOS is free, on-device, tokenless and already inside the constraint; trading satellite and 3D terrain on the app's signature screen for cosmetic parity with a shop window is the tail wagging the dog. Consistency is a means, not a goal.\n\nACCEPTED COSTS, measured not assumed. An agent downloaded the shipped MapKit JS binary (v5.81.65) and grepped it: `pitch` 0 hits, `tilt` 0, `globe` 0, `orthographic` 0. So the web loses the 3D globe, camera pitch, terrain relief, atmosphere and line-blur glow. Satellite imagery is KEPT for the journey view -- the screen a shared link actually lands on -- and only the landing globe must be drawn by us.",
+      "files": [
+        "ARCHITECTURE.md"
+      ],
+      "verify": [
+        "Recorded in ARCHITECTURE.md"
+      ],
+      "evidence": "Recorded in ARCHITECTURE.md and in the MAP-01..MAP-05 breakdown."
+    },
+    {
+      "id": "MAP-01",
+      "effort": 1,
+      "priority": 50,
+      "title": "A map interface narrow enough that the next vendor swap is one adapter",
+      "done_when": "Web components speak only to a vendor-neutral map interface; no Mapbox or MapKit type appears outside its adapter.",
+      "why": "ARCH-01's design requirement, and the task that decides whether this work pays off twice. Today AkashicApp.tsx, BottomSheetContent.tsx and PhotosTab.tsx import Mapbox types directly (type-only, at AkashicApp.tsx:12/32, BottomSheetContent.tsx:17/54/248, PhotosTab.tsx:11/25/240), and useMapbox.ts leaks addLayer / setPaintProperty / setTerrain into its own surface. Define the interface from what the SHOWCASE needs -- show journeys as pins, fly to a journey, draw a route, mark days and photos, hit-test a marker -- not from what either vendor offers. PhotosTab.tsx:232-247 already handles both a tuple and a LngLatBounds, which is a hint the boundary wants to be there. Do this FIRST: written after the MapKit port, it will have MapKit's shape baked in and the next swap costs the same as this one.",
+      "files": [
+        "src/lib/map/**",
+        "src/components/AkashicApp.tsx",
+        "src/components/layout/BottomSheetContent.tsx",
+        "src/components/trek/PhotosTab.tsx"
+      ],
       "track": "QUALITY",
       "status": "TODO",
-      "effort": 0.25,
-      "priority": 45,
-      "owner": true,
-      "title": "Price the Mapbox dependency before the showcase gets traffic",
-      "done_when": "A written figure for expected Mapbox cost at beta and launch traffic, and a decision to keep it or replace it.",
-      "why": "Measured 2026-07-27 while auditing external dependencies: after Supabase, R2 and the Cloudflare Worker are gone, **Mapbox is the only third-party runtime dependency left in the product.** The built web bundle reaches exactly two external origins that matter -- cdn.apple-cloudkit.com and api/events.mapbox.com -- and the native app reaches none at all (every import is an Apple framework; there are no SPM packages). So the 'write ourselves out of external dependencies' goal is essentially met, with one exception nobody has been discussing.\nIt matters because Mapbox is metered per map load and billed to us, exactly like the public CloudKit database whose cost line COMMERCIALIZATION-PLAN.md got wrong. The showcase is the public, world-readable surface -- the one whose traffic we do not control -- and every visitor who spins the globe is a billed load. Mapbox's free tier is generous but finite, and the failure mode is a bill rather than an outage, which is the kind that arrives unannounced.\nNote the asymmetry worth deciding on: the native app already renders the same globe with MapKit at no marginal cost. If the showcase could too, the last third-party dependency disappears -- but MapKit JS has its own terms and the globe projection may not be equivalent, so this is a real evaluation and not a swap.",
-      "files": [],
       "verify": [
-        "A figure and a decision recorded in COMMERCIALIZATION-PLAN.md"
+        "npx vitest --run",
+        "npm run typecheck",
+        "npm run build"
+      ],
+      "deps": []
+    },
+    {
+      "id": "MAP-02",
+      "effort": 2,
+      "priority": 51,
+      "deps": [
+        "MAP-01"
+      ],
+      "title": "Draw the landing globe ourselves — MapKit JS provably cannot",
+      "done_when": "The landing view is a rotating sphere with a pin per published journey, using no map service and no token.",
+      "why": "Measured in the shipped MapKit JS binary: zero occurrences of globe, orthographic, pitch or tilt. There is no 3D and no globe, so this screen cannot come from Apple's web map at any price. Orthographic projection over vendored coastline geometry gives a genuine sphere; the existing starfield stays. Deliberately tokenless, which also means a visitor on the day a MapKit token lapses still sees a rotating Earth rather than a void -- that is why the split exists and not only because of the capability gap. If a photographic texture is wanted later, source it with its licence committed alongside (LEG-16 is why that sentence is here).",
+      "files": [
+        "src/lib/map/globe/**",
+        "public/geo/**"
+      ],
+      "track": "QUALITY",
+      "status": "TODO",
+      "verify": [
+        "npx vitest --run",
+        "npm run typecheck",
+        "npm run build"
+      ]
+    },
+    {
+      "id": "MAP-03",
+      "effort": 3,
+      "priority": 52,
+      "deps": [
+        "MAP-01"
+      ],
+      "title": "MapKit JS behind the adapter for the journey view",
+      "done_when": "Selecting a journey shows its route and days on Apple satellite imagery, with Apple's mandatory attribution correctly placed.",
+      "why": "The screen a shared link actually lands on, and where satellite parity with the app is won. mapType satellite/hybrid gives the same Apple imagery the native app draws. Losses are known and accepted (ARCH-01): no pitch, so trekConfig.preferredPitch and camp.pitch become dead data; no terrain; no atmosphere; no line-blur, so the cyan active-day glow becomes a hard stroke that lineGradient only partly compensates. Apple's logo and Legal link are mandatory and non-removable -- the .public-chrome rule at src/index.css:487 lifts Mapbox's attribution 80px clear of the bottom chips and needs its MapKit equivalent, or the required link ends up under the 'Made with Akashic' chip. VERIFY IMAGERY FIRST: compare Kilimanjaro and Nepal in MapKit JS against Mapbox before building on it. Apple's coverage in East Africa and the Himalaya is unverified and that is exactly where these treks are; if it is visibly worse the parity argument this decision rests on fails.",
+      "files": [
+        "src/lib/map/mapkit/**",
+        "index.html"
+      ],
+      "track": "QUALITY",
+      "status": "TODO",
+      "verify": [
+        "npx vitest --run",
+        "npm run typecheck",
+        "npm run build"
+      ]
+    },
+    {
+      "id": "MAP-04",
+      "effort": 1.5,
+      "priority": 53,
+      "deps": [
+        "MAP-03"
+      ],
+      "owner": true,
+      "title": "MapKit JS token: mint it, restrict it, and make its expiry loud",
+      "done_when": "The deployed page authenticates to MapKit, and a build fails or files an issue when the token is within 14 days of expiring.",
+      "why": "The one genuinely dangerous part, and half of it is owner work. The token is minted in the Apple Developer portal, is public in the bundle by design, and is protected by DOMAIN RESTRICTION rather than secrecy -- Apple rejects requests whose Referer does not match, so a copied token cannot be repointed. That part is fine.\nExpiry is not. Maximum portal validity is ONE YEAR. The day it lapses mapkit.init fails with unauthorized and the journey map is an empty box -- and because MapKit periodically re-invokes the authorization callback, a tab left open across the moment dies mid-session too. With no backend nothing can mint a replacement; the site stays broken until a human pushes a build. On a family keepsake that may go untouched for months, that is a fuse lit today and burning down on a random day next summer.\nSo: a CI step that decodes `exp` and fails at <14 days is not optional, it is the feature. Do NOT rely on a `schedule:` workflow to rotate it -- GitHub disables scheduled workflows after 60 days of repository inactivity, so the rotation dies precisely in the quiet period it exists to protect. Register localhost too, or Playwright and `npm run dev` cannot authenticate; confirm the portal accepts it before assuming.",
+      "files": [
+        ".github/workflows/**",
+        "scripts/checkMapKitToken.mjs"
+      ],
+      "track": "QUALITY",
+      "status": "TODO",
+      "verify": [
+        "npx vitest --run",
+        "npm run typecheck",
+        "npm run build"
+      ]
+    },
+    {
+      "id": "MAP-05",
+      "effort": 0.5,
+      "priority": 54,
+      "deps": [
+        "MAP-02",
+        "MAP-03"
+      ],
+      "title": "Delete Mapbox: 2786 LOC, the 1626 KB chunk, the SW rules and the secret",
+      "done_when": "No mapbox package, no mapbox origin in the built bundle, and VITE_MAPBOX_TOKEN removed from all three workflows.",
+      "why": "The payoff, and last on purpose: it is only safe once MAP-02 and MAP-03 render. Removes useMapbox.ts (1810), MapboxGlobe.tsx (677), layerConfigs.ts (206), types.ts (93); the `mapbox: ['mapbox-gl']` manual chunk at vite.config.js:183 and 1626 KB of a 2380 KB bundle; the five Mapbox runtime-caching rules; the MAPBOX CUSTOMIZATION block at src/index.css:478-510; the mock at AkashicApp.test.tsx:6; and VITE_MAPBOX_TOKEN from deploy-pages.yml:54, e2e.yml:49 and test.yml:172. Revoking the Mapbox account key itself is the owner's.",
+      "files": [
+        "src/hooks/mapbox/**",
+        "src/components/MapboxGlobe.tsx",
+        "vite.config.js",
+        "src/index.css",
+        "package.json",
+        ".github/workflows/**"
+      ],
+      "track": "QUALITY",
+      "status": "TODO",
+      "verify": [
+        "npx vitest --run",
+        "npm run typecheck",
+        "npm run build"
       ]
     },
     {
