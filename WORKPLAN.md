@@ -5,7 +5,7 @@
 
 # Akashic — work ledger
 
-119 tasks · **28 open** (6 agent-doable, 6.5 dev-days · 22 owner-only, 8.8 dev-days) · 91 done · 0 dropped
+119 tasks · **27 open** (6 agent-doable, 6.5 dev-days · 21 owner-only, 8.7 dev-days) · 92 done · 0 dropped
 
 > **`dev-days` are a human-developer estimate, not agent time.** They came from the review
 > that produced these tasks and they are the right unit for deciding whether something is
@@ -34,7 +34,7 @@ node scripts/workplan.mjs next
 | Task | Agent | Branch | Stopped at |
 |---|---|---|---|
 | `LEG-09` Execute the GitHub Pages + DNS cutover (T4.2, T4.3) | opus5 | `claude/remote-control-project-review-9462c1` | — |
-| `MAP-04A` Mint the MapKit token in the build, and fail the build before it lapses | opus5 | `claude/remote-control-project-review-9462c1` | minter rewritten against Apple's spec, 45 tests green; the deploy-workflow wiring wants MAP-03 landed first |
+| `MAP-04A` Mint the MapKit token in the build, and fail the build before it lapses | opus5 | `claude/remote-control-project-review-9462c1` | minter + health guard done and locally proven; the deploy-step wiring wants MAP-03 landed first |
 
 ## LEGACY
 
@@ -148,7 +148,7 @@ node scripts/workplan.mjs next
 
 > Tests, types, CI, localisation, accessibility. Localisation and accessibility are in v1.0 by decision.
 
-8 open of 47 · 7.1 d remaining
+7 open of 47 · 7 d remaining
 
 | | Task | Days | Who | Deps | Finish line |
 |---|---|---|---|---|---|
@@ -196,7 +196,7 @@ node scripts/workplan.mjs next
 | ` ` | `MAP-02` **Draw the landing globe ourselves — MapKit JS provably cannot** | 2 | agent | `MAP-01` | The landing view is a rotating sphere with a pin per published journey, using no map service and no token. |
 | ` ` | `MAP-03` **MapKit JS behind the adapter for the journey view** | 3 | agent | `MAP-01` | Selecting a journey shows its route and days on Apple satellite imagery, with Apple's mandatory attribution correctly placed. |
 | `~` | `MAP-04A` **Mint the MapKit token in the build, and fail the build before it lapses** | 0.5 | agent | `MAP-01` | scripts/mapkit/mintToken.mjs produces a token a JWT verifier accepts, and the deploy workflow both injects a freshly-minted token and fails when it is within 14 days of expiring. |
-| ` ` | `MAP-04` **Add the MapKit private key as a repository secret** | 0.1 | owner | — | MAPKIT_PRIVATE_KEY exists as a repository secret. The two identifiers are already set as repository variables. |
+| `x` | `MAP-04` **Add the MapKit private key as a repository secret** | 0.1 | owner | — | MAPKIT_PRIVATE_KEY exists as a repository secret. The two identifiers are already set as repository variables. |
 | ` ` | `MAP-05` **Delete Mapbox: 2786 LOC, the 1626 KB chunk, the SW rules and the secret** | 0.5 | agent | `MAP-02` `MAP-03` | No mapbox package, no mapbox origin in the built bundle, and VITE_MAPBOX_TOKEN removed from all three workflows. |
 | ` ` | `QUA-40` **E2E reaches live CloudKit, and shares its config with the live site** | 0.4 | agent | — | The E2E Tests workflow is green on main, and it stays green with no network access to Apple. |
 
