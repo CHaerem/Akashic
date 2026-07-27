@@ -483,39 +483,27 @@ html {
 /* Signed-out public showcase mounts a bottom-left "Family sign-in" pill and a
    bottom-right "Made with Akashic" chip. Lift Mapbox's own attribution + logo
    clear of them so the wordmark and the © attribution links stay visible and
-   clickable — required by Mapbox's Terms of Service. */
+   clickable — required by Mapbox's Terms of Service.
+
+   MAP-03: the MapKit surface CANNOT be fixed this way and has no rule here. Apple
+   paints its logo and Legal link as pixels onto canvas.rt-root — measured: zero
+   <a>, <svg> or <img> anywhere in the map container, nothing matching
+   /logo|attribut|legal/i in any class name, and elementFromPoint over both returns
+   the same full-size div.mk-map-node-element. So there is nothing to select. Its
+   equivalent of this 80px is `map.padding`, in
+   src/lib/map/mapkit/chrome.ts — which is also why the lift had to move into the
+   adapter: it depends on auth state, and no media query can see that.
+   When MAP-05 deletes Mapbox, delete this rule and keep chrome.ts. */
 .public-chrome .mapboxgl-ctrl-bottom-left,
 .public-chrome .mapboxgl-ctrl-bottom-right {
   bottom: 80px;
 }
 
-.dark-popup .mapboxgl-popup-content {
-  background: transparent;
-  padding: 0;
-  box-shadow: none;
-}
-
-.dark-popup .mapboxgl-popup-tip {
-  border-top-color: rgba(10, 10, 15, 0.95);
-  border-bottom-color: rgba(10, 10, 15, 0.95);
-}
-
-/* Glass popup variant */
-.glass-popup .mapboxgl-popup-content {
-  background: linear-gradient(
-    135deg,
-    rgba(255, 255, 255, 0.12) 0%,
-    rgba(255, 255, 255, 0.06) 100%
-  );
-  backdrop-filter: blur(24px) saturate(180%);
-  -webkit-backdrop-filter: blur(24px) saturate(180%);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  border-radius: 12px;
-  box-shadow:
-    0 8px 32px rgba(0, 0, 0, 0.3),
-    inset 0 1px 0 rgba(255, 255, 255, 0.15);
-  padding: 12px 16px;
-}
+/* MAP-03 deleted three dead rules here: .dark-popup .mapboxgl-popup-content,
+   .dark-popup .mapboxgl-popup-tip and .glass-popup .mapboxgl-popup-content (plus its
+   mobile override further down). No mapboxgl.Popup is constructed anywhere in src/, and
+   no element ever carries either class — grep found only the rules themselves. The POI
+   popup that looks like it might be them is plain React JSX in MapboxGlobe.tsx. */
 
 /* Photo thumbnail markers on map */
 .photo-thumbnail-marker {
@@ -674,7 +662,23 @@ html {
     inset 0 1px 0 rgba(255, 255, 255, 0.3),
     0 0 20px rgba(255, 255, 255, 0.1);
   transition: all var(--lg-transition-smooth);
-  /* Always above photo markers */
+  /* LOAD-BEARING ON MAPBOX, INERT ON MAPKIT — and the difference is measured, because getting it
+     wrong here turned a MapKit-only regression into an apparently shared product decision. An
+     earlier MAP-03 comment in this spot claimed the rule was "INERT and has been all along ... on
+     both surfaces". The Mapbox half of that was false.
+     MEASURED on the running Mapbox surface: `.camp-marker` computes `position: absolute`,
+     `z-index: 22`, parent `.mapboxgl-canvas-container` — there is NO wrapper. mapbox-gl takes
+     `options.element` as its own `_element` and adds `.mapboxgl-marker`, which is
+     `position: absolute`. `.photo-thumbnail-marker` computes `z-index: 5`. So on Mapbox camps do
+     sit above photo stacks, and this rule is what puts them there.
+     MEASURED on the MapKit surface: both elements compute `position: static`, so the rule does
+     nothing, and with a photo stack over the day-3 camp `elementFromPoint` at the camp's centre
+     returns `.photo-stack-main` and the photo intercepts the camp's clicks. Three levers were tried
+     and none flipped it — `position: relative` plus explicit z-index on both,
+     `mapkit.Annotation.DisplayPriority` Required vs High, and moving the camp element to the end of
+     `.mk-annotation-container`.
+     So "a photo stack can hide a camp marker" is a REGRESSION the MapKit surface introduces, not a
+     shortcoming both share. Filed as QUA-49. Do not delete this rule while Mapbox still ships. */
   z-index: 20 !important;
 }
 
@@ -811,13 +815,6 @@ html {
     box-shadow:
       0 6px 20px rgba(0, 0, 0, 0.3),
       inset 0 1px 0 rgba(255, 255, 255, 0.25);
-  }
-
-  /* Optimize glass popup on mobile */
-  .glass-popup .mapboxgl-popup-content {
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
   }
 
   /* Optimize photo markers - simpler shadows */

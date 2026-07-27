@@ -19,6 +19,22 @@ interface ImportMetaEnv {
      * `scripts/assertNoFixtureInBundle.mjs` fails the build if the fixture reaches `dist/`.
      */
     readonly VITE_E2E_TEST_MODE?: string;
+    /**
+     * Which map vendor draws the surfaces (MAP-03). `'mapkit'` puts the JOURNEY view on Apple MapKit JS;
+     * anything else — including unset, the default — leaves both views on Mapbox. The globe stays on Mapbox
+     * either way, because MapKit JS has no globe at all. See `src/components/MapSurface.tsx`.
+     *
+     * Do not default this to `mapkit` without also correcting `e2e/fixtures/test.ts`'s pinned host list, the
+     * `api.mapbox.com` Workbox rules in `vite.config.js`, and `public/privacy.html` — which names Mapbox as
+     * the map provider and as third-party telemetry, and is a user-facing statement rather than config.
+     */
+    readonly VITE_MAP_VENDOR?: string;
+    /**
+     * MapKit JS token, minted from the `.p8` rather than pasted from the portal — see
+     * `scripts/mapkit/mintToken.mjs` for why, and `scripts/mapkit/devToken.mjs` for the one-line dev loop.
+     * Public by design: it ships in the client bundle and is protected by its `origin` claim.
+     */
+    readonly VITE_MAPKIT_TOKEN?: string;
 }
 
 interface ImportMeta {

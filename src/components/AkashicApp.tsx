@@ -9,7 +9,7 @@ import { hasPendingShares } from '../lib/shareTarget';
 import { setSheetCoversChrome } from '../lib/sheetOverlay';
 import type { Photo, Camp } from '../types/trek';
 import type { MapBounds } from '../lib/map/types';
-import { MapboxGlobe } from './MapboxGlobe';
+import { MapSurface } from './MapSurface';
 import { OfflineIndicator } from './OfflineIndicator';
 import { GlobeHint } from './home/GlobeHint';
 import { ShareTargetModal } from './ShareTargetModal';
@@ -243,9 +243,11 @@ export default function AkashicApp() {
     return (
         <ErrorBoundary>
         <div className={signedIn ? undefined : 'public-chrome'} style={{ position: 'fixed', inset: 0, background: colors.background.base }}>
-            {/* Mapbox Globe - Full screen hero */}
+            {/* Map surface - full screen hero */}
                     <div style={{ position: 'absolute', inset: 0 }}>
-                        <MapboxGlobe
+                        {/* MAP-03: MapSurface picks the vendor (VITE_MAP_VENDOR, default mapbox) and owns
+                            window.testHelpers, because two vendor surfaces cannot both hold that global. */}
+                        <MapSurface
                             selectedTrek={selectedTrek}
                             selectedCamp={selectedCamp}
                             onSelectTrek={selectTrek}
@@ -260,6 +262,7 @@ export default function AkashicApp() {
                             onViewportVisiblePhotoIdsChange={setMapViewportPhotoIds}
                             editMode={editMode}
                             onPhotoLocationUpdate={handlePhotoLocationUpdate}
+                            signedIn={signedIn}
                         />
                     </div>
 

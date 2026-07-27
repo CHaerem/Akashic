@@ -1,0 +1,111 @@
+/**
+ * The journey view on Apple MapKit JS. (MAP-03)
+ *
+ * The second implementation of the vendor surface `src/lib/map/types.ts` defines, and — with
+ * `MapboxGlobe.tsx` — one of only two files in `src/` allowed to name a map vendor
+ * (`src/lib/map/boundary.test.ts` enforces that, and now bans the `mapkit` *global* as well as the import,
+ * because MapKit JS arrives from a CDN script tag and no import ban could ever catch it).
+ *
+ * This file is deliberately thin. Everything imperative is in `src/lib/map/mapkit/useMapKitJourney.ts`, and
+ * everything decidable without a browser is in that directory's pure modules, which is where MAP-03's test
+ * coverage lives.
+ *
+ * ## What this surface does NOT do, and why not — so nobody ports it back in
+ *
+ * | dropped | reason |
+ * |---|---|
+ * | Terrain, fog, sky, `projection: 'globe'`, auto-rotation, the CSS starfield | Zero occurrences of `terrain`, `elevation`, `globe` or `orthographic` in the shipped MapKit bundle. ARCH-01 accepted the loss; MAP-02 owns the landing globe separately. The starfield is only visible at globe zoom. |
+ * | Pitch (`camp.pitch`, `trekConfig.preferredPitch`, the 45–60° flight pitches) | MapKit has no tilt — confirmed independently of ARCH-01: zero occurrences of `pitch`, `tilt` or `3d` in the 807 KB bundle. Both fields are annotated as dead at their declarations. |
+ * | The `line-blur` glow, and `lineGradient` as a substitute for it | `mapkit.Style` is closed at 13 settable keys, none a blur. `lineGradient` is *accepted* and paints nothing while suppressing the stroke — it would ship an invisible route. Replaced by a three-overlay halo and by `strokeStart`/`strokeEnd`; see `src/lib/map/mapkit/overlays.ts`. |
+ * | The eleven native circle/cluster/symbol layers and all `PHOTO_*_PAINT` / `CAMP_*_PAINT` | Hidden unconditionally by the very functions that would populate them (`useMapbox.ts:1302-1311`, `:1518-1526`). Dead as shipped. |
+ * | Photo cluster expansion on click | Unreachable: those cluster layers are never visible. |
+ * | The whole POI subsystem — four layers, the colour/icon match expressions, the ~170-line glass popup, `updatePOIMarkers`, `flyToPOI` | Unreachable along the data path: `src/lib/journeys/transforms.ts:269-287` never assigns trek-level `TrekData.pointsOfInterest`, so `updatePOIMarkers` is always called with `[]`. **Worth an explicit owner answer rather than an assumption** — per-*camp* `camp.pointsOfInterest` IS populated and renders in `DayDiscoveries`, so the trek-level path is either a deliberate retirement or an unnoticed regression, and dropping it here should not be what settles that. |
+ * | `RouteClickInfo` and the ~85-line route-click computation | Dead through the boundary: `onRouteClick` is not a member of `MapSurfaceProps`, `AkashicApp` never passes it, and the handler early-returns on the null ref. |
+ * | `startPlayback` / `stopPlayback` / `playbackState` | Returned by `useMapbox` and never destructured by anyone. There is no playback in the journey view. |
+ * | The glyph-source style reload, mobile `setTerrain(null)` juggling, `touchPitch`, the 1800 ms deferred update, the 2600 ms marker deferral | Workarounds for terrain and pitch costs MapKit does not have. |
+ * | `import 'mapbox-gl/dist/mapbox-gl.css'` | MapKit injects its own stylesheet from the CDN. There is nothing to import, which is also why its attribution cannot be moved with CSS. |
+ *
+ * Note the three dead subsystems are **not deleted from the Mapbox adapter** here. That is MAP-05, which
+ * depends on MAP-02, and `src/hooks/mapbox/` may be owned by another in-flight ledger entry.
+ */
+
+import { useEffect, useRef } from 'react';
+import type { VendorSurfaceProps } from '../lib/map/vendorSurface';
+import { useMapKitJourney } from '../lib/map/mapkit/useMapKitJourney';
+import { useJourneys } from '../contexts/JourneysContext';
+import { MapErrorFallback } from './common/ErrorBoundary';
+import { colors } from '../styles/liquidGlass';
+import type { Photo } from '../types/trek';
+
+export function MapKitJourneyMap({
+    selectedTrek, selectedCamp, view, photos = [], onPhotoClick, flyToPhotoRef, recenterRef,
+    onCampSelect, getMediaUrl, onViewportChange, onViewportVisiblePhotoIdsChange,
+    editMode, onPhotoLocationUpdate, signedIn = false, onReadyChange, mapStateRef,
+}: VendorSurfaceProps) {
+    const containerRef = useRef<HTMLDivElement>(null);
+    const { trekDataMap } = useJourneys();
+
+    // Route and camp geometry come from context, not from props: `MapSurfaceProps.selectedTrek` carries only
+    // lat/lng/bearing/pitch/slug, so the contract alone is not enough to draw a route. The Mapbox adapter
+    // reads the same context in the same way (`MapboxGlobe.tsx:175`, `useMapbox.ts:39`).
+    const trekData = selectedTrek ? trekDataMap[selectedTrek.id] ?? null : null;
+
+    const { ready, error, flyToPhoto, recenter, getCameraState } = useMapKitJourney({
+        containerRef,
+        selectedTrek,
+        selectedCamp,
+        trekData,
+        photos,
+        signedIn,
+        editMode: editMode === true,
+        onCampSelect,
+        onPhotoClick: (photo: Photo) => {
+            if (!onPhotoClick) return;
+            const index = photos.findIndex(p => p.id === photo.id);
+            onPhotoClick(photo, index >= 0 ? index : 0);
+        },
+        onPhotoLocationUpdate,
+        getMediaUrl,
+        onViewportChange,
+        onViewportVisiblePhotoIdsChange,
+    });
+
+    useEffect(() => {
+        onReadyChange?.(ready);
+    }, [ready, onReadyChange]);
+
+    useEffect(() => {
+        if (!mapStateRef) return;
+        mapStateRef.current = getCameraState;
+        return () => { mapStateRef.current = null; };
+    }, [mapStateRef, getCameraState]);
+
+    useEffect(() => {
+        if (!flyToPhotoRef) return;
+        flyToPhotoRef.current = flyToPhoto;
+        return () => { flyToPhotoRef.current = null; };
+    }, [flyToPhotoRef, flyToPhoto]);
+
+    useEffect(() => {
+        if (!recenterRef) return;
+        recenterRef.current = recenter;
+        return () => { recenterRef.current = null; };
+    }, [recenterRef, recenter]);
+
+    if (error) {
+        return <MapErrorFallback error={error} />;
+    }
+
+    return (
+        <div style={{ position: 'absolute', inset: 0, background: colors.background.base }}>
+            {/* `view` is accepted for contract parity and is not read: MapSurface routes the globe view to a
+                different surface, so this component only ever renders a journey. Reading it here would make
+                the two files disagree about who decides. */}
+            <div
+                ref={containerRef}
+                data-testid={`mapkit-journey-${view}`}
+                style={{ position: 'absolute', inset: 0 }}
+            />
+        </div>
+    );
+}

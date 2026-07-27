@@ -4,7 +4,8 @@
 
 import { useRef, useEffect, useCallback, useState } from 'react';
 import 'mapbox-gl/dist/mapbox-gl.css';   // MAP-01: moved here from AkashicApp — vendor CSS lives with the vendor adapter
-import type { MapSurfaceProps, MapBounds } from '../lib/map/types';
+import type { MapBounds } from '../lib/map/types';
+import type { VendorSurfaceProps } from '../lib/map/vendorSurface';
 import { useMapbox } from '../hooks/useMapbox';
 import { useJourneys } from '../contexts/JourneysContext';
 import { MapErrorFallback } from './common/ErrorBoundary';
@@ -25,63 +26,29 @@ const POI_CATEGORY_INFO: Record<string, { icon: string; label: string; color: st
     info: { icon: 'ℹ', label: 'Information', color: 'rgba(148, 163, 184, 0.8)' }
 };
 
-// Check if running in E2E test mode
-const isE2ETestMode = import.meta.env.VITE_E2E_TEST_MODE === 'true';
-
 // Delay before starting globe rotation (ms) - allows user to see the globe stationary first
 const ROTATION_START_DELAY_MS = 3500;
 
 /**
- * What window.testHelpers.getTrekData actually returns: a flattened projection of TrekData for
- * E2E assertions, not TrekData itself. Named so the difference is visible at the call site.
+ * MAP-03 moved `window.testHelpers` OUT of this file into `src/components/MapSurface.tsx`.
+ *
+ * Nine of its eleven members were pure React/context reads with no Mapbox in them at all, and two vendor
+ * surfaces cannot both register and delete the same global without racing. So this component now reports the
+ * two members that DO carry vendor state — readiness and camera state — up through the `onReadyChange` and
+ * `mapStateRef` hatches on `VendorSurfaceProps`, the same pattern `flyToPhotoRef` and `recenterRef` already
+ * use. Net effect: this file got smaller, and the contract duplicated at `e2e/utils/test-helpers.ts:40-69`
+ * has two members of vendor surface area instead of eleven.
  */
-interface TrekDataSummary {
-    id: string;
-    name: string;
-    campCount: number;
-    camps: Array<{
-        id: string;
-        name: string;
-        dayNumber: number;
-        elevation: number;
-        coordinates: [number, number];
-    }>;
-}
-
-// Test helpers interface for E2E testing
-interface TestHelpers {
-    selectTrek: (id: string) => boolean;
-    getTreks: () => Array<{ id: string; name: string }>;
-    getSelectedTrek: () => string | null;
-    selectDay: (dayNumber: number) => boolean;
-    getCurrentDay: () => number | null;
-    getCamps: () => Array<{ id: string; name: string; dayNumber: number }>;
-    getTrekDataKeys: () => string[]; // Debug: see what trek IDs are in trekDataMap
-    getTrekData: (id: string) => TrekDataSummary | null; // Debug: get a trek-data projection
-    isMapReady: () => boolean;
-    isDataLoaded: () => boolean;
-    // Map state inspection for visual verification
-    getMapState: () => {
-        cameraCenter: [number, number] | null;
-        cameraZoom: number | null;
-        cameraBearing: number | null;
-        pendingHighlightCampId: string | null;
-        hasPendingAnimations: boolean;
-    };
-}
-
-// Declare global window extension for test helpers
-declare global {
-    interface Window {
-        testHelpers?: TestHelpers;
-    }
-}
 
 /**
  * MAP-01: the props are the shared `MapSurfaceProps` contract, not a Mapbox-shaped one. A MapKit
  * component implementing the same interface can replace this file without touching its callers.
+ *
+ * MAP-03 widened this to `VendorSurfaceProps` — the same contract plus the two vendor-state hatches. That is
+ * a vendor-internal extension, NOT a change to `MapSurfaceProps`: `AkashicApp` still passes exactly the
+ * app-facing contract, and `MapSurface` fills the extras in.
  */
-type MapboxGlobeProps = MapSurfaceProps;
+type MapboxGlobeProps = VendorSurfaceProps;
 
 // Generate realistic starfield - seeded positions for consistency
 // Optimized for mobile with fewer stars while maintaining visual quality
@@ -170,9 +137,9 @@ const starfieldStyle: React.CSSProperties = {
     zIndex: 0
 };
 
-export function MapboxGlobe({ selectedTrek, selectedCamp, onSelectTrek, view, photos = [], onPhotoClick, flyToPhotoRef, recenterRef, onCampSelect, getMediaUrl, onViewportChange, onViewportVisiblePhotoIdsChange, editMode, onPhotoLocationUpdate }: MapboxGlobeProps) {
+export function MapboxGlobe({ selectedTrek, selectedCamp, onSelectTrek, view, photos = [], onPhotoClick, flyToPhotoRef, recenterRef, onCampSelect, getMediaUrl, onViewportChange, onViewportVisiblePhotoIdsChange, editMode, onPhotoLocationUpdate, onReadyChange, mapStateRef }: MapboxGlobeProps) {
     const containerRef = useRef<HTMLDivElement>(null);
-    const { treks, trekDataMap, loading: journeysLoading } = useJourneys();
+    const { treks, trekDataMap } = useJourneys();
     const [poiInfo, setPOIInfo] = useState<PointOfInterest | null>(null);
     const rotationTimerRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -264,69 +231,16 @@ export function MapboxGlobe({ selectedTrek, selectedCamp, onSelectTrek, view, ph
         };
     }, [map, mapReady, onViewportChange, onViewportVisiblePhotoIdsChange, photos]);
 
-    // Expose test helpers for E2E testing
+    // Report readiness and camera state up to MapSurface, which owns window.testHelpers (MAP-03).
     useEffect(() => {
-        if (!isE2ETestMode) return;
+        onReadyChange?.(mapReady);
+    }, [mapReady, onReadyChange]);
 
-        // Get camps for currently selected trek
-        const currentCamps = selectedTrek ? trekDataMap[selectedTrek.id]?.camps || [] : [];
-
-        // Create test helpers object
-        const testHelpers: TestHelpers = {
-            selectTrek: (id: string) => {
-                const trek = treks.find(t => t.id === id);
-                if (trek) {
-                    onSelectTrek(trek);
-                    return true;
-                }
-                return false;
-            },
-            getTreks: () => treks.map(t => ({ id: t.id, name: t.name })),
-            getSelectedTrek: () => selectedTrek?.id || null,
-            selectDay: (dayNumber: number) => {
-                if (!selectedTrek || !onCampSelect) return false;
-                const camp = currentCamps.find(c => c.dayNumber === dayNumber);
-                if (camp) {
-                    onCampSelect(camp);
-                    return true;
-                }
-                return false;
-            },
-            getCurrentDay: () => selectedCamp?.dayNumber || null,
-            getCamps: () => currentCamps.map(c => ({
-                id: c.id,
-                name: c.name,
-                dayNumber: c.dayNumber
-            })),
-            getTrekDataKeys: () => Object.keys(trekDataMap),
-            getTrekData: (id: string) => {
-                const data = trekDataMap[id];
-                if (!data) return null;
-                return {
-                    id: data.id,
-                    name: data.name,
-                    campCount: data.camps?.length || 0,
-                    camps: data.camps?.map(c => ({
-                        id: c.id,
-                        name: c.name,
-                        dayNumber: c.dayNumber,
-                        elevation: c.elevation,
-                        coordinates: c.coordinates
-                    })) || []
-                };
-            },
-            isMapReady: () => mapReady,
-            isDataLoaded: () => !journeysLoading && treks.length > 0,
-            getMapState: () => getMapStateForTesting()
-        };
-
-        // Register on window
-        window.testHelpers = testHelpers;
-
-        return () => {
-            delete window.testHelpers;
-        };
-    }, [mapReady, treks, selectedTrek, selectedCamp, trekDataMap, onSelectTrek, onCampSelect, journeysLoading, getMapStateForTesting]);
+    useEffect(() => {
+        if (!mapStateRef) return;
+        mapStateRef.current = getMapStateForTesting;
+        return () => { mapStateRef.current = null; };
+    }, [mapStateRef, getMapStateForTesting]);
 
     // Expose flyToPhoto to parent via ref
     useEffect(() => {
