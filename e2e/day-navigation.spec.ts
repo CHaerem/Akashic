@@ -1,529 +1,337 @@
-import { test, expect, Page } from '@playwright/test';
+/**
+ * Day navigation, including rapid switching — the class of bug where the camera ends up on
+ * a day the user is no longer looking at.
+ *
+ * THREE THINGS IN THIS FILE CHANGED MEANING WITH QUA-40, and none of them is cosmetic.
+ *
+ * 1. THE JOURNEY IS DISCOVERED, NOT NAMED. `selectTrekWithCamps` used to try exactly
+ *    `['kilimanjaro','mount-kenya','inca-trail']`, and one assertion hardcoded
+ *    `getTrekData('kilimanjaro')`. Those are the owner's real published slugs — live-CloudKit
+ *    knowledge baked into a spec. `selectTrekWithDays(page, 5)` now finds a journey that
+ *    actually exposes days 1..5, and the fixture is deliberately NOT slugged `kilimanjaro`
+ *    so the discovery cannot rot into decoration.
+ *
+ * 2. NO TEST SKIPS ANY MORE. Every test opened with `if (!navigated) { test.skip(); return; }`.
+ *    Under the CI 401 that meant eight of these nine tests SKIPPED silently and only
+ *    journey-data.spec went red — the web analogue of the CLAUDE.md trap that a UI test
+ *    which cannot find its element PASSES. Data is now guaranteed, so its absence throws.
+ *
+ * 3. THE CAMERA ASSERTIONS ARE POSITION CHECKS NOW; THEY WERE NOT BEFORE.
+ *    `waitForMapAnimations` returned as soon as `hasPendingAnimations` went false, and
+ *    `cameraAnimationFrameRef.current` was cleared on the FIRST LINE of the rAF callback
+ *    (`useMapbox.ts:1031-1032`, in the Mapbox surface MAP-05 deleted) — before
+ *    `fitBounds`/`flyTo` was issued. So
+ *    `verifyCameraPosition` read `map.getCenter()` roughly 0 ms into a 2200 ms flight,
+ *    i.e. usually the PREVIOUS day's centre, and `expect(success).toBe(true)` passed only
+ *    because the 50 km tolerance was wider than the whole Kilimanjaro massif. Tests written
+ *    to catch "camera stuck on the previous day" could not have caught it.
+ *    Now: `waitForCameraSettled` waits for the centre to hold still, and the assertion is
+ *    relative — the settled camera must be strictly CLOSER to the target day's camp than to
+ *    the camp it came from. That is the actual defect, stated as an assertion, and it does
+ *    not depend on the fixture's scale or on any surface's padding maths — which is why it
+ *    survived the vendor swap unchanged and still holds on MapKit.
+ *
+ * 4. THE OFF-ROUTE BRANCH IS FINALLY EXERCISED. Four tests were named for Mount Kenya's
+ *    "Safari day" and asserted only `getCurrentDay() === 5`. `selectTrekWithCamps` picked
+ *    Kilimanjaro first, whose day 5 is ON route, so the `distanceToRoute <= 10` gate never fell
+ *    through in this suite. (That gate was `useMapbox.ts:1079`; MAP-05 deleted it and the MapKit
+ *    equivalent is `src/lib/map/mapkit/geometry.ts:91`, deliberately the same 10 km threshold.) The fixture puts day 5
+ *    MEASURED 12.28 km from the nearest route point, and the tests below assert the flyTo
+ *    signature that branch produces (centre exactly on the camp; a fixed zoom) rather than
+ *    the fitBounds signature (centre between two camps; a zoom derived from the segment).
+ */
 
-const MAP_TIMEOUT = 15000;
+import { test, expect } from './fixtures/test';
+import {
+    openApp,
+    navigateToTrekView,
+    selectDay,
+    expectDay,
+    goToDay,
+    getCamps,
+    getSelectedTrekCamps,
+    campForDay,
+    waitForCameraSettled,
+    distanceKm,
+} from './utils/test-helpers';
+import type { Page } from '@playwright/test';
 
-// Helper to wait for map to be ready
-async function waitForMapReady(page: Page, timeout = MAP_TIMEOUT): Promise<boolean> {
-    const startTime = Date.now();
-    let pollInterval = 100;
+/** The fixture journey exposes days 1..5; day 5 is the off-route one. */
+const OFF_ROUTE_DAY = 5;
 
-    while (Date.now() - startTime < timeout) {
-        const ready = await page.evaluate(() => {
-            return window.testHelpers?.isMapReady() && window.testHelpers?.isDataLoaded();
-        }).catch(() => false);
+/**
+ * Absolute bound for an ON-ROUTE day, and every number in it is measured rather than chosen.
+ *
+ * The camera uses `fitBounds` over the route segment between the previous camp and this one,
+ * with asymmetric desktop padding (`right: 400`), so the settled centre legitimately sits
+ * between the two camps and shifted east — it is NOT expected to land on the camp.
+ *
+ * MEASURED on this fixture (route span 20.41 km, day segments ~5.1 km), settled distances:
+ *   day 1 -> 1.70 km   day 3 -> 2.55 km   day 4 -> 2.55 km
+ * and distance to the day the camera came FROM, in the same runs: 7.65, 7.65, 7.66, 11.91,
+ * 12.76, 13.98 km. So 5 km sits roughly 2x above the worst target distance and 1.5x below
+ * the best origin distance — a real bound with real margin, where the 50 km it replaces was
+ * wider than the whole Kilimanjaro massif and could not fail.
+ *
+ * Re-measured on `mobile-chrome`, whose padding differs (`bottom: 300`, symmetric left/right):
+ * identical figures, 1.70 and 2.55 km. I had expected the different padding to shift the
+ * centre by roughly another kilometre and it does not — the settled centre is dominated by
+ * the segment geometry, not the padding.
+ */
+const ON_ROUTE_TOLERANCE_KM = 5;
 
-        if (ready) return true;
+/**
+ * Bound for the OFF-ROUTE day. That branch calls `flyTo({ center: camp.coordinates })`, so
+ * the settled centre IS the camp. MEASURED: 0.000 km, on every one of the three tests that
+ * check it. The bound is 0.5 km because the nearest an on-route day ever settles to its own
+ * camp is 1.70 km (above) — so this threshold cannot be satisfied by the fitBounds branch,
+ * which is exactly what makes it a branch assertion rather than a position tolerance.
+ */
+const OFF_ROUTE_TOLERANCE_KM = 0.5;
 
-        await page.waitForTimeout(pollInterval);
-        pollInterval = Math.min(pollInterval * 1.5, 500);
-    }
+/**
+ * Assert the camera settled on `targetDay` AND actually travelled there from `fromDay`.
+ *
+ * The relative half is the point. "Camera stuck at Day 2" and "stuck at Safari" are what
+ * these tests were written for, and an absolute tolerance cannot express it — `fitBounds`
+ * centres between two camps, so the target camp and the previous camp are both a few km
+ * away. Requiring the settled centre to be strictly nearer the target than the origin does
+ * express it, at any fixture scale.
+ */
+async function expectCameraMovedTo(page: Page, targetDay: number, fromDay: number) {
+    const centre = await waitForCameraSettled(page);
+    const camps = await getSelectedTrekCamps(page);
+    const target = camps.find((c) => c.dayNumber === targetDay);
+    const origin = camps.find((c) => c.dayNumber === fromDay);
+    expect(target?.coordinates).toBeDefined();
+    expect(origin?.coordinates).toBeDefined();
 
-    return false;
-}
+    const toTarget = distanceKm(centre, target!.coordinates);
+    const toOrigin = distanceKm(centre, origin!.coordinates);
+    console.log(
+        `[camera] settled ${JSON.stringify(centre)} — ${toTarget.toFixed(2)} km from day ` +
+            `${targetDay}, ${toOrigin.toFixed(2)} km from day ${fromDay}`
+    );
 
-// Helper to select a trek with camps (try multiple treks)
-async function selectTrekWithCamps(page: Page): Promise<boolean> {
-    // Try Kilimanjaro first, then Mount Kenya, then Inca Trail
-    const treksToTry = ['kilimanjaro', 'mount-kenya', 'inca-trail'];
-
-    for (const trekId of treksToTry) {
-        const selected = await page.evaluate((id) => {
-            return window.testHelpers?.selectTrek(id) || false;
-        }, trekId).catch(() => false);
-
-        if (!selected) continue;
-
-        try {
-            await page.waitForSelector('text="Explore Journey →"', { timeout: 5000 });
-            console.log(`[selectTrekWithCamps] Successfully selected ${trekId}`);
-            return true;
-        } catch {
-            console.log(`[selectTrekWithCamps] Failed to select ${trekId}`);
-            continue;
-        }
-    }
-
-    console.log('[selectTrekWithCamps] No trek could be selected');
-    return false;
-}
-
-// Helper to wait for camps to be available
-async function waitForCampsLoaded(page: Page, timeout = 15000): Promise<boolean> {
-    const startTime = Date.now();
-    let pollInterval = 100;
-    let lastCheck = 0;
-
-    while (Date.now() - startTime < timeout) {
-        const result = await page.evaluate(() => {
-            const camps = window.testHelpers?.getCamps();
-            const selectedTrek = window.testHelpers?.getSelectedTrek();
-            const treks = window.testHelpers?.getTreks();
-            const trekDataKeys = window.testHelpers?.getTrekDataKeys();
-            const trekData = selectedTrek ? window.testHelpers?.getTrekData(selectedTrek) : null;
-
-            return {
-                camps: camps || [],
-                campCount: camps?.length || 0,
-                selectedTrek,
-                dataLoaded: window.testHelpers?.isDataLoaded() || false,
-                availableTreks: treks?.map(t => t.id) || [],
-                trekCount: treks?.length || 0,
-                trekDataKeys: trekDataKeys || [],
-                trekData: trekData || null
-            };
-        }).catch(() => ({ camps: [], campCount: 0, selectedTrek: null, dataLoaded: false, availableTreks: [], trekCount: 0, trekDataKeys: [], trekData: null }));
-
-        // Log every 2 seconds
-        const now = Date.now();
-        if (now - lastCheck > 2000) {
-            console.log('[waitForCampsLoaded] Status:', result);
-            lastCheck = now;
-        }
-
-        if (result.campCount > 0) {
-            console.log(`[waitForCampsLoaded] Success! Found ${result.campCount} camps`);
-            return true;
-        }
-
-        await page.waitForTimeout(pollInterval);
-        pollInterval = Math.min(pollInterval * 1.5, 500);
-    }
-
-    console.log('[waitForCampsLoaded] Timeout waiting for camps');
-    return false;
-}
-
-// Helper to navigate to trek view and start journey
-async function navigateToTrekView(page: Page): Promise<boolean> {
-    const selected = await selectTrekWithCamps(page);
-    if (!selected) {
-        console.log('[navigateToTrekView] Failed to select a trek with camps');
-        return false;
-    }
-
-    await page.getByText('Explore Journey →').click();
-
-    try {
-        await page.waitForSelector('text="Start"', { timeout: 10000 });
-        console.log('[navigateToTrekView] Found Start button, clicking...');
-        // Click Start to actually begin the journey
-        await page.getByText('Start').click();
-        // Wait for camps to be loaded and available
-        console.log('[navigateToTrekView] Waiting for camps to load...');
-        const campsLoaded = await waitForCampsLoaded(page);
-
-        if (!campsLoaded) {
-            const camps = await page.evaluate(() => {
-                return window.testHelpers?.getCamps() || [];
-            });
-            console.log('[navigateToTrekView] Camps not loaded. Available camps:', camps);
-        } else {
-            const campCount = await page.evaluate(() => {
-                return window.testHelpers?.getCamps()?.length || 0;
-            });
-            console.log(`[navigateToTrekView] Successfully loaded ${campCount} camps`);
-        }
-
-        return campsLoaded;
-    } catch (e) {
-        console.log('[navigateToTrekView] Error:', e);
-        return false;
-    }
-}
-
-// Helper to select a day
-async function selectDay(page: Page, dayNumber: number): Promise<boolean> {
-    return await page.evaluate((day) => {
-        return window.testHelpers?.selectDay(day) || false;
-    }, dayNumber).catch(() => false);
-}
-
-// Helper to get current day
-async function getCurrentDay(page: Page): Promise<number | null> {
-    return await page.evaluate(() => {
-        return window.testHelpers?.getCurrentDay() || null;
-    }).catch(() => null);
-}
-
-// Helper to wait for map animations to complete
-async function waitForMapAnimations(page: Page, timeout = 5000): Promise<boolean> {
-    const startTime = Date.now();
-    let pollInterval = 100;
-
-    while (Date.now() - startTime < timeout) {
-        const state = await page.evaluate(() => {
-            return window.testHelpers?.getMapState() || { hasPendingAnimations: true };
-        }).catch(() => ({ hasPendingAnimations: true }));
-
-        if (!state.hasPendingAnimations) {
-            console.log('[waitForMapAnimations] Animations complete');
-            return true;
-        }
-
-        await page.waitForTimeout(pollInterval);
-        pollInterval = Math.min(pollInterval * 1.2, 300);
-    }
-
-    console.log('[waitForMapAnimations] Timeout waiting for animations');
-    return false;
+    expect(
+        toTarget,
+        `camera settled ${toTarget.toFixed(2)} km from day ${targetDay}`
+    ).toBeLessThanOrEqual(ON_ROUTE_TOLERANCE_KM);
+    expect(
+        toTarget,
+        `camera is nearer day ${fromDay} than day ${targetDay} — it did not move`
+    ).toBeLessThan(toOrigin);
 }
 
 /**
- * Calculate distance between two coordinates in km (Haversine formula)
+ * Assert the OFF-ROUTE camera branch ran: `flyTo` centred on the camp, at its own fixed
+ * zoom rather than a zoom derived from a route segment.
  */
-function calculateDistance(coord1: [number, number], coord2: [number, number]): number {
-    const R = 6371; // Earth's radius in km
-    const [lng1, lat1] = coord1;
-    const [lng2, lat2] = coord2;
+async function expectOffRouteFlyTo(page: Page) {
+    const centre = await waitForCameraSettled(page);
+    const camp = await campForDay(page, OFF_ROUTE_DAY);
+    const zoom = await page.evaluate(() => window.testHelpers?.getMapState().cameraZoom ?? null);
+    const offset = distanceKm(centre, camp.coordinates);
+    console.log(
+        `[camera] off-route day settled ${offset.toFixed(3)} km from its camp, zoom ${zoom}`
+    );
 
-    const dLat = (lat2 - lat1) * Math.PI / 180;
-    const dLng = (lng2 - lng1) * Math.PI / 180;
-
-    const a = Math.sin(dLat / 2) ** 2 +
-        Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-        Math.sin(dLng / 2) ** 2;
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-
-    return R * c;
+    expect(
+        offset,
+        'off-route day did not use flyTo centred on the camp — it took the on-route ' +
+            'fitBounds branch, so src/lib/map/mapkit/geometry.ts:91 (distanceToRoute <= 10) is ' +
+            'not being exercised'
+    ).toBeLessThanOrEqual(OFF_ROUTE_TOLERANCE_KM);
+    // Second, independent signal for the same branch: the flyTo path hardcodes zoom 15 on
+    // desktop and 14.5 on mobile, while fitBounds derives a zoom from the segment. MEASURED
+    // here: 15.000, 15.010, 15.010 on the off-route day. So a floor of 14 separates the two
+    // branches on either viewport without pinning the exact easing end-state.
+    expect(zoom).not.toBeNull();
+    expect(zoom!).toBeGreaterThan(14);
 }
 
 /**
- * Verify camera is positioned near the expected camp
- * Allows for some tolerance since camera might be slightly offset for better view
+ * Every test below enters through `navigateToTrekView`, which leaves the app settled on day
+ * 1 with the camera arrived — a known starting position, so a "rapid switch" test interrupts
+ * the transition it means to interrupt rather than racing the entry animation.
  */
-async function verifyCameraPosition(
-    page: Page,
-    expectedCampCoords: [number, number],
-    toleranceKm = 50
-): Promise<{ success: boolean; distance?: number; cameraCenter?: [number, number] }> {
-    const mapState = await page.evaluate(() => window.testHelpers?.getMapState());
-
-    if (!mapState?.cameraCenter) {
-        return { success: false };
-    }
-
-    const distance = calculateDistance(mapState.cameraCenter, expectedCampCoords);
-
-    return {
-        success: distance <= toleranceKm,
-        distance,
-        cameraCenter: mapState.cameraCenter
-    };
-}
-
 test.describe('Day Navigation', () => {
-    test('rapid day switching goes to final selection', async ({ page }) => {
-        await page.goto('/');
-        await page.waitForSelector('canvas', { timeout: MAP_TIMEOUT });
-        await waitForMapReady(page);
+    test('rapid day switching lands on the final selection', async ({ page }) => {
+        await openApp(page);
+        await navigateToTrekView(page);
 
-        const navigated = await navigateToTrekView(page);
-        if (!navigated) {
-            test.skip();
-            return;
-        }
+        // Replaces a hardcoded getTrekData('kilimanjaro'): the camps come from whichever
+        // journey was discovered, so this cannot silently assert against the wrong journey.
+        expect((await campForDay(page, 3)).coordinates).toBeDefined();
 
-        // Get camps to find expected coordinates for day 3
-        const camps = await page.evaluate(() => window.testHelpers?.getCamps() || []);
-        const day3Camp = camps.find(c => c.dayNumber === 3);
-        expect(day3Camp).toBeDefined();
-
-        // Get full camp data with coordinates
-        const day3CampData = await page.evaluate((campId) => {
-            const trekData = window.testHelpers?.getTrekData('kilimanjaro');
-            return trekData?.camps.find((c: any) => c.id === campId);
-        }, day3Camp?.id);
-        expect(day3CampData?.coordinates).toBeDefined();
-
-        // Rapidly switch through days 1, 2, 3
-        await selectDay(page, 1);
-        await selectDay(page, 2);
-        await selectDay(page, 3);
-
-        // Wait for animations to complete
-        const animationsComplete = await waitForMapAnimations(page);
-        expect(animationsComplete).toBe(true);
-
-        // Verify selected day matches
-        const currentDay = await getCurrentDay(page);
-        expect(currentDay).toBe(3);
-
-        // Verify camera is positioned near Day 3 camp (visual state verification)
-        const cameraCheck = await verifyCameraPosition(page, day3CampData.coordinates);
-        console.log('[Test] Camera position check:', {
-            expected: day3CampData.coordinates,
-            actual: cameraCheck.cameraCenter,
-            distance: cameraCheck.distance ? `${cameraCheck.distance.toFixed(2)} km` : 'unknown',
-            success: cameraCheck.success
-        });
-        expect(cameraCheck.success).toBe(true);
-    });
-
-    test('very rapid day switching (5 days quickly)', async ({ page }) => {
-        await page.goto('/');
-        await page.waitForSelector('canvas', { timeout: MAP_TIMEOUT });
-        await waitForMapReady(page);
-
-        const navigated = await navigateToTrekView(page);
-        if (!navigated) {
-            test.skip();
-            return;
-        }
-
-        // Rapidly switch through all 5 days of Mount Kenya
-        await selectDay(page, 1);
+        // Three switches with no waiting in between; the last one must win.
         await selectDay(page, 2);
         await selectDay(page, 3);
         await selectDay(page, 4);
-        await selectDay(page, 5); // Safari day
 
-        // Wait for animations to complete
-        await page.waitForTimeout(3000);
+        await expectDay(page, 4);
+        await expectCameraMovedTo(page, 4, 1);
+    });
 
-        // Should be on day 5 (Safari)
-        const currentDay = await getCurrentDay(page);
-        expect(currentDay).toBe(5);
+    test('rapid switching through all five days lands on the off-route day', async ({ page }) => {
+        // Was 'very rapid day switching (5 days quickly)', whose comment claimed "all 5 days
+        // of Mount Kenya" while selecting Kilimanjaro, and which asserted only the day
+        // number after a blind 3 s sleep. It now also asserts the camera reached the
+        // off-route day's own branch.
+        await openApp(page);
+        await navigateToTrekView(page);
+
+        await selectDay(page, 2);
+        await selectDay(page, 3);
+        await selectDay(page, 4);
+        await selectDay(page, OFF_ROUTE_DAY);
+
+        await expectDay(page, OFF_ROUTE_DAY);
+        await expectOffRouteFlyTo(page);
     });
 
     test('forward and backward day switching', async ({ page }) => {
-        await page.goto('/');
-        await page.waitForSelector('canvas', { timeout: MAP_TIMEOUT });
-        await waitForMapReady(page);
+        await openApp(page);
+        await navigateToTrekView(page);
 
-        const navigated = await navigateToTrekView(page);
-        if (!navigated) {
-            test.skip();
-            return;
-        }
-
-        // Switch forward: 1 → 3
-        await selectDay(page, 1);
-        await page.waitForTimeout(500);
+        // Forward, from the settled day 1.
         await selectDay(page, 3);
-        await page.waitForTimeout(2500);
+        await expectDay(page, 3);
+        await expectCameraMovedTo(page, 3, 1);
 
-        let currentDay = await getCurrentDay(page);
-        expect(currentDay).toBe(3);
-
-        // Switch backward: 3 → 1
+        // And back again.
         await selectDay(page, 1);
-        await page.waitForTimeout(2500);
-
-        currentDay = await getCurrentDay(page);
-        expect(currentDay).toBe(1);
+        await expectDay(page, 1);
+        await expectCameraMovedTo(page, 1, 3);
     });
 
-    test('Safari day (off-route) navigation works', async ({ page }) => {
-        await page.goto('/');
-        await page.waitForSelector('canvas', { timeout: MAP_TIMEOUT });
-        await waitForMapReady(page);
+    test('off-route day uses flyTo centred on the camp, not a route-segment fitBounds', async ({
+        page,
+    }) => {
+        // Was 'Safari day (off-route) navigation works', which asserted getCurrentDay() === 5
+        // and nothing about the route at all — and picked a journey whose day 5 is on-route,
+        // so the branch in the test's own name was never reached.
+        await openApp(page);
+        await navigateToTrekView(page);
 
-        const navigated = await navigateToTrekView(page);
-        if (!navigated) {
-            test.skip();
-            return;
-        }
-
-        // Select Day 5 (Safari - off-route waypoint)
-        const selected = await selectDay(page, 5);
-        expect(selected).toBe(true);
-
-        // Wait for camera animation
-        await page.waitForTimeout(3000);
-
-        // Verify we're on day 5
-        const currentDay = await getCurrentDay(page);
-        expect(currentDay).toBe(5);
+        expect(await selectDay(page, OFF_ROUTE_DAY)).toBe(true);
+        await expectDay(page, OFF_ROUTE_DAY);
+        await expectOffRouteFlyTo(page);
     });
 
-    test('rapid switching to Safari day works', async ({ page }) => {
-        await page.goto('/');
-        await page.waitForSelector('canvas', { timeout: MAP_TIMEOUT });
-        await waitForMapReady(page);
+    test('rapid switch from an unsettled day straight to the off-route day', async ({ page }) => {
+        await openApp(page);
+        await navigateToTrekView(page);
 
-        const navigated = await navigateToTrekView(page);
-        if (!navigated) {
-            test.skip();
-            return;
-        }
-
-        // Rapidly switch from day 1 to Safari (day 5)
-        await selectDay(page, 1);
-        await selectDay(page, 5);
-
-        // Wait for animations
-        await page.waitForTimeout(3000);
-
-        // Should be on Safari day
-        const currentDay = await getCurrentDay(page);
-        expect(currentDay).toBe(5);
-    });
-
-    test('switching from established day with two rapid switches', async ({ page }) => {
-        await page.goto('/');
-        await page.waitForSelector('canvas', { timeout: MAP_TIMEOUT });
-        await waitForMapReady(page);
-
-        const navigated = await navigateToTrekView(page);
-        if (!navigated) {
-            test.skip();
-            return;
-        }
-
-        // Get camp coordinates
-        const camps = await page.evaluate(() => window.testHelpers?.getCamps() || []);
-        const day4Camp = camps.find(c => c.dayNumber === 4);
-        expect(day4Camp).toBeDefined();
-
-        const day4CampData = await page.evaluate((campId) => {
-            const selectedTrek = window.testHelpers?.getSelectedTrek();
-            const trekData = selectedTrek ? window.testHelpers?.getTrekData(selectedTrek) : null;
-            return trekData?.camps.find((c: any) => c.id === campId);
-        }, day4Camp?.id);
-        expect(day4CampData?.coordinates).toBeDefined();
-
-        // IMPORTANT: First go to Day 2 and WAIT for it to complete
+        // No settle between these two: the off-route flight has to win over an on-route
+        // fitBounds that is still in flight.
         await selectDay(page, 2);
-        await waitForMapAnimations(page);
-        await page.waitForTimeout(500); // Ensure we're fully settled on Day 2
+        await selectDay(page, OFF_ROUTE_DAY);
 
-        console.log('[Test] Established on Day 2, now rapidly switching Day 2 → 3 → 4');
+        await expectDay(page, OFF_ROUTE_DAY);
+        await expectOffRouteFlyTo(page);
+    });
 
-        // Now rapidly switch TWO times while already at Day 2
+    test('switching from an established day with two rapid switches', async ({ page }) => {
+        await openApp(page);
+        await navigateToTrekView(page);
+
+        // Establish and settle on day 2 first — the original bug only reproduced from an
+        // established camera position, not from the initial trek-view framing. goToDay
+        // survives the select-toggle, which a bare selectDay does not.
+        await goToDay(page, 2);
+
         await selectDay(page, 3);
         await selectDay(page, 4);
 
-        // Wait for animations to complete
-        const animationsComplete = await waitForMapAnimations(page);
-        expect(animationsComplete).toBe(true);
-
-        // Verify we ended up on Day 4
-        const currentDay = await getCurrentDay(page);
-        expect(currentDay).toBe(4);
-
-        // CRITICAL: Verify camera actually moved to Day 4, not stuck at Day 2
-        const cameraCheck = await verifyCameraPosition(page, day4CampData.coordinates, 50);
-        console.log('[Test] Camera position check (from established day):', {
-            expected: day4CampData.coordinates,
-            actual: cameraCheck.cameraCenter,
-            distance: cameraCheck.distance ? `${cameraCheck.distance.toFixed(2)} km` : 'unknown',
-            success: cameraCheck.success
-        });
-        expect(cameraCheck.success).toBe(true);
+        await expectDay(page, 4);
+        // The critical half: the camera must not still be framing day 2.
+        await expectCameraMovedTo(page, 4, 2);
     });
 
-    test('rapid switching FROM Safari day back works', async ({ page }) => {
-        await page.goto('/');
-        await page.waitForSelector('canvas', { timeout: MAP_TIMEOUT });
-        await waitForMapReady(page);
+    test('rapid switching back from the off-route day', async ({ page }) => {
+        await openApp(page);
+        await navigateToTrekView(page);
 
-        const navigated = await navigateToTrekView(page);
-        if (!navigated) {
-            test.skip();
-            return;
-        }
-
-        // Get camp coordinates for verification - we'll end on Day 1
-        const camps = await page.evaluate(() => window.testHelpers?.getCamps() || []);
-        const day1Camp = camps.find(c => c.dayNumber === 1);
-        expect(day1Camp).toBeDefined();
-
-        const day1CampData = await page.evaluate((campId) => {
-            const selectedTrek = window.testHelpers?.getSelectedTrek();
-            const trekData = selectedTrek ? window.testHelpers?.getTrekData(selectedTrek) : null;
-            return trekData?.camps.find((c: any) => c.id === campId);
-        }, day1Camp?.id);
-        expect(day1CampData?.coordinates).toBeDefined();
-
-        // Go to Safari day first (off-route)
-        await selectDay(page, 5);
-        await page.waitForTimeout(100); // Minimal wait
-
-        // VERY rapidly switch back: Safari (day 5) → Day 4 → Day 3 → Day 2 → Day 1
+        await selectDay(page, OFF_ROUTE_DAY);
+        // Deliberately no settle here: the point is to interrupt the off-route flight.
         await selectDay(page, 4);
         await selectDay(page, 3);
         await selectDay(page, 2);
         await selectDay(page, 1);
 
-        // Wait for animations to complete
-        const animationsComplete = await waitForMapAnimations(page);
-        expect(animationsComplete).toBe(true);
-
-        // Verify we ended up on Day 1
-        const currentDay = await getCurrentDay(page);
-        expect(currentDay).toBe(1);
-
-        // CRITICAL: Verify camera actually moved from Safari to Day 1
-        // If stuck at Safari, this will fail
-        const cameraCheck = await verifyCameraPosition(page, day1CampData.coordinates, 50);
-        console.log('[Test] Camera position check (from Safari):', {
-            expected: day1CampData.coordinates,
-            actual: cameraCheck.cameraCenter,
-            distance: cameraCheck.distance ? `${cameraCheck.distance.toFixed(2)} km` : 'unknown',
-            success: cameraCheck.success
-        });
-        expect(cameraCheck.success).toBe(true);
+        await expectDay(page, 1);
+        // If the camera were stuck on the off-route day this is what fails — and with the
+        // off-route camp 12.28 km away from the route, "stuck" is unambiguous now.
+        await expectCameraMovedTo(page, 1, OFF_ROUTE_DAY);
     });
 
     test('triple rapid switch pattern', async ({ page }) => {
-        await page.goto('/');
-        await page.waitForSelector('canvas', { timeout: MAP_TIMEOUT });
-        await waitForMapReady(page);
+        await openApp(page);
+        await navigateToTrekView(page);
 
-        const navigated = await navigateToTrekView(page);
-        if (!navigated) {
-            test.skip();
-            return;
-        }
-
-        // Switch Day 2 → 4 → 3 (common user pattern)
+        // Day 2 -> 4 -> 3, a common user pattern: the final target is BEHIND the intermediate
+        // one, which is what used to leave the camera on day 4.
         await selectDay(page, 2);
         await selectDay(page, 4);
         await selectDay(page, 3);
 
-        // Wait for animations
-        await page.waitForTimeout(2500);
-
-        // Should be on day 3
-        const currentDay = await getCurrentDay(page);
-        expect(currentDay).toBe(3);
+        await expectDay(page, 3);
+        await expectCameraMovedTo(page, 3, 4);
     });
 
     test('console shows no errors during rapid switching', async ({ page }) => {
         const errors: string[] = [];
-
-        page.on('console', msg => {
-            if (msg.type() === 'error') {
-                errors.push(msg.text());
-            }
+        page.on('console', (msg) => {
+            if (msg.type() === 'error') errors.push(msg.text());
         });
+        // An uncaught exception inside a requestAnimationFrame callback lands on the console,
+        // which is how an unguarded `route.coordinates[0][0]` would surface if a fixture ever
+        // shipped an empty route. That was a real hazard on the Mapbox surface
+        // (`useMapbox.ts:1131-1134`, unguarded); MAP-05 deleted it, and the MapKit path GUARDS the
+        // case (`src/lib/map/mapkit/geometry.ts:142`, `if (coordinates.length < 2) return null`).
+        // The check is kept because it is cheap and because it now guards the guard. Collect
+        // pageerror explicitly so the failure names itself instead of arriving as an anonymous
+        // console line.
+        page.on('pageerror', (err) => errors.push(`pageerror: ${err.message}`));
 
-        await page.goto('/');
-        await page.waitForSelector('canvas', { timeout: MAP_TIMEOUT });
-        await waitForMapReady(page);
+        await openApp(page);
+        await navigateToTrekView(page);
 
-        const navigated = await navigateToTrekView(page);
-        if (!navigated) {
-            test.skip();
-            return;
-        }
-
-        // Rapidly switch through days
-        await selectDay(page, 1);
         await selectDay(page, 2);
         await selectDay(page, 3);
         await selectDay(page, 4);
-        await selectDay(page, 5);
+        await selectDay(page, OFF_ROUTE_DAY);
+        await expectDay(page, OFF_ROUTE_DAY);
+        await waitForCameraSettled(page);
 
-        // Wait for animations
-        await page.waitForTimeout(3000);
-
-        // Check for errors (filter out known safe warnings)
-        const relevantErrors = errors.filter(err =>
-            !err.includes('Download the React DevTools') &&
-            !err.includes('DevTools')
+        // This test is the reason the fixture had to cover fetchPublicPhotos as well as
+        // fetchPublicJourneys, and had to make canUserComment quiet: entering trek view calls
+        // AkashicApp -> getJourneyIdBySlug -> fetchPhotos -> fetchPublicPhotos, and
+        // DayCommentsSection calls canUserComment for every selected day. Under the 401 each
+        // logged its own '[cloudkit] Error ...' line and failed here.
+        const relevantErrors = errors.filter(
+            (err) => !err.includes('Download the React DevTools') && !err.includes('DevTools')
         );
 
         expect(relevantErrors).toEqual([]);
+    });
+
+    test('every day exposes a camp with coordinates', async ({ page }) => {
+        // NEW. The old suite asserted `coordinates).toBeDefined()` for days 1, 3 and 4 only,
+        // as a side effect of the camera tests, and skipped entirely when data was missing.
+        // Coordinates are load-bearing for both camera branches, so check all five.
+        await openApp(page);
+        await navigateToTrekView(page);
+
+        const camps = await getCamps(page);
+        expect(camps.length).toBeGreaterThanOrEqual(5);
+
+        for (let day = 1; day <= 5; day++) {
+            const camp = await campForDay(page, day);
+            expect(camp.coordinates).toHaveLength(2);
+            expect(Number.isFinite(camp.coordinates[0])).toBe(true);
+            expect(Number.isFinite(camp.coordinates[1])).toBe(true);
+        }
     });
 });

@@ -1,5 +1,6 @@
 import { memo } from 'react';
 import type { TrekData } from '../../types/trek';
+import { journeyDayCount } from '../../lib/journeys/transforms';
 import { Card } from '../ui/card';
 
 interface OverviewTabProps {
@@ -30,7 +31,8 @@ export const OverviewTab = memo(function OverviewTab({ trekData }: OverviewTabPr
                 {trekData.description}
             </p>
             <div className="grid grid-cols-2 gap-3">
-                <StatItem label="Duration" value={`${trekData.stats.duration} days`} />
+                {/* QUA-46: same helper as the header pill, so the two cannot disagree. */}
+                <StatItem label="Duration" value={`${journeyDayCount(trekData)} days`} />
                 <StatItem label="Distance" value={`${trekData.stats.totalDistance} km`} />
                 <StatItem label="Ascent" value={`+${trekData.stats.totalElevationGain}m`} color="#22c55e" />
                 <StatItem label="Summit" value={`${trekData.stats.highestPoint.elevation}m`} />

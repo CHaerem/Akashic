@@ -89,6 +89,10 @@ jobs:
       # including a crash on Mapbox getBounds() returning null and a `getDifficultyColor` import
       # of a symbol that exists nowhere). Do not reintroduce continue-on-error here — if this
       # step is red, the fix is the type error, not the flag.
+      #
+      # Both defects named above were in code MAP-05 has since deleted, which is the point rather
+      # than a reason to soften the example: neither was found by review or by a test, and the type
+      # check is what surfaced them while that code was still shipping to users.
       - name: Type check
         run: npm run typecheck
 
@@ -169,10 +173,23 @@ jobs:
 
       - name: Build
         env:
-          VITE_MAPBOX_TOKEN: ${{ secrets.VITE_MAPBOX_TOKEN }}
+          # MAP-05 removed VITE_MAPBOX_TOKEN with the package. No VITE_MAPKIT_TOKEN is minted for
+          # this job on purpose: it builds the bundle to prove it COMPILES and that the fixture is
+          # absent, and it never opens a page. A tokenless bundle builds identically — the token is
+          # read at runtime by `src/lib/map/mapkit/loader.ts`, not at build time. `e2e.yml` is where
+          # a token is needed, because that job actually renders a map.
           VITE_CLOUDKIT_ENV: ${{ vars.VITE_CLOUDKIT_ENV || 'development' }}
           VITE_CLOUDKIT_API_TOKEN: ${{ vars.VITE_CLOUDKIT_API_TOKEN || '' }}
         run: npm run build
+
+      - name: Assert the E2E fixture is absent from the bundle
+        # QUA-40. `VITE_E2E_TEST_MODE` now swaps the data layer for a fixture CloudKit
+        # container, not just the sign-in pill, so a bundle built with it set would serve
+        # fabricated journeys. This greps the built artifact for three fixture signals rather
+        # than trusting Rollup to have dropped the dead dynamic import — verified failing on a
+        # `VITE_E2E_TEST_MODE=true` build. The deploy workflow runs the same check plus an
+        # environment assertion, because the deploy is the path that reaches visitors.
+        run: node scripts/assertNoFixtureInBundle.mjs dist
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v5

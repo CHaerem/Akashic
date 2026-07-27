@@ -253,7 +253,7 @@
       "id": "LEG-09",
       "track": "LEGACY",
       "title": "Execute the GitHub Pages + DNS cutover (T4.2, T4.3)",
-      "status": "WIP",
+      "status": "DONE",
       "effort": 0.5,
       "done_when": "https://akashic.no serves the production build from GitHub Pages with a valid certificate for the domain, and privacy/terms/support/AASA resolve over HTTPS.",
       "owner": true,
@@ -269,19 +269,26 @@
         "docs/github-pages-cutover.md — complete zero-downtime runbook with rollback",
         "deploy-pages.yml is correct and complete; only its trigger needs flipping"
       ],
-      "claim": {
-        "agent": "opus5",
-        "branch": "claude/remote-control-project-review-9462c1",
-        "at": "2026-07-27"
-      }
+      "notes": [
+        "2026-07-27 THE STATE IS ANOMALOUS, NOT WAITING — and this corrects what I told the owner earlier the same day. The Pages UI shows \"DNS check in progress\", which reads as an ordinary waiting state. It is not. `gh api repos/CHaerem/Akashic/pages/health` returns is_valid: true, is_https_eligible: true, caa_error: null and reason: null for BOTH akashic.no and www.akashic.no — verified across four consecutive calls. So GitHub's own DNS checker PASSES. Per GitHub's documented pipeline (DNS check -> queue job -> Let's Encrypt -> upload -> check mark) a passing check should have produced a certificate record; instead https_certificate is ABSENT from the Pages object — not \"new\", not \"authorization_pending\", absent, i.e. none of the twelve documented states. The banner is a stale display, not a live verdict.",
+        "2026-07-27 NOTE ON THE HEALTH ENDPOINT: it is evaluated on demand and the FIRST call after a while returns an empty object with no domain/alt_domain keys. That reads exactly like \"GitHub cannot see your DNS\". Call it two or three times before believing anything. This is why the first research pass on this problem never found the endpoint's verdict and concluded, wrongly, that the DNS check simply had not returned yet.",
+        "2026-07-27 RULED OUT BY MEASUREMENT, so nobody re-litigates them: extra/conflicting apex records (ANY at the authoritative NS returns only SOA; no CNAME, ALIAS or ANAME; the four A and four AAAA match GitHub's documented set exactly, consistent across 1.1.1.1/8.8.8.8/9.9.9.9/OpenDNS/ns1.hyp.net); a Domeneshop wildcard (a random subdomain returns NXDOMAIN); CAA (none at akashic.no and none at the `no` TLD, which is the permissive state); DNSSEC (two DS records, alg 15, and the `ad` flag is set — it validates end to end, so DISABLING IT WOULD BE A SECURITY REGRESSION CHASING A RULED-OUT CAUSE, and it is the loudest suggestion you will find given the same-day migration); Let's Encrypt rate limiting (CT logs show 11 issuances for this domain, all Domeneshop's own, none for the identifier set GitHub would request — so no duplicate-certificate limit can have been hit); a wedged deploy (github-pages deployment 5620695346 succeeded 10:13:13Z); a platform incident (Pages operational); and a permissions artefact hiding the field (the token has admin: true on the repo, so this caller would see it).",
+        "2026-07-27 WHAT TO DO, in order. (1) Open Settings -> Pages in a BROWSER, let it load fully, change nothing. Not a placebo: GitHub staff have said this can resolve itself \"when you visit the repository settings page\", and it is a different code path from the API — the health endpoint has now been called nine times with no certificate record appearing. (2) Poll from the terminal: `gh api repos/CHaerem/Akashic/pages --jq '.https_certificate.state // \"ABSENT\"'`. ANY value, even \"new\", is real progress, because it means an order finally exists. (3) DO NOT remove and re-add the domain again today. GitHub's docs say that \"will cancel and restart the provisioning process\", so each repeat throws away whatever exists and restarts the 24-hour ceiling — and an ABSENT record rather than \"new\" is consistent with exactly that teardown-without-re-enqueue, so repeating the move risks reproducing the state we are trying to escape. One per 24 hours is the whole budget. (4) NEVER force https_enforced: true. That is the single action that turns a cosmetic problem into a real outage, 301-ing every visitor to a certificate that fails validation.",
+        "2026-07-27 IF STILL ABSENT ~24 h AFTER THE RE-ADD, it is genuinely abnormal and the escalation evidence is unusually strong: pages/health green on both legs while https_certificate is absent entirely. The only case with a confirmed resolution was a staff member manually re-triggering provisioning, so that is the remedy with a track record. On a free personal account there may be no Pages support category, in which case a Community Discussion under Pages with the same API output is the route.",
+        "2026-07-27 RESOLVED, and by exactly the action the research predicted: loading Settings -> Pages in a browser and changing nothing. The API health endpoint had been polled nine times with no effect; the browser is a different code path, and GitHub staff had said as much. Roughly 25 minutes from that page load to an issued certificate. So the sequence that worked was: get the DNS provably right, remove and re-add the domain ONCE, wait, then open the settings page in a browser. Do not repeat the remove/re-add -- it cancels and restarts provisioning.",
+        "2026-07-27 The owner enabling Enforce HTTPS was safe, and it is worth recording why rather than leaving it as luck: GitHub greys that control out until a certificate exists, so being ABLE to enable it was itself evidence the certificate had landed. Forcing https_enforced through the API before that point is the action that would have turned a cosmetic problem into a real outage, 301-ing every visitor to a certificate that fails validation.",
+        "2026-07-27 Two live defects found in the first minute of looking at the working site, both filed: QUA-43 (the globe hint tells visitors to click a marker when zero journeys are published, and is overlapped by the \"Made with Akashic\" chip) and QUA-44 (four debug console.log calls run on every visit). Neither is a cutover problem; both were hidden behind the site not being reachable.",
+        "2026-07-27 CORRECTION TO THIS TASK'S OWN COMMIT (288f6fd): its message states QUA-43 and QUA-44 were \"both filed\". They were not. The shell command meant to create them combined `node qua43.mjs` with a second inline script, and zsh failed to PARSE the whole compound command before executing any of it (`unmatched \"`), so the ledger write never ran — and the confirmation line it would have printed never appeared in the output I had already read. I then asserted the ledger state in a commit message without re-reading the ledger. Both tasks are now filed for real. The lesson is narrow and worth keeping: `npm run workplan:check` cannot catch a task that was never added, so a ledger claim in a commit message has to be verified by reading the ledger, exactly like any other measurement."
+      ],
+      "evidence": "Certificate issued 2026-07-27 13:05:47Z: openssl s_client reports subject=CN=akashic.no, issuer Let's Encrypt YR1, valid to 2026-10-25. Pages API: https_certificate.state=approved, domains=[akashic.no, www.akashic.no], https_enforced=true. curl with full validation: https://akashic.no 200 with ssl_verify_result=0; www 301 to the apex; http 301 to https. Served content verified ours rather than a cache: server=GitHub.com, x-served-by=cache-osl6528-OSL, and the E2E fixture signals are absent from the live bundle. Four CloudKit production requests complete from the real origin with no console errors."
     },
     {
-      "id": "LEG-10",
+      "id": "LEG-10A",
       "track": "LEGACY",
-      "title": "Delete deploy.yml, then revoke the Cloudflare and Supabase secrets",
-      "status": "TODO",
+      "title": "Take Cloudflare and Supabase out of the repo",
+      "status": "DONE",
       "effort": 0.25,
-      "done_when": "No workflow references Cloudflare or Supabase, the four secrets are revoked, and CI is green without them.",
+      "done_when": "No workflow references Cloudflare or Supabase, and CI is green without their secrets.",
       "deps": [
         "LEG-09"
       ],
@@ -291,10 +298,32 @@
       "serialise_with": "QUA-01, QUA-03, QUA-04 also edit .github/workflows/**",
       "why": "Order matters: revoking CLOUDFLARE_API_TOKEN while deploy.yml still runs turns CI permanently red. It will not take the site down -- Pages keeps serving the last deploy -- but it makes every push look broken.\n\nThe one-month hold recorded here on 2026-07-27 is GONE: the owner waived hosting rollback the same day. That hold existed only because deploy.yml keeps the Cloudflare site fresh for a DNS revert, and there is no revert to keep fresh. So both halves run as soon as the cutover is verified:\n  * prune VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY (nothing references either; grep -rn SUPABASE .github/ is empty),\n  * delete deploy.yml and revoke CLOUDFLARE_API_TOKEN / CLOUDFLARE_ACCOUNT_ID, in that order.",
       "verify": [
-        "grep -rln cloudflare .github/workflows/  # expect no hits",
-        "gh run list --branch main --limit 5"
+        "grep -rniE \"cloudflare|supabase|wrangler\" .github/  # comments only"
       ],
-      "resume": "Ready to execute the moment its owner dependency clears; no agent work needed beforehand. All other agent tasks in the ledger are DONE as of 2026-07-26."
+      "resume": "Ready to execute the moment its owner dependency clears; no agent work needed beforehand. All other agent tasks in the ledger are DONE as of 2026-07-26.",
+      "owner": false,
+      "evidence": "grep -rniE \"cloudflare|supabase|wrangler\" .github/ returns only two comments in deploy-pages.yml explaining the deletion; .github/workflows/ is apple-ci, deploy-pages, e2e, test; no workflow reads either secret (verified 2026-07-27)",
+      "notes": [
+        "2026-07-27: verified complete. deploy.yml is gone, the four secrets are referenced by nothing in .github/, and CI has been green without them. Split from the revocation half, which CLAUDE.md places with the owner (\"never delete a remote resource, rotate a key, or deploy\") and which this task had wrongly carried as agent work — which is most of why it sat untouched."
+      ]
+    },
+    {
+      "id": "LEG-10B",
+      "effort": 0.2,
+      "priority": 45,
+      "deps": [
+        "LEG-10A"
+      ],
+      "owner": true,
+      "title": "Delete the four dead repository secrets, then revoke the tokens themselves",
+      "done_when": "gh secret list shows neither CLOUDFLARE_* nor VITE_SUPABASE_*, and both tokens are revoked at Cloudflare and Supabase.",
+      "why": "MEASURED 2026-07-27, while setting the MapKit variables: CLOUDFLARE_ACCOUNT_ID, CLOUDFLARE_API_TOKEN,\nVITE_SUPABASE_ANON_KEY and VITE_SUPABASE_URL are all still present as repository secrets, dated\n2025-11-26. Nothing in .github/ reads any of them (LEG-10A). Live credentials that nothing uses are a\nstanding risk with no upside -- and the Cloudflare API token in particular still carries whatever\nscope it was minted with.\n\nTwo halves, and they are not the same act. Deleting the repository secret stops CI from holding the\ncredential; REVOKING the token at Cloudflare/Supabase is what actually makes the credential dead.\nDo both, in that order, and do not stop after the first -- a deleted secret whose token is still\nvalid has improved nothing except the appearance of the settings page.\n\nONE CHECK BEFORE REVOKING, because getting it wrong strands 12.21 GB. scripts/export/pullR2Archive.ts\nis still needed for LEG-03 (the 5080 un-catalogued R2 objects) and reads CLOUDFLARE_ACCOUNT_ID plus\nR2_ACCESS_KEY_ID / R2_SECRET_ACCESS_KEY from the local environment. Those R2 access keys are a\ndifferent credential type from the Cloudflare API token and are NOT among the repository secrets, so\ndeleting the repo secrets is safe for LEG-03. But if the local .env happens to use the same Cloudflare\nAPI token for R2, revoking it removes the only read path to the un-catalogued objects. Confirm which\ncredential the local archive tooling actually uses before revoking, or simply do LEG-03 first.",
+      "files": [],
+      "track": "LEGACY",
+      "status": "TODO",
+      "verify": [
+        "gh secret list --repo CHaerem/Akashic  # expect no CLOUDFLARE_* and no VITE_SUPABASE_*"
+      ]
     },
     {
       "id": "LEG-11A",
@@ -306,7 +335,7 @@
       "owner": true,
       "deps": [
         "LEG-09",
-        "LEG-10"
+        "LEG-10A"
       ],
       "priority": 90,
       "why": "The hosting half of the old LEG-11, freed from the stability gate because the owner waived hosting rollback on 2026-07-27. Nothing here holds data: the Pages project is a build output that GitHub Pages now reproduces, and the DNS zone is replaced by GoDaddy. Do it AFTER confirming akashic.no resolves to GitHub's addresses through GoDaddy -- deleting the Cloudflare zone while it is still authoritative takes the domain down until NS propagates. Order: confirm resolution, then Pages project, then zone.",
@@ -848,7 +877,7 @@
       "id": "SHIP-10B",
       "track": "SHIP",
       "title": "Publish one journey into the production mirror and see it signed out",
-      "status": "TODO",
+      "status": "DONE",
       "effort": 0.25,
       "done_when": "A published journey is visible on akashic.no while signed out.",
       "owner": true,
@@ -862,10 +891,14 @@
         "APPLE-MIGRATION-RUNBOOK.md:377 already tracks this as an operator step"
       ],
       "deps": [
-        "SHIP-10A",
-        "SHIP-15"
+        "SHIP-10A"
       ],
-      "files": null
+      "files": null,
+      "evidence": "Full loop measured 2026-07-27 in the iOS Simulator on Debug-Production: production mirror empty (0 PublicJourney) -> published the SAMPLE Kilimanjaro -> \"Showcase updated: Published 1 record, Skipped (no thumbnail) 1\" -> REST query returns 1 record, recordName \"kilimanjaro\", with routeJSON, waypointsJSON, statsJSON, centerLocation -> https://akashic.no/?journey=kilimanjaro renders it SIGNED OUT with title, description, 70 km and seven numbered day markers on the route -> \"Remove from showcase\" -> \"Published 0 records, Removed 2\" -> mirror empty again.",
+      "notes": [
+        "2026-07-27 THE DEPENDENCY ON SHIP-15 WAS WRONG, and this is the useful correction. This entry said the publish path \"cannot be done from a desk\" because it needs a CloudKit-entitled build signed into iCloud and \"no simulator has an iCloud account\". The second half is a configuration state, not a law: the owner signed the simulator into iCloud and the whole loop ran. The first half is subtler — `codesign -d --entitlements --xml` on the Debug-Production simulator build returns `<dict></dict>`, so the entitlement is genuinely NOT embedded, and by the SIGTRAP warning in project.yml the app should have crashed on its first CKContainer. It did not: the log shows client/account-status, client/account-info and `<CKSyncEngine> initialized sync engine`, served by a simulator-specific CloudKit daemon (com.apple.cloudkit.sim). So the simulator does not enforce the entitlement the way a device does. CLAUDE.md's \"no simulator test can prove an entitlement\" still holds for what it says — the entitlement is not observable — but it does NOT follow that entitlement-gated FEATURES are untestable there. Those are different claims and this project had merged them.",
+        "2026-07-27 A LARGER FINDING THAN THE TASK: the app reached CloudKit PRODUCTION and synced the real library down — Settings reported Mode \"CloudKit sync\", container iCloud.no.akashic, environment \"Production (env)\", 4 journeys and 1539 photos, sync \"last update in 0 sec.\" So CKSyncEngine against production is demonstrably working from a simulator. That does not close SHIP-15, which is about PUSH delivery between two devices on two Apple IDs and cannot be simulated — but it removes \"does sync work at all against production\" from that session's risk, which was most of its weight."
+      ]
     },
     {
       "id": "SHIP-11",
@@ -2542,15 +2575,29 @@
       "done_when": "The landing view is a rotating sphere with a pin per published journey, using no map service and no token.",
       "why": "Measured in the shipped MapKit JS binary: zero occurrences of globe, orthographic, pitch or tilt. There is no 3D and no globe, so this screen cannot come from Apple's web map at any price. Orthographic projection over vendored coastline geometry gives a genuine sphere; the existing starfield stays. Deliberately tokenless, which also means a visitor on the day a MapKit token lapses still sees a rotating Earth rather than a void -- that is why the split exists and not only because of the capability gap. If a photographic texture is wanted later, source it with its licence committed alongside (LEG-16 is why that sentence is here).",
       "files": [
-        "src/lib/map/globe/**",
-        "public/geo/**"
+        "src/lib/globe/**",
+        "src/components/AkashicGlobe.tsx",
+        "src/components/MapSurface.tsx",
+        "scripts/geo/**",
+        "src/lib/map/boundary.test.ts",
+        "e2e/*.spec.ts-snapshots/**"
       ],
       "track": "QUALITY",
-      "status": "TODO",
+      "status": "DONE",
       "verify": [
         "npx vitest --run",
         "npm run typecheck",
         "npm run build"
+      ],
+      "evidence": "Canvas 2D orthographic globe, no vendor SDK, no token, no tile service. Verified in this tree: 650 unit tests (was 588) across 52 files, typecheck clean, lint 25 warnings / 0 errors, boundary test 6 passing WITHOUT the globe being added to the ADAPTER allowlist, both dist guards exit 0. Tokenlessness checked by grep — the only occurrences of \"mapbox\" or \"mapkit\" anywhere in src/lib/globe/ or AkashicGlobe.tsx are in prose comments, and there is no import.meta.env, no process.env, no fetch, no Image and no script injection in any of them. The adversarial pass additionally blocked every non-local request in Playwright and confirmed the globe still renders with pins.",
+      "notes": [
+        "2026-07-27 THE DATA PROVENANCE IS A COMPLETE CHAIN, which is the thing LEG-16 and LEG-17 were about. Natural Earth ne_110m_land at tag v5.1.2: download verified HTTP 200 / 138,160 B, sha256 recorded in PROVENANCE.md and re-checked here (9e0729ee…), licence 4,636 B of real prose beginning \"Everything here is public domain\". And the generator is DETERMINISTIC: re-running scripts/geo/buildCoastline.mjs reproduces the committed coastline.generated.ts BYTE-IDENTICALLY, so the module is provably derived from the committed source rather than merely accompanied by it. The LEG-17 trap reproduced live along the way — naturalearthdata's /LICENSE without the extension returns HTTP 404 with a 14-byte body, exactly the shape that nearly got committed as a font licence.",
+        "2026-07-27 IT SHIPS AS A GENERATED TS MODULE, NOT public/geo/, and the reason is a silent failure the ledger's own file list would have caused: workbox's globPatterns does not match `.geojson`, so a file at the natural path would be ABSENT from the precache and the globe blank offline while every gate stayed green. The ledger said `public/geo/**`; that would have been wrong. It also said `src/lib/map/globe/**`, which sits inside the boundary test's `lib/map/` ADAPTER prefix and would have exempted the globe from the very check that proves it needs no vendor. Both corrected in the files list above.",
+        "2026-07-27 TWO DEFECTS FOUND BY MEASURING RATHER THAN INSPECTING, both of which would have shipped. (1) requestAnimationFrame does not fire in a hidden tab: the first version painted and reported readiness from inside the rAF loop, measured 0 callbacks and isMapReady() false over 9 seconds — which hard-fails openApp() after 15 s, and openApp() is the entry point of EVERY spec, so this would have taken out the whole suite rather than a globe test. Fixed by painting the first frame synchronously on mount; now ready at 0 ms even hidden. (2) The ice-cap gradient turned southern Africa white, visible only by opening the regenerated PNG because CI runs --ignore-snapshots. Related discovery: --update-snapshots will NOT rewrite a baseline whose diff is inside maxDiffPixelRatio, so the three PNGs had to be deleted to force honest regeneration.",
+        "2026-07-27 THE HORIZON CLIP HAS A GROUND-TRUTH HARNESS, and its finding is the one worth keeping: across 34 cameras with ~2,826 in-disc samples each, ray-cast against the source rings by independent code, the correct clip disagrees with ground truth by a mean of 0.0167 % while a radial clamp disagrees by 95.9-100 % and a limb mirror by 99.93-100 %. But AT THE LANDING CAMERA (30, 15) the three are 0.035 %, 0.04 % and 0.04 % — indistinguishable. So both broken shortcuts look perfect on the only screen anyone would have checked, and would have shipped. horizon.test.ts asserts the harness still detects them.",
+        "2026-07-27 BYTE COST, and all three passes disagreed on it. Measured here by extracting 8bc4a99 with `git archive` into a clean directory and building there — NOT by stashing, because a stash leaves untracked files behind and a \"before\" build taken that way can still contain part of the feature. Result: +1 precache entry, +46.94 KiB (+0.60 %), +48 KB on disk, +48,135 B of total output. The implementing agent's headline figures match this exactly; its sub-claim of \"6.6 kB of code\" did not (+11,533 B is right), and the adversarial pass's own baseline (7754.34 KiB) reproduces from no commit in this history. PROVENANCE.md now carries only the isolated-build figures and says plainly that if a re-measurement disagrees, the file is to be distrusted.",
+        "2026-07-27 DESIGN NOTE, since this is the first screen a paying customer sees and it changed character: photographic satellite Earth is now stylised vector Earth — green landmass, blue ocean, an atmospheric limb glow, a latitude-driven ice tint at the caps, and the existing starfield. Inspected by eye at 1280x720: the Mediterranean, Red Sea, Persian Gulf, Black Sea and Caspian all read correctly, coastlines compress toward the limb as an orthographic projection must, and it holds together as a designed object rather than a data visualisation. It is arguably more coherent with the app's own stylised aesthetic than photographic tiles were, and it is the reason a lapsed MapKit token can no longer blank the landing page. Judge 2 of the design panel argued for a shaded-relief texture and was overruled on the grounds that it needs WebGL, a vite.config.js change for webp, and derived imagery with its own licence — the ice tint costs zero bytes and answered the same critique.",
+        "2026-07-27 Canvas 2D over WebGL, against one of the three judges. Frame cost was never the binding constraint; the deciding argument was that shader code is unreachable from the jsdom suite in a repo whose traps file is a monument to untested-because-uncompilable code, and that a blank canvas on a driver blocklist would defeat the one reason MAP-02 exists as a separate task."
       ]
     },
     {
@@ -2568,35 +2615,79 @@
         "index.html"
       ],
       "track": "QUALITY",
-      "status": "TODO",
+      "status": "DONE",
       "verify": [
         "npx vitest --run",
         "npm run typecheck",
         "npm run build"
-      ]
+      ],
+      "notes": [
+        "2026-07-27 THE IMAGERY GATE IS PASSED, and it was a real gate rather than a formality. Measured with the real key (9UN97VBZR8), MapKit JS 5.81.65 against mapbox-gl 3.9.0 satellite-v9, seven views over the journeys this app actually holds, every pair matched on metres per pixel to within 0.05%. Five at parity (Kilimanjaro wide and close, Mount Kenya, Machu Picchu, Jotunheimen). ONE FAVOURS APPLE CLEARLY: the Khumbu Icefall at ~5 m/px, where Mapbox is blown out to flat white and Apple holds serac structure, moraine ridges and the teal glacial ponds. ONE FAVOURS MAPBOX CLEARLY: the Khumbu at ~20 m/px, where Apple`s mosaic carries heavy cloud and a visible tile seam while Mapbox is cloud-free. Full table and screenshots-worth of detail in scripts/mapkit/imagery-compare/FINDINGS.md.",
+        "The Khumbu finding is zoom-band specific AND IT INVERTS, which is what makes it liveable: the cloud is in the wide mosaic only, and one band closer Apple is the better vendor. So the implementation requirement it creates is narrow — frame a journey from its ROUTE BOUNDS rather than from a fixed wide zoom, which for a trek is tighter than the massif anyway and lands where Apple wins. Explicitly NOT a reason to keep Mapbox as a fallback: that would carry the whole 1626 KB chunk, the token, the service-worker rules and the maintenance to cover one cloudy mosaic level in one view of one journey. MAP-05 stands.",
+        "Three measurement traps, all of which produced a wrong answer before being caught, recorded because any future imagery comparison will hit them. (1) Matching the coordinate SPAN is not matching the view — CoordinateRegion and fitBounds each adapt to the container aspect ratio and differently, so asking both for 0.09° gave Mapbox a tighter frame and the first comparison \"showed\" Apple as washed out and low-detail. That was an artefact of comparing two magnifications, and it would have been a very expensive false conclusion. (2) A half-loaded map is indistinguishable from bad coverage: the first Kilimanjaro screenshot showed Apple as a flat green blur, and the same view fully loaded is highly detailed. MapKit also draws an empty grey tile grid while loading, which reads as a coverage hole. (3) Mapbox GL runs on requestAnimationFrame, so in a hidden document it stops painting with no error, no failed request and isStyleLoaded() false — which reads as \"Mapbox cannot render here\".",
+        "Incidental but load-bearing for MAP-04: this is the first time the MapKit token has been exercised by a real browser rather than by curl. mapkit.init succeeded, 7/7 maps constructed, tiles served from sat-cdn.apple-mapkit.com. The credential is proven end to end.",
+        "2026-07-27 THE ADVERSARIAL PASS EARNED ITS KEEP — it refuted the implementation on one of three checks and found a live defect whose own comment asserted the opposite. `chromeState` depended on [signedIn, selectedTrek], which made `syncPhotos` unstable, which re-ran the INIT effect, whose cleanup calls map.destroy(). So selecting a journey tore the whole MapKit map down and rebuilt it: measured 1 -> 2 -> 3 constructions with 2 destroys across two selections in jsdom, and in a real browser .mk-map-view was removed and re-added with the original node gone. It SELF-HEALS — five overlays and the markers come back — which is exactly why no assertion caught it, and why the effect's comment could claim the map \"must be built once and never on a prop change\" while the code did the opposite. Cost: a full teardown plus satellite-tile reload and a fresh map-node-ready wait (915-1101 ms) on every journey switch and every sign-in. Fixed by making chromeState ref-backed, with the three effects that must still react naming signedIn/selectedTrek explicitly.",
+        "2026-07-27 I INTRODUCED AND THEN FIXED THE EXACT ERROR THE FILE WARNS ABOUT. My first fix assigned the new refs during render; useMapKitJourney.ts's own header says \"Synced in an effect rather than assigned during render — react-hooks/refs makes the latter an error, and rightly\". Two lint errors, caught by the gate. Then a second slip: I added signedIn/selectedTrek to two useCallbacks (flyToPhoto, getCameraState) that call chromeState() at invocation and therefore already read the current values — eslint flagged them as unnecessary deps and was right. Both reverted. Lint is back at exactly 25 warnings, the ratchet value.",
+        "2026-07-27 WHAT IS STILL OUTSTANDING from the adversarial pass, filed rather than fixed: QUA-49 (the camp-marker/photo-stack precedence regression, plus the false \"inert on Mapbox too\" measurement, now corrected in src/index.css and annotations.ts), QUA-50 (the rebuild has no regression test — a self-healing invisible defect with nothing guarding it will come back), and QUA-51 (four pieces of prose/contract drift and four pieces of dead code, one of which looks like it refreshes a click handler and does not).",
+        "2026-07-27 One judgement call left as-is: the framing effect keeps deps [containerPx, chromeState, selectedCamp, trekData]. `trekData` changes on a journey switch, which covers the panelOpen transition that matters for framing, and re-framing the camera on a sign-in/out would be a jarring jump for no reason. eslint cannot see through chromeState to advise here, so this is deliberate rather than missed."
+      ],
+      "evidence": "Verified in the merged tree rather than taken from the agent report: 566 unit tests (was 473), typecheck clean, lint 25 warnings / 0 errors (unchanged — the cap), build 48 precache entries, boundary.test.ts 4 passing, fixture guard exit 0. The surface itself was verified against a live map by the adversarial pass reading window.mapkit.maps[0] rather than the adapter's own reporting: 5 overlays carrying all 13 route points, 70x HTTP 200 from sat-cdn.apple-mapkit.com/tile, mapType satellite, Apple's wordmark fetched 200, .mapboxgl-canvas ABSENT (so the globe is genuinely unmounted, not Mapbox imagery under MapKit chrome), 5 camp markers + badges + 2 photo stacks, and selectDay(2) moving the camera to zoom 13.03 with the cyan overlays at strokeStart 0.1668 / strokeEnd 0.4169."
+    },
+    {
+      "id": "MAP-04A",
+      "effort": 0.5,
+      "priority": 52.5,
+      "deps": [
+        "MAP-01"
+      ],
+      "title": "Mint the MapKit token in the build, and fail the build before it lapses",
+      "done_when": "scripts/mapkit/mintToken.mjs produces a token a JWT verifier accepts, and the deploy workflow both injects a freshly-minted token and fails when it is within 14 days of expiring.",
+      "why": "The half of MAP-04 that does not need Apple, separated so the owner action shrinks to clicking twice.\nTwo details silently produce a token that looks perfect and always fails auth. First, Node`s default ES256 signature is DER-encoded and every JWT verifier rejects it -- `dsaEncoding: ieee-p1363` is required, and there is a test asserting the signature is exactly 64 bytes and does not start with the DER SEQUENCE tag, so the day someone drops that option the suite says so. Second, the origin claim must match the browser`s Origin header exactly: scheme and host, no path, no trailing slash. That is not hypothetical -- the CloudKit token`s Allowed Origins had been entered as `akashic.no/`, which passed from a curl written to match the stored string and failed from every real browser. The minter refuses a malformed origin rather than normalising it, because a silent correction is what let that bug survive.\nDo NOT rotate via a `schedule:` workflow: GitHub disables scheduled workflows after 60 days of repository inactivity, so the rotation would die in exactly the quiet period it exists to protect. Minting on every deploy has no such hole.",
+      "files": [
+        "scripts/mapkit/**",
+        ".github/workflows/deploy-pages.yml"
+      ],
+      "track": "QUALITY",
+      "status": "WIP",
+      "notes": [
+        "2026-07-27: minter written and green (26 tests, scripts/mapkit/mintToken.test.mjs) -- a generated P-256 key proves everything except \"does Apple accept it\", which needs the real key and is MAP-04. Workflow wiring is the remaining half and wants MAP-03 landed first so there is something to authenticate.",
+        "2026-07-27: rewritten against Apple's DocC source after a research pass found THREE defects in the first version, two of which would have minted a token that signs cleanly and 401s. (1) No \"scope\" claim at all; Apple requires it and the browser SDK needs \"mapkit_js\". (2) The origin validator ENFORCED a scheme, so it threw on \"akashic.no\" -- the documented value -- and accepted \"https://akashic.no\", which Apple documents nowhere. That guard's own justification was the CloudKit trailing-slash trap: same word, two Apple services, opposite formats. (3) \"origin\" was optional; Apple requires it for any browser scope. 45 tests now, up from 26, pinning both directions of the origin format. See the new CLAUDE.md trap.",
+        "2026-07-27 MEASURED against the real key, which changed three of my own claims. (1) The apex/wildcard finding, which no documentation states and which would have broken production: a bare-domain claim is 401 ORIGIN_CHECK_FAILURE from a subdomain, a wildcard claim is 401 from the apex, and this site serves from both — only the comma-separated list covers it. (2) I had asserted in a commit message that the three spec violations I fixed \"would produce a token that 401s\". Measured, Apple returns 200 for all three: missing scope, scheme-form origin, and absent origin. They were non-canonical, not broken. The guards stay — write to the spec, not to what the server currently forgives — but the stakes were overstated and are now corrected in the source, the tests and CLAUDE.md. (3) The `localhost` exception was marked unverified with a removal condition; it is now measured working, so the condition is gone. The one thing that genuinely 401s is a trailing slash — the CloudKit trap wearing a different hat. 47 tests.",
+        "2026-07-27: the expiry/health guard is built — scripts/mapkit/checkToken.mjs plus a MapKit Token workflow. Three checks, and the split between them matters: the secret being present and usable, and the token having more than 14 days of life, are deterministic and need no network, so they always deserve to fail the build. Apple accepting the token needs the network, and it is the only check that can catch a revoked or mis-scoped key. Every failure path was exercised locally before shipping: absent secret, absent variables, truncated key and — the one that proves the check has teeth — a VALID P-256 key that is not the one Apple issued, which produces 401 from both hosts and exit 1. Mangled newlines correctly exit 0, because the script repairs that one recoverable case and the repair carried all the way through to Apple returning 200.",
+        "2026-07-27: deliberately NOT a required status check, and deliberately not on a schedule. The Apple call means a required check would block unrelated merges during someone else's outage, which is the exact failure QUA-40 exists to undo; and GitHub disables scheduled workflows after 60 days of repository inactivity, so a scheduled health check dies in the quiet period it exists to protect. On every push to main the check is as fresh as the last deploy, which is what the token's lifetime already depends on."
+      ],
+      "verify": [
+        "npx vitest --run scripts/mapkit/mintToken.test.mjs"
+      ],
+      "claim": {
+        "agent": "opus5",
+        "branch": "claude/remote-control-project-review-9462c1",
+        "at": "2026-07-27"
+      },
+      "resume": "minter + health guard done and locally proven; the deploy-step wiring wants MAP-03 landed first"
     },
     {
       "id": "MAP-04",
-      "effort": 1.5,
+      "effort": 0.1,
       "priority": 53,
-      "deps": [
-        "MAP-03"
-      ],
+      "deps": [],
       "owner": true,
-      "title": "MapKit JS token: mint it, restrict it, and make its expiry loud",
-      "done_when": "The deployed page authenticates to MapKit, and a build fails or files an issue when the token is within 14 days of expiring.",
-      "why": "The one genuinely dangerous part, and half of it is owner work. The token is minted in the Apple Developer portal, is public in the bundle by design, and is protected by DOMAIN RESTRICTION rather than secrecy -- Apple rejects requests whose Referer does not match, so a copied token cannot be repointed. That part is fine.\nExpiry is not. Maximum portal validity is ONE YEAR. The day it lapses mapkit.init fails with unauthorized and the journey map is an empty box -- and because MapKit periodically re-invokes the authorization callback, a tab left open across the moment dies mid-session too. With no backend nothing can mint a replacement; the site stays broken until a human pushes a build. On a family keepsake that may go untouched for months, that is a fuse lit today and burning down on a random day next summer.\nSo: a CI step that decodes `exp` and fails at <14 days is not optional, it is the feature. Do NOT rely on a `schedule:` workflow to rotate it -- GitHub disables scheduled workflows after 60 days of repository inactivity, so the rotation dies precisely in the quiet period it exists to protect. Register localhost too, or Playwright and `npm run dev` cannot authenticate; confirm the portal accepts it before assuming.",
-      "files": [
-        ".github/workflows/**",
-        "scripts/checkMapKitToken.mjs"
-      ],
+      "title": "Add the MapKit private key as a repository secret",
+      "done_when": "MAPKIT_PRIVATE_KEY exists as a repository secret. The two identifiers are already set as repository variables.",
+      "why": "Reduced from the original scope -- the build mints the token now (MAP-04A), so this is portal clicking,\nnot a recurring chore. Two corrections to what this entry used to say, both verified against Apple's own\nDocC source on 2026-07-27.\n\nFIRST: there is a prerequisite the portal only hints at. The \"Maps\" row on Register-a-New-Key renders GREY\nwith \"There are no identifiers available that can be associated with the key\" until a Maps ID exists.\nApple states it plainly elsewhere: \"the MapKit JS checkbox isn't in an enabled state until you create a\nMaps ID.\" So the path is Identifiers -> + -> Maps IDs -> Continue, description free-text, and an\nidentifier whose FIRST dot-separated field must literally be \"maps\" -- maps.no.akashic, NOT\nno.akashic.maps. Then Keys -> + -> tick Maps -> Configure -> pick the Maps ID -> Register -> Download.\nThe .p8 downloads ONCE and is not recoverable; there are two key slots per Maps ID, so treat the second\nas the rotation slot.\n\nSECOND: this entry previously said \"Maximum portal validity is ONE YEAR\" and used that to argue for\nbuild-time minting. That premise has weakened -- Apple's current documentation lists No Expiration among\nthe Domain Token Validation Durations. It does not change the decision (a hardcoded credential you must\nhand-edit to rotate is still worse than one minted on every deploy) but the stated reason was wrong, and\nis corrected here rather than quietly left standing.\n\nWhat can still go wrong, in likelihood order: the identifier string is rejected (that is the \"maps.\"\nprefix, every time); the Identifiers list looks empty because it filters by type and defaults to App IDs;\nthe token signs and then 401s, for which the order of suspicion is the origin/scope format (fixed in\nMAP-04A), then Apple-side breakage -- there are unresolved forum reports of portal-minted MapKit tokens\n401ing on cdn.apple-mapkit.com/ma/bootstrap with DTS concluding service-side, so verify with a trivial\nlocal page before rewriting any integration.\n\nOne cost line for the ledger: MapKit's entitlement is 250,000 map views and 25,000 service calls per day\nPER PROGRAM MEMBERSHIP, not per token. That is a second ceiling on showcase traffic, independent of the\npublic CloudKit egress the cost table already tracks.\n\nUPDATE 2026-07-27: the portal work above is DONE and the measured origin finding below changes the value to use. Mint with --origin 'akashic.no,*.akashic.no', NOT with the apex alone: measured against Apple, a bare domain is 401 ORIGIN_CHECK_FAILURE from any subdomain and a wildcard is 401 from the apex -- they are disjoint, and this site serves from both. See the CLAUDE.md table.",
+      "files": [],
       "track": "QUALITY",
-      "status": "TODO",
+      "status": "DONE",
       "verify": [
-        "npx vitest --run",
-        "npm run typecheck",
-        "npm run build"
-      ]
+        "gh secret list --repo CHaerem/Akashic | grep MAPKIT_PRIVATE_KEY"
+      ],
+      "notes": [
+        "2026-07-27: the PORTAL HALF IS DONE. Maps ID created and a Maps key issued — Key ID 9UN97VBZR8 (not secret; it travels in every token as the `kid` claim and the token ships in the public bundle). The key is a valid PKCS#8 EC P-256, confirmed with `openssl pkey`. Verified end to end against cdn.apple-mapkit.com/ma/bootstrap: a token minted by scripts/mapkit/mintToken.mjs returns HTTP 200 with real attribution data, so \"does Apple accept it\" — the one question MAP-04A's unit tests explicitly could not answer — is now answered yes. What remains is only the two repository secrets, which the owner sets (the private key is a credential and does not pass through an agent).",
+        "2026-07-27 SECURITY: the .p8 was delivered through a chat upload, so it now sits in a conversation transcript. Low severity — it signs origin-restricted map tokens, grants nothing else, and is revocable — but there are two key slots per Maps ID, so the cheap hygiene is to register a second key later, switch the secret to it, and revoke 9UN97VBZR8. Not urgent; worth not forgetting.",
+        "2026-07-27: everything except the private key is now IN PLACE AND VERIFIED. MAPKIT_KEY_ID=9UN97VBZR8 and MAPKIT_TEAM_ID=9LVCB72DT8 are repository VARIABLES, deliberately not secrets: both travel in clear text inside every minted token (as `kid` and `iss`) and ship in the public bundle, so masking them in CI logs would cost debuggability and buy nothing. Proven end to end by reading both values back out of the repo config, minting with --origin 'akashic.no,*.akashic.no', and getting HTTP 200 from cdn.apple-mapkit.com/ma/bootstrap for Origin https://akashic.no AND https://www.akashic.no. Only the private key is outstanding, and that is owner work: a signing credential does not pass through an agent.",
+        "2026-07-27 WHAT IS AND IS NOT VERIFIED. A secret cannot be read back, so \"the name appears in gh secret list\" proves the name and not the value — and the commonest way an Apple .p8 arrives broken is newlines mangled to literal backslash-n, which is invisible from the outside. What IS proven is the KEY: minting from the local copy of AuthKey_9UN97VBZR8.p8 yields a token Apple accepts from both hosts. What is NOT yet proven is that the stored secret holds that same key byte for byte. The new MapKit Token workflow closes that gap on the first push to main; until it has run once, treat the stored value as probable rather than known."
+      ],
+      "evidence": "gh secret list shows MAPKIT_PRIVATE_KEY at 2026-07-27T11:50:23Z, alongside repository variables MAPKIT_KEY_ID=9UN97VBZR8 and MAPKIT_TEAM_ID=9LVCB72DT8. The credential itself is proven: scripts/mapkit/checkToken.mjs against the same key returns 200 from cdn.apple-mapkit.com/ma/bootstrap for both https://akashic.no and https://www.akashic.no."
     },
     {
       "id": "MAP-05",
@@ -2618,11 +2709,19 @@
         ".github/workflows/**"
       ],
       "track": "QUALITY",
-      "status": "TODO",
+      "status": "DONE",
       "verify": [
         "npx vitest --run",
         "npm run typecheck",
         "npm run build"
+      ],
+      "evidence": "Measured in this tree, not taken from the report. Mapbox is gone from source, package.json and package-lock.json; `VITE_MAPBOX_TOKEN` appears in no `env:` key in any workflow (the five remaining occurrences are comments recording the removal); ZERO files under dist/ contain the string \"mapbox\"; the 1,664,113 B mapbox chunk is gone. precache 7810.94 -> 6126.52 KiB, dist 8668 -> 6972 KB, -19.6 %. 650 unit tests held across 52 files, typecheck clean, boundary test 6 passing, both dist guards ok, e2e 27 passed / 6 skipped (was 18 / 7). Lint cap lowered 25 -> 14.",
+      "notes": [
+        "2026-07-27 THE LEDGER'S OWN INVENTORY WAS WRONG IN SIX PLACES, which is the argument for having the implementing pass build its own. MapboxGlobe.tsx was 575 lines, not the ledger's 677 nor the 667 MAP-03 read — QUA-44 had removed four console.log calls in between — so the deletion is 2707 lines, not 2786. The manual chunk was at vite.config.js:203, not :183. Two files the ledger never mentioned went too: src/hooks/mapbox/index.ts and the src/hooks/useMapbox.ts re-export shim. The lockfile lost 33 packages, not the 10 whose names contain \"mapbox\" — the transitive tree took gl-matrix, supercluster, earcut, pbf and kdbush with it. And AkashicApp.test.tsx had a second mock (vi.mock('./MapboxGlobe')) alongside the one the ledger named.",
+        "2026-07-27 MAP-03 LEFT ITSELF A TRIPWIRE AND IT FIRED CORRECTLY. chrome.test.ts had an assertion that readFileSync'd src/index.css and regex-matched `.public-chrome .mapboxgl-ctrl-bottom-left`, with a failure message reading \"if MAP-05 removed it, delete this assertion\". It went red the instant the CSS rule was deleted, which is exactly what a cross-file coupling should do. The 80 px band is still asserted, now against attributionPadding() rather than against the stylesheet. That is a deliberate -1 test, and it is why the unit count held at 650 despite three MapSurface tests dying and four being added.",
+        "2026-07-27 THE DANGEROUS ONE, and it is new: a build with no VITE_MAPKIT_TOKEN does not fail, it ships NO MAP LOADER. mapKitToken() inlines to `void 0`, Rollup dead-code-eliminates the loader, and cdn.apple-mapkit.com appears in ZERO files under dist/ — verified independently here, 0 files tokenless against 1 with a token. It is nasty because MAP-02 made the landing globe deliberately tokenless, so the deployed site looks entirely healthy until a visitor opens a journey. deploy-pages.yml now asserts the string is present in the built output. Recorded in CLAUDE.md as a trap.",
+        "2026-07-27 A SNAPSHOT TEST WAS DELETED RATHER THAN MADE TO PASS, and the reasoning is worth keeping. mobile.spec.ts's trek-view visual regression could not be regenerated honestly: the fresh baseline came out a grey rectangle because satellite tiles had not arrived (113 KB against the old 473 KB), and masking the canvas produced a SOLID MAGENTA image that passed twice — the map canvas is `inset: 0`, so its mask box is the whole viewport. A test that passes on a uniformly magenta screenshot asserts nothing, and this repo has shipped two of those already, so it went rather than being kept green. The journey view's rendering is covered by e2e/mapkit-journey.spec.ts, which reads the live map object.",
+        "2026-07-27 QUA-49 IS NOW THE SHIPPED BEHAVIOUR, not a MapKit-only regression, and MAP-05 did not fix it. `.camp-marker { z-index: 20 !important }` was load-bearing on Mapbox (position: absolute, z-index 22, because mapbox-gl adopts options.element and adds its own positioned class) and is inert on MapKit (both elements compute position: static). Deleting Mapbox removed the only surface where a photo stack could NOT hide a camp marker. The rule and its comment survive, rewritten to say so. Also in CLAUDE.md, because the surviving CSS reads like the problem is handled and it is not."
       ]
     },
     {
@@ -2689,6 +2788,278 @@
         "at": "2026-07-27"
       },
       "evidence": "Fonts self-hosted; Google is gone from the product. Bare-word greps (the escaped dots in the JS regex literals had been defeating my earlier greps -- 'fonts\\.googleapis' does not match 'fonts\\\\.googleapis'): vite.config.js 0 references, dist/sw.js 0 references, no <link> to Google in dist/index.html. roboto-latin-variable.woff2 is precached by the service worker. 414 web tests pass, typecheck clean, build ok. THREE THINGS BETTER THAN THE TASK ASSUMED: (1) Playfair Display was requested from Google on every page load and used by NOTHING -- declared in tailwind.config.js as 'display', referenced by no component, absent from every built CSS -- so it was dropped rather than vendored, removing a whole family; (2) upstream returns the SAME woff2 URL for weights 400/600/700, so one 37,520-byte file replaces the expected six, and roboto.css reproduces Google's own three @font-face blocks verbatim with only the url() swapped, so rendering cannot drift; (3) the old Google link requested 300/400/500/700 while the built CSS needs 600 and 700 -- so weight 600 was being synthesised before and is now real. Provenance and the Apache 2.0 licence are committed beside the file: the first licence URL returned a 14-byte '404: Not Found' body, which was discarded rather than committed -- the exact mistake LEG-16 had just found in clouds.png."
+    },
+    {
+      "id": "QUA-40",
+      "effort": 0.4,
+      "priority": 16,
+      "deps": [],
+      "title": "E2E reaches live CloudKit, and shares its config with the live site",
+      "done_when": "The E2E Tests workflow is green on main, and it stays green with no network access to Apple.",
+      "why": "MEASURED 2026-07-27, and the mechanism is not the one this task first claimed -- see the correction note below.\nE2E Tests was GREEN on main on 2026-07-25 (c864176) and has failed on every run since 2026-07-27 07:33. The repository variables VITE_CLOUDKIT_ENV and VITE_CLOUDKIT_API_TOKEN were set to production at 06:36 that morning, 57 minutes before the first red run, and no commit in between touched the CloudKit fetch path.\nThe coupling is the finding: e2e.yml:54-55 reads the SAME TWO REPOSITORY VARIABLES the production deploy reads. So pointing the live site at CloudKit production (SHIP-10A) simultaneously pointed the e2e suite at it, and there is no way to configure one without the other.\nWhy that breaks: the production token is origin-restricted to https://akashic.no, and a CI runner serves the app from http://localhost:5173. Measured directly against the CloudKit REST endpoint with the production token -- Origin https://akashic.no => 200, Origin http://localhost:5173 => 401, no Origin header => 401. So the suite gets 401 and journey-data.spec.ts, which asserts zero cloudkit console errors, fails.\nTHIS ALSO KILLS THE SHORTCUT. Publishing a journey into production (SHIP-10B) would NOT turn the gate green: the 401 happens at authorisation, before any record is considered. Anyone reaching for that fix will spend the time and still be red.\nThe fix is that VITE_E2E_TEST_MODE must keep the suite off the network entirely, as it already does for auth (AuthGuard) and the map (MapboxGlobe). Prefer stubbing at the TRANSPORT boundary -- getPublicDatabase/performQueryAll -- rather than at fetchPublicJourneys, so the real record mapping, asset resolution and deterministic ordering still run in e2e against canned records. Stubbing the higher seam would quietly stop exercising code that publicAdapter.test.ts covers only in isolation.\nAll four specs (app, day-navigation, journey-data, mobile) depend on journey data being present, so the fixture has to be good enough for day navigation and photo viewing, not just a globe with a dot.",
+      "files": [
+        "src/lib/journeys/adapters/cloudkit/publicAdapter.ts",
+        "src/lib/cloudkit.ts",
+        "src/lib/journeys/**",
+        "e2e/**",
+        ".github/workflows/e2e.yml"
+      ],
+      "track": "QUALITY",
+      "status": "DONE",
+      "verify": [
+        "VITE_E2E_TEST_MODE=true CI=true npx playwright test --project=chromium --ignore-snapshots",
+        "npx vitest --run",
+        "npm run typecheck"
+      ],
+      "notes": [
+        "2026-07-27 CORRECTION: the first version of this entry said SHIP-10A `repointed the showcase` and that nothing gates the fetch on VITE_E2E_TEST_MODE. The second half is true; the first was hand-waving that happened to point at the right commit for the wrong reason -- SHIP-10A`s DIFF touched only deploy-pages.yml and docs, and could not have broken e2e. The cause is the shared repository VARIABLES, which are not in any diff. Written from the commit I had open rather than from the run history, which is the same mistake as the three wrong removal conditions in QUA-08.",
+        "The seam is getContainer() in src/lib/cloudkit.ts — ONE `if` at the SDK boundary, returning before loadCloudKit(), so neither the cdn.apple-cloudkit.com script nor readCloudKitEnv() is ever reached. Chosen over guarding fetchPublicJourneys because FIVE separate surfaces reach Apple, not one: public journeys, public photos, canUserComment (which has no signed-out guard and mounts per selected day), AuthGuard's probe, and the two auth listeners. Each fails the zero-console-error assertion on its own, so a per-fetch guard would have been whack-a-mole.",
+        "The fixture is loaded by dynamic import so Rollup can drop it whole, and that is ASSERTED AGAINST THE BUILT ARTIFACT rather than trusted — scripts/assertNoFixtureInBundle.mjs greps dist/ for three independent signals. Same lesson as asserting against the built Info.plist instead of the XcodeGen spec. The first version of that guard could never have fired: its marker was a decorative `const MARKER = ...; void MARKER;` which Rollup inlined and dropped, so it reported ok on a build that plainly contained the fixture. The marker is now the prefix of every CKAsset fileChecksum, i.e. returned data.",
+        "THE SUITE WAS LARGELY FAKE, and fixing the 401 is the smaller half of this task. (1) The camera assertions never checked position: hasPendingAnimations clears on the FIRST LINE of the rAF callback, before fitBounds/flyTo is issued, so verifyCameraPosition read getCenter() ~0 ms into a 2200 ms flight and passed only because its 50 km tolerance exceeded the whole Kilimanjaro massif. Now it polls until the centre holds still and asserts RELATIVELY — the settled camera must be strictly closer to the target day than to the day it came from. Measured 1.70-2.55 km to target vs 7.65-13.98 km to origin, so the tolerance is 5 km, chosen from those numbers. (2) Four tests were named for Mount Kenya's off-route day while selecting Kilimanjaro, whose day 5 is on-route, and asserted only getCurrentDay() === 5 — the off-route branch was never exercised at all. (3) Ten test.skip() escapes meant 8 of day-navigation's 9 tests skipped SILENTLY under the 401. (4) mobile.spec.ts's lightbox body was dead: getByRole('tab') matches nothing in src/, so its isVisible() guard was permanently false. A green suite was reporting on work it was not doing.",
+        "Config coupling closed: VITE_CLOUDKIT_ENV and VITE_CLOUDKIT_API_TOKEN are deleted from e2e.yml, so no repository variable reaches that gate. deploy-pages.yml now refuses to deploy if VITE_E2E_TEST_MODE is set, and both deploy-pages.yml and test.yml run the dist guard. One design-doc claim was corrected rather than propagated: a repository VARIABLE named VITE_E2E_TEST_MODE would not reach the production build, because repo vars only exist via an explicit ${{ vars.X }} reference. The real leak paths are scripts/build.js forwarding all of process.env into vite build, and Vite auto-loading .env/.env.local.",
+        "Accurate scope of the claim: the suite is CloudKit-independent and deterministic, NOT offline. Measured over a full page load, the complete set of external hosts it contacts is exactly [\"api.mapbox.com\", \"events.mapbox.com\"] — Mapbox stays a live dependency because every spec waits for a real canvas and mapReady, which needs the style, glyphs and terrain DEM. MAP-05 removes that.",
+        "PROCESS NOTE: six stale snapshot PNGs deleted as part of this work were swept into commit 3f320f9, a ledger-only commit made by the concurrent session, because `git rm` stages itself immediately — the exact hazard CLAUDE.md documents, experienced from the other side. The deletions are correct; only their commit message is wrong about them. Not rewritten: moving six binary deletions between two commits is not worth the risk, and this note is the durable record."
+      ],
+      "evidence": "Verified in the merged tree, not taken from the agent report: 473 unit tests (was 462), typecheck clean, lint 25 warnings 0 errors, build 48 precache entries, VITE_E2E_TEST_MODE=true CI=true npx playwright test --project=chromium => 18 passed / 7 skipped / 0 flaky in 1.3m. The dist guard was checked in BOTH directions: exit 0 on a clean build, exit 1 on a VITE_E2E_TEST_MODE=true build with all three fixture signals matched in dist/assets/e2eCloudKitContainer-*.js."
+    },
+    {
+      "id": "QUA-41",
+      "effort": 0.2,
+      "priority": 17,
+      "deps": [
+        "QUA-40"
+      ],
+      "owner": true,
+      "title": "Replace the CloudKit canary that QUA-40 removed — check the deployed apex, not localhost",
+      "done_when": "A documented owner check exists that fetches the deployed site's CloudKit path with a real Origin header, and it has been run once against akashic.no.",
+      "why": "QUA-40 took every automated test off the real CloudKit container, for good reasons. But be honest\nabout what that removed: nothing automated now touches the production container, so a token rotated\ninto the wrong environment, or the trailing-slash Allowed-Origins failure, would reach akashic.no with\nevery gate green.\n\nThat canary was never usable where it was, which is why removing it was still right. It ran from a CI\nrunner on localhost, and the production token is origin-restricted to the apex -- measured, Origin\nhttps://akashic.no is 200 and http://localhost:5173 is 401 -- so it could only ever report red. A gate\nthat cannot pass is not a canary; it is the \"known red\" state CLAUDE.md warns trains everyone to\nignore CI.\n\nSo the replacement has to run from somewhere that can send the real Origin. That is either the owner\nwith curl, or a browser. It cannot be a CI runner. The check is a POST to\napi.apple-cloudkit.com/database/1/iCloud.no.akashic/production/public/records/query with\nrecordType PublicJourney and an explicit `Origin: https://akashic.no` header; 200 with a records array\nmeans the deployed showcase can read its own data.\n\nWorth pairing with SHIP-10B, which needs the same thing looked at from the browser side.",
+      "files": [],
+      "track": "QUALITY",
+      "status": "TODO",
+      "verify": [
+        "See the why: an owner-run curl with an explicit Origin header against the production container"
+      ]
+    },
+    {
+      "id": "QUA-42",
+      "effort": 0.3,
+      "priority": 46,
+      "deps": [
+        "QUA-40"
+      ],
+      "title": "e2e/ is checked by neither tsc nor eslint, so the specs are verified only by running",
+      "done_when": "A type error or lint error in e2e/ fails a gate without the suite having to run.",
+      "why": "Surfaced by QUA-40, which rewrote all four specs and 700-odd lines of helper. tsconfig has\ninclude: [\"src\"] and eslint.config.js has globalIgnores(['e2e']), so nothing static looks at e2e/ at\nall. The only verification a spec gets is being executed.\n\nThat is a worse gap than it sounds, because of what QUA-40 found in there: a helper file imported by\nno spec, a lightbox assertion whose selector matched nothing in src/ so its guard was permanently\nfalse, and ten test.skip() escapes that let 8 of 9 tests skip silently. Every one of those is the kind\nof thing a type check or an unused-symbol lint rule surfaces in a second, and none of them could fail\na run -- they made the run pass while doing less.\n\nThe e2e suite is also the slowest gate at ~1.3 minutes, so pushing spec errors into a static check is\nthe cheap end of the trade. Note the specs use Playwright globals and a different tsconfig lib set\nthan src/, which is presumably why they were excluded in the first place -- expect to need a second\ntsconfig rather than widening include.",
+      "files": [
+        "tsconfig*.json",
+        "eslint.config.js",
+        "e2e/**",
+        "package.json"
+      ],
+      "track": "QUALITY",
+      "status": "TODO",
+      "verify": [
+        "npm run typecheck",
+        "npm run lint",
+        "VITE_E2E_TEST_MODE=true CI=true npx playwright test --project=chromium --ignore-snapshots"
+      ]
+    },
+    {
+      "id": "QUA-45",
+      "effort": 0.4,
+      "priority": 15,
+      "deps": [],
+      "title": "The Showcase sheet says a journey is published when the public mirror is empty",
+      "done_when": "The publish state shown to the user reflects the mirror for the CURRENT CloudKit environment, or says it cannot tell.",
+      "why": "MEASURED 2026-07-27, and it is the worst class of bug in a sharing feature: the app told the truth as\nit knew it and the user would have believed something false.\n\nOpening Showcase on the SAMPLE Kilimanjaro read \"This journey is published to the world-readable\nshowcase. Its route, day notes and photo thumbnails can be viewed on the web without signing in.\" At\nthat exact moment a REST query against the PRODUCTION public database returned ZERO PublicJourney\nrecords. Verified twice, minutes apart.\n\nThe cause is that publish state is a flag on the private-database record, and the flag is ENVIRONMENT\nBLIND. The journey had been published while the app pointed at Development; the flag synced down; the\napp now points at Production, where nothing was ever mirrored, and still reports \"published\".\n\nWhy it matters commercially: a customer reading that sentence has no reason to press \"Update\nshowcase\", so their journey is silently absent from akashic.no while the app assures them it is live.\nAnd the same blindness runs the other way — a journey published from a Production build would read as\n\"published\" in a Development build whose mirror is empty.\n\nThe honest fix is not to trust the flag: either query the mirror for the current environment before\nasserting, or scope the flag per environment. If neither is cheap, the sheet must say what it actually\nknows (\"marked as published — not verified against the live showcase\") rather than making a claim\nabout the web it has not checked.",
+      "files": [
+        "apple/Akashic/Views/Showcase/**",
+        "apple/Akashic/Services/PublicMirrorPublisher.swift"
+      ],
+      "track": "QUALITY",
+      "status": "TODO",
+      "verify": [
+        "cd apple && xcodegen generate && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,name=iPhone 17 Pro\" CODE_SIGNING_ALLOWED=NO test -only-testing:AkashicTests"
+      ]
+    },
+    {
+      "id": "QUA-46",
+      "effort": 0.2,
+      "priority": 20,
+      "deps": [],
+      "title": "The showcase page shows two different day counts for the same journey",
+      "done_when": "One journey reports one duration, and it matches the app.",
+      "why": "MEASURED on the live site 2026-07-27 with a real published journey. On\nhttps://akashic.no/?journey=kilimanjaro the header pill reads \"8 days\" while the Duration stat below it\nreads \"7 days\" — two elements, same page, same journey. The app says 7 in both its list card and its\ndetail view, so the header pill is the wrong one.\n\nRead from the DOM to remove any doubt: a SPAN whose parent text is \"8 daysKilimanjaroStart\", and a P\nwhose parent text is \"Duration7 days\".\n\nLikely an inclusive/exclusive slip on the date range or a `days.length + 1`, but do not guess — the\npublished record carries totalDays, so establish which value each surface reads before changing either.\nWorth checking the same pair on the story view and on the og: card, which derive their own copy.",
+      "files": [
+        "src/components/journey/**",
+        "src/lib/journeys/transforms.ts"
+      ],
+      "track": "QUALITY",
+      "status": "DONE",
+      "verify": [
+        "npx vitest --run",
+        "npm run typecheck"
+      ],
+      "evidence": "Not an off-by-one — the two surfaces read two different QUANTITIES. The header pill's totalDays came from `trekData?.camps.length` (a WAYPOINT count) while Duration reads the record's stated duration. Kilimanjaro genuinely has 8 waypoints across 7 days: day 6 carries both Uhuru Peak (Summit) and Mweka Camp. Confirmed against four independent sources — apple/Fixtures/recovered/kilimanjaro.json (stats.duration 7, dayNumbers [1,2,3,4,5,6,6,7]); the pre-migration src/data/kilimanjaro.json recovered from git history; the iOS render sites (JourneyListView.swift:172 and JourneyDetailView.swift:380 both read stats.duration, not camps.count); and the live site's Duration stat having rendered 7 straight from the record. One new journeyDayCount() helper now serves every surface, and src/components/journey/dayCountWiring.test.tsx mounts the real AkashicApp and asserts ONE distinct day figure — reverting to camps.length fails it with exactly the live symptom, [\"8 days\",\"7 days\"].",
+      "notes": [
+        "2026-07-27 A SECOND DEFECT fell out of the same line: totalDays also bounds the next-day arrow and generates the day dots, so with 8 it rendered a day-8 dot whose camps.find(c => c.dayNumber === 8) matched nothing — a dead control, live on the site.",
+        "2026-07-27 Why no gate caught it: both e2e fixtures have as many waypoints as days (alpine 5/5, coastal 3/3), so the two quantities coincide there and the bug is invisible to the browser gate. The unit test therefore asserts the FIXTURE's shape too — 8 camps against duration 7, two of them on day 6 — so a fixture whose numbers happen to agree can never make this pass silently again."
+      ]
+    },
+    {
+      "id": "QUA-47",
+      "effort": 0.3,
+      "priority": 21,
+      "deps": [],
+      "title": "The journey view frames past the imagery resolution and shows a blurred smear",
+      "done_when": "Opening a journey shows legible terrain at the arrival framing, for a short route as well as a long one.",
+      "why": "MEASURED on the live site 2026-07-27. Opening the published Kilimanjaro flew the camera to a framing\nwhere the satellite imagery is a featureless brown blur — zoomed past the deepest tile Mapbox has for\nthat ground, with the seven day markers clustered in the middle of it.\n\nThe cause is framing from route bounds with no floor on ground resolution: this sample route spans a\nfew hundred metres, so fitBounds asks for a zoom no imagery supports. A long route would not show it,\nwhich is why nobody has seen it — the demo fixtures are the short ones.\n\nNote this is the SAME class of problem as the finding MAP-03 must respect, from opposite ends: there,\nApple's Khumbu mosaic is cloudy at ~20 m/px so a fixed WIDE framing is wrong; here a route-bounds\nframing goes too CLOSE. Both say the arrival camera needs clamping at both ends, in metres per pixel\nrather than in zoom levels. See scripts/mapkit/imagery-compare/FINDINGS.md for the measured resolutions.\n\nFix in the vendor-neutral layer if possible, so MAP-03's MapKit surface inherits the clamp rather than\nreimplementing it.",
+      "files": [
+        "src/lib/map/**",
+        "src/hooks/mapbox/useMapbox.ts"
+      ],
+      "track": "QUALITY",
+      "status": "TODO",
+      "verify": [
+        "npx vitest --run",
+        "VITE_E2E_TEST_MODE=true CI=true npx playwright test --project=chromium --ignore-snapshots"
+      ]
+    },
+    {
+      "id": "QUA-48",
+      "effort": 0.3,
+      "priority": 22,
+      "deps": [],
+      "title": "A SAMPLE journey seeded on top of a synced library, duplicating the real one",
+      "done_when": "A fresh install signed into an account that already has journeys does not seed a sample.",
+      "why": "MEASURED 2026-07-27 on a fresh install signed into the owner's real account. The library ended up with\nFOUR journeys, of which two are Kilimanjaro: one badged SAMPLE dated Sep 29 - Oct 9 2023, and one\nunbadged dated Sep 30 - Oct 9 2023. Identical distance (70 km), ascent (4 800 m) and summit (Uhuru Peak,\n5 895 m). The sample is a near-duplicate of the family's real trek, one day offset.\n\nConfig.swift's own comment claims this trap is closed: \"This closes the fresh-install trap: before,\ncloudKitEnabled was a hard false, so EVERY build resolved .fixtures and seeded demo journeys\". That\nfixed the MODE resolution. It did not stop a .cloudKit-mode fresh install from seeding its single demo\njourney before sync arrives — which is a race, not a mode error, and the visible result is a customer\nwhose first sync leaves a fake duplicate of their own trip sitting in their library.\n\nThe SAMPLE badge is doing real work here and should stay; the fix is not to seed at all when the\naccount has journeys, which means deferring the decision until the first sync settles rather than\ntaking it at launch.",
+      "files": [
+        "apple/Akashic/App/JourneyStore.swift",
+        "apple/Akashic/App/Config.swift"
+      ],
+      "track": "QUALITY",
+      "status": "TODO",
+      "verify": [
+        "cd apple && xcodegen generate && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,name=iPhone 17 Pro\" CODE_SIGNING_ALLOWED=NO test -only-testing:AkashicTests"
+      ]
+    },
+    {
+      "id": "QUA-49",
+      "effort": 0.3,
+      "priority": 23,
+      "deps": [
+        "MAP-03"
+      ],
+      "title": "On MapKit a photo stack hides a camp marker and eats its clicks — a regression versus Mapbox",
+      "done_when": "A camp marker is clickable on the MapKit surface even with a photo stack over it, or the divergence from Mapbox is an accepted, recorded product decision.",
+      "why": "MEASURED during MAP-03, and the interesting part is that the first write-up got the comparison wrong in\na way that would have buried the finding.\n\nOn the MapKit surface, with a photo stack over the day-3 camp, `elementFromPoint` at the camp centre\nreturns `.photo-stack-main` and Playwright reports the photo subtree intercepting pointer events on a\ncamp marker that is visible and stable. Three levers were tried and none flipped it: `position:\nrelative` plus explicit z-index on both (the elements compute `position: static`, so\nsrc/index.css's `z-index: 20 !important` is inert there), `DisplayPriority.Required` vs `.High`, and\nmoving the camp element to the end of `.mk-annotation-container`.\n\nThe original comment concluded this \"affects Mapbox equally\" and was therefore a pre-existing product\ndecision rather than a port regression. That is false, and it was measured false: on Mapbox\n`.camp-marker` computes `position: absolute` with `z-index: 22` and NO wrapper, because mapbox-gl adopts\n`options.element` and adds its own `position: absolute` class; `.photo-thumbnail-marker` computes\n`z-index: 5`. So camps DO paint above photo stacks on Mapbox and that CSS rule is what puts them there.\n\nWhich makes this a behaviour regression the MapKit surface introduces, and it must be either fixed or\naccepted explicitly before MAP-05 deletes the surface that does not have it. The comments in\nsrc/index.css and src/lib/map/mapkit/annotations.ts are corrected; this task is the open question.",
+      "files": [
+        "src/lib/map/mapkit/annotations.ts",
+        "src/index.css"
+      ],
+      "track": "QUALITY",
+      "status": "TODO",
+      "verify": [
+        "npx vitest --run",
+        "VITE_E2E_TEST_MODE=true CI=true npx playwright test --project=chromium --ignore-snapshots"
+      ]
+    },
+    {
+      "id": "QUA-50",
+      "effort": 0.3,
+      "priority": 24,
+      "deps": [
+        "MAP-03"
+      ],
+      "title": "No test stops the MapKit map being destroyed and rebuilt on a prop change",
+      "done_when": "A test fails if the MapKit map is constructed more than once across a journey switch and a sign-in.",
+      "why": "The defect MAP-03's adversarial pass found — an unstable `chromeState` re-running the init effect, whose\ncleanup calls `map.destroy()` — is fixed, and nothing prevents its return. That combination is the\ndangerous one: the rebuild SELF-HEALS, so every existing assertion still passes while the surface eats a\nfull teardown and a satellite-tile reload (915-1101 ms) on each journey switch.\n\nThis is the same shape as the defects catalogued in CLAUDE.md — a UI test whose selector matched nothing\nso its guard was permanently false; a camera assertion that read position before the animation was\nissued; a bundle guard whose marker Rollup inlined away. All invisible, all green.\n\nThe test the fix deserves already exists in prototype: the verifier proved the defect in jsdom with a\nfake mapkit namespace, counting constructions and destroys across two selections (1 -> 2 -> 3, two\ndestroys) and across a bare signedIn flip (1 -> 2). Turn that into a committed test. Assert the count,\nnot the absence of an error — an error is not what this produces.",
+      "files": [
+        "src/lib/map/mapkit/useMapKitJourney.test.ts",
+        "src/lib/map/mapkit/**"
+      ],
+      "track": "QUALITY",
+      "status": "DONE",
+      "verify": [
+        "npx vitest --run src/lib/map/mapkit/"
+      ],
+      "evidence": "src/lib/map/mapkit/useMapKitJourney.test.ts — 4 tests counting mapkit.Map constructions and destroy() calls against a counting fake namespace. Proven able to fail: reintroducing the unstable chromeState dependency takes it from 4 passed to 2 failed with the exact timeline {built 1, destroyed 0} -> {2,1} -> {3,2} across two journey selections, and {1,0} -> {2,1} on a bare signedIn flip. Independently reproduced by the workflow's own adversarial agent.",
+      "notes": [
+        "2026-07-27 The test asserts COUNTS, not the absence of an error, because the defect produces no error: measured in the red run, the newest map already carried all five route overlays and its annotations and `ready` was back to true. Every softer assertion available passes while the map has been thrown away and rebuilt — which is the whole reason this task existed."
+      ]
+    },
+    {
+      "id": "QUA-51",
+      "effort": 0.3,
+      "priority": 47,
+      "deps": [
+        "MAP-03"
+      ],
+      "title": "MAP-03 left four comments describing behaviour it does not have, and four dead symbols",
+      "done_when": "Every comment listed below describes what the code does, and the dead symbols are gone or used.",
+      "why": "Found by MAP-03's adversarial pass. Recorded rather than swept in, because a comment that confidently\ndescribes the opposite of the code is how this project has repeatedly lost time — the rebuild defect in\nMAP-03 itself had a comment asserting the map was built once.\n\nDRIFT:\n- camera.ts regionForBounds docstring claims it mirrors fitBounds \"including the asymmetric right\n  padding\". The change deliberately does the opposite, and chrome.test.ts asserts symmetry on desktop.\n- camera.ts claims \"for the showcase the attribution padding is bottom-only, so inset width equals\n  container width\". False in the ordinary desktop journey view, where attributionPadding returns\n  left: 364 whenever a journey is selected. The arithmetic is right; the comment invites simplifying it\n  away.\n- e2e/utils/test-helpers.ts still says the testHelpers contract is \"registered by MapboxGlobe.tsx:268\".\n  MAP-03 moved it to MapSurface.tsx, and three files point at test-helpers.ts as the counterpart with\n  \"Change both or neither\".\n\nDEAD:\n- camera.ts boundsOfRegion (its own doc says \"Only for tests\") and regionCenterAsLatLng — referenced\n  nowhere in src/, e2e/ or scripts/, including tests.\n- coords.ts toLalngs/toLatLngs — used only by its own test.\n- annotations.ts `entry.camp = camp` is written on every diff and never read. This one is worse than\n  dead: it LOOKS like it refreshes the click handler, and the handler closes over the creation-time\n  camp, so a camp whose data changed dispatches the stale object. Either wire it up or delete it, but do\n  not leave something that reads as a fix and is not one.\n\nAlso: `isFirstFraming` is true on EVERY framing with no day selected, not just the first, so deselecting\na day snaps the camera instead of animating. Rename it or gate it.",
+      "files": [
+        "src/lib/map/mapkit/**",
+        "e2e/utils/test-helpers.ts"
+      ],
+      "track": "QUALITY",
+      "status": "DONE",
+      "verify": [
+        "npx vitest --run",
+        "npm run typecheck",
+        "npm run lint"
+      ],
+      "evidence": "Four drift comments corrected in place — each retains the old wrong claim and says why it was wrong rather than deleting the question — a FIFTH found while fixing them, two dead symbols removed with a tombstone naming what went, and `entry.camp` wired up rather than deleted. src/lib/map/mapkit/annotations.test.ts carries the negative control: reverting the handler to close over the creation-time camp fails two tests on the exact stale values (expected 995 to be 1200).",
+      "notes": [
+        "2026-07-27 `isFirstFraming` was deliberately LEFT by the QUA-51 agent because useMapKitJourney.ts was under concurrent edit by the QUA-50 agent, whose whole method was to reintroduce and revert a defect in that same file — an edit would have broken their negative control. Correct call under the working agreement, and worth recording as the right instinct rather than as a gap.",
+        "2026-07-27 Done afterwards by the dispatching session: renamed to `isFirstFramingOfThisJourney` and keyed on a new framedTrekIdRef rather than on `!selectedCamp`. Both halves of the old condition were wrong for the purpose — overlayTrekIdRef is non-null from the first framing onward, and \"no day selected\" is the DESELECT case as much as the arrival case, which is why deselecting a day snapped the camera instead of animating back to the whole route. The selectedCamp term is gone entirely: arriving on a deep link with a day already chosen is still an arrival and should still be instant. Reset in teardown alongside the overlays, so the framing after a rebuild is instant again."
+      ]
+    },
+    {
+      "id": "QUA-43",
+      "effort": 0.2,
+      "priority": 18,
+      "deps": [],
+      "title": "The live showcase told first-time visitors to click a marker that does not exist",
+      "done_when": "The globe hint appears only when there is at least one marker to click, and it is not overlapped by the \"Made with Akashic\" chip at any viewport width.",
+      "why": "Found on the LIVE production site 2026-07-27, minutes after HTTPS came up. Two defects in the same\ncorner, and the first is the one that mattered.\n\n1. THE HINT WAS NOT GATED ON THERE BEING ANY MARKERS. AkashicApp.tsx:313 rendered it on\n   `!selectedTrek && view === 'globe'` alone. The production mirror held zero published journeys, so\n   akashic.no showed an empty rotating globe captioned \"CLICK A MARKER TO EXPLORE\" — the first thing\n   every visitor to a paid product saw, instructing them to do something impossible.\n\n2. IT WAS OVERLAPPED BY THE \"MADE WITH AKASHIC\" CHIP on desktop. Measured in the browser at\n   1280x720: a bare <div> at right: 24, bottom: 24 with no z-index, rect (1080, 681, 176x15);\n   `document.elementFromPoint` at its right edge returned the chip's <a>. The line read as \"CLICK\".\n\nThe gate now lives in the component, reading useJourneys itself, because whether there is anything to\nclick is the component's own business — the call site only ever knew navigation state. Centred on\nevery viewport, which also collapsed a mobile/desktop divergence that existed for no reason.",
+      "files": [
+        "src/components/home/GlobeHint.tsx"
+      ],
+      "track": "QUALITY",
+      "status": "DONE",
+      "evidence": "Fixed in b6764da. src/components/home/GlobeHint.test.tsx — 7 tests, covering the zero-journey case, the loading case, both copy variants, the centring on both viewports and pointer-events. The original component could not have been tested at all: it took only `isMobile` and always rendered.",
+      "verify": [
+        "npx vitest --run src/components/home/GlobeHint.test.tsx"
+      ],
+      "notes": [
+        "2026-07-27 The gate deliberately does NOT distinguish \"nothing published\" from \"the CloudKit fetch failed\" — the adapter returns an empty result on error, so silence hides both. Surfacing a failed load is a separate concern and does not belong in a hint; recorded in the component."
+      ]
+    },
+    {
+      "id": "QUA-44",
+      "effort": 0.2,
+      "priority": 19,
+      "deps": [],
+      "title": "Debug console.log ships to production and runs on every visit",
+      "done_when": "A production build emits no debug console output on load, and the mechanism that ensures it is a build setting rather than a promise to remember.",
+      "why": "MEASURED on the LIVE site 2026-07-27: opening https://akashic.no prints sixteen lines of\n\"[MapboxGlobe camera effect] Triggered:\", \"Map not ready\" and \"Calling flyToGlobe\" before the globe\nhas settled. Four console.log calls produce it, at MapboxGlobe.tsx:298, 306, 311 and 314.\nvite.config.js configures no console stripping.\n\nTwo reasons this is a task and not a quick delete. It is a paid product whose console is visible to\nanyone who opens the inspector, and camera-state chatter reads as an unfinished build. And deleting\nfour lines fixes today only — the mechanism has to be a build setting so the fifth one somebody adds\nwhile debugging cannot ship. Keep console.warn/error, which carry real diagnostics: the CloudKit\nadapter's error path is how QUA-40 was diagnosed at all.\n\nONE MEASUREMENT TRAP, recorded because it nearly produced the opposite conclusion: grepping the\nserved assets/index-*.js for \"console.log\" returns ZERO, which reads as \"already stripped\". It is\nnot — the code is in a different chunk and the logs demonstrably execute. A grep of one bundle file\nproves nothing about chunked output.",
+      "files": [
+        "vite.config.js",
+        "src/components/MapboxGlobe.tsx"
+      ],
+      "track": "QUALITY",
+      "status": "DONE",
+      "verify": [
+        "npm run build",
+        "grep -rl \"console\\.log\" dist/assets/ || echo \"none\"",
+        "npx vitest --run"
+      ],
+      "evidence": "Fixed as a BUILD PROPERTY, not four deletions: vite.config.js marks console.log/debug/info/trace/dir/table as esbuild `pure` so Rollup tree-shakes them, and scripts/assertNoFixtureInBundle.mjs gained a [console-guard] that greps EVERY file under dist/. Verified in both directions: with the mechanism on, a live console.log in an effect body reaches 0 dist files and the guard exits 0; with the `pure` list emptied, the same source puts it in 1 dist file and the guard exits 1 with the FAIL diagnosis. 26 console.warn and 40 console.error survive.",
+      "notes": [
+        "2026-07-27 The mechanism is `pure`, NOT `drop`, and not the minifier. esbuild does not delete the call, it annotates it /* @__PURE__ */ — measured, the dev server still serves the call verbatim so `npm run dev` logs normally — and Rollup tree-shaking is what removes it. `vite build --minify false` also emits it nowhere. So what breaks this is losing `pure` or disabling treeshake, not a change to build.minify.",
+        "2026-07-27 My own first two negative controls were both worthless and it is worth saying why, because the shape recurs: the first neutralised `drop` (the wrong option, so the mechanism was never off), and the second used a probe in an unreferenced function that Rollup removed as dead code regardless. Only the third — a live call inside an effect body, with `pure` emptied — actually put the mechanism under test. A negative control that fails to reproduce is evidence about the control first, not about the code."
+      ]
     }
   ]
 }

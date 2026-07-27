@@ -5,23 +5,23 @@
 
 # Akashic — work ledger
 
-116 tasks · **26 open** (5 agent-doable, 5.9 dev-days · 21 owner-only, 10 dev-days) · 90 done · 0 dropped
+130 tasks · **27 open** (7 agent-doable, 2.2 dev-days · 20 owner-only, 8.1 dev-days) · 103 done · 0 dropped
 
 > **`dev-days` are a human-developer estimate, not agent time.** They came from the review
 > that produced these tasks and they are the right unit for deciding whether something is
 > worth doing — they are the wrong unit for predicting how long an agent will take, and
 > summing them as "work remaining" overstates it substantially.
 >
-> Measured so far: **88 agent tasks estimated at 63.3 dev-days**,
+> Measured so far: **98 agent tasks estimated at 70.7 dev-days**,
 > closed in roughly one working afternoon across up to three parallel tracks.
 >
 > But that compression is **unmeasured for the large items**: of the tasks closed so far,
-> 7 were 2 dev-days or more. 5 of the
-> 5.9 remaining dev-days sit in 2 such tasks —
+> 9 were 2 dev-days or more. 0 of the
+> 2.2 remaining dev-days sit in 0 such tasks —
 > localisation, Swift 6 strict concurrency, a UI test target, the PDF book. Those involve
 > design judgement and broad-blast-radius refactors rather than localised edits, so do not
 > assume the same ratio holds. The cheap band is nearly exhausted:
-> 3 tasks at 0.5 dev-days or less remain.
+> 7 tasks at 0.5 dev-days or less remain.
 
 Read [CLAUDE.md](CLAUDE.md) before touching anything. To find work:
 
@@ -33,13 +33,13 @@ node scripts/workplan.mjs next
 
 | Task | Agent | Branch | Stopped at |
 |---|---|---|---|
-| `LEG-09` Execute the GitHub Pages + DNS cutover (T4.2, T4.3) | opus5 | `claude/remote-control-project-review-9462c1` | — |
+| `MAP-04A` Mint the MapKit token in the build, and fail the build before it lapses | opus5 | `claude/remote-control-project-review-9462c1` | minter + health guard done and locally proven; the deploy-step wiring wants MAP-03 landed first |
 
 ## LEGACY
 
 > Retire Supabase, Cloudflare and R2. Repo-side removal can happen now; the infrastructure deletions are gated on the archive being duplicated and on the Pages cutover. LEG-01 is independent of every gate and should happen today.
 
-9 open of 18 · 3 d remaining
+8 open of 19 · 2.4 d remaining
 
 | | Task | Days | Who | Deps | Finish line |
 |---|---|---|---|---|---|
@@ -51,9 +51,10 @@ node scripts/workplan.mjs next
 | `x` | `LEG-06` **Delete the unrunnable legacy scripts and the AWS SDK dependency** | 0.5 | agent | — | npm run build and vitest pass with the dead scripts and @aws-sdk/client-s3 gone. |
 | `x` | `LEG-07` **Gate every native-only web write behind one guard** | 1 | agent | — | No web UI offers a write that silently no-ops; each either disappears or shows a native-only notice. |
 | `x` | `LEG-08` **Remove the hardcoded /Users/cher archive path from shipping code** | 0.25 | agent | — | No absolute developer path appears in any non-test Swift file. |
-| `~` | `LEG-09` **Execute the GitHub Pages + DNS cutover (T4.2, T4.3)** | 0.5 | owner | `SHIP-10A` | https://akashic.no serves the production build from GitHub Pages with a valid certificate for the domain, and privacy/terms/support/AASA resolve over HTTPS. |
-| ` ` | `LEG-10` **Delete deploy.yml, then revoke the Cloudflare and Supabase secrets** | 0.25 | agent | `LEG-09` | No workflow references Cloudflare or Supabase, the four secrets are revoked, and CI is green without them. |
-| ` ` | `LEG-11A` **Delete the Cloudflare Pages project and the DNS zone** | 0.25 | owner | `LEG-09` `LEG-10` | The akashic Pages project and the Cloudflare DNS zone are gone from the dashboard, and akashic.no still resolves via GoDaddy to GitHub Pages. |
+| `x` | `LEG-09` **Execute the GitHub Pages + DNS cutover (T4.2, T4.3)** | 0.5 | owner | `SHIP-10A` | https://akashic.no serves the production build from GitHub Pages with a valid certificate for the domain, and privacy/terms/support/AASA resolve over HTTPS. |
+| `x` | `LEG-10A` **Take Cloudflare and Supabase out of the repo** | 0.25 | agent | `LEG-09` | No workflow references Cloudflare or Supabase, and CI is green without their secrets. |
+| ` ` | `LEG-10B` **Delete the four dead repository secrets, then revoke the tokens themselves** | 0.2 | owner | `LEG-10A` | gh secret list shows neither CLOUDFLARE_* nor VITE_SUPABASE_*, and both tokens are revoked at Cloudflare and Supabase. |
+| ` ` | `LEG-11A` **Delete the Cloudflare Pages project and the DNS zone** | 0.25 | owner | `LEG-09` `LEG-10A` | The akashic Pages project and the Cloudflare DNS zone are gone from the dashboard, and akashic.no still resolves via GoDaddy to GitHub Pages. |
 | ` ` | `LEG-11B` **Delete the R2 bucket, Supabase project and Google OAuth config** | 0.25 | owner | `LEG-03` `LEG-04` | All three are gone from their dashboards AND the archive has been verified on a second physical medium. |
 | `x` | `LEG-12` **Delete workers/ from the repo** | 0.25 | agent | `LEG-01` `LEG-05` | workers/ is gone and no workflow or test references it. |
 | ` ` | `LEG-13` **Delete supabase/** | 0.1 | agent | `LEG-04` | supabase/ is gone from the repo. |
@@ -94,7 +95,7 @@ node scripts/workplan.mjs next
 
 > Hard requirements for a paid v1.0. Most of the remaining calendar time lives here, in items only the owner can do.
 
-10 open of 20 · 4.8 d remaining
+9 open of 20 · 4.5 d remaining
 
 | | Task | Days | Who | Deps | Finish line |
 |---|---|---|---|---|---|
@@ -108,7 +109,7 @@ node scripts/workplan.mjs next
 | `x` | `SHIP-08` **Write the public-showcase takedown procedure** | 0.5 | agent | `DIFF-02` | A documented, tested procedure removes a reported public journey, and the privacy page says how to ask. |
 | `x` | `SHIP-09` **Compile the developer workshop out of Release** | 0.25 | agent | — | No developer surface is reachable in a Release build, and the seven-tap gesture is gone. |
 | `x` | `SHIP-10A` **Point the deployed showcase at the CloudKit PRODUCTION environment** | 0.25 | owner | — | The deployed bundle carries environment:"production" and a PublicJourney query returns without an auth error. |
-| ` ` | `SHIP-10B` **Publish one journey into the production mirror and see it signed out** | 0.25 | owner | `SHIP-10A` `SHIP-15` | A published journey is visible on akashic.no while signed out. |
+| `x` | `SHIP-10B` **Publish one journey into the production mirror and see it signed out** | 0.25 | owner | `SHIP-10A` | A published journey is visible on akashic.no while signed out. |
 | ` ` | `SHIP-11` **Trademark and name clearance for 'Akashic'** | 0.5 | owner | — | A written go/no-go exists from Patentstyret and EUIPO in the software class. |
 | ` ` | `SHIP-12` **Paid Applications agreement, banking and tax forms** | 0.5 | owner | — | App Store Connect reports the Paid Applications agreement as active. |
 | ` ` | `SHIP-13` **Create the IAP, join Small Business Program, declare EU trader status** | 0.5 | owner | `DOC-08` `SHIP-12` | no.akashic.app.complete exists at kr 149 with Family Sharing on, and trader status is submitted. |
@@ -146,7 +147,7 @@ node scripts/workplan.mjs next
 
 > Tests, types, CI, localisation, accessibility. Localisation and accessibility are in v1.0 by decision.
 
-6 open of 45 · 7.6 d remaining
+9 open of 58 · 2.9 d remaining
 
 | | Task | Days | Who | Deps | Finish line |
 |---|---|---|---|---|---|
@@ -191,10 +192,23 @@ node scripts/workplan.mjs next
 | `x` | `QUA-39` **Bump the GitHub Actions that still target Node 20** | 0.1 | agent | — | Every action the workflows reference DIRECTLY targets Node 24. The residual annotation from inside upload-pages-artifact is upstream's and is out of scope -- see why. |
 | `x` | `ARCH-01` **DECISION: one map layer, Apple MapKit, swapped across both surfaces together** | 0 | agent | — | Recorded in ARCHITECTURE.md. |
 | `x` | `MAP-01` **A map interface narrow enough that the next vendor swap is one adapter** | 1 | agent | — | Web components speak only to a vendor-neutral map interface; no Mapbox or MapKit type appears outside its adapter. |
-| ` ` | `MAP-02` **Draw the landing globe ourselves — MapKit JS provably cannot** | 2 | agent | `MAP-01` | The landing view is a rotating sphere with a pin per published journey, using no map service and no token. |
-| ` ` | `MAP-03` **MapKit JS behind the adapter for the journey view** | 3 | agent | `MAP-01` | Selecting a journey shows its route and days on Apple satellite imagery, with Apple's mandatory attribution correctly placed. |
-| ` ` | `MAP-04` **MapKit JS token: mint it, restrict it, and make its expiry loud** | 1.5 | owner | `MAP-03` | The deployed page authenticates to MapKit, and a build fails or files an issue when the token is within 14 days of expiring. |
-| ` ` | `MAP-05` **Delete Mapbox: 2786 LOC, the 1626 KB chunk, the SW rules and the secret** | 0.5 | agent | `MAP-02` `MAP-03` | No mapbox package, no mapbox origin in the built bundle, and VITE_MAPBOX_TOKEN removed from all three workflows. |
+| `x` | `MAP-02` **Draw the landing globe ourselves — MapKit JS provably cannot** | 2 | agent | `MAP-01` | The landing view is a rotating sphere with a pin per published journey, using no map service and no token. |
+| `x` | `MAP-03` **MapKit JS behind the adapter for the journey view** | 3 | agent | `MAP-01` | Selecting a journey shows its route and days on Apple satellite imagery, with Apple's mandatory attribution correctly placed. |
+| `~` | `MAP-04A` **Mint the MapKit token in the build, and fail the build before it lapses** | 0.5 | agent | `MAP-01` | scripts/mapkit/mintToken.mjs produces a token a JWT verifier accepts, and the deploy workflow both injects a freshly-minted token and fails when it is within 14 days of expiring. |
+| `x` | `MAP-04` **Add the MapKit private key as a repository secret** | 0.1 | owner | — | MAPKIT_PRIVATE_KEY exists as a repository secret. The two identifiers are already set as repository variables. |
+| `x` | `MAP-05` **Delete Mapbox: 2786 LOC, the 1626 KB chunk, the SW rules and the secret** | 0.5 | agent | `MAP-02` `MAP-03` | No mapbox package, no mapbox origin in the built bundle, and VITE_MAPBOX_TOKEN removed from all three workflows. |
+| `x` | `QUA-40` **E2E reaches live CloudKit, and shares its config with the live site** | 0.4 | agent | — | The E2E Tests workflow is green on main, and it stays green with no network access to Apple. |
+| ` ` | `QUA-41` **Replace the CloudKit canary that QUA-40 removed — check the deployed apex, not localhost** | 0.2 | owner | `QUA-40` | A documented owner check exists that fetches the deployed site's CloudKit path with a real Origin header, and it has been run once against akashic.no. |
+| ` ` | `QUA-42` **e2e/ is checked by neither tsc nor eslint, so the specs are verified only by running** | 0.3 | agent | `QUA-40` | A type error or lint error in e2e/ fails a gate without the suite having to run. |
+| ` ` | `QUA-45` **The Showcase sheet says a journey is published when the public mirror is empty** | 0.4 | agent | — | The publish state shown to the user reflects the mirror for the CURRENT CloudKit environment, or says it cannot tell. |
+| `x` | `QUA-46` **The showcase page shows two different day counts for the same journey** | 0.2 | agent | — | One journey reports one duration, and it matches the app. |
+| ` ` | `QUA-47` **The journey view frames past the imagery resolution and shows a blurred smear** | 0.3 | agent | — | Opening a journey shows legible terrain at the arrival framing, for a short route as well as a long one. |
+| ` ` | `QUA-48` **A SAMPLE journey seeded on top of a synced library, duplicating the real one** | 0.3 | agent | — | A fresh install signed into an account that already has journeys does not seed a sample. |
+| ` ` | `QUA-49` **On MapKit a photo stack hides a camp marker and eats its clicks — a regression versus Mapbox** | 0.3 | agent | `MAP-03` | A camp marker is clickable on the MapKit surface even with a photo stack over it, or the divergence from Mapbox is an accepted, recorded product decision. |
+| `x` | `QUA-50` **No test stops the MapKit map being destroyed and rebuilt on a prop change** | 0.3 | agent | `MAP-03` | A test fails if the MapKit map is constructed more than once across a journey switch and a sign-in. |
+| `x` | `QUA-51` **MAP-03 left four comments describing behaviour it does not have, and four dead symbols** | 0.3 | agent | `MAP-03` | Every comment listed below describes what the code does, and the dead symbols are gone or used. |
+| `x` | `QUA-43` **The live showcase told first-time visitors to click a marker that does not exist** | 0.2 | agent | — | The globe hint appears only when there is at least one marker to click, and it is not overlapped by the "Made with Akashic" chip at any viewport width. |
+| `x` | `QUA-44` **Debug console.log ships to production and runs on every visit** | 0.2 | agent | — | A production build emits no debug console output on load, and the mechanism that ensures it is a build setting rather than a promise to remember. |
 
 ## Decisions on record
 

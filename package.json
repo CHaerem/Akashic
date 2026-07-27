@@ -7,8 +7,8 @@
   "scripts": {
     "dev": "vite",
     "build": "node scripts/build.js",
-    "//lint": "--max-warnings ratchets the 25 remaining warnings (9 exhaustive-deps + 16 React-Compiler-readiness, see eslint.config.js) so they cannot grow. Lower the number as they are fixed; do not raise it.",
-    "lint": "eslint . --max-warnings 25",
+    "//lint": "--max-warnings ratchets the 14 remaining warnings (3 exhaustive-deps + 11 React-Compiler-readiness, see eslint.config.js) so they cannot grow. Lower the number as they are fixed; do not raise it. Was 25 until MAP-05 deleted useMapbox.ts (8) and MapboxGlobe.tsx (3) — a deletion, not a fix, so the remaining 14 are the same warnings they always were.",
+    "lint": "eslint . --max-warnings 14",
     "typecheck": "tsc --noEmit",
     "workplan": "node scripts/workplan.mjs",
     "workplan:check": "node scripts/workplan.mjs check",
@@ -37,7 +37,6 @@
     "clsx": "^2.1.1",
     "exifr": "^7.1.3",
     "framer-motion": "^12.23.25",
-    "mapbox-gl": "^3.16.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "tailwind-merge": "^3.4.0",

@@ -1,0 +1,59 @@
+name: MapKit Token
+
+# Proves the MapKit credential works, and fails before it lapses. (MAP-04A)
+#
+# Why this is a workflow of its own rather than a job in Tests: the last of its three checks calls Apple,
+# and a REQUIRED status check that depends on a third party blocks unrelated merges during someone else's
+# outage. That is exactly the failure QUA-40 exists to undo, so this deliberately gates nothing — do not add
+# it to main's required checks. Red here is a real signal about the credential, visible without holding up
+# the queue.
+#
+# And deliberately NOT on a `schedule:`. GitHub disables scheduled workflows after 60 days of repository
+# inactivity, so a scheduled health check dies in precisely the quiet period it exists to protect. Running
+# on every push to main keeps the check as fresh as the last deploy — which is what the token's lifetime
+# already depends on, since the deploy is what mints it.
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+    paths:
+      # On PRs, only when the minter itself changes — the credential cannot drift on a branch.
+      - 'scripts/mapkit/**'
+      - '.github/workflows/mapkit-token.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: mapkit-token-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  token:
+    name: Credential health
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: 24
+
+      # No install step: the checker imports only node:crypto and the minter, both dependency-free.
+      - name: Mint from the configured credential and check Apple accepts it
+        env:
+          # Variables, not secrets, on purpose — both travel in clear text inside every token (as `kid`
+          # and `iss`) and ship in the public bundle, so masking them in logs would cost debuggability
+          # and buy nothing.
+          MAPKIT_KEY_ID: ${{ vars.MAPKIT_KEY_ID }}
+          MAPKIT_TEAM_ID: ${{ vars.MAPKIT_TEAM_ID }}
+          MAPKIT_PRIVATE_KEY: ${{ secrets.MAPKIT_PRIVATE_KEY }}
+        run: node scripts/mapkit/checkToken.mjs

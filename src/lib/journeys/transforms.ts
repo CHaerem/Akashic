@@ -177,6 +177,42 @@ function toHistoricalSite(dbSite: DbHistoricalSite, dayNumber?: number): Histori
 }
 
 /**
+ * How many days a journey lasted — the ONE number every "N days" surface must render.
+ *
+ * QUA-46: the showcase header pill read `trekData.camps.length` while the Duration stat
+ * read `trekData.stats.duration`, and on the published Kilimanjaro journey those are 8 and
+ * 7. Measured from the source record (`src/data/kilimanjaro.json` before it was migrated
+ * into CloudKit): `stats.duration` is 7 and there are 8 waypoints, because day 6 carries
+ * two of them — "Uhuru Peak (Summit)" and "Mweka Camp", both `dayNumber: 6`. So a waypoint
+ * count is simply not a day count, and the iOS app agreeing on 7 in both its list card and
+ * its detail view is the tie-break: `camps.length` was the wrong quantity, not an
+ * off-by-one in `total_days`.
+ *
+ * The journey's own stated duration wins, because that is what the record carries
+ * (`totalDays`, or `duration` inside `statsJSON`) and what iOS renders. It falls back to
+ * the camps only when the record states nothing usable — a journey published without
+ * `totalDays` and without `statsJSON` yields `duration: 0` (see `toTrekData` below), and
+ * before this helper existed that case still navigated because the pill was counting
+ * camps. Losing that would trade one visible bug for a worse invisible one: `totalDays`
+ * also bounds day navigation and generates the day dots.
+ *
+ * Deriving from the camps uses the highest `dayNumber` rather than the count, for exactly
+ * the reason above — two waypoints on one day must not add a day.
+ */
+export function journeyDayCount(trekData: Pick<TrekData, 'stats' | 'camps'>): number {
+    const stated = trekData.stats.duration;
+    if (Number.isFinite(stated) && stated > 0) return Math.floor(stated);
+
+    let highestDay = 0;
+    for (const camp of trekData.camps) {
+        if (Number.isFinite(camp.dayNumber) && camp.dayNumber > highestDay) {
+            highestDay = Math.floor(camp.dayNumber);
+        }
+    }
+    return highestDay;
+}
+
+/**
  * Transform database journey + waypoints to TrekData
  */
 export function toTrekData(journey: DbJourney, waypoints: DbWaypoint[]): TrekData {

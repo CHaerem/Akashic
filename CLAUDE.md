@@ -81,12 +81,28 @@ work from `apple/README.md`, and expect the merge back to need real conflict res
 
 
 `.env` and `.env.local` are gitignored and live only in the main checkout at
-`/Users/cher/Privat/Akashic/`. `git worktree add` does not copy them. Without them the
-Playwright suite fails **37 of 37 tests over ten minutes**, every failure a missing Mapbox
-canvas — and it reads exactly like a regression you caused. It is not. Copy them first:
+`/Users/cher/Privat/Akashic/`. `git worktree add` does not copy them. Copy them first:
 
 ```bash
 cp /Users/cher/Privat/Akashic/.env* .
+```
+
+**MAP-05 changed the shape of this failure and made it worse, so re-read this even if you know the
+trap.** The old symptom was the whole Playwright suite failing — 37 of 37 over ten minutes, every
+failure a missing Mapbox canvas — because the map needed `VITE_MAPBOX_TOKEN`. Mapbox is deleted, and
+the journey map now needs a **minted MapKit token**, which no `.env` in the main checkout carries
+either. Two consequences:
+
+- The landing globe needs no token at all (`MAP-02`), so the app looks fine and only journeys break.
+- `playwright.config.ts` deliberately DOES NOT REGISTER the journey specs when `VITE_MAPKIT_TOKEN` is
+  unset. So the tokenless run is **green with fewer tests**, not red — quieter than the old failure and
+  easier to mistake for a pass. It prints a warning saying so; read the test count, not the colour.
+
+Mint one before you trust an e2e run (needs the Apple `.p8` at `~/.keys/AuthKey_<keyId>.p8`, which is
+not in the repo and cannot be):
+
+```bash
+export VITE_MAPKIT_TOKEN=$(node scripts/mapkit/devToken.mjs)
 ```
 
 ## Verification commands that actually work
@@ -100,7 +116,7 @@ These are measured, not guessed. Prefer them over inventing your own.
 | Built Info.plist | `plutil -p "$(find ~/Library/Developer/Xcode/DerivedData/Akashic-*/Build/Products -name Akashic.app -maxdepth 3 \| head -1)/Info.plist"` | see the trap below |
 | Web unit tests | `npx vitest --run` | 414 tests, ~5 s. Was 452 → 436 (LEG-12 deleted `workers/`, −16) → 414 (LEG-15 deleted the dead `mapMatching`, −22). Falling counts here have been deletions of dead code, not lost coverage — check `git log` before treating a drop as a regression. |
 | Web typecheck | `npm run typecheck` | clean, and a type error now fails CI and the commit |
-| Web lint | `npm run lint` | 171 files inspected, 0 errors, warnings capped at 25 |
+| Web lint | `npm run lint` | 205 files inspected, 0 errors, warnings capped at 14 (was 25; MAP-05 deleted `useMapbox.ts` and `MapboxGlobe.tsx`, which held 11 of them — a deletion, not a fix) |
 | Web build | `npm run build` | ~4 s, no env needed |
 | Web e2e | `VITE_E2E_TEST_MODE=true CI=true npx playwright test --project=chromium --ignore-snapshots` | needs `.env.local` |
 | Export tooling | `npx tsc -p scripts/export/tsconfig.json && node scripts/export/smoke.ts` | clean; 26 checks |
@@ -213,6 +229,49 @@ right: fix this file in the same commit.
   * The token IS environment-scoped (dev token: 200 on development, 401 on production), so a separate
     Production token is genuinely required. Test it with an explicit `Origin` header, from the exact
     scheme+host a browser would send.
+- **MapKit's `origin` claim: a bare domain and a wildcard are DISJOINT, and using either alone breaks half
+  the site.** Measured 2026-07-27 against `cdn.apple-mapkit.com/ma/bootstrap` with the real key — the only
+  way to learn any of this, because no page says it:
+
+  | claim | request `Origin` | result |
+  |---|---|---|
+  | `akashic.no` | `https://akashic.no` | 200 |
+  | `akashic.no` | `https://sub.akashic.no` | **401 ORIGIN_CHECK_FAILURE** |
+  | `*.akashic.no` | `https://akashic.no` | **401 ORIGIN_CHECK_FAILURE** |
+  | `akashic.no,*.akashic.no` | apex **and** `www` | 200 both |
+  | `akashic.no/` | `https://akashic.no` | 401 ORIGIN_CHECK_FAILURE |
+  | `https://akashic.no` | `https://akashic.no` | **200** — the scheme is tolerated |
+  | *(no `origin` claim)* | matching site | 200 |
+  | *(no `scope` claim)* | matching site | 200 |
+  | `akashic.no` | *(no `Origin` header)* | 200 |
+
+  The site serves from the apex **and** `www` (a CNAME to `chaerem.github.io` that resolves), so the only
+  correct value is the list: `--origin 'akashic.no,*.akashic.no'`. `localhost` works as a list entry and the
+  port is not part of the claim.
+
+  Two lessons beyond the table. **First**, the spec and the enforcement disagree, and not where you would
+  guess: Apple documents `scope` and `origin` as required and tolerates both being absent, while the two
+  things that actually 401 are a trailing slash and the apex/subdomain split. Write to the spec anyway — but
+  do not claim a spec violation will fail until you have seen it fail. I asserted in a commit message that
+  three spec violations "would 401"; measured, all three return 200, and I had to correct it.
+  **Second**, "the token is protected by its origin claim, not by secrecy" holds only for browsers, which
+  always send `Origin`. With no `Origin` header the token is served regardless of the claim, so a copied
+  token works server-side from anywhere against the 250,000-views-per-day entitlement — which is billed per
+  Program membership, not per token.
+
+  And the sibling trap that started all this: CloudKit's Allowed Origins is matched against an HTTP
+  `Origin` header, so it needs the scheme (`https://akashic.no`) and rejects a trailing slash. MapKit's is a
+  domain pattern. Same word, two Apple services, opposite formats — carrying one lesson across produced a
+  validator that rejected the documented value with an authoritative message.
+- **A MapKit key cannot be created until a Maps ID exists**, and the portal says so only in red small
+  print on a greyed row. Apple: "the MapKit JS checkbox isn't in an enabled state until you create a Maps
+  ID." The identifier's first dot-separated field must literally be `maps` (`maps.no.akashic`), which is
+  the one place reverse-domain muscle memory misleads you. Keys → the four rows carrying "There are no
+  identifiers available" (Maps, Media Services, Sign in with Apple, iWork Document Exporting) are the
+  identifier-scoped services; APNs, DeviceCheck and WeatherKit bind to nothing and are always selectable.
+  Note also that Apple's own two pages disagree on whether a Maps ID is needed for the *token* route —
+  `applemapsserverapi/creating-a-maps-identifier-and-a-private-key` states it twice, `mapkitjs/creating-a-maps-token`
+  omits it. Create the Maps ID unconditionally; it is free and removes the ambiguity.
 - **Entitlements are never embedded in an unsigned simulator build, so no simulator test can prove one.**
   Measured on Release-CloudKit with `CODE_SIGNING_ALLOWED=NO`: the log contains **zero** codesign steps
   and `codesign -d --entitlements - <app>` reports nothing at all. So `associated-domains`, App Groups,
@@ -274,6 +333,24 @@ right: fix this file in the same commit.
 - **The public CloudKit database is billed to us, not to the customer.** The cost table in
   `COMMERCIALIZATION-PLAN.md` says bandwidth is free; that is true of the private database
   only. Anything that increases showcase traffic has a real cost line.
+- **A build with no `VITE_MAPKIT_TOKEN` does not fail — it silently ships no map loader at all.**
+  Measured after MAP-05: `mapKitToken()` inlines to `void 0` with the variable unset, Rollup then
+  dead-code-eliminates the whole loader, and `cdn.apple-mapkit.com` appears in **zero** files under
+  `dist/`. With a token it appears in one. The failure is nasty because the landing globe is
+  deliberately tokenless (MAP-02) and still renders, so the deployed site looks entirely healthy until
+  a visitor opens a journey and gets an empty box. `deploy-pages.yml` now asserts the string is present
+  in the built output; keep that assertion, and note it is the only thing standing between a forgotten
+  repository secret and a half-broken production site. Same family as the CloudKit trailing slash and
+  the missing `INFOPLIST_KEY_*`: the thing that is absent is invisible unless something asserts on the
+  artefact.
+- **`.camp-marker { z-index: 20 !important }` in `src/index.css` was load-bearing on Mapbox and is inert
+  on MapKit, so deleting Mapbox made a known defect the SHIPPED behaviour rather than fixing it.**
+  Measured: on Mapbox the element computed `position: absolute; z-index: 22` because mapbox-gl adopts
+  `options.element` and adds its own absolutely-positioned class; on MapKit both the camp marker and the
+  photo stack compute `position: static`, and neither `DisplayPriority` nor DOM order changes the paint
+  order. So a photo stack can hide a camp marker and eat its clicks, and after MAP-05 there is no longer
+  a surface where it cannot. That is QUA-49, and it is open — do not read the surviving CSS rule as
+  evidence the problem is handled.
 
 ## Conventions
 

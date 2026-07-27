@@ -1,0 +1,724 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>MapKit JS surface probe — the measurements MAP-03's design rests on</title>
+<!--
+  MAP-03's second harness. `imagery-compare/` answered "is Apple's imagery good enough"; this one answers
+  "does the API actually do what the adapter is about to assume".
+
+  Every probe here exists because getting the answer wrong would ship a defect that looks like a working
+  feature — the same failure shape CLAUDE.md documents for silently-ignored UI-test lookups. In particular:
+
+  * **A misspelled MapKit event name throws nothing and fires never.** So a readiness gate wired to a
+    non-existent event is indistinguishable from a slow map. P-READY pins which names are real.
+  * **If `map.center` reports the destination the instant an animated setter is called**, then the e2e
+    suite's `waitForCameraSettled` (e2e/utils/test-helpers.ts:303-339) returns immediately and every camera
+    assertion in day-navigation.spec.ts passes vacuously. That is the exact defect QUA-40 removed. P-M1.
+  * **Nothing can read back what MapKit painted** — neither `getImageData` on `canvas.rt-root` nor
+    `gl.readPixels` on `canvas.syrup-canvas` sees overlays. So every visual probe here is designed to be
+    settled by a SCREENSHOT, with on-canvas reference markers that make the answer unambiguous in a still
+    image rather than by pixel arithmetic.
+
+  Usage:
+      MAPKIT_KEY_ID=9UN97VBZR8 MAPKIT_TEAM_ID=9LVCB72DT8 \
+        node scripts/mapkit/imagery-compare/tokens.mjs      # writes the gitignored tokens.js
+      open the `mapkitprobe` preview at /surface-probe/?probe=<id>
+
+  One probe per page load, deliberately: `imagery-compare` learned that many simultaneous map contexts
+  fail silently, and these probes each need a clean camera history.
+
+  ## WHAT THIS MEASURED — 2026-07-27, MapKit JS 5.81.65 build 26.13-41, Chromium 1100x800, map 620x465
+
+  Re-run before trusting any of it: Apple serves MapKit JS from a rolling 5.x.x URL, so every line below is
+  a snapshot of one build. Four of these answers overturned a design decision in MAP-03's plan; those are
+  marked (!). The adapter cites the relevant line at each site that depends on it.
+
+  P-READY
+    * There is NO single "loaded" event. `'loaded' in map` and `'tilesLoaded' in map` are both false and
+      there is no tile event, so nothing can observe that the imagery finished painting.
+    * (!) `start-up-complete` is UNUSABLE as a readiness gate: 952 ms / 26264 ms / never-within-9-s across
+      three runs on one machine. A factor of 27, and one no-show. Gate on `configuration-change:Initialized`
+      (743-864 ms) plus `map-node-ready` (915-1101 ms) — those two were within 200 ms of each other every
+      time. `mapkit.addEventListener('configuration-change')` MUST be registered before `mapkit.init`.
+    * A MISSPELLED EVENT NAME IS ACCEPTED SILENTLY AND FIRES NEVER. `load`, `ready`, `idle`, `render`,
+      `tiles-loaded` and `this-name-is-not-real` all attached without a throw and fired zero times. Same
+      shape as the ignored-waitForExistence trap in CLAUDE.md. Hence src/lib/map/mapkit/events.ts.
+    * Complete DOM: div.mk-map-view > [canvas.syrup-canvas (webgl), canvas.rt-root (2d),
+      div.mk-map-node-element > div.mk-annotation-container, div.mk-font-size-detector]. So
+      `page.waitForSelector('canvas')` still resolves for the six e2e call sites that need it.
+    * `map.destroy()` took mapkit.maps.length 1 -> 0. No leak.
+
+  P-ATTRIB
+    * (!) THERE ARE NO ATTRIBUTION CLASS NAMES. Apple paints the logo and the Legal link onto
+      canvas.rt-root. Inside the container: 0 <a>, 0 <svg>, 0 <img>, 0 shadow roots, nothing matching
+      /logo|attribut|legal|copyright|apple/i in any className, id or leaf text, and elementFromPoint over
+      both returns the same full-size div.mk-map-node-element. The planned src/index.css lift has nothing
+      to select and CANNOT work.
+    * The lever is `map.padding = new mapkit.Padding({ bottom: 80 })`. Proven by before/after screenshot
+      with the signed-out chrome mocked at its real positions: the strip moves up by exactly 80 px and sits
+      clear of the "Family sign-in" pill instead of under it.
+
+  P-M1
+    * `map.center` DOES track the live animating camera: samples 61.600/8.300 (t=0, the ORIGIN) ->
+      61.700/8.567 (89 ms) -> 61.820/8.887 (188 ms) -> 61.900/9.100 (287 ms); 17 distinct centres;
+      region-change-start at 0 ms, region-change-end at 266 ms. So e2e's centre-stability settle loop
+      (e2e/utils/test-helpers.ts:303-339) works unchanged and is NOT vacuous.
+    * (!) But the flight is ~270 ms against Mapbox's 2200-2500 ms, and MapKit exposes no duration knob.
+
+  P-CAMERA
+    * MapKit snaps a region to the container aspect ratio and PRESERVES THE CONSTRAINING DIMENSION:
+      requested 0.021 x 0.042, got back 0.021 x 0.058934 — and 0.021 * (620/465) / cos(61.6) = 0.058874,
+      so the correction is proper Mercator. A region computed to the right aspect ratio survives intact.
+    * `map.padding` does NOT move the camera; it insets the region. padding 0: region latitudeDelta
+      0.021000, full-canvas span 0.021000. padding bottom 80: region 0.017371, full-canvas span 0.021001,
+      cameraDistance unchanged. 0.017371/0.021001 = 0.827 = (465-80)/465.
+    * (!) THEREFORE `map.region.toBoundingRegion()` IS THE WRONG SOURCE for onViewportChange: at bottom 80
+      it reported south 61.59131 where the corner conversion gave 61.58768. Photos painted at the bottom of
+      the canvas would be filtered out of PhotosTab. Use convertPointOnPageToCoordinate at the corners.
+
+  P-INT
+    * (!!) NOTHING INTERRUPTS AN IN-FLIGHT CAMERA ANIMATION, and there is no map.stop(). Five interrupts
+      issued 120 ms into a ~270 ms flight to A, with B as the real target — setRegionAnimated(B, true),
+      `map.region = B`, setRegionAnimated(B, false), a center self-write then animate, a region self-assign
+      then animate — ALL FIVE left A winning. `typeof map.stop` and `typeof map.cancelAnimation` are both
+      undefined. A mid-flight request is silently DROPPED, which on rapid day switching lands the camera on
+      a day the user is no longer looking at: exactly what e2e/day-navigation.spec.ts exists to catch.
+      The only thing that worked was a coalescing queue drained from region-change-end.
+    * And the queue's watchdog is LOAD-BEARING, not defensive: a no-op animated set (same centre, same
+      span) fires ZERO region-change-end events. Without a timeout the in-flight flag sticks true,
+      hasPendingAnimations never clears, and e2e/utils/test-helpers.ts:325 deadlocks the whole suite.
+    * A single framing animation gave exactly 1 start and 1 end here — the capability survey's 3:2
+      asymmetry did not reproduce. Still a reason not to build the flag from a start/end counter.
+
+  P-M2
+    * strokeStart/strokeEnd are fractions of ARC LENGTH, not of point index. Settled visually on a 3-point
+      line with a 10:1 leg ratio and strokeEnd 0.5: the stroke ends at the arc-length pin (lng 8.31), ~180 px
+      short of the middle vertex (lng 8.40). Both read back and are live-mutable on an on-map overlay.
+
+  P-HALO
+    * Overlay z-order IS add order: a 3 px white line added after a 20 px red line on identical points
+      paints over it. So glow-under-core needs no z-index API.
+    * The three-overlay halo (24 px @ 0.15, 14 px @ 0.30, 5 px solid) reads as a genuine soft glow.
+    * (!) `lineGradient` is ACCEPTED (style.lineGradient reads back truthy, no throw, no warning, no error
+      event) and paints NOTHING — and it SUPPRESSES the stroke, so a polyline that also carried
+      strokeColor '#ff8800' rendered as absolutely nothing. Chromium only; Safari unmeasured. MAP-03 does
+      not use it. Note the brief's premise was wrong anyway: the incumbent uses line-blur, not a gradient.
+
+  P-M3 / P-ANCHOR
+    * A custom-DOM annotation's element is a DIRECT CHILD of div.mk-annotation-container — no per-annotation
+      wrapper. Both the element's and the container's computed `transform` are `none`, so the marker CSS's
+      hover `transform: scale()` has nothing to fight. Better than Mapbox's transform-positioned wrapper.
+    * Both `click` listeners fired and stopPropagation works.
+    * (!) CORRECTED BY A LATER MEASUREMENT IN THE REAL APP — do not trust the version of this line that this
+      probe originally produced. P-M3 concluded `.camp-marker { z-index: 20 !important }` had started working
+      because elementFromPoint at the camp's centre returned span.camp-marker-badge. That was an artefact of
+      the probe adding the camp SECOND. In the running app, with a photo stack over the day-3 camp,
+      elementFromPoint returns .photo-stack-main and the photo INTERCEPTS THE CAMP'S CLICKS. Neither
+      `position: relative` plus explicit z-index on both, nor DisplayPriority Required-vs-High, nor moving the
+      camp element to the end of .mk-annotation-container changed it: MapKit's annotation paint order is not
+      reachable from the app. The z-index rule is inert on both surfaces, because the element computes
+      `position: static`. Lesson for this harness: two annotations added in a chosen order is not a model of
+      N annotations added by two independent effects.
+    * The factory is called LAZILY on first display. Do not assert on the DOM right after addAnnotation.
+    * (!) anchorOffset y is DOWNWARD-NEGATIVE. For a 36 px element, rect-centre minus coordinate measured
+      -18 at offset (0,0) — i.e. bottom-anchored like a pin — -36 at (0,+18), and 0 at (0,-18). Centring
+      needs new DOMPoint(0, -height/2). Backwards puts every camp a full marker-height off its coordinate.
+-->
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 10px 14px 14px; background: #0b0d10; color: #e6e8eb;
+         font: 12px/1.5 ui-sans-serif, -apple-system, system-ui, sans-serif; }
+  h1 { margin: 0 0 6px; font-size: 13px; font-weight: 600; }
+  nav { display: flex; gap: 5px; flex-wrap: wrap; margin-bottom: 8px; }
+  nav a { padding: 3px 8px; border-radius: 5px; text-decoration: none; background: #16191d;
+          border: 1px solid #23272d; color: #b9c0c8; font-size: 11px; }
+  nav a[aria-current="true"] { background: #2b62d9; border-color: #2b62d9; color: #fff; font-weight: 600; }
+  #wrap { display: grid; grid-template-columns: 620px 1fr; gap: 10px; align-items: start; }
+  /* MAP-05 renamed this from `#mapbox-of-apple`: with Mapbox deleted, an id naming it in the MapKit
+     probe reads as a leftover dependency rather than the joke it was. */
+  #probe-map { position: relative; width: 620px; height: 465px; background: #16191d;
+                     border: 1px solid #23272d; border-radius: 6px; overflow: hidden; }
+  #map { position: absolute; inset: 0; }
+  pre#out { margin: 0; padding: 8px 10px; background: #101318; border: 1px solid #23272d; border-radius: 6px;
+            font: 11px/1.45 ui-monospace, SFMono-Regular, monospace; white-space: pre-wrap;
+            max-height: 700px; overflow: auto; }
+  /* Mock-ups of the signed-out showcase chrome, at the real positions from AkashicApp/AuthGuard, so the
+     attribution-clearance question is asked against the layout that actually ships. */
+  .chip { position: absolute; bottom: 16px; z-index: 40; padding: 8px 14px; border-radius: 999px;
+          background: rgba(255,255,255,0.16); backdrop-filter: blur(20px);
+          border: 1px solid rgba(255,255,255,0.2); color: #fff; font-size: 11px; font-weight: 600; }
+  #chip-left { left: 16px; }
+  #chip-right { right: 16px; }
+  /* Copied verbatim from src/index.css so the probe tests the CSS that ships, not a lookalike. */
+  .camp-marker { width: 36px; height: 36px; border-radius: 50%; cursor: pointer;
+    background: linear-gradient(135deg, rgba(255,255,255,0.28) 0%, rgba(255,255,255,0.12) 100%);
+    backdrop-filter: blur(20px) saturate(180%); border: 1.5px solid rgba(255,255,255,0.5);
+    box-shadow: 0 4px 16px rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center;
+    transition: transform 0.2s cubic-bezier(0.32,0.72,0,1); z-index: 20 !important; }
+  .camp-marker:hover { transform: scale(1.15); }
+  .camp-marker-badge { color: #fff; font-size: 14px; font-weight: 700; line-height: 1; }
+  .photo-thumbnail-marker { width: 32px; height: 32px; border-radius: 50%; overflow: hidden;
+    border: 2px solid rgba(255,255,255,0.9); box-shadow: 0 2px 12px rgba(0,0,0,0.5); cursor: pointer;
+    background: #345; transition: transform 0.2s cubic-bezier(0.32,0.72,0,1); }
+  .photo-thumbnail-marker:hover { transform: scale(1.25); }
+</style>
+</head>
+<body>
+<h1 id="title">…</h1>
+<nav id="nav"></nav>
+<div id="wrap">
+  <div id="probe-map">
+    <div id="map"></div>
+    <div class="chip" id="chip-left">Family sign-in</div>
+    <div class="chip" id="chip-right">Made with Akashic</div>
+  </div>
+  <pre id="out">loading…</pre>
+</div>
+
+<script src="../imagery-compare/tokens.js"></script>
+<script>
+const out = document.getElementById('out');
+const lines = [];
+function log(...args) {
+  lines.push(args.map(a => typeof a === 'string' ? a : JSON.stringify(a)).join(' '));
+  out.textContent = lines.join('\n');
+}
+// A machine-readable mirror, so a driving agent can read one JSON blob instead of scraping prose.
+window.PROBE = { id: null, done: false, result: {} };
+function record(key, value) { window.PROBE.result[key] = value; log(`  ${key} = ${JSON.stringify(value)}`); }
+function finish() { window.PROBE.done = true; log('\n--- PROBE DONE ---'); }
+
+const PROBES = {
+  ready:  'P-READY  readiness events + DOM shape',
+  attrib: 'P-ATTRIB attribution DOM + map.padding lever',
+  m1:     'P-M1     does map.center animate?',
+  m2:     'P-M2     strokeStart/End: arc length or index?',
+  m3:     'P-M3     custom annotation DOM, click, hover, z-order',
+  camera: 'P-CAMERA region readback, supersede, padding vs bounds',
+  halo:   'P-HALO   stacked-overlay glow + overlay z-order',
+  interrupt: 'P-INT  how do you interrupt an in-flight camera animation?',
+  anchor: 'P-ANCHOR annotation anchorOffset semantics',
+};
+const probe = new URLSearchParams(location.search).get('probe') || 'ready';
+document.getElementById('title').textContent = PROBES[probe] || `unknown probe "${probe}"`;
+document.getElementById('nav').innerHTML = Object.keys(PROBES)
+  .map(k => `<a href="?probe=${k}"${k === probe ? ' aria-current="true"' : ''}>${k}</a>`).join('');
+window.PROBE.id = probe;
+
+// Jotunheimen — the fixture journeys' own geography, measured at imagery PARITY in imagery-compare.
+const HOME = { lat: 61.6, lng: 8.3 };
+
+/* ------------------------------------------------------------------ boot */
+
+const t0 = performance.now();
+const readiness = {};
+function stamp(name) { readiness[name] = Math.round(performance.now() - t0); log(`  [${readiness[name]} ms] ${name}`); }
+
+if (!window.TOKENS || !window.TOKENS.mapkit) {
+  log('ERROR: no tokens.js — run: MAPKIT_KEY_ID=… MAPKIT_TEAM_ID=… node scripts/mapkit/imagery-compare/tokens.mjs');
+} else {
+  const s = document.createElement('script');
+  s.src = 'https://cdn.apple-mapkit.com/mk/5.x.x/mapkit.js';
+  s.crossOrigin = 'anonymous';
+  s.onload = boot;
+  s.onerror = () => log('ERROR: mapkit.js failed to load');
+  document.head.appendChild(s);
+}
+
+function boot() {
+  log(`mapkit.js loaded at ${Math.round(performance.now() - t0)} ms; version = ${mapkit.version || '(none)'} build ${mapkit.build || '(none)'}`);
+  // MUST be registered BEFORE init — registering after misses the event entirely.
+  mapkit.addEventListener('configuration-change', (e) => {
+    stamp(`configuration-change:${e.status}`);
+    if (e.status === 'Initialized') start();
+  });
+  mapkit.addEventListener('error', (e) => log(`mapkit error: ${e.status}`));
+  mapkit.init({ authorizationCallback: (done) => done(window.TOKENS.mapkit) });
+}
+
+let map;
+function makeMap(options = {}) {
+  map = new mapkit.Map('map', Object.assign({
+    mapType: mapkit.Map.MapTypes.Satellite,
+    colorScheme: mapkit.Map.ColorSchemes.Dark,
+    showsMapTypeControl: false,
+    showsZoomControl: false,
+    showsUserLocationControl: false,
+    showsCompass: mapkit.FeatureVisibility.Hidden,
+    showsScale: mapkit.FeatureVisibility.Hidden,
+    showsPointsOfInterest: false,
+    isRotationEnabled: false,
+  }, options));
+  map.addEventListener('map-node-ready', () => stamp('map-node-ready'));
+  map.addEventListener('start-up-complete', () => stamp('start-up-complete'));
+  return map;
+}
+
+function region(latDelta, lngDelta, center = HOME) {
+  return new mapkit.CoordinateRegion(
+    new mapkit.Coordinate(center.lat, center.lng),
+    new mapkit.CoordinateSpan(latDelta, lngDelta));
+}
+
+/* ------------------------------------------------------------------ probes */
+
+const RUN = {
+
+/* P-READY — which readiness signals are real, how long they take, and what the DOM looks like. */
+ready() {
+  makeMap();
+  map.region = region(0.05, 0.08);
+
+  // A misspelled name is accepted silently and fires never. Prove it here so the adapter's allowlist has
+  // a measurement behind it rather than a belief.
+  const FAKE = ['load', 'ready', 'idle', 'render', 'tiles-loaded', 'this-name-is-not-real'];
+  const fired = {};
+  for (const name of FAKE) {
+    try { map.addEventListener(name, () => { fired[name] = true; }); }
+    catch (err) { fired[name] = `THREW: ${err.message}`; }
+  }
+
+  setTimeout(() => {
+    record('readinessMs', readiness);
+    record('bogusEventNamesThatFired', fired);
+    record('hasLoadedProperty', 'loaded' in map);
+    record('hasTilesLoadedProperty', 'tilesLoaded' in map);
+    const container = document.getElementById('map');
+    record('elementTree', [...container.querySelectorAll('*')]
+      .map(el => `${el.tagName.toLowerCase()}${el.className ? '.' + String(el.className).trim().split(/\s+/).join('.') : ''}`));
+    record('canvasSelectorResolves', !!document.querySelector('canvas'));
+    record('canvasList', [...container.querySelectorAll('canvas')].map(c => c.className));
+    record('mapkitMapsLength', mapkit.maps.length);
+    finish();
+  }, 9000);
+},
+
+/* P-ATTRIB — where Apple's logo and Legal link actually live, and whether map.padding moves them.
+   Settled by screenshot: the driving agent takes one at padding 0 and one at padding 80. */
+attrib() {
+  makeMap();
+  map.region = region(0.05, 0.08);
+  setTimeout(() => {
+    const container = document.getElementById('map');
+    const all = [...container.querySelectorAll('*')];
+    record('anchorCount', container.querySelectorAll('a').length);
+    record('svgCount', container.querySelectorAll('svg').length);
+    record('imgCount', container.querySelectorAll('img').length);
+    record('shadowRoots', all.filter(el => el.shadowRoot).length);
+    record('classesMatchingLogoLegalApple', all
+      .map(el => `${el.tagName.toLowerCase()}.${String(el.className)}`)
+      .filter(s => /logo|attribut|legal|copyright|apple/i.test(s)));
+    record('leafTextMatching', all.filter(el => !el.children.length && /legal|apple|maps/i.test(el.textContent || ''))
+      .map(el => el.textContent.trim().slice(0, 40)));
+
+    // Hit-test the two spots Apple paints its furniture into, at padding 0.
+    const r = container.getBoundingClientRect();
+    const at = (dx, dy) => {
+      const el = document.elementFromPoint(r.left + dx, r.top + r.height - dy);
+      return el ? `${el.tagName.toLowerCase()}.${String(el.className)}` : null;
+    };
+    record('hitTest_logoSpot_pad0', at(30, 14));
+    record('hitTest_legalSpot_pad0', at(r.width - 40, 14));
+    record('hitTest_liftedLogoSpot_pad0', at(30, 94));
+
+    window.setPad = (bottom) => {
+      map.padding = new mapkit.Padding({ top: 0, right: 0, bottom, left: 0 });
+      log(`  padding.bottom = ${bottom}; map.padding.bottom reads back ${map.padding.bottom}`);
+      log(`  region.span.latitudeDelta now ${map.region.span.latitudeDelta.toFixed(6)}`);
+    };
+    log('\n  SCREENSHOT NOW (padding 0), then run setPad(80) and screenshot again.');
+    log('  Expect: logo+Legal at the very bottom-left/right first (under the chips), lifted clear after.');
+    finish();
+  }, 7000);
+},
+
+/* P-M1 — the highest-risk unknown. Does map.center track the animation, or jump to the destination? */
+m1() {
+  makeMap();
+  map.region = region(0.05, 0.08);
+  setTimeout(() => {
+    const from = { lat: map.center.latitude, lng: map.center.longitude };
+    const to = { lat: 61.9, lng: 9.1 };          // ~0.3 deg away: unmistakable in one sample
+    const samples = [];
+    const events = [];
+    map.addEventListener('region-change-start', () => events.push(['start', Math.round(performance.now() - t1)]));
+    map.addEventListener('region-change-end', () => events.push(['end', Math.round(performance.now() - t1)]));
+
+    const t1 = performance.now();
+    map.setRegionAnimated(region(0.02, 0.03, to), true);
+    // Sample synchronously first — that is the case that makes waitForCameraSettled vacuous.
+    samples.push([0, map.center.latitude, map.center.longitude]);
+    // setTimeout, not requestAnimationFrame: rAF never fires in a hidden document, which is exactly the
+    // trap imagery-compare's header records, and it silently hangs the probe rather than failing it.
+    (function tick() {
+      const dt = performance.now() - t1;
+      samples.push([Math.round(dt), map.center.latitude, map.center.longitude]);
+      if (dt < 2500) setTimeout(tick, 16);
+      else {
+        const dist = (a) => Math.hypot(a[1] - to.lat, a[2] - to.lng);
+        record('from', from);
+        record('to', to);
+        record('firstSampleIsDestination', dist(samples[0]) < 1e-4);
+        record('sampleCount', samples.length);
+        record('samplesEvery~100ms', samples.filter((_, i) => i % 6 === 0).map(s => [s[0], +s[1].toFixed(5), +s[2].toFixed(5)]));
+        record('distinctCenters', new Set(samples.map(s => `${s[1].toFixed(6)},${s[2].toFixed(6)}`)).size);
+        record('regionChangeEvents', events);
+        record('startCount', events.filter(e => e[0] === 'start').length);
+        record('endCount', events.filter(e => e[0] === 'end').length);
+        finish();
+      }
+    })();
+  }, 7000);
+},
+
+/* P-M2 — are strokeStart/strokeEnd fractions of ARC LENGTH or of POINT INDEX?
+   A 3-point line whose first leg is 10x the second, with strokeEnd 0.5. Two marker annotations mark the
+   two candidate answers, so a screenshot settles it without any pixel reading. */
+m2() {
+  makeMap();
+  // Deliberately axis-aligned in longitude so "half way" is visually obvious.
+  const A = { lat: 61.60, lng: 8.20 };
+  const B = { lat: 61.60, lng: 8.40 };   // leg 1 = 0.20 deg
+  const C = { lat: 61.60, lng: 8.42 };   // leg 2 = 0.02 deg  → total 0.22, arc midpoint at lng 8.31
+  const pts = [A, B, C].map(p => new mapkit.Coordinate(p.lat, p.lng));
+
+  setTimeout(() => {
+    map.region = region(0.06, 0.30, { lat: 61.60, lng: 8.31 });
+
+    const full = new mapkit.PolylineOverlay(pts, {
+      style: new mapkit.Style({ strokeColor: '#ffffff', strokeOpacity: 0.35, lineWidth: 3 }),
+    });
+    const half = new mapkit.PolylineOverlay(pts, {
+      style: new mapkit.Style({ strokeColor: '#00ffff', lineWidth: 8, strokeStart: 0, strokeEnd: 0.5 }),
+    });
+    map.addOverlay(full);
+    map.addOverlay(half);
+
+    const mark = (lat, lng, text, color) => {
+      const a = new mapkit.MarkerAnnotation(new mapkit.Coordinate(lat, lng), { color, glyphText: text });
+      a.calloutEnabled = false;
+      map.addAnnotation(a);
+    };
+    mark(61.605, 8.31, 'A', '#ff3b30');   // where an ARC-LENGTH 0.5 ends
+    mark(61.605, 8.40, 'I', '#ffcc00');   // where an INDEX 0.5 ends (the middle vertex B)
+
+    record('strokeStartReadback', half.style.strokeStart);
+    record('strokeEndReadback', half.style.strokeEnd);
+    // Live mutability — the whole reason to prefer this over rebuilding geometry per day.
+    half.style.strokeStart = 0.25;
+    record('liveMutableStrokeStart', half.style.strokeStart === 0.25);
+    half.style.strokeStart = 0;
+    log('\n  SCREENSHOT NOW. Cyan ends at the RED "A" pin => arc length. At the YELLOW "I" pin => index.');
+    finish();
+  }, 7000);
+},
+
+/* P-M3 — custom-DOM annotations: does a click listener fire, does hover scale work, is the element
+   centred on its coordinate, and does .camp-marker paint above an overlapping photo stack? */
+m3() {
+  makeMap();
+  setTimeout(() => {
+    map.region = region(0.01, 0.02);
+    const clicks = [];
+
+    const campEl = () => {
+      const el = document.createElement('div');
+      el.className = 'camp-marker';
+      const b = document.createElement('span');
+      b.className = 'camp-marker-badge';
+      b.textContent = '3';
+      el.appendChild(b);
+      el.addEventListener('click', (e) => { e.stopPropagation(); clicks.push('camp'); });
+      return el;
+    };
+    const photoEl = () => {
+      const el = document.createElement('div');
+      el.className = 'photo-thumbnail-marker';
+      el.addEventListener('click', (e) => { e.stopPropagation(); clicks.push('photo'); });
+      return el;
+    };
+
+    // Deliberately OVERLAPPING, a few metres apart, to force the stacking question.
+    const campCoord = new mapkit.Coordinate(HOME.lat, HOME.lng);
+    const photoCoord = new mapkit.Coordinate(HOME.lat + 0.00004, HOME.lng + 0.00008);
+
+    const camp = new mapkit.Annotation(campCoord, campEl, {
+      size: { width: 36, height: 36 }, data: { campId: 'c1' },
+      collisionMode: mapkit.Annotation.CollisionMode.None,
+      displayPriority: mapkit.Annotation.DisplayPriority.Required,
+    });
+    const photo = new mapkit.Annotation(photoCoord, photoEl, {
+      size: { width: 32, height: 32 }, data: { photoId: 'p1' },
+      collisionMode: mapkit.Annotation.CollisionMode.None,
+      displayPriority: mapkit.Annotation.DisplayPriority.Required,
+    });
+    // Photo first, camp second — same order the adapter will use.
+    map.addAnnotation(photo);
+    map.addAnnotation(camp);
+
+    record('domPresentImmediatelyAfterAdd', !!document.querySelector('.camp-marker'));
+
+    setTimeout(() => {
+      const container = document.getElementById('map');
+      const c = container.querySelector('.camp-marker');
+      const p = container.querySelector('.photo-thumbnail-marker');
+      record('campElementFound', !!c);
+      record('photoElementFound', !!p);
+      if (!c || !p) return finish();
+
+      record('annotationWrapperClasses', [c.parentElement, c.parentElement?.parentElement]
+        .filter(Boolean).map(el => `${el.tagName.toLowerCase()}.${String(el.className)}`));
+
+      // Is the element centred on its coordinate, or hung from a corner?
+      const pt = map.convertCoordinateToPointOnPage(campCoord);
+      const cr = c.getBoundingClientRect();
+      record('coordPageXY', [Math.round(pt.x), Math.round(pt.y)]);
+      record('campRectCentreXY', [Math.round(cr.left + cr.width / 2 + scrollX), Math.round(cr.top + cr.height / 2 + scrollY)]);
+      record('centredOnCoordinate', Math.abs(cr.left + cr.width / 2 + scrollX - pt.x) < 3
+                                 && Math.abs(cr.top + cr.height / 2 + scrollY - pt.y) < 3);
+
+      // Which one wins the overlap? elementFromPoint at the camp's centre.
+      const top = document.elementFromPoint(cr.left + cr.width / 2, cr.top + cr.height / 2);
+      record('topmostAtCampCentre', top ? `${top.tagName.toLowerCase()}.${String(top.className)}` : null);
+      record('campZIndexComputed', getComputedStyle(c).zIndex);
+      record('photoZIndexComputed', getComputedStyle(p).zIndex);
+      record('campWrapperZIndex', c.parentElement ? getComputedStyle(c.parentElement).zIndex : null);
+
+      // Click, for real, through the browser's own dispatch path.
+      c.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      p.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      record('clicksObserved', clicks);
+
+      // Hover scale: does the transform survive whatever MapKit puts on the wrapper?
+      record('campTransformBase', getComputedStyle(c).transform);
+      record('wrapperTransform', c.parentElement ? getComputedStyle(c.parentElement).transform : null);
+      record('mapkitMapsLength', mapkit.maps.length);
+
+      // Teardown leak check.
+      map.destroy();
+      record('mapkitMapsAfterDestroy', mapkit.maps.length);
+      finish();
+    }, 2500);
+  }, 7000);
+},
+
+/* P-CAMERA — region readback vs what we asked for; does a second animated set supersede the first;
+   and does map.padding shrink map.region relative to the painted canvas. */
+camera() {
+  makeMap();
+  setTimeout(async () => {
+    const wait = (ms) => new Promise(r => setTimeout(r, ms));
+
+    // 1. Readback. MapKit snaps to its own ladder and to the container aspect ratio.
+    map.region = region(0.021, 0.042);
+    await wait(500);
+    record('requested_0.021x0.042', [0.021, 0.042]);
+    record('readback', [+map.region.span.latitudeDelta.toFixed(6), +map.region.span.longitudeDelta.toFixed(6)]);
+    record('cameraDistance', Math.round(map.cameraDistance));
+
+    // 2. Padding: does it zoom the camera, or just inset the region?
+    const container = document.getElementById('map');
+    const cornersSpan = () => {
+      const r = container.getBoundingClientRect();
+      const nw = map.convertPointOnPageToCoordinate(new DOMPoint(r.left + scrollX, r.top + scrollY));
+      const se = map.convertPointOnPageToCoordinate(new DOMPoint(r.right + scrollX, r.bottom + scrollY));
+      return [+(nw.latitude - se.latitude).toFixed(6), +(se.longitude - nw.longitude).toFixed(6)];
+    };
+    record('pad0_regionSpan', [+map.region.span.latitudeDelta.toFixed(6), +map.region.span.longitudeDelta.toFixed(6)]);
+    record('pad0_fullCanvasSpan', cornersSpan());
+    const d0 = map.cameraDistance;
+    map.padding = new mapkit.Padding({ top: 0, right: 0, bottom: 80, left: 0 });
+    await wait(600);
+    record('pad80_regionSpan', [+map.region.span.latitudeDelta.toFixed(6), +map.region.span.longitudeDelta.toFixed(6)]);
+    record('pad80_fullCanvasSpan', cornersSpan());
+    record('pad80_cameraDistanceUnchanged', Math.abs(map.cameraDistance - d0) < 5);
+    const br = map.region.toBoundingRegion();
+    record('pad80_toBoundingRegion', [+br.westLongitude.toFixed(5), +br.southLatitude.toFixed(5),
+                                      +br.eastLongitude.toFixed(5), +br.northLatitude.toFixed(5)]);
+    const r2 = container.getBoundingClientRect();
+    const sw = map.convertPointOnPageToCoordinate(new DOMPoint(r2.left + scrollX, r2.bottom + scrollY));
+    const ne = map.convertPointOnPageToCoordinate(new DOMPoint(r2.right + scrollX, r2.top + scrollY));
+    record('pad80_cornerBounds', [+sw.longitude.toFixed(5), +sw.latitude.toFixed(5),
+                                 +ne.longitude.toFixed(5), +ne.latitude.toFixed(5)]);
+    map.padding = new mapkit.Padding({ top: 0, right: 0, bottom: 0, left: 0 });
+    await wait(400);
+
+    // 3. Supersede: does a second animated set win, without a map.stop() equivalent?
+    map.setRegionAnimated(region(0.02, 0.03, { lat: 62.2, lng: 9.6 }), true);
+    await wait(120);
+    const second = { lat: 61.2, lng: 7.4 };
+    map.setRegionAnimated(region(0.02, 0.03, second), true);
+    await wait(3000);
+    record('supersede_finalCentre', [+map.center.latitude.toFixed(4), +map.center.longitude.toFixed(4)]);
+    record('supersede_secondWon', Math.hypot(map.center.latitude - second.lat, map.center.longitude - second.lng) < 0.02);
+
+    // 4. Is there a stop()?
+    record('hasStopMethod', typeof map.stop === 'function');
+    record('hasCancelAnimation', typeof map.cancelAnimation === 'function');
+    finish();
+  }, 7000);
+},
+
+/* P-HALO — overlay z-order (is it add order?) and whether stacked overlays read as a glow.
+   Settled by screenshot. */
+halo() {
+  makeMap();
+  setTimeout(() => {
+    map.region = region(0.03, 0.06);
+    const line = (n) => Array.from({ length: n }, (_, i) =>
+      new mapkit.Coordinate(61.59 + i * 0.0015, 8.27 + i * 0.003));
+    const pts = line(12);
+
+    // Add order test: a fat RED first, a thin WHITE second. If white paints over red, add order is z-order.
+    const fat = new mapkit.PolylineOverlay(pts, { style: new mapkit.Style({ strokeColor: '#ff0000', lineWidth: 20 }) });
+    const thin = new mapkit.PolylineOverlay(pts, { style: new mapkit.Style({ strokeColor: '#ffffff', lineWidth: 3 }) });
+    map.addOverlay(fat);
+    map.addOverlay(thin);
+
+    // The three-overlay halo, offset north so both live in one screenshot.
+    const pts2 = pts.map(c => new mapkit.Coordinate(c.latitude + 0.012, c.longitude));
+    const halo = [
+      new mapkit.PolylineOverlay(pts2, { style: new mapkit.Style({ strokeColor: '#00ffff', strokeOpacity: 0.15, lineWidth: 24 }) }),
+      new mapkit.PolylineOverlay(pts2, { style: new mapkit.Style({ strokeColor: '#00ffff', strokeOpacity: 0.30, lineWidth: 14 }) }),
+      new mapkit.PolylineOverlay(pts2, { style: new mapkit.Style({ strokeColor: '#00ffff', lineWidth: 5 }) }),
+    ];
+    halo.forEach(o => map.addOverlay(o));
+
+    record('overlayCount', map.overlays.length);
+    // While we are here: confirm the survey's lineGradient verdict rather than inheriting it.
+    let gradientAccepted = null;
+    try {
+      const g = new mapkit.LineGradient({ 0: '#ff0000', 1: '#0000ff' });
+      const grad = new mapkit.PolylineOverlay(pts.map(c => new mapkit.Coordinate(c.latitude - 0.012, c.longitude)),
+        { style: new mapkit.Style({ lineWidth: 8, strokeColor: '#ff8800', lineGradient: g }) });
+      map.addOverlay(grad);
+      gradientAccepted = !!grad.style.lineGradient;
+    } catch (err) { gradientAccepted = `THREW: ${err.message}`; }
+    record('lineGradientAccepted', gradientAccepted);
+    log('\n  SCREENSHOT NOW. Top line = cyan halo (3 overlays). Middle = white-over-red (add order).');
+    log('  Bottom line = lineGradient probe: if NOTHING is drawn there, the gradient suppresses the stroke.');
+    finish();
+  }, 7000);
+},
+
+/* P-INT — P-CAMERA found that a second setRegionAnimated issued mid-flight is SILENTLY DROPPED and the
+   FIRST target wins, and that there is no map.stop() or map.cancelAnimation(). That is the rapid-day-switch
+   defect day-navigation.spec.ts exists to catch, so the mitigation has to be measured, not guessed.
+   Four candidate interrupts, each tried at 120 ms into a 270 ms flight. */
+interrupt() {
+  makeMap();
+  setTimeout(async () => {
+    const wait = (ms) => new Promise(r => setTimeout(r, ms));
+    const A = { lat: 62.2, lng: 9.6 };   // first target
+    const B = { lat: 61.2, lng: 7.4 };   // second target — the one the user is actually looking at
+    const near = (t) => Math.hypot(map.center.latitude - t.lat, map.center.longitude - t.lng) < 0.02;
+
+    async function trial(name, interrupt) {
+      map.region = region(0.05, 0.08);            // reset, unanimated
+      await wait(900);
+      map.setRegionAnimated(region(0.02, 0.03, A), true);
+      await wait(120);
+      interrupt();
+      await wait(2500);
+      const won = near(B) ? 'B (the later target — GOOD)' : near(A) ? 'A (the earlier target — STALE)' : 'neither';
+      record(name, won);
+    }
+
+    await trial('animatedSetAgain', () => map.setRegionAnimated(region(0.02, 0.03, B), true));
+    await trial('unanimatedRegionWrite', () => { map.region = region(0.02, 0.03, B); });
+    await trial('setRegionAnimatedFalse', () => map.setRegionAnimated(region(0.02, 0.03, B), false));
+    await trial('centreWriteThenAnimated', () => {
+      map.center = map.center.copy();             // does touching the camera cancel the flight?
+      map.setRegionAnimated(region(0.02, 0.03, B), true);
+    });
+    await trial('unanimatedThenAnimated', () => {
+      map.region = map.region;                    // eslint-disable-line no-self-assign
+      map.setRegionAnimated(region(0.02, 0.03, B), true);
+    });
+
+    // And the honest fallback: wait for region-change-end, then apply the latest pending target.
+    map.region = region(0.05, 0.08);
+    await wait(900);
+    let pending = null;
+    const onEnd = () => {
+      if (!pending) return;
+      const t = pending; pending = null;
+      map.setRegionAnimated(region(0.02, 0.03, t), true);
+    };
+    map.addEventListener('region-change-end', onEnd);
+    map.setRegionAnimated(region(0.02, 0.03, A), true);
+    await wait(120);
+    pending = B;                                   // the user switched day mid-flight
+    await wait(3000);
+    record('queueOnRegionChangeEnd', near(B) ? 'B (the later target — GOOD)' : near(A) ? 'A (STALE)' : 'neither');
+    record('hasStopMethod', typeof map.stop === 'function');
+
+    // Does a NO-OP animated set still fire region-change-end? If it does not, a queue that waits for the
+    // event hangs and hasPendingAnimations sticks true — which DEADLOCKS the e2e settle helper
+    // (e2e/utils/test-helpers.ts:325 requires it false). Decides whether a watchdog is load-bearing.
+    map.removeEventListener('region-change-end', onEnd);
+    await wait(500);
+    let ends = 0;
+    const count = () => { ends += 1; };
+    map.addEventListener('region-change-end', count);
+    const same = new mapkit.CoordinateRegion(map.center.copy(), map.region.span);
+    map.setRegionAnimated(same, true);
+    await wait(1200);
+    record('noopAnimatedSet_endEventsFired', ends);
+    record('animationDurationMsIsFixed_seeM1', '~270 ms measured in P-M1; MapKit exposes no duration knob');
+    finish();
+  }, 7000);
+},
+
+/* P-ANCHOR — P-M3 measured a 36 px marker's rect centre 18 px ABOVE its coordinate, i.e. the element hangs
+   with its BOTTOM on the coordinate. Pin the anchorOffset that actually centres it, in both signs, rather
+   than reasoning about it. */
+anchor() {
+  makeMap();
+  setTimeout(() => {
+    map.region = region(0.01, 0.02);
+    const coord = new mapkit.Coordinate(HOME.lat, HOME.lng);
+    const make = (dy, cls) => {
+      const el = () => { const d = document.createElement('div'); d.className = cls; return d; };
+      return new mapkit.Annotation(coord, el, {
+        size: { width: 36, height: 36 },
+        anchorOffset: new DOMPoint(0, dy),
+        collisionMode: mapkit.Annotation.CollisionMode.None,
+        displayPriority: mapkit.Annotation.DisplayPriority.Required,
+      });
+    };
+    const a0 = make(0, 'camp-marker probe-a0');
+    const aPlus = make(18, 'camp-marker probe-aplus');
+    const aMinus = make(-18, 'camp-marker probe-aminus');
+    [a0, aPlus, aMinus].forEach(a => map.addAnnotation(a));
+
+    setTimeout(() => {
+      const pt = map.convertCoordinateToPointOnPage(coord);
+      const dy = (cls) => {
+        const el = document.querySelector('.' + cls);
+        if (!el) return null;
+        const r = el.getBoundingClientRect();
+        return Math.round(r.top + r.height / 2 + scrollY - pt.y);
+      };
+      record('coordPageY', Math.round(pt.y));
+      record('offset0_rectCentreMinusCoordY', dy('probe-a0'));
+      record('offsetPlus18_rectCentreMinusCoordY', dy('probe-aplus'));
+      record('offsetMinus18_rectCentreMinusCoordY', dy('probe-aminus'));
+      finish();
+    }, 2000);
+  }, 7000);
+},
+
+};
+
+function start() {
+  const fn = RUN[probe];
+  if (!fn) return log(`no such probe: ${probe}`);
+  log(`\nrunning ${probe}…`);
+  fn();
+}
+</script>
+</body>
+</html>

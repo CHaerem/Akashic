@@ -79,7 +79,7 @@ export function useTrekData(): UseTrekDataReturn {
     const [editMode, setEditMode] = useState(false);
     const toggleEditMode = useCallback(() => setEditMode(prev => !prev), []);
 
-    // Use transition for view changes to prevent blocking Mapbox animations
+    // Use transition for view changes to prevent blocking the map surface's animations
     const [, startTransition] = useTransition();
 
     // Track if URL params have been processed

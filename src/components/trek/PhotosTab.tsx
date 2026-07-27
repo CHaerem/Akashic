@@ -237,9 +237,13 @@ export function PhotosTab({ trekData, editMode = false, onViewPhotoOnMap, mapVie
         }
 
         // MAP-01: a `LngLatBounds`-object branch stood here, calling getWest()/getEast()/getSouth()/
-        // getNorth(). It was unreachable: the only producer is MapboxGlobe's `bounds.toArray()`, which
-        // always yields the nested tuple handled above, and the tests already passed plain arrays. Naming
+        // getNorth(). It was unreachable: the only producer was MapboxGlobe's `bounds.toArray()`, which
+        // always yielded the nested tuple handled above, and the tests already passed plain arrays. Naming
         // the real contract (`MapBounds`) made the cast impossible and the dead branch went with it.
+        // MAP-05 deleted that producer; the current one is `useMapKitJourney`'s viewport reporting, which
+        // builds the same nested tuple from the container's corners. The reasoning is unchanged — MapBounds
+        // is always the tuple — and it is now guaranteed by the type rather than by one vendor's return
+        // value, which is the outcome MAP-01 was for.
         return false;
     }, []);
 

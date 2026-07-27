@@ -44,15 +44,68 @@ jobs:
         if: steps.playwright-cache.outputs.cache-hit == 'true'
         run: npx playwright install-deps chromium
 
+      - name: Mint a localhost MapKit token
+        # MAP-05: without this the gate loses its journey coverage entirely.
+        #
+        # Mapbox used to be this suite's live map dependency, and the journey specs needed no
+        # credential beyond `secrets.VITE_MAPBOX_TOKEN`. MAP-05 deleted that surface, so the journey
+        # view is MapKit-only and MapKit JS comes from Apple's CDN behind a minted JWT — there is no
+        # npm package and no offline mode. With no token, `playwright.config.ts` deliberately does
+        # not register the journey specs, so this job would go GREEN having silently stopped testing
+        # the map. Minting here is what keeps the run honest.
+        #
+        # `--origin localhost` (bare, no port — measured accepted by Apple; the port is not part of
+        # the origin claim) because the runner serves the app from http://localhost:5173. `--days 1`
+        # because the token's only job is to outlive this job.
+        #
+        # WHAT THIS COSTS, and it is a real cost: every journey spec now has a live dependency on
+        # Apple's CDN, so an Apple outage can turn this gate red. That is the property QUA-40 removed
+        # for CloudKit, partially reintroduced for a different Apple service. It is documented in
+        # `e2e/fixtures/test.ts`, which measures the suite's external hosts on every run rather than
+        # trusting this comment. The CloudKit family remains hard-blocked and asserted empty.
+        env:
+          # Variables, not secrets: both ship in clear text inside every token. Only the .p8 is secret.
+          MAPKIT_KEY_ID: ${{ vars.MAPKIT_KEY_ID }}
+          MAPKIT_TEAM_ID: ${{ vars.MAPKIT_TEAM_ID }}
+          MAPKIT_PRIVATE_KEY: ${{ secrets.MAPKIT_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          TOKEN="$(node scripts/mapkit/mintToken.mjs --origin localhost --days 1)"
+          if [ -z "$TOKEN" ]; then
+            echo "::error::minted MapKit token is empty — the journey specs would be skipped silently."
+            exit 1
+          fi
+          echo "VITE_MAPKIT_TOKEN=$TOKEN" >> "$GITHUB_ENV"
+
       - name: Run E2E tests
         env:
-          VITE_MAPBOX_TOKEN: ${{ secrets.VITE_MAPBOX_TOKEN }}
-          # CloudKit is the only backend (T3.4). The JS API token is public and
-          # container-scoped — it is baked into the client bundle either way — so
-          # it lives in repo vars, not secrets. Signed-out e2e reads the public
-          # showcase mirror (T3.3) in the Development environment.
-          VITE_CLOUDKIT_ENV: ${{ vars.VITE_CLOUDKIT_ENV || 'development' }}
-          VITE_CLOUDKIT_API_TOKEN: ${{ vars.VITE_CLOUDKIT_API_TOKEN || '' }}
+          # MAP-05 removed VITE_MAPBOX_TOKEN from here with the package. VITE_MAPKIT_TOKEN arrives
+          # from the minting step above via GITHUB_ENV; `playwright.config.ts` passes it to the dev
+          # server and registers the journey specs only when it is present.
+          # QUA-40: VITE_CLOUDKIT_ENV and VITE_CLOUDKIT_API_TOKEN are deliberately ABSENT.
+          #
+          # They used to be read here as `${{ vars.* }}` — the same two repository variables
+          # the production deploy reads. They were switched to production at
+          # 2026-07-27T06:36 and this gate went red 57 minutes later, with no commit in
+          # between touching the CloudKit fetch path. MEASURED against the CloudKit REST
+          # endpoint with the production token:
+          #     Origin: https://akashic.no      -> HTTP 200
+          #     Origin: http://localhost:5173   -> HTTP 401
+          #     (no Origin header)              -> HTTP 401
+          # The production token is origin-restricted to the apex, and a CI runner serves
+          # the app from localhost, so every CloudKit call 401s. Publishing a journey into
+          # the production mirror would NOT have helped: the 401 is an authorisation
+          # failure that happens before any record is considered.
+          #
+          # Under VITE_E2E_TEST_MODE the app now takes a fixture CloudKit container
+          # (src/fixtures/e2eCloudKitContainer.ts) and never reaches loadCloudKit(),
+          # CloudKit.configure() or the REST endpoint — so these two variables are simply
+          # irrelevant to this job. Leaving them declared and ignored would keep the
+          # coupling in the very file the next person reads. There is now no repository
+          # variable a deployer can change that reaches this gate.
+          #
+          # `e2e/fixtures/test.ts` asserts per run that zero requests reached an Apple host,
+          # so the decoupling is measured on every run rather than assumed here.
           VITE_E2E_TEST_MODE: 'true'
           CI: 'true'
         run: npx playwright test --project=chromium --ignore-snapshots

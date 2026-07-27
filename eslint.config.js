@@ -11,7 +11,10 @@ export default defineConfig([
   // the 144 .ts/.tsx files under src/ (both counts measured). tsc checks types; it does not catch
   // unused vars, bad hook deps, or `any` creep. With TS included the run covers 171 files.
   // e2e/ is Playwright's and has its own tsconfig, so it stays out of the type-aware program.
-  globalIgnores(['dist', 'e2e', 'dev-dist', 'coverage']),
+  // scripts/mapkit/imagery-compare/tokens.js is GENERATED (by tokens.mjs) and gitignored — but eslint's
+  // flat config does not read .gitignore, so without this line the harness's generated browser globals
+  // fail `no-undef` and put the lint gate at 1 error the moment anyone runs the imagery comparison.
+  globalIgnores(['dist', 'e2e', 'dev-dist', 'coverage', 'scripts/mapkit/imagery-compare/tokens.js']),
   // Node.js scripts
   {
     files: ['scripts/**/*.{js,mjs}', 'vite.config.js'],
@@ -100,13 +103,20 @@ export default defineConfig([
 
       // The three rules below arrived as errors when eslint-plugin-react-hooks went to v7, which
       // folded the React Compiler readiness checks into `recommended`. Akashic's web client does
-      // not run the React Compiler, and the 16 findings are concentrated in useMapbox.ts (1.8k
-      // lines) and DayGallery: almost all are "callback references a const declared later in the
-      // component body", which works today and is fixed only by reordering large blocks. The web
-      // client is frozen as a showcase view (decision recorded 2026-07-26), so that reordering
-      // buys readiness for a compiler we do not use, at real regression risk in code nobody is
-      // otherwise touching. Warn, so they are counted and visible, rather than gate on them.
-      // Revisit if the freeze lifts or React Compiler is adopted.
+      // not run the React Compiler. Almost all the findings are "callback references a const
+      // declared later in the component body", which works today and is fixed only by reordering
+      // large blocks. The web client is frozen as a showcase view (decision recorded 2026-07-26),
+      // so that reordering buys readiness for a compiler we do not use, at real regression risk in
+      // code nobody is otherwise touching. Warn, so they are counted and visible, rather than gate
+      // on them. Revisit if the freeze lifts or React Compiler is adopted.
+      //
+      // The count and its distribution moved under MAP-05 and the justification is weaker for it,
+      // so it is restated MEASURED (`npx eslint . -f json`) rather than left to imply the old
+      // shape: 11 findings across five files, the largest concentration being DayGallery (4) and
+      // PhotoLightbox (3). It used to be 16 "concentrated in useMapbox.ts (1.8k lines) and
+      // DayGallery" — deleting Mapbox removed 11 of the 25 total warnings without fixing anything,
+      // so "concentrated in one huge file nobody should touch" is no longer the argument. What is
+      // left is genuinely spread across live components, and the freeze is now the whole reason.
       //
       // `react-hooks/rules-of-hooks` and `react-hooks/refs` deliberately stay errors: both were
       // already clean (refs had one finding, in useDragGesture, and it is fixed).

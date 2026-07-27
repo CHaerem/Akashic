@@ -26,7 +26,7 @@ database to operate, and no server to run.
 | Access control | CloudKit itself — `CKShare` on a per-journey record zone | **Live.** Enforced by Apple, not by us. |
 | Public journeys | A mirror in the container's **public** database, written by the app on publish | **Live.** Metadata + thumbnails only. |
 | Assistant / automation | App Intents (Siri, Shortcuts) inside the app | **Live.** |
-| Web maps | Mapbox GL JS (globe projection, 3D terrain) | **Live, and being replaced by Apple MapKit** — see the decision below. 1626 KB of a 2380 KB bundle; `MAP-05` removes it last. |
+| Web maps | Apple MapKit JS for the journey view; our own tokenless canvas globe for the landing view | **Live. The replacement is done** — see the decision below. `MAP-03` moved the journey view, `MAP-02` replaced the globe with geometry we vendor ourselves, and `MAP-05` deleted Mapbox: 2707 lines of source and a 1 664 113-byte chunk out of the bundle. Journeys need a minted MapKit token; the globe needs none. |
 | iOS app native maps | MapKit `.hybrid(elevation: .realistic)` | **Live, and staying.** Free, on-device, no token, no vendor. |
 | Web fonts | **Google Fonts** (`fonts.googleapis.com`, `fonts.gstatic.com`) — Roboto + Playfair Display | **Live, and missed by the first dependency audit** because that audit grepped the compiled JS and not `index.html`. Every visitor's IP reaches Google before any of the family's content renders, on a page whose selling point is that the data never leaves the owner's iCloud. `LEG-17` self-hosts them. |
 | Web hosting | **GitHub Pages**, via [`.github/workflows/deploy-pages.yml`](./.github/workflows/deploy-pages.yml) | **Live.** Cut over 2026-07-27; `deploy.yml` (Cloudflare) is deleted. Only `main` may deploy — the `github-pages` environment restricts it. |
@@ -47,10 +47,16 @@ uses it, so alignment is reached by moving only the web.
 
 If a different vendor ever fits better, the correct move is to swap **both surfaces as a single job** so
 they cannot drift. That imposes a requirement on the web work rather than being a slogan: the map has to
-sit behind an interface narrow enough that the next swap is one adapter. Today's `useMapbox.ts` is 1810
-lines with Mapbox concepts (`addLayer`, `setPaintProperty`, `setTerrain`) leaking through its own surface,
-and three components import Mapbox types directly — rebuilding that shape against MapKit would spend ten
-days to arrive at the same trap. `MAP-01` therefore comes first, before any MapKit code.
+sit behind an interface narrow enough that the next swap is one adapter. When this was written, `useMapbox.ts`
+was 1810 lines with Mapbox concepts (`addLayer`, `setPaintProperty`, `setTerrain`) leaking through its own
+surface, and three components imported Mapbox types directly — rebuilding that shape against MapKit would have
+spent ten days to arrive at the same trap. `MAP-01` therefore came first, before any MapKit code.
+
+**It paid out, and the number is worth recording.** `MAP-01` found that almost nothing was actually leaking:
+one vendor type (`mapboxgl.LngLatBoundsLike`) across four files, and it was wider than the truth. The swap
+that followed replaced the whole surface without touching `AkashicApp`, and `src/lib/map/boundary.test.ts`
+now fails the build if anything reaches past the boundary again. That test is the durable part of this
+decision — the prose above is why it exists.
 
 **What the web gives up, measured rather than assumed.** An agent downloaded the shipped MapKit JS binary
 (v5.81.65) and grepped it: `pitch` 0 hits, `tilt` 0, `globe` 0, `orthographic` 0. Apple's web map has no
@@ -236,8 +242,9 @@ Every intent goes through `JourneyStore` → `PersistenceController`, never stra
 
 ## The web showcase (`src/`)
 
-A React 19 + TypeScript + Vite single-page bundle. Mapbox GL JS for the globe and terrain.
-CloudKit JS is the data layer: Apple ID sign-in for the family (private and shared databases),
+A React 19 + TypeScript + Vite single-page bundle. Apple MapKit JS draws the journey map; the landing
+globe is ours, a 2D canvas over vendored public-domain coastline geometry with no token and no tile
+service, so the first screen cannot fail on a credential. CloudKit JS is the data layer: Apple ID sign-in for the family (private and shared databases),
 anonymous reads against the public database for everyone else.
 
 **It is read-only.** As of 2026-07-26 every capability that mutates a journey is native-only.
@@ -253,13 +260,15 @@ Day comments and caption edits are the deliberate exception, and they round-trip
 
 ```
 src/
-├── components/       AkashicApp, AuthGuard, MapboxGlobe, and feature folders
+├── components/       AkashicApp, AuthGuard, MapSurface (picks AkashicGlobe or
+│                     MapKitJourneyMap by view), and feature folders
 │                     (home, trek, journey, photos, comments, public, layout, nav, ui)
 ├── contexts/         AuthContext, JourneysContext, ThemeContext
-├── hooks/            useMapbox (modular, under hooks/mapbox/), useTrekData, usePhotoDay,
+├── hooks/            useTrekData, usePhotoDay,
 │                     usePhotoOriginals, useMedia, useOnlineStatus, gesture hooks
 ├── lib/              cloudkit.ts (CDN load + auth facade), journeys/ (API + CloudKit
-│                     adapters), media.ts, nativeOnly.ts, exif.ts
+│                     adapters), map/ (vendor-neutral contract + mapkit/ adapter),
+│                     globe/ (the tokenless landing globe), media.ts, nativeOnly.ts, exif.ts
 ├── styles/           liquidGlass.ts design tokens
 ├── types/            shared TypeScript types
 └── utils/            dates, formatting, geography, routeUtils, stats, countryFlags
@@ -286,7 +295,9 @@ regresses: every day switch cancels **all** pending camera work (`map.stop()`, R
 style-load handlers, timeouts) and re-verifies that the selection has not changed before
 applying camera movement or route highlighting. `isStyleLoaded()` returns `false` during
 `fitBounds`/`flyTo`, so checking it invents problems; once `mapReady` is true the style is
-loaded. See [`src/hooks/mapbox/useMapbox.ts`](./src/hooks/mapbox/useMapbox.ts).
+loaded. That was the Mapbox surface, deleted in `MAP-05`; the same class of race is handled on MapKit by
+[`src/lib/map/mapkit/cameraQueue.ts`](./src/lib/map/mapkit/cameraQueue.ts), which exists precisely because
+MapKit has no `map.stop()` to make the problem disappear.
 
 ---
 
@@ -318,7 +329,9 @@ Only after that does deleting the Cloudflare DNS zone and Pages project become s
 The web bundle needs two things and no secrets of ours. See [`.env.example`](./.env.example).
 
 ```env
-VITE_MAPBOX_TOKEN=…            # required — globe and terrain
+VITE_MAPKIT_TOKEN=…            # journey map only — mint with scripts/mapkit/devToken.mjs.
+                               # The landing globe needs NO token, so an unset value degrades
+                               # to an error card on journeys and nothing else.
 VITE_CLOUDKIT_ENV=development  # 'development' (default) | 'production'
 VITE_CLOUDKIT_API_TOKEN=…      # container-scoped, public — for anonymous public-DB reads
 VITE_E2E_TEST_MODE=true        # optional — disables auth for Playwright
@@ -328,7 +341,11 @@ CloudKit JS itself is loaded from Apple's CDN. There are no Supabase, R2 or Work
 left in the code; the `VITE_MEDIA_URL` line still present in `.env.example` is dead and should
 go with the Worker.
 
-CI secrets still in use: `VITE_MAPBOX_TOKEN`. `CLOUDFLARE_API_TOKEN` and
+CI secrets still in use: `MAPKIT_PRIVATE_KEY` (the Apple `.p8`, plus the `MAPKIT_KEY_ID` and
+`MAPKIT_TEAM_ID` repo *variables*) — `deploy-pages.yml` and `e2e.yml` mint a fresh token per run rather
+than storing one, so the token's lifetime is never load-bearing. `VITE_MAPBOX_TOKEN` is no longer read by
+any workflow after `MAP-05`; **revoking the Mapbox account key itself is the owner's outstanding task**,
+and `scripts/mapkit/imagery-compare/` is the one thing that still uses it. `CLOUDFLARE_API_TOKEN` and
 `CLOUDFLARE_ACCOUNT_ID` are used only by `deploy.yml` and are revoked in `LEG-10`.
 
 ---
@@ -349,9 +366,11 @@ fail and why (web typecheck does; three quality gates are open at once, which is
 happened), and which commands must never be run because they mutate things or need the owner's
 credentials.
 
-E2E tests run with `VITE_E2E_TEST_MODE=true`, which disables auth. `window.testHelpers` on
-`MapboxGlobe` exposes `selectTrek`, `getTreks`, `selectDay`, `getCurrentDay`, `getCamps`,
-`isMapReady`, `isDataLoaded` for programmatic control. Specs live in [`e2e/`](./e2e).
+E2E tests run with `VITE_E2E_TEST_MODE=true`, which disables auth. `window.testHelpers` — owned by
+`MapSurface` since `MAP-03`, because two surfaces cannot both register the same global without racing —
+exposes `selectTrek`, `getTreks`, `selectDay`, `getCurrentDay`, `getCamps`, `isMapReady`, `isDataLoaded`
+and `getMapState` for programmatic control. Specs live in [`e2e/`](./e2e). The journey specs need a minted
+`VITE_MAPKIT_TOKEN` and are not registered without one; see [`playwright.config.ts`](./playwright.config.ts).
 
 ---
 
