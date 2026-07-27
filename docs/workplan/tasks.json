@@ -2543,7 +2543,7 @@
     {
       "id": "LEG-17",
       "track": "LEGACY",
-      "status": "TODO",
+      "status": "DONE",
       "effort": 0.25,
       "priority": 48,
       "title": "Self-host the fonts — Google Fonts is a third external origin",
@@ -2558,7 +2558,13 @@
       "verify": [
         "npm run build && ! grep -r 'fonts.googleapis\\|fonts.gstatic' dist/",
         "Load the deployed page and confirm no request to a Google origin"
-      ]
+      ],
+      "claim": {
+        "agent": "opus5",
+        "branch": "claude/remote-control-project-review-9462c1",
+        "at": "2026-07-27"
+      },
+      "evidence": "Fonts self-hosted; Google is gone from the product. Bare-word greps (the escaped dots in the JS regex literals had been defeating my earlier greps -- 'fonts\\.googleapis' does not match 'fonts\\\\.googleapis'): vite.config.js 0 references, dist/sw.js 0 references, no <link> to Google in dist/index.html. roboto-latin-variable.woff2 is precached by the service worker. 414 web tests pass, typecheck clean, build ok. THREE THINGS BETTER THAN THE TASK ASSUMED: (1) Playfair Display was requested from Google on every page load and used by NOTHING -- declared in tailwind.config.js as 'display', referenced by no component, absent from every built CSS -- so it was dropped rather than vendored, removing a whole family; (2) upstream returns the SAME woff2 URL for weights 400/600/700, so one 37,520-byte file replaces the expected six, and roboto.css reproduces Google's own three @font-face blocks verbatim with only the url() swapped, so rendering cannot drift; (3) the old Google link requested 300/400/500/700 while the built CSS needs 600 and 700 -- so weight 600 was being synthesised before and is now real. Provenance and the Apache 2.0 licence are committed beside the file: the first licence URL returned a 14-byte '404: Not Found' body, which was discarded rather than committed -- the exact mistake LEG-16 had just found in clouds.png."
     }
   ]
 }

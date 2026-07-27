@@ -10,7 +10,9 @@ export default {
     extend: {
       fontFamily: {
         sans: ['Roboto', 'sans-serif'],
-        display: ['Playfair Display', 'serif'],
+        // LEG-17: Playfair Display removed. It was fetched from Google on every page load and used
+        // by nothing — no component referenced `font-display` and it reached no built CSS. Left out
+        // rather than self-hosted so it cannot silently return.
       },
       colors: {
         mountain: {

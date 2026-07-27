@@ -5,23 +5,23 @@
 
 # Akashic — work ledger
 
-111 tasks · **24 open** (3 agent-doable, 0.6 dev-days · 21 owner-only, 8.7 dev-days) · 87 done · 0 dropped
+111 tasks · **23 open** (2 agent-doable, 0.4 dev-days · 21 owner-only, 8.7 dev-days) · 88 done · 0 dropped
 
 > **`dev-days` are a human-developer estimate, not agent time.** They came from the review
 > that produced these tasks and they are the right unit for deciding whether something is
 > worth doing — they are the wrong unit for predicting how long an agent will take, and
 > summing them as "work remaining" overstates it substantially.
 >
-> Measured so far: **85 agent tasks estimated at 62.1 dev-days**,
+> Measured so far: **86 agent tasks estimated at 62.3 dev-days**,
 > closed in roughly one working afternoon across up to three parallel tracks.
 >
 > But that compression is **unmeasured for the large items**: of the tasks closed so far,
 > 7 were 2 dev-days or more. 0 of the
-> 0.6 remaining dev-days sit in 0 such tasks —
+> 0.4 remaining dev-days sit in 0 such tasks —
 > localisation, Swift 6 strict concurrency, a UI test target, the PDF book. Those involve
 > design judgement and broad-blast-radius refactors rather than localised edits, so do not
 > assume the same ratio holds. The cheap band is nearly exhausted:
-> 3 tasks at 0.5 dev-days or less remain.
+> 2 tasks at 0.5 dev-days or less remain.
 
 Read [CLAUDE.md](CLAUDE.md) before touching anything. To find work:
 
@@ -39,7 +39,7 @@ node scripts/workplan.mjs next
 
 > Retire Supabase, Cloudflare and R2. Repo-side removal can happen now; the infrastructure deletions are gated on the archive being duplicated and on the Pages cutover. LEG-01 is independent of every gate and should happen today.
 
-10 open of 18 · 3.2 d remaining
+9 open of 18 · 3 d remaining
 
 | | Task | Days | Who | Deps | Finish line |
 |---|---|---|---|---|---|
@@ -60,7 +60,7 @@ node scripts/workplan.mjs next
 | ` ` | `LEG-14` **Remove the dead 'build-deploy' required status check from main** | 0.1 | owner | — | main's required status checks are exactly the three that can still report, and a test PR is mergeable. |
 | `x` | `LEG-15` **Delete the dead Mapbox Map Matching wrapper** | 0.1 | agent | — | src/lib/mapMatching.ts is gone and nothing references api.mapbox.com/matching. |
 | `x` | `LEG-16` **Delete public/textures — 3.8 MB of unattributed dead imagery** | 0.1 | agent | — | public/textures is gone and dist/ no longer ships it. |
-| ` ` | `LEG-17` **Self-host the fonts — Google Fonts is a third external origin** | 0.25 | agent | — | No request to fonts.googleapis.com or fonts.gstatic.com from the deployed page, and the two service-worker rules for them are gone. |
+| `x` | `LEG-17` **Self-host the fonts — Google Fonts is a third external origin** | 0.25 | agent | — | No request to fonts.googleapis.com or fonts.gstatic.com from the deployed page, and the two service-worker rules for them are gone. |
 
 ## DOCS
 

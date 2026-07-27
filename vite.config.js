@@ -134,25 +134,10 @@ export default defineConfig({
 							},
 						},
 					},
-					// Google Fonts
-					{
-						urlPattern: /^https:\/\/fonts\.googleapis\.com\//,
-						handler: "StaleWhileRevalidate",
-						options: {
-							cacheName: "google-fonts-stylesheets",
-						},
-					},
-					{
-						urlPattern: /^https:\/\/fonts\.gstatic\.com\//,
-						handler: "CacheFirst",
-						options: {
-							cacheName: "google-fonts-webfonts",
-							expiration: {
-								maxEntries: 30,
-								maxAgeSeconds: 60 * 60 * 24 * 365, // 1 year
-							},
-						},
-					},
+					// LEG-17: the two Google Fonts rules that stood here are gone with the origin. Roboto is
+					// self-hosted now, so it is precached by `globPatterns` above (which already lists woff2)
+					// along with the rest of the build. A runtime rule for a domain we no longer contact would
+					// only have kept a dead cache alive.
 				],
 			},
 		}),

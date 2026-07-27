@@ -1,0 +1,53 @@
+/*
+ * Self-hosted Roboto — LEG-17. Replaces the Google Fonts <link> that used to sit in index.html.
+ *
+ * WHY: every visitor's IP reached fonts.googleapis.com before a byte of the family's content rendered,
+ * on a page whose selling point is that the data never leaves the owner's iCloud. A stylesheet link was
+ * undoing a privacy claim.
+ *
+ * These @font-face blocks are Google's OWN declarations for the latin subset, copied verbatim with only
+ * the url() swapped for the vendored file. Nothing about the weights or the unicode-range is invented:
+ * all three weights resolve to the same woff2 upstream, so one 37 KB file serves them, and reproducing
+ * Google's own blocks means the rendering cannot drift from what shipped before.
+ *
+ * The unicode-range covers U+0000-00FF, so æ ø å are included — the Norwegian text renders from this
+ * file and never falls back.
+ *
+ * Playfair Display is NOT here on purpose: it was requested from Google on every page load, declared in
+ * tailwind.config.js as `display`, and used by nothing — no component references font-display and it
+ * reaches no built CSS. Removed rather than vendored. See LEG-17.
+ *
+ * LICENCE: Roboto is Apache License 2.0 — see public/fonts/LICENSE-Roboto.txt, committed beside the
+ * file. Recorded deliberately: LEG-16 had just deleted 3.8 MB of vendored imagery whose provenance
+ * nobody wrote down.
+ */
+
+@font-face {
+  font-family: 'Roboto';
+  font-style: normal;
+  font-weight: 400;
+  font-stretch: 100%;
+  font-display: swap;
+  src: url('/fonts/roboto-latin-variable.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: 'Roboto';
+  font-style: normal;
+  font-weight: 600;
+  font-stretch: 100%;
+  font-display: swap;
+  src: url('/fonts/roboto-latin-variable.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: 'Roboto';
+  font-style: normal;
+  font-weight: 700;
+  font-stretch: 100%;
+  font-display: swap;
+  src: url('/fonts/roboto-latin-variable.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}

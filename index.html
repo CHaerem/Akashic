@@ -105,9 +105,11 @@
     <link rel="apple-touch-startup-image" href="/splash/apple-splash-1620-2160.png" media="(device-width: 810px) and (device-height: 1080px) and (-webkit-device-pixel-ratio: 2)" />
 
     <!-- Fonts -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&family=Playfair+Display:wght@700;900&display=swap" rel="stylesheet">
+    <!-- LEG-17: self-hosted. Was three lines reaching fonts.googleapis.com / fonts.gstatic.com, which
+         sent every visitor's IP to Google before any of the family's content rendered. Preloaded so the
+         first paint does not wait on a stylesheet round-trip, which the <link> version did anyway. -->
+    <link rel="preload" href="/fonts/roboto-latin-variable.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="stylesheet" href="/fonts/roboto.css">
 
     <!-- Scrapers that find no og:title fall back to this; keep it in step with the og: tags. -->
     <title>Akashic — Your treks on a living globe</title>
