@@ -2576,26 +2576,48 @@
       ]
     },
     {
-      "id": "MAP-04",
-      "effort": 1.5,
-      "priority": 53,
+      "id": "MAP-04A",
+      "effort": 0.5,
+      "priority": 52.5,
       "deps": [
-        "MAP-03"
+        "MAP-01"
       ],
-      "owner": true,
-      "title": "MapKit JS token: mint it, restrict it, and make its expiry loud",
-      "done_when": "The deployed page authenticates to MapKit, and a build fails or files an issue when the token is within 14 days of expiring.",
-      "why": "The one genuinely dangerous part, and half of it is owner work. The token is minted in the Apple Developer portal, is public in the bundle by design, and is protected by DOMAIN RESTRICTION rather than secrecy -- Apple rejects requests whose Referer does not match, so a copied token cannot be repointed. That part is fine.\nExpiry is not. Maximum portal validity is ONE YEAR. The day it lapses mapkit.init fails with unauthorized and the journey map is an empty box -- and because MapKit periodically re-invokes the authorization callback, a tab left open across the moment dies mid-session too. With no backend nothing can mint a replacement; the site stays broken until a human pushes a build. On a family keepsake that may go untouched for months, that is a fuse lit today and burning down on a random day next summer.\nSo: a CI step that decodes `exp` and fails at <14 days is not optional, it is the feature. Do NOT rely on a `schedule:` workflow to rotate it -- GitHub disables scheduled workflows after 60 days of repository inactivity, so the rotation dies precisely in the quiet period it exists to protect. Register localhost too, or Playwright and `npm run dev` cannot authenticate; confirm the portal accepts it before assuming.",
+      "title": "Mint the MapKit token in the build, and fail the build before it lapses",
+      "done_when": "scripts/mapkit/mintToken.mjs produces a token a JWT verifier accepts, and the deploy workflow both injects a freshly-minted token and fails when it is within 14 days of expiring.",
+      "why": "The half of MAP-04 that does not need Apple, separated so the owner action shrinks to clicking twice.\nTwo details silently produce a token that looks perfect and always fails auth. First, Node`s default ES256 signature is DER-encoded and every JWT verifier rejects it -- `dsaEncoding: ieee-p1363` is required, and there is a test asserting the signature is exactly 64 bytes and does not start with the DER SEQUENCE tag, so the day someone drops that option the suite says so. Second, the origin claim must match the browser`s Origin header exactly: scheme and host, no path, no trailing slash. That is not hypothetical -- the CloudKit token`s Allowed Origins had been entered as `akashic.no/`, which passed from a curl written to match the stored string and failed from every real browser. The minter refuses a malformed origin rather than normalising it, because a silent correction is what let that bug survive.\nDo NOT rotate via a `schedule:` workflow: GitHub disables scheduled workflows after 60 days of repository inactivity, so the rotation would die in exactly the quiet period it exists to protect. Minting on every deploy has no such hole.",
       "files": [
-        ".github/workflows/**",
-        "scripts/checkMapKitToken.mjs"
+        "scripts/mapkit/**",
+        ".github/workflows/deploy-pages.yml"
       ],
+      "track": "QUALITY",
+      "status": "WIP",
+      "notes": [
+        "2026-07-27: minter written and green (26 tests, scripts/mapkit/mintToken.test.mjs) -- a generated P-256 key proves everything except \"does Apple accept it\", which needs the real key and is MAP-04. Workflow wiring is the remaining half and wants MAP-03 landed first so there is something to authenticate."
+      ],
+      "verify": [
+        "npx vitest --run scripts/mapkit/mintToken.test.mjs"
+      ],
+      "claim": {
+        "agent": "opus5",
+        "branch": "claude/remote-control-project-review-9462c1",
+        "at": "2026-07-27"
+      },
+      "resume": "minter done + 26 tests green; the deploy-workflow wiring wants MAP-03 landed first"
+    },
+    {
+      "id": "MAP-04",
+      "effort": 0.2,
+      "priority": 53,
+      "deps": [],
+      "owner": true,
+      "title": "Create the MapKit JS key and add two repository secrets",
+      "done_when": "A MapKit JS key exists in the Apple Developer portal, and MAPKIT_KEY_ID + MAPKIT_PRIVATE_KEY are set as repository secrets. Verified by running scripts/mapkit/mintToken.mjs in CI and getting a token.",
+      "why": "Reduced from the original scope, and worth recording why. The obvious path is to press \"Generate Token\" in the portal and paste the result -- and that is a fuse. Portal tokens max out at ONE YEAR, there is no backend to replace one, and the day it lapses mapkit.init fails with `unauthorized`, the journey map becomes an empty box, and it stays broken until a human notices and pushes a build. On a keepsake that may go untouched for months that is a bad failure mode.\nThe private key does not expire. So the build mints the token instead (MAP-04A), which means every deploy refreshes it: the fuse resets on every push rather than burning down once. There is no Apple CLI for either half -- verified: altool and notarytool take a .p8 but authenticate to App Store Connect, and xcrun offers only mapc and vmmap -- but only the KEY needs the portal. The JWT is fully scriptable and already written and tested.\nSo the owner action is two downloads-worth of clicking, not a recurring chore. The .p8 downloads ONCE and cannot be re-downloaded; losing it means revoking and re-creating the key.",
+      "files": [],
       "track": "QUALITY",
       "status": "TODO",
       "verify": [
-        "npx vitest --run",
-        "npm run typecheck",
-        "npm run build"
+        "node scripts/mapkit/mintToken.mjs --origin https://akashic.no  # with the two env vars set"
       ]
     },
     {

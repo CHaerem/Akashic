@@ -187,7 +187,12 @@ function render(d) {
     L.push('| Task | Agent | Branch | Stopped at |');
     L.push('|---|---|---|---|');
     for (const t of wip) {
-      L.push(`| \`${t.id}\` ${t.title} | ${t.claim.agent} | \`${t.claim.branch}\` | ${t.resume || '—'} |`);
+      // Tolerant on purpose. `validate` already rejects a WIP task with no claim, in those words —
+      // but this line used to crash with a bare `Cannot read properties of undefined (reading
+      // 'agent')` BEFORE `check` got to print it, so the clear message was replaced by a stack
+      // trace. Rendering a placeholder lets the real diagnostic through.
+      const claim = t.claim || {};
+      L.push(`| \`${t.id}\` ${t.title} | ${claim.agent || '—'} | \`${claim.branch || '—'}\` | ${t.resume || '—'} |`);
     }
     L.push('');
   }
@@ -255,7 +260,10 @@ switch (cmd) {
   case 'check': {
     const d = read();
     const errs = validate(d);
-    if (render(d) !== readFileSync(RENDERED, 'utf8')) {
+    // Only compare the render once the ledger is known valid. Rendering an invalid ledger is at
+    // best a second, vaguer complaint about the same defect and at worst a crash that hides the
+    // first one — which is exactly what a WIP task with no claim used to do.
+    if (!errs.length && render(d) !== readFileSync(RENDERED, 'utf8')) {
       errs.push('WORKPLAN.md is out of date — run `npm run workplan:render` and commit the result');
     }
     if (errs.length) {
