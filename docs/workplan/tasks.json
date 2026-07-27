@@ -276,12 +276,12 @@
       }
     },
     {
-      "id": "LEG-10",
+      "id": "LEG-10A",
       "track": "LEGACY",
-      "title": "Delete deploy.yml, then revoke the Cloudflare and Supabase secrets",
-      "status": "TODO",
+      "title": "Take Cloudflare and Supabase out of the repo",
+      "status": "DONE",
       "effort": 0.25,
-      "done_when": "No workflow references Cloudflare or Supabase, the four secrets are revoked, and CI is green without them.",
+      "done_when": "No workflow references Cloudflare or Supabase, and CI is green without their secrets.",
       "deps": [
         "LEG-09"
       ],
@@ -291,10 +291,32 @@
       "serialise_with": "QUA-01, QUA-03, QUA-04 also edit .github/workflows/**",
       "why": "Order matters: revoking CLOUDFLARE_API_TOKEN while deploy.yml still runs turns CI permanently red. It will not take the site down -- Pages keeps serving the last deploy -- but it makes every push look broken.\n\nThe one-month hold recorded here on 2026-07-27 is GONE: the owner waived hosting rollback the same day. That hold existed only because deploy.yml keeps the Cloudflare site fresh for a DNS revert, and there is no revert to keep fresh. So both halves run as soon as the cutover is verified:\n  * prune VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY (nothing references either; grep -rn SUPABASE .github/ is empty),\n  * delete deploy.yml and revoke CLOUDFLARE_API_TOKEN / CLOUDFLARE_ACCOUNT_ID, in that order.",
       "verify": [
-        "grep -rln cloudflare .github/workflows/  # expect no hits",
-        "gh run list --branch main --limit 5"
+        "grep -rniE \"cloudflare|supabase|wrangler\" .github/  # comments only"
       ],
-      "resume": "Ready to execute the moment its owner dependency clears; no agent work needed beforehand. All other agent tasks in the ledger are DONE as of 2026-07-26."
+      "resume": "Ready to execute the moment its owner dependency clears; no agent work needed beforehand. All other agent tasks in the ledger are DONE as of 2026-07-26.",
+      "owner": false,
+      "evidence": "grep -rniE \"cloudflare|supabase|wrangler\" .github/ returns only two comments in deploy-pages.yml explaining the deletion; .github/workflows/ is apple-ci, deploy-pages, e2e, test; no workflow reads either secret (verified 2026-07-27)",
+      "notes": [
+        "2026-07-27: verified complete. deploy.yml is gone, the four secrets are referenced by nothing in .github/, and CI has been green without them. Split from the revocation half, which CLAUDE.md places with the owner (\"never delete a remote resource, rotate a key, or deploy\") and which this task had wrongly carried as agent work — which is most of why it sat untouched."
+      ]
+    },
+    {
+      "id": "LEG-10B",
+      "effort": 0.2,
+      "priority": 45,
+      "deps": [
+        "LEG-10A"
+      ],
+      "owner": true,
+      "title": "Delete the four dead repository secrets, then revoke the tokens themselves",
+      "done_when": "gh secret list shows neither CLOUDFLARE_* nor VITE_SUPABASE_*, and both tokens are revoked at Cloudflare and Supabase.",
+      "why": "MEASURED 2026-07-27, while setting the MapKit variables: CLOUDFLARE_ACCOUNT_ID, CLOUDFLARE_API_TOKEN,\nVITE_SUPABASE_ANON_KEY and VITE_SUPABASE_URL are all still present as repository secrets, dated\n2025-11-26. Nothing in .github/ reads any of them (LEG-10A). Live credentials that nothing uses are a\nstanding risk with no upside -- and the Cloudflare API token in particular still carries whatever\nscope it was minted with.\n\nTwo halves, and they are not the same act. Deleting the repository secret stops CI from holding the\ncredential; REVOKING the token at Cloudflare/Supabase is what actually makes the credential dead.\nDo both, in that order, and do not stop after the first -- a deleted secret whose token is still\nvalid has improved nothing except the appearance of the settings page.\n\nONE CHECK BEFORE REVOKING, because getting it wrong strands 12.21 GB. scripts/export/pullR2Archive.ts\nis still needed for LEG-03 (the 5080 un-catalogued R2 objects) and reads CLOUDFLARE_ACCOUNT_ID plus\nR2_ACCESS_KEY_ID / R2_SECRET_ACCESS_KEY from the local environment. Those R2 access keys are a\ndifferent credential type from the Cloudflare API token and are NOT among the repository secrets, so\ndeleting the repo secrets is safe for LEG-03. But if the local .env happens to use the same Cloudflare\nAPI token for R2, revoking it removes the only read path to the un-catalogued objects. Confirm which\ncredential the local archive tooling actually uses before revoking, or simply do LEG-03 first.",
+      "files": [],
+      "track": "LEGACY",
+      "status": "TODO",
+      "verify": [
+        "gh secret list --repo CHaerem/Akashic  # expect no CLOUDFLARE_* and no VITE_SUPABASE_*"
+      ]
     },
     {
       "id": "LEG-11A",
@@ -306,7 +328,7 @@
       "owner": true,
       "deps": [
         "LEG-09",
-        "LEG-10"
+        "LEG-10A"
       ],
       "priority": 90,
       "why": "The hosting half of the old LEG-11, freed from the stability gate because the owner waived hosting rollback on 2026-07-27. Nothing here holds data: the Pages project is a build output that GitHub Pages now reproduces, and the DNS zone is replaced by GoDaddy. Do it AFTER confirming akashic.no resolves to GitHub's addresses through GoDaddy -- deleting the Cloudflare zone while it is still authoritative takes the domain down until NS propagates. Order: confirm resolution, then Pages project, then zone.",
@@ -2612,18 +2634,19 @@
       "priority": 53,
       "deps": [],
       "owner": true,
-      "title": "Add the two MapKit repository secrets (key created and verified)",
-      "done_when": "MAPKIT_KEY_ID and MAPKIT_PRIVATE_KEY exist as repository secrets, and a CI run mints a token the bootstrap endpoint accepts.",
+      "title": "Add the MapKit private key as a repository secret",
+      "done_when": "MAPKIT_PRIVATE_KEY exists as a repository secret. The two identifiers are already set as repository variables.",
       "why": "Reduced from the original scope -- the build mints the token now (MAP-04A), so this is portal clicking,\nnot a recurring chore. Two corrections to what this entry used to say, both verified against Apple's own\nDocC source on 2026-07-27.\n\nFIRST: there is a prerequisite the portal only hints at. The \"Maps\" row on Register-a-New-Key renders GREY\nwith \"There are no identifiers available that can be associated with the key\" until a Maps ID exists.\nApple states it plainly elsewhere: \"the MapKit JS checkbox isn't in an enabled state until you create a\nMaps ID.\" So the path is Identifiers -> + -> Maps IDs -> Continue, description free-text, and an\nidentifier whose FIRST dot-separated field must literally be \"maps\" -- maps.no.akashic, NOT\nno.akashic.maps. Then Keys -> + -> tick Maps -> Configure -> pick the Maps ID -> Register -> Download.\nThe .p8 downloads ONCE and is not recoverable; there are two key slots per Maps ID, so treat the second\nas the rotation slot.\n\nSECOND: this entry previously said \"Maximum portal validity is ONE YEAR\" and used that to argue for\nbuild-time minting. That premise has weakened -- Apple's current documentation lists No Expiration among\nthe Domain Token Validation Durations. It does not change the decision (a hardcoded credential you must\nhand-edit to rotate is still worse than one minted on every deploy) but the stated reason was wrong, and\nis corrected here rather than quietly left standing.\n\nWhat can still go wrong, in likelihood order: the identifier string is rejected (that is the \"maps.\"\nprefix, every time); the Identifiers list looks empty because it filters by type and defaults to App IDs;\nthe token signs and then 401s, for which the order of suspicion is the origin/scope format (fixed in\nMAP-04A), then Apple-side breakage -- there are unresolved forum reports of portal-minted MapKit tokens\n401ing on cdn.apple-mapkit.com/ma/bootstrap with DTS concluding service-side, so verify with a trivial\nlocal page before rewriting any integration.\n\nOne cost line for the ledger: MapKit's entitlement is 250,000 map views and 25,000 service calls per day\nPER PROGRAM MEMBERSHIP, not per token. That is a second ceiling on showcase traffic, independent of the\npublic CloudKit egress the cost table already tracks.\n\nUPDATE 2026-07-27: the portal work above is DONE and the measured origin finding below changes the value to use. Mint with --origin 'akashic.no,*.akashic.no', NOT with the apex alone: measured against Apple, a bare domain is 401 ORIGIN_CHECK_FAILURE from any subdomain and a wildcard is 401 from the apex -- they are disjoint, and this site serves from both. See the CLAUDE.md table.",
       "files": [],
       "track": "QUALITY",
       "status": "TODO",
       "verify": [
-        "gh secret list --repo CHaerem/Akashic | grep MAPKIT   # expect both"
+        "gh secret list --repo CHaerem/Akashic | grep MAPKIT_PRIVATE_KEY"
       ],
       "notes": [
         "2026-07-27: the PORTAL HALF IS DONE. Maps ID created and a Maps key issued — Key ID 9UN97VBZR8 (not secret; it travels in every token as the `kid` claim and the token ships in the public bundle). The key is a valid PKCS#8 EC P-256, confirmed with `openssl pkey`. Verified end to end against cdn.apple-mapkit.com/ma/bootstrap: a token minted by scripts/mapkit/mintToken.mjs returns HTTP 200 with real attribution data, so \"does Apple accept it\" — the one question MAP-04A's unit tests explicitly could not answer — is now answered yes. What remains is only the two repository secrets, which the owner sets (the private key is a credential and does not pass through an agent).",
-        "2026-07-27 SECURITY: the .p8 was delivered through a chat upload, so it now sits in a conversation transcript. Low severity — it signs origin-restricted map tokens, grants nothing else, and is revocable — but there are two key slots per Maps ID, so the cheap hygiene is to register a second key later, switch the secret to it, and revoke 9UN97VBZR8. Not urgent; worth not forgetting."
+        "2026-07-27 SECURITY: the .p8 was delivered through a chat upload, so it now sits in a conversation transcript. Low severity — it signs origin-restricted map tokens, grants nothing else, and is revocable — but there are two key slots per Maps ID, so the cheap hygiene is to register a second key later, switch the secret to it, and revoke 9UN97VBZR8. Not urgent; worth not forgetting.",
+        "2026-07-27: everything except the private key is now IN PLACE AND VERIFIED. MAPKIT_KEY_ID=9UN97VBZR8 and MAPKIT_TEAM_ID=9LVCB72DT8 are repository VARIABLES, deliberately not secrets: both travel in clear text inside every minted token (as `kid` and `iss`) and ship in the public bundle, so masking them in CI logs would cost debuggability and buy nothing. Proven end to end by reading both values back out of the repo config, minting with --origin 'akashic.no,*.akashic.no', and getting HTTP 200 from cdn.apple-mapkit.com/ma/bootstrap for Origin https://akashic.no AND https://www.akashic.no. Only the private key is outstanding, and that is owner work: a signing credential does not pass through an agent."
       ]
     },
     {
