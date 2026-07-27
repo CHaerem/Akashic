@@ -876,7 +876,7 @@
       "id": "SHIP-10B",
       "track": "SHIP",
       "title": "Publish one journey into the production mirror and see it signed out",
-      "status": "TODO",
+      "status": "DONE",
       "effort": 0.25,
       "done_when": "A published journey is visible on akashic.no while signed out.",
       "owner": true,
@@ -890,10 +890,14 @@
         "APPLE-MIGRATION-RUNBOOK.md:377 already tracks this as an operator step"
       ],
       "deps": [
-        "SHIP-10A",
-        "SHIP-15"
+        "SHIP-10A"
       ],
-      "files": null
+      "files": null,
+      "evidence": "Full loop measured 2026-07-27 in the iOS Simulator on Debug-Production: production mirror empty (0 PublicJourney) -> published the SAMPLE Kilimanjaro -> \"Showcase updated: Published 1 record, Skipped (no thumbnail) 1\" -> REST query returns 1 record, recordName \"kilimanjaro\", with routeJSON, waypointsJSON, statsJSON, centerLocation -> https://akashic.no/?journey=kilimanjaro renders it SIGNED OUT with title, description, 70 km and seven numbered day markers on the route -> \"Remove from showcase\" -> \"Published 0 records, Removed 2\" -> mirror empty again.",
+      "notes": [
+        "2026-07-27 THE DEPENDENCY ON SHIP-15 WAS WRONG, and this is the useful correction. This entry said the publish path \"cannot be done from a desk\" because it needs a CloudKit-entitled build signed into iCloud and \"no simulator has an iCloud account\". The second half is a configuration state, not a law: the owner signed the simulator into iCloud and the whole loop ran. The first half is subtler — `codesign -d --entitlements --xml` on the Debug-Production simulator build returns `<dict></dict>`, so the entitlement is genuinely NOT embedded, and by the SIGTRAP warning in project.yml the app should have crashed on its first CKContainer. It did not: the log shows client/account-status, client/account-info and `<CKSyncEngine> initialized sync engine`, served by a simulator-specific CloudKit daemon (com.apple.cloudkit.sim). So the simulator does not enforce the entitlement the way a device does. CLAUDE.md's \"no simulator test can prove an entitlement\" still holds for what it says — the entitlement is not observable — but it does NOT follow that entitlement-gated FEATURES are untestable there. Those are different claims and this project had merged them.",
+        "2026-07-27 A LARGER FINDING THAN THE TASK: the app reached CloudKit PRODUCTION and synced the real library down — Settings reported Mode \"CloudKit sync\", container iCloud.no.akashic, environment \"Production (env)\", 4 journeys and 1539 photos, sync \"last update in 0 sec.\" So CKSyncEngine against production is demonstrably working from a simulator. That does not close SHIP-15, which is about PUSH delivery between two devices on two Apple IDs and cannot be simulated — but it removes \"does sync work at all against production\" from that session's risk, which was most of its weight."
+      ]
     },
     {
       "id": "SHIP-11",
@@ -2836,6 +2840,80 @@
         "npm run typecheck",
         "npm run lint",
         "VITE_E2E_TEST_MODE=true CI=true npx playwright test --project=chromium --ignore-snapshots"
+      ]
+    },
+    {
+      "id": "QUA-45",
+      "effort": 0.4,
+      "priority": 15,
+      "deps": [],
+      "title": "The Showcase sheet says a journey is published when the public mirror is empty",
+      "done_when": "The publish state shown to the user reflects the mirror for the CURRENT CloudKit environment, or says it cannot tell.",
+      "why": "MEASURED 2026-07-27, and it is the worst class of bug in a sharing feature: the app told the truth as\nit knew it and the user would have believed something false.\n\nOpening Showcase on the SAMPLE Kilimanjaro read \"This journey is published to the world-readable\nshowcase. Its route, day notes and photo thumbnails can be viewed on the web without signing in.\" At\nthat exact moment a REST query against the PRODUCTION public database returned ZERO PublicJourney\nrecords. Verified twice, minutes apart.\n\nThe cause is that publish state is a flag on the private-database record, and the flag is ENVIRONMENT\nBLIND. The journey had been published while the app pointed at Development; the flag synced down; the\napp now points at Production, where nothing was ever mirrored, and still reports \"published\".\n\nWhy it matters commercially: a customer reading that sentence has no reason to press \"Update\nshowcase\", so their journey is silently absent from akashic.no while the app assures them it is live.\nAnd the same blindness runs the other way — a journey published from a Production build would read as\n\"published\" in a Development build whose mirror is empty.\n\nThe honest fix is not to trust the flag: either query the mirror for the current environment before\nasserting, or scope the flag per environment. If neither is cheap, the sheet must say what it actually\nknows (\"marked as published — not verified against the live showcase\") rather than making a claim\nabout the web it has not checked.",
+      "files": [
+        "apple/Akashic/Views/Showcase/**",
+        "apple/Akashic/Services/PublicMirrorPublisher.swift"
+      ],
+      "track": "QUALITY",
+      "status": "TODO",
+      "verify": [
+        "cd apple && xcodegen generate && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,name=iPhone 17 Pro\" CODE_SIGNING_ALLOWED=NO test -only-testing:AkashicTests"
+      ]
+    },
+    {
+      "id": "QUA-46",
+      "effort": 0.2,
+      "priority": 20,
+      "deps": [],
+      "title": "The showcase page shows two different day counts for the same journey",
+      "done_when": "One journey reports one duration, and it matches the app.",
+      "why": "MEASURED on the live site 2026-07-27 with a real published journey. On\nhttps://akashic.no/?journey=kilimanjaro the header pill reads \"8 days\" while the Duration stat below it\nreads \"7 days\" — two elements, same page, same journey. The app says 7 in both its list card and its\ndetail view, so the header pill is the wrong one.\n\nRead from the DOM to remove any doubt: a SPAN whose parent text is \"8 daysKilimanjaroStart\", and a P\nwhose parent text is \"Duration7 days\".\n\nLikely an inclusive/exclusive slip on the date range or a `days.length + 1`, but do not guess — the\npublished record carries totalDays, so establish which value each surface reads before changing either.\nWorth checking the same pair on the story view and on the og: card, which derive their own copy.",
+      "files": [
+        "src/components/journey/**",
+        "src/lib/journeys/transforms.ts"
+      ],
+      "track": "QUALITY",
+      "status": "TODO",
+      "verify": [
+        "npx vitest --run",
+        "npm run typecheck"
+      ]
+    },
+    {
+      "id": "QUA-47",
+      "effort": 0.3,
+      "priority": 21,
+      "deps": [],
+      "title": "The journey view frames past the imagery resolution and shows a blurred smear",
+      "done_when": "Opening a journey shows legible terrain at the arrival framing, for a short route as well as a long one.",
+      "why": "MEASURED on the live site 2026-07-27. Opening the published Kilimanjaro flew the camera to a framing\nwhere the satellite imagery is a featureless brown blur — zoomed past the deepest tile Mapbox has for\nthat ground, with the seven day markers clustered in the middle of it.\n\nThe cause is framing from route bounds with no floor on ground resolution: this sample route spans a\nfew hundred metres, so fitBounds asks for a zoom no imagery supports. A long route would not show it,\nwhich is why nobody has seen it — the demo fixtures are the short ones.\n\nNote this is the SAME class of problem as the finding MAP-03 must respect, from opposite ends: there,\nApple's Khumbu mosaic is cloudy at ~20 m/px so a fixed WIDE framing is wrong; here a route-bounds\nframing goes too CLOSE. Both say the arrival camera needs clamping at both ends, in metres per pixel\nrather than in zoom levels. See scripts/mapkit/imagery-compare/FINDINGS.md for the measured resolutions.\n\nFix in the vendor-neutral layer if possible, so MAP-03's MapKit surface inherits the clamp rather than\nreimplementing it.",
+      "files": [
+        "src/lib/map/**",
+        "src/hooks/mapbox/useMapbox.ts"
+      ],
+      "track": "QUALITY",
+      "status": "TODO",
+      "verify": [
+        "npx vitest --run",
+        "VITE_E2E_TEST_MODE=true CI=true npx playwright test --project=chromium --ignore-snapshots"
+      ]
+    },
+    {
+      "id": "QUA-48",
+      "effort": 0.3,
+      "priority": 22,
+      "deps": [],
+      "title": "A SAMPLE journey seeded on top of a synced library, duplicating the real one",
+      "done_when": "A fresh install signed into an account that already has journeys does not seed a sample.",
+      "why": "MEASURED 2026-07-27 on a fresh install signed into the owner's real account. The library ended up with\nFOUR journeys, of which two are Kilimanjaro: one badged SAMPLE dated Sep 29 - Oct 9 2023, and one\nunbadged dated Sep 30 - Oct 9 2023. Identical distance (70 km), ascent (4 800 m) and summit (Uhuru Peak,\n5 895 m). The sample is a near-duplicate of the family's real trek, one day offset.\n\nConfig.swift's own comment claims this trap is closed: \"This closes the fresh-install trap: before,\ncloudKitEnabled was a hard false, so EVERY build resolved .fixtures and seeded demo journeys\". That\nfixed the MODE resolution. It did not stop a .cloudKit-mode fresh install from seeding its single demo\njourney before sync arrives — which is a race, not a mode error, and the visible result is a customer\nwhose first sync leaves a fake duplicate of their own trip sitting in their library.\n\nThe SAMPLE badge is doing real work here and should stay; the fix is not to seed at all when the\naccount has journeys, which means deferring the decision until the first sync settles rather than\ntaking it at launch.",
+      "files": [
+        "apple/Akashic/App/JourneyStore.swift",
+        "apple/Akashic/App/Config.swift"
+      ],
+      "track": "QUALITY",
+      "status": "TODO",
+      "verify": [
+        "cd apple && xcodegen generate && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,name=iPhone 17 Pro\" CODE_SIGNING_ALLOWED=NO test -only-testing:AkashicTests"
       ]
     }
   ]

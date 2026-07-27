@@ -5,7 +5,7 @@
 
 # Akashic — work ledger
 
-121 tasks · **27 open** (6 agent-doable, 6.4 dev-days · 21 owner-only, 8.4 dev-days) · 94 done · 0 dropped
+125 tasks · **30 open** (10 agent-doable, 7.6 dev-days · 20 owner-only, 8.1 dev-days) · 95 done · 0 dropped
 
 > **`dev-days` are a human-developer estimate, not agent time.** They came from the review
 > that produced these tasks and they are the right unit for deciding whether something is
@@ -17,11 +17,11 @@
 >
 > But that compression is **unmeasured for the large items**: of the tasks closed so far,
 > 7 were 2 dev-days or more. 5 of the
-> 6.4 remaining dev-days sit in 2 such tasks —
+> 7.6 remaining dev-days sit in 2 such tasks —
 > localisation, Swift 6 strict concurrency, a UI test target, the PDF book. Those involve
 > design judgement and broad-blast-radius refactors rather than localised edits, so do not
 > assume the same ratio holds. The cheap band is nearly exhausted:
-> 4 tasks at 0.5 dev-days or less remain.
+> 8 tasks at 0.5 dev-days or less remain.
 
 Read [CLAUDE.md](CLAUDE.md) before touching anything. To find work:
 
@@ -96,7 +96,7 @@ node scripts/workplan.mjs next
 
 > Hard requirements for a paid v1.0. Most of the remaining calendar time lives here, in items only the owner can do.
 
-10 open of 20 · 4.8 d remaining
+9 open of 20 · 4.5 d remaining
 
 | | Task | Days | Who | Deps | Finish line |
 |---|---|---|---|---|---|
@@ -110,7 +110,7 @@ node scripts/workplan.mjs next
 | `x` | `SHIP-08` **Write the public-showcase takedown procedure** | 0.5 | agent | `DIFF-02` | A documented, tested procedure removes a reported public journey, and the privacy page says how to ask. |
 | `x` | `SHIP-09` **Compile the developer workshop out of Release** | 0.25 | agent | — | No developer surface is reachable in a Release build, and the seven-tap gesture is gone. |
 | `x` | `SHIP-10A` **Point the deployed showcase at the CloudKit PRODUCTION environment** | 0.25 | owner | — | The deployed bundle carries environment:"production" and a PublicJourney query returns without an auth error. |
-| ` ` | `SHIP-10B` **Publish one journey into the production mirror and see it signed out** | 0.25 | owner | `SHIP-10A` `SHIP-15` | A published journey is visible on akashic.no while signed out. |
+| `x` | `SHIP-10B` **Publish one journey into the production mirror and see it signed out** | 0.25 | owner | `SHIP-10A` | A published journey is visible on akashic.no while signed out. |
 | ` ` | `SHIP-11` **Trademark and name clearance for 'Akashic'** | 0.5 | owner | — | A written go/no-go exists from Patentstyret and EUIPO in the software class. |
 | ` ` | `SHIP-12` **Paid Applications agreement, banking and tax forms** | 0.5 | owner | — | App Store Connect reports the Paid Applications agreement as active. |
 | ` ` | `SHIP-13` **Create the IAP, join Small Business Program, declare EU trader status** | 0.5 | owner | `DOC-08` `SHIP-12` | no.akashic.app.complete exists at kr 149 with Family Sharing on, and trader status is submitted. |
@@ -148,7 +148,7 @@ node scripts/workplan.mjs next
 
 > Tests, types, CI, localisation, accessibility. Localisation and accessibility are in v1.0 by decision.
 
-8 open of 49 · 7.1 d remaining
+12 open of 53 · 8.3 d remaining
 
 | | Task | Days | Who | Deps | Finish line |
 |---|---|---|---|---|---|
@@ -201,6 +201,10 @@ node scripts/workplan.mjs next
 | `x` | `QUA-40` **E2E reaches live CloudKit, and shares its config with the live site** | 0.4 | agent | — | The E2E Tests workflow is green on main, and it stays green with no network access to Apple. |
 | ` ` | `QUA-41` **Replace the CloudKit canary that QUA-40 removed — check the deployed apex, not localhost** | 0.2 | owner | `QUA-40` | A documented owner check exists that fetches the deployed site's CloudKit path with a real Origin header, and it has been run once against akashic.no. |
 | ` ` | `QUA-42` **e2e/ is checked by neither tsc nor eslint, so the specs are verified only by running** | 0.3 | agent | `QUA-40` | A type error or lint error in e2e/ fails a gate without the suite having to run. |
+| ` ` | `QUA-45` **The Showcase sheet says a journey is published when the public mirror is empty** | 0.4 | agent | — | The publish state shown to the user reflects the mirror for the CURRENT CloudKit environment, or says it cannot tell. |
+| ` ` | `QUA-46` **The showcase page shows two different day counts for the same journey** | 0.2 | agent | — | One journey reports one duration, and it matches the app. |
+| ` ` | `QUA-47` **The journey view frames past the imagery resolution and shows a blurred smear** | 0.3 | agent | — | Opening a journey shows legible terrain at the arrival framing, for a short route as well as a long one. |
+| ` ` | `QUA-48` **A SAMPLE journey seeded on top of a synced library, duplicating the real one** | 0.3 | agent | — | A fresh install signed into an account that already has journeys does not seed a sample. |
 
 ## Decisions on record
 
