@@ -258,7 +258,7 @@
       "done_when": "akashic.no serves from GitHub Pages, privacy/terms/support resolve, and the AASA file is reachable.",
       "owner": true,
       "deps": [
-        "SHIP-10"
+        "SHIP-10A"
       ],
       "why": "Nothing Cloudflare-hosted can be deleted until this lands — deploy.yml still deploys the live site on every push to main. The runbook is complete and two of its stated blockers are already closed: the AASA Team ID is filled in, and netlify.toml was removed by d331970.",
       "verify": [
@@ -791,22 +791,46 @@
       "evidence": "Two independent guards: DeveloperTools.isUnlocked returns false unconditionally in non-DEBUG, and the Form branch plus the seven-tap gesture are inside #if DEBUG so the workshop is not present in the binary at all. Verified against the Release-CloudKit binary: 'Run import to CloudKit', 'Persistence mode', 'Hidden from customers' and 'Clear override' all return 0 occurrences in strings output. Debug-CloudKit and Debug-Production both define DEBUG, so the runbook keeps its tools."
     },
     {
-      "id": "SHIP-10",
+      "id": "SHIP-10A",
       "track": "SHIP",
-      "title": "Point akashic.no at the CloudKit production environment",
+      "title": "Point the deployed showcase at the CloudKit PRODUCTION environment",
       "status": "TODO",
-      "effort": 0.5,
-      "done_when": "The deployed bundle carries environment:\"production\" and a published journey is visible signed out.",
+      "effort": 0.25,
+      "done_when": "The deployed bundle carries environment:\"production\" and a PublicJourney query returns without an auth error.",
       "owner": true,
       "priority": 10,
-      "why": "VITE_CLOUDKIT_ENV is inlined at build time and defaults to 'development' in all three workflows, while T2.5 imported into Production. Verify before the DNS flip, not after, or the first Pages deploy serves an empty showcase against the wrong environment. Needs a Console step to mint a production CloudKit JS token with akashic.no in allowed origins.",
+      "why": "Confirmed live on 2026-07-27, not inferred: akashic.no is public, shows \"CLICK A MARKER TO EXPLORE\" with no journeys, and a PublicJourney query run in the page returns 0 records with NO error — so it is not auth and not code, the development public database is simply empty while T2.5 imported into Production. No repo change is needed: all four workflows already read ${{ vars.VITE_CLOUDKIT_ENV || 'development' }}, and the variable is explicitly set to development. Two repository VARIABLES must change TOGETHER -- VITE_CLOUDKIT_ENV to production and VITE_CLOUDKIT_API_TOKEN to a token minted for Production with akashic.no in allowed origins. Flipping the environment alone leaves a development token pointed at production and turns an empty showcase into an erroring one. The token is correctly a variable rather than a secret: CloudKit JS tokens are public by design (they are inlined into the client bundle) and restricted by origin allowlist, not by secrecy.",
       "verify": [
-        "curl -s https://akashic.no/assets/index-*.js | grep -o 'environment:\"[a-z]*\"'"
+        "curl -s https://akashic.no/assets/index-*.js | grep -o 'environment:\"[a-z]*\"'   # expect production",
+        "In the page: CloudKit.getDefaultContainer().publicCloudDatabase.performQuery({recordType:'PublicJourney'}) must not return an auth error"
       ],
       "refs": [
         "src/lib/cloudkit.ts:21, deploy.yml:35, deploy-pages.yml:63",
         "APPLE-MIGRATION-RUNBOOK.md:377 already tracks this as an operator step"
       ]
+    },
+    {
+      "id": "SHIP-10B",
+      "track": "SHIP",
+      "title": "Publish one journey into the production mirror and see it signed out",
+      "status": "TODO",
+      "effort": 0.25,
+      "done_when": "A published journey is visible on akashic.no while signed out.",
+      "owner": true,
+      "priority": 11,
+      "why": "The half of the old SHIP-10 that cannot be done from a desk. Populating the public mirror runs through PublicMirrorPublisher behind #if AKASHIC_CLOUDKIT_BUILD, and JourneyShowcaseSheet constructs a real CKContainer and checks accountStatus() before it will publish -- so it needs a CloudKit-entitled build signed into iCloud, and no simulator has an iCloud account. Fold this into the SHIP-15 device session; it costs minutes once a device is in hand. Until it is done the showcase is legitimately empty rather than wrongly empty, which is why LEG-09 depends on SHIP-10A and not on this.",
+      "verify": [
+        "Open https://akashic.no in a private window (signed out) and confirm the journey renders on the globe"
+      ],
+      "refs": [
+        "src/lib/cloudkit.ts:21, deploy.yml:35, deploy-pages.yml:63",
+        "APPLE-MIGRATION-RUNBOOK.md:377 already tracks this as an operator step"
+      ],
+      "deps": [
+        "SHIP-10A",
+        "SHIP-15"
+      ],
+      "files": null
     },
     {
       "id": "SHIP-11",
