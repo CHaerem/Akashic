@@ -294,24 +294,18 @@ export function MapboxGlobe({ selectedTrek, selectedCamp, onSelectTrek, view, ph
     }, [recenterRef, mapReady, view, selectedTrek, selectedCamp, treks, flyToTrek, flyToGlobe, onSelectTrek, stopRotation]);
 
     // Handle view transitions - camera movement
+    //
+    // QUA-44: the four console.log calls that used to trace this effect are gone. They ran on
+    // every visit to the live site — sixteen lines before the globe even settled, because the
+    // effect re-runs as mapReady and the selection settle. They are removed here, and
+    // vite.config.js now strips debug console calls from every production build, so the next
+    // one added while debugging cannot ship either.
     useEffect(() => {
-        console.log('[MapboxGlobe camera effect] Triggered:', {
-            view,
-            trek: selectedTrek?.id,
-            camp: selectedCamp?.name,
-            campDay: selectedCamp?.dayNumber,
-            mapReady
-        });
-        if (!mapReady) {
-            console.log('[MapboxGlobe camera effect] Map not ready');
-            return;
-        }
+        if (!mapReady) return;
 
         if (view === 'trek' && selectedTrek) {
-            console.log('[MapboxGlobe camera effect] Calling flyToTrek');
             flyToTrek(selectedTrek, selectedCamp);
         } else if (view === 'globe') {
-            console.log('[MapboxGlobe camera effect] Calling flyToGlobe');
             flyToGlobe(selectedTrek);
         }
     }, [view, selectedTrek, selectedCamp, mapReady, flyToGlobe, flyToTrek]);

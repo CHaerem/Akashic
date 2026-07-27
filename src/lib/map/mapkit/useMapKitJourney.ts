@@ -114,6 +114,16 @@ export function useMapKitJourney(options: UseMapKitJourneyOptions): UseMapKitJou
     const mapRef = useRef<MKMap | null>(null);
     const overlaysRef = useRef<RouteOverlays | null>(null);
     const overlayTrekIdRef = useRef<string | null>(null);
+    /**
+     * The journey whose camera has already been framed once.
+     *
+     * Distinct from `overlayTrekIdRef`, which says "whose overlays are mounted" and is non-null from the
+     * first framing onward — so a condition built on it alone is true for EVERY later framing too. That is
+     * the defect this ref fixes: `isFirstFraming` used `overlayTrekIdRef.current !== null && !selectedCamp`,
+     * which made deselecting a day snap the camera instead of animating back to the whole route, because
+     * "no day selected" is exactly the deselect case as well as the arrival case.
+     */
+    const framedTrekIdRef = useRef<string | null>(null);
     const campsRef = useRef<Map<string, CampAnnotationEntry>>(new Map());
     const photoEntriesRef = useRef<Map<string, PhotoAnnotationEntry>>(new Map());
 
@@ -394,6 +404,9 @@ export function useMapKitJourney(options: UseMapKitJourneyOptions): UseMapKitJou
             }
             overlaysRef.current = null;
             overlayTrekIdRef.current = null;
+            // Reset with the overlays: after a teardown the next framing is genuinely an arrival on a
+            // default camera again, so it must be instant rather than a swoop from wherever we were.
+            framedTrekIdRef.current = null;
             mapRef.current = null;
             setReady(false);
         };
@@ -519,12 +532,20 @@ export function useMapKitJourney(options: UseMapKitJourneyOptions): UseMapKitJou
         const region = regionForSelection();
         if (!region) return;
 
-        // First framing of a journey is instant: MapKit starts on its own default camera, and animating from
-        // there is a meaningless several-thousand-kilometre swoop.
-        const isFirstFraming = overlayTrekIdRef.current !== null
-            && queueRef.current?.pending !== true
-            && !selectedCamp;
-        requestCamera(region, !isFirstFraming);
+        // The first framing OF THIS JOURNEY is instant: MapKit starts on its own default camera, and
+        // animating from there is a meaningless several-thousand-kilometre swoop. Every later framing
+        // animates, including the one that follows deselecting a day.
+        //
+        // The condition was `overlayTrekIdRef.current !== null && !selectedCamp`, and both halves were
+        // wrong for this purpose: `overlayTrekIdRef` is non-null from the first framing onward, and "no
+        // day selected" is the DESELECT case as much as the arrival case — so deselecting a day snapped
+        // the camera. The `selectedCamp` term is gone entirely: arriving on a deep link with a day already
+        // chosen is still an arrival and should still be instant.
+        const isFirstFramingOfThisJourney = overlayTrekIdRef.current !== null
+            && framedTrekIdRef.current !== overlayTrekIdRef.current
+            && queueRef.current?.pending !== true;
+        requestCamera(region, !isFirstFramingOfThisJourney);
+        if (overlayTrekIdRef.current !== null) framedTrekIdRef.current = overlayTrekIdRef.current;
 
         // The highlight is applied with the camera request, and re-checked against the pending camp so a
         // superseded day never paints its segment. Same guard as `useMapbox.ts:1105`.

@@ -2878,16 +2878,16 @@
         "src/lib/journeys/transforms.ts"
       ],
       "track": "QUALITY",
-      "status": "WIP",
+      "status": "DONE",
       "verify": [
         "npx vitest --run",
         "npm run typecheck"
       ],
-      "claim": {
-        "agent": "opus5",
-        "branch": "claude/remote-control-project-review-9462c1",
-        "at": "2026-07-27"
-      }
+      "evidence": "Not an off-by-one — the two surfaces read two different QUANTITIES. The header pill's totalDays came from `trekData?.camps.length` (a WAYPOINT count) while Duration reads the record's stated duration. Kilimanjaro genuinely has 8 waypoints across 7 days: day 6 carries both Uhuru Peak (Summit) and Mweka Camp. Confirmed against four independent sources — apple/Fixtures/recovered/kilimanjaro.json (stats.duration 7, dayNumbers [1,2,3,4,5,6,6,7]); the pre-migration src/data/kilimanjaro.json recovered from git history; the iOS render sites (JourneyListView.swift:172 and JourneyDetailView.swift:380 both read stats.duration, not camps.count); and the live site's Duration stat having rendered 7 straight from the record. One new journeyDayCount() helper now serves every surface, and src/components/journey/dayCountWiring.test.tsx mounts the real AkashicApp and asserts ONE distinct day figure — reverting to camps.length fails it with exactly the live symptom, [\"8 days\",\"7 days\"].",
+      "notes": [
+        "2026-07-27 A SECOND DEFECT fell out of the same line: totalDays also bounds the next-day arrow and generates the day dots, so with 8 it rendered a day-8 dot whose camps.find(c => c.dayNumber === 8) matched nothing — a dead control, live on the site.",
+        "2026-07-27 Why no gate caught it: both e2e fixtures have as many waypoints as days (alpine 5/5, coastal 3/3), so the two quantities coincide there and the bug is invisible to the browser gate. The unit test therefore asserts the FIXTURE's shape too — 8 camps against duration 7, two of them on day 6 — so a fixture whose numbers happen to agree can never make this pass silently again."
+      ]
     },
     {
       "id": "QUA-47",
@@ -2962,15 +2962,14 @@
         "src/lib/map/mapkit/**"
       ],
       "track": "QUALITY",
-      "status": "WIP",
+      "status": "DONE",
       "verify": [
         "npx vitest --run src/lib/map/mapkit/"
       ],
-      "claim": {
-        "agent": "opus5",
-        "branch": "claude/remote-control-project-review-9462c1",
-        "at": "2026-07-27"
-      }
+      "evidence": "src/lib/map/mapkit/useMapKitJourney.test.ts — 4 tests counting mapkit.Map constructions and destroy() calls against a counting fake namespace. Proven able to fail: reintroducing the unstable chromeState dependency takes it from 4 passed to 2 failed with the exact timeline {built 1, destroyed 0} -> {2,1} -> {3,2} across two journey selections, and {1,0} -> {2,1} on a bare signedIn flip. Independently reproduced by the workflow's own adversarial agent.",
+      "notes": [
+        "2026-07-27 The test asserts COUNTS, not the absence of an error, because the defect produces no error: measured in the red run, the newest map already carried all five route overlays and its annotations and `ready` was back to true. Every softer assertion available passes while the map has been thrown away and rebuilt — which is the whole reason this task existed."
+      ]
     },
     {
       "id": "QUA-51",
@@ -2987,17 +2986,17 @@
         "e2e/utils/test-helpers.ts"
       ],
       "track": "QUALITY",
-      "status": "WIP",
+      "status": "DONE",
       "verify": [
         "npx vitest --run",
         "npm run typecheck",
         "npm run lint"
       ],
-      "claim": {
-        "agent": "opus5",
-        "branch": "claude/remote-control-project-review-9462c1",
-        "at": "2026-07-27"
-      }
+      "evidence": "Four drift comments corrected in place — each retains the old wrong claim and says why it was wrong rather than deleting the question — a FIFTH found while fixing them, two dead symbols removed with a tombstone naming what went, and `entry.camp` wired up rather than deleted. src/lib/map/mapkit/annotations.test.ts carries the negative control: reverting the handler to close over the creation-time camp fails two tests on the exact stale values (expected 995 to be 1200).",
+      "notes": [
+        "2026-07-27 `isFirstFraming` was deliberately LEFT by the QUA-51 agent because useMapKitJourney.ts was under concurrent edit by the QUA-50 agent, whose whole method was to reintroduce and revert a defect in that same file — an edit would have broken their negative control. Correct call under the working agreement, and worth recording as the right instinct rather than as a gap.",
+        "2026-07-27 Done afterwards by the dispatching session: renamed to `isFirstFramingOfThisJourney` and keyed on a new framedTrekIdRef rather than on `!selectedCamp`. Both halves of the old condition were wrong for the purpose — overlayTrekIdRef is non-null from the first framing onward, and \"no day selected\" is the DESELECT case as much as the arrival case, which is why deselecting a day snapped the camera instead of animating back to the whole route. The selectedCamp term is gone entirely: arriving on a deep link with a day already chosen is still an arrival and should still be instant. Reset in teardown alongside the overlays, so the framing after a rebuild is instant again."
+      ]
     },
     {
       "id": "QUA-43",
@@ -3033,17 +3032,16 @@
         "src/components/MapboxGlobe.tsx"
       ],
       "track": "QUALITY",
-      "status": "WIP",
-      "claim": {
-        "agent": "opus5",
-        "branch": "claude/remote-control-project-review-9462c1",
-        "at": "2026-07-27"
-      },
-      "resume": "in flight in the QUA-44/46/50/51 cleanup workflow",
+      "status": "DONE",
       "verify": [
         "npm run build",
         "grep -rl \"console\\.log\" dist/assets/ || echo \"none\"",
         "npx vitest --run"
+      ],
+      "evidence": "Fixed as a BUILD PROPERTY, not four deletions: vite.config.js marks console.log/debug/info/trace/dir/table as esbuild `pure` so Rollup tree-shakes them, and scripts/assertNoFixtureInBundle.mjs gained a [console-guard] that greps EVERY file under dist/. Verified in both directions: with the mechanism on, a live console.log in an effect body reaches 0 dist files and the guard exits 0; with the `pure` list emptied, the same source puts it in 1 dist file and the guard exits 1 with the FAIL diagnosis. 26 console.warn and 40 console.error survive.",
+      "notes": [
+        "2026-07-27 The mechanism is `pure`, NOT `drop`, and not the minifier. esbuild does not delete the call, it annotates it /* @__PURE__ */ — measured, the dev server still serves the call verbatim so `npm run dev` logs normally — and Rollup tree-shaking is what removes it. `vite build --minify false` also emits it nowhere. So what breaks this is losing `pure` or disabling treeshake, not a change to build.minify.",
+        "2026-07-27 My own first two negative controls were both worthless and it is worth saying why, because the shape recurs: the first neutralised `drop` (the wrong option, so the mechanism was never off), and the second used a probe in an unreferenced function that Rollup removed as dead code regardless. Only the third — a live call inside an effect body, with `pure` emptied — actually put the mechanism under test. A negative control that fails to reproduce is evidence about the control first, not about the code."
       ]
     }
   ]

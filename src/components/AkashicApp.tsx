@@ -4,7 +4,7 @@ import { useIsMobile } from '../hooks/useMediaQuery';
 import { useMedia } from '../hooks/useMedia';
 import { useJourneys } from '../contexts/JourneysContext';
 import { useAuth } from '../contexts/AuthContext';
-import { fetchPhotos, getJourneyIdBySlug, updatePhoto } from '../lib/journeys';
+import { fetchPhotos, getJourneyIdBySlug, journeyDayCount, updatePhoto } from '../lib/journeys';
 import { hasPendingShares } from '../lib/shareTarget';
 import { setSheetCoversChrome } from '../lib/sheetOverlay';
 import type { Photo, Camp } from '../types/trek';
@@ -181,6 +181,13 @@ export default function AkashicApp() {
         }
     }, [trekData, handleCampSelect]);
 
+    // QUA-46: the day count the "N days" pill shows, the day dots enumerate and the
+    // next-day arrow bounds itself on. This used to be `trekData.camps.length`, which on
+    // Kilimanjaro is 8 against a stated duration of 7 — day 6 holds two waypoints. That
+    // showed as two different day counts on one page, and also generated a day-8 dot whose
+    // `camps.find(c => c.dayNumber === 8)` matched nothing (handleDaySelect, above).
+    const totalDays = useMemo(() => (trekData ? journeyDayCount(trekData) : 0), [trekData]);
+
     // Journey navigation (globe view)
     const currentJourneyIndex = useMemo(() => {
         if (!selectedTrek || treks.length === 0) return 0;
@@ -317,7 +324,7 @@ export default function AkashicApp() {
                 view={view}
                 selectedJourney={selectedTrek?.name ?? null}
                 selectedDay={selectedCamp?.dayNumber ?? null}
-                totalDays={trekData?.camps.length ?? 0}
+                totalDays={totalDays}
                 activeMode={activeMode}
             />
 
@@ -333,7 +340,7 @@ export default function AkashicApp() {
                         view={view}
                         selectedTrek={selectedTrek}
                         selectedCamp={selectedCamp}
-                        totalDays={trekData?.camps.length ?? 0}
+                        totalDays={totalDays}
                         activeMode={activeMode}
                         onModeChange={setActiveMode}
                         onDaySelect={handleDaySelect}
@@ -375,7 +382,7 @@ export default function AkashicApp() {
                         view={view}
                         selectedTrek={selectedTrek}
                         selectedCamp={selectedCamp}
-                        totalDays={trekData?.camps.length ?? 0}
+                        totalDays={totalDays}
                         activeMode={activeMode}
                         onModeChange={setActiveMode}
                         onDaySelect={handleDaySelect}

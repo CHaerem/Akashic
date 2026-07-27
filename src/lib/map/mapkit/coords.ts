@@ -35,7 +35,9 @@ export function toLngLat(coordinate: LatLng | MKCoordinate): LngLat {
     return [coordinate.longitude, coordinate.latitude];
 }
 
-/** Batch form, for a whole route. Drops the elevation third element that `Route.coordinates` carries. */
-export function toLatLngs(coordinates: readonly (readonly [number, number, ...number[]])[]): LatLng[] {
-    return coordinates.map(toLatLng);
-}
+/*
+ * There was a `toLatLngs` batch form here. Deleted by QUA-51: its only caller was its own test.
+ * `./overlays.ts` maps a route through `coordinate()` because it needs real `mapkit.Coordinate` instances,
+ * not plain objects, so a batch of plain objects has no call site to grow into. The elevation-dropping
+ * behaviour it was tested for belongs to `toLatLng` and is still asserted there (`coords.test.ts`).
+ */

@@ -112,6 +112,28 @@ describe('synthesised zoom calibration (MAP-03)', () => {
         expect(synthesizeZoom(dayRegion(5), INSET_WIDTH)).toBeCloseTo(15.000, 3);
     });
 
+    it('OVERSTATES the zoom when handed the container width instead of the inset width (QUA-51)', () => {
+        // The DIRECTION, pinned rather than described. `map.region` spans INSET_WIDTH pixels, so spreading
+        // that span across the full container counts pixels hidden behind the sidebar, claims more pixels
+        // per degree than exist, and reports a camera zoomed further IN than it is. Worth an assertion
+        // because prose keeps getting it backwards — `useMapKitJourney.ts:293-295` says "understate the zoom
+        // and coarsen the photo grid", and both halves are inverted.
+        const skew = Math.log2(DESKTOP.width / INSET_WIDTH);
+        expect(skew).toBeCloseTo(0.483, 3);
+        for (const region of [arrivalRegion(), dayRegion(1), dayRegion(5)]) {
+            const correct = synthesizeZoom(region, INSET_WIDTH);
+            expect(synthesizeZoom(region, DESKTOP.width)).toBeCloseTo(correct + skew, 9);
+        }
+        // Not cosmetic: `syncPhotos` rounds this into a grid level, and the day-1 fit crosses one. A level
+        // too high halves `groupPhotosByLocation`'s `0.1 / 2^(zoom − 8)` cell and splits stacks that belong
+        // together. The arrival frame does NOT cross (11.0 → 11.5, both round to 11), which is exactly how a
+        // mistake like this stays hidden.
+        expect(Math.round(synthesizeZoom(dayRegion(1), INSET_WIDTH))).toBe(13);
+        expect(Math.round(synthesizeZoom(dayRegion(1), DESKTOP.width))).toBe(14);
+        expect(Math.round(synthesizeZoom(arrivalRegion(), DESKTOP.width)))
+            .toBe(Math.round(synthesizeZoom(arrivalRegion(), INSET_WIDTH)));
+    });
+
     it('keeps every on-route fit BELOW 14 and the off-route frame ABOVE it', () => {
         // This is the assertion that matters. See e2e/day-navigation.spec.ts:130-147.
         for (const dayNumber of [1, 2, 3, 4]) {

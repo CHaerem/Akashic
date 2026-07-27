@@ -46,7 +46,6 @@
  */
 
 import type { LngLat, MapBounds } from '../types';
-import type { LatLng } from './coords';
 
 /** Pixel size of the map container. */
 export interface ContainerPx {
@@ -101,9 +100,25 @@ function latForWorldY(y: number): number {
  * answer does not depend on where on the globe the camera is — a latitude-derived zoom would drift with the
  * journey's latitude and quietly move the branch threshold.
  *
- * `widthPx` must be the **inset** width (`container.width − padding.left − padding.right`). For the showcase
- * the attribution padding is bottom-only, so inset width equals container width; the argument is spelled out
- * anyway so a future left/right padding cannot silently skew the number.
+ * `widthPx` must be the **inset** width (`container.width − padding.left − padding.right`), and in the
+ * ordinary desktop journey view that is NOT the container width: `attributionPadding` returns
+ * `left: DESKTOP_PANEL_BAND_PX` (364) whenever a journey is selected, because the sidebar covers the corner
+ * Apple paints into (`./chrome.ts` §3). An earlier version of this comment claimed the padding was
+ * bottom-only — it is bottom-only only on mobile, and only when no panel is open. Both callers subtract
+ * `left + right` (`useMapKitJourney.ts`'s `syncPhotos` and `getCameraState`), and must: `map.region` spans
+ * the INSET width, so spreading that span across the full container claims more pixels per degree than exist
+ * and **OVERSTATES** the zoom, by exactly `log2(1280 / 916) = 0.483` on desktop.
+ *
+ * MEASURED on the fixture journey, correct → wrong: the arrival frame goes `10.994 → 11.477`, which both
+ * round to 11 and so hides the bug, while the day-1 fit goes `13.331 → 13.814` and crosses a level.
+ * `groupPhotosByLocation`'s cell is `0.1 / 2^(zoom − 8)`, so one level too high HALVES the cell and splits
+ * stacks that belong together. `camera.test.ts` pins the direction, because prose gets it backwards easily:
+ * the note at `useMapKitJourney.ts:293-295` says "understate the zoom and coarsen the photo grid", which is
+ * inverted twice over. Not corrected in this commit only because that file was under concurrent edit —
+ * QUA-51's report flags it.
+ *
+ * The `cameraZoom > 14` e2e threshold survives the inset because `regionForZoom` builds the span from the
+ * same inset width that {@link synthesizeZoom} divides by, so the pair round-trips exactly.
  */
 export function spanToZoom(longitudeDelta: number, widthPx: number): number {
     if (!(longitudeDelta > 0) || !(widthPx > 0)) return Number.NaN;
@@ -123,10 +138,22 @@ function unitsPerPixel(zoom: number): number {
 /**
  * Build the region that puts `bounds` inside the padded sub-rect of the inset viewport.
  *
- * Mirrors `map.fitBounds(bounds, { padding, maxZoom })` at `src/hooks/mapbox/useMapbox.ts:1079-1109` and
- * `:1130-1162`, including the asymmetric `right` padding that keeps the route clear of the side panel — the
- * e2e day-navigation tolerances are calibrated to the centre that asymmetry produces, so dropping it would
- * move the assertions rather than the picture.
+ * Mirrors the *fit maths* of `map.fitBounds(bounds, { padding, maxZoom })` at
+ * `src/hooks/mapbox/useMapbox.ts:1079-1109` and `:1130-1162`: the constraining dimension wins, `maxZoom`
+ * clamps the scale, and the centre shifts by half the padding asymmetry.
+ *
+ * It does **not** mirror the incumbent's padding VALUES, and that is deliberate rather than an oversight —
+ * an earlier version of this comment claimed the opposite, which is why the distinction is spelled out.
+ * `useMapbox.ts` pads `right: 450` (arrival) and `right: 400` (day) to clear a side panel that is on the
+ * LEFT in this app, so it frames the route *into* the panel; `./chrome.ts` §2 has the measurement, and both
+ * `arrivalFramePadding` and `dayFramePadding` are horizontally symmetric instead. `chrome.test.ts`'s "is
+ * symmetric on desktop" pins that, and `e2e/mapkit-journey.spec.ts`'s `expectOnRouteCamera` restates the
+ * day-navigation assertion that had silently depended on the eastward shift the asymmetry produced.
+ *
+ * So `offsetXPx` below is zero for all four padding sets this app currently passes. It is still live
+ * arithmetic, not dead: every set is vertically asymmetric (mobile arrival `top: 80` over `bottom: 40`,
+ * desktop day `bottom: 150` over `top: 120`), so `offsetYPx` always does work, and a future horizontal
+ * asymmetry must move the centre rather than silently skew the fit.
  */
 export function regionForBounds(
     bounds: MapBounds,
@@ -252,16 +279,10 @@ export function projectToPixels(
     };
 }
 
-/** Region → the `MapBounds` tuple the rest of the app speaks. Only for tests; the hook uses real corners. */
-export function boundsOfRegion(region: Region): MapBounds {
-    const [lng, lat] = region.center;
-    return [
-        [lng - region.longitudeDelta / 2, lat - region.latitudeDelta / 2],
-        [lng + region.longitudeDelta / 2, lat + region.latitudeDelta / 2],
-    ];
-}
-
-/** `Region` → the plain `{ latitude, longitude }` centre the coord layer speaks. */
-export function regionCenterAsLatLng(region: Region): LatLng {
-    return { latitude: region.center[1], longitude: region.center[0] };
-}
+/*
+ * Deleted by QUA-51: `boundsOfRegion` ("only for tests" — and no test called it) and
+ * `regionCenterAsLatLng`, neither referenced anywhere in `src/`, `e2e/` or `scripts/`. The hook derives
+ * viewport bounds from the container's real corners (`useMapKitJourney.ts`'s `emitViewport` explains why
+ * `region.toBoundingRegion()` is wrong here), and `./overlays.ts` builds vendor coordinates itself — so both
+ * were plausible-looking shortcuts to the two mistakes this module's header warns about.
+ */

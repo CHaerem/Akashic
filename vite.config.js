@@ -155,6 +155,41 @@ export default defineConfig({
 		// Better error reporting
 		reporters: process.env.CI ? ["default", "github-actions"] : ["default"],
 	},
+	// QUA-44: debug console output must not be able to reach production, as a BUILD
+	// PROPERTY rather than as a habit. On 2026-07-27 the live site printed sixteen lines of
+	// "[MapboxGlobe camera effect] …" before the globe settled, from four console.log calls
+	// nobody meant to ship. Deleting those four lines fixes that day only; the fifth one
+	// somebody adds while debugging would ship exactly the same way.
+	//
+	// `pure`, not `drop: ["console"]`, and the difference matters: console.warn and
+	// console.error carry the diagnostics this project actually debugs from — the CloudKit
+	// adapter's error path is how QUA-40 was found at all. There are 58 console.warn/error
+	// calls in src/ (measured), and every one of them survives this setting.
+	//
+	// MEASURED in this tree, because "the bundler removes it" is the class of build-tool
+	// belief this repo has been burned by before (INFOPLIST_KEY_* was declared correctly and
+	// silently dropped from every shipped plist):
+	//   before — dist/assets/AkashicApp-*.js held 4 console.log, all four the MapboxGlobe ones
+	//   after  — 0 console.log anywhere under dist/, 18 console.error and 6 console.warn intact
+	//            in that same chunk (mapbox-gl's own 13 debug logs go too — `pure` reaches the
+	//            bundled output, not only our TS)
+	//
+	// HOW it strips, measured rather than assumed, because I wrote the wrong explanation first:
+	// esbuild's transform does not delete the call, it ANNOTATES it. Dev serves
+	// `/* @__PURE__ */ console.log("…")` verbatim (measured on a `vite` dev server:
+	// GET /src/components/MapboxGlobe.tsx, line 177), so `npm run dev` still logs normally and
+	// debugging is unaffected. Rollup's tree-shaking is what drops the annotated call — NOT the
+	// minifier: a `vite build --minify false` also emits it nowhere. So the thing that would
+	// break this is losing `pure` here or disabling treeshake, not a change to `build.minify`.
+	//
+	// The trap that nearly produced the opposite conclusion: grepping the served
+	// assets/index-*.js for "console.log" returns ZERO both before and after, because the
+	// calls were in a different chunk. Grep every file under dist/, never one chunk.
+	// scripts/assertNoFixtureInBundle.mjs asserts this over the whole tree, in CI.
+	esbuild: {
+		pure: ["console.log", "console.debug", "console.info", "console.trace", "console.dir", "console.table"],
+		drop: ["debugger"],
+	},
 	base: "/",
 	resolve: {
 		alias: {

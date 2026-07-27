@@ -32,10 +32,10 @@ export const TIMEOUTS = {
 } as const;
 
 /**
- * The `window.testHelpers` contract, as registered by `src/components/MapboxGlobe.tsx:268`
- * under `VITE_E2E_TEST_MODE`. Declared here because `e2e/` is outside the app's tsconfig
- * (`include: ["src"]`) and outside eslint's scope, so nothing else tells these specs what
- * the surface is. `getTrekData` returns a FLATTENED projection, not `TrekData`.
+ * The `window.testHelpers` contract, registered by `src/components/MapSurface.tsx:175` under
+ * `VITE_E2E_TEST_MODE` — MAP-03 moved it out of `MapboxGlobe.tsx` so one component owns the
+ * global whichever vendor draws it. `e2e/` is outside the app tsconfig, so nothing checks this copy
+ * against `MapSurface.tsx:89-101`; change both or neither. `getTrekData` returns a FLATTENED projection.
  */
 interface TestHelpers {
     selectTrek(id: string): boolean;

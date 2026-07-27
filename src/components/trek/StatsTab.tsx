@@ -4,6 +4,7 @@
 
 import { memo, useState } from 'react';
 import type { TrekData, Camp, ExtendedStats, ElevationProfile } from '../../types/trek';
+import { journeyDayCount } from '../../lib/journeys/transforms';
 import { Card } from '../ui/card';
 import { Skeleton } from '../ui/skeleton';
 import { InteractiveElevationProfile } from './InteractiveElevationProfile';
@@ -104,7 +105,8 @@ export const StatsTab = memo(function StatsTab({
                         </p>
                         <div className="grid grid-cols-2 gap-3">
                             <StatItem label="Total Distance" value={`${trekData.stats.totalDistance} km`} />
-                            <StatItem label="Duration" value={`${trekData.stats.duration} days`} />
+                            {/* QUA-46: same helper as the header pill, so the two cannot disagree. */}
+                            <StatItem label="Duration" value={`${journeyDayCount(trekData)} days`} />
                             <StatItem label="Est. Hiking Time" value={extendedStats.estimatedTotalTime} color="#8b5cf6" />
                             <StatItem label="Avg. Daily Distance" value={`${extendedStats.avgDailyDistance} km`} />
                         </div>

@@ -91,8 +91,14 @@ function annotationOptions(
 
 /* ------------------------------------------------------------------ camps */
 
-/** DOM identical to `useMapbox.ts:1556-1563`, so `src/index.css`'s `.camp-marker` rules apply unchanged. */
-function campElement(camp: Camp, isSelected: boolean, onClick: (camp: Camp) => void): HTMLElement {
+/**
+ * DOM identical to `useMapbox.ts:1556-1563`, so `src/index.css`'s `.camp-marker` rules apply unchanged.
+ *
+ * `onClick` is deliberately zero-argument: the element outlives any single version of the camp data, so it
+ * must not close over a `Camp` at all. The caller supplies a closure that resolves the current one — see
+ * {@link syncCampAnnotations}.
+ */
+function campElement(camp: Camp, isSelected: boolean, onClick: () => void): HTMLElement {
     const element = document.createElement('div');
     element.className = 'camp-marker' + (isSelected ? ' camp-marker-selected' : '');
     const badge = document.createElement('span');
@@ -101,7 +107,7 @@ function campElement(camp: Camp, isSelected: boolean, onClick: (camp: Camp) => v
     element.appendChild(badge);
     element.addEventListener('click', (event) => {
         event.stopPropagation();
-        onClick(camp);
+        onClick();
     });
     return element;
 }
@@ -109,6 +115,15 @@ function campElement(camp: Camp, isSelected: boolean, onClick: (camp: Camp) => v
 export interface CampAnnotationEntry {
     annotation: MKAnnotation;
     element: HTMLElement;
+    /**
+     * The latest camp data for this id, refreshed on every diff and **read by the click handler**.
+     *
+     * Load-bearing, and it was not until QUA-51: the handler used to close over the camp the element was
+     * created with, so after a diff that changed a camp's coordinates or day number, clicking it dispatched
+     * the stale object. `useTrekData.ts:171-173` puts that object straight into `selectedCamp`, which is what
+     * the sidebar renders and what `regionForZoom` frames the off-route branch on — so a stale click moved
+     * the camera to where the camp used to be. `annotations.test.ts` covers it.
+     */
     camp: Camp;
 }
 
@@ -136,6 +151,7 @@ export function syncCampAnnotations(
         if (entry) {
             const { latitude, longitude } = toLatLng(camp.coordinates);
             entry.annotation.coordinate = new mapkit.Coordinate(latitude, longitude);
+            // Refreshes what the click handler will dispatch. See `CampAnnotationEntry.camp`.
             entry.camp = camp;
             entry.element.classList.toggle('camp-marker-selected', isSelected);
             const badge = entry.element.querySelector('.camp-marker-badge');
@@ -145,7 +161,14 @@ export function syncCampAnnotations(
 
         // Built eagerly and handed to the factory, rather than built inside it: the factory is called lazily
         // and we need a stable element reference now, to restyle it on the next diff.
-        const element = campElement(camp, isSelected, onClick);
+        //
+        // The handler reads the camp back out of the registry at CLICK time. `camp` here is only the
+        // fallback for the impossible case of the entry having been removed while its element is still in
+        // the DOM — the id is captured, the object is not.
+        const campId = camp.id;
+        const element = campElement(camp, isSelected, () => {
+            onClick(existing.get(campId)?.camp ?? camp);
+        });
         const { latitude, longitude } = toLatLng(camp.coordinates);
         const annotation = new mapkit.Annotation(
             new mapkit.Coordinate(latitude, longitude),

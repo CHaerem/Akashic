@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import routeJson from '../../../fixtures/assets/e2e-alpine-loop.route.json';
-import { toLatLng, toLngLat, toLatLngs } from './coords';
+import { toLatLng, toLngLat } from './coords';
 import type { RouteCoord } from './geometry';
 
 /**
@@ -34,8 +34,8 @@ describe('coords (MAP-03)', () => {
     it('drops the elevation third element rather than smuggling it through', () => {
         // Route coordinates are [lng, lat, elevation]. A MapKit coordinate has no elevation, and passing one
         // through as a longitude would be a spectacular failure — assert the shape, not just the values.
-        const converted = toLatLngs([[8.3, 61.6, 900]]);
-        expect(Object.keys(converted[0]).sort()).toEqual(['latitude', 'longitude']);
-        expect(converted[0]).toEqual({ latitude: 61.6, longitude: 8.3 });
+        const converted = toLatLng([8.3, 61.6, 900]);
+        expect(Object.keys(converted).sort()).toEqual(['latitude', 'longitude']);
+        expect(converted).toEqual({ latitude: 61.6, longitude: 8.3 });
     });
 });

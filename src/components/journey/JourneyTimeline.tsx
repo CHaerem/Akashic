@@ -13,6 +13,7 @@ import type { TrekData, Camp, Photo, RouteSegment } from '../../types/trek';
 import { DayChapter } from './DayChapter';
 import { SegmentTransition } from './SegmentTransition';
 import { PhotoLightbox } from '../common/PhotoLightbox';
+import { journeyDayCount } from '../../lib/journeys/transforms';
 import { calculateAllSegments } from '../../utils/routeUtils';
 import { getDateForDay, isPhotoFromDay } from '../../utils/dates';
 import { colors } from '../../styles/liquidGlass';
@@ -206,7 +207,8 @@ export const JourneyTimeline = memo(function JourneyTimeline({
                     fontSize: 13,
                     color: colors.text.tertiary,
                 }}>
-                    {trekData.stats.duration} days • Summit: {trekData.stats.highestPoint.elevation}m
+                    {/* QUA-46: same helper as the header pill, so the two cannot disagree. */}
+                    {journeyDayCount(trekData)} days • Summit: {trekData.stats.highestPoint.elevation}m
                 </div>
             </div>
 

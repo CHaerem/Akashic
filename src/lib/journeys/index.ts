@@ -18,6 +18,7 @@ export type {
 export {
     toTrekConfig,
     toTrekData,
+    journeyDayCount,
     findClosestRoutePointIndex,
     calculateElevationGainBetweenIndices,
     calculateElevationLossBetweenIndices,
