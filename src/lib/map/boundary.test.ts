@@ -32,6 +32,28 @@ const ADAPTER = [
 // day it reaches for `window.mapkit` the test below catches it.
 
 /**
+ * MAP-02's tokenless globe, held to a STRICTER standard than the rest of the app.
+ *
+ * These files are the landing globe: `src/lib/globe/` and the component that mounts it. They are sited
+ * outside `lib/map/` on purpose, because `lib/map/` is in ADAPTER above — putting the globe under
+ * `src/lib/map/globe/` (as MAP-02's original file list proposed) would have placed it inside the very
+ * allowlist that exempts files from these checks, and MAP-02's central promise would have been guarded by
+ * nothing at all.
+ *
+ * The last test in this file is the mechanical statement of that promise: no map service, no token, no
+ * vendor SDK, not even a mention. It is stricter than the two checks above, which only ban imports and
+ * globals — here even the substring is a failure, because the whole value of this screen is that it has no
+ * runtime dependency that can lapse.
+ */
+const TOKENLESS_GLOBE = [
+    'lib/globe/',
+    'components/AkashicGlobe.tsx',
+];
+
+/** Any mention at all, not just an import. Deliberately broader than VENDOR_IMPORTS. */
+const ANY_VENDOR_MENTION = /mapbox|mapkit|maplibre|leaflet|google\.maps|openlayers/i;
+
+/**
  * Vendor globals that must not appear outside the adapter.
  *
  * MAP-03: **MapKit JS is not on npm.** It arrives as a global from a `<script>` tag pointing at
@@ -116,6 +138,50 @@ describe('map vendor boundary (MAP-01)', () => {
             '',
             ...offenders,
         ].join('\n')).toEqual([]);
+    });
+
+    it('MAP-02: the tokenless globe names no map vendor in CODE, only in prose', () => {
+        // The rule is "no vendor code", not "no vendor word". The globe's comments cite the Mapbox globe
+        // constantly and should: they record what each behaviour replaced, which measurements justified
+        // dropping zoom and terrain, and why the missing-token path has no counterpart. Deleting that
+        // history to satisfy a regex would make the code worse. So a vendor mention is allowed on a
+        // comment line and banned everywhere else — which still catches the thing that matters, an
+        // import or an API call sneaking into the one screen that must have no runtime dependency.
+        const offenders: string[] = [];
+        const globeFiles = files.filter(({ rel }) => TOKENLESS_GLOBE.some(g => rel.startsWith(g)));
+
+        for (const { path, rel } of globeFiles) {
+            readFileSync(path, 'utf8').split('\n').forEach((line, i) => {
+                if (!ANY_VENDOR_MENTION.test(line)) return;
+                const t = line.trim();
+                const isComment = t.startsWith('*') || t.startsWith('//') || t.startsWith('/*');
+                if (!isComment) offenders.push(`${rel}:${i + 1}  ${t}`);
+            });
+        }
+
+        expect(offenders, [
+            'The landing globe reached for a map vendor.',
+            'MAP-02 exists so that the first screen keeps working with no token and no tile service — if a',
+            'vendor lapses, the visitor still sees a rotating Earth. A vendor name in executable code here',
+            'defeats the whole point. Keep the explanation in a comment and the dependency out.',
+            '',
+            ...offenders,
+        ].join('\n')).toEqual([]);
+    });
+
+    it('MAP-02: the globe is sited OUTSIDE the adapter allowlist, so the check above can bite', () => {
+        // The trap this guards: if the globe were moved under `src/lib/map/globe/`, `lib/map/` in ADAPTER
+        // would exempt it from the import and global checks, and a stray vendor import would pass all of
+        // them. The assertion is on the layout itself rather than on anyone remembering why.
+        for (const dir of TOKENLESS_GLOBE) {
+            expect(
+                ADAPTER.some(a => dir.startsWith(a)),
+                `${dir} must not sit inside an ADAPTER path — it would exempt the tokenless globe from the vendor checks.`,
+            ).toBe(false);
+        }
+        // And the files must actually exist, or both globe tests pass by inspecting nothing.
+        const globeFiles = files.filter(({ rel }) => TOKENLESS_GLOBE.some(g => rel.startsWith(g)));
+        expect(globeFiles.length).toBeGreaterThan(4);
     });
 
     it('the adapter is where the vendors actually live, so the tests are not vacuous', () => {

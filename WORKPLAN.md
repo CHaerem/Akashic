@@ -5,19 +5,19 @@
 
 # Akashic — work ledger
 
-130 tasks · **29 open** (9 agent-doable, 4.7 dev-days · 20 owner-only, 8.1 dev-days) · 101 done · 0 dropped
+130 tasks · **28 open** (8 agent-doable, 2.7 dev-days · 20 owner-only, 8.1 dev-days) · 102 done · 0 dropped
 
 > **`dev-days` are a human-developer estimate, not agent time.** They came from the review
 > that produced these tasks and they are the right unit for deciding whether something is
 > worth doing — they are the wrong unit for predicting how long an agent will take, and
 > summing them as "work remaining" overstates it substantially.
 >
-> Measured so far: **96 agent tasks estimated at 68.2 dev-days**,
+> Measured so far: **97 agent tasks estimated at 70.2 dev-days**,
 > closed in roughly one working afternoon across up to three parallel tracks.
 >
 > But that compression is **unmeasured for the large items**: of the tasks closed so far,
-> 8 were 2 dev-days or more. 2 of the
-> 4.7 remaining dev-days sit in 1 such tasks —
+> 9 were 2 dev-days or more. 0 of the
+> 2.7 remaining dev-days sit in 0 such tasks —
 > localisation, Swift 6 strict concurrency, a UI test target, the PDF book. Those involve
 > design judgement and broad-blast-radius refactors rather than localised edits, so do not
 > assume the same ratio holds. The cheap band is nearly exhausted:
@@ -33,7 +33,6 @@ node scripts/workplan.mjs next
 
 | Task | Agent | Branch | Stopped at |
 |---|---|---|---|
-| `MAP-02` Draw the landing globe ourselves — MapKit JS provably cannot | opus5 | `claude/remote-control-project-review-9462c1` | — |
 | `MAP-04A` Mint the MapKit token in the build, and fail the build before it lapses | opus5 | `claude/remote-control-project-review-9462c1` | minter + health guard done and locally proven; the deploy-step wiring wants MAP-03 landed first |
 
 ## LEGACY
@@ -148,7 +147,7 @@ node scripts/workplan.mjs next
 
 > Tests, types, CI, localisation, accessibility. Localisation and accessibility are in v1.0 by decision.
 
-11 open of 58 · 5.4 d remaining
+10 open of 58 · 3.4 d remaining
 
 | | Task | Days | Who | Deps | Finish line |
 |---|---|---|---|---|---|
@@ -193,7 +192,7 @@ node scripts/workplan.mjs next
 | `x` | `QUA-39` **Bump the GitHub Actions that still target Node 20** | 0.1 | agent | — | Every action the workflows reference DIRECTLY targets Node 24. The residual annotation from inside upload-pages-artifact is upstream's and is out of scope -- see why. |
 | `x` | `ARCH-01` **DECISION: one map layer, Apple MapKit, swapped across both surfaces together** | 0 | agent | — | Recorded in ARCHITECTURE.md. |
 | `x` | `MAP-01` **A map interface narrow enough that the next vendor swap is one adapter** | 1 | agent | — | Web components speak only to a vendor-neutral map interface; no Mapbox or MapKit type appears outside its adapter. |
-| `~` | `MAP-02` **Draw the landing globe ourselves — MapKit JS provably cannot** | 2 | agent | `MAP-01` | The landing view is a rotating sphere with a pin per published journey, using no map service and no token. |
+| `x` | `MAP-02` **Draw the landing globe ourselves — MapKit JS provably cannot** | 2 | agent | `MAP-01` | The landing view is a rotating sphere with a pin per published journey, using no map service and no token. |
 | `x` | `MAP-03` **MapKit JS behind the adapter for the journey view** | 3 | agent | `MAP-01` | Selecting a journey shows its route and days on Apple satellite imagery, with Apple's mandatory attribution correctly placed. |
 | `~` | `MAP-04A` **Mint the MapKit token in the build, and fail the build before it lapses** | 0.5 | agent | `MAP-01` | scripts/mapkit/mintToken.mjs produces a token a JWT verifier accepts, and the deploy workflow both injects a freshly-minted token and fails when it is within 14 days of expiring. |
 | `x` | `MAP-04` **Add the MapKit private key as a repository secret** | 0.1 | owner | — | MAPKIT_PRIVATE_KEY exists as a repository secret. The two identifiers are already set as repository variables. |

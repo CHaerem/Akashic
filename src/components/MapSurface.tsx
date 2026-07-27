@@ -4,17 +4,25 @@
  * Names **no** map SDK — that is why it is not in `src/lib/map/boundary.test.ts`'s adapter allowlist. It
  * composes vendor components; it does not talk to a vendor.
  *
- * ## How the app chooses between the two surfaces
+ * ## How the app chooses between the surfaces
  *
- * Both coexist, and will until MAP-05 (which depends on MAP-02 and is not done):
+ * **MAP-02 changed this.** The landing globe is now `AkashicGlobe` — ours, drawn in a 2D canvas from
+ * vendored public-domain coastline geometry — and it is used for `view === 'globe'` under **both**
+ * `VITE_MAP_VENDOR` values. Only the journey view is still vendor-dependent:
  *
- * - **`VITE_MAP_VENDOR` is unset or `mapbox` — the DEFAULT.** Mapbox draws both views, exactly as before this
- *   task. Nothing regresses, and the currently-green Playwright run is untouched by MAP-03.
- * - **`VITE_MAP_VENDOR=mapkit`.** MapKit draws the **journey** view; Mapbox still draws the **globe**. That
- *   split is deliberate and not a half-measure: MapKit JS has no globe at all — zero occurrences of `globe`,
- *   `orthographic`, `pitch` or `tilt` in the shipped bundle — so pointing MAP-03 at `view === 'globe'` would
- *   replace the app's signature rotating 3D globe with a flat satellite world map. MAP-02 owns the landing
- *   globe as its own job.
+ * - **`VITE_MAP_VENDOR` is unset or `mapbox` — the DEFAULT.** `AkashicGlobe` draws the globe; Mapbox draws
+ *   the journey view.
+ * - **`VITE_MAP_VENDOR=mapkit`.** `AkashicGlobe` draws the globe; MapKit draws the journey view. MapKit JS
+ *   has no globe at all — zero occurrences of `globe`, `orthographic`, `pitch` or `tilt` in the shipped
+ *   bundle — which is why the landing view was never a candidate for it.
+ *
+ * The globe is not hidden behind a third flag value, and that is a deliberate call rather than an
+ * oversight. A flag the e2e gate never exercises means the screenshots stay Mapbox and the feature ships
+ * unverified; and MAP-02's `done_when` ("the landing view IS a rotating sphere using no map service and no
+ * token") is not satisfied by a surface nobody sees. It needs no token under either value, and MAP-05
+ * deletes Mapbox regardless. **This is a visible product change to the first screen a paying customer
+ * sees** — photographic satellite Earth becomes stylised vector Earth — and it is called out in
+ * `AkashicGlobe.tsx` and in `src/lib/globe/render.ts` for the owner rather than left to a diff.
  *
  * The flag stays defaulted to Mapbox until MapKit has been through the device/beta loop. Flipping it also
  * makes three other things false at once, none of them config: `e2e/fixtures/test.ts`'s pinned external-host
@@ -43,6 +51,7 @@ import type { MapSurfaceProps } from '../lib/map/types';
 import type { MapCameraState } from '../lib/map/vendorSurface';
 import { EMPTY_CAMERA_STATE } from '../lib/map/vendorSurface';
 import { useJourneys } from '../contexts/JourneysContext';
+import { AkashicGlobe } from './AkashicGlobe';
 import { MapboxGlobe } from './MapboxGlobe';
 import { MapKitJourneyMap } from './MapKitJourneyMap';
 
@@ -123,7 +132,7 @@ export function MapSurface(props: MapSurfaceComponentProps) {
     const handleReadyChange = useCallback((ready: boolean) => setMapReady(ready), []);
 
     const vendor = mapVendor();
-    // MapKit has no globe, so the globe view stays on Mapbox regardless of the flag. See the header.
+    // MAP-02: the landing globe is ours under both vendor values. Only the journey view varies.
     const useMapKit = vendor === 'mapkit' && view === 'trek';
 
     useEffect(() => {
@@ -175,6 +184,18 @@ export function MapSurface(props: MapSurfaceComponentProps) {
         window.testHelpers = testHelpers;
         return () => { delete window.testHelpers; };
     }, [mapReady, treks, selectedTrek, selectedCamp, trekDataMap, onSelectTrek, onCampSelect, journeysLoading]);
+
+    // MAP-02: the landing view. Checked before the vendor branch because it is vendor-independent — there
+    // is no configuration under which a vendor draws the globe any more.
+    if (view === 'globe') {
+        return (
+            <AkashicGlobe
+                {...props}
+                onReadyChange={handleReadyChange}
+                mapStateRef={mapStateRef}
+            />
+        );
+    }
 
     if (useMapKit) {
         return (

@@ -16,6 +16,7 @@ import type { MapCameraState } from '../lib/map/vendorSurface';
 // stub records the props it got and fills the two hatches, so the wiring is observable.
 const mapboxProps: Record<string, unknown>[] = [];
 const mapkitProps: Record<string, unknown>[] = [];
+const globeProps: Record<string, unknown>[] = [];
 
 /** `Array.prototype.at` is past this tsconfig's lib target, so index from the end by hand. */
 const last = (all: Record<string, unknown>[]) => all[all.length - 1];
@@ -31,6 +32,16 @@ vi.mock('./MapKitJourneyMap', () => ({
     MapKitJourneyMap: (props: Record<string, unknown>) => {
         mapkitProps.push(props);
         return <div data-testid="stub-mapkit" />;
+    },
+}));
+
+// MAP-02's tokenless globe. Stubbed for the same reason as the two vendor surfaces: this file tests the
+// switch, not the drawing. The globe itself is covered by src/lib/globe/*.test.ts, which is where its
+// arithmetic lives precisely so that it can be tested without a canvas.
+vi.mock('./AkashicGlobe', () => ({
+    AkashicGlobe: (props: Record<string, unknown>) => {
+        globeProps.push(props);
+        return <div data-testid="stub-akashic-globe" />;
     },
 }));
 
@@ -68,6 +79,7 @@ function baseProps(overrides: Record<string, unknown> = {}) {
 beforeEach(() => {
     mapboxProps.length = 0;
     mapkitProps.length = 0;
+    globeProps.length = 0;
     vi.stubEnv('VITE_E2E_TEST_MODE', 'true');
     vi.stubEnv('VITE_MAP_VENDOR', '');
 });
@@ -92,12 +104,32 @@ describe('MapSurface vendor selection (MAP-03)', () => {
         expect(getByTestId('stub-mapkit')).toBeInTheDocument();
     });
 
-    it('keeps the GLOBE on Mapbox even with the flag set, because MapKit has no globe', () => {
-        // Zero occurrences of `globe` or `orthographic` in the shipped MapKit bundle. Pointing MAP-03 at the
-        // globe would replace the app's signature rotating 3D globe with a flat satellite world map.
-        vi.stubEnv('VITE_MAP_VENDOR', 'mapkit');
-        const { getByTestId } = render(<MapSurface {...baseProps({ view: 'globe' })} />);
-        expect(getByTestId('stub-mapbox')).toBeInTheDocument();
+    /**
+     * MAP-02 changed this, and it is the assertion that would catch it being changed back.
+     *
+     * The landing globe used to be Mapbox under every configuration. It is now ours under every
+     * configuration — a 2D canvas over vendored public-domain coastline geometry, with no token and no
+     * tile service, so that the first screen survives a vendor outage. There is deliberately no flag
+     * value that routes the globe back to a vendor: a surface the e2e gate never exercises ships
+     * unverified, and MAP-02's `done_when` is not met by a globe nobody sees.
+     */
+    it.each(['', 'mapbox', 'mapkit', 'googlemaps'])(
+        'draws the GLOBE with our own tokenless surface when VITE_MAP_VENDOR=%s',
+        vendor => {
+            vi.stubEnv('VITE_MAP_VENDOR', vendor);
+            const { getByTestId, queryByTestId } = render(<MapSurface {...baseProps({ view: 'globe' })} />);
+            expect(getByTestId('stub-akashic-globe')).toBeInTheDocument();
+            expect(queryByTestId('stub-mapbox')).toBeNull();
+            expect(queryByTestId('stub-mapkit')).toBeNull();
+        },
+    );
+
+    it('fills the globe surface\'s two vendor-state hatches, so isMapReady and getMapState work', () => {
+        // openApp() hard-fails after 15 s if isMapReady() never goes true, and it is the entry point of
+        // every spec file — so the globe not receiving onReadyChange would red-line the whole suite.
+        render(<MapSurface {...baseProps({ view: 'globe' })} />);
+        expect(last(globeProps)).toHaveProperty('onReadyChange');
+        expect(last(globeProps)).toHaveProperty('mapStateRef');
     });
 
     it('falls back to Mapbox for an unrecognised vendor rather than rendering nothing', () => {

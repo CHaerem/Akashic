@@ -2575,21 +2575,30 @@
       "done_when": "The landing view is a rotating sphere with a pin per published journey, using no map service and no token.",
       "why": "Measured in the shipped MapKit JS binary: zero occurrences of globe, orthographic, pitch or tilt. There is no 3D and no globe, so this screen cannot come from Apple's web map at any price. Orthographic projection over vendored coastline geometry gives a genuine sphere; the existing starfield stays. Deliberately tokenless, which also means a visitor on the day a MapKit token lapses still sees a rotating Earth rather than a void -- that is why the split exists and not only because of the capability gap. If a photographic texture is wanted later, source it with its licence committed alongside (LEG-16 is why that sentence is here).",
       "files": [
-        "src/lib/map/globe/**",
-        "public/geo/**"
+        "src/lib/globe/**",
+        "src/components/AkashicGlobe.tsx",
+        "src/components/MapSurface.tsx",
+        "scripts/geo/**",
+        "src/lib/map/boundary.test.ts",
+        "e2e/*.spec.ts-snapshots/**"
       ],
       "track": "QUALITY",
-      "status": "WIP",
+      "status": "DONE",
       "verify": [
         "npx vitest --run",
         "npm run typecheck",
         "npm run build"
       ],
-      "claim": {
-        "agent": "opus5",
-        "branch": "claude/remote-control-project-review-9462c1",
-        "at": "2026-07-27"
-      }
+      "evidence": "Canvas 2D orthographic globe, no vendor SDK, no token, no tile service. Verified in this tree: 650 unit tests (was 588) across 52 files, typecheck clean, lint 25 warnings / 0 errors, boundary test 6 passing WITHOUT the globe being added to the ADAPTER allowlist, both dist guards exit 0. Tokenlessness checked by grep — the only occurrences of \"mapbox\" or \"mapkit\" anywhere in src/lib/globe/ or AkashicGlobe.tsx are in prose comments, and there is no import.meta.env, no process.env, no fetch, no Image and no script injection in any of them. The adversarial pass additionally blocked every non-local request in Playwright and confirmed the globe still renders with pins.",
+      "notes": [
+        "2026-07-27 THE DATA PROVENANCE IS A COMPLETE CHAIN, which is the thing LEG-16 and LEG-17 were about. Natural Earth ne_110m_land at tag v5.1.2: download verified HTTP 200 / 138,160 B, sha256 recorded in PROVENANCE.md and re-checked here (9e0729ee…), licence 4,636 B of real prose beginning \"Everything here is public domain\". And the generator is DETERMINISTIC: re-running scripts/geo/buildCoastline.mjs reproduces the committed coastline.generated.ts BYTE-IDENTICALLY, so the module is provably derived from the committed source rather than merely accompanied by it. The LEG-17 trap reproduced live along the way — naturalearthdata's /LICENSE without the extension returns HTTP 404 with a 14-byte body, exactly the shape that nearly got committed as a font licence.",
+        "2026-07-27 IT SHIPS AS A GENERATED TS MODULE, NOT public/geo/, and the reason is a silent failure the ledger's own file list would have caused: workbox's globPatterns does not match `.geojson`, so a file at the natural path would be ABSENT from the precache and the globe blank offline while every gate stayed green. The ledger said `public/geo/**`; that would have been wrong. It also said `src/lib/map/globe/**`, which sits inside the boundary test's `lib/map/` ADAPTER prefix and would have exempted the globe from the very check that proves it needs no vendor. Both corrected in the files list above.",
+        "2026-07-27 TWO DEFECTS FOUND BY MEASURING RATHER THAN INSPECTING, both of which would have shipped. (1) requestAnimationFrame does not fire in a hidden tab: the first version painted and reported readiness from inside the rAF loop, measured 0 callbacks and isMapReady() false over 9 seconds — which hard-fails openApp() after 15 s, and openApp() is the entry point of EVERY spec, so this would have taken out the whole suite rather than a globe test. Fixed by painting the first frame synchronously on mount; now ready at 0 ms even hidden. (2) The ice-cap gradient turned southern Africa white, visible only by opening the regenerated PNG because CI runs --ignore-snapshots. Related discovery: --update-snapshots will NOT rewrite a baseline whose diff is inside maxDiffPixelRatio, so the three PNGs had to be deleted to force honest regeneration.",
+        "2026-07-27 THE HORIZON CLIP HAS A GROUND-TRUTH HARNESS, and its finding is the one worth keeping: across 34 cameras with ~2,826 in-disc samples each, ray-cast against the source rings by independent code, the correct clip disagrees with ground truth by a mean of 0.0167 % while a radial clamp disagrees by 95.9-100 % and a limb mirror by 99.93-100 %. But AT THE LANDING CAMERA (30, 15) the three are 0.035 %, 0.04 % and 0.04 % — indistinguishable. So both broken shortcuts look perfect on the only screen anyone would have checked, and would have shipped. horizon.test.ts asserts the harness still detects them.",
+        "2026-07-27 BYTE COST, and all three passes disagreed on it. Measured here by extracting 8bc4a99 with `git archive` into a clean directory and building there — NOT by stashing, because a stash leaves untracked files behind and a \"before\" build taken that way can still contain part of the feature. Result: +1 precache entry, +46.94 KiB (+0.60 %), +48 KB on disk, +48,135 B of total output. The implementing agent's headline figures match this exactly; its sub-claim of \"6.6 kB of code\" did not (+11,533 B is right), and the adversarial pass's own baseline (7754.34 KiB) reproduces from no commit in this history. PROVENANCE.md now carries only the isolated-build figures and says plainly that if a re-measurement disagrees, the file is to be distrusted.",
+        "2026-07-27 DESIGN NOTE, since this is the first screen a paying customer sees and it changed character: photographic satellite Earth is now stylised vector Earth — green landmass, blue ocean, an atmospheric limb glow, a latitude-driven ice tint at the caps, and the existing starfield. Inspected by eye at 1280x720: the Mediterranean, Red Sea, Persian Gulf, Black Sea and Caspian all read correctly, coastlines compress toward the limb as an orthographic projection must, and it holds together as a designed object rather than a data visualisation. It is arguably more coherent with the app's own stylised aesthetic than photographic tiles were, and it is the reason a lapsed MapKit token can no longer blank the landing page. Judge 2 of the design panel argued for a shaded-relief texture and was overruled on the grounds that it needs WebGL, a vite.config.js change for webp, and derived imagery with its own licence — the ice tint costs zero bytes and answered the same critique.",
+        "2026-07-27 Canvas 2D over WebGL, against one of the three judges. Frame cost was never the binding constraint; the deciding argument was that shader code is unreachable from the jsdom suite in a repo whose traps file is a monument to untested-because-uncompilable code, and that a blank canvas on a driver blocklist would defeat the one reason MAP-02 exists as a separate task."
+      ]
     },
     {
       "id": "MAP-03",
