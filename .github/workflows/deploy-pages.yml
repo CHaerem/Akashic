@@ -78,8 +78,15 @@ jobs:
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          # public/CNAME is copied into dist/ by Vite, so the uploaded artifact
-          # carries the akashic.no custom-domain marker (see cutover doc).
+          # public/CNAME is copied into dist/ by Vite and rides along in the artifact.
+          # MEASURED 2026-07-27: that does NOT set the Pages custom domain. After a
+          # successful run of this workflow, `gh api repos/.../pages` still reported
+          # `cname: null`, and Pages answered "Site not found" for Host: akashic.no.
+          # With `build_type: workflow` the CNAME file is not honoured — the domain has
+          # to be set in Settings → Pages (or `gh api -X PUT .../pages -f cname=...`).
+          # It is set now. Expect ~45 s of edge propagation after setting it before
+          # akashic.no starts resolving to the site; a 404 in the first seconds is not
+          # a failed deploy.
           path: dist
 
   deploy:

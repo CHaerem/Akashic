@@ -5,7 +5,7 @@
 
 # Akashic — work ledger
 
-105 tasks · **23 open** (3 agent-doable, 0.6 dev-days · 20 owner-only, 8.6 dev-days) · 82 done · 0 dropped
+106 tasks · **23 open** (4 agent-doable, 0.7 dev-days · 19 owner-only, 8.4 dev-days) · 83 done · 0 dropped
 
 > **`dev-days` are a human-developer estimate, not agent time.** They came from the review
 > that produced these tasks and they are the right unit for deciding whether something is
@@ -17,11 +17,11 @@
 >
 > But that compression is **unmeasured for the large items**: of the tasks closed so far,
 > 7 were 2 dev-days or more. 0 of the
-> 0.6 remaining dev-days sit in 0 such tasks —
+> 0.7 remaining dev-days sit in 0 such tasks —
 > localisation, Swift 6 strict concurrency, a UI test target, the PDF book. Those involve
 > design judgement and broad-blast-radius refactors rather than localised edits, so do not
 > assume the same ratio holds. The cheap band is nearly exhausted:
-> 3 tasks at 0.5 dev-days or less remain.
+> 4 tasks at 0.5 dev-days or less remain.
 
 Read [CLAUDE.md](CLAUDE.md) before touching anything. To find work:
 
@@ -84,7 +84,7 @@ node scripts/workplan.mjs next
 
 > Hard requirements for a paid v1.0. Most of the remaining calendar time lives here, in items only the owner can do.
 
-12 open of 20 · 5.3 d remaining
+11 open of 20 · 5 d remaining
 
 | | Task | Days | Who | Deps | Finish line |
 |---|---|---|---|---|---|
@@ -97,7 +97,7 @@ node scripts/workplan.mjs next
 | ` ` | `SHIP-07` **Add the associated-domains entitlement so Universal Links work** | 0.25 | agent | `LEG-09` | Tapping an akashic.no journey link opens the app rather than Safari. |
 | `x` | `SHIP-08` **Write the public-showcase takedown procedure** | 0.5 | agent | `DIFF-02` | A documented, tested procedure removes a reported public journey, and the privacy page says how to ask. |
 | `x` | `SHIP-09` **Compile the developer workshop out of Release** | 0.25 | agent | — | No developer surface is reachable in a Release build, and the seven-tap gesture is gone. |
-| ` ` | `SHIP-10A` **Point the deployed showcase at the CloudKit PRODUCTION environment** | 0.25 | owner | — | The deployed bundle carries environment:"production" and a PublicJourney query returns without an auth error. |
+| `x` | `SHIP-10A` **Point the deployed showcase at the CloudKit PRODUCTION environment** | 0.25 | owner | — | The deployed bundle carries environment:"production" and a PublicJourney query returns without an auth error. |
 | ` ` | `SHIP-10B` **Publish one journey into the production mirror and see it signed out** | 0.25 | owner | `SHIP-10A` `SHIP-15` | A published journey is visible on akashic.no while signed out. |
 | ` ` | `SHIP-11` **Trademark and name clearance for 'Akashic'** | 0.5 | owner | — | A written go/no-go exists from Patentstyret and EUIPO in the software class. |
 | ` ` | `SHIP-12` **Paid Applications agreement, banking and tax forms** | 0.5 | owner | — | App Store Connect reports the Paid Applications agreement as active. |
@@ -136,7 +136,7 @@ node scripts/workplan.mjs next
 
 > Tests, types, CI, localisation, accessibility. Localisation and accessibility are in v1.0 by decision.
 
-2 open of 38 · 0.6 d remaining
+3 open of 39 · 0.7 d remaining
 
 | | Task | Days | Who | Deps | Finish line |
 |---|---|---|---|---|---|
@@ -178,6 +178,7 @@ node scripts/workplan.mjs next
 | `x` | `QUA-36` **Declare PublicMirrorDatabase Sendable so PublicMirrorPublisher's conformance becomes checked** | 0.5 | agent | — | PublicMirrorPublisher conforms to Sendable without @unchecked, and the public-mirror tests still pass. |
 | `x` | `QUA-37` **Declare MediaDatabase Sendable so PhotoMediaService's conformance becomes checked** | 0.25 | agent | — | PhotoMediaService conforms to Sendable without @unchecked, and the media tests still pass. |
 | ` ` | `QUA-38` **Verify the Vision features on a real device — they cannot run in any simulator** | 0.5 | owner | — | Photo curation (hero pick, best-of, duplicate grouping) and DIFF-05 subject labels are confirmed working on a physical device, with a note recording what was seen. |
+| ` ` | `QUA-39` **Bump the GitHub Actions that still target Node 20** | 0.1 | agent | — | No workflow run emits the Node 20 deprecation annotation. |
 
 ## Decisions on record
 

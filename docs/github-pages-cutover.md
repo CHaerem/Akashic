@@ -83,6 +83,14 @@ Apex `akashic.no` — four **AAAA** records:
 
 ### Stage 0 — Prep on GitHub (no DNS change; users still served by Cloudflare)
 
+> **Measured 2026-07-27 — the artifact's `CNAME` does not set the custom domain.** With
+> `build_type: workflow`, `dist/CNAME` rides along in the upload and is ignored: after a green
+> `deploy-pages.yml` run, the Pages API still reported `cname: null` and Pages answered
+> *"Site not found"* for `Host: akashic.no`, which also makes the Stage 1 `--resolve` check 404.
+> Set the domain explicitly (step 5 below, or `gh api -X PUT repos/OWNER/REPO/pages -f
+> cname=akashic.no`), then allow **~45 seconds** of edge propagation. A 404 in the first seconds
+> after setting it is propagation, not a failed deploy — retry before debugging.
+
 1. **Merge** the branch that adds `deploy-pages.yml` and `public/CNAME` to
    `main`. `deploy.yml` is untouched, so Cloudflare keeps serving akashic.no.
 2. Repo **Settings → Pages → Build and deployment → Source: GitHub Actions**.

@@ -814,7 +814,7 @@
       "id": "SHIP-10A",
       "track": "SHIP",
       "title": "Point the deployed showcase at the CloudKit PRODUCTION environment",
-      "status": "TODO",
+      "status": "DONE",
       "effort": 0.25,
       "done_when": "The deployed bundle carries environment:\"production\" and a PublicJourney query returns without an auth error.",
       "owner": true,
@@ -827,7 +827,8 @@
       "refs": [
         "src/lib/cloudkit.ts:21, deploy.yml:35, deploy-pages.yml:63",
         "APPLE-MIGRATION-RUNBOOK.md:377 already tracks this as an operator step"
-      ]
+      ],
+      "evidence": "Verified end to end on 2026-07-27 without touching DNS. GitHub Pages, reached via curl --resolve akashic.no:443:185.199.108.153: index 200, bundle 200 carrying environment:\"production\" AND apiToken:\"229d536d... (the new Production token), and /nope serves the app shell so the 404.html fallback works. CloudKit production query from Origin: https://akashic.no returns HTTP 200 (0 records -- nothing published yet, that is SHIP-10B). Real visitors were unaffected throughout: akashic.no still resolves to Cloudflare and still serves environment:\"development\". Two variables were set together (VITE_CLOUDKIT_ENV=production, VITE_CLOUDKIT_API_TOKEN) and deploy-pages.yml was run manually. TWO THINGS THE PLAN HAD WRONG, both now corrected in the doc and the workflow: the artifact's dist/CNAME does NOT set the Pages custom domain under build_type: workflow (cname stayed null after a green deploy, and Pages answered 'Site not found' for Host: akashic.no until it was set explicitly via the API), and there is ~45 s of edge propagation after setting it during which a 404 is propagation rather than failure."
     },
     {
       "id": "SHIP-10B",
@@ -2435,6 +2436,22 @@
       "files": [],
       "verify": [
         "Run on a physical device: create a journey with a photo burst, tap Curate, and confirm a hero is proposed, a best-of selection appears, and burst frames are grouped as duplicates."
+      ]
+    },
+    {
+      "id": "QUA-39",
+      "track": "QUALITY",
+      "status": "TODO",
+      "effort": 0.1,
+      "priority": 43,
+      "title": "Bump the GitHub Actions that still target Node 20",
+      "done_when": "No workflow run emits the Node 20 deprecation annotation.",
+      "why": "Surfaced by the first deploy-pages.yml run on 2026-07-27: 'Node.js 20 is deprecated. The following actions target Node.js 20 but are being forced to run on Node.js 24: actions/checkout@v4, actions/configure-pages@v5, actions/setup-node@v4, actions/upload-artifact@v4.' Forced onto 24 today, so nothing is broken -- but this is the deploy path for the live site after the cutover, and 'forced' is a state GitHub eventually stops honouring. Cheap to fix by bumping to the v5/v6 lines that target Node 24. Do it in one pass across every workflow, not just deploy-pages.yml.",
+      "files": [
+        ".github/workflows/**"
+      ],
+      "verify": [
+        "gh run list --workflow=deploy-pages.yml --limit 1  # then check the run has no Node 20 annotation"
       ]
     }
   ]
