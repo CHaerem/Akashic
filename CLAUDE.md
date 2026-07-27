@@ -98,7 +98,7 @@ These are measured, not guessed. Prefer them over inventing your own.
 | Native build + tests | `cd apple && xcodegen generate && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination "platform=iOS Simulator,id=$(xcrun simctl list devices available \| grep -o '[0-9A-F-]\{36\}' \| tail -1)" CODE_SIGNING_ALLOWED=NO test` | 804 unit (1 skipped, device-only) + 14 UI tests, 0 failures (~6 s + ~190 s). Add `-only-testing:AkashicTests` for the fast unit-only loop; the UI suite relaunches the app per test |
 | Native coverage | add `-enableCodeCoverage YES -resultBundlePath /tmp/cov.xcresult`, then `xcrun xccov view --report --only-targets /tmp/cov.xcresult` | app 48.4 %; `Views/` 34.4 % (was 30.2 % / 6.0 % before the UI test target — QUA-10) |
 | Built Info.plist | `plutil -p "$(find ~/Library/Developer/Xcode/DerivedData/Akashic-*/Build/Products -name Akashic.app -maxdepth 3 \| head -1)/Info.plist"` | see the trap below |
-| Web unit tests | `npx vitest --run` | 436 tests, ~5 s (was 452 until LEG-12 deleted `workers/`, whose 16 tests the root run picked up) |
+| Web unit tests | `npx vitest --run` | 414 tests, ~5 s. Was 452 → 436 (LEG-12 deleted `workers/`, −16) → 414 (LEG-15 deleted the dead `mapMatching`, −22). Falling counts here have been deletions of dead code, not lost coverage — check `git log` before treating a drop as a regression. |
 | Web typecheck | `npm run typecheck` | clean, and a type error now fails CI and the commit |
 | Web lint | `npm run lint` | 171 files inspected, 0 errors, warnings capped at 25 |
 | Web build | `npm run build` | ~4 s, no env needed |

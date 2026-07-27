@@ -225,7 +225,7 @@ src/
 ├── hooks/            useMapbox (modular, under hooks/mapbox/), useTrekData, usePhotoDay,
 │                     usePhotoOriginals, useMedia, useOnlineStatus, gesture hooks
 ├── lib/              cloudkit.ts (CDN load + auth facade), journeys/ (API + CloudKit
-│                     adapters), media.ts, nativeOnly.ts, exif.ts, mapMatching.ts
+│                     adapters), media.ts, nativeOnly.ts, exif.ts
 ├── styles/           liquidGlass.ts design tokens
 ├── types/            shared TypeScript types
 └── utils/            dates, formatting, geography, routeUtils, stats, countryFlags

@@ -2492,6 +2492,27 @@
       "verify": [
         "A figure and a decision recorded in COMMERCIALIZATION-PLAN.md"
       ]
+    },
+    {
+      "id": "LEG-15",
+      "track": "LEGACY",
+      "status": "DONE",
+      "effort": 0.1,
+      "priority": 46,
+      "title": "Delete the dead Mapbox Map Matching wrapper",
+      "done_when": "src/lib/mapMatching.ts is gone and nothing references api.mapbox.com/matching.",
+      "why": "Found while auditing external dependencies for the owner's decision to keep only Apple, Domeneshop and GitHub. src/lib/mapMatching.ts (406 LOC) wrapped https://api.mapbox.com/matching/v5 -- a SEPARATELY BILLED Mapbox API, distinct from the GL JS map -- and nothing imported it. Verified three ways: no import anywhere in src/, apple/, e2e/ or scripts/; the string 'matching/v5' appears in no built asset; the only references were its own 642-LOC test file and a mention in ARCHITECTURE.md's file tree. So it was 1048 lines of dead code holding a live call to a metered endpoint -- harmless today, and a bill the first time someone wired it up believing it was in use.",
+      "files": [
+        "src/lib/mapMatching.ts",
+        "src/lib/mapMatching.test.ts",
+        "ARCHITECTURE.md",
+        "CLAUDE.md"
+      ],
+      "evidence": "Deleted with its test. Web suite 436 -> 414, exactly the 22 tests mapMatching.test.ts contributed (counted before deleting, so the drop was predicted rather than explained afterwards). Typecheck clean, build ok, and 'matching/v5' now appears nowhere outside git history.",
+      "verify": [
+        "! grep -rn 'matching/v5' src/ apple/ e2e/ scripts/",
+        "npx vitest --run"
+      ]
     }
   ]
 }

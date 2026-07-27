@@ -5,14 +5,14 @@
 
 # Akashic — work ledger
 
-108 tasks · **24 open** (3 agent-doable, 0.6 dev-days · 21 owner-only, 8.7 dev-days) · 84 done · 0 dropped
+109 tasks · **24 open** (3 agent-doable, 0.6 dev-days · 21 owner-only, 8.7 dev-days) · 85 done · 0 dropped
 
 > **`dev-days` are a human-developer estimate, not agent time.** They came from the review
 > that produced these tasks and they are the right unit for deciding whether something is
 > worth doing — they are the wrong unit for predicting how long an agent will take, and
 > summing them as "work remaining" overstates it substantially.
 >
-> Measured so far: **82 agent tasks estimated at 61.6 dev-days**,
+> Measured so far: **83 agent tasks estimated at 61.7 dev-days**,
 > closed in roughly one working afternoon across up to three parallel tracks.
 >
 > But that compression is **unmeasured for the large items**: of the tasks closed so far,
@@ -39,7 +39,7 @@ node scripts/workplan.mjs next
 
 > Retire Supabase, Cloudflare and R2. Repo-side removal can happen now; the infrastructure deletions are gated on the archive being duplicated and on the Pages cutover. LEG-01 is independent of every gate and should happen today.
 
-9 open of 15 · 3 d remaining
+9 open of 16 · 3 d remaining
 
 | | Task | Days | Who | Deps | Finish line |
 |---|---|---|---|---|---|
@@ -58,6 +58,7 @@ node scripts/workplan.mjs next
 | `x` | `LEG-12` **Delete workers/ from the repo** | 0.25 | agent | `LEG-01` `LEG-05` | workers/ is gone and no workflow or test references it. |
 | ` ` | `LEG-13` **Delete supabase/** | 0.1 | agent | `LEG-04` | supabase/ is gone from the repo. |
 | ` ` | `LEG-14` **Remove the dead 'build-deploy' required status check from main** | 0.1 | owner | — | main's required status checks are exactly the three that can still report, and a test PR is mergeable. |
+| `x` | `LEG-15` **Delete the dead Mapbox Map Matching wrapper** | 0.1 | agent | — | src/lib/mapMatching.ts is gone and nothing references api.mapbox.com/matching. |
 
 ## DOCS
 
