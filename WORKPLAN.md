@@ -5,7 +5,7 @@
 
 # Akashic — work ledger
 
-121 tasks · **28 open** (6 agent-doable, 6.4 dev-days · 22 owner-only, 8.9 dev-days) · 93 done · 0 dropped
+121 tasks · **27 open** (6 agent-doable, 6.4 dev-days · 21 owner-only, 8.4 dev-days) · 94 done · 0 dropped
 
 > **`dev-days` are a human-developer estimate, not agent time.** They came from the review
 > that produced these tasks and they are the right unit for deciding whether something is
@@ -33,7 +33,6 @@ node scripts/workplan.mjs next
 
 | Task | Agent | Branch | Stopped at |
 |---|---|---|---|
-| `LEG-09` Execute the GitHub Pages + DNS cutover (T4.2, T4.3) | opus5 | `claude/remote-control-project-review-9462c1` | DNS is provably correct and GitHub's own health check passes on both legs, yet no certificate record exists at all — anomalous, not waiting. Next step is a browser load of Settings -> Pages, changing nothing; do not remove/re-add again today. |
 | `MAP-03` MapKit JS behind the adapter for the journey view | opus5 | `claude/remote-control-project-review-9462c1` | imagery gate PASSED (see scripts/mapkit/imagery-compare/FINDINGS.md); next is the journey-view adapter itself, framing from route bounds not a fixed wide zoom |
 | `MAP-04A` Mint the MapKit token in the build, and fail the build before it lapses | opus5 | `claude/remote-control-project-review-9462c1` | minter + health guard done and locally proven; the deploy-step wiring wants MAP-03 landed first |
 
@@ -41,7 +40,7 @@ node scripts/workplan.mjs next
 
 > Retire Supabase, Cloudflare and R2. Repo-side removal can happen now; the infrastructure deletions are gated on the archive being duplicated and on the Pages cutover. LEG-01 is independent of every gate and should happen today.
 
-9 open of 19 · 2.9 d remaining
+8 open of 19 · 2.4 d remaining
 
 | | Task | Days | Who | Deps | Finish line |
 |---|---|---|---|---|---|
@@ -53,7 +52,7 @@ node scripts/workplan.mjs next
 | `x` | `LEG-06` **Delete the unrunnable legacy scripts and the AWS SDK dependency** | 0.5 | agent | — | npm run build and vitest pass with the dead scripts and @aws-sdk/client-s3 gone. |
 | `x` | `LEG-07` **Gate every native-only web write behind one guard** | 1 | agent | — | No web UI offers a write that silently no-ops; each either disappears or shows a native-only notice. |
 | `x` | `LEG-08` **Remove the hardcoded /Users/cher archive path from shipping code** | 0.25 | agent | — | No absolute developer path appears in any non-test Swift file. |
-| `~` | `LEG-09` **Execute the GitHub Pages + DNS cutover (T4.2, T4.3)** | 0.5 | owner | `SHIP-10A` | https://akashic.no serves the production build from GitHub Pages with a valid certificate for the domain, and privacy/terms/support/AASA resolve over HTTPS. |
+| `x` | `LEG-09` **Execute the GitHub Pages + DNS cutover (T4.2, T4.3)** | 0.5 | owner | `SHIP-10A` | https://akashic.no serves the production build from GitHub Pages with a valid certificate for the domain, and privacy/terms/support/AASA resolve over HTTPS. |
 | `x` | `LEG-10A` **Take Cloudflare and Supabase out of the repo** | 0.25 | agent | `LEG-09` | No workflow references Cloudflare or Supabase, and CI is green without their secrets. |
 | ` ` | `LEG-10B` **Delete the four dead repository secrets, then revoke the tokens themselves** | 0.2 | owner | `LEG-10A` | gh secret list shows neither CLOUDFLARE_* nor VITE_SUPABASE_*, and both tokens are revoked at Cloudflare and Supabase. |
 | ` ` | `LEG-11A` **Delete the Cloudflare Pages project and the DNS zone** | 0.25 | owner | `LEG-09` `LEG-10A` | The akashic Pages project and the Cloudflare DNS zone are gone from the dashboard, and akashic.no still resolves via GoDaddy to GitHub Pages. |
