@@ -1,0 +1,209 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>MapKit JS vs Mapbox — satellite imagery over the actual treks</title>
+<!--
+  MAP-03's first gate, and the one that can still overturn ARCH-01.
+
+  ARCH-01 chose Apple MapKit for both surfaces on a parity argument: mapType satellite gives the web the
+  same Apple imagery the native app already draws. That argument is only true where Apple's coverage is
+  good, and this app's journeys are in East Africa and the Himalaya — precisely where Apple's satellite
+  coverage is unverified. If it is visibly worse than Mapbox there, the decision the whole map track rests
+  on is wrong, and it is far cheaper to learn that now than after MAP-05 has deleted Mapbox.
+
+  Kept in the repo rather than thrown away, because this is not a one-time question: Apple's imagery
+  changes and so does Mapbox's. Anyone revisiting the decision should re-run the comparison, not rebuild
+  the harness.
+
+  ## Two things this harness learned the hard way
+
+  1. **Matching the coordinate span is NOT matching the view.** `CoordinateRegion` and `fitBounds` each
+     adjust to the container's aspect ratio, and differently, so asking both for span 0.09° gave Mapbox a
+     tighter frame — and comparing imagery at two magnifications tells you nothing. The shared unit here is
+     METRES PER PIXEL, with MapKit as the reference because it is the constrained one: set its region, read
+     back what it actually chose, and give Mapbox exactly that resolution. Both panes print the m/px they
+     achieved, so a screenshot carries its own proof of comparability.
+
+  2. **One location at a time.** Seven rows meant fourteen simultaneous WebGL contexts, past the browser's
+     cap, and all seven Mapbox maps silently never finished loading — `loaded()` false, no error. Bigger
+     panes are the better comparison anyway.
+
+  Usage:  node scripts/mapkit/imagery-compare/tokens.mjs     # writes the gitignored tokens.js
+          open the `mapcompare` preview, then ?place=0 … ?place=6
+-->
+<link rel="stylesheet" href="https://api.mapbox.com/mapbox-gl-js/v3.9.0/mapbox-gl.css">
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 12px 16px 16px;
+    background: #0b0d10; color: #e6e8eb;
+    font: 13px/1.5 ui-sans-serif, -apple-system, system-ui, sans-serif;
+  }
+  h1 { margin: 0 0 2px; font-size: 14px; font-weight: 600; letter-spacing: -0.01em; }
+  #meta { color: #8b929c; font-size: 11px; font-variant-numeric: tabular-nums; margin-bottom: 8px; }
+  nav { display: flex; gap: 5px; flex-wrap: wrap; margin-bottom: 10px; }
+  nav a {
+    padding: 3px 9px; border-radius: 5px; text-decoration: none;
+    background: #16191d; border: 1px solid #23272d; color: #b9c0c8; font-size: 11px;
+  }
+  nav a[aria-current="true"] { background: #2b62d9; border-color: #2b62d9; color: #fff; font-weight: 600; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .col > h2 {
+    margin: 0 0 5px; font-size: 10px; font-weight: 600; color: #8b929c;
+    text-transform: uppercase; letter-spacing: 0.07em;
+  }
+  .pane {
+    position: relative; aspect-ratio: 4 / 3;
+    background: #16191d; border: 1px solid #23272d; border-radius: 6px; overflow: hidden;
+  }
+  .pane > .map { position: absolute; inset: 0; }
+  .mpp {
+    position: absolute; top: 6px; right: 6px; z-index: 5;
+    padding: 2px 6px; border-radius: 4px;
+    background: rgba(8, 10, 12, 0.74); color: #cfd4da;
+    font: 600 10px/1.4 ui-monospace, SFMono-Regular, monospace;
+    font-variant-numeric: tabular-nums;
+  }
+  .err { padding: 10px; color: #ff8f8f; font-size: 11px; white-space: pre-wrap; }
+</style>
+</head>
+<body>
+<h1 id="title">…</h1>
+<div id="meta"></div>
+<nav id="nav"></nav>
+<div class="grid">
+  <div class="col"><h2>Apple MapKit JS — satellite</h2><div class="pane"><div class="map" id="mk"></div></div></div>
+  <div class="col"><h2>Mapbox — satellite</h2><div class="pane"><div class="map" id="mb"></div></div></div>
+</div>
+
+<script src="./tokens.js"></script>
+<script>
+/** Real journey regions. `span` is the latitude span in degrees; the harness matches Mapbox to it. */
+const PLACES = [
+  { name: 'Kilimanjaro',  note: 'Uhuru Peak, Tanzania',        lat:  -3.0674, lng:  37.3556, span: 0.09  },
+  { name: 'Kilimanjaro',  note: 'Barranco Wall — close',       lat:  -3.0930, lng:  37.3170, span: 0.022 },
+  { name: 'Everest',      note: 'Khumbu / base camp, Nepal',   lat:  28.0026, lng:  86.8528, span: 0.09  },
+  { name: 'Everest',      note: 'Khumbu Icefall — close',      lat:  28.0100, lng:  86.8600, span: 0.022 },
+  { name: 'Mount Kenya',  note: 'Batian & Nelion',             lat:  -0.1521, lng:  37.3084, span: 0.05  },
+  { name: 'Inca Trail',   note: 'Machu Picchu, Peru',          lat: -13.1631, lng: -72.5450, span: 0.03  },
+  { name: 'Jotunheimen',  note: 'Norway — European control',   lat:  61.6360, lng:   8.3120, span: 0.05  },
+];
+
+const METRES_PER_DEGREE_LAT = 111_320;
+/** Mapbox GL uses 512 px tiles, so this is its world resolution at zoom 0. */
+const MAPBOX_Z0_MPP = 78_271.516;
+
+const index = Math.min(PLACES.length - 1,
+  Math.max(0, Number(new URLSearchParams(location.search).get('place') ?? 0) | 0));
+const place = PLACES[index];
+
+document.getElementById('title').textContent =
+  `${place.name} — ${place.note}`;
+document.getElementById('meta').textContent =
+  `${place.lat.toFixed(4)}, ${place.lng.toFixed(4)}  ·  requested span ${place.span}°  ·  `
+  + `both panes matched on metres per pixel, MapKit as reference`;
+
+const nav = document.getElementById('nav');
+PLACES.forEach((p, i) => {
+  const a = document.createElement('a');
+  a.href = `?place=${i}`;
+  a.textContent = `${p.name} ${p.note.includes('close') ? '(close)' : ''}`.trim();
+  if (i === index) a.setAttribute('aria-current', 'true');
+  nav.appendChild(a);
+});
+
+function annotate(id, text) {
+  const pane = document.getElementById(id).parentElement;
+  let tag = pane.querySelector('.mpp');
+  if (!tag) { tag = document.createElement('div'); tag.className = 'mpp'; pane.appendChild(tag); }
+  tag.textContent = text;
+}
+function fail(id, message) {
+  document.getElementById(id).innerHTML = `<div class="err">${message}</div>`;
+}
+
+window.STATE = { mkMpp: null, mbMpp: null, mkReady: false, mbReady: false };
+
+// ------------------------------------------------- MapKit first: it establishes the reference resolution
+function initMapKit() {
+  if (!window.TOKENS?.mapkit) { fail('mk', 'no MapKit token in tokens.js — run tokens.mjs'); return; }
+  mapkit.init({ authorizationCallback: done => done(window.TOKENS.mapkit), language: 'en' });
+  let map;
+  try {
+    map = new mapkit.Map('mk', {
+      mapType: mapkit.Map.MapTypes.Satellite,
+      showsMapTypeControl: false,
+      showsZoomControl: false,
+      showsCompass: mapkit.FeatureVisibility.Hidden,
+      showsScale: mapkit.FeatureVisibility.Hidden,
+    });
+  } catch (err) { fail('mk', `mapkit: ${err.message}`); return; }
+
+  map.region = new mapkit.CoordinateRegion(
+    new mapkit.Coordinate(place.lat, place.lng),
+    new mapkit.CoordinateSpan(place.span, place.span),
+  );
+  // Read BACK what MapKit chose — it snaps to its own zoom ladder, and the value we asked for is not
+  // necessarily the value we got.
+  const height = document.getElementById('mk').getBoundingClientRect().height;
+  window.STATE.mkMpp = (map.region.span.latitudeDelta * METRES_PER_DEGREE_LAT) / height;
+  window.STATE.mkMap = map;
+  annotate('mk', `${window.STATE.mkMpp.toFixed(2)} m/px`);
+  map.addEventListener('map-type-change', () => {});
+  window.STATE.mkReady = true;
+  maybeInitMapbox();
+}
+
+// ------------------------------------------------- Mapbox, matched to MapKit's achieved resolution
+function maybeInitMapbox() {
+  if (window.STATE.mbMap || !window.mapboxgl || !window.STATE.mkMpp) return;
+  if (!window.TOKENS?.mapbox) { fail('mb', 'no VITE_MAPBOX_TOKEN found — run tokens.mjs'); return; }
+  mapboxgl.accessToken = window.TOKENS.mapbox;
+  const zoom = Math.log2((MAPBOX_Z0_MPP * Math.cos(place.lat * Math.PI / 180)) / window.STATE.mkMpp);
+  const map = new mapboxgl.Map({
+    container: 'mb',
+    // satellite-v9 is imagery with no labels — the fair comparison against MapKit's Satellite.
+    style: 'mapbox://styles/mapbox/satellite-v9',
+    center: [place.lng, place.lat],
+    zoom,
+    attributionControl: true,
+  });
+  window.STATE.mbMap = map;
+  map.on('load', () => {
+    const b = map.getBounds();
+    const h = map.getCanvas().clientHeight;
+    window.STATE.mbMpp = ((b.getNorth() - b.getSouth()) * METRES_PER_DEGREE_LAT) / h;
+    annotate('mb', `${window.STATE.mbMpp.toFixed(2)} m/px`);
+    window.STATE.mbReady = true;
+  });
+  map.on('error', e => { window.STATE.mbError = e?.error?.message || 'unknown'; });
+
+  // Mapbox GL drives itself from requestAnimationFrame, which a browser throttles or stops entirely
+  // while `document.visibilityState === 'hidden'` — and an automated preview pane is frequently hidden.
+  // The symptom is nasty for a comparison harness: the Mapbox pane stays BLACK with no error, no failed
+  // request and `isStyleLoaded() === false`, which reads exactly like "Mapbox cannot render here" rather
+  // than "nothing has asked it to paint". Nudging it keeps the pane honest whether or not anyone is
+  // watching. MapKit is unaffected — it paints without this.
+  const pump = setInterval(() => {
+    if (document.visibilityState !== 'hidden') return;
+    try { map.triggerRepaint(); } catch { clearInterval(pump); }
+  }, 250);
+}
+
+const mk = document.createElement('script');
+mk.src = 'https://cdn.apple-mapkit.com/mk/5.x.x/mapkit.js';
+mk.crossOrigin = 'anonymous';
+mk.addEventListener('load', initMapKit);
+mk.addEventListener('error', () => fail('mk', 'mapkit.js did not load from cdn.apple-mapkit.com'));
+document.head.appendChild(mk);
+
+const mb = document.createElement('script');
+mb.src = 'https://api.mapbox.com/mapbox-gl-js/v3.9.0/mapbox-gl.js';
+mb.addEventListener('load', maybeInitMapbox);
+mb.addEventListener('error', () => fail('mb', 'mapbox-gl did not load'));
+document.head.appendChild(mb);
+</script>
+</body>
+</html>

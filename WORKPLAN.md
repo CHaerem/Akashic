@@ -34,6 +34,7 @@ node scripts/workplan.mjs next
 | Task | Agent | Branch | Stopped at |
 |---|---|---|---|
 | `LEG-09` Execute the GitHub Pages + DNS cutover (T4.2, T4.3) | opus5 | `claude/remote-control-project-review-9462c1` | — |
+| `MAP-03` MapKit JS behind the adapter for the journey view | opus5 | `claude/remote-control-project-review-9462c1` | imagery gate PASSED (see scripts/mapkit/imagery-compare/FINDINGS.md); next is the journey-view adapter itself, framing from route bounds not a fixed wide zoom |
 | `MAP-04A` Mint the MapKit token in the build, and fail the build before it lapses | opus5 | `claude/remote-control-project-review-9462c1` | minter + health guard done and locally proven; the deploy-step wiring wants MAP-03 landed first |
 
 ## LEGACY
@@ -194,7 +195,7 @@ node scripts/workplan.mjs next
 | `x` | `ARCH-01` **DECISION: one map layer, Apple MapKit, swapped across both surfaces together** | 0 | agent | — | Recorded in ARCHITECTURE.md. |
 | `x` | `MAP-01` **A map interface narrow enough that the next vendor swap is one adapter** | 1 | agent | — | Web components speak only to a vendor-neutral map interface; no Mapbox or MapKit type appears outside its adapter. |
 | ` ` | `MAP-02` **Draw the landing globe ourselves — MapKit JS provably cannot** | 2 | agent | `MAP-01` | The landing view is a rotating sphere with a pin per published journey, using no map service and no token. |
-| ` ` | `MAP-03` **MapKit JS behind the adapter for the journey view** | 3 | agent | `MAP-01` | Selecting a journey shows its route and days on Apple satellite imagery, with Apple's mandatory attribution correctly placed. |
+| `~` | `MAP-03` **MapKit JS behind the adapter for the journey view** | 3 | agent | `MAP-01` | Selecting a journey shows its route and days on Apple satellite imagery, with Apple's mandatory attribution correctly placed. |
 | `~` | `MAP-04A` **Mint the MapKit token in the build, and fail the build before it lapses** | 0.5 | agent | `MAP-01` | scripts/mapkit/mintToken.mjs produces a token a JWT verifier accepts, and the deploy workflow both injects a freshly-minted token and fails when it is within 14 days of expiring. |
 | `x` | `MAP-04` **Add the MapKit private key as a repository secret** | 0.1 | owner | — | MAPKIT_PRIVATE_KEY exists as a repository secret. The two identifiers are already set as repository variables. |
 | ` ` | `MAP-05` **Delete Mapbox: 2786 LOC, the 1626 KB chunk, the SW rules and the secret** | 0.5 | agent | `MAP-02` `MAP-03` | No mapbox package, no mapbox origin in the built bundle, and VITE_MAPBOX_TOKEN removed from all three workflows. |

@@ -4,8 +4,25 @@
     {
       "name": "web",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev"],
+      "runtimeArgs": [
+        "run",
+        "dev"
+      ],
       "port": 5173
+    },
+    {
+      "name": "mapcompare",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": [
+        "--yes",
+        "http-server",
+        "scripts/mapkit/imagery-compare",
+        "-p",
+        "5199",
+        "-c-1",
+        "--silent"
+      ],
+      "port": 5199
     }
   ]
 }

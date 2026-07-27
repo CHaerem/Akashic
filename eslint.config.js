@@ -11,7 +11,10 @@ export default defineConfig([
   // the 144 .ts/.tsx files under src/ (both counts measured). tsc checks types; it does not catch
   // unused vars, bad hook deps, or `any` creep. With TS included the run covers 171 files.
   // e2e/ is Playwright's and has its own tsconfig, so it stays out of the type-aware program.
-  globalIgnores(['dist', 'e2e', 'dev-dist', 'coverage']),
+  // scripts/mapkit/imagery-compare/tokens.js is GENERATED (by tokens.mjs) and gitignored — but eslint's
+  // flat config does not read .gitignore, so without this line the harness's generated browser globals
+  // fail `no-undef` and put the lint gate at 1 error the moment anyone runs the imagery comparison.
+  globalIgnores(['dist', 'e2e', 'dev-dist', 'coverage', 'scripts/mapkit/imagery-compare/tokens.js']),
   // Node.js scripts
   {
     files: ['scripts/**/*.{js,mjs}', 'vite.config.js'],

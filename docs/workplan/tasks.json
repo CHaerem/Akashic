@@ -2590,12 +2590,24 @@
         "index.html"
       ],
       "track": "QUALITY",
-      "status": "TODO",
+      "status": "WIP",
       "verify": [
         "npx vitest --run",
         "npm run typecheck",
         "npm run build"
-      ]
+      ],
+      "claim": {
+        "agent": "opus5",
+        "branch": "claude/remote-control-project-review-9462c1",
+        "at": "2026-07-27"
+      },
+      "notes": [
+        "2026-07-27 THE IMAGERY GATE IS PASSED, and it was a real gate rather than a formality. Measured with the real key (9UN97VBZR8), MapKit JS 5.81.65 against mapbox-gl 3.9.0 satellite-v9, seven views over the journeys this app actually holds, every pair matched on metres per pixel to within 0.05%. Five at parity (Kilimanjaro wide and close, Mount Kenya, Machu Picchu, Jotunheimen). ONE FAVOURS APPLE CLEARLY: the Khumbu Icefall at ~5 m/px, where Mapbox is blown out to flat white and Apple holds serac structure, moraine ridges and the teal glacial ponds. ONE FAVOURS MAPBOX CLEARLY: the Khumbu at ~20 m/px, where Apple`s mosaic carries heavy cloud and a visible tile seam while Mapbox is cloud-free. Full table and screenshots-worth of detail in scripts/mapkit/imagery-compare/FINDINGS.md.",
+        "The Khumbu finding is zoom-band specific AND IT INVERTS, which is what makes it liveable: the cloud is in the wide mosaic only, and one band closer Apple is the better vendor. So the implementation requirement it creates is narrow — frame a journey from its ROUTE BOUNDS rather than from a fixed wide zoom, which for a trek is tighter than the massif anyway and lands where Apple wins. Explicitly NOT a reason to keep Mapbox as a fallback: that would carry the whole 1626 KB chunk, the token, the service-worker rules and the maintenance to cover one cloudy mosaic level in one view of one journey. MAP-05 stands.",
+        "Three measurement traps, all of which produced a wrong answer before being caught, recorded because any future imagery comparison will hit them. (1) Matching the coordinate SPAN is not matching the view — CoordinateRegion and fitBounds each adapt to the container aspect ratio and differently, so asking both for 0.09° gave Mapbox a tighter frame and the first comparison \"showed\" Apple as washed out and low-detail. That was an artefact of comparing two magnifications, and it would have been a very expensive false conclusion. (2) A half-loaded map is indistinguishable from bad coverage: the first Kilimanjaro screenshot showed Apple as a flat green blur, and the same view fully loaded is highly detailed. MapKit also draws an empty grey tile grid while loading, which reads as a coverage hole. (3) Mapbox GL runs on requestAnimationFrame, so in a hidden document it stops painting with no error, no failed request and isStyleLoaded() false — which reads as \"Mapbox cannot render here\".",
+        "Incidental but load-bearing for MAP-04: this is the first time the MapKit token has been exercised by a real browser rather than by curl. mapkit.init succeeded, 7/7 maps constructed, tiles served from sat-cdn.apple-mapkit.com. The credential is proven end to end."
+      ],
+      "resume": "imagery gate PASSED (see scripts/mapkit/imagery-compare/FINDINGS.md); next is the journey-view adapter itself, framing from route bounds not a fixed wide zoom"
     },
     {
       "id": "MAP-04A",
