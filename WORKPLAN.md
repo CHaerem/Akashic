@@ -197,7 +197,7 @@ node scripts/workplan.mjs next
 | `~` | `MAP-04A` **Mint the MapKit token in the build, and fail the build before it lapses** | 0.5 | agent | `MAP-01` | scripts/mapkit/mintToken.mjs produces a token a JWT verifier accepts, and the deploy workflow both injects a freshly-minted token and fails when it is within 14 days of expiring. |
 | ` ` | `MAP-04` **Create the MapKit JS key and add two repository secrets** | 0.2 | owner | — | A MapKit JS key exists in the Apple Developer portal, and MAPKIT_KEY_ID + MAPKIT_PRIVATE_KEY are set as repository secrets. Verified by running scripts/mapkit/mintToken.mjs in CI and getting a token. |
 | ` ` | `MAP-05` **Delete Mapbox: 2786 LOC, the 1626 KB chunk, the SW rules and the secret** | 0.5 | agent | `MAP-02` `MAP-03` | No mapbox package, no mapbox origin in the built bundle, and VITE_MAPBOX_TOKEN removed from all three workflows. |
-| ` ` | `QUA-40` **E2E must not depend on live CloudKit — the gate has been red on main since SHIP-10A** | 0.4 | agent | — | The E2E Tests workflow is green on main, and it stays green with no network access to Apple. |
+| ` ` | `QUA-40` **E2E reaches live CloudKit, and shares its config with the live site** | 0.4 | agent | — | The E2E Tests workflow is green on main, and it stays green with no network access to Apple. |
 
 ## Decisions on record
 

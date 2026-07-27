@@ -2717,13 +2717,15 @@
       "effort": 0.4,
       "priority": 16,
       "deps": [],
-      "title": "E2E must not depend on live CloudKit — the gate has been red on main since SHIP-10A",
+      "title": "E2E reaches live CloudKit, and shares its config with the live site",
       "done_when": "The E2E Tests workflow is green on main, and it stays green with no network access to Apple.",
-      "why": "MEASURED 2026-07-27: E2E Tests has failed on every run on main since SHIP-10A (9541b05, e016cd9, 6fb947f, eda235e), and journey-data.spec.ts names why -- it asserts zero console errors and receives `[cloudkit] Error fetching public journeys`.\nThis is a self-inflicted regression and worth being precise about the cause. SHIP-10A repointed the deployed showcase at the CloudKit PRODUCTION environment. Nothing gates that fetch on VITE_E2E_TEST_MODE -- the flag exists and is read by AuthGuard, MapboxGlobe and TestModeOverlay, but not by the public adapter -- so the suite now reaches Apple for real, from a runner with no token for that container, and fails.\nThe shallow fix is to publish a journey into production (SHIP-10B) and let the fetch succeed. Do NOT do that as the fix: it makes a CI gate depend on a live third-party service and on data staying published, so the suite goes red again the first time Apple has a bad afternoon or the owner unpublishes something. The e2e suite exists to test our UI, not Apple`s uptime.\nSo the fix is that VITE_E2E_TEST_MODE must short-circuit the public adapter to fixtures, the same way it already short-circuits auth and the map. That also makes the suite runnable offline, which it currently is not.\nThis one matters beyond the gate: CLAUDE.md`s own lesson is that a red gate left red trains everyone to ignore CI, and the owner`s stated bar for the Apple submission is a clean beta. Four red runs on main is not clean.",
+      "why": "MEASURED 2026-07-27, and the mechanism is not the one this task first claimed -- see the correction note below.\nE2E Tests was GREEN on main on 2026-07-25 (c864176) and has failed on every run since 2026-07-27 07:33. The repository variables VITE_CLOUDKIT_ENV and VITE_CLOUDKIT_API_TOKEN were set to production at 06:36 that morning, 57 minutes before the first red run, and no commit in between touched the CloudKit fetch path.\nThe coupling is the finding: e2e.yml:54-55 reads the SAME TWO REPOSITORY VARIABLES the production deploy reads. So pointing the live site at CloudKit production (SHIP-10A) simultaneously pointed the e2e suite at it, and there is no way to configure one without the other.\nWhy that breaks: the production token is origin-restricted to https://akashic.no, and a CI runner serves the app from http://localhost:5173. Measured directly against the CloudKit REST endpoint with the production token -- Origin https://akashic.no => 200, Origin http://localhost:5173 => 401, no Origin header => 401. So the suite gets 401 and journey-data.spec.ts, which asserts zero cloudkit console errors, fails.\nTHIS ALSO KILLS THE SHORTCUT. Publishing a journey into production (SHIP-10B) would NOT turn the gate green: the 401 happens at authorisation, before any record is considered. Anyone reaching for that fix will spend the time and still be red.\nThe fix is that VITE_E2E_TEST_MODE must keep the suite off the network entirely, as it already does for auth (AuthGuard) and the map (MapboxGlobe). Prefer stubbing at the TRANSPORT boundary -- getPublicDatabase/performQueryAll -- rather than at fetchPublicJourneys, so the real record mapping, asset resolution and deterministic ordering still run in e2e against canned records. Stubbing the higher seam would quietly stop exercising code that publicAdapter.test.ts covers only in isolation.\nAll four specs (app, day-navigation, journey-data, mobile) depend on journey data being present, so the fixture has to be good enough for day navigation and photo viewing, not just a globe with a dot.",
       "files": [
         "src/lib/journeys/adapters/cloudkit/publicAdapter.ts",
-        "e2e/journey-data.spec.ts",
-        "src/lib/journeys/**"
+        "src/lib/cloudkit.ts",
+        "src/lib/journeys/**",
+        "e2e/**",
+        ".github/workflows/e2e.yml"
       ],
       "track": "QUALITY",
       "status": "TODO",
@@ -2731,6 +2733,9 @@
         "VITE_E2E_TEST_MODE=true CI=true npx playwright test --project=chromium --ignore-snapshots",
         "npx vitest --run",
         "npm run typecheck"
+      ],
+      "notes": [
+        "2026-07-27 CORRECTION: the first version of this entry said SHIP-10A `repointed the showcase` and that nothing gates the fetch on VITE_E2E_TEST_MODE. The second half is true; the first was hand-waving that happened to point at the right commit for the wrong reason -- SHIP-10A`s DIFF touched only deploy-pages.yml and docs, and could not have broken e2e. The cause is the shared repository VARIABLES, which are not in any diff. Written from the commit I had open rather than from the run history, which is the same mistake as the three wrong removal conditions in QUA-08."
       ]
     }
   ]
