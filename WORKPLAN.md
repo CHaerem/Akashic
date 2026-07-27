@@ -5,23 +5,23 @@
 
 # Akashic — work ledger
 
-109 tasks · **24 open** (3 agent-doable, 0.6 dev-days · 21 owner-only, 8.7 dev-days) · 85 done · 0 dropped
+109 tasks · **22 open** (2 agent-doable, 0.4 dev-days · 20 owner-only, 8.2 dev-days) · 87 done · 0 dropped
 
 > **`dev-days` are a human-developer estimate, not agent time.** They came from the review
 > that produced these tasks and they are the right unit for deciding whether something is
 > worth doing — they are the wrong unit for predicting how long an agent will take, and
 > summing them as "work remaining" overstates it substantially.
 >
-> Measured so far: **83 agent tasks estimated at 61.7 dev-days**,
+> Measured so far: **84 agent tasks estimated at 62 dev-days**,
 > closed in roughly one working afternoon across up to three parallel tracks.
 >
 > But that compression is **unmeasured for the large items**: of the tasks closed so far,
 > 7 were 2 dev-days or more. 0 of the
-> 0.6 remaining dev-days sit in 0 such tasks —
+> 0.4 remaining dev-days sit in 0 such tasks —
 > localisation, Swift 6 strict concurrency, a UI test target, the PDF book. Those involve
 > design judgement and broad-blast-radius refactors rather than localised edits, so do not
 > assume the same ratio holds. The cheap band is nearly exhausted:
-> 3 tasks at 0.5 dev-days or less remain.
+> 2 tasks at 0.5 dev-days or less remain.
 
 Read [CLAUDE.md](CLAUDE.md) before touching anything. To find work:
 
@@ -29,17 +29,11 @@ Read [CLAUDE.md](CLAUDE.md) before touching anything. To find work:
 node scripts/workplan.mjs next
 ```
 
-## In flight
-
-| Task | Agent | Branch | Stopped at |
-|---|---|---|---|
-| `LEG-09` Execute the GitHub Pages + DNS cutover (T4.2, T4.3) | opus5 | `claude/remote-control-project-review-9462c1` | Zone is built and authoritatively verified against ns1.hyp.net; only delegation propagation remains (up to 4h + 24h per Domeneshop). Nothing further to do -- close it when dig +short akashic.no NS shows hyp.net. |
-
 ## LEGACY
 
 > Retire Supabase, Cloudflare and R2. Repo-side removal can happen now; the infrastructure deletions are gated on the archive being duplicated and on the Pages cutover. LEG-01 is independent of every gate and should happen today.
 
-9 open of 16 · 3 d remaining
+8 open of 16 · 2.5 d remaining
 
 | | Task | Days | Who | Deps | Finish line |
 |---|---|---|---|---|---|
@@ -51,7 +45,7 @@ node scripts/workplan.mjs next
 | `x` | `LEG-06` **Delete the unrunnable legacy scripts and the AWS SDK dependency** | 0.5 | agent | — | npm run build and vitest pass with the dead scripts and @aws-sdk/client-s3 gone. |
 | `x` | `LEG-07` **Gate every native-only web write behind one guard** | 1 | agent | — | No web UI offers a write that silently no-ops; each either disappears or shows a native-only notice. |
 | `x` | `LEG-08` **Remove the hardcoded /Users/cher archive path from shipping code** | 0.25 | agent | — | No absolute developer path appears in any non-test Swift file. |
-| `~` | `LEG-09` **Execute the GitHub Pages + DNS cutover (T4.2, T4.3)** | 0.5 | owner | `SHIP-10A` | akashic.no serves from GitHub Pages, privacy/terms/support resolve, and the AASA file is reachable. |
+| `x` | `LEG-09` **Execute the GitHub Pages + DNS cutover (T4.2, T4.3)** | 0.5 | owner | `SHIP-10A` | akashic.no serves from GitHub Pages, privacy/terms/support resolve, and the AASA file is reachable. |
 | ` ` | `LEG-10` **Delete deploy.yml, then revoke the Cloudflare and Supabase secrets** | 0.25 | agent | `LEG-09` | No workflow references Cloudflare or Supabase, the four secrets are revoked, and CI is green without them. |
 | ` ` | `LEG-11A` **Delete the Cloudflare Pages project and the DNS zone** | 0.25 | owner | `LEG-09` `LEG-10` | The akashic Pages project and the Cloudflare DNS zone are gone from the dashboard, and akashic.no still resolves via GoDaddy to GitHub Pages. |
 | ` ` | `LEG-11B` **Delete the R2 bucket, Supabase project and Google OAuth config** | 0.25 | owner | `LEG-03` `LEG-04` | All three are gone from their dashboards AND the archive has been verified on a second physical medium. |
@@ -92,7 +86,7 @@ node scripts/workplan.mjs next
 
 > Hard requirements for a paid v1.0. Most of the remaining calendar time lives here, in items only the owner can do.
 
-11 open of 20 · 5 d remaining
+10 open of 20 · 4.8 d remaining
 
 | | Task | Days | Who | Deps | Finish line |
 |---|---|---|---|---|---|
@@ -102,7 +96,7 @@ node scripts/workplan.mjs next
 | `x` | `SHIP-04` **Add PrivacyInfo.xcprivacy** | 0.25 | agent | — | The manifest ships in the app bundle and the upload draws no ITMS-91053 notice. |
 | `x` | `SHIP-05` **Bump the marketing version to 1.0.0** | 0.1 | agent | — | The built plist reports CFBundleShortVersionString 1.0.0. |
 | `x` | `SHIP-06` **D5 — consumer sync wording, iPhone portrait lock, ASC config match** | 0.5 | agent | — | Settings shows no engineering strings and iPhone does not rotate into the iPad panel layout. |
-| ` ` | `SHIP-07` **Add the associated-domains entitlement so Universal Links work** | 0.25 | agent | `LEG-09` | Tapping an akashic.no journey link opens the app rather than Safari. |
+| `x` | `SHIP-07` **Add the associated-domains entitlement so Universal Links work** | 0.25 | agent | `LEG-09` | Tapping an akashic.no journey link opens the app rather than Safari. |
 | `x` | `SHIP-08` **Write the public-showcase takedown procedure** | 0.5 | agent | `DIFF-02` | A documented, tested procedure removes a reported public journey, and the privacy page says how to ask. |
 | `x` | `SHIP-09` **Compile the developer workshop out of Release** | 0.25 | agent | — | No developer surface is reachable in a Release build, and the seven-tap gesture is gone. |
 | `x` | `SHIP-10A` **Point the deployed showcase at the CloudKit PRODUCTION environment** | 0.25 | owner | — | The deployed bundle carries environment:"production" and a PublicJourney query returns without an auth error. |

@@ -213,6 +213,16 @@ right: fix this file in the same commit.
   * The token IS environment-scoped (dev token: 200 on development, 401 on production), so a separate
     Production token is genuinely required. Test it with an explicit `Origin` header, from the exact
     scheme+host a browser would send.
+- **Entitlements are never embedded in an unsigned simulator build, so no simulator test can prove one.**
+  Measured on Release-CloudKit with `CODE_SIGNING_ALLOWED=NO`: the log contains **zero** codesign steps
+  and `codesign -d --entitlements - <app>` reports nothing at all. So `associated-domains`, App Groups,
+  WeatherKit and the CloudKit container keys are all *declared* and none of them *take effect* in any
+  simulator run. This is why SHIP-07's Universal Link can be fully unit-tested and still not be known to
+  work — the test can read the `.entitlements` file and assert its contents (see `UniversalLinkTests`),
+  which catches drift between the plist and the code, but it cannot observe the capability. Same blind
+  spot as the Vision and Intelligence code: anything gated on signing or on a compilation condition is
+  invisible to every tool that does not sign or compile it. The device session (SHIP-15) is the only
+  place these become facts.
 - **No Vision ML request works in the simulator, so the whole curation feature has never run in CI —
   and it fails SILENTLY.** Measured on iOS 26.5: `VNGenerateImageFeaturePrintRequest`,
   `VNClassifyImageRequest` and `VNCalculateImageAestheticsScoresRequest` all return *"Failed to create

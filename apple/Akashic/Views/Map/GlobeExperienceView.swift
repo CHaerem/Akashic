@@ -144,10 +144,12 @@ struct GlobeExperienceView: View {
         .onChange(of: controller.selectedJourneyID) { _, _ in
             loadPhotos(for: controller.selectedJourney)
         }
-        // Spotlight deep link: SpotlightIndexer records the tapped journey on the
-        // store; fly the globe there and clear the pending selection.
-        .onChange(of: store.pendingJourneySelection) { _, id in
-            if let id, let journey = store.journey(withID: id) {
+        // Deep link: two sources now write here. SpotlightIndexer records a tapped journey by ID,
+        // and SHIP-07's Universal Link handler records one by SLUG — `AppInfo.showcaseURL` addresses
+        // journeys by slug, so an id-only lookup silently dropped every shared link. Resolving both
+        // matches what `TrekCameraController.applyLaunchScene` already does for its launch key.
+        .onChange(of: store.pendingJourneySelection) { _, key in
+            if let key, let journey = store.journeys.first(where: { $0.id == key || $0.slug == key }) {
                 controller.selectJourney(journey)
                 store.pendingJourneySelection = nil
             }

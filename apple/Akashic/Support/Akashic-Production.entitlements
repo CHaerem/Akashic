@@ -44,5 +44,19 @@
 	<array>
 		<string>group.no.akashic</string>
 	</array>
+	<!--
+	  SHIP-07 — Universal Links. `public/.well-known/apple-app-site-association` declares
+	  appID `9LVCB72DT8.no.akashic.app` and matches `/?journey=<slug>`, so a tap on a showcase
+	  link opens the app instead of Safari. `applinks:` only — no `webcredentials`, since the
+	  app has no password to share with the site.
+	  Apex only, deliberately: `AppInfo.showcaseURL` builds `https://akashic.no/?journey=…`, and
+	  Universal Links match the URL AS TAPPED without following redirects — so declaring
+	  `www.akashic.no` would buy nothing (GitHub Pages 301s www to the apex, and would not serve
+	  an AASA there anyway).
+	-->
+	<key>com.apple.developer.associated-domains</key>
+	<array>
+		<string>applinks:akashic.no</string>
+	</array>
 </dict>
 </plist>

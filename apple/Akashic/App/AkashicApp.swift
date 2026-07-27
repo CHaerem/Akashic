@@ -175,7 +175,18 @@ struct AkashicApp: App {
                 // `AkashicAppDelegate.application(_:userDidAcceptCloudKitShareWith:)` above instead,
                 // so this handler is GPX-only.
                 .onOpenURL { url in
-                    Task { await handleOpenedGPX(url) }
+                    // SHIP-07: a Universal Link arrives here too, so the GPX path is no longer the
+                    // only case. Order matters — a showcase link is NOT a GPX file, and letting it
+                    // fall through would parse it as one and show "Couldn't open this file". An
+                    // entitlement without this branch would have been worse than no deep link at all.
+                    if let slug = Self.showcaseJourneySlug(from: url) {
+                        // The Spotlight deep-link seam already exists and already flies the globe to
+                        // a pending selection (see GlobeExperienceView), so this reuses it rather
+                        // than inventing a second route into the same behaviour.
+                        store.pendingJourneySelection = slug
+                    } else {
+                        Task { await handleOpenedGPX(url) }
+                    }
                 }
                 .sheet(item: $openedGPX) { opened in
                     NewJourneySheet(preloadedGPX: opened.file, suggestedName: opened.suggestedName)
@@ -195,6 +206,29 @@ struct AkashicApp: App {
                     Text(openGPXAlertMessage ?? "")
                 }
         }
+    }
+
+    /// The journey slug in an Akashic showcase link, or nil for anything else. (SHIP-07)
+    ///
+    /// Matches what `AppInfo.showcaseURL` builds — `https://akashic.no/?journey=<slug>` — and nothing
+    /// else. Deliberately strict: the host is checked so a `?journey=` on some other domain cannot
+    /// steer the app, and an empty value returns nil so a malformed link falls through to the GPX path
+    /// and its existing error rather than selecting nothing and looking like a no-op.
+    ///
+    /// `www` is accepted even though `applinks` declares the apex only: a link that reaches this
+    /// function has already been admitted by the system, and being lenient costs nothing.
+    ///
+    /// `nonisolated` because this is a pure function of the URL. `AkashicApp` is implicitly `@MainActor`
+    /// as the `@main` App, which would otherwise bind a string parser to the main actor and make every
+    /// caller — tests included — hop for no reason.
+    nonisolated static func showcaseJourneySlug(from url: URL) -> String? {
+        guard let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
+              let host = components.host?.lowercased(),
+              host == "akashic.no" || host == "www.akashic.no",
+              let slug = components.queryItems?.first(where: { $0.name == "journey" })?.value,
+              !slug.isEmpty
+        else { return nil }
+        return slug
     }
 
     /// C7: security-scoped read (the URL comes from outside our sandbox) → parse off the main

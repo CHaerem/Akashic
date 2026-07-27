@@ -253,7 +253,7 @@
       "id": "LEG-09",
       "track": "LEGACY",
       "title": "Execute the GitHub Pages + DNS cutover (T4.2, T4.3)",
-      "status": "WIP",
+      "status": "DONE",
       "effort": 0.5,
       "done_when": "akashic.no serves from GitHub Pages, privacy/terms/support resolve, and the AASA file is reachable.",
       "owner": true,
@@ -274,7 +274,7 @@
         "branch": "claude/remote-control-project-review-9462c1",
         "at": "2026-07-27"
       },
-      "resume": "Zone is built and authoritatively verified against ns1.hyp.net; only delegation propagation remains (up to 4h + 24h per Domeneshop). Nothing further to do -- close it when dig +short akashic.no NS shows hyp.net."
+      "evidence": "DNS cutover complete and globally propagated 2026-07-27. All three public resolvers (8.8.8.8, 1.1.1.1, 9.9.9.9) return the four GitHub Pages A records and ns1/ns2/ns3.hyp.net; www resolves via CNAME to chaerem.github.io. http://akashic.no serves 200 from GitHub Pages with the production bundle (environment:\"production\", new CloudKit token); /privacy, /terms, /support all 200; /.well-known/apple-app-site-association 200 with valid JSON. REMAINING, and not part of done_when: GitHub has not begun provisioning the TLS certificate (pages API shows no https_certificate key at all), so https:// still presents the *.github.io cert and fails. The site is reachable over HTTP meanwhile because https_enforced is false. If the cert has not appeared within about an hour the documented remedy is to remove and re-add the custom domain, which forces GitHub to re-run its DNS check. Do NOT enable Enforce HTTPS until the cert is issued -- it would turn the working HTTP into a redirect to something broken."
     },
     {
       "id": "LEG-10",
@@ -753,22 +753,31 @@
       "id": "SHIP-07",
       "track": "SHIP",
       "title": "Add the associated-domains entitlement so Universal Links work",
-      "status": "TODO",
+      "status": "DONE",
       "effort": 0.25,
       "done_when": "Tapping an akashic.no journey link opens the app rather than Safari.",
       "deps": [
         "LEG-09"
       ],
       "files": [
-        "apple/Akashic/Akashic.entitlements",
-        "apple/Akashic/Akashic-Release.entitlements"
+        "apple/Akashic/Support/Akashic.entitlements",
+        "apple/Akashic/Support/Akashic-Release.entitlements",
+        "apple/Akashic/Support/Akashic-Production.entitlements",
+        "apple/Akashic/App/AkashicApp.swift",
+        "apple/Akashic/Views/Map/GlobeExperienceView.swift",
+        "apple/AkashicTests/UniversalLinkTests.swift"
       ],
-      "why": "Doc status is wrong in both directions: the AASA file is finished and live with a real Team ID, but the app declares no associated-domains entitlement, so the deep link cannot work. This is the return half of the growth funnel. Note from DIFF-03: the journey is addressed by QUERY STRING (?journey=<slug>), which GitHub Pages cannot route on, so per-path prerendering for share previews would need a URL scheme change — and an edge-worker alternative would make every scraper hit billable public-CloudKit traffic. Any change to the URL form has to keep the AASA component in step.\n\nAASA CONTENT-TYPE, measured against Pages 2026-07-27 via --resolve: /.well-known/apple-app-site-association returns 200 with valid JSON ({\"applinks\":{\"details\":[{\"appIDs\":...) but Content-Type: application/octet-stream, because GitHub Pages derives the type from the file extension and this file has none. Pages allows no custom headers, so it cannot be changed from the repo. Modern iOS fetches AASA through Apple's CDN, which is tolerant of the type, and older guidance required application/json -- so this is a verify-on-device item rather than a known break. Universal Links either open the app or they do not, and the SHIP-15 device session is where that shows. Note /apple-app-site-association at the root is 404; only the .well-known path exists, which is correct for current iOS.",
+      "why": "Doc status is wrong in both directions: the AASA file is finished and live with a real Team ID, but the app declares no associated-domains entitlement, so the deep link cannot work. This is the return half of the growth funnel. Note from DIFF-03: the journey is addressed by QUERY STRING (?journey=<slug>), which GitHub Pages cannot route on, so per-path prerendering for share previews would need a URL scheme change — and an edge-worker alternative would make every scraper hit billable public-CloudKit traffic. Any change to the URL form has to keep the AASA component in step.\n\nAASA CONTENT-TYPE, measured against Pages 2026-07-27 via --resolve: /.well-known/apple-app-site-association returns 200 with valid JSON ({\"applinks\":{\"details\":[{\"appIDs\":...) but Content-Type: application/octet-stream, because GitHub Pages derives the type from the file extension and this file has none. Pages allows no custom headers, so it cannot be changed from the repo. Modern iOS fetches AASA through Apple's CDN, which is tolerant of the type, and older guidance required application/json -- so this is a verify-on-device item rather than a known break. Universal Links either open the app or they do not, and the SHIP-15 device session is where that shows. Note /apple-app-site-association at the root is 404; only the .well-known path exists, which is correct for current iOS.\n\nTASK WAS UNDER-SCOPED, found while doing it. Two things beyond the entitlement:\n  1. It listed two entitlement files; there are THREE that can run signed (Akashic, Akashic-Release, Akashic-Production). Production is the one that ships, and it was missing from the list.\n  2. More seriously, `onOpenURL` was GPX-ONLY -- its own comment said so. Adding associated-domains alone would have made a tapped showcase link open the app, fail to parse as GPX, and show \"Couldn't open this file\". That is WORSE than the link staying in Safari, so the entitlement could not ship on its own. The handler now branches, and reuses the Spotlight deep-link seam (store.pendingJourneySelection) rather than inventing a second route -- but that seam resolved by ID only, while AppInfo.showcaseURL addresses journeys by SLUG, so every shared link would have been silently dropped. It resolves both now, matching what TrekCameraController.applyLaunchScene already did.",
       "verify": [
         "cd apple && xcodegen generate",
         "grep -rn 'associated-domains' apple/Akashic/*.entitlements"
       ],
-      "resume": "Ready to execute the moment its owner dependency clears; no agent work needed beforehand. All other agent tasks in the ledger are DONE as of 2026-07-26."
+      "claim": {
+        "agent": "opus5",
+        "branch": "claude/remote-control-project-review-9462c1",
+        "at": "2026-07-27"
+      },
+      "evidence": "associated-domains -> applinks:akashic.no in ALL THREE signable entitlement files (the task listed two; Akashic-Production, the one that ships, was missing). onOpenURL now branches: a showcase URL sets store.pendingJourneySelection, anything else falls through to the GPX path. GlobeExperienceView resolves that key by id OR slug -- it was id-only, and showcase links carry slugs, so shared links would have been dropped silently. 11 new UniversalLinkTests including host-suffix rejection (evil.example.com and akashic.no.evil.example.com both refused) and a test that reads the shipped .entitlements files and asserts the exact applinks value, so plist/code drift fails loudly. 815 unit tests, 0 failures, 0 strict-concurrency warnings; Release-CloudKit builds 0 errors 0 warnings. NOT VERIFIED END TO END, and cannot be from here: with CODE_SIGNING_ALLOWED=NO there are zero codesign steps and no entitlements are embedded, so no simulator run can show the capability taking effect. Tapping a real link is SHIP-15 device work. Also unresolved there: the AASA is served as application/octet-stream by Pages."
     },
     {
       "id": "SHIP-08",
