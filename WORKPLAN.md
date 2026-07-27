@@ -33,7 +33,7 @@ node scripts/workplan.mjs next
 
 | Task | Agent | Branch | Stopped at |
 |---|---|---|---|
-| `LEG-09` Execute the GitHub Pages + DNS cutover (T4.2, T4.3) | opus5 | `claude/remote-control-project-review-9462c1` | — |
+| `LEG-09` Execute the GitHub Pages + DNS cutover (T4.2, T4.3) | opus5 | `claude/remote-control-project-review-9462c1` | DNS is provably correct and GitHub's own health check passes on both legs, yet no certificate record exists at all — anomalous, not waiting. Next step is a browser load of Settings -> Pages, changing nothing; do not remove/re-add again today. |
 | `MAP-03` MapKit JS behind the adapter for the journey view | opus5 | `claude/remote-control-project-review-9462c1` | imagery gate PASSED (see scripts/mapkit/imagery-compare/FINDINGS.md); next is the journey-view adapter itself, framing from route bounds not a fixed wide zoom |
 | `MAP-04A` Mint the MapKit token in the build, and fail the build before it lapses | opus5 | `claude/remote-control-project-review-9462c1` | minter + health guard done and locally proven; the deploy-step wiring wants MAP-03 landed first |
 
