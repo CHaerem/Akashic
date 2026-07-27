@@ -62,20 +62,26 @@ Apex `akashic.no` — four **AAAA** records:
 
 `www.akashic.no` — one **CNAME** record → `chaerem.github.io.` (trailing dot).
 
-> `.no` domains are registered at Norid-accredited registrars (Cloudflare
-> Registrar does not support `.no`), so only **DNS hosting** moves. The domain
-> registration itself does not move.
+> **Registrar confirmed by whois 2026-07-27: Domeneshop AS** (`REG42-NORID`, Oslo). This section used
+> to guess at that, and the guess was right. `.no` requires a Norid-accredited registrar, so the
+> registration itself is not moving — Cloudflare Registrar does not support `.no` and never held it.
+> Only **DNS hosting** moves.
 >
-> **Destination: GoDaddy** (2026-07-27) — the owner already hosts other domains
-> there. DNS hosting is independent of registration, so this works even though
-> the `.no` registration stays where it is: change the **nameservers at the Norid
-> registrar** to GoDaddy's, then create the records below in GoDaddy.
+> **Destination: Domeneshop's own DNS, not GoDaddy.** The owner asked about GoDaddy (already used for
+> other domains) and it would work, but Domeneshop is the better answer here:
 >
-> One thing to confirm in GoDaddy's control panel first: some providers only host
-> DNS for domains registered with them. If GoDaddy will not accept an externally
-> registered `.no`, fall back to the registrar's own DNS — any host that supports
-> four apex A records, four apex AAAA, and a `www` CNAME is sufficient. Nothing
-> about GitHub Pages needs a premium DNS feature.
+> * **One vendor.** The NS delegation lives at Domeneshop regardless — that is where nameservers are
+>   changed. Putting DNS there too keeps the domain managed in one place instead of splitting
+>   registration and DNS across two consoles, which is how "which one is authoritative?" incidents start.
+> * **Free with the domain**, same as GoDaddy. No saving either way.
+> * **No account-wide API key.** GoDaddy's API keys cannot be scoped to a single domain, so automating
+>   DNS through them would mean handing over control of every other domain in that account — a bad
+>   trade for nine records.
+> * **Less to mistype.** "Use our DNS" at the registrar is usually one switch that sets the NS records
+>   correctly itself. Entering a third party's nameservers by hand is one typo away from a dark domain
+>   for the length of the delegation TTL.
+>
+> GoDaddy is the right choice only if a single console for all domains is worth the two-vendor split.
 
 ---
 

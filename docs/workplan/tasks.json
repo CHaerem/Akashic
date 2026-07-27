@@ -260,7 +260,7 @@
       "deps": [
         "SHIP-10A"
       ],
-      "why": "Nothing Cloudflare-hosted can be deleted until this lands — deploy.yml still deploys the live site on every push to main. The runbook is complete and two of its stated blockers are already closed: the AASA Team ID is filled in, and netlify.toml was removed by d331970.",
+      "why": "Nothing Cloudflare-hosted can be deleted until this lands — deploy.yml still deploys the live site on every push to main. The runbook is complete and two of its stated blockers are already closed: the AASA Team ID is filled in, and netlify.toml was removed by d331970.\n\nDNS DESTINATION DECIDED 2026-07-27: Domeneshop's own DNS, not GoDaddy. whois confirms the registrar is Domeneshop AS (REG42-NORID, Oslo), so the NS delegation is changed there regardless -- keeping DNS in the same place avoids splitting one domain across two consoles, and avoids GoDaddy's account-wide API keys, which cannot be scoped to a single domain. Measured TTLs, which size the cutover: A records are already at 300 s, and the .no registry's NS delegation TTL is 7200 s. During an NS change the OLD nameservers keep answering until that expires, so there is no dark window -- only up to ~2 h where some resolvers reach Cloudflare (old build) and some reach Pages (new build). Both render an empty globe until SHIP-10B publishes something, so the split is invisible to visitors. That makes now the cheapest moment this cutover will ever have.",
       "verify": [
         "curl -sI https://akashic.no | head -1",
         "curl -s https://akashic.no/.well-known/apple-app-site-association | head -5"
