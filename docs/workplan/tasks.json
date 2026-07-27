@@ -2521,6 +2521,44 @@
         "! grep -rn 'matching/v5' src/ apple/ e2e/ scripts/",
         "npx vitest --run"
       ]
+    },
+    {
+      "id": "LEG-16",
+      "track": "LEGACY",
+      "status": "DONE",
+      "effort": 0.1,
+      "priority": 47,
+      "title": "Delete public/textures — 3.8 MB of unattributed dead imagery",
+      "done_when": "public/textures is gone and dist/ no longer ships it.",
+      "why": "Found while designing the Mapbox replacement. public/textures held 3.1 MB in the repo and shipped 3.8 MB into dist/ -- earth-blue-marble.jpg (1.46 MB), earth-night.jpg (715 KB), earth-water.png (430 KB), earth-topology.png (378 KB), earth-day.jpg (245 KB) -- and NOTHING referenced it: no hit in src/ or index.html. It was larger than the entire rest of the site's assets.\nTwo reasons to delete rather than keep for later. There is no licence or attribution file of any kind for third-party earth imagery in a commercial product. And clouds.png is 53 BYTES containing the literal text 'Not found: /three-globe@2.31.0/example/img/clouds.png' -- a captured HTTP 404 committed as if it were an image, which proves the set was scraped from an npm package's examples rather than sourced.\nNASA Blue Marble is genuinely public domain, so the content may well have been fine -- but provenance was never recorded and one file proves the method was scraping. If the textured-globe option is chosen for the Mapbox replacement, source a texture deliberately with its attribution committed alongside; do not resurrect these from git history.",
+      "files": [
+        "public/textures/**"
+      ],
+      "evidence": "Deleted. dist/ shrinks by the full 3.8 MB; build ok; nothing referenced it so no code changed.",
+      "verify": [
+        "! test -d public/textures",
+        "npm run build && ! test -d dist/textures"
+      ]
+    },
+    {
+      "id": "LEG-17",
+      "track": "LEGACY",
+      "status": "TODO",
+      "effort": 0.25,
+      "priority": 48,
+      "title": "Self-host the fonts — Google Fonts is a third external origin",
+      "done_when": "No request to fonts.googleapis.com or fonts.gstatic.com from the deployed page, and the two service-worker rules for them are gone.",
+      "why": "MY AUDIT MISSED THIS. Asked for the external-dependency status on 2026-07-27 I answered 'CloudKit + Mapbox', having grepped the compiled JS bundle for origins and never checked the HTML shell. index.html:108-110 preconnects to fonts.googleapis.com and fonts.gstatic.com and loads Roboto 300/400/500/700 + Playfair Display 700/900 -- present in the built dist/index.html, so it ships.\nIt matters beyond the dependency count: every visitor's IP reaches Google before a single byte of the family's content renders, on a page whose whole selling point is that the data stays in the owner's iCloud. That is a privacy claim undermined by a stylesheet link.\nThe work is small: download the six WOFF2 latin subsets, commit them, swap the <link> for @font-face, and delete the two Google Fonts runtime-caching rules in vite.config.js. Adds roughly 100-150 KB of self-hosted font bytes and removes an origin. Do it independently of the Mapbox decision -- it is unaffected by which map option wins.",
+      "files": [
+        "index.html",
+        "vite.config.js",
+        "public/fonts/**",
+        "src/index.css"
+      ],
+      "verify": [
+        "npm run build && ! grep -r 'fonts.googleapis\\|fonts.gstatic' dist/",
+        "Load the deployed page and confirm no request to a Google origin"
+      ]
     }
   ]
 }

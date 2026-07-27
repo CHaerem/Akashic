@@ -27,7 +27,9 @@ database to operate, and no server to run.
 | Public journeys | A mirror in the container's **public** database, written by the app on publish | **Live.** Metadata + thumbnails only. |
 | Assistant / automation | App Intents (Siri, Shortcuts) inside the app | **Live.** |
 | iOS app native maps | MapKit `.hybrid(elevation: .realistic)` | **Live.** No token, no vendor. |
-| Web maps | Mapbox GL JS (globe projection, 3D terrain) | **Live, and the only third-party runtime dependency left in the product.** Web only — the native app uses MapKit. Metered by map load and billed to us, so it belongs in the same cost conversation as the public CloudKit database (`QUA-40`). |
+| Web maps | Mapbox GL JS (globe projection, 3D terrain) | **Live.** The largest third-party runtime dependency — 1626 KB of a 2380 KB bundle. Removal is designed but not chosen; see `QUA-40`. |
+| Web fonts | **Google Fonts** (`fonts.googleapis.com`, `fonts.gstatic.com`) — Roboto + Playfair Display | **Live, and missed by the first dependency audit** because that audit grepped the compiled JS and not `index.html`. Every visitor's IP reaches Google before any of the family's content renders, on a page whose selling point is that the data never leaves the owner's iCloud. `LEG-17` self-hosts them. |
+| ~~Web maps~~ | ~~placeholder~~ | ~~x~~ | Web only — the native app uses MapKit. Metered by map load and billed to us, so it belongs in the same cost conversation as the public CloudKit database (`QUA-40`). |
 | Web hosting | **GitHub Pages**, via [`.github/workflows/deploy-pages.yml`](./.github/workflows/deploy-pages.yml) | **Live.** Cut over 2026-07-27; `deploy.yml` (Cloudflare) is deleted. Only `main` may deploy — the `github-pages` environment restricts it. |
 | DNS for `akashic.no` | **Domeneshop** (also the registrar) | **Live.** Zone rebuilt 2026-07-27: 4 apex A + 4 AAAA at GitHub Pages, `www` CNAME. Cloudflare DNS is redundant and awaiting deletion (`LEG-11A`). |
 
