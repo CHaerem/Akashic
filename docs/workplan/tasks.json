@@ -2711,6 +2711,27 @@
         "at": "2026-07-27"
       },
       "evidence": "Fonts self-hosted; Google is gone from the product. Bare-word greps (the escaped dots in the JS regex literals had been defeating my earlier greps -- 'fonts\\.googleapis' does not match 'fonts\\\\.googleapis'): vite.config.js 0 references, dist/sw.js 0 references, no <link> to Google in dist/index.html. roboto-latin-variable.woff2 is precached by the service worker. 414 web tests pass, typecheck clean, build ok. THREE THINGS BETTER THAN THE TASK ASSUMED: (1) Playfair Display was requested from Google on every page load and used by NOTHING -- declared in tailwind.config.js as 'display', referenced by no component, absent from every built CSS -- so it was dropped rather than vendored, removing a whole family; (2) upstream returns the SAME woff2 URL for weights 400/600/700, so one 37,520-byte file replaces the expected six, and roboto.css reproduces Google's own three @font-face blocks verbatim with only the url() swapped, so rendering cannot drift; (3) the old Google link requested 300/400/500/700 while the built CSS needs 600 and 700 -- so weight 600 was being synthesised before and is now real. Provenance and the Apache 2.0 licence are committed beside the file: the first licence URL returned a 14-byte '404: Not Found' body, which was discarded rather than committed -- the exact mistake LEG-16 had just found in clouds.png."
+    },
+    {
+      "id": "QUA-40",
+      "effort": 0.4,
+      "priority": 16,
+      "deps": [],
+      "title": "E2E must not depend on live CloudKit — the gate has been red on main since SHIP-10A",
+      "done_when": "The E2E Tests workflow is green on main, and it stays green with no network access to Apple.",
+      "why": "MEASURED 2026-07-27: E2E Tests has failed on every run on main since SHIP-10A (9541b05, e016cd9, 6fb947f, eda235e), and journey-data.spec.ts names why -- it asserts zero console errors and receives `[cloudkit] Error fetching public journeys`.\nThis is a self-inflicted regression and worth being precise about the cause. SHIP-10A repointed the deployed showcase at the CloudKit PRODUCTION environment. Nothing gates that fetch on VITE_E2E_TEST_MODE -- the flag exists and is read by AuthGuard, MapboxGlobe and TestModeOverlay, but not by the public adapter -- so the suite now reaches Apple for real, from a runner with no token for that container, and fails.\nThe shallow fix is to publish a journey into production (SHIP-10B) and let the fetch succeed. Do NOT do that as the fix: it makes a CI gate depend on a live third-party service and on data staying published, so the suite goes red again the first time Apple has a bad afternoon or the owner unpublishes something. The e2e suite exists to test our UI, not Apple`s uptime.\nSo the fix is that VITE_E2E_TEST_MODE must short-circuit the public adapter to fixtures, the same way it already short-circuits auth and the map. That also makes the suite runnable offline, which it currently is not.\nThis one matters beyond the gate: CLAUDE.md`s own lesson is that a red gate left red trains everyone to ignore CI, and the owner`s stated bar for the Apple submission is a clean beta. Four red runs on main is not clean.",
+      "files": [
+        "src/lib/journeys/adapters/cloudkit/publicAdapter.ts",
+        "e2e/journey-data.spec.ts",
+        "src/lib/journeys/**"
+      ],
+      "track": "QUALITY",
+      "status": "TODO",
+      "verify": [
+        "VITE_E2E_TEST_MODE=true CI=true npx playwright test --project=chromium --ignore-snapshots",
+        "npx vitest --run",
+        "npm run typecheck"
+      ]
     }
   ]
 }
