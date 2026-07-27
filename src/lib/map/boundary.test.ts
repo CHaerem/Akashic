@@ -18,18 +18,20 @@ import { join, relative, resolve } from 'node:path';
 // which yielded a bare "/src" here and made the first run fail on ENOENT.
 const SRC = resolve(process.cwd(), 'src');
 
-/** Files allowed to name a map vendor. Everything here IS the adapter. */
+/**
+ * Files allowed to name a map vendor. Everything here IS the adapter.
+ *
+ * MAP-05 removed three entries — `hooks/mapbox/`, `hooks/useMapbox.ts` and `components/MapboxGlobe.tsx` —
+ * because the files themselves are gone. One vendor is left.
+ */
 const ADAPTER = [
-    'hooks/mapbox/',                    // the Mapbox implementation
-    'hooks/useMapbox.ts',               // its re-export shim
-    'components/MapboxGlobe.tsx',       // the component implementing MapSurfaceProps
-    'components/MapKitJourneyMap.tsx',  // MAP-03: the MapKit component implementing the same contract
+    'components/MapKitJourneyMap.tsx',  // MAP-03: the MapKit component implementing MapSurfaceProps
     'lib/map/',                         // the contract itself, AND lib/map/mapkit/ — the MapKit adapter
 ];
 
-// Deliberately NOT in ADAPTER: `components/MapSurface.tsx`. It composes the two vendor components and picks
-// between them, but names no vendor SDK — so it is held to the same standard as the rest of the app, and the
-// day it reaches for `window.mapkit` the test below catches it.
+// Deliberately NOT in ADAPTER: `components/MapSurface.tsx`. It composes the globe and the journey surface and
+// picks between them, but names no vendor SDK — so it is held to the same standard as the rest of the app, and
+// the day it reaches for `window.mapkit` the test below catches it.
 
 /**
  * MAP-02's tokenless globe, held to a STRICTER standard than the rest of the app.
@@ -63,15 +65,26 @@ const ANY_VENDOR_MENTION = /mapbox|mapkit|maplibre|leaflet|google\.maps|openlaye
 const VENDOR_GLOBALS = [
     /\bwindow\.mapkit\b/,
     /\bmapkit\.[A-Za-z]/,
+    // MAP-05 KEPT this deliberately, and its job changed rather than ended. While Mapbox shipped it was half
+    // of a boundary; now that the package is gone it is a REINTRODUCTION guard, which is worth more — the
+    // cheapest way to undo MAP-05 is `npm i mapbox-gl` in a hurry, and this fails on the first line of it.
     /\bmapboxgl\.[A-Za-z]/,
 ];
 
-/** Vendor SDK identifiers that must not appear in an import outside the adapter. */
+/**
+ * Vendor SDK identifiers that must not appear in an import outside the adapter.
+ *
+ * The three `mapbox` patterns survive MAP-05 for the reason given in VENDOR_GLOBALS: nothing in the tree can
+ * satisfy them any more, so they are a tripwire on the package coming back rather than a boundary between
+ * two live vendors. Note they are scoped to files OUTSIDE the adapter, so they would not catch a
+ * reintroduction inside `lib/map/` — `assertNoFixtureInBundle`-style bundle checks and the missing
+ * dependency in `package.json` are the other two layers.
+ */
 const VENDOR_IMPORTS = [
     /from\s+['"]mapbox-gl['"]/,
     /from\s+['"]mapbox-gl\/[^'"]*['"]/,
     /from\s+['"]@?mapbox\/[^'"]*['"]/,
-    /from\s+['"]mapkit['"]/,          // pre-emptive: MAP-03 must not leak either
+    /from\s+['"]mapkit['"]/,          // pre-emptive: MapKit JS is a CDN global, not a package
     /from\s+['"]@?apple\/mapkit[^'"]*['"]/,
 ];
 
@@ -184,21 +197,28 @@ describe('map vendor boundary (MAP-01)', () => {
         expect(globeFiles.length).toBeGreaterThan(4);
     });
 
-    it('the adapter is where the vendors actually live, so the tests are not vacuous', () => {
-        // If an adapter stopped naming its vendor, the checks above would pass for the wrong reason.
-        // BOTH vendors must be findable here while both exist. When MAP-05 deletes Mapbox, drop the mapbox
-        // line — do NOT drop the whole test, or the boundary goes unguarded again.
-        const adapterText = files
-            .filter(({ rel }) => ADAPTER.some(a => rel.startsWith(a)) && !rel.startsWith('lib/map/'))
-            .map(({ path }) => readFileSync(path, 'utf8'))
-            .join('\n');
-        expect(adapterText).toMatch(/mapbox/i);
+    it('the adapter is where the vendor actually lives, so the tests are not vacuous', () => {
+        // If the adapter stopped naming its vendor, the checks above would pass for the wrong reason: every
+        // file would be clean because no file talks to a map at all.
+        //
+        // MAP-05 RETARGETED this test rather than deleting it, as the previous comment here instructed. It
+        // used to make two assertions, one per live vendor, and the Mapbox half was computed from `ADAPTER`
+        // minus `lib/map/` — a filter that existed only because the Mapbox adapter lived under `hooks/`.
+        // With those three entries removed that filter selects exactly one file, so it was not a
+        // one-line deletion: the expression went with the assertion, and what remains is stated directly
+        // against the MapKit adapter's own paths instead of being derived from ADAPTER by subtraction.
+        const adapterFiles = files.filter(
+            ({ rel }) => rel.startsWith('lib/map/mapkit/') || rel === 'components/MapKitJourneyMap.tsx',
+        );
 
-        // lib/map/ is included for MapKit: unlike Mapbox, most of its adapter lives under lib/map/mapkit/.
-        const mapkitAdapterText = files
-            .filter(({ rel }) => rel.startsWith('lib/map/mapkit/') || rel === 'components/MapKitJourneyMap.tsx')
-            .map(({ path }) => readFileSync(path, 'utf8'))
-            .join('\n');
-        expect(mapkitAdapterText).toMatch(/mapkit/i);
+        // Guard the filter itself, not just its output — the failure mode this whole test exists to catch is
+        // "inspected nothing and reported success", and a renamed directory would reproduce it exactly.
+        expect(
+            adapterFiles.length,
+            'the MapKit adapter has no files — this test would pass vacuously. Did lib/map/mapkit/ move?',
+        ).toBeGreaterThan(5);
+
+        const adapterText = adapterFiles.map(({ path }) => readFileSync(path, 'utf8')).join('\n');
+        expect(adapterText).toMatch(/mapkit/i);
     });
 });

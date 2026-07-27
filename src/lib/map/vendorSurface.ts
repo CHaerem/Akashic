@@ -6,11 +6,16 @@
  * `MapSurfaceProps` (`./types.ts`) is the **app-facing** contract: what `AkashicApp` must supply for a map to
  * work. It does not change in MAP-03, and it should not — everything in it is something the showcase means.
  *
- * What MAP-03 needs on top is narrower and is not the app's business: with two vendor surfaces coexisting
- * (Mapbox for the globe, MapKit for the journey view — see `src/components/MapSurface.tsx`), **only one of
- * them may own `window.testHelpers`**. Two components racing to register and delete the same global is a
- * flaky-suite generator. So the eleven-member helper object moves up into the neutral `MapSurface`, and the
- * two members that carry real vendor state come back up through the two hatches below.
+ * What MAP-03 needs on top is narrower and is not the app's business: with more than one map surface
+ * coexisting, **only one of them may own `window.testHelpers`**. Two components racing to register and delete
+ * the same global is a flaky-suite generator. So the eleven-member helper object moves up into the neutral
+ * `MapSurface`, and the two members that carry real surface state come back up through the two hatches below.
+ *
+ * The surfaces have changed twice since and the reason has survived both, which is why this is still here. It
+ * was Mapbox for the globe and MapKit for the journey view when MAP-03 wrote this; MAP-02 replaced the globe
+ * with our own tokenless `AkashicGlobe`, and MAP-05 deleted Mapbox. It is still two surfaces
+ * (`AkashicGlobe` and `MapKitJourneyMap`, chosen by view in `src/components/MapSurface.tsx`) and they still
+ * must not both own the global.
  *
  * That is a deliberate widening of MAP-03's stated scope — the task says "the journey view only", but the
  * swap unit is a component that serves BOTH views (`AkashicApp.tsx:248` renders one and passes `view`), so
@@ -51,7 +56,7 @@ export interface MapCameraState {
      * `camera.test.ts` for the calibration that keeps the branches separable.
      */
     cameraZoom: number | null;
-    /** Mapbox's `getBearing()`; MapKit's `map.rotation`. Nothing asserts on it, and MAP-03 stays north-up. */
+    /** MapKit's `map.rotation` (it was Mapbox's `getBearing()`). Nothing asserts on it; the app stays north-up. */
     cameraBearing: number | null;
     /** The camp the surface is currently animating towards, for the stale-selection guard. */
     pendingHighlightCampId: string | null;

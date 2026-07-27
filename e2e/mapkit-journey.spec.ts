@@ -1,9 +1,14 @@
 /**
- * The MapKit journey surface, against the same assertions the Mapbox one has to pass. (MAP-03)
+ * The MapKit journey surface, against the same assertions the Mapbox one had to pass. (MAP-03)
  *
- * Runs only in the `chromium-mapkit` project, which only exists when `VITE_MAPKIT_TOKEN` is set — MapKit JS is
- * served exclusively from Apple's CDN and needs a minted JWT, so there is nothing to fall back to. See
- * `playwright.config.ts` for why that is a missing project rather than a skipped test.
+ * Runs in the `chromium` project, and only when `VITE_MAPKIT_TOKEN` is set — MapKit JS is served exclusively
+ * from Apple's CDN and needs a minted JWT, so there is nothing to fall back to. See `playwright.config.ts` for
+ * why that is a missing spec rather than a skipped test.
+ *
+ * MAP-05 folded the dedicated `chromium-mapkit` project and its second dev server away: with Mapbox deleted
+ * there is one bundle, so this is no longer the vendor-specific spec — it is the journey-surface spec, and it
+ * overlaps `day-navigation.spec.ts` deliberately. See "Why this file duplicates day-navigation.spec.ts"
+ * below; that reasoning is unchanged by the deletion, because it was never about there being two vendors.
  *
  * ## Why this file duplicates day-navigation.spec.ts rather than parameterising it
  *
@@ -31,14 +36,14 @@ import {
     selectDay, waitForCameraSettled,
 } from './utils/test-helpers';
 
-/** Same tolerances as day-navigation.spec.ts, so a MapKit regression is comparable to a Mapbox one. */
+/** Same tolerances as day-navigation.spec.ts, so a regression here is comparable to one there. */
 const ON_ROUTE_TOLERANCE_KM = 5;
 const OFF_ROUTE_TOLERANCE_KM = 0.5;
 /** Day 5 of the alpine fixture is MEASURED 12.28 km from its nearest route point. */
 const OFF_ROUTE_DAY = 5;
 
 test.describe('MapKit journey surface', () => {
-    test('renders the journey on a MapKit canvas, not a Mapbox one', async ({ page }) => {
+    test('renders the journey on a MapKit canvas, and on no other', async ({ page }) => {
         await openApp(page);
         await navigateToTrekView(page);
 
@@ -47,8 +52,12 @@ test.describe('MapKit journey surface', () => {
         // `waitForSelector('canvas')` call sites working on this surface.
         await expect(page.locator('.mk-map-view')).toHaveCount(1);
         await expect(page.locator('canvas.syrup-canvas')).toHaveCount(1);
-        // And prove it is not both vendors at once — a MapKit surface with a live Mapbox map behind it would
-        // pass every other assertion in this file.
+        // MAP-05 note on the line below: it used to prove "not both vendors at once", because a MapKit
+        // surface with a live Mapbox map behind it would pass every other assertion in this file. Mapbox is
+        // deleted, so NOTHING IN THE TREE CAN PRODUCE THIS CLASS and the assertion can no longer fail for the
+        // reason it was written. It is kept as a REINTRODUCTION guard — the same role `boundary.test.ts` gives
+        // its surviving `mapbox` patterns — and deliberately not described as evidence of single-vendor
+        // rendering any more. If it ever goes red, someone reinstalled mapbox-gl.
         await expect(page.locator('.mapboxgl-map')).toHaveCount(0);
     });
 
@@ -237,8 +246,9 @@ test.describe('MapKit journey surface', () => {
         // applied. An assertion of `padding.bottom === 80` here would be asserting a state this suite can
         // never produce — it failed exactly that way when first written.
         //
-        // Where the signed-out case IS proven: `src/lib/map/mapkit/chrome.test.ts` pins the value and pins it
-        // against the Mapbox rule in `src/index.css`, and the before/after screenshot pair from
+        // Where the signed-out case IS proven: `src/lib/map/mapkit/chrome.test.ts` pins the value — it used
+        // to cross-check it against the Mapbox rule in `src/index.css`, but MAP-05 deleted both the rule and
+        // that assertion, so the constant now stands alone — and the before/after screenshot pair from
         // `scripts/mapkit/surface-probe/?probe=attrib` is the evidence for the EFFECT — Apple paints the logo
         // and Legal onto `canvas.rt-root`, so there is no element to locate and no pixel to read (neither
         // `getImageData` on `rt-root` nor `gl.readPixels` on `syrup-canvas` can see what MapKit drew).
@@ -309,8 +319,9 @@ async function cameraZoom(page: Page): Promise<number | null> {
  * ## Why this is not `day-navigation.spec.ts:96-121` verbatim
  *
  * That helper's second assertion is "the settled centre is strictly nearer the target camp than the camp it
- * came from". MEASURED, that holds on Mapbox **because of the asymmetric `right: 400` padding**
- * (`useMapbox.ts:1094-1096`), which shifts the centre east, towards the later camp. It is not a property of a
+ * came from". MEASURED, that held on Mapbox **because of the asymmetric `right: 400` padding**
+ * (`useMapbox.ts:1094-1096`, deleted with that surface by MAP-05), which shifted the centre east, towards the
+ * later camp. It is not a property of a
  * correct segment fit: a day's segment runs from the previous camp to this one, so a fit that pads
  * symmetrically centres the camera BETWEEN the two — measured 2.66 km from day 2 and 2.45 km from day 1 on
  * the fixture. The MapKit surface pads symmetrically on purpose (the desktop panel is on the LEFT, so the

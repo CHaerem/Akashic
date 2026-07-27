@@ -1,7 +1,7 @@
 /**
  * Turning the globe to face a journey, and back. (MAP-02)
  *
- * The Mapbox globe used `flyTo` with a zoom change: zoom 3.5 (3 on mobile) over 2500 ms on selection,
+ * The Mapbox globe (deleted by MAP-05) used `flyTo` with a zoom change: zoom 3.5 (3 on mobile) over 2500 ms on selection,
  * back to `[30, 15]` at zoom 1.5 (1.2 mobile) over 3000 ms on deselect. **Literal zoom parity is
  * deliberately not reproduced.** Zooming an orthographic globe drawn from 110m vector coastlines rewards
  * the visitor with a bigger polygon and nothing else — there is no imagery underneath to resolve. So a

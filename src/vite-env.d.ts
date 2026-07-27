@@ -1,7 +1,6 @@
 /// <reference types="vite/client" />
 
 interface ImportMetaEnv {
-    readonly VITE_MAPBOX_TOKEN: string;
     readonly VITE_STAGING_BRANCH?: string;
     readonly VITE_DEPLOY_TIME?: string;
     /** CloudKit environment: 'development' (default) | 'production' */
@@ -20,19 +19,15 @@ interface ImportMetaEnv {
      */
     readonly VITE_E2E_TEST_MODE?: string;
     /**
-     * Which map vendor draws the surfaces (MAP-03). `'mapkit'` puts the JOURNEY view on Apple MapKit JS;
-     * anything else — including unset, the default — leaves both views on Mapbox. The globe stays on Mapbox
-     * either way, because MapKit JS has no globe at all. See `src/components/MapSurface.tsx`.
-     *
-     * Do not default this to `mapkit` without also correcting `e2e/fixtures/test.ts`'s pinned host list, the
-     * `api.mapbox.com` Workbox rules in `vite.config.js`, and `public/privacy.html` — which names Mapbox as
-     * the map provider and as third-party telemetry, and is a user-facing statement rather than config.
-     */
-    readonly VITE_MAP_VENDOR?: string;
-    /**
      * MapKit JS token, minted from the `.p8` rather than pasted from the portal — see
      * `scripts/mapkit/mintToken.mjs` for why, and `scripts/mapkit/devToken.mjs` for the one-line dev loop.
      * Public by design: it ships in the client bundle and is protected by its `origin` claim.
+     *
+     * **Optional to the type checker, REQUIRED for the journey view.** MAP-05 deleted the Mapbox surface and
+     * `VITE_MAP_VENDOR` with it, so there is no second vendor and no fallback: with this unset, the landing
+     * globe is perfect (it needs no token by design — MAP-02) and every journey map is `MapErrorFallback`.
+     * That is the one thing to know before building or deploying this app. `deploy-pages.yml` mints it per
+     * deploy so the token's lifetime is never load-bearing.
      */
     readonly VITE_MAPKIT_TOKEN?: string;
 }

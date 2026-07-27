@@ -3,10 +3,11 @@
  *
  * ## 1. The brief's plan for the attribution was impossible. Here is the measurement.
  *
- * MAP-03 said to find MapKit's attribution DOM class names by inspecting a rendered map, and to translate
- * `src/index.css`'s `.public-chrome .mapboxgl-ctrl-bottom-left { bottom: 80px }` into the MapKit equivalent.
- * The instinct was right and the answer is that **there are no class names**: MapKit JS 5.81.65 paints the
- * Apple Maps logo and the Legal link as pixels onto `canvas.rt-root`.
+ * MAP-03 said to find MapKit's attribution DOM class names by inspecting a rendered map, and to translate the
+ * Mapbox stylesheet rule that lifted the attribution clear of the signed-out chips
+ * (`.public-chrome .mapboxgl-ctrl-bottom-left { bottom: 80px }`, in `src/index.css` until MAP-05 deleted it)
+ * into the MapKit equivalent. The instinct was right and the answer is that **there are no class names**:
+ * MapKit JS 5.81.65 paints the Apple Maps logo and the Legal link as pixels onto `canvas.rt-root`.
  *
  * Measured 2026-07-27 (`scripts/mapkit/surface-probe/?probe=attrib`), inside the map container:
  *
@@ -27,12 +28,14 @@
  * `src/components/AkashicApp.tsx:371`. Measured in the running app at 1280 x 720: rect
  * `[12, 12, 340 x 696]`. It covers the bottom-LEFT of the map, which is exactly where Apple paints.
  *
- * **The incumbent's camera padding clears the wrong side.** `src/hooks/mapbox/useMapbox.ts:1150-1153` pads
- * `right: 450` on the arrival fit and `:1094-1096` pads `right: 400` on a day — pushing the route away from
- * the empty right edge and *into* the sidebar. That is a real defect in the Mapbox surface too, not a MapKit
- * artefact, and it is left alone there: `src/hooks/mapbox/` is MAP-05's territory and may be owned by another
- * in-flight ledger entry. **MAP-03 does not reproduce it.** This is a deliberate deviation from behaviour
- * parity; faithfully porting a framing that hides the route under a panel would be the wrong kind of faithful.
+ * **The Mapbox surface's camera padding cleared the wrong side**, and this file deliberately did not copy it.
+ * It padded `right: 450` on the arrival fit and `right: 400` on a day (`src/hooks/mapbox/useMapbox.ts`
+ * :1150-1153 and :1094-1096, deleted by MAP-05) — pushing the route away from the empty right edge and *into*
+ * the sidebar. It was a real defect in that surface, not a MapKit artefact, and it was left alone at the time
+ * because `src/hooks/mapbox/` was MAP-05's territory; MAP-05 then deleted the whole file, so the defect is
+ * gone rather than fixed. **This is why the padding here is symmetric** — a deliberate deviation from
+ * behaviour parity, because faithfully porting a framing that hides the route under a panel would have been
+ * the wrong kind of faithful.
  *
  * ## 3. So the panel clearance is `map.padding`, and it does both jobs at once
  *
@@ -55,6 +58,18 @@
  * `signedIn = isE2ETestMode || user != null`, so every Playwright run is signed in and the 80 px chip band is
  * never applied. `chrome.test.ts` pins the value; the screenshot pair from the probe is the evidence for the
  * effect. `e2e/mapkit-journey.spec.ts` says so where it would otherwise look covered.
+ *
+ * ## MAP-05: "the incumbent" is GONE, and every citation below is history
+ *
+ * This file was written against a shipping Mapbox surface and refers to it in the present tense as **"the
+ * incumbent"**, citing `useMapbox.ts`, `layerConfigs.ts` and `MapboxGlobe.tsx` by line. MAP-05 DELETED all of
+ * it (2707 lines). So: read every "the incumbent does X" below as "the Mapbox surface did X, until MAP-05",
+ * and expect none of those paths to resolve — `git log --diff-filter=D -- src/hooks/mapbox/` recovers them.
+ *
+ * The prose is kept rather than rewritten because each citation is the MEASUREMENT that explains why the code
+ * here is shaped as it is, and that reason did not stop being true when the file it measured went away. A
+ * mechanical tense-scrub across ~36 of these would have risked the measurements to fix a verb, so the term is
+ * retired here instead of edited everywhere.
  */
 
 import type { EdgeInsets } from './camera';
@@ -62,8 +77,11 @@ import type { EdgeInsets } from './camera';
 /**
  * Height of the band the signed-out showcase's own chrome occupies at the bottom of the map.
  *
- * Same value as `src/index.css`'s Mapbox rule, and for the same reason: the bottom-left "Family sign-in" pill
- * and the bottom-right "Made with Akashic" chip. `chrome.test.ts` asserts the two stay equal.
+ * The reason for the value is the bottom-left "Family sign-in" pill and the bottom-right "Made with Akashic"
+ * chip. It began as the same 80 px the Mapbox stylesheet rule used, and `chrome.test.ts` used to assert the
+ * two stayed equal — MAP-05 deleted both the rule and that assertion, so this is now the ONLY definition of
+ * the band. If the chips change height, nothing will tell you: re-measure with
+ * `scripts/mapkit/surface-probe/?probe=attrib`.
  */
 export const SHOWCASE_CHROME_BAND_PX = 80;
 

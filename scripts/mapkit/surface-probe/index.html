@@ -136,7 +136,9 @@
           border: 1px solid #23272d; color: #b9c0c8; font-size: 11px; }
   nav a[aria-current="true"] { background: #2b62d9; border-color: #2b62d9; color: #fff; font-weight: 600; }
   #wrap { display: grid; grid-template-columns: 620px 1fr; gap: 10px; align-items: start; }
-  #mapbox-of-apple { position: relative; width: 620px; height: 465px; background: #16191d;
+  /* MAP-05 renamed this from `#mapbox-of-apple`: with Mapbox deleted, an id naming it in the MapKit
+     probe reads as a leftover dependency rather than the joke it was. */
+  #probe-map { position: relative; width: 620px; height: 465px; background: #16191d;
                      border: 1px solid #23272d; border-radius: 6px; overflow: hidden; }
   #map { position: absolute; inset: 0; }
   pre#out { margin: 0; padding: 8px 10px; background: #101318; border: 1px solid #23272d; border-radius: 6px;
@@ -167,7 +169,7 @@
 <h1 id="title">…</h1>
 <nav id="nav"></nav>
 <div id="wrap">
-  <div id="mapbox-of-apple">
+  <div id="probe-map">
     <div id="map"></div>
     <div class="chip" id="chip-left">Family sign-in</div>
     <div class="chip" id="chip-right">Made with Akashic</div>

@@ -4,29 +4,24 @@ import type { MapCameraState } from '../lib/map/vendorSurface';
 
 /**
  * `MapSurface` is the composition point MAP-03 introduced, and it owns two things worth a test:
- * which vendor draws the map, and `window.testHelpers`.
+ * which surface draws the map, and `window.testHelpers`.
  *
- * The second is the reason it exists at all. Two vendor surfaces cannot both register and delete the same
- * global without racing, and the entire Playwright suite drives the app through that global — so a surface
- * that quietly fails to publish it, or publishes a state object of the wrong shape, breaks 18 specs at once
- * with an error that points at the spec rather than at the cause.
+ * The second is the reason it exists at all. Two surfaces cannot both register and delete the same global
+ * without racing, and the entire Playwright suite drives the app through that global — so a surface that
+ * quietly fails to publish it, or publishes a state object of the wrong shape, breaks 18 specs at once with
+ * an error that points at the spec rather than at the cause.
+ *
+ * MAP-05 narrowed the first job from "which of two vendors" to "globe or journey": Mapbox is deleted and
+ * `VITE_MAP_VENDOR` with it. Two tests went with them — see `describe` below.
  */
 
-// Both vendor components are stubbed: this test is about the switch and the global, not about a map. Each
+// Both surface components are stubbed: this test is about the switch and the global, not about a map. Each
 // stub records the props it got and fills the two hatches, so the wiring is observable.
-const mapboxProps: Record<string, unknown>[] = [];
 const mapkitProps: Record<string, unknown>[] = [];
 const globeProps: Record<string, unknown>[] = [];
 
 /** `Array.prototype.at` is past this tsconfig's lib target, so index from the end by hand. */
 const last = (all: Record<string, unknown>[]) => all[all.length - 1];
-
-vi.mock('./MapboxGlobe', () => ({
-    MapboxGlobe: (props: Record<string, unknown>) => {
-        mapboxProps.push(props);
-        return <div data-testid="stub-mapbox" />;
-    },
-}));
 
 vi.mock('./MapKitJourneyMap', () => ({
     MapKitJourneyMap: (props: Record<string, unknown>) => {
@@ -35,9 +30,9 @@ vi.mock('./MapKitJourneyMap', () => ({
     },
 }));
 
-// MAP-02's tokenless globe. Stubbed for the same reason as the two vendor surfaces: this file tests the
-// switch, not the drawing. The globe itself is covered by src/lib/globe/*.test.ts, which is where its
-// arithmetic lives precisely so that it can be tested without a canvas.
+// MAP-02's tokenless globe. Stubbed for the same reason as the journey surface: this file tests the switch,
+// not the drawing. The globe itself is covered by src/lib/globe/*.test.ts, which is where its arithmetic
+// lives precisely so that it can be tested without a canvas.
 vi.mock('./AkashicGlobe', () => ({
     AkashicGlobe: (props: Record<string, unknown>) => {
         globeProps.push(props);
@@ -77,11 +72,9 @@ function baseProps(overrides: Record<string, unknown> = {}) {
 }
 
 beforeEach(() => {
-    mapboxProps.length = 0;
     mapkitProps.length = 0;
     globeProps.length = 0;
     vi.stubEnv('VITE_E2E_TEST_MODE', 'true');
-    vi.stubEnv('VITE_MAP_VENDOR', '');
 });
 
 afterEach(() => {
@@ -90,16 +83,14 @@ afterEach(() => {
     delete window.testHelpers;
 });
 
-describe('MapSurface vendor selection (MAP-03)', () => {
-    it('defaults to Mapbox, so MAP-03 changes nothing until the flag is set', () => {
-        // The default matters more than it looks: flipping it also makes e2e/fixtures/test.ts's pinned host
-        // list, vite.config.js's api.mapbox.com Workbox rules and public/privacy.html false at once.
-        const { getByTestId } = render(<MapSurface {...baseProps()} />);
-        expect(getByTestId('stub-mapbox')).toBeInTheDocument();
-    });
-
-    it('uses MapKit for the journey view when VITE_MAP_VENDOR=mapkit', () => {
-        vi.stubEnv('VITE_MAP_VENDOR', 'mapkit');
+describe('MapSurface surface selection (MAP-03, narrowed by MAP-05)', () => {
+    /**
+     * The retarget of the two tests MAP-05 deleted — "defaults to Mapbox" and "falls back to Mapbox for an
+     * unrecognised vendor". Both asserted the behaviour of a flag that no longer exists, so neither could be
+     * salvaged as written; what they were really protecting was "the journey view always renders SOME map
+     * surface, never nothing". That survives here, and it is now unconditional.
+     */
+    it('draws the journey view with MapKit, with no flag able to route it elsewhere', () => {
         const { getByTestId } = render(<MapSurface {...baseProps({ view: 'trek' })} />);
         expect(getByTestId('stub-mapkit')).toBeInTheDocument();
     });
@@ -107,20 +98,32 @@ describe('MapSurface vendor selection (MAP-03)', () => {
     /**
      * MAP-02 changed this, and it is the assertion that would catch it being changed back.
      *
-     * The landing globe used to be Mapbox under every configuration. It is now ours under every
-     * configuration — a 2D canvas over vendored public-domain coastline geometry, with no token and no
-     * tile service, so that the first screen survives a vendor outage. There is deliberately no flag
-     * value that routes the globe back to a vendor: a surface the e2e gate never exercises ships
-     * unverified, and MAP-02's `done_when` is not met by a globe nobody sees.
+     * The landing globe used to be Mapbox under every configuration. It is now ours — a 2D canvas over
+     * vendored public-domain coastline geometry, with no token and no tile service, so that the first screen
+     * survives a vendor outage.
+     *
+     * MAP-05 deleted `VITE_MAP_VENDOR`, so the values below are junk rather than a flag matrix — and that is
+     * exactly why the parameterisation is kept. `.env` and `.env.local` are gitignored, long-lived and
+     * copied between worktrees by hand, so a developer's checkout will carry `VITE_MAP_VENDOR=mapbox` for a
+     * long time yet. This asserts a stale value cannot reroute either surface.
      */
     it.each(['', 'mapbox', 'mapkit', 'googlemaps'])(
-        'draws the GLOBE with our own tokenless surface when VITE_MAP_VENDOR=%s',
+        'draws the GLOBE with our own tokenless surface, ignoring a stale VITE_MAP_VENDOR=%s',
         vendor => {
             vi.stubEnv('VITE_MAP_VENDOR', vendor);
             const { getByTestId, queryByTestId } = render(<MapSurface {...baseProps({ view: 'globe' })} />);
             expect(getByTestId('stub-akashic-globe')).toBeInTheDocument();
-            expect(queryByTestId('stub-mapbox')).toBeNull();
             expect(queryByTestId('stub-mapkit')).toBeNull();
+        },
+    );
+
+    it.each(['', 'mapbox', 'googlemaps'])(
+        'draws the JOURNEY view with MapKit, ignoring a stale VITE_MAP_VENDOR=%s',
+        vendor => {
+            vi.stubEnv('VITE_MAP_VENDOR', vendor);
+            const { getByTestId, queryByTestId } = render(<MapSurface {...baseProps({ view: 'trek' })} />);
+            expect(getByTestId('stub-mapkit')).toBeInTheDocument();
+            expect(queryByTestId('stub-akashic-globe')).toBeNull();
         },
     );
 
@@ -132,14 +135,7 @@ describe('MapSurface vendor selection (MAP-03)', () => {
         expect(last(globeProps)).toHaveProperty('mapStateRef');
     });
 
-    it('falls back to Mapbox for an unrecognised vendor rather than rendering nothing', () => {
-        vi.stubEnv('VITE_MAP_VENDOR', 'googlemaps');
-        const { getByTestId } = render(<MapSurface {...baseProps()} />);
-        expect(getByTestId('stub-mapbox')).toBeInTheDocument();
-    });
-
     it('threads signedIn down to the MapKit surface, which needs it for Apple\'s attribution lift', () => {
-        vi.stubEnv('VITE_MAP_VENDOR', 'mapkit');
         render(<MapSurface {...baseProps({ signedIn: false })} />);
         expect(last(mapkitProps)).toMatchObject({ signedIn: false });
         expect(last(mapkitProps)).toHaveProperty('mapStateRef');
@@ -193,8 +189,11 @@ describe('MapSurface owns window.testHelpers (MAP-03)', () => {
             pendingHighlightCampId: 'c2',
             hasPendingAnimations: true,
         };
+        // baseProps() is view: 'trek', so the mounted surface is MapKit. Before MAP-05 this read
+        // `mapboxProps` — the default vendor — and the eight testHelpers tests below silently changed which
+        // surface they mount when Mapbox was deleted, which is why this one had to be retargeted by hand.
         render(<MapSurface {...baseProps()} />);
-        const ref = last(mapboxProps).mapStateRef as { current: (() => MapCameraState) | null };
+        const ref = last(mapkitProps).mapStateRef as { current: (() => MapCameraState) | null };
         ref.current = () => surfaceState;
         expect(window.testHelpers!.getMapState()).toEqual(surfaceState);
     });

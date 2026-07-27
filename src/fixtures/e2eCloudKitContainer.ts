@@ -38,7 +38,11 @@
  * paging, all of `records.ts`, `recordToPublicDbJourney`/`mapWaypoint`, the deterministic
  * sort, `resolveJsonField`'s ASSET branch including a real `fetch`, `toTrekConfig` /
  * `toTrekData` with the Haversine day-distance derivation, `journeyCache`, and the whole
- * UI and Mapbox layer. `api.mapbox.com` remains a live dependency of every spec: this
+ * UI and map layer. Apple's MapKit CDN remains a live dependency of every spec that opens a
+ * journey — it was `api.mapbox.com` until MAP-05 deleted that surface, and the exact host names
+ * are listed in `e2e/fixtures/test.ts`'s allowlist rather than here, because
+ * `src/lib/map/boundary.test.ts` rejects a `mapkit.`-prefixed token anywhere outside the adapter
+ * and its regex cannot tell a hostname in a comment from an API call. This
  * change makes the suite CloudKit-independent, NOT offline.
  */
 

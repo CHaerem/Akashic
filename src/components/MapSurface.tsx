@@ -1,43 +1,34 @@
 /**
- * Picks which vendor draws the map, and owns `window.testHelpers`. (MAP-03)
+ * Picks which surface draws the map, and owns `window.testHelpers`. (MAP-03, narrowed by MAP-05)
  *
  * Names **no** map SDK — that is why it is not in `src/lib/map/boundary.test.ts`'s adapter allowlist. It
- * composes vendor components; it does not talk to a vendor.
+ * composes surface components; it does not talk to a vendor.
  *
  * ## How the app chooses between the surfaces
  *
- * **MAP-02 changed this.** The landing globe is now `AkashicGlobe` — ours, drawn in a 2D canvas from
- * vendored public-domain coastline geometry — and it is used for `view === 'globe'` under **both**
- * `VITE_MAP_VENDOR` values. Only the journey view is still vendor-dependent:
+ * There is no vendor flag any more. MAP-05 deleted Mapbox, and with one journey surface left a
+ * `VITE_MAP_VENDOR` with a single legal value would advertise a fallback that does not exist. The choice
+ * that remains is by VIEW, not by vendor:
  *
- * - **`VITE_MAP_VENDOR` is unset or `mapbox` — the DEFAULT.** `AkashicGlobe` draws the globe; Mapbox draws
- *   the journey view.
- * - **`VITE_MAP_VENDOR=mapkit`.** `AkashicGlobe` draws the globe; MapKit draws the journey view. MapKit JS
- *   has no globe at all — zero occurrences of `globe`, `orthographic`, `pitch` or `tilt` in the shipped
- *   bundle — which is why the landing view was never a candidate for it.
+ * - **`view === 'globe'`** — `AkashicGlobe`, ours: a 2D canvas over vendored public-domain coastline
+ *   geometry, no token and no tile service, so the first screen survives any vendor lapsing. (MAP-02.)
+ * - **anything else** — `MapKitJourneyMap`. MapKit JS has no globe at all (zero occurrences of `globe`,
+ *   `orthographic`, `pitch` or `tilt` in the shipped bundle), which is why the landing view was never a
+ *   candidate for it and why we draw that one ourselves.
  *
- * The globe is not hidden behind a third flag value, and that is a deliberate call rather than an
- * oversight. A flag the e2e gate never exercises means the screenshots stay Mapbox and the feature ships
- * unverified; and MAP-02's `done_when` ("the landing view IS a rotating sphere using no map service and no
- * token") is not satisfied by a surface nobody sees. It needs no token under either value, and MAP-05
- * deletes Mapbox regardless. **This is a visible product change to the first screen a paying customer
- * sees** — photographic satellite Earth becomes stylised vector Earth — and it is called out in
- * `AkashicGlobe.tsx` and in `src/lib/globe/render.ts` for the owner rather than left to a diff.
+ * **MapKit needs a token and the globe does not**, which is the asymmetry to keep in mind: with
+ * `VITE_MAPKIT_TOKEN` unset the landing screen is perfect and the journey view is `MapErrorFallback`
+ * (`src/lib/map/mapkit/useMapKitJourney.ts:111`). That is now the only tokenless-degradation path in the
+ * web app — MAP-05 removed the surface that used to cover for it.
  *
- * The flag stays defaulted to Mapbox until MapKit has been through the device/beta loop. Flipping it also
- * makes three other things false at once, none of them config: `e2e/fixtures/test.ts`'s pinned external-host
- * list, the five Workbox `api.mapbox.com` runtime-caching rules at `vite.config.js:71-133`, and
- * `public/privacy.html:61` and `:102-106`, which name Mapbox as the map provider and as third-party
- * telemetry. That last one is a user-facing statement about data handling.
+ * ## Why `window.testHelpers` lives here rather than in a surface component
  *
- * ## Why `window.testHelpers` moved up here from `MapboxGlobe`
- *
- * Two vendor surfaces cannot both register and delete the same global without racing. Nine of the eleven
- * members are pure React/context reads with no vendor semantics at all and are copied verbatim from
- * `MapboxGlobe.tsx:275-320`; the two that carry real vendor state — `isMapReady` and `getMapState` — arrive
+ * Two surfaces cannot both register and delete the same global without racing, and that is still true of
+ * `AkashicGlobe` and `MapKitJourneyMap`. Nine of the eleven members are pure React/context reads with no
+ * vendor semantics at all; the two that carry real surface state — `isMapReady` and `getMapState` — arrive
  * through the `onReadyChange` / `mapStateRef` hatches on `VendorSurfaceProps`. So the duplicated,
- * type-checked-against-nothing contract at `e2e/utils/test-helpers.ts:40-69` now has two members of surface
- * area instead of eleven, and `MapboxGlobe.tsx` got smaller rather than forked.
+ * type-checked-against-nothing contract at `e2e/utils/test-helpers.ts:40-69` has two members of surface
+ * area instead of eleven.
  *
  * The de-facto parts of that contract are preserved deliberately, and each one has a spec depending on it:
  * `selectDay` goes through `onCampSelect`, which **toggles** (`src/hooks/useTrekData.ts:171-173`) and which
@@ -52,28 +43,22 @@ import type { MapCameraState } from '../lib/map/vendorSurface';
 import { EMPTY_CAMERA_STATE } from '../lib/map/vendorSurface';
 import { useJourneys } from '../contexts/JourneysContext';
 import { AkashicGlobe } from './AkashicGlobe';
-import { MapboxGlobe } from './MapboxGlobe';
 import { MapKitJourneyMap } from './MapKitJourneyMap';
 
 /**
- * Read at call time rather than pinned to a module-level const, unlike the version this replaced in
- * `MapboxGlobe.tsx`. Vite still statically substitutes `import.meta.env.*`, so the production bundle is
- * identical and the block still dead-code-eliminates — but `MapSurface.test.tsx` can now actually exercise
- * both branches instead of only whichever one the ambient env happened to give it, which is how the "does not
- * register outside E2E mode" assertion stops passing for the wrong reason.
+ * Read at call time rather than pinned to a module-level const. Vite still statically substitutes
+ * `import.meta.env.*`, so the production bundle is identical and the block still dead-code-eliminates — but
+ * `MapSurface.test.tsx` can actually exercise both branches instead of only whichever one the ambient env
+ * happened to give it, which is how the "does not register outside E2E mode" assertion stops passing for
+ * the wrong reason.
  */
 function isE2ETestMode(): boolean {
     return import.meta.env.VITE_E2E_TEST_MODE === 'true';
 }
 
-/** Which vendor to use. Unrecognised values fall back to Mapbox rather than to a blank map. */
-function mapVendor(): 'mapbox' | 'mapkit' {
-    return import.meta.env.VITE_MAP_VENDOR === 'mapkit' ? 'mapkit' : 'mapbox';
-}
-
 /**
  * A flattened projection of `TrekData` for E2E assertions, not `TrekData` itself.
- * Moved from `MapboxGlobe.tsx`; the shape is asserted against by `e2e/utils/test-helpers.ts`.
+ * The shape is asserted against by `e2e/utils/test-helpers.ts`.
  */
 interface TrekDataSummary {
     id: string;
@@ -131,10 +116,6 @@ export function MapSurface(props: MapSurfaceComponentProps) {
     // that effect re-run on every render.
     const handleReadyChange = useCallback((ready: boolean) => setMapReady(ready), []);
 
-    const vendor = mapVendor();
-    // MAP-02: the landing globe is ours under both vendor values. Only the journey view varies.
-    const useMapKit = vendor === 'mapkit' && view === 'trek';
-
     useEffect(() => {
         if (!isE2ETestMode()) return;
 
@@ -185,8 +166,8 @@ export function MapSurface(props: MapSurfaceComponentProps) {
         return () => { delete window.testHelpers; };
     }, [mapReady, treks, selectedTrek, selectedCamp, trekDataMap, onSelectTrek, onCampSelect, journeysLoading]);
 
-    // MAP-02: the landing view. Checked before the vendor branch because it is vendor-independent — there
-    // is no configuration under which a vendor draws the globe any more.
+    // MAP-02: the landing view, ours and tokenless. Checked first because it is the one surface that
+    // cannot fail on a lapsed credential.
     if (view === 'globe') {
         return (
             <AkashicGlobe
@@ -197,20 +178,12 @@ export function MapSurface(props: MapSurfaceComponentProps) {
         );
     }
 
-    if (useMapKit) {
-        return (
-            <MapKitJourneyMap
-                {...props}
-                signedIn={signedIn}
-                onReadyChange={handleReadyChange}
-                mapStateRef={mapStateRef}
-            />
-        );
-    }
-
+    // Everything else is the journey view. MAP-05: no vendor branch — Mapbox is gone, so this is not a
+    // fallback for an unrecognised flag value, it is the only journey surface there is.
     return (
-        <MapboxGlobe
+        <MapKitJourneyMap
             {...props}
+            signedIn={signedIn}
             onReadyChange={handleReadyChange}
             mapStateRef={mapStateRef}
         />

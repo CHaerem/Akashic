@@ -3,7 +3,11 @@
  * Mint a `localhost` MapKit token and print it bare, so the dev loop is one line. (MAP-03)
  *
  *   VITE_MAPKIT_TOKEN=$(node scripts/mapkit/devToken.mjs) \
- *   VITE_MAP_VENDOR=mapkit VITE_E2E_TEST_MODE=true npm run dev
+ *   VITE_E2E_TEST_MODE=true npm run dev
+ *
+ * MAP-05 removed `VITE_MAP_VENDOR=mapkit` from that line: Mapbox is deleted, so MapKit is not a mode you
+ * opt into any more. It is also why this token is no longer optional for the journey view — without it the
+ * map is `MapErrorFallback`. The landing globe still needs nothing (MAP-02).
  *
  * That gives the MapKit journey surface over the two fixture journeys in Jotunheimen (~61.6 N, 8.3 E —
  * measured at imagery PARITY in `imagery-compare/FINDINGS.md`), with five days, camps and photos, and no

@@ -11,8 +11,16 @@
  * of `globe`, `orthographic`, `pitch` or `tilt`, so this screen could not come from Apple's web map at
  * any price. It is that **the landing screen is the wrong place to have a runtime dependency at all.**
  * On the day a MapKit token lapses or a tile host has an outage, a visitor still sees a rotating Earth
- * rather than a void. That is why `MapErrorFallback` and the whole missing-token path that
- * `MapboxGlobe.tsx` needs have no counterpart here: deleting that path IS the task.
+ * rather than a void. That is why `MapErrorFallback` and the whole missing-token path have no counterpart
+ * here: not having that path IS the point of this file. The journey view still has one, and since MAP-05
+ * deleted Mapbox it is the ONLY surface that can fail on a credential — which makes this screen's
+ * independence load-bearing rather than merely nice.
+ *
+ * (MAP-05 has since deleted `MapboxGlobe.tsx`. The comments in this file and under `src/lib/globe/` still
+ * cite it as provenance — what each behaviour replaced, which measurements justified dropping zoom and
+ * terrain, which rates were matched. That is deliberate and `src/lib/map/boundary.test.ts` permits it on
+ * comment lines specifically so the history survives; deleting it to satisfy a regex would make the code
+ * worse.)
  *
  * ## Where the parts live
  *
@@ -57,9 +65,9 @@ import {
 } from '../lib/globe/camera';
 import { SPACE_BACKGROUND, generateStarfield } from '../lib/globe/starfield';
 
-/** Matches the Mapbox globe's `ROTATION_START_DELAY_MS`: the visitor sees the Earth still first. */
+/** Carried over from the Mapbox globe's `ROTATION_START_DELAY_MS`: the visitor sees the Earth still first. */
 const ROTATION_START_DELAY_MS = 3500;
-/** Degrees per second, westward. Same rates the Mapbox globe used. */
+/** Degrees per second, westward. The rates the Mapbox globe used, kept so the motion did not change. */
 const ROTATION_DEG_PER_SEC_DESKTOP = 2;
 const ROTATION_DEG_PER_SEC_MOBILE = 1.5;
 /** Below this pointer travel a press is a click, not a drag. */

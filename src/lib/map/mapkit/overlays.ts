@@ -4,8 +4,9 @@
  * ## Three findings shape everything here
  *
  * 1. **`mapkit.Style` has no blur, glow or shadow.** The settable set is closed at 13 keys; any other key
- *    logs `[MapKit] Style has no property named …` and is dropped. So Mapbox's `line-blur`
- *    (`src/hooks/mapbox/layerConfigs.ts:196-206`) has no translation, and the substitute is
+ *    logs `[MapKit] Style has no property named …` and is dropped. So Mapbox's `line-blur` — 8 px under the
+ *    base route and 10 px under the active segment, in the deleted `src/hooks/mapbox/layerConfigs.ts:196-206`
+ *    — has no translation, and the substitute is
  *    {@link HALO_LAYERS} — three overlays on the same points at widening width and falling opacity.
  *    MEASURED to read as a genuine soft glow at satellite zoom (`surface-probe/?probe=halo`).
  * 2. **Overlay z-order IS add order.** A 3 px white line added after a 20 px red line on identical points
@@ -24,6 +25,18 @@
  * `visibility` (`useMapbox.ts:687-706`, `:1005-1011`). MapKit overlays have no layout property, so
  * "preload and toggle" collapses into add/remove anyway — at which point a 2N-overlay registry buys nothing
  * over adding the one pair that is visible.
+ *
+ * ## MAP-05: "the incumbent" is GONE, and every citation below is history
+ *
+ * This file was written against a shipping Mapbox surface and refers to it in the present tense as **"the
+ * incumbent"**, citing `useMapbox.ts`, `layerConfigs.ts` and `MapboxGlobe.tsx` by line. MAP-05 DELETED all of
+ * it (2707 lines). So: read every "the incumbent does X" below as "the Mapbox surface did X, until MAP-05",
+ * and expect none of those paths to resolve — `git log --diff-filter=D -- src/hooks/mapbox/` recovers them.
+ *
+ * The prose is kept rather than rewritten because each citation is the MEASUREMENT that explains why the code
+ * here is shaped as it is, and that reason did not stop being true when the file it measured went away. A
+ * mechanical tense-scrub across ~36 of these would have risked the measurements to fix a verb, so the term is
+ * retired here instead of edited everywhere.
  */
 
 import type { LngLat } from '../types';
@@ -70,7 +83,13 @@ const HALO_LAYERS: { lineWidth: number; strokeOpacity: number }[] = [
 ];
 
 const ROUTE_COLOR = '#ffffff';
-/** Same cyan as `ACTIVE_SEGMENT_PAINT` in `src/hooks/mapbox/layerConfigs.ts`. */
+/**
+ * The active-day cyan, `#00ffff`.
+ *
+ * Carried over from the Mapbox surface's `ACTIVE_SEGMENT_GLOW_PAINT` / `ACTIVE_SEGMENT_LINE_PAINT`, both of
+ * which used this exact value. Those lived in `src/hooks/mapbox/layerConfigs.ts` and MAP-05 deleted them, so
+ * this is now the only definition of the colour — it is written out rather than cited for that reason.
+ */
 const ACTIVE_COLOR = '#00ffff';
 
 export interface RouteOverlays {

@@ -39,6 +39,18 @@
  *   tolerates a missing element.
  * - **`anchorOffset` y is DOWNWARD-NEGATIVE, and the default is bottom-anchored.** See
  *   {@link centringAnchorOffset}.
+ *
+ * ## MAP-05: "the incumbent" is GONE, and every citation below is history
+ *
+ * This file was written against a shipping Mapbox surface and refers to it in the present tense as **"the
+ * incumbent"**, citing `useMapbox.ts`, `layerConfigs.ts` and `MapboxGlobe.tsx` by line. MAP-05 DELETED all of
+ * it (2707 lines). So: read every "the incumbent does X" below as "the Mapbox surface did X, until MAP-05",
+ * and expect none of those paths to resolve — `git log --diff-filter=D -- src/hooks/mapbox/` recovers them.
+ *
+ * The prose is kept rather than rewritten because each citation is the MEASUREMENT that explains why the code
+ * here is shaped as it is, and that reason did not stop being true when the file it measured went away. A
+ * mechanical tense-scrub across ~36 of these would have risked the measurements to fix a verb, so the term is
+ * retired here instead of edited everywhere.
  */
 
 import type { LngLat } from '../types';

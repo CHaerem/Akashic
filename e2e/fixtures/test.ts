@@ -42,20 +42,31 @@ import { test as base, expect } from '@playwright/test';
  *
  * So MapKit's hosts are now matched and **explicitly allowed**, recorded separately, and the
  * CloudKit family stays hard-blocked. A MapKit request no longer sneaks past; it is let through
- * on purpose, and only in the one project that needs it.
+ * on purpose.
  *
- * WHAT THAT COSTS. The `chromium-mapkit` project has a **live dependency on Apple's CDN** and
- * on a minted MapKit JWT — there is no npm package for MapKit JS and no offline fallback. The
- * default projects do not: `VITE_MAP_VENDOR` defaults to `mapbox`, so the 18-passing run is
- * unchanged. **Putting `chromium-mapkit` in CI needs the `MAPKIT_PRIVATE_KEY` secret plus a
- * minting step, and that is the dispatching session's call, not this file's.**
+ * ## MAP-05 INVERTED WHAT THAT EXCEPTION MEANS, and this is the important paragraph
  *
- * NOT COVERED, and it would be false to claim otherwise: Mapbox remains a live dependency of
- * every default spec — the style, the glyphs and the terrain DEM are all fetched, and
- * `secrets.VITE_MAPBOX_TOKEN` is still required. MEASURED over a full page load, the complete
- * set of external hosts the default suite contacts is exactly
- * `["api.mapbox.com", "events.mapbox.com"]` and nothing else. So this makes the suite
- * CloudKit-independent and deterministic, NOT offline.
+ * When MAP-03 wrote the section above, `ALLOWED_APPLE_HOSTS` was a hole opened for exactly one
+ * project. The other three ran the Mapbox build and reached no Apple host at all, so the
+ * exception was narrow and the 18-passing run was untouched by it.
+ *
+ * MAP-05 deleted Mapbox. There is no tokenless journey surface any more, so **every project that
+ * opens a journey now depends on Apple's CDN and on a minted MapKit JWT**, and
+ * `ALLOWED_APPLE_HOSTS` has gone from an exception to the norm. That is a real loss and it is
+ * recorded here rather than quietly absorbed: the suite was deterministic and third-party-free
+ * apart from Mapbox's tiles, and it is now deterministic and third-party-free apart from Apple's.
+ * An Apple CDN outage can turn this gate red, which is precisely the property QUA-40 removed for
+ * CloudKit. The mitigation is that it CANNOT go red from an iCloud/CloudKit outage — the hard block
+ * below still covers that whole family, and MapKit is a different service from CloudKit.
+ *
+ * WHAT IS STILL COVERED, unchanged and worth keeping straight: the CloudKit family stays
+ * hard-blocked and asserted empty per run, so the fixture container cannot quietly regain a data
+ * dependency. That was always the point of this file, and MAP-05 does not weaken it.
+ *
+ * NOT COVERED, and it would be false to claim otherwise: this makes the suite
+ * CloudKit-independent and deterministic, NOT offline. The landing globe alone is genuinely
+ * offline — MAP-02 draws it from precached coastline geometry with no token and no tiles — so
+ * `app.spec.ts`'s first screen would survive with the network cut. A journey view would not.
  */
 const APPLE_HOSTS =
     /^https?:\/\/([\w-]+\.)*(apple-cloudkit\.com|icloud\.com|icloud-content\.com|apple\.com|cdn-apple\.com|apple-mapkit\.com)(:\d+)?(\/|$)/i;
@@ -63,7 +74,10 @@ const APPLE_HOSTS =
 /**
  * The ONLY Apple hosts a spec may legitimately reach, and only because MapKit JS cannot be
  * served any other way. Kept as its own list rather than a hole in `APPLE_HOSTS` so that the
- * exception is visible, enumerable, and asserted against.
+ * allowance is visible, enumerable, and asserted against.
+ *
+ * Unchanged by MAP-05 — `cdn.apple-mapkit.com` and `sat-cdn.apple-mapkit.com` are still the whole
+ * set — but what it MEANS changed; see the header. It is no longer one project's exception.
  */
 const ALLOWED_APPLE_HOSTS = /^https?:\/\/([\w-]+\.)*apple-mapkit\.com(:\d+)?(\/|$)/i;
 

@@ -60,8 +60,10 @@ describe('GlobeHint', () => {
      * The second half of QUA-43. On desktop the hint sat at `right: 24` with no z-index, underneath the
      * "Made with Akashic" chip — measured at 1280×720 it occupied (1080, 681, 176×15) and
      * `document.elementFromPoint` at its right edge returned the chip's anchor, so the line read as "CLICK".
-     * Bottom-right holds Mapbox's attribution bar, its Privacy/Terms/Support links and that chip; centring
-     * removes the collision outright rather than negotiating pixels with three other elements.
+     * Centring removes the collision outright rather than negotiating pixels with a neighbour. (The original
+     * note here also blamed "Mapbox's attribution bar and its Privacy/Terms/Support links" for crowding the
+     * bottom-right. That was stale even then — MAP-02's globe paints no vendor attribution and MAP-05 deleted
+     * Mapbox — so the chip measured above is the only real neighbour. The assertions are unaffected.)
      *
      * Asserted on the inline style because that is where the bug lived — a snapshot would drift with every
      * copy edit and tell us nothing about the overlap.

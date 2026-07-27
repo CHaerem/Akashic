@@ -10,7 +10,12 @@
  * trailing-slash failure that makes it non-theoretical.
  *
  * The `test` import comes from ../fixtures/test, which asserts the run made zero requests
- * to Apple. `api.mapbox.com` is still live for every test in this file.
+ * to Apple. MAP-05 changed what that means for this file: the map's live dependency used to be
+ * `api.mapbox.com`, and it is now `cdn.apple-mapkit.com` plus `sat-cdn.apple-mapkit.com`, which are
+ * Apple hosts — so they are matched by the fixture's blocklist and EXPLICITLY ALLOWED through rather
+ * than being invisible to it. Note the tests in this file cover the app shell and the landing globe,
+ * which MAP-02 draws with no token and no tiles at all, so most of them would pass with the network
+ * cut; it is the journey specs that carry the CDN dependency.
  */
 
 import { test, expect } from './fixtures/test';

@@ -29,10 +29,14 @@ interface GlobeHintProps {
  * Bottom-centre on every viewport, not just mobile. It used to sit at `right: 24` on desktop with no
  * z-index, which put it underneath the "Made with Akashic" chip — measured at 1280×720, the hint occupied
  * (1080, 681, 176×15) and `document.elementFromPoint` at its right edge returned the chip's anchor, so the
- * line read as "CLICK" with the rest covered. Bottom-right is the crowded corner: Mapbox's attribution bar,
- * its Privacy/Terms/Support links and that chip all live there. Centring removes the collision outright
- * instead of negotiating pixels with three other elements, and it collapses a mobile/desktop divergence
- * that existed for no reason.
+ * line read as "CLICK" with the rest covered. Centring removes the collision outright instead of negotiating
+ * pixels with a neighbour, and it collapses a mobile/desktop divergence that existed for no reason.
+ *
+ * The original reasoning named three colliding elements — the chip plus "Mapbox's attribution bar and its
+ * Privacy/Terms/Support links" — but that was already stale when written: MAP-02 replaced this screen's globe
+ * with `AkashicGlobe`, which paints NO vendor attribution, and MAP-05 then deleted Mapbox entirely. So the
+ * bottom-right now holds only the "Made with Akashic" chip. The measurement above stands and the placement is
+ * still right; it is right for one reason instead of three.
  */
 export function GlobeHint({ isMobile }: GlobeHintProps) {
     const { treks, loading } = useJourneys();
@@ -52,9 +56,9 @@ export function GlobeHint({ isMobile }: GlobeHintProps) {
             letterSpacing: '0.15em',
             textTransform: 'uppercase',
             textAlign: 'center',
-            // Bottom-centre is clear of the sign-in pill and Mapbox logo (both bottom-left) and of the
-            // attribution and chip (bottom-right), but without this a cursor crossing the line would still
-            // steal a drag from the globe underneath.
+            // Bottom-centre is clear of the sign-in pill (bottom-left) and the "Made with Akashic" chip
+            // (bottom-right) — no vendor logo or attribution since MAP-02/MAP-05 — but without this a cursor
+            // crossing the line would still steal a drag from the globe underneath.
             pointerEvents: 'none',
             whiteSpace: 'nowrap',
         }}>

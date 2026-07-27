@@ -36,7 +36,7 @@ world-readable public mirror for journeys the owner publishes.
 | iOS AI | Foundation Models on-device, where Apple Intelligence is available — day notes, day names, grounded facts |
 | Data | Apple CloudKit (`iCloud.no.akashic`) — private DB per family, shared DB for CKShare participants, public DB showcase mirror |
 | Web frontend | React 19, TypeScript, Vite |
-| Web maps | Mapbox GL JS (globe projection, 3D terrain) |
+| Web maps | Apple MapKit JS for journeys; the landing globe is ours — a 2D canvas over vendored public-domain coastline geometry, no token and no tile service (MAP-02). Mapbox was deleted in MAP-05 |
 | Web data | CloudKit JS (Apple ID sign-in for family; anonymous public reads) |
 | Hosting | **Cloudflare Pages today.** GitHub Pages is staged and dormant, awaiting the DNS cutover — see [`docs/github-pages-cutover.md`](docs/github-pages-cutover.md) |
 
@@ -45,7 +45,9 @@ world-readable public mirror for journeys the owner publishes.
 ### Prerequisites
 
 - Node.js 20+ (Vite 7 requires `^20.19` or `>=22.12`; CI runs 20)
-- Mapbox access token
+- A MapKit JS token, for the journey map only — mint one with `node scripts/mapkit/devToken.mjs`
+  (needs the Apple `.p8` at `~/.keys/AuthKey_<keyId>.p8`). **Without it the app still runs and the
+  landing globe is fully working; every journey map shows an error card instead.**
 - CloudKit JS API token for the container (public, container-scoped)
 
 ### Environment Variables
@@ -53,7 +55,7 @@ world-readable public mirror for journeys the owner publishes.
 Create `.env.local` in the project root (see `.env.example`):
 
 ```env
-VITE_MAPBOX_TOKEN=your_mapbox_token
+VITE_MAPKIT_TOKEN=$(node scripts/mapkit/devToken.mjs)
 VITE_CLOUDKIT_ENV=development
 VITE_CLOUDKIT_API_TOKEN=your_cloudkit_api_token
 ```
@@ -105,11 +107,14 @@ Current work is v1.0 commercialization — see
 
 ```
 src/
-├── components/      # AkashicApp, AuthGuard, MapboxGlobe + feature folders
-│                    # (common, home, trek, journey, comments, public, layout, nav, ui)
+├── components/      # AkashicApp, AuthGuard, MapSurface (AkashicGlobe | MapKitJourneyMap)
+│                    # + feature folders (common, home, trek, journey, comments, public,
+│                    # layout, nav, ui)
 ├── contexts/        # AuthContext, JourneysContext, ThemeContext
-├── hooks/           # useMapbox (modular), useTrekData, usePhotoDay, useMedia, …
-├── lib/             # CloudKit JS adapter, journeys API, media, nativeOnly guard
+├── hooks/           # useTrekData, usePhotoDay, useMedia, …
+├── lib/             # CloudKit JS adapter, journeys API, media, nativeOnly guard,
+│                    # map/ (the vendor-neutral contract + the MapKit adapter),
+│                    # globe/ (the tokenless landing globe)
 ├── styles/          # liquidGlass.ts design tokens
 ├── types/           # TypeScript types
 └── utils/           # dates, formatting, geography, routeUtils, stats

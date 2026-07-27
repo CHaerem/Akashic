@@ -2709,11 +2709,19 @@
         ".github/workflows/**"
       ],
       "track": "QUALITY",
-      "status": "TODO",
+      "status": "DONE",
       "verify": [
         "npx vitest --run",
         "npm run typecheck",
         "npm run build"
+      ],
+      "evidence": "Measured in this tree, not taken from the report. Mapbox is gone from source, package.json and package-lock.json; `VITE_MAPBOX_TOKEN` appears in no `env:` key in any workflow (the five remaining occurrences are comments recording the removal); ZERO files under dist/ contain the string \"mapbox\"; the 1,664,113 B mapbox chunk is gone. precache 7810.94 -> 6126.52 KiB, dist 8668 -> 6972 KB, -19.6 %. 650 unit tests held across 52 files, typecheck clean, boundary test 6 passing, both dist guards ok, e2e 27 passed / 6 skipped (was 18 / 7). Lint cap lowered 25 -> 14.",
+      "notes": [
+        "2026-07-27 THE LEDGER'S OWN INVENTORY WAS WRONG IN SIX PLACES, which is the argument for having the implementing pass build its own. MapboxGlobe.tsx was 575 lines, not the ledger's 677 nor the 667 MAP-03 read — QUA-44 had removed four console.log calls in between — so the deletion is 2707 lines, not 2786. The manual chunk was at vite.config.js:203, not :183. Two files the ledger never mentioned went too: src/hooks/mapbox/index.ts and the src/hooks/useMapbox.ts re-export shim. The lockfile lost 33 packages, not the 10 whose names contain \"mapbox\" — the transitive tree took gl-matrix, supercluster, earcut, pbf and kdbush with it. And AkashicApp.test.tsx had a second mock (vi.mock('./MapboxGlobe')) alongside the one the ledger named.",
+        "2026-07-27 MAP-03 LEFT ITSELF A TRIPWIRE AND IT FIRED CORRECTLY. chrome.test.ts had an assertion that readFileSync'd src/index.css and regex-matched `.public-chrome .mapboxgl-ctrl-bottom-left`, with a failure message reading \"if MAP-05 removed it, delete this assertion\". It went red the instant the CSS rule was deleted, which is exactly what a cross-file coupling should do. The 80 px band is still asserted, now against attributionPadding() rather than against the stylesheet. That is a deliberate -1 test, and it is why the unit count held at 650 despite three MapSurface tests dying and four being added.",
+        "2026-07-27 THE DANGEROUS ONE, and it is new: a build with no VITE_MAPKIT_TOKEN does not fail, it ships NO MAP LOADER. mapKitToken() inlines to `void 0`, Rollup dead-code-eliminates the loader, and cdn.apple-mapkit.com appears in ZERO files under dist/ — verified independently here, 0 files tokenless against 1 with a token. It is nasty because MAP-02 made the landing globe deliberately tokenless, so the deployed site looks entirely healthy until a visitor opens a journey. deploy-pages.yml now asserts the string is present in the built output. Recorded in CLAUDE.md as a trap.",
+        "2026-07-27 A SNAPSHOT TEST WAS DELETED RATHER THAN MADE TO PASS, and the reasoning is worth keeping. mobile.spec.ts's trek-view visual regression could not be regenerated honestly: the fresh baseline came out a grey rectangle because satellite tiles had not arrived (113 KB against the old 473 KB), and masking the canvas produced a SOLID MAGENTA image that passed twice — the map canvas is `inset: 0`, so its mask box is the whole viewport. A test that passes on a uniformly magenta screenshot asserts nothing, and this repo has shipped two of those already, so it went rather than being kept green. The journey view's rendering is covered by e2e/mapkit-journey.spec.ts, which reads the live map object.",
+        "2026-07-27 QUA-49 IS NOW THE SHIPPED BEHAVIOUR, not a MapKit-only regression, and MAP-05 did not fix it. `.camp-marker { z-index: 20 !important }` was load-bearing on Mapbox (position: absolute, z-index 22, because mapbox-gl adopts options.element and adds its own positioned class) and is inert on MapKit (both elements compute position: static). Deleting Mapbox removed the only surface where a photo stack could NOT hide a camp marker. The rule and its comment survive, rewritten to say so. Also in CLAUDE.md, because the surviving CSS reads like the problem is handled and it is not."
       ]
     },
     {

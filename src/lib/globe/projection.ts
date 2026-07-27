@@ -276,9 +276,11 @@ export function wrapLongitude(lon: number): number {
 /**
  * Where the camera sits when nothing is selected: `[30, 15]`.
  *
- * Same value as the Mapbox globe's `GLOBE_CENTER` (`src/hooks/mapbox/types.ts`), so the landing framing
- * does not shift as part of this swap. Latitude 15 is also the band the auto-rotation sweeps, which is
- * why `./horizon.test.ts` samples it densely.
+ * Carried over verbatim from the Mapbox globe's `GLOBE_CENTER`, which was also `[30, 15]`, so that the
+ * landing framing did not shift as part of the swap. That constant lived in `src/hooks/mapbox/types.ts`
+ * and MAP-05 deleted it, so this declaration is now the only definition — hence the value is written out
+ * here rather than cited. Latitude 15 is also the band the auto-rotation sweeps, which is why
+ * `./horizon.test.ts` samples it densely.
  */
 export const GLOBE_HOME: GlobeCamera = { lon: 30, lat: 15 };
 

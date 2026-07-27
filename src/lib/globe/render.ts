@@ -3,7 +3,8 @@
  *
  * ## What this replaces, and what it deliberately gives up
  *
- * The Mapbox globe drew photographic satellite imagery (`mapbox://styles/mapbox/satellite-v9`) over a
+ * The Mapbox globe — deleted by MAP-05, so this is the only globe now — drew photographic satellite
+ * imagery (`mapbox://styles/mapbox/satellite-v9`) over a
  * raster-DEM terrain source at exaggeration 1.2. Both are token-gated tile services, so both are out by
  * definition — MAP-02's requirement is that the landing view keeps working when there is no token at
  * all. **This is a visible product change to the first screen a paying customer sees: photographic

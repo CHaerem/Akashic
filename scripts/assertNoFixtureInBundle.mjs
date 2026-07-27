@@ -39,7 +39,9 @@
  *
  * MEASURED on the live site 2026-07-27: https://akashic.no printed sixteen lines of
  * "[MapboxGlobe camera effect] …" before the globe settled, from four console.log calls in
- * src/components/MapboxGlobe.tsx that nobody meant to ship. The fix is a build setting
+ * src/components/MapboxGlobe.tsx that nobody meant to ship. (MAP-05 has since deleted that file;
+ * the incident is kept because it is why this script exists, and the guard is vendor-independent
+ * and protects whatever gets written next.) The fix is a build setting
  * (`esbuild.pure` in vite.config.js), not four deletions, so the fifth call somebody adds
  * while debugging cannot ship either. This guard is what proves the setting is still there
  * and still working — a config key can be dropped in a merge as easily as a log can be added.
@@ -55,7 +57,8 @@
  * console.warn in the app chunk, unchanged from before).
  *
  * IF THIS FIRES ON CODE YOU DID NOT WRITE: `esbuild.pure` reaches the minify pass, so it
- * strips vendor debug logs too (mapbox-gl's 13 went with ours). But dist/sw.js and
+ * strips vendor debug logs too (mapbox-gl's 13 went with ours, back when it was a dependency —
+ * MAP-05 removed it). But dist/sw.js and
  * dist/workbox-*.js are minified by workbox's own pipeline, not by Vite, so a future workbox
  * release could land a console.log there that our setting never touches. That is a real
  * finding about our build, not noise: either the file is outside the mechanism and needs one,

@@ -67,15 +67,91 @@ jobs:
             exit 1
           fi
 
+      - name: Mint the MapKit JS token
+        # MAP-05 SHIP-BLOCKER, and it had to land in the same change as the deletion.
+        #
+        # Until MAP-05 this workflow passed VITE_MAPBOX_TOKEN and set no map vendor, so the live
+        # journey view was Mapbox. Deleting the package moves production onto MapKit — and NO
+        # workflow was minting a MapKit token into a build. `mapkit-token.yml` proves the credential
+        # is healthy and deliberately gates nothing; it does not produce a token for the bundle.
+        # Without this step the deploy would have gone green and akashic.no would have rendered
+        # `MapErrorFallback` with "No MapKit token configured" on every journey
+        # (src/lib/map/mapkit/useMapKitJourney.ts:111) while the landing globe looked perfect,
+        # because MAP-02's globe needs no token. A smoke check on the front page would not have
+        # caught it.
+        #
+        # Minted per deploy rather than stored, which is the whole argument in
+        # scripts/mapkit/mintToken.mjs's header: the .p8 does not expire, so every push resets the
+        # fuse. A pasted token would instead lapse on a date nobody remembers, and there is no
+        # backend here to rotate it.
+        #
+        # BOTH origins, and they are disjoint — measured in that same header: the claim `akashic.no`
+        # alone 401s a request from `https://www.akashic.no`, and `*.akashic.no` alone 401s the
+        # apex. Using either one on its own breaks half the site.
+        #
+        # Key ID and Team ID are repo VARIABLES, not secrets: both travel in clear text inside every
+        # token (as `kid` and `iss`) and ship in the public bundle, so masking them would cost
+        # debuggability and buy nothing. Only the .p8 is secret. The minted token is public by
+        # design and is protected by its origin claim, not by secrecy — hence GITHUB_ENV rather than
+        # an attempt to mask it.
+        env:
+          MAPKIT_KEY_ID: ${{ vars.MAPKIT_KEY_ID }}
+          MAPKIT_TEAM_ID: ${{ vars.MAPKIT_TEAM_ID }}
+          MAPKIT_PRIVATE_KEY: ${{ secrets.MAPKIT_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          TOKEN="$(node scripts/mapkit/mintToken.mjs --origin 'akashic.no,*.akashic.no')"
+          # Fail here rather than shipping a tokenless bundle. mintToken.mjs exits non-zero on a
+          # missing credential, but an empty-but-successful result would otherwise sail through
+          # `set -e` and produce exactly the silent breakage this step exists to prevent.
+          if [ -z "$TOKEN" ]; then
+            echo "::error::minted MapKit token is empty — refusing to build a journey view that cannot render."
+            exit 1
+          fi
+          echo "VITE_MAPKIT_TOKEN=$TOKEN" >> "$GITHUB_ENV"
+
       - name: Build
         env:
-          VITE_MAPBOX_TOKEN: ${{ secrets.VITE_MAPBOX_TOKEN }}
+          # MAP-05: VITE_MAPBOX_TOKEN is gone from here with the package. The GitHub secret itself
+          # still exists and revoking the Mapbox account key is the owner's task, not this file's.
+          # VITE_MAPKIT_TOKEN arrives from the minting step above via GITHUB_ENV.
+          #
           # A CloudKit JS API token is public and container-scoped — it is baked
           # into the client bundle either way — so it comes from repo `vars`,
           # not `secrets`.
           VITE_CLOUDKIT_ENV: ${{ vars.VITE_CLOUDKIT_ENV || 'development' }}
           VITE_CLOUDKIT_API_TOKEN: ${{ vars.VITE_CLOUDKIT_API_TOKEN || '' }}
         run: npm run build
+
+      - name: Assert the built bundle carries a MapKit token and no Mapbox origin
+        # MAP-05's `done_when` is "no mapbox origin in the built bundle", and the lesson this repo
+        # keeps relearning is to assert against the BUILT ARTIFACT rather than the spec that
+        # produced it (INFOPLIST_KEY_* was declared correctly and silently dropped from every
+        # shipped plist). Both halves are checked here because both are silent failures: a bundle
+        # with no token renders MapErrorFallback, and a bundle still reaching api.mapbox.com would
+        # mean the deletion was incomplete in a way no test covers.
+        #
+        # THE SECOND CHECK IS SHARPER THAN IT LOOKS, and this is measured rather than hoped for.
+        # `mapKitToken()` reads `import.meta.env.VITE_MAPKIT_TOKEN`, which Vite substitutes
+        # statically — so in a build with no token it becomes `void 0`, and Rollup then
+        # dead-code-eliminates the whole loader with it. MEASURED on this tree: a tokenless build
+        # contains the string "mapkit" exactly once (inside the MapErrorFallback message) and
+        # `cdn.apple-mapkit.com` NOT AT ALL, while a build with a minted token does contain it.
+        # So this grep is a true test of "the minting step above actually reached the bundle" —
+        # verified failing without the token and passing with it, which is the only way to know a
+        # guard works.
+        run: |
+          set -euo pipefail
+          if grep -rlq "api\.mapbox\.com" dist/; then
+            echo "::error::the built bundle still references api.mapbox.com — MAP-05 is incomplete."
+            grep -rl "api\.mapbox\.com" dist/
+            exit 1
+          fi
+          if ! grep -rlq "cdn\.apple-mapkit\.com" dist/; then
+            echo "::error::the built bundle names no MapKit CDN — the journey view cannot load."
+            exit 1
+          fi
+          echo "ok: no Mapbox origin, MapKit loader present"
 
       - name: Assert the E2E fixture is absent from the bundle
         # Belt to the previous step's braces, and the one that survives a leak path nobody

@@ -33,7 +33,7 @@ export const TIMEOUTS = {
 
 /**
  * The `window.testHelpers` contract, registered by `src/components/MapSurface.tsx:175` under
- * `VITE_E2E_TEST_MODE` — MAP-03 moved it out of `MapboxGlobe.tsx` so one component owns the
+ * `VITE_E2E_TEST_MODE` — MAP-03 moved it out of the then-Mapbox surface so one component owns the
  * global whichever vendor draws it. `e2e/` is outside the app tsconfig, so nothing checks this copy
  * against `MapSurface.tsx:89-101`; change both or neither. `getTrekData` returns a FLATTENED projection.
  */
@@ -289,15 +289,16 @@ export async function campForDay(page: Page, dayNumber: number): Promise<CampSum
  * MEASURED: `getMapState().hasPendingAnimations` is
  * `cameraAnimationFrameRef.current !== null || styleLoadTimeoutRef.current !== null`, and
  * `cameraAnimationFrameRef.current` is cleared on the FIRST LINE of the rAF callback
- * (`useMapbox.ts:1031-1032`) — before `fitBounds`/`flyTo` is even issued. So the old
+ * (`useMapbox.ts:1031-1032`, in the Mapbox surface MAP-05 deleted) — before `fitBounds`/`flyTo` was
+ * even issued. So the old
  * `waitForMapAnimations` returned roughly 0 ms into a 2200 ms flight, and every camera
  * assertion read a mid-flight centre, usually still the previous day's. Those assertions
  * passed only because the tolerance (50 km) was wider than the whole Kilimanjaro massif —
  * they were not position checks at all.
  *
  * This polls the centre and requires it to hold still, so the assertions that follow are
- * about where the camera ENDED UP. Fixing it in the spec rather than in `useMapbox` keeps
- * the change to test code; waiting on Mapbox's own `idle`/`moveend` would be better still
+ * about where the camera ENDED UP. Fixing it in the helper rather than in the adapter keeps
+ * the change to test code; waiting on the surface's own idle/settle event would be better still
  * and needs a new test helper in the app.
  */
 export async function waitForCameraSettled(

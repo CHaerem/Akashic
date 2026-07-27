@@ -81,12 +81,28 @@ work from `apple/README.md`, and expect the merge back to need real conflict res
 
 
 `.env` and `.env.local` are gitignored and live only in the main checkout at
-`/Users/cher/Privat/Akashic/`. `git worktree add` does not copy them. Without them the
-Playwright suite fails **37 of 37 tests over ten minutes**, every failure a missing Mapbox
-canvas — and it reads exactly like a regression you caused. It is not. Copy them first:
+`/Users/cher/Privat/Akashic/`. `git worktree add` does not copy them. Copy them first:
 
 ```bash
 cp /Users/cher/Privat/Akashic/.env* .
+```
+
+**MAP-05 changed the shape of this failure and made it worse, so re-read this even if you know the
+trap.** The old symptom was the whole Playwright suite failing — 37 of 37 over ten minutes, every
+failure a missing Mapbox canvas — because the map needed `VITE_MAPBOX_TOKEN`. Mapbox is deleted, and
+the journey map now needs a **minted MapKit token**, which no `.env` in the main checkout carries
+either. Two consequences:
+
+- The landing globe needs no token at all (`MAP-02`), so the app looks fine and only journeys break.
+- `playwright.config.ts` deliberately DOES NOT REGISTER the journey specs when `VITE_MAPKIT_TOKEN` is
+  unset. So the tokenless run is **green with fewer tests**, not red — quieter than the old failure and
+  easier to mistake for a pass. It prints a warning saying so; read the test count, not the colour.
+
+Mint one before you trust an e2e run (needs the Apple `.p8` at `~/.keys/AuthKey_<keyId>.p8`, which is
+not in the repo and cannot be):
+
+```bash
+export VITE_MAPKIT_TOKEN=$(node scripts/mapkit/devToken.mjs)
 ```
 
 ## Verification commands that actually work
@@ -100,7 +116,7 @@ These are measured, not guessed. Prefer them over inventing your own.
 | Built Info.plist | `plutil -p "$(find ~/Library/Developer/Xcode/DerivedData/Akashic-*/Build/Products -name Akashic.app -maxdepth 3 \| head -1)/Info.plist"` | see the trap below |
 | Web unit tests | `npx vitest --run` | 414 tests, ~5 s. Was 452 → 436 (LEG-12 deleted `workers/`, −16) → 414 (LEG-15 deleted the dead `mapMatching`, −22). Falling counts here have been deletions of dead code, not lost coverage — check `git log` before treating a drop as a regression. |
 | Web typecheck | `npm run typecheck` | clean, and a type error now fails CI and the commit |
-| Web lint | `npm run lint` | 171 files inspected, 0 errors, warnings capped at 25 |
+| Web lint | `npm run lint` | 205 files inspected, 0 errors, warnings capped at 14 (was 25; MAP-05 deleted `useMapbox.ts` and `MapboxGlobe.tsx`, which held 11 of them — a deletion, not a fix) |
 | Web build | `npm run build` | ~4 s, no env needed |
 | Web e2e | `VITE_E2E_TEST_MODE=true CI=true npx playwright test --project=chromium --ignore-snapshots` | needs `.env.local` |
 | Export tooling | `npx tsc -p scripts/export/tsconfig.json && node scripts/export/smoke.ts` | clean; 26 checks |
@@ -317,6 +333,24 @@ right: fix this file in the same commit.
 - **The public CloudKit database is billed to us, not to the customer.** The cost table in
   `COMMERCIALIZATION-PLAN.md` says bandwidth is free; that is true of the private database
   only. Anything that increases showcase traffic has a real cost line.
+- **A build with no `VITE_MAPKIT_TOKEN` does not fail — it silently ships no map loader at all.**
+  Measured after MAP-05: `mapKitToken()` inlines to `void 0` with the variable unset, Rollup then
+  dead-code-eliminates the whole loader, and `cdn.apple-mapkit.com` appears in **zero** files under
+  `dist/`. With a token it appears in one. The failure is nasty because the landing globe is
+  deliberately tokenless (MAP-02) and still renders, so the deployed site looks entirely healthy until
+  a visitor opens a journey and gets an empty box. `deploy-pages.yml` now asserts the string is present
+  in the built output; keep that assertion, and note it is the only thing standing between a forgotten
+  repository secret and a half-broken production site. Same family as the CloudKit trailing slash and
+  the missing `INFOPLIST_KEY_*`: the thing that is absent is invisible unless something asserts on the
+  artefact.
+- **`.camp-marker { z-index: 20 !important }` in `src/index.css` was load-bearing on Mapbox and is inert
+  on MapKit, so deleting Mapbox made a known defect the SHIPPED behaviour rather than fixing it.**
+  Measured: on Mapbox the element computed `position: absolute; z-index: 22` because mapbox-gl adopts
+  `options.element` and adds its own absolutely-positioned class; on MapKit both the camp marker and the
+  photo stack compute `position: static`, and neither `DisplayPriority` nor DOM order changes the paint
+  order. So a photo stack can hide a camp marker and eat its clicks, and after MAP-05 there is no longer
+  a surface where it cannot. That is QUA-49, and it is open — do not read the surviving CSS rule as
+  evidence the problem is handled.
 
 ## Conventions
 

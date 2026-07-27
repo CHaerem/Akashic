@@ -16,6 +16,23 @@
   changes and so does Mapbox's. Anyone revisiting the decision should re-run the comparison, not rebuild
   the harness.
 
+  ## MAP-05: THE MAPBOX COLUMN OF THIS HARNESS IS ON BORROWED TIME. Read this before trusting a blank pane.
+
+  MAP-05 has deleted Mapbox from the app, and this page is now the ONLY thing in the repo that loads
+  mapbox-gl — it pulls 3.9.0 straight from api.mapbox.com (see the <script>/<link> below) rather than from
+  node_modules, so it does NOT break by the package being uninstalled, and `npm ls mapbox-gl` will not warn
+  you about it. What it does depend on is `VITE_MAPBOX_TOKEN`, and revoking the Mapbox account key is the
+  OWNER'S remaining task on MAP-05. On the day that happens the Mapbox pane goes blank or 401s while the
+  MapKit pane keeps working, and nothing here will say why.
+
+  That is deliberately not fixed by deleting this file, because the harness answers a question that still
+  matters and the Apple pane alone is what you want for "is Apple's coverage still good over this journey".
+  THE VERDICT IS ALREADY RECORDED: read `FINDINGS.md` in this directory — measured 2026-07-27 with the real
+  key across seven views in East Africa and the Himalaya, concluding parity and that "Mapbox is not a
+  fallback worth keeping". That document is the evidence MAP-05 was safe to do at all, and it does not
+  depend on this page still running. If you need the A/B again after the key is gone, you will need a new
+  Mapbox token; the harness is otherwise intact.
+
   ## Two things this harness learned the hard way
 
   1. **Matching the coordinate span is NOT matching the view.** `CoordinateRegion` and `fitBounds` each

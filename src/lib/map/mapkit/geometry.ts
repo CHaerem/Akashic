@@ -1,13 +1,26 @@
 /**
  * Route, segment and photo-grouping geometry for the MapKit surface — pure. (MAP-03)
  *
- * All of it is behaviour lifted out of `src/hooks/mapbox/useMapbox.ts`, where it is tangled with an
- * imperative map and therefore has **no unit test at all** (`grep -rln groupPhotosByLocation src` finds only
- * that one file). Moving it here is most of MAP-03's new coverage: the day-segment slicing and the on/off
+ * All of it is behaviour lifted out of `src/hooks/mapbox/useMapbox.ts`, where it was tangled with an
+ * imperative map and therefore had **no unit test at all** — at the time, `grep -rln groupPhotosByLocation
+ * src` found only that one file. Extracting it was most of MAP-03's new coverage, and MAP-05 has since
+ * deleted the original, so this is now the only copy: the day-segment slicing and the on/off
  * route threshold decide which camera branch runs, and `e2e/day-navigation.spec.ts` asserts against both
  * branches, so a silent change here shows up as a confusing Playwright failure rather than a red unit test.
  *
  * Nothing in this file imports MapKit or React.
+ *
+ * ## MAP-05: "the incumbent" is GONE, and every citation below is history
+ *
+ * This file was written against a shipping Mapbox surface and refers to it in the present tense as **"the
+ * incumbent"**, citing `useMapbox.ts`, `layerConfigs.ts` and `MapboxGlobe.tsx` by line. MAP-05 DELETED all of
+ * it (2707 lines). So: read every "the incumbent does X" below as "the Mapbox surface did X, until MAP-05",
+ * and expect none of those paths to resolve — `git log --diff-filter=D -- src/hooks/mapbox/` recovers them.
+ *
+ * The prose is kept rather than rewritten because each citation is the MEASUREMENT that explains why the code
+ * here is shaped as it is, and that reason did not stop being true when the file it measured went away. A
+ * mechanical tense-scrub across ~36 of these would have risked the measurements to fix a verb, so the term is
+ * retired here instead of edited everywhere.
  */
 
 import type { LngLat, MapBounds } from '../types';

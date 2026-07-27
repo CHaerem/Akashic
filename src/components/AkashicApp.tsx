@@ -109,7 +109,7 @@ export default function AkashicApp() {
     }, []);
 
     // Fetch photos when in trek view
-    // Native Mapbox layers handle photos efficiently - no delays needed
+    // The map surface handles photo annotations efficiently - no delays needed
     useEffect(() => {
         if (!selectedTrek || view !== 'trek') {
             setPhotos([]);
@@ -252,8 +252,10 @@ export default function AkashicApp() {
         <div className={signedIn ? undefined : 'public-chrome'} style={{ position: 'fixed', inset: 0, background: colors.background.base }}>
             {/* Map surface - full screen hero */}
                     <div style={{ position: 'absolute', inset: 0 }}>
-                        {/* MAP-03: MapSurface picks the vendor (VITE_MAP_VENDOR, default mapbox) and owns
-                            window.testHelpers, because two vendor surfaces cannot both hold that global. */}
+                        {/* MAP-03/MAP-05: MapSurface picks the surface by VIEW — our tokenless globe for
+                            'globe', MapKit for a journey — and owns window.testHelpers, because two
+                            surfaces cannot both hold that global. There is no vendor flag: MAP-05 deleted
+                            Mapbox and VITE_MAP_VENDOR with it. */}
                         <MapSurface
                             selectedTrek={selectedTrek}
                             selectedCamp={selectedCamp}

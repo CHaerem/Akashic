@@ -1,9 +1,9 @@
 /**
  * The journey view on Apple MapKit JS. (MAP-03)
  *
- * The second implementation of the vendor surface `src/lib/map/types.ts` defines, and — with
- * `MapboxGlobe.tsx` — one of only two files in `src/` allowed to name a map vendor
- * (`src/lib/map/boundary.test.ts` enforces that, and now bans the `mapkit` *global* as well as the import,
+ * An implementation of the vendor surface `src/lib/map/types.ts` defines, and — since MAP-05 deleted
+ * `MapboxGlobe.tsx` — the ONLY component in `src/` allowed to name a map vendor
+ * (`src/lib/map/boundary.test.ts` enforces that, and bans the `mapkit` *global* as well as the import,
  * because MapKit JS arrives from a CDN script tag and no import ban could ever catch it).
  *
  * This file is deliberately thin. Everything imperative is in `src/lib/map/mapkit/useMapKitJourney.ts`, and
@@ -12,6 +12,13 @@
  *
  * ## What this surface does NOT do, and why not — so nobody ports it back in
  *
+ * A SETTLED RECORD, not a live comparison. This table was written against a shipping Mapbox adapter, to
+ * justify each thing the port left behind; MAP-05 has since deleted that adapter, so every `useMapbox.ts`
+ * citation below names a file that no longer exists and nothing here is recoverable by reading the other
+ * surface. It is kept because the reasons are the reasons — most of these subsystems were dead ON MAPBOX
+ * before the port, which is the finding, and the table is the only place it is written down. Recover the
+ * cited lines with `git log --diff-filter=D -- src/hooks/mapbox/` if a claim ever needs re-checking.
+ *
  * | dropped | reason |
  * |---|---|
  * | Terrain, fog, sky, `projection: 'globe'`, auto-rotation, the CSS starfield | Zero occurrences of `terrain`, `elevation`, `globe` or `orthographic` in the shipped MapKit bundle. ARCH-01 accepted the loss; MAP-02 owns the landing globe separately. The starfield is only visible at globe zoom. |
@@ -19,14 +26,14 @@
  * | The `line-blur` glow, and `lineGradient` as a substitute for it | `mapkit.Style` is closed at 13 settable keys, none a blur. `lineGradient` is *accepted* and paints nothing while suppressing the stroke — it would ship an invisible route. Replaced by a three-overlay halo and by `strokeStart`/`strokeEnd`; see `src/lib/map/mapkit/overlays.ts`. |
  * | The eleven native circle/cluster/symbol layers and all `PHOTO_*_PAINT` / `CAMP_*_PAINT` | Hidden unconditionally by the very functions that would populate them (`useMapbox.ts:1302-1311`, `:1518-1526`). Dead as shipped. |
  * | Photo cluster expansion on click | Unreachable: those cluster layers are never visible. |
- * | The whole POI subsystem — four layers, the colour/icon match expressions, the ~170-line glass popup, `updatePOIMarkers`, `flyToPOI` | Unreachable along the data path: `src/lib/journeys/transforms.ts:269-287` never assigns trek-level `TrekData.pointsOfInterest`, so `updatePOIMarkers` is always called with `[]`. **Worth an explicit owner answer rather than an assumption** — per-*camp* `camp.pointsOfInterest` IS populated and renders in `DayDiscoveries`, so the trek-level path is either a deliberate retirement or an unnoticed regression, and dropping it here should not be what settles that. |
+ * | The whole POI subsystem — four layers, the colour/icon match expressions, the ~170-line glass popup, `updatePOIMarkers`, `flyToPOI` | Unreachable along the data path: `src/lib/journeys/transforms.ts:269-287` never assigns trek-level `TrekData.pointsOfInterest`, so `updatePOIMarkers` was always called with `[]`. **STILL WORTH AN EXPLICIT OWNER ANSWER, and MAP-05 has now made it consequential** — per-*camp* `camp.pointsOfInterest` IS populated and renders in `DayDiscoveries`, so the trek-level path is either a deliberate retirement or an unnoticed regression. MAP-05 deleted the only code that read the trek-level field, so it is no longer "dropped from the port" but gone from the product; `TrekData.pointsOfInterest` (`src/types/trek.ts:85`) is now written by the transform and read by nothing, and `getNearbyPOIs`/`getNextPOI` (`src/utils/routeUtils.ts:581-604`) are unambiguously dead. Restoring it is a feature decision, not a revert. |
  * | `RouteClickInfo` and the ~85-line route-click computation | Dead through the boundary: `onRouteClick` is not a member of `MapSurfaceProps`, `AkashicApp` never passes it, and the handler early-returns on the null ref. |
  * | `startPlayback` / `stopPlayback` / `playbackState` | Returned by `useMapbox` and never destructured by anyone. There is no playback in the journey view. |
  * | The glyph-source style reload, mobile `setTerrain(null)` juggling, `touchPitch`, the 1800 ms deferred update, the 2600 ms marker deferral | Workarounds for terrain and pitch costs MapKit does not have. |
  * | `import 'mapbox-gl/dist/mapbox-gl.css'` | MapKit injects its own stylesheet from the CDN. There is nothing to import, which is also why its attribution cannot be moved with CSS. |
  *
- * Note the three dead subsystems are **not deleted from the Mapbox adapter** here. That is MAP-05, which
- * depends on MAP-02, and `src/hooks/mapbox/` may be owned by another in-flight ledger entry.
+ * The three dead subsystems named above are gone for good: MAP-05 deleted `src/hooks/mapbox/` and
+ * `MapboxGlobe.tsx` outright (2707 lines), so there is no longer a second adapter carrying them.
  */
 
 import { useEffect, useRef } from 'react';

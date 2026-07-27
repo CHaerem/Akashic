@@ -44,14 +44,44 @@ jobs:
         if: steps.playwright-cache.outputs.cache-hit == 'true'
         run: npx playwright install-deps chromium
 
+      - name: Mint a localhost MapKit token
+        # MAP-05: without this the gate loses its journey coverage entirely.
+        #
+        # Mapbox used to be this suite's live map dependency, and the journey specs needed no
+        # credential beyond `secrets.VITE_MAPBOX_TOKEN`. MAP-05 deleted that surface, so the journey
+        # view is MapKit-only and MapKit JS comes from Apple's CDN behind a minted JWT — there is no
+        # npm package and no offline mode. With no token, `playwright.config.ts` deliberately does
+        # not register the journey specs, so this job would go GREEN having silently stopped testing
+        # the map. Minting here is what keeps the run honest.
+        #
+        # `--origin localhost` (bare, no port — measured accepted by Apple; the port is not part of
+        # the origin claim) because the runner serves the app from http://localhost:5173. `--days 1`
+        # because the token's only job is to outlive this job.
+        #
+        # WHAT THIS COSTS, and it is a real cost: every journey spec now has a live dependency on
+        # Apple's CDN, so an Apple outage can turn this gate red. That is the property QUA-40 removed
+        # for CloudKit, partially reintroduced for a different Apple service. It is documented in
+        # `e2e/fixtures/test.ts`, which measures the suite's external hosts on every run rather than
+        # trusting this comment. The CloudKit family remains hard-blocked and asserted empty.
+        env:
+          # Variables, not secrets: both ship in clear text inside every token. Only the .p8 is secret.
+          MAPKIT_KEY_ID: ${{ vars.MAPKIT_KEY_ID }}
+          MAPKIT_TEAM_ID: ${{ vars.MAPKIT_TEAM_ID }}
+          MAPKIT_PRIVATE_KEY: ${{ secrets.MAPKIT_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          TOKEN="$(node scripts/mapkit/mintToken.mjs --origin localhost --days 1)"
+          if [ -z "$TOKEN" ]; then
+            echo "::error::minted MapKit token is empty — the journey specs would be skipped silently."
+            exit 1
+          fi
+          echo "VITE_MAPKIT_TOKEN=$TOKEN" >> "$GITHUB_ENV"
+
       - name: Run E2E tests
         env:
-          # Mapbox stays a genuine live dependency: every spec waits for a real canvas and
-          # `mapReady`, which needs the style, the glyphs and the terrain DEM. MEASURED over a
-          # full page load, the complete set of external hosts this suite contacts is exactly
-          # ["api.mapbox.com", "events.mapbox.com"] — so it is deterministic and
-          # CloudKit-independent, but NOT offline. Claiming offline in the ledger would be false.
-          VITE_MAPBOX_TOKEN: ${{ secrets.VITE_MAPBOX_TOKEN }}
+          # MAP-05 removed VITE_MAPBOX_TOKEN from here with the package. VITE_MAPKIT_TOKEN arrives
+          # from the minting step above via GITHUB_ENV; `playwright.config.ts` passes it to the dev
+          # server and registers the journey specs only when it is present.
           # QUA-40: VITE_CLOUDKIT_ENV and VITE_CLOUDKIT_API_TOKEN are deliberately ABSENT.
           #
           # They used to be read here as `${{ vars.* }}` — the same two repository variables

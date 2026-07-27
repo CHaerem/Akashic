@@ -1,3 +1,9 @@
+/**
+ * MAP-05: "the incumbent" below means the Mapbox surface, which MAP-05 DELETED (2707 lines), and any
+ * `useMapbox.ts` / `layerConfigs.ts` citation is a historical measurement whose path no longer resolves.
+ * Recover it with `git log --diff-filter=D -- src/hooks/mapbox/`. Kept because the measurement is the reason
+ * the code is shaped this way; see the fuller note in the module this exercises.
+ */
 import { describe, it, expect } from 'vitest';
 import routeJson from '../../../fixtures/assets/e2e-alpine-loop.route.json';
 import waypointsJson from '../../../fixtures/assets/e2e-alpine-loop.waypoints.json';

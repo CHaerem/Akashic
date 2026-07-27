@@ -1,13 +1,16 @@
 /**
  * The starfield behind the globe. (MAP-02)
  *
- * ## Why this is a copy rather than an extraction
+ * ## This was a deliberate duplicate, and it is now the only copy
  *
- * `src/components/MapboxGlobe.tsx` holds an identical `generateStarfield`. Lifting it into a shared
- * module would be the tidier move and is deliberately not done: MAP-05 deletes the Mapbox adapter
- * outright, so extracting now means editing a file that is about to be removed, and MAP-02's brief says
- * not to touch it. **Removal condition: when MAP-05 deletes `MapboxGlobe.tsx`, this becomes the only
- * copy and the duplication is gone.** If MAP-05 is ever abandoned, extract instead.
+ * `src/components/MapboxGlobe.tsx` held an identical `generateStarfield`. MAP-02 chose to copy rather than
+ * extract, on the grounds that extracting would mean editing a file MAP-05 was about to delete, with the
+ * stated removal condition "when MAP-05 deletes `MapboxGlobe.tsx`, this becomes the only copy and the
+ * duplication is gone".
+ *
+ * **MAP-05 has done that, so the condition is discharged and there is nothing left to extract.** The note
+ * survives only to explain why this lives under `src/lib/globe/` rather than in a shared utility module:
+ * there is no second consumer, and there never will be unless a second globe appears.
  *
  * ## Why CSS and not canvas
  *

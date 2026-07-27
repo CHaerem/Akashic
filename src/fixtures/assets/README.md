@@ -27,11 +27,16 @@ expect, a unit test goes red before the e2e gate does.
 - `route.coordinates` must be `[lng, lat, elevation]` **triples**, never pairs. `transforms.ts:65,86`
   and `stats.ts:241` read index `[2]`; pairs give `NaN` elevation maths that renders garbage
   instead of failing.
-- `route.coordinates` must hold **at least two** entries. `useMapbox.ts:1131-1134` dereferences
-  `coordinates[0][0]` unguarded in the no-camp branch — the state entered by clicking
-  "Explore Journey →" — and throws inside a `requestAnimationFrame` callback, which lands in the
-  console uncaught and fails the zero-console-error tests. Fewer than two points is also invalid
-  GeoJSON for the `route-<slug>` LineString source at `useMapbox.ts:687`.
+- `route.coordinates` must hold **at least two** entries. THE REASON FOR THIS CHANGED UNDER MAP-05
+  and the constraint did not, so do not delete it along with its old citation. It used to be a crash:
+  `useMapbox.ts:1131-1134` dereferenced `coordinates[0][0]` unguarded in the no-camp branch — the
+  state entered by clicking "Explore Journey →" — and threw inside a `requestAnimationFrame`
+  callback, landing in the console uncaught and failing the zero-console-error tests. MAP-05 deleted
+  that surface, and the MapKit path GUARDS the case
+  (`src/lib/map/mapkit/geometry.ts:142`, `if (coordinates.length < 2) return null`), so the crash is
+  gone. What remains is the plain-validity reason, which was always the better one: fewer than two
+  points is not a LineString. A one-point route now degrades silently to "no route drawn" instead of
+  throwing — a *worse* failure mode for a fixture, because nothing goes red.
 - Waypoint keys are **camelCase** (Swift `Codable`, `apple/Akashic/Models/Domain.swift`) and the
   day text field is `notes`, not `description`. `snakeCaseKeys` + `mapWaypoint` handle the
   conversion; writing snake_case here would bypass the code under test.

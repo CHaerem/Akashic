@@ -97,8 +97,10 @@ export const PRIMARY_FIXTURE_DAY_COUNT = 5;
 
 /**
  * Day 5 sits >= 10 km from the nearest route point (MEASURED: 12.28 km from route
- * index 0), which is what makes `useMapbox.ts:1079`'s `distanceToRoute <= 10` gate fall
- * through to `flyTo` instead of `fitBounds`. Four day-navigation tests have always
+ * index 0), which is what makes the `distanceToRoute <= 10` gate fall through to `flyTo`
+ * instead of `fitBounds`. That gate is `src/lib/map/mapkit/geometry.ts:91` — it was
+ * `useMapbox.ts:1079` until MAP-05 deleted that surface, and the MapKit port kept the same
+ * 10 km threshold deliberately, so this fixture's 12.28 km still straddles it. Four day-navigation tests have always
  * *claimed* to cover that branch and never did: `selectTrekWithCamps` picked
  * Kilimanjaro first, whose day 5 is on-route, so they only ever asserted
  * `getCurrentDay() === 5`. The specs now assert the branch itself.
@@ -215,9 +217,12 @@ export function buildPublicJourneyRecords(origin: string): CloudKitJS.Record[] {
  * `dayNumber` 1/3/5 exercises `buildDayToWaypointId`'s day -> camp-id synthesis,
  * including the day-3 camp whose id is itself derived (`${slug}-day-3`, because that
  * waypoint carries no `id`). The `thumb` descriptors MUST point at a body that really
- * resolves: `useMapbox.ts:1437` puts the URL straight into an `<img src>`, and a 404
- * surfaces in Chromium as a console error of type `error`, which
- * `day-navigation.spec.ts` collects and fails on (it filters only on 'DevTools').
+ * resolves: the photo-stack annotation puts the URL straight into an `<img src>`
+ * (`src/lib/map/mapkit/annotations.ts:241` — it was `useMapbox.ts:1437` before MAP-05, and
+ * the DOM is deliberately identical), and a 404 surfaces in Chromium as a console error of
+ * type `error`, which `day-navigation.spec.ts` collects and fails on (it filters only on
+ * 'DevTools'). Note the MapKit path sets `img.onerror` to hide the element, which changes
+ * the VISIBLE symptom but not the console error — so this constraint still bites.
  *
  * Deliberately three photos, not the 200+ that would exercise `performQueryAll`'s paging
  * loop end to end: the fixture DB below implements `resultsLimit` + continuation markers

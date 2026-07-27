@@ -1,3 +1,9 @@
+/**
+ * MAP-05: "the incumbent" below means the Mapbox surface, which MAP-05 DELETED (2707 lines), and any
+ * `useMapbox.ts` / `layerConfigs.ts` citation is a historical measurement whose path no longer resolves.
+ * Recover it with `git log --diff-filter=D -- src/hooks/mapbox/`. Kept because the measurement is the reason
+ * the code is shaped this way; see the fuller note in the module this exercises.
+ */
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -52,16 +58,12 @@ describe('attribution padding (MAP-03)', () => {
         expect(DESKTOP_PANEL_BAND_PX).toBeGreaterThanOrEqual(Number(width![1]) + Number(left![1]));
     });
 
-    it('uses the same 80 px band the Mapbox stylesheet rule does', () => {
-        // Both surfaces are lifting clear of the same two chips. If they diverge, one vendor's attribution is
-        // wrong — and the CSS one cannot be found by grepping for this constant, so assert against the file.
-        const css = readFileSync(resolve(SRC, 'index.css'), 'utf8');
-        const rule = css.match(/\.public-chrome \.mapboxgl-ctrl-bottom-left,[\s\S]{0,1600}?bottom: (\d+)px;/);
-        expect(rule, 'the Mapbox attribution lift rule is gone from src/index.css — if MAP-05 removed it, '
-            + 'delete this assertion; if something else did, Mapbox\'s attribution is now under the chips')
-            .not.toBeNull();
-        expect(Number(rule![1])).toBe(SHOWCASE_CHROME_BAND_PX);
-    });
+    // MAP-05 DELETED a test here: 'uses the same 80 px band the Mapbox stylesheet rule does'. It read
+    // src/index.css and matched `.public-chrome .mapboxgl-ctrl-bottom-left { bottom: 80px }`, checking the two
+    // surfaces had not diverged on the same clearance. Its own failure message said to delete it if MAP-05
+    // removed the rule, and MAP-05 did — there is no second surface to diverge from, so the assertion had
+    // nothing left to compare. Nothing else was lost with it: the 80 px itself is still asserted in the first
+    // test in this describe, against attributionPadding() rather than against a stylesheet.
 });
 
 describe('frame padding (MAP-03)', () => {

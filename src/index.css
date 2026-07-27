@@ -477,33 +477,28 @@ html {
 }
 
 /* ============================================================================
-   MAPBOX CUSTOMIZATION
+   MAP SURFACE CUSTOMIZATION
    ============================================================================ */
 
-/* Signed-out public showcase mounts a bottom-left "Family sign-in" pill and a
-   bottom-right "Made with Akashic" chip. Lift Mapbox's own attribution + logo
-   clear of them so the wordmark and the © attribution links stay visible and
-   clickable — required by Mapbox's Terms of Service.
+/* MAP-05 emptied this section, and where its one rule went is worth knowing.
+   It was `.public-chrome .mapboxgl-ctrl-bottom-{left,right} { bottom: 80px }` —
+   lifting Mapbox's attribution and logo clear of the signed-out showcase's
+   bottom-left "Family sign-in" pill and bottom-right "Made with Akashic" chip,
+   which Mapbox's Terms of Service required to stay visible and clickable.
 
-   MAP-03: the MapKit surface CANNOT be fixed this way and has no rule here. Apple
-   paints its logo and Legal link as pixels onto canvas.rt-root — measured: zero
-   <a>, <svg> or <img> anywhere in the map container, nothing matching
-   /logo|attribut|legal/i in any class name, and elementFromPoint over both returns
-   the same full-size div.mk-map-node-element. So there is nothing to select. Its
-   equivalent of this 80px is `map.padding`, in
-   src/lib/map/mapkit/chrome.ts — which is also why the lift had to move into the
-   adapter: it depends on auth state, and no media query can see that.
-   When MAP-05 deletes Mapbox, delete this rule and keep chrome.ts. */
-.public-chrome .mapboxgl-ctrl-bottom-left,
-.public-chrome .mapboxgl-ctrl-bottom-right {
-  bottom: 80px;
-}
+   There is deliberately NO MapKit equivalent here, and it is not an omission.
+   Apple paints its logo and Legal link as pixels onto canvas.rt-root — measured:
+   zero <a>, <svg> or <img> anywhere in the map container, nothing matching
+   /logo|attribut|legal/i in any class name, and elementFromPoint over both
+   returns the same full-size div.mk-map-node-element. So there is nothing for a
+   selector to reach. The same 80 px now lives in src/lib/map/mapkit/chrome.ts as
+   SHOWCASE_CHROME_BAND_PX, applied through `map.padding`, which is also the only
+   place it COULD live: the lift depends on auth state and no media query can see
+   that.
 
-/* MAP-03 deleted three dead rules here: .dark-popup .mapboxgl-popup-content,
-   .dark-popup .mapboxgl-popup-tip and .glass-popup .mapboxgl-popup-content (plus its
-   mobile override further down). No mapboxgl.Popup is constructed anywhere in src/, and
-   no element ever carries either class — grep found only the rules themselves. The POI
-   popup that looks like it might be them is plain React JSX in MapboxGlobe.tsx. */
+   So the map surface no longer styles anything from a stylesheet, with one
+   exception — `.camp-marker` further down, which we own because we create the
+   element. Read the comment on it before touching it. */
 
 /* Photo thumbnail markers on map */
 .photo-thumbnail-marker {
@@ -662,23 +657,31 @@ html {
     inset 0 1px 0 rgba(255, 255, 255, 0.3),
     0 0 20px rgba(255, 255, 255, 0.1);
   transition: all var(--lg-transition-smooth);
-  /* LOAD-BEARING ON MAPBOX, INERT ON MAPKIT — and the difference is measured, because getting it
-     wrong here turned a MapKit-only regression into an apparently shared product decision. An
-     earlier MAP-03 comment in this spot claimed the rule was "INERT and has been all along ... on
-     both surfaces". The Mapbox half of that was false.
-     MEASURED on the running Mapbox surface: `.camp-marker` computes `position: absolute`,
-     `z-index: 22`, parent `.mapboxgl-canvas-container` — there is NO wrapper. mapbox-gl takes
-     `options.element` as its own `_element` and adds `.mapboxgl-marker`, which is
-     `position: absolute`. `.photo-thumbnail-marker` computes `z-index: 5`. So on Mapbox camps do
-     sit above photo stacks, and this rule is what puts them there.
-     MEASURED on the MapKit surface: both elements compute `position: static`, so the rule does
-     nothing, and with a photo stack over the day-3 camp `elementFromPoint` at the camp's centre
-     returns `.photo-stack-main` and the photo intercepts the camp's clicks. Three levers were tried
-     and none flipped it — `position: relative` plus explicit z-index on both,
-     `mapkit.Annotation.DisplayPriority` Required vs High, and moving the camp element to the end of
-     `.mk-annotation-container`.
-     So "a photo stack can hide a camp marker" is a REGRESSION the MapKit surface introduces, not a
-     shortcoming both share. Filed as QUA-49. Do not delete this rule while Mapbox still ships. */
+  /* INERT AS OF MAP-05 — and that is a statement about the product, not about this rule. Read this
+     before deleting it as dead CSS, because the deletion would take the only record of QUA-49 with
+     it.
+     History, all measured, because getting it wrong here once already turned a MapKit-only
+     regression into an apparently shared product decision:
+     - ON MAPBOX this rule was LOAD-BEARING. `.camp-marker` computed `position: absolute`,
+       `z-index: 22`, parent `.mapboxgl-canvas-container`, with NO wrapper — mapbox-gl took
+       `options.element` as its own `_element` and added `.mapboxgl-marker`, which is
+       `position: absolute`. `.photo-thumbnail-marker` computed `z-index: 5`. So on Mapbox camps sat
+       above photo stacks, and this rule is what put them there.
+     - ON MAPKIT it does NOTHING. Both elements compute `position: static`, so `z-index` does not
+       apply at all (`display: flex` above makes this element's CHILDREN flex items, not this
+       element). With a photo stack over the day-3 camp, `elementFromPoint` at the camp's centre
+       returns `.photo-stack-main` and the photo intercepts the camp's clicks. Three levers were
+       tried and none flipped it — `position: relative` plus explicit z-index on both,
+       `mapkit.Annotation.DisplayPriority` Required vs High, and moving the camp element to the end
+       of `.mk-annotation-container`.
+     MAP-05 deleted the Mapbox surface. It DID NOT FIX QUA-49 and must not be read as having done
+     so: it removed the surface on which camps were correctly stacked, so "a photo stack can hide a
+     camp marker" went from a regression on one of two surfaces to the ONLY shipped behaviour. That
+     is strictly worse for the user and QUA-49 stays open.
+     Kept rather than deleted for two reasons: it is the anchor for the measurement above, and any
+     fix for QUA-49 has to establish a positioned context on this element anyway — at which point
+     this declaration starts working again and the `20` is already the value it should be. If you
+     fix QUA-49, re-measure and rewrite this comment; do not just delete the words "INERT". */
   z-index: 20 !important;
 }
 

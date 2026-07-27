@@ -81,18 +81,37 @@ test.describe('Mobile Experience', () => {
         await expect(page).toHaveScreenshot('mobile-globe.png', { maxDiffPixelRatio: 0.15 });
     });
 
-    test('trek view visual regression', async ({ page }) => {
-        await openApp(page);
-        await selectFirstTrek(page);
-
-        await page.getByText('Explore Journey →').click();
-        await expect(page.getByText('DURATION')).toBeVisible({ timeout: TIMEOUTS.dataLoad });
-
-        // Let the entry animation settle before capturing.
-        await page.waitForTimeout(500);
-
-        await expect(page).toHaveScreenshot('mobile-trek-view.png', { maxDiffPixelRatio: 0.15 });
-    });
+    /*
+     * MAP-05 DELETED a test here: 'trek view visual regression', with its committed baseline
+     * `mobile-trek-view-mobile-chrome-darwin.png`. This is a real reduction in coverage and it is recorded
+     * rather than quietly dropped, because the alternative was a test that could only pass for the wrong
+     * reason. Three things were tried, in this order, and all are measured:
+     *
+     * 1. LEAVE THE BASELINE. It was a Mapbox render, so it no longer depicts anything the app can draw. CI
+     *    runs `--ignore-snapshots`, so it would never have gone red — it would have silently stopped
+     *    meaning anything, which is worse than absent.
+     * 2. RE-CAPTURE IT. MapKit initialised and drew the route and Apple's logo, but NO satellite tiles
+     *    arrived inside the 500 ms settle: the fresh baseline was a grey rectangle (113 KB against the old
+     *    473 KB). Committing it produces a test that fails whenever the tiles DO arrive in time — flaky in
+     *    the worst direction, because the failure reads as a genuine visual regression. Waiting for tiles is
+     *    not available: `tiles-loaded` is a correctly-spelled MapKit event that was never observed firing
+     *    (`src/lib/map/mapkit/events.ts` — "spelled right ≠ guaranteed to fire"), and there is no other
+     *    signal.
+     * 3. MASK THE MAP with `mask: [page.locator('canvas')]`. MEASURED: the entire snapshot came out solid
+     *    magenta and the test passed twice in a row. The map canvas is `position: absolute; inset: 0` behind
+     *    the whole UI, so its bounding box IS the viewport and the mask covers everything. A test that
+     *    passes against a single flat colour is exactly the vacuous-pass failure this repo keeps warning
+     *    about, so it was not kept.
+     *
+     * What would make this test possible again: an element-scoped screenshot of the bottom sheet
+     * (`expect(sheet).toHaveScreenshot()`), which needs a stable `data-testid` on the sheet container —
+     * there is none today, and adding one is a source change outside MAP-05's file list. That is the
+     * cheapest route back to this coverage and is the recommended follow-up.
+     *
+     * 'mobile visual regression' (the globe) is UNAFFECTED and still runs: MAP-02 draws that surface from
+     * vendored geometry with no tiles and no third party, so it is deterministic by construction. That
+     * asymmetry is itself worth noticing — the screen we own can be pinned and the one we rent cannot.
+     */
 });
 
 test.describe('Photo Lightbox', () => {

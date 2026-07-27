@@ -5,23 +5,23 @@
 
 # Akashic — work ledger
 
-130 tasks · **28 open** (8 agent-doable, 2.7 dev-days · 20 owner-only, 8.1 dev-days) · 102 done · 0 dropped
+130 tasks · **27 open** (7 agent-doable, 2.2 dev-days · 20 owner-only, 8.1 dev-days) · 103 done · 0 dropped
 
 > **`dev-days` are a human-developer estimate, not agent time.** They came from the review
 > that produced these tasks and they are the right unit for deciding whether something is
 > worth doing — they are the wrong unit for predicting how long an agent will take, and
 > summing them as "work remaining" overstates it substantially.
 >
-> Measured so far: **97 agent tasks estimated at 70.2 dev-days**,
+> Measured so far: **98 agent tasks estimated at 70.7 dev-days**,
 > closed in roughly one working afternoon across up to three parallel tracks.
 >
 > But that compression is **unmeasured for the large items**: of the tasks closed so far,
 > 9 were 2 dev-days or more. 0 of the
-> 2.7 remaining dev-days sit in 0 such tasks —
+> 2.2 remaining dev-days sit in 0 such tasks —
 > localisation, Swift 6 strict concurrency, a UI test target, the PDF book. Those involve
 > design judgement and broad-blast-radius refactors rather than localised edits, so do not
 > assume the same ratio holds. The cheap band is nearly exhausted:
-> 8 tasks at 0.5 dev-days or less remain.
+> 7 tasks at 0.5 dev-days or less remain.
 
 Read [CLAUDE.md](CLAUDE.md) before touching anything. To find work:
 
@@ -147,7 +147,7 @@ node scripts/workplan.mjs next
 
 > Tests, types, CI, localisation, accessibility. Localisation and accessibility are in v1.0 by decision.
 
-10 open of 58 · 3.4 d remaining
+9 open of 58 · 2.9 d remaining
 
 | | Task | Days | Who | Deps | Finish line |
 |---|---|---|---|---|---|
@@ -196,7 +196,7 @@ node scripts/workplan.mjs next
 | `x` | `MAP-03` **MapKit JS behind the adapter for the journey view** | 3 | agent | `MAP-01` | Selecting a journey shows its route and days on Apple satellite imagery, with Apple's mandatory attribution correctly placed. |
 | `~` | `MAP-04A` **Mint the MapKit token in the build, and fail the build before it lapses** | 0.5 | agent | `MAP-01` | scripts/mapkit/mintToken.mjs produces a token a JWT verifier accepts, and the deploy workflow both injects a freshly-minted token and fails when it is within 14 days of expiring. |
 | `x` | `MAP-04` **Add the MapKit private key as a repository secret** | 0.1 | owner | — | MAPKIT_PRIVATE_KEY exists as a repository secret. The two identifiers are already set as repository variables. |
-| ` ` | `MAP-05` **Delete Mapbox: 2786 LOC, the 1626 KB chunk, the SW rules and the secret** | 0.5 | agent | `MAP-02` `MAP-03` | No mapbox package, no mapbox origin in the built bundle, and VITE_MAPBOX_TOKEN removed from all three workflows. |
+| `x` | `MAP-05` **Delete Mapbox: 2786 LOC, the 1626 KB chunk, the SW rules and the secret** | 0.5 | agent | `MAP-02` `MAP-03` | No mapbox package, no mapbox origin in the built bundle, and VITE_MAPBOX_TOKEN removed from all three workflows. |
 | `x` | `QUA-40` **E2E reaches live CloudKit, and shares its config with the live site** | 0.4 | agent | — | The E2E Tests workflow is green on main, and it stays green with no network access to Apple. |
 | ` ` | `QUA-41` **Replace the CloudKit canary that QUA-40 removed — check the deployed apex, not localhost** | 0.2 | owner | `QUA-40` | A documented owner check exists that fetches the deployed site's CloudKit path with a real Origin header, and it has been run once against akashic.no. |
 | ` ` | `QUA-42` **e2e/ is checked by neither tsc nor eslint, so the specs are verified only by running** | 0.3 | agent | `QUA-40` | A type error or lint error in e2e/ fails a gate without the suite having to run. |

@@ -18,8 +18,9 @@
  *
  * 3. THE CAMERA ASSERTIONS ARE POSITION CHECKS NOW; THEY WERE NOT BEFORE.
  *    `waitForMapAnimations` returned as soon as `hasPendingAnimations` went false, and
- *    `cameraAnimationFrameRef.current` is cleared on the FIRST LINE of the rAF callback
- *    (`useMapbox.ts:1031-1032`) — before `fitBounds`/`flyTo` is issued. So
+ *    `cameraAnimationFrameRef.current` was cleared on the FIRST LINE of the rAF callback
+ *    (`useMapbox.ts:1031-1032`, in the Mapbox surface MAP-05 deleted) — before
+ *    `fitBounds`/`flyTo` was issued. So
  *    `verifyCameraPosition` read `map.getCenter()` roughly 0 ms into a 2200 ms flight,
  *    i.e. usually the PREVIOUS day's centre, and `expect(success).toBe(true)` passed only
  *    because the 50 km tolerance was wider than the whole Kilimanjaro massif. Tests written
@@ -27,12 +28,14 @@
  *    Now: `waitForCameraSettled` waits for the centre to hold still, and the assertion is
  *    relative — the settled camera must be strictly CLOSER to the target day's camp than to
  *    the camp it came from. That is the actual defect, stated as an assertion, and it does
- *    not depend on the fixture's scale or on Mapbox's padding maths.
+ *    not depend on the fixture's scale or on any surface's padding maths — which is why it
+ *    survived the vendor swap unchanged and still holds on MapKit.
  *
  * 4. THE OFF-ROUTE BRANCH IS FINALLY EXERCISED. Four tests were named for Mount Kenya's
  *    "Safari day" and asserted only `getCurrentDay() === 5`. `selectTrekWithCamps` picked
- *    Kilimanjaro first, whose day 5 is ON route, so `useMapbox.ts:1079`'s
- *    `distanceToRoute <= 10` gate never fell through in this suite. The fixture puts day 5
+ *    Kilimanjaro first, whose day 5 is ON route, so the `distanceToRoute <= 10` gate never fell
+ *    through in this suite. (That gate was `useMapbox.ts:1079`; MAP-05 deleted it and the MapKit
+ *    equivalent is `src/lib/map/mapkit/geometry.ts:91`, deliberately the same 10 km threshold.) The fixture puts day 5
  *    MEASURED 12.28 km from the nearest route point, and the tests below assert the flyTo
  *    signature that branch produces (centre exactly on the camp; a fixed zoom) rather than
  *    the fitBounds signature (centre between two camps; a zoom derived from the segment).
@@ -136,7 +139,8 @@ async function expectOffRouteFlyTo(page: Page) {
     expect(
         offset,
         'off-route day did not use flyTo centred on the camp — it took the on-route ' +
-            'fitBounds branch, so useMapbox.ts:1079 (distanceToRoute <= 10) is not being exercised'
+            'fitBounds branch, so src/lib/map/mapkit/geometry.ts:91 (distanceToRoute <= 10) is ' +
+            'not being exercised'
     ).toBeLessThanOrEqual(OFF_ROUTE_TOLERANCE_KM);
     // Second, independent signal for the same branch: the flyTo path hardcodes zoom 15 on
     // desktop and 14.5 on mobile, while fitBounds derives a zoom from the segment. MEASURED
@@ -282,9 +286,13 @@ test.describe('Day Navigation', () => {
             if (msg.type() === 'error') errors.push(msg.text());
         });
         // An uncaught exception inside a requestAnimationFrame callback lands on the console,
-        // which is how the unguarded `route.coordinates[0][0]` at useMapbox.ts:1131-1134 would
-        // surface if a fixture ever shipped an empty route. Collect pageerror explicitly so
-        // the failure names itself instead of arriving as an anonymous console line.
+        // which is how an unguarded `route.coordinates[0][0]` would surface if a fixture ever
+        // shipped an empty route. That was a real hazard on the Mapbox surface
+        // (`useMapbox.ts:1131-1134`, unguarded); MAP-05 deleted it, and the MapKit path GUARDS the
+        // case (`src/lib/map/mapkit/geometry.ts:142`, `if (coordinates.length < 2) return null`).
+        // The check is kept because it is cheap and because it now guards the guard. Collect
+        // pageerror explicitly so the failure names itself instead of arriving as an anonymous
+        // console line.
         page.on('pageerror', (err) => errors.push(`pageerror: ${err.message}`));
 
         await openApp(page);

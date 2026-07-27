@@ -58,7 +58,12 @@ export default defineConfig({
 				importScripts: ["sw-share-target.js"],
 				// Pre-cache app shell and trek data
 				globPatterns: ["**/*.{js,css,html,ico,png,svg,json,woff,woff2}"],
-				// Increase max file size for Mapbox GL JS and large photos
+				// Raised for large photos. MEASURED after MAP-05 deleted mapbox-gl (which was the
+				// original reason, at 1626 KB): the largest precached asset is now
+				// dist/assets/index-*.js at ~244 KB, so 20 MB is far above what the build needs and
+				// is doing nothing for the JS. It is kept for the PHOTO half of that original
+				// sentence — fixture and showcase imagery are precached by `globPatterns`, and a
+				// single HEIC off a modern iPhone clears Workbox's 2 MB default on its own.
 				maximumFileSizeToCacheInBytes: 20 * 1024 * 1024, // 20MB
 				// Offline fallback
 				navigateFallback: "/index.html",
@@ -68,72 +73,19 @@ export default defineConfig({
 					// Worker it cached (`akashic-media.*.workers.dev`, deleted in LEG-01). It had become
 					// dead config — the pattern can no longer match anything, and a `CacheFirst` rule
 					// against a dead origin only serves stale entries until they expire.
-					// Mapbox Style API
-					{
-						urlPattern: /^https:\/\/api\.mapbox\.com\/styles\//,
-						handler: "StaleWhileRevalidate",
-						options: {
-							cacheName: "mapbox-styles",
-							expiration: {
-								maxEntries: 50,
-								maxAgeSeconds: 60 * 60 * 24 * 7, // 7 days
-							},
-						},
-					},
-					// Mapbox Tiles (raster and vector)
-					{
-						urlPattern: /^https:\/\/api\.mapbox\.com\/v4\//,
-						handler: "CacheFirst",
-						options: {
-							cacheName: "mapbox-tiles",
-							expiration: {
-								maxEntries: 1000,
-								maxAgeSeconds: 60 * 60 * 24 * 30, // 30 days
-							},
-							cacheableResponse: {
-								statuses: [0, 200],
-							},
-						},
-					},
-					// Mapbox Terrain and Satellite tiles
-					{
-						urlPattern: /^https:\/\/api\.mapbox\.com\/raster\/v1\//,
-						handler: "CacheFirst",
-						options: {
-							cacheName: "mapbox-terrain",
-							expiration: {
-								maxEntries: 500,
-								maxAgeSeconds: 60 * 60 * 24 * 30, // 30 days
-							},
-							cacheableResponse: {
-								statuses: [0, 200],
-							},
-						},
-					},
-					// Mapbox Fonts
-					{
-						urlPattern: /^https:\/\/api\.mapbox\.com\/fonts\//,
-						handler: "CacheFirst",
-						options: {
-							cacheName: "mapbox-fonts",
-							expiration: {
-								maxEntries: 50,
-								maxAgeSeconds: 60 * 60 * 24 * 30, // 30 days
-							},
-						},
-					},
-					// Mapbox Sprite images
-					{
-						urlPattern: /^https:\/\/api\.mapbox\.com\/.*sprite/,
-						handler: "CacheFirst",
-						options: {
-							cacheName: "mapbox-sprites",
-							expiration: {
-								maxEntries: 20,
-								maxAgeSeconds: 60 * 60 * 24 * 30, // 30 days
-							},
-						},
-					},
+					// MAP-05: the five `api.mapbox.com` rules that stood here (styles, v4 tiles, raster v1
+					// terrain, fonts and sprites) are gone with the vendor. Same reasoning as the two notes
+					// around them: a runtime-caching rule for an origin the app can no longer contact is dead
+					// config that only keeps a stale cache alive.
+					//
+					// There is deliberately NO MapKit replacement, and it is not an oversight. MapKit JS is
+					// loaded as a `<script>` from `cdn.apple-mapkit.com` by `src/lib/map/mapkit/loader.ts` and
+					// fetches its own tiles internally; Apple sets the caching policy on both, and a
+					// StaleWhileRevalidate rule over a signed, token-scoped CDN would cache responses whose
+					// authorisation outlives them. The journey map is therefore ONLINE-ONLY — the app shell and
+					// the landing globe still work offline (the globe draws from precached coastline geometry
+					// and needs no network at all, which is MAP-02's whole point), but a journey opened with no
+					// connection shows `MapErrorFallback` where the map would be.
 					// LEG-17: the two Google Fonts rules that stood here are gone with the origin. Roboto is
 					// self-hosted now, so it is precached by `globPatterns` above (which already lists woff2)
 					// along with the rest of the build. A runtime rule for a domain we no longer contact would
@@ -160,6 +112,12 @@ export default defineConfig({
 	// "[MapboxGlobe camera effect] …" before the globe settled, from four console.log calls
 	// nobody meant to ship. Deleting those four lines fixes that day only; the fifth one
 	// somebody adds while debugging would ship exactly the same way.
+	//
+	// MAP-05 has since deleted MapboxGlobe.tsx, so every measurement below names a file that no
+	// longer exists. They are kept because they are the EVIDENCE for this setting, not a
+	// description of current state, and the setting protects whatever gets written next — which
+	// was the argument for it in the first place. Re-measuring the "before" would require
+	// reverting the setting; do not treat the stale filenames as a reason to drop it.
 	//
 	// `pure`, not `drop: ["console"]`, and the difference matters: console.warn and
 	// console.error carry the diagnostics this project actually debugs from — the CloudKit
@@ -200,7 +158,8 @@ export default defineConfig({
 		rollupOptions: {
 			output: {
 				manualChunks: {
-					mapbox: ["mapbox-gl"],
+					// MAP-05 removed `mapbox: ["mapbox-gl"]` here. It was 1 664 113 bytes raw /
+					// 458.75 KiB gzip of a 8668 KB dist — the single largest asset in the build.
 					vendor: ["react", "react-dom"],
 					motion: ["framer-motion"],
 					radixui: ["@radix-ui/react-dialog", "@radix-ui/react-select", "@radix-ui/react-tabs"],

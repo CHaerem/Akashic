@@ -116,12 +116,33 @@ document as fact is precisely the failure mode this repo's traps file exists to 
 
 The coastline is its own chunk because `coastline.ts` reaches it through a dynamic `import()`, so it is
 deferred past first paint — the globe draws its sphere, atmosphere and journey pins without it. Verified
-that it is still precached and the extension trap above is genuinely avoided: `dist/sw.js` contains 49
-`url:` entries and one of them is `coastline.generated-txXG1mJz.js`.
+that it is still precached and the extension trap above is genuinely avoided: `dist/sw.js` contains 48
+`url:` entries and one of them is `coastline.generated-txXG1mJz.js`. (It said 49 until MAP-05 removed the
+Mapbox chunk from the precache manifest — re-measured, not adjusted by arithmetic.)
 
 Report both raw and gzip. Workbox's Cache Storage keeps decompressed bodies, so raw bytes are the
 visitor's disk footprint while gzip is their download; quoting only the gzip figure understates the cost.
 
-Report this honestly and do not net it against MAP-05. `dist/assets/mapbox-*.js` is 1 664 111 bytes raw /
+Report this honestly and do not net it against MAP-05. `dist/assets/mapbox-*.js` was 1 664 113 bytes raw /
 458.75 KiB gzip and its removal is **MAP-05's** credit, not this task's. The track is strongly net negative
 on bytes; MAP-02 alone is net positive by a third of a percent.
+
+**MAP-05 has now landed, and here is the measured delta** — re-measured on this tree rather than copied
+from the line above, which said 1 664 111 and was two bytes stale (QUA-44 and MAP-02 both touched that
+chunk after it was written; re-measure, never quote):
+
+Both builds below carry their vendor's token, so this is like for like — the "before" build read
+`VITE_MAPBOX_TOKEN` from `.env` and the "after" one a freshly minted `VITE_MAPKIT_TOKEN`. That matters here
+for a reason particular to MapKit: with no token the loader is dead-code-eliminated entirely, so a tokenless
+build is ~4 KiB smaller and is NOT what production ships.
+
+| | before MAP-05 | after | delta |
+|---|---|---|---|
+| `dist/` total | 8668 KB | 6976 KB | **−1692 KB (−19.5 %)** |
+| Workbox precache | 49 entries / 7810.94 KiB | 48 entries / 6130.65 KiB | −1 entry / **−1680.29 KiB** |
+| largest JS chunk | `mapbox-CZJOuRYy.js` 1 664 113 B | `index-*.js` 243 323 B | the 1.66 MB chunk is gone |
+| `AkashicApp` chunk | 217.79 kB / 64.87 KiB gzip | 199.15 kB / 60.86 KiB gzip | −18.6 kB raw |
+
+The single precache entry lost is the Mapbox chunk itself. Note the total saving (1680 KiB) slightly exceeds
+that chunk's own 1625 KiB, because `AkashicApp` shrank too — the components that imported Mapbox went with
+it, and the CSS it needed went with them (`AkashicApp-*.css` fell from 44.86 kB to 6.25 kB).
