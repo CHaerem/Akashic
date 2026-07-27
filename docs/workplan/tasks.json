@@ -253,7 +253,7 @@
       "id": "LEG-09",
       "track": "LEGACY",
       "title": "Execute the GitHub Pages + DNS cutover (T4.2, T4.3)",
-      "status": "TODO",
+      "status": "WIP",
       "effort": 0.5,
       "done_when": "akashic.no serves from GitHub Pages, privacy/terms/support resolve, and the AASA file is reachable.",
       "owner": true,
@@ -268,7 +268,12 @@
       "refs": [
         "docs/github-pages-cutover.md — complete zero-downtime runbook with rollback",
         "deploy-pages.yml is correct and complete; only its trigger needs flipping"
-      ]
+      ],
+      "claim": {
+        "agent": "opus5",
+        "branch": "claude/remote-control-project-review-9462c1",
+        "at": "2026-07-27"
+      }
     },
     {
       "id": "LEG-10",
@@ -2441,7 +2446,7 @@
     {
       "id": "QUA-39",
       "track": "QUALITY",
-      "status": "TODO",
+      "status": "DONE",
       "effort": 0.1,
       "priority": 43,
       "title": "Bump the GitHub Actions that still target Node 20",
@@ -2452,7 +2457,9 @@
       ],
       "verify": [
         "gh run list --workflow=deploy-pages.yml --limit 1  # then check the run has no Node 20 annotation"
-      ]
+      ],
+      "evidence": "Bumped across all four workflows: checkout v4->v5, setup-node v4->v5, upload-artifact v4->v5, configure-pages v5->v6, upload-pages-artifact v3->v4, deploy-pages v4->v4. Versions read from the GitHub API rather than guessed. Deliberately conservative on the Pages-specific actions (one major at a time) because their inputs have changed across majors and this is now the live deploy path for akashic.no. NOT yet validated by a CI run -- see the note.",
+      "resume": "The bumps are committed but NOT exercised by a CI run: the trigger is now push:[main] and the change sits on a feature branch, so validating it needs either a merge to main or a workflow_dispatch against this branch's ref. Harmless to discover late while akashic.no is still served by Cloudflare -- a broken Pages deploy has no user impact until DNS moves. Validate BEFORE the DNS cutover."
     }
   ]
 }

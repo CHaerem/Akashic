@@ -5,29 +5,35 @@
 
 # Akashic — work ledger
 
-106 tasks · **23 open** (4 agent-doable, 0.7 dev-days · 19 owner-only, 8.4 dev-days) · 83 done · 0 dropped
+106 tasks · **22 open** (3 agent-doable, 0.6 dev-days · 19 owner-only, 8.4 dev-days) · 84 done · 0 dropped
 
 > **`dev-days` are a human-developer estimate, not agent time.** They came from the review
 > that produced these tasks and they are the right unit for deciding whether something is
 > worth doing — they are the wrong unit for predicting how long an agent will take, and
 > summing them as "work remaining" overstates it substantially.
 >
-> Measured so far: **81 agent tasks estimated at 61.5 dev-days**,
+> Measured so far: **82 agent tasks estimated at 61.6 dev-days**,
 > closed in roughly one working afternoon across up to three parallel tracks.
 >
 > But that compression is **unmeasured for the large items**: of the tasks closed so far,
 > 7 were 2 dev-days or more. 0 of the
-> 0.7 remaining dev-days sit in 0 such tasks —
+> 0.6 remaining dev-days sit in 0 such tasks —
 > localisation, Swift 6 strict concurrency, a UI test target, the PDF book. Those involve
 > design judgement and broad-blast-radius refactors rather than localised edits, so do not
 > assume the same ratio holds. The cheap band is nearly exhausted:
-> 4 tasks at 0.5 dev-days or less remain.
+> 3 tasks at 0.5 dev-days or less remain.
 
 Read [CLAUDE.md](CLAUDE.md) before touching anything. To find work:
 
 ```bash
 node scripts/workplan.mjs next
 ```
+
+## In flight
+
+| Task | Agent | Branch | Stopped at |
+|---|---|---|---|
+| `LEG-09` Execute the GitHub Pages + DNS cutover (T4.2, T4.3) | opus5 | `claude/remote-control-project-review-9462c1` | — |
 
 ## LEGACY
 
@@ -45,7 +51,7 @@ node scripts/workplan.mjs next
 | `x` | `LEG-06` **Delete the unrunnable legacy scripts and the AWS SDK dependency** | 0.5 | agent | — | npm run build and vitest pass with the dead scripts and @aws-sdk/client-s3 gone. |
 | `x` | `LEG-07` **Gate every native-only web write behind one guard** | 1 | agent | — | No web UI offers a write that silently no-ops; each either disappears or shows a native-only notice. |
 | `x` | `LEG-08` **Remove the hardcoded /Users/cher archive path from shipping code** | 0.25 | agent | — | No absolute developer path appears in any non-test Swift file. |
-| ` ` | `LEG-09` **Execute the GitHub Pages + DNS cutover (T4.2, T4.3)** | 0.5 | owner | `SHIP-10A` | akashic.no serves from GitHub Pages, privacy/terms/support resolve, and the AASA file is reachable. |
+| `~` | `LEG-09` **Execute the GitHub Pages + DNS cutover (T4.2, T4.3)** | 0.5 | owner | `SHIP-10A` | akashic.no serves from GitHub Pages, privacy/terms/support resolve, and the AASA file is reachable. |
 | ` ` | `LEG-10` **Delete deploy.yml, then revoke the Cloudflare and Supabase secrets** | 0.25 | agent | `LEG-09` | No workflow references Cloudflare or Supabase, the four secrets are revoked, and CI is green without them. |
 | ` ` | `LEG-11A` **Delete the Cloudflare Pages project and the DNS zone** | 0.25 | owner | `LEG-09` `LEG-10` | The akashic Pages project and the Cloudflare DNS zone are gone from the dashboard, and akashic.no still resolves via GoDaddy to GitHub Pages. |
 | ` ` | `LEG-11B` **Delete the R2 bucket, Supabase project and Google OAuth config** | 0.25 | owner | `LEG-03` `LEG-04` | All three are gone from their dashboards AND the archive has been verified on a second physical medium. |
@@ -136,7 +142,7 @@ node scripts/workplan.mjs next
 
 > Tests, types, CI, localisation, accessibility. Localisation and accessibility are in v1.0 by decision.
 
-3 open of 39 · 0.7 d remaining
+2 open of 39 · 0.6 d remaining
 
 | | Task | Days | Who | Deps | Finish line |
 |---|---|---|---|---|---|
@@ -178,7 +184,7 @@ node scripts/workplan.mjs next
 | `x` | `QUA-36` **Declare PublicMirrorDatabase Sendable so PublicMirrorPublisher's conformance becomes checked** | 0.5 | agent | — | PublicMirrorPublisher conforms to Sendable without @unchecked, and the public-mirror tests still pass. |
 | `x` | `QUA-37` **Declare MediaDatabase Sendable so PhotoMediaService's conformance becomes checked** | 0.25 | agent | — | PhotoMediaService conforms to Sendable without @unchecked, and the media tests still pass. |
 | ` ` | `QUA-38` **Verify the Vision features on a real device — they cannot run in any simulator** | 0.5 | owner | — | Photo curation (hero pick, best-of, duplicate grouping) and DIFF-05 subject labels are confirmed working on a physical device, with a note recording what was seen. |
-| ` ` | `QUA-39` **Bump the GitHub Actions that still target Node 20** | 0.1 | agent | — | No workflow run emits the Node 20 deprecation annotation. |
+| `x` | `QUA-39` **Bump the GitHub Actions that still target Node 20** | 0.1 | agent | — | No workflow run emits the Node 20 deprecation annotation. |
 
 ## Decisions on record
 
