@@ -162,16 +162,29 @@ function render(d) {
   L.push('> worth doing — they are the wrong unit for predicting how long an agent will take, and');
   L.push('> summing them as "work remaining" overstates it substantially.');
   L.push('>');
-  L.push(`> Measured so far: **${doneAgent.length} agent tasks estimated at ${sum(doneAgent)} dev-days**,`);
-  L.push('> closed in roughly one working afternoon across up to three parallel tracks.');
-  L.push('>');
-  L.push(`> But that compression is **unmeasured for the large items**: of the tasks closed so far,`);
-  L.push(`> ${big(doneAgent).length} were 2 dev-days or more. ${sum(big(agentOpen))} of the`);
-  L.push(`> ${sum(agentOpen)} remaining dev-days sit in ${big(agentOpen).length} such tasks —`);
-  L.push('> localisation, Swift 6 strict concurrency, a UI test target, the PDF book. Those involve');
-  L.push('> design judgement and broad-blast-radius refactors rather than localised edits, so do not');
-  L.push('> assume the same ratio holds. The cheap band is nearly exhausted:');
-  L.push(`> ${agentOpen.filter((t) => t.effort <= 0.5).length} tasks at 0.5 dev-days or less remain.`);
+    L.push(`> Measured so far: **${doneAgent.length} agent tasks estimated at ${sum(doneAgent)} dev-days**.`);
+    // NO DURATION CLAIM, deliberately, and the reason is worth keeping. This line read "closed in roughly
+    // one working afternoon" — true at 44 tasks / 17.7 dev-days, fiction by 99. The obvious fix, deriving
+    // the span from dates in the ledger, produced "2 calendar days", also wrong, because only recently
+    // annotated tasks carry ISO dates at all. A computed wrong number is worse than a stale sentence: it
+    // looks measured. The ledger cannot support a duration, so it states none.
+    L.push('> Elapsed time is deliberately absent: nothing here can support it. Use `git log` for that.');
+    L.push('>');
+    // The example list here used to name localisation, Swift 6 concurrency, the UI test target and the PDF
+    // book as the large unmeasured items. All four are DONE, so it was warning the reader about work that no
+    // longer exists. Derived from the ledger now, and it says the opposite.
+    if (big(agentOpen).length) {
+      L.push(`> ${big(doneAgent).length} of the closed tasks were 2 dev-days or more, and ` +
+        `${sum(big(agentOpen))} of the ${sum(agentOpen)} remaining dev-days still sit in ` +
+        `${big(agentOpen).length} such task(s): ${big(agentOpen).map((t) => t.id).join(', ')}. Those turn ` +
+        `on design judgement rather than localised edits, so do not assume the compression above holds.`);
+    } else {
+      L.push(`> **Every large agent item is closed.** ${big(doneAgent).length} of the tasks closed so far ` +
+        `were 2 dev-days or more; nothing 2 dev-days or larger remains agent-doable, and the ` +
+        `${sum(agentOpen)} remaining dev-days are all small tasks ` +
+        `(${agentOpen.filter((t) => t.effort <= 0.5).length} at 0.5 or less). What is still genuinely ` +
+        `large is OWNER work, which no amount of agent compression touches.`);
+    }
   L.push('');
   L.push('Read [CLAUDE.md](CLAUDE.md) before touching anything. To find work:');
   L.push('');

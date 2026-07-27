@@ -5,23 +5,17 @@
 
 # Akashic — work ledger
 
-130 tasks · **27 open** (7 agent-doable, 2.2 dev-days · 20 owner-only, 8.1 dev-days) · 103 done · 0 dropped
+135 tasks · **31 open** (7 agent-doable, 2.2 dev-days · 24 owner-only, 10.4 dev-days) · 104 done · 0 dropped
 
 > **`dev-days` are a human-developer estimate, not agent time.** They came from the review
 > that produced these tasks and they are the right unit for deciding whether something is
 > worth doing — they are the wrong unit for predicting how long an agent will take, and
 > summing them as "work remaining" overstates it substantially.
 >
-> Measured so far: **98 agent tasks estimated at 70.7 dev-days**,
-> closed in roughly one working afternoon across up to three parallel tracks.
+> Measured so far: **99 agent tasks estimated at 70.8 dev-days**.
+> Elapsed time is deliberately absent: nothing here can support it. Use `git log` for that.
 >
-> But that compression is **unmeasured for the large items**: of the tasks closed so far,
-> 9 were 2 dev-days or more. 0 of the
-> 2.2 remaining dev-days sit in 0 such tasks —
-> localisation, Swift 6 strict concurrency, a UI test target, the PDF book. Those involve
-> design judgement and broad-blast-radius refactors rather than localised edits, so do not
-> assume the same ratio holds. The cheap band is nearly exhausted:
-> 7 tasks at 0.5 dev-days or less remain.
+> **Every large agent item is closed.** 9 of the tasks closed so far were 2 dev-days or more; nothing 2 dev-days or larger remains agent-doable, and the 2.2 remaining dev-days are all small tasks (7 at 0.5 or less). What is still genuinely large is OWNER work, which no amount of agent compression touches.
 
 Read [CLAUDE.md](CLAUDE.md) before touching anything. To find work:
 
@@ -39,7 +33,7 @@ node scripts/workplan.mjs next
 
 > Retire Supabase, Cloudflare and R2. Repo-side removal can happen now; the infrastructure deletions are gated on the archive being duplicated and on the Pages cutover. LEG-01 is independent of every gate and should happen today.
 
-8 open of 19 · 2.4 d remaining
+8 open of 20 · 2.4 d remaining
 
 | | Task | Days | Who | Deps | Finish line |
 |---|---|---|---|---|---|
@@ -58,10 +52,11 @@ node scripts/workplan.mjs next
 | ` ` | `LEG-11B` **Delete the R2 bucket, Supabase project and Google OAuth config** | 0.25 | owner | `LEG-03` `LEG-04` | All three are gone from their dashboards AND the archive has been verified on a second physical medium. |
 | `x` | `LEG-12` **Delete workers/ from the repo** | 0.25 | agent | `LEG-01` `LEG-05` | workers/ is gone and no workflow or test references it. |
 | ` ` | `LEG-13` **Delete supabase/** | 0.1 | agent | `LEG-04` | supabase/ is gone from the repo. |
-| ` ` | `LEG-14` **Remove the dead 'build-deploy' required status check from main** | 0.1 | owner | — | main's required status checks are exactly the three that can still report, and a test PR is mergeable. |
+| `x` | `LEG-14` **Remove the dead 'build-deploy' required status check from main** | 0.1 | agent | — | main's required status checks are exactly the three that can still report, and a test PR is mergeable. |
 | `x` | `LEG-15` **Delete the dead Mapbox Map Matching wrapper** | 0.1 | agent | — | src/lib/mapMatching.ts is gone and nothing references api.mapbox.com/matching. |
 | `x` | `LEG-16` **Delete public/textures — 3.8 MB of unattributed dead imagery** | 0.1 | agent | — | public/textures is gone and dist/ no longer ships it. |
 | `x` | `LEG-17` **Self-host the fonts — Google Fonts is a third external origin** | 0.25 | agent | — | No request to fonts.googleapis.com or fonts.gstatic.com from the deployed page, and the two service-worker rules for them are gone. |
+| ` ` | `LEG-18` **Revoke the Mapbox account key** | 0.1 | owner | `MAP-05` | The Mapbox public key is revoked in the Mapbox account. |
 
 ## DOCS
 
@@ -95,7 +90,7 @@ node scripts/workplan.mjs next
 
 > Hard requirements for a paid v1.0. Most of the remaining calendar time lives here, in items only the owner can do.
 
-9 open of 20 · 4.5 d remaining
+13 open of 24 · 6.8 d remaining
 
 | | Task | Days | Who | Deps | Finish line |
 |---|---|---|---|---|---|
@@ -114,11 +109,15 @@ node scripts/workplan.mjs next
 | ` ` | `SHIP-12` **Paid Applications agreement, banking and tax forms** | 0.5 | owner | — | App Store Connect reports the Paid Applications agreement as active. |
 | ` ` | `SHIP-13` **Create the IAP, join Small Business Program, declare EU trader status** | 0.5 | owner | `DOC-08` `SHIP-12` | no.akashic.app.complete exists at kr 149 with Family Sharing on, and trader status is submitted. |
 | ` ` | `SHIP-14` **Enter ASC metadata, App Privacy, review notes and the icon** | 0.5 | owner | `DOC-08` `SHIP-03` `QUA-09` | The version is complete in App Store Connect except for the build. |
-| ` ` | `SHIP-15` **Real-device smoke test on two Apple IDs** | 1 | owner | `SHIP-01` `SHIP-02` | A share invitation opens in-app, and an edit on device A appears on device B without foregrounding. |
+| ` ` | `SHIP-15` **Real-device smoke test on two Apple IDs** | 2 | owner | `SHIP-01` `SHIP-02` | A share invitation opens in-app, and an edit on device A appears on device B without foregrounding. |
 | ` ` | `SHIP-16` **TestFlight: internal family, then the external beta group** | 0.5 | owner | `SHIP-15` | An external group of ~10 households is running a build with test notes. |
 | ` ` | `SHIP-17` **The external beta gate** | 0 | owner | `SHIP-16` `SHIP-03` | At least 7 of 10 households create a journey unaided and 5 finish and hand one over. |
 | ` ` | `SHIP-18` **Submit for review with a rejection buffer** | 0.5 | owner | `SHIP-17` `SHIP-14` | The app is approved and held for manual release. |
 | ` ` | `SHIP-19` **Day-one support readiness** | 0.5 | owner | `SHIP-18` | support@akashic.no is monitored with a real FAQ, and crash reports are checked daily for week one. |
+| ` ` | `SHIP-20` **Any iCloud user can write to the public showcase — decide the defence before launch** | 0.5 | owner | — | Either the showcase renders only records the owner created, or the CloudKit JS token is proven read-only, or the risk is recorded as accepted next to SHIP-08. |
+| ` ` | `SHIP-21` **Request the Private Cloud Compute entitlement — it is a review, not a toggle** | 0.1 | owner | — | The entitlement request is submitted to Apple. |
+| ` ` | `SHIP-22` **Recruit the ten beta households — the longest lead time nobody owned** | 0.5 | owner | — | A written list of at least ten households who have agreed, with names and a start date. |
+| ` ` | `SHIP-23` **Nominate the app for Apple featuring, and treat it as launch strategy rather than a lottery ticket** | 0.2 | owner | — | A featuring nomination is submitted in App Store Connect. |
 
 ## DIFF
 

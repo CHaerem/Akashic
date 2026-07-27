@@ -367,14 +367,24 @@ right: fix this file in the same commit.
 
 `effort` in the ledger is **dev-days: what the work would cost a human developer**, taken from
 the review that produced the tasks. It is the right unit for deciding whether something is worth
-doing and the wrong one for predicting how long you will take — measured on this project, 44 agent
-tasks estimated at 17.7 dev-days closed in about one working afternoon across three parallel
-tracks. Do not report the sum as "work remaining"; it overstates it by a large factor.
+doing and the wrong one for predicting how long you will take. Do not report the sum as "work
+remaining"; it overstates it by a large factor. `WORKPLAN.md` renders the current counts, so read
+them there rather than from any number written into prose — including this file.
 
-Do not assume a fixed ratio either. Every task closed so far was under two dev-days, so the
-compression is entirely unmeasured on the large ones — localisation, Swift 6 strict concurrency, a
-UI test target, the PDF book. Those turn on design judgement and broad blast radius rather than
-localised edits, and that is exactly where a human estimate is most likely to be honest.
+**This paragraph used to carry two numbers and both went stale, which is the lesson.** It said "44
+agent tasks estimated at 17.7 dev-days closed in about one working afternoon", and by 99 tasks and
+70.8 dev-days the duration had become arithmetic fiction — the work demonstrably spans several days
+of git history. The generator carried the same sentence, so the ledger's own header, the one
+document that advertises it cannot drift, was asserting it too. Worth knowing what the fix was NOT:
+deriving the span from dates in the ledger produced "2 calendar days", also wrong, because only
+recently-annotated tasks carry ISO dates. A computed wrong number is worse than a stale sentence,
+because it looks measured. Neither document states an elapsed time now.
+
+The compression is also no longer unmeasured on the large items, and the old warning here has
+inverted. Every agent task of 2 dev-days or more is closed — localisation, Swift 6 strict
+concurrency, the UI test target, the PDF book, the MapKit port, the hand-drawn globe. What remains
+large is **owner** work: an Apple agreement with banking forms, an external beta, a device session.
+No amount of agent compression touches any of it, and that is now the whole shape of the schedule.
 
 ## Where the real constraints are
 

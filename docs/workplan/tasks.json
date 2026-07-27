@@ -871,7 +871,11 @@
         "src/lib/cloudkit.ts:21, deploy.yml:35, deploy-pages.yml:63",
         "APPLE-MIGRATION-RUNBOOK.md:377 already tracks this as an operator step"
       ],
-      "evidence": "Verified end to end on 2026-07-27 without touching DNS. GitHub Pages, reached via curl --resolve akashic.no:443:185.199.108.153: index 200, bundle 200 carrying environment:\"production\" AND apiToken:\"229d536d... (the new Production token), and /nope serves the app shell so the 404.html fallback works. CloudKit production query from Origin: https://akashic.no returns HTTP 200 (0 records -- nothing published yet, that is SHIP-10B). Real visitors were unaffected throughout: akashic.no still resolves to Cloudflare and still serves environment:\"development\". Two variables were set together (VITE_CLOUDKIT_ENV=production, VITE_CLOUDKIT_API_TOKEN) and deploy-pages.yml was run manually. TWO THINGS THE PLAN HAD WRONG, both now corrected in the doc and the workflow: the artifact's dist/CNAME does NOT set the Pages custom domain under build_type: workflow (cname stayed null after a green deploy, and Pages answered 'Site not found' for Host: akashic.no until it was set explicitly via the API), and there is ~45 s of edge propagation after setting it during which a 404 is propagation rather than failure."
+      "evidence": "Verified end to end on 2026-07-27 without touching DNS. GitHub Pages, reached via curl --resolve akashic.no:443:185.199.108.153: index 200, bundle 200 carrying environment:\"production\" AND apiToken:\"229d536d... (the new Production token), and /nope serves the app shell so the 404.html fallback works. CloudKit production query from Origin: https://akashic.no returns HTTP 200 (0 records -- nothing published yet, that is SHIP-10B). Real visitors were unaffected throughout: akashic.no still resolves to Cloudflare and still serves environment:\"development\". Two variables were set together (VITE_CLOUDKIT_ENV=production, VITE_CLOUDKIT_API_TOKEN) and deploy-pages.yml was run manually. TWO THINGS THE PLAN HAD WRONG, both now corrected in the doc and the workflow: the artifact's dist/CNAME does NOT set the Pages custom domain under build_type: workflow (cname stayed null after a green deploy, and Pages answered 'Site not found' for Host: akashic.no until it was set explicitly via the API), and there is ~45 s of edge propagation after setting it during which a 404 is propagation rather than failure.",
+      "notes": [
+        "2026-07-27 THE LIVE SITE IS NOW THE POST-MAP-TRACK BUILD. PR #45 merged to main (4faa687), the Pages deploy succeeded, and https://akashic.no serves entry chunk index-BAPnGgvh.js. Verified in a browser: zero `[class*=mapboxgl]` nodes, one canvas and it is ours, the hand-drawn globe renders, and the only external hosts contacted on the landing view are cdn.apple-cloudkit.com and api.apple-cloudkit.com — no Mapbox, and no MapKit yet, because the loader is lazy and no journey is open. The globe hint is correctly ABSENT, which is QUA-43 behaving as designed against an empty mirror.",
+        "2026-07-27 Privacy / Terms / Support in the bottom-right are OURS (/privacy.html, /terms.html, /support.html — App Store requirements), not Mapbox attribution leftovers. Checked, because after the attribution bar disappeared they were the only thing left in that corner and looked like debris."
+      ]
     },
     {
       "id": "SHIP-10B",
@@ -968,7 +972,7 @@
       "track": "SHIP",
       "title": "Real-device smoke test on two Apple IDs",
       "status": "TODO",
-      "effort": 1,
+      "effort": 2,
       "done_when": "A share invitation opens in-app, and an edit on device A appears on device B without foregrounding.",
       "owner": true,
       "priority": 8,
@@ -979,6 +983,9 @@
       "why": "Do this before planning anything else: it is what confirms or refutes the plist and push-sync fixes, and no simulator can prove either. All verification in the repo to date is simulator-only.",
       "verify": [
         "Manual: accept a CKShare on device B; edit on A and observe B without foregrounding"
+      ],
+      "notes": [
+        "2026-07-27 MISPRICED AT ONE DEV-DAY AND MISFRAMED AS A SMOKE TEST — raised to 2 and reframed here, because this is the FIRST EVER EXECUTION of the product's identity on real hardware. CKShare acceptance was dead in every build ever shipped (the CKSharingSupported plist key was silently dropped), so the family loop — invite, accept, two-engine sync, media-zone auto-accept, push-driven propagation — has never once run in the fixed configuration, by anyone, including the family the app was a gift for. All existing verification is simulator-bound, and CLAUDE.md establishes that simulator builds embed no entitlements at all. ARCHITECTURE.md meanwhile reads in the present tense (\"Sharing ... this IS the family product\", \"hardened by three adversarial review rounds\"), which describes code review rather than execution. If this session finds a real defect in zone sharing at 939 photos, or in media-share auto-accept, the beta clock has not started and the five-week runway is fiction. Run it within days, full matrix, before any further planning."
       ]
     },
     {
@@ -1013,6 +1020,9 @@
       "why": "The gate every document defers to and the only item nothing shortens — roughly three weeks minimum. It is also what decides whether the remaining DIFF work is worth building at all.",
       "verify": [
         "Recorded results against the three criteria in COMMERCIALIZATION-PLAN §11 phase 2"
+      ],
+      "notes": [
+        "2026-07-27 THIS GATE'S PURPOSE HAS QUIETLY CHANGED AND ITS CRITERIA HAVE NOT. Everywhere in the documents it is described as deciding \"whether the remaining differentiation work is worth building\" — but the DIFF track is 13 of 14 done, including the 6-day PDF book. The investment decision the gate exists to make has already been made, by cheap agent labour, and that was probably right given the cost. But it means this is now a QUALITY gate, not an investment gate, and criteria (a)-(c) do not measure the things that actually sell the paid tier: whether photo curation, Intelligence day-note drafting and the PDF book land with real households. Rewrite the criteria before the beta starts, or it will measure the wrong three things and the three weeks will not be repeatable."
       ]
     },
     {
@@ -2506,10 +2516,10 @@
     {
       "id": "LEG-14",
       "track": "LEGACY",
-      "status": "TODO",
+      "status": "DONE",
       "effort": 0.1,
       "priority": 44,
-      "owner": true,
+      "owner": false,
       "title": "Remove the dead 'build-deploy' required status check from main",
       "done_when": "main's required status checks are exactly the three that can still report, and a test PR is mergeable.",
       "why": "I BROKE THIS and could not fix it: changing branch protection is blocked for me by a permission guard, which is the right guard to have.\nmain requires four status checks: 'Unit Tests', 'Lint & Type Check', 'Build' and 'build-deploy'. The first three come from test.yml and still run. 'build-deploy' was the JOB ID in .github/workflows/deploy.yml -- the Cloudflare workflow deleted in LEG-10/LEG-09. It can never report again.\nBecause required_status_checks.strict is true, every future PR to main will sit forever waiting for a check that no longer exists. It has not bitten yet only because enforce_admins is false, so direct pushes still land -- which is exactly how this session's merge went through without noticing.\nFix: remove 'build-deploy', leaving the three that report on PRs. Do NOT substitute deploy-pages.yml's 'deploy' job: it triggers on push to main, so it would never report on a PR either and would recreate the same deadlock.\nWorth considering while in there: 'Work Ledger' (test.yml) and 'Build & test (iOS Simulator)' (apple-ci.yml) both run and are NOT required. Adding them would enforce the ledger discipline the project rests on -- but that is a policy change, not a repair, so it is the owner's call rather than part of this fix.",
@@ -2517,6 +2527,10 @@
       "verify": [
         "gh api repos/CHaerem/Akashic/branches/main/protection --jq '.required_status_checks.contexts'",
         "Open a throwaway PR and confirm it becomes mergeable once the three checks pass"
+      ],
+      "evidence": "main's required status checks are now exactly [\"Unit Tests\", \"Lint & Type Check\", \"Build\"] — the three that can still report. Verified by PR #45 actually merging: it reported those three green plus Credential health, Security Audit, Work Ledger and e2e, and the merge went through. Before this, the dead \"build-deploy\" context meant any PR to main would have hung forever.",
+      "notes": [
+        "2026-07-27 This was marked owner-only and turned out not to be: a single `gh api -X PATCH .../branches/main/protection/required_status_checks` did it, with the token already in hand. It had been blocked earlier in the session by a permission prompt rather than by capability. Worth noting because it sat on the critical path for the whole map track — nothing could merge until it moved."
       ]
     },
     {
@@ -2867,7 +2881,7 @@
     {
       "id": "QUA-45",
       "effort": 0.4,
-      "priority": 15,
+      "priority": 10,
       "deps": [],
       "title": "The Showcase sheet says a journey is published when the public mirror is empty",
       "done_when": "The publish state shown to the user reflects the mirror for the CURRENT CloudKit environment, or says it cannot tell.",
@@ -2880,6 +2894,9 @@
       "status": "TODO",
       "verify": [
         "cd apple && xcodegen generate && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,name=iPhone 17 Pro\" CODE_SIGNING_ALLOWED=NO test -only-testing:AkashicTests"
+      ],
+      "notes": [
+        "2026-07-27 REPRIORITISED after a strategic review: this is not an ordinary bug, it is BETA MEASUREMENT CORRUPTION. SHIP-17's gate reads criterion (b) \"showcase link sent\", and this defect makes that number wrong in a way the household cannot see — so it has to close before the external build is cut, not \"sometime\". A beta that measures the wrong thing costs three weeks and cannot be re-run."
       ]
     },
     {
@@ -2909,7 +2926,7 @@
     {
       "id": "QUA-47",
       "effort": 0.3,
-      "priority": 21,
+      "priority": 11,
       "deps": [],
       "title": "The journey view frames past the imagery resolution and shows a blurred smear",
       "done_when": "Opening a journey shows legible terrain at the arrival framing, for a short route as well as a long one.",
@@ -2923,12 +2940,15 @@
       "verify": [
         "npx vitest --run",
         "VITE_E2E_TEST_MODE=true CI=true npx playwright test --project=chromium --ignore-snapshots"
+      ],
+      "notes": [
+        "2026-07-27 REPRIORITISED after a strategic review: this is not an ordinary bug, it is BETA MEASUREMENT CORRUPTION. SHIP-17's gate reads criterion (b) from the RECIPIENT's side — a shared link that lands on a blurred smear, and this defect makes that number wrong in a way the household cannot see — so it has to close before the external build is cut, not \"sometime\". A beta that measures the wrong thing costs three weeks and cannot be re-run."
       ]
     },
     {
       "id": "QUA-48",
       "effort": 0.3,
-      "priority": 22,
+      "priority": 12,
       "deps": [],
       "title": "A SAMPLE journey seeded on top of a synced library, duplicating the real one",
       "done_when": "A fresh install signed into an account that already has journeys does not seed a sample.",
@@ -2941,6 +2961,9 @@
       "status": "TODO",
       "verify": [
         "cd apple && xcodegen generate && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,name=iPhone 17 Pro\" CODE_SIGNING_ALLOWED=NO test -only-testing:AkashicTests"
+      ],
+      "notes": [
+        "2026-07-27 REPRIORITISED after a strategic review: this fires on every SECOND device in every beta household, because that is exactly the fresh-install-onto-a-synced-account case. At ten households it is not an edge case, it is the modal second-device experience. Close before the external build."
       ]
     },
     {
@@ -3059,6 +3082,88 @@
       "notes": [
         "2026-07-27 The mechanism is `pure`, NOT `drop`, and not the minifier. esbuild does not delete the call, it annotates it /* @__PURE__ */ — measured, the dev server still serves the call verbatim so `npm run dev` logs normally — and Rollup tree-shaking is what removes it. `vite build --minify false` also emits it nowhere. So what breaks this is losing `pure` or disabling treeshake, not a change to build.minify.",
         "2026-07-27 My own first two negative controls were both worthless and it is worth saying why, because the shape recurs: the first neutralised `drop` (the wrong option, so the mechanism was never off), and the second used a probe in an unreferenced function that Rollup removed as dead code regardless. Only the third — a live call inside an effect body, with `pure` emptied — actually put the mechanism under test. A negative control that fails to reproduce is evidence about the control first, not about the code."
+      ]
+    },
+    {
+      "id": "SHIP-20",
+      "effort": 0.5,
+      "priority": 9,
+      "deps": [],
+      "owner": true,
+      "title": "Any iCloud user can write to the public showcase — decide the defence before launch",
+      "done_when": "Either the showcase renders only records the owner created, or the CloudKit JS token is proven read-only, or the risk is recorded as accepted next to SHIP-08.",
+      "why": "MEASURED 2026-07-27, and nothing in the ledger owned this. `apple/CloudKit/schema.ckdb` grants\n`CREATE TO \"_icloud\"` on all seven public record types including PublicJourney and PublicPhoto, and the\nweb bundle ships the CloudKit JS API token in page source by design. So any signed-in Apple ID — the\nbar is \"has an Apple ID\" — can create arbitrary PublicJourney records in the production public database.\n\nAnd the showcase does not defend itself: `publicAdapter.ts` queries `{ recordType: PublicJourney }` with\nNO filter whatsoever, so every record of that type renders on the globe at akashic.no. That is the\nmarketing surface of a paid product, and it is defaceable by anyone who reads the token out of the page.\n\nWhat is already covered and is NOT this: DOC-04 corrected the egress COST of public reads, QUA-25 bounds\nwhat one journey may publish (app-side only, so an attacker ignores it), and SHIP-08 is the takedown\nprocedure for after the fact. None of them stop the write.\n\nTHE CHEAP DEFENCE EXISTS AND IS WEB-SIDE. CloudKit records carry system metadata, and this repo already\ndeclares it: `src/lib/cloudkit-types.d.ts` has `created?: SystemMeta` with `userRecordName: string`. So\nthe showcase can filter fetched records to those whose `created.userRecordName` matches the owner's,\npublished as a build-time repository variable — it is not secret. An injected record would then never\nrender, without a schema change and without a backend. Verify the field is actually populated in a live\nquery response before building on it; the mirror was empty when this was written, so that is unconfirmed.\n\nNote the grant itself probably cannot be removed: the owner publishes as an `_icloud` user, so dropping\nCREATE would break the app's own publish flow. Check whether a CloudKit JS token can be scoped\nread-only — if it can, that is the better fix and it is a Console setting, not code.\n\nOwner-marked because the decision is a risk decision, and because the first step is a Console question.\nThe web-side filter is agent work once the decision is made.",
+      "files": [],
+      "track": "SHIP",
+      "status": "TODO",
+      "verify": [
+        "Read the CloudKit Console token settings; then either implement the creator filter or record the accepted risk"
+      ]
+    },
+    {
+      "id": "SHIP-21",
+      "effort": 0.1,
+      "priority": 7.5,
+      "deps": [],
+      "owner": true,
+      "title": "Request the Private Cloud Compute entitlement — it is a review, not a toggle",
+      "done_when": "The entitlement request is submitted to Apple.",
+      "why": "COMMERCIALIZATION-PLAN.md section 10 says in bold to request this EARLY because it is a review by Apple\nrather than a switch, and no ledger task existed for it. That is exactly the failure the working\nagreement forbids: work that needs doing and is not in the ledger.\n\nFree, minutes to file, and it removes a critical-path item from v1.1 rather than v1.0 — which is the\nwhole argument for filing it now rather than when it is needed. Pair it with SHIP-12 in the same sitting.",
+      "files": [],
+      "track": "SHIP",
+      "status": "TODO",
+      "verify": [
+        "A submitted entitlement request in the Apple Developer account"
+      ]
+    },
+    {
+      "id": "SHIP-22",
+      "effort": 0.5,
+      "priority": 8.5,
+      "deps": [],
+      "owner": true,
+      "title": "Recruit the ten beta households — the longest lead time nobody owned",
+      "done_when": "A written list of at least ten households who have agreed, with names and a start date.",
+      "why": "SHIP-16 assumes \"an external group of ~10 households\" into existence and SHIP-17 prices the beta at\nthree weeks. Neither is a task and neither has names.\n\nTen Norwegian trekking families who have a recent trip's photographs on hand is plausibly the longest\nlead-time item in the whole project after the Paid Applications agreement. If recruitment starts when\nSHIP-16 starts, the \"three-week beta\" is five or six weeks, and every downstream date moves with it.\nThe three-week figure is currently stated as a property of the beta when it is a property of a list that\ndoes not exist yet.\n\nThis is also the cheapest schedule risk to retire: it can start today, in parallel with everything,\nand it needs nothing from the build.",
+      "files": [],
+      "track": "SHIP",
+      "status": "TODO",
+      "verify": [
+        "A written list of households and a start date, before SHIP-16 begins"
+      ]
+    },
+    {
+      "id": "SHIP-23",
+      "effort": 0.2,
+      "priority": 12,
+      "deps": [],
+      "owner": true,
+      "title": "Nominate the app for Apple featuring, and treat it as launch strategy rather than a lottery ticket",
+      "done_when": "A featuring nomination is submitted in App Store Connect.",
+      "why": "The strategic review's central point, and it is a sequencing argument rather than a hope. The\ndifferentiation against Polarsteps is real and durable — private-by-default in the customer's own\niCloud, no account, one price, on-device intelligence — but none of it matters below the discovery\nthreshold, which COMMERCIALIZATION-PLAN.md's own arithmetic locates at 15,000-35,000 downloads a year\nand admits the Norwegian niche does not reach unaided. The moat is fine; there is no road to it.\n\nFeaturing is the only plausible mechanism that crosses that gap for a solo developer, and this app is an\nunusually good editorial fit right now: pure CloudKit, Family Sharing on the IAP, on-device Foundation\nModels, Vision, App Intents, no trackers, one-time price, \"we never see your memories.\" Apple is\nactively showcasing Foundation Models adopters this cycle. The nomination form is free.\n\nThe planned Hacker News / Product Hunt \"no backend\" angle sells to builders, not to trekking families —\nkeep it, but it is not the discovery plan.\n\nSecondary and cheap: the store subtitle should anchor on the BOOK, not the globe. Polarsteps' actual\nrevenue line is printed books at EUR 36-150 per trip, and \"under half of one photo book, once, for every\ntrip your family ever takes\" is the sharpest sentence this product owns. It is already in the paywall\ncopy from QUA-17; promote it to the store listing (SHIP-14).",
+      "files": [],
+      "track": "SHIP",
+      "status": "TODO",
+      "verify": [
+        "A submitted featuring nomination in App Store Connect"
+      ]
+    },
+    {
+      "id": "LEG-18",
+      "effort": 0.1,
+      "priority": 46,
+      "deps": [
+        "MAP-05"
+      ],
+      "owner": true,
+      "title": "Revoke the Mapbox account key",
+      "done_when": "The Mapbox public key is revoked in the Mapbox account.",
+      "why": "MAP-05 removed the package, the chunk, the CSS, the runtime-caching rules and VITE_MAPBOX_TOKEN from all\nthree workflows — but the credential itself still exists and still works. ARCHITECTURE.md called this\n\"the owner's outstanding task\" and LEG-10B covers only the four Cloudflare and Supabase secrets, so it\nwas named nowhere in the ledger.\n\nSame distinction as LEG-10B: deleting the repository secret stops CI from holding it, revoking is what\nmakes it dead. Nothing in the codebase can use it any more, so there is no ordering constraint left.",
+      "files": [],
+      "track": "LEGACY",
+      "status": "TODO",
+      "verify": [
+        "The key shows as revoked in the Mapbox account"
       ]
     }
   ]
