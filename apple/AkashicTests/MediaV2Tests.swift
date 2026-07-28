@@ -432,6 +432,9 @@ final class ToggleGate: NetworkPolicyGate {
     init(allows: Bool) { self.allows = allows }
     var allowsHeavyTransfer: Bool { allows }
     func heavyTransferDidComplete() {}
+    /// DIFF-16: `allows` is flipped directly by the repack test, which polls the gate per batch rather
+    /// than reacting to a transition — so there is nothing to notify. `MediaRepackJob` pauses itself.
+    func observeHeavyTransferDisallowed(_ onDisallowed: @escaping () -> Void) {}
 }
 
 /// Recording fake `MediaShareAccepting`.

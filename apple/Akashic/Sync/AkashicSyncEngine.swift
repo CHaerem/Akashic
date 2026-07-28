@@ -181,6 +181,47 @@ final class AkashicSyncEngine: NSObject, CKSyncEngineDelegate {
         activationFetch = Task.detached { [weak self] in await self?.fetchOnActivation() }
     }
 
+    /// DIFF-16 ROOT CAUSE: the policy just turned AGAINST a heavy transfer, and the first download has
+    /// delivered nothing. Enter the same honest deferred state the activation branch produces, instead
+    /// of letting CloudKit defer every operation silently behind a status that says "Syncing".
+    ///
+    /// ## The race this closes
+    ///
+    /// `NetworkPolicy` seeds `isExpensivePath` from `NWPathMonitor.currentPath`, which before the
+    /// monitor's first update always reports not-expensive. So on a CELLULAR launch
+    /// `fetchOnActivation`'s gate passes, `fetchChanges()` starts, the status says Syncing — and
+    /// milliseconds later the real path arrives, after which `nextFetchChangesOptions` hands CloudKit
+    /// `allowsCellularAccess = false` for every subsequent request and CloudKit defers them with no
+    /// error and no event. Measured on the owner's phone on TestFlight builds 101 and 102: "Syncing ·
+    /// 0 journeys · 0 photos", indefinitely. **No simulator can reproduce it** — a simulator path is
+    /// never expensive — which is why it survived a green suite twice.
+    ///
+    /// The correction arrives within milliseconds of launch, so this self-corrects long before a user
+    /// could read the wrong status; deliberately NOT solved by awaiting the first path update before
+    /// activating, which would add latency to every launch (cellular or not) and still not cover the
+    /// path changing later. It also covers walking OUT of Wi-Fi during the first download for free.
+    ///
+    /// ## What it deliberately does not do
+    ///
+    /// Nothing, once the archive has started landing (`localPhotoCount` above the fresh-install
+    /// ceiling). At that point the list renders real journey cards, so none of the DIFF-15/16 empty-list
+    /// surfaces apply and claiming "Waiting for Wi-Fi" would replace one wrong statement with another.
+    /// The bill is still protected there by `nextFetchChangesOptions`, which is unconditional.
+    func networkPolicyDidDisallowHeavyTransfer() {
+        guard isRunning else { return }
+        // Already deferred (the ordinary case: activation deferred and the path merely flapped).
+        guard !deferredHeavyFetch else { return }
+        // Nothing has been delivered yet, so the deferral IS the whole story on screen.
+        guard store.localPhotoCount() <= FirstSyncDownloadDecision.freshInstallPhotoCeiling else { return }
+        deferredHeavyFetch = true
+        status.set(.waitingForWiFi)
+        SyncLog.log("networkPolicy: heavy transfer disallowed before the first download delivered — deferring honestly")
+        // Same publish the activation deferral branch performs, so the named rows / could-not-check /
+        // "Download now" surfaces engage. Via `previewRetry` because this is a synchronous callback and
+        // the publish is async — and because that is the handle a test awaits instead of racing.
+        previewRetry = Task { [weak self] in await self?.publishDeferredDownloadPreview() }
+    }
+
     /// Handle on a preview retry, for the same reason `activationFetch` exists: so a test awaits it
     /// rather than racing it.
     private(set) var previewRetry: Task<Void, Never>?
@@ -197,9 +238,10 @@ final class AkashicSyncEngine: NSObject, CKSyncEngineDelegate {
     /// deferral branch — activation, a silent push (`fetchChangesForPush`), and the path-change
     /// retry above — and each of those now retries for free, because
     /// `publishDeferredDownloadPreview` is no longer once-per-lifetime. What none of them covers is
-    /// the ordinary case: the app was backgrounded while deferred and the user comes back to look.
-    /// `NetworkPolicy` fires only on false → true (there is no became-*disallowed* callback), so a
-    /// path change that leaves the download deferred reaches nothing at all.
+    /// the ordinary case: the app was backgrounded while deferred and the user comes back to look — a
+    /// path change that leaves the download *already* deferred is a no-op in both transition
+    /// directions (`networkPolicyDidDisallowHeavyTransfer` returns early on `deferredHeavyFetch`), so
+    /// it reaches nothing at all.
     ///
     /// No-op unless a deferral is genuinely outstanding AND the preview has never answered, so a
     /// foreground in the steady state costs a comparison and nothing else. Deliberately does NOT
@@ -310,6 +352,15 @@ final class AkashicSyncEngine: NSObject, CKSyncEngineDelegate {
         super.init()
         discoveredMediaZoneKeys = Set(defaults.stringArray(forKey: Self.discoveredMediaZonesKey(databaseScope)) ?? [])
         if databaseScope == .private { observeForeground() }
+        // DIFF-16: subscribe to the policy turning AGAINST a heavy transfer. In `init` and not in
+        // `activate()` for the same reason `observeForeground` is (see its comment): the subscription
+        // must not depend on the order two async activations complete in, and
+        // `networkPolicyDidDisallowHeavyTransfer` guards on `isRunning` so an early notification is a
+        // no-op. Registered by BOTH scopes — the shared database's fetch is deferred by the same
+        // policy, and the observer list exists precisely so neither engine replaces the other.
+        networkPolicy.observeHeavyTransferDisallowed { [weak self] in
+            self?.networkPolicyDidDisallowHeavyTransfer()
+        }
     }
 
     private static func discoveredMediaZonesKey(_ scope: CKDatabase.Scope) -> String {
@@ -513,6 +564,20 @@ final class AkashicSyncEngine: NSObject, CKSyncEngineDelegate {
             SyncLog.log("activate: fetchChanges() starting")
             try await engine?.fetchChanges()
             SyncLog.log("activate: fetchChanges() returned")
+            // DIFF-16, and without this the fix above is inert on the very path it was written for.
+            // `deferredHeavyFetch` was cleared just before the fetch, so it can only be true again
+            // because `networkPolicyDidDisallowHeavyTransfer` fired WHILE we were awaiting — i.e. the
+            // race: the path turned expensive mid-fetch and CloudKit silently deferred the rest of the
+            // operations. `fetchChanges()` then returns without error having transferred nothing, and
+            // everything below would treat that as a completed round trip: `markSynced()` puts the
+            // status back to "Syncing", `remoteJourneySummaries = nil` blanks the rows the transition
+            // just published, and `onFreshInstallDetermined` would burn the once-ever demo-seed decision
+            // on a store that is empty only because the download was deferred. None of that is true, so
+            // none of it runs; the honest `.waitingForWiFi` stands and the became-true wiring resumes it.
+            guard !deferredHeavyFetch else {
+                SyncLog.log("activate: fetchChanges() returned while the policy had turned against it — no round trip to claim, staying deferred")
+                return
+            }
             status.markSynced()
             // DIFF-15: the real journeys have landed, so the un-downloaded placeholder rows have
             // nothing left to stand in for. Cleared HERE rather than before the fetch, so a fetch

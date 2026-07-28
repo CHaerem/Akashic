@@ -256,6 +256,107 @@ final class NetworkPolicyTests: XCTestCase {
         XCTAssertNil(status.firstSyncPrompt, "an already-populated store gets no first-sync prompt")
         XCTAssertEqual(status.state, .waitingForWiFi, "it still defers, just without the sized dialog")
     }
+
+    // MARK: - The other transition direction (DIFF-16)
+
+    // The engine-level consequences of these live in `CellularLaunchRaceTests`, which deliberately names
+    // no symbol this change introduced so it can serve as the `prove.mjs` proof. These pin the policy's
+    // half of the contract, where naming the new observer API is the whole point.
+
+    func testPathBecomingExpensiveFiresTheDisallowedObservers() {
+        let source = FakeNetworkPathSource(expensive: false)      // the monitor's pre-update lie
+        let policy = NetworkPolicy(source: source, defaults: freshDefaults())   // wifiOnly default true
+        var disallowed = 0
+        policy.observeHeavyTransferDisallowed { disallowed += 1 }
+        policy.start()
+
+        XCTAssertTrue(policy.allowsHeavyTransfer, "the seed says cheap, which is DIFF-16's root cause")
+        source.simulate(expensive: true)
+
+        XCTAssertFalse(policy.allowsHeavyTransfer)
+        XCTAssertEqual(disallowed, 1, "the correction must be announced, not merely stored")
+    }
+
+    /// Both engines share one policy, so the false direction is a LIST — a single closure would have let
+    /// whichever registered last silently replace the other, which is a defect with no symptom.
+    func testEveryDisallowedObserverIsNotified() {
+        let source = FakeNetworkPathSource(expensive: false)
+        let policy = NetworkPolicy(source: source, defaults: freshDefaults())
+        var first = 0
+        var second = 0
+        policy.observeHeavyTransferDisallowed { first += 1 }
+        policy.observeHeavyTransferDisallowed { second += 1 }
+        policy.start()
+
+        source.simulate(expensive: true)
+
+        XCTAssertEqual(first, 1)
+        XCTAssertEqual(second, 1)
+    }
+
+    func testTurningWifiOnlyOnOnAnExpensivePathFiresTheDisallowedObservers() {
+        let defaults = freshDefaults()
+        defaults.set(false, forKey: NetworkPolicy.wifiOnlyKey)
+        let policy = NetworkPolicy(source: FakeNetworkPathSource(expensive: true), defaults: defaults)
+        var disallowed = 0
+        policy.observeHeavyTransferDisallowed { disallowed += 1 }
+
+        policy.wifiOnlyDownloads = true
+
+        XCTAssertFalse(policy.allowsHeavyTransfer)
+        XCTAssertEqual(disallowed, 1)
+    }
+
+    /// A one-occasion pass keeps `allowsHeavyTransfer` true, so neither transition site may report a
+    /// change. The `didSet` "before" value has to include the exemption for this to hold — computing it
+    /// from the setting and the path alone reports a false → true flip and then a spurious disallow.
+    func testAnOutstandingExemptionSuppressesTheDisallowedTransition() {
+        let defaults = freshDefaults()
+        defaults.set(false, forKey: NetworkPolicy.wifiOnlyKey)
+        let source = FakeNetworkPathSource(expensive: false)
+        let policy = NetworkPolicy(source: source, defaults: defaults)
+        policy.grantOneOccasionCellularDownload()
+        var disallowed = 0
+        policy.observeHeavyTransferDisallowed { disallowed += 1 }
+        policy.start()
+
+        source.simulate(expensive: true)
+        policy.wifiOnlyDownloads = true
+
+        XCTAssertTrue(policy.allowsHeavyTransfer, "the user granted this download a pass")
+        XCTAssertEqual(disallowed, 0, "nothing changed for the download the user already allowed")
+    }
+
+    /// Spending the exemption DOES flip `allowsHeavyTransfer` true → false, and deliberately stays quiet:
+    /// it is called from inside `fetchOnActivation` right after a successful fetch, which owns the status
+    /// for the rest of its body. Re-entering the deferred state from underneath it would have the engine
+    /// contradict the round trip it just completed.
+    func testSpendingTheExemptionDoesNotFireTheDisallowedObservers() {
+        let policy = NetworkPolicy(source: FakeNetworkPathSource(expensive: true), defaults: freshDefaults())
+        policy.grantOneOccasionCellularDownload()
+        var disallowed = 0
+        policy.observeHeavyTransferDisallowed { disallowed += 1 }
+
+        policy.heavyTransferDidComplete()
+
+        XCTAssertFalse(policy.allowsHeavyTransfer)
+        XCTAssertEqual(disallowed, 0, "the fetch path owns its own status; see heavyTransferDidComplete")
+    }
+
+    func testARedundantPathUpdateFiresNeitherDirection() {
+        let source = FakeNetworkPathSource(expensive: true)
+        let policy = NetworkPolicy(source: source, defaults: freshDefaults())
+        var allowed = 0
+        var disallowed = 0
+        policy.onAllowsHeavyTransferBecameTrue = { allowed += 1 }
+        policy.observeHeavyTransferDisallowed { disallowed += 1 }
+        policy.start()
+
+        source.simulate(expensive: true)     // same state the policy already holds
+
+        XCTAssertEqual(allowed, 0)
+        XCTAssertEqual(disallowed, 0)
+    }
 }
 
 // MARK: - Test doubles
