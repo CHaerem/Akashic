@@ -175,6 +175,12 @@ struct DraftMapCard: View {
         }
         .accessibilityLabel("Route options")
         .accessibilityHint("Import a GPX file, draw the route on a map, or remove it")
+        // QUA-55: `performAccessibilityAudit` measured this at 104.5 × 14.5 pt on iPad (A16) — a
+        // `.caption` label, and the only way to replace, draw or REMOVE the route. Same fix as
+        // QUA-29's six: the frame grows the hit area without moving the glyph or the text, and
+        // `contentShape` is what makes the grown frame actually tappable. Width already cleared 44.
+        .frame(minHeight: 44)
+        .contentShape(Rectangle())
     }
 
     // MARK: Empty states
