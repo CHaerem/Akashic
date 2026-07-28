@@ -1,5 +1,8 @@
 import Foundation
 import CloudKit
+// DIFF-16: the foreground notification is the only retry trigger for the deferred-download preview
+// that does not depend on the network path changing (see `applicationWillEnterForeground`).
+import UIKit
 
 /// Coordinates CloudKit sync for the `.cloudKit` persistence mode using `CKSyncEngine`
 /// (D4 = FINAL: custom record types, zone-per-journey, Core Data as the local store).
@@ -64,9 +67,44 @@ final class AkashicSyncEngine: NSObject, CKSyncEngineDelegate {
     /// mode a nil default invites. Tests override it with a fake.
     private let remoteJourneySummarizer: RemoteJourneySummarizing?
 
-    /// One-time guard so the deferred-download preview (prompt + journey summaries) is evaluated at
-    /// most once per engine lifetime.
-    private var hasEvaluatedFirstSyncPrompt = false
+    /// DIFF-16: publishes "the heavy first download is running right now" to `JourneyListView`, so
+    /// the void between the user granting the download and the first records landing says what is
+    /// happening instead of showing an empty list or the first-run hero. See
+    /// `FirstSyncDownloadProgress` for why this is not a `SyncStatus.State`.
+    private let downloadProgress: FirstSyncDownloadProgress
+
+    /// True once the preview established that there IS something to download — a non-empty summary
+    /// pre-fetch, or a positive remote photo count. The gate on `downloadProgress`: without it,
+    /// "Downloading your journeys…" would render at a brand-new family for as long as their empty
+    /// fetch takes, which is DIFF-15's false statement pointing the other way.
+    private var firstDownloadHasKnownContent = false
+
+    /// Set once the deferred-download preview has actually ANSWERED — a summary pre-fetch that
+    /// returned (even empty), or a store too full for the preview to be relevant.
+    ///
+    /// DIFF-16 replaced a `hasEvaluatedFirstSyncPrompt` flag set at the top of the method: it made
+    /// the preview run exactly once per engine lifetime, so a single transient failure was a
+    /// permanent first-run hero until the app was relaunched. That is hypothesis (c) of the device
+    /// report, and it costs nothing to remove.
+    private var hasPublishedDeferredDownloadPreview = false
+
+    /// Separate from the flag above because the two answer different questions: the prompt is a
+    /// SHEET the user can dismiss (`RootView` nils `status.firstSyncPrompt` when they do), and a
+    /// retry must never resurrect a dialog they already answered.
+    private var hasPublishedFirstSyncPrompt = false
+
+    /// Re-entrancy guard: everything here is `@MainActor`, but two triggers can still interleave at
+    /// the `await`, and paying for the same network query twice is exactly what "keep it cheap"
+    /// rules out.
+    private var isPublishingDeferredPreview = false
+
+    /// Attempts spent on the deferred-download preview. Bounded, because a PERMANENT failure —
+    /// hypothesis (b), a Journey query the deployed Production schema will not serve — would
+    /// otherwise re-run on every foreground and every push for the life of the install.
+    /// Test-visible, so "the retry actually retried" is an assertion rather than an inference.
+    private(set) var deferredPreviewAttempts = 0
+
+    static let maxDeferredPreviewAttempts = 5
 
     /// Which CloudKit database this engine drives.
     ///
@@ -143,6 +181,71 @@ final class AkashicSyncEngine: NSObject, CKSyncEngineDelegate {
         activationFetch = Task.detached { [weak self] in await self?.fetchOnActivation() }
     }
 
+    /// Handle on a preview retry, for the same reason `activationFetch` exists: so a test awaits it
+    /// rather than racing it.
+    private(set) var previewRetry: Task<Void, Never>?
+
+    /// Await a deferred-download-preview retry, if one is in flight.
+    func awaitPreviewRetry() async { await previewRetry?.value }
+
+    /// DIFF-16: re-attempt the deferred-download preview. Driven by the foreground notification below
+    /// and by the "Check again" button on the could-not-check surface.
+    ///
+    /// ## Why foregrounding, and why this is the trigger that was missing
+    ///
+    /// Every OTHER trigger that could retry the preview funnels through `fetchOnActivation`'s
+    /// deferral branch — activation, a silent push (`fetchChangesForPush`), and the path-change
+    /// retry above — and each of those now retries for free, because
+    /// `publishDeferredDownloadPreview` is no longer once-per-lifetime. What none of them covers is
+    /// the ordinary case: the app was backgrounded while deferred and the user comes back to look.
+    /// `NetworkPolicy` fires only on false → true (there is no became-*disallowed* callback), so a
+    /// path change that leaves the download deferred reaches nothing at all.
+    ///
+    /// No-op unless a deferral is genuinely outstanding AND the preview has never answered, so a
+    /// foreground in the steady state costs a comparison and nothing else. Deliberately does NOT
+    /// touch the heavy fetch: this is kilobytes of journey names, not the archive.
+    func retryDeferredDownloadPreview() {
+        guard databaseScope == .private, isRunning, deferredHeavyFetch else { return }
+        guard !hasPublishedDeferredDownloadPreview else { return }
+        guard deferredPreviewAttempts < Self.maxDeferredPreviewAttempts else {
+            SyncLog.log("foreground: deferred-download preview has spent its \(Self.maxDeferredPreviewAttempts) attempts — not retrying")
+            return
+        }
+        SyncLog.log("foreground: retrying the deferred-download preview")
+        previewRetry = Task { [weak self] in await self?.publishDeferredDownloadPreview() }
+    }
+
+    /// Owns the foreground-notification token and removes it when released.
+    ///
+    /// Copied in shape from `SyncScheduler.ObserverToken` and for the same measured reason (QUA-08):
+    /// a `@MainActor` type's `deinit` is nonisolated and may not READ its isolated stored properties,
+    /// but it may destroy them — so `removeObserver` lives in the token's own deinit. Deliberately
+    /// NOT `@MainActor` itself: its deinit touches only its own storage and
+    /// `NotificationCenter.removeObserver` is thread-safe.
+    private final class ObserverToken {
+        private let token: NSObjectProtocol
+        init(_ token: NSObjectProtocol) { self.token = token }
+        deinit { NotificationCenter.default.removeObserver(token) }
+    }
+
+    private var foregroundObserver: ObserverToken?
+
+    /// Subscribe to the foreground notification. Called from `init` rather than `activate()` so the
+    /// subscription does not depend on the order two async activations happen to complete in;
+    /// `applicationWillEnterForeground` guards on `isRunning`, so an early notification is a no-op.
+    private func observeForeground() {
+        // `queue: .main` because `applicationWillEnterForeground` is main-actor isolated and the
+        // notification's own delivery thread is not part of UIKit's contract in a way worth relying
+        // on. With the main queue named explicitly, `assumeIsolated` is a statement the runtime can
+        // check rather than a hope.
+        foregroundObserver = ObserverToken(NotificationCenter.default.addObserver(
+            forName: UIApplication.willEnterForegroundNotification,
+            object: nil,
+            queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated { self?.retryDeferredDownloadPreview() }
+            })
+    }
+
     /// Media zones discovered from server database-change events, so they are excluded from fetch
     /// even before this device has the corresponding journey locally — the fresh-install / restore
     /// case, where `mediaZoneIDsToExclude()` would otherwise be empty on the first pull and let the
@@ -181,7 +284,12 @@ final class AkashicSyncEngine: NSObject, CKSyncEngineDelegate {
          engine: SyncEngineProtocol? = nil,
          networkPolicy: NetworkPolicyGate = AlwaysAllowHeavyTransfer(),
          remotePhotoCounter: RemotePhotoCounting? = nil,
-         remoteJourneySummarizer: RemoteJourneySummarizing? = nil) {
+         remoteJourneySummarizer: RemoteJourneySummarizing? = nil,
+         // SE-0411 again, and this one WOULD have broken: `FirstSyncDownloadProgress` is
+         // `@MainActor`, and a default-argument expression is evaluated in a nonisolated context at
+         // the call site — so `= .shared` here does not compile under Swift 5 mode with strict
+         // concurrency. `nil` plus a body resolution is the shape that survives.
+         downloadProgress: FirstSyncDownloadProgress? = nil) {
         self.store = store
         self.status = status
         self.accountProvider = accountProvider
@@ -198,8 +306,10 @@ final class AkashicSyncEngine: NSObject, CKSyncEngineDelegate {
         // day this seam gains any main-actor isolation, nothing has to be untangled.
         self.remoteJourneySummarizer = remoteJourneySummarizer
             ?? CloudKitRemoteJourneySummarizer(containerIdentifier: containerIdentifier)
+        self.downloadProgress = downloadProgress ?? FirstSyncDownloadProgress.shared
         super.init()
         discoveredMediaZoneKeys = Set(defaults.stringArray(forKey: Self.discoveredMediaZonesKey(databaseScope)) ?? [])
+        if databaseScope == .private { observeForeground() }
     }
 
     private static func discoveredMediaZonesKey(_ scope: CKDatabase.Scope) -> String {
@@ -387,6 +497,18 @@ final class AkashicSyncEngine: NSObject, CKSyncEngineDelegate {
         // The download is proceeding now, so any pending first-sync prompt is moot — clear it so a
         // presented sheet dismisses instead of lingering behind the download.
         status.firstSyncPrompt = nil
+        // DIFF-16: the owner's second point, and it stands on its own — sync happens invisibly in the
+        // background, so even the WORKING path "just appears eventually", which reads as broken. From
+        // here until the fetch returns, `JourneyListView` says a download is running instead of
+        // showing a void. Gated on `firstDownloadHasKnownContent` so a brand-new family, whose fetch
+        // will return nothing, never sees a claim that something is coming.
+        let showsDownloadProgress = firstDownloadHasKnownContent
+            && store.localPhotoCount() <= FirstSyncDownloadDecision.freshInstallPhotoCeiling
+        if showsDownloadProgress {
+            downloadProgress.begin()
+            SyncLog.log("activate: first heavy download starting — the journey list shows progress")
+        }
+        defer { if showsDownloadProgress { downloadProgress.end() } }
         do {
             SyncLog.log("activate: fetchChanges() starting")
             try await engine?.fetchChanges()
@@ -413,24 +535,54 @@ final class AkashicSyncEngine: NSObject, CKSyncEngineDelegate {
 
     /// On a fresh install whose heavy download was just deferred, replace two silences with facts:
     /// **what** is waiting (named journey rows for `JourneyListView`) and **how big** it is (the
-    /// sized first-sync prompt). Evaluated once, and only by the private engine — there is a single
-    /// prompt and a single list, not one per database.
+    /// sized first-sync prompt). Only ever run by the private engine — there is a single prompt and a
+    /// single list, not one per database.
     ///
     /// Both halves are best-effort and independently nil-tolerant. Nothing here can make the state
-    /// worse than it was: a failed summary query renders the ordinary first-run hero, a failed count
-    /// falls back to the plain "Waiting for Wi-Fi" status.
+    /// worse than it was: a failed summary query renders the neutral could-not-check state (DIFF-16;
+    /// it used to render the first-run hero, which is a false statement to a family whose archive
+    /// exists), and a failed count falls back to the plain "Waiting for Wi-Fi" status.
+    ///
+    /// ## Retryable as of DIFF-16
+    ///
+    /// This used to be guarded by a flag set on ENTRY, so it ran exactly once per engine lifetime and
+    /// one transient failure was a permanent first-run hero until the app was relaunched. The guard is
+    /// now "has it ANSWERED", which makes every trigger that lands in the deferral branch — activation,
+    /// a push, the path-change retry, and the foreground hook above — a free retry. Bounded by
+    /// `maxDeferredPreviewAttempts`, because a permanent failure must not re-query forever, and
+    /// re-entrancy-guarded, because two triggers can interleave at the `await` below.
     private func publishDeferredDownloadPreview() async {
-        guard databaseScope == .private, !hasEvaluatedFirstSyncPrompt else { return }
-        hasEvaluatedFirstSyncPrompt = true
+        guard databaseScope == .private, !hasPublishedDeferredDownloadPreview else { return }
+        guard !isPublishingDeferredPreview else { return }
+        guard deferredPreviewAttempts < Self.maxDeferredPreviewAttempts else { return }
+        isPublishingDeferredPreview = true
+        defer { isPublishingDeferredPreview = false }
+        deferredPreviewAttempts += 1
         let local = store.localPhotoCount()
         // Only pay for the (network) pre-fetch for a plausible fresh install. An incremental sync
-        // already has journeys on screen and needs neither the rows nor the dialog.
-        guard local <= FirstSyncDownloadDecision.freshInstallPhotoCeiling else { return }
+        // already has journeys on screen and needs neither the rows nor the dialog — and that is a
+        // settled answer, not a failed one, so no retry is ever warranted for it.
+        guard local <= FirstSyncDownloadDecision.freshInstallPhotoCeiling else {
+            hasPublishedDeferredDownloadPreview = true
+            return
+        }
 
         // (a) The ungated summary pre-fetch — kilobytes, so it runs on the metered path the heavy
         // fetch was just deferred from.
         let summaries = await remoteJourneySummarizer?.remoteJourneySummaries()
-        status.remoteJourneySummaries = summaries
+        if let summaries {
+            // Never overwrite rows we already have with nothing: the assignment is inside the `if let`
+            // so a retry that fails leaves the previous answer standing.
+            status.remoteJourneySummaries = summaries
+            hasPublishedDeferredDownloadPreview = true
+            if !summaries.isEmpty { firstDownloadHasKnownContent = true }
+            SyncLog.log("remoteJourneySummaries: attempt \(deferredPreviewAttempts) answered — \(summaries.count) journey(s) waiting")
+        } else {
+            // The line the owner could not read on build 101. It is an `error`, so it is logged even
+            // with the diagnostics toggle off — this is the one sentence that distinguishes "nothing
+            // is there" from "we could not find out".
+            SyncLog.error("remoteJourneySummaries: attempt \(deferredPreviewAttempts) of \(Self.maxDeferredPreviewAttempts) could NOT name the remote journeys — the list shows the could-not-check state, not the first-run hero")
+        }
 
         // The summaries already carry a per-zone photo count, so when they arrive the estimate is
         // free and no second network round trip is spent. `remotePhotoCounter` remains the fallback
@@ -441,8 +593,19 @@ final class AkashicSyncEngine: NSObject, CKSyncEngineDelegate {
         } else {
             remote = await remotePhotoCounter?.remotePhotoCount()
         }
+        // A positive remote count is evidence in its own right that there IS an archive to download —
+        // and on build 101 it was the ONLY evidence that survived, because the count query answered
+        // while the journey query did not. That is what makes the progress state honest even when the
+        // rows could never be named.
+        if let remote, remote > 0 { firstDownloadHasKnownContent = true }
         let decision = FirstSyncDownloadDecision.decide(localPhotoCount: local, remotePhotoCount: remote)
-        if case .prompt = decision { status.firstSyncPrompt = decision }
+        // `hasPublishedFirstSyncPrompt` and not `status.firstSyncPrompt == nil`: the sheet nils that
+        // property when the user answers it, so a retry would otherwise re-present a dialog they have
+        // already dismissed.
+        if case .prompt = decision, !hasPublishedFirstSyncPrompt {
+            hasPublishedFirstSyncPrompt = true
+            status.firstSyncPrompt = decision
+        }
     }
 
     private func buildRealEngine() -> SyncEngineProtocol? {

@@ -12,8 +12,11 @@ import CloudKit
 /// not fetched since photo architecture v2 — gigabytes for a ~97 MB thumbnail pull.
 ///
 /// Two things are pinned here, in the order they matter:
-///   1. the branch: named waiting rows when we have evidence, the hero when we do not — asserted
-///      both purely and through the engine seam, so a decision the engine never publishes fails,
+///   1. the branch: named waiting rows when we have evidence, the hero when we have positive evidence
+///      of a NEW family — asserted both purely and through the engine seam, so a decision the engine
+///      never publishes fails. (DIFF-16 split the third case out: a pre-fetch that could not ANSWER is
+///      no longer the same state as one that answered "nothing is there". Two assertions below moved
+///      from `.firstRunHero` to `.couldNotCheck` for that reason, each marked where it happened.)
 ///   2. the one-occasion release: the surface's action runs the deferred fetch and does NOT turn
 ///      the user's Wi-Fi-only preference off.
 ///
@@ -50,13 +53,16 @@ final class DeferredDownloadPreviewTests: XCTestCase {
             "nothing waiting in iCloud IS a new family — they must get the create hero")
     }
 
-    /// The pre-fetch is best-effort, so `nil` (no account, no index, a transient error) has to be
-    /// safe. Unproven is treated as "new family", never as an empty waiting screen that never
-    /// resolves.
-    func testFailedSummaryPrefetchShowsTheFirstRunHero() {
+    /// **DIFF-16 CHANGED THIS ASSERTION, and the change is the point of that task.** It used to expect
+    /// `.firstRunHero` for a failed pre-fetch, on the reasoning that "unproven is treated as new
+    /// family". Measured on TestFlight build 101 that reasoning is wrong in the one case that matters:
+    /// the remote photo COUNT answered (the sized prompt appeared) while the journey query did not, so
+    /// `nil` described a family whose archive demonstrably existed and the list invited them to create
+    /// their first journey. `nil` and `[]` are now different answers — see `SyncDiagnosticsTests`.
+    func testFailedSummaryPrefetchIsCouldNotCheckRatherThanTheHero() {
         XCTAssertEqual(
             FirstSyncDownloadDecision.emptyListContent(remoteSummaries: nil, isDownloadDeferred: true),
-            .firstRunHero)
+            .couldNotCheck)
     }
 
     /// Rows saying "waiting for Wi-Fi" while the download is actually running would be a second
@@ -141,8 +147,11 @@ final class DeferredDownloadPreviewTests: XCTestCase {
         XCTAssertTrue(summary.contains("MB"), "1538 thumbnails is megabytes, not gigabytes: \(summary)")
     }
 
-    /// A failing pre-fetch must leave the list exactly as it was before this feature existed.
-    func testFailedSummaryPrefetchLeavesTheHeroBranchIntact() async {
+    /// A failing pre-fetch publishes no rows — and (DIFF-16) the list then says it could not check
+    /// rather than impersonating a brand-new family. The sized prompt still survives, because the count
+    /// seam is a separate question from the summary seam: **this is exactly the state TestFlight build
+    /// 101 was measured in**, prompt and all, which is why the assertion below changed.
+    func testFailedSummaryPrefetchPublishesNoRowsAndKeepsTheSizedPrompt() async {
         let store = FakeLocalStore()
         store.photoCount = 0
         let (engine, _, _, status) = makeDeferredEngine(
@@ -157,7 +166,7 @@ final class DeferredDownloadPreviewTests: XCTestCase {
         XCTAssertEqual(
             FirstSyncDownloadDecision.emptyListContent(remoteSummaries: status.remoteJourneySummaries,
                                                        isDownloadDeferred: status.state == .waitingForWiFi),
-            .firstRunHero)
+            .couldNotCheck)
         // The count seam is still the fallback, so the sized prompt survives a summary failure.
         guard case let .prompt(bytes, _) = status.firstSyncPrompt else {
             return XCTFail("the remote-count fallback should still size the prompt")

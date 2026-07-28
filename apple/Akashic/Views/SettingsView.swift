@@ -37,6 +37,27 @@ struct SettingsView: View {
     @State private var developerUnlocked = DeveloperTools.isUnlocked()
     @State private var versionTapCount = 0
 
+    /// DIFF-16 — the DIAGNOSTICS gate, deliberately separate from the developer gate above.
+    ///
+    /// `DeveloperTools.isUnlocked()` returns false in Release unconditionally (SHIP-09) and the whole
+    /// workshop is compiled out, which is right: a persistence-mode override that can repoint the
+    /// customer's store has no business in a paid binary. But that left a signed build with **no way
+    /// to be diagnosed at all** — the failure DIFF-16 exists to fix, measured on TestFlight build 101,
+    /// where DIFF-15's journey rows did not render and every line explaining why went to a logger only
+    /// an environment variable could enable. So the persisted seven-tap flag, which `isUnlocked()`
+    /// deliberately ignores, gates one extra section here, and that section contains exactly one
+    /// switch that turns logging on. Nothing it holds writes data, moves a store, or spends money.
+    @State private var diagnosticsUnlocked = SettingsView.diagnosticsAreUnlocked()
+
+    /// Live state of the persisted sync-log switch. Seeded from and written back through `SyncLog`,
+    /// so that type stays the single owner of its key.
+    @State private var syncLoggingEnabled = SyncLog.isPersistentlyEnabled()
+
+    /// DEBUG auto-reveals (like the workshop); Release reveals on the persisted seven-tap flag.
+    static func diagnosticsAreUnlocked() -> Bool {
+        DeveloperTools.isUnlocked() || DeveloperTools.isPersistentlyUnlocked()
+    }
+
     // Import state.
     @State private var bundlePath = Config.importBundlePath
     @State private var mediaRoot = Config.importMediaRoot
@@ -49,6 +70,12 @@ struct SettingsView: View {
     var body: some View {
         Form {
             consumerSections
+
+            // DIFF-16: present in EVERY configuration, unlike the workshop below. This is the whole
+            // point — a TestFlight build must be able to produce a sync log the owner can read.
+            if diagnosticsUnlocked {
+                diagnosticsSection
+            }
 
             // SHIP-09: compiled out of Release entirely, not merely hidden. `DeveloperTools`
             // already returns false there, so this is the second of two independent guards — the
@@ -231,23 +258,70 @@ struct SettingsView: View {
         }
     }
 
-    /// Version row. In DEBUG it also carries the seven-tap unlock gesture for the developer
-    /// section; in Release it is an ordinary row, because there is nothing to unlock (SHIP-09).
+    /// Version row, carrying the classic seven-tap unlock.
+    ///
+    /// **DIFF-16 changed this and the change is deliberate.** It used to be `#if DEBUG` only, on the
+    /// correct reasoning that Release had nothing to unlock (SHIP-09 compiles the workshop out). The
+    /// consequence, found on device: a signed build could not be made to log, so the one surface where
+    /// DIFF-15 could fail was the one surface with no way to see why. The gesture now works in every
+    /// configuration and reveals the DIAGNOSTICS section only — the workshop is still absent from a
+    /// Release binary, guarded by both `#if DEBUG` and `DeveloperTools.isUnlocked()`'s hard `false`.
     private var versionRow: some View {
-        #if DEBUG
         labelled("Version", AppInfo.versionDisplay)
             .contentShape(Rectangle())
             .onTapGesture {
-                guard !developerUnlocked else { return }
+                guard !diagnosticsUnlocked else { return }
                 versionTapCount += 1
                 if DeveloperTools.tapsReachUnlock(versionTapCount) {
                     DeveloperTools.setUnlocked(true)
-                    developerUnlocked = true
+                    diagnosticsUnlocked = true
                 }
             }
-        #else
-        labelled("Version", AppInfo.versionDisplay)
-        #endif
+    }
+
+    // MARK: - Diagnostics (DIFF-16)
+
+    /// One switch, and it is the reason this task is sequenced first: **every candidate root cause for
+    /// the device failure is a guess until the device can talk.**
+    ///
+    /// The log itself already existed and is thorough — `SyncLog` carries account status, fetch
+    /// start/return, per-batch counts, send failures with CloudKit error codes, and the
+    /// `remoteJourneySummaries` line that would have settled which of the three hypotheses is right.
+    /// All of it was unreachable from an installed build, because `SyncLog.isEnabled` read an
+    /// environment variable and TestFlight cannot set one.
+    @ViewBuilder
+    private var diagnosticsSection: some View {
+        Section {
+            Toggle("Sync logging", isOn: Binding(
+                get: { syncLoggingEnabled },
+                set: { newValue in
+                    syncLoggingEnabled = newValue
+                    SyncLog.setPersistentlyEnabled(newValue)
+                    // Written through the switch that was just flipped, so the first line in the
+                    // stream is itself proof the toggle took effect. This is also the assertion the
+                    // unit test makes: `SyncLog.isEnabled` was a `static let`, evaluated once, and a
+                    // toggle in front of a cached `let` does nothing at all while looking correct.
+                    SyncLog.log("diagnostics: sync logging turned on from Settings")
+                }))
+                .tint(Theme.accent)
+                .foregroundStyle(Theme.textPrimary)
+            labelled("Log subsystem", "no.akashic.app · sync")
+            Button(role: .destructive) {
+                // Turning the section off turns the logging off with it: a switch nobody can see any
+                // more must not be left on, quietly writing to the log store for the life of the
+                // install.
+                SyncLog.setPersistentlyEnabled(false)
+                syncLoggingEnabled = false
+                DeveloperTools.setUnlocked(false)
+                diagnosticsUnlocked = Self.diagnosticsAreUnlocked()
+            } label: {
+                Label("Hide diagnostics", systemImage: "eye.slash")
+            }
+        } header: {
+            Text("Diagnostics")
+        } footer: {
+            Text("Records what iCloud sync does — account status, fetch counts, zone names and failures — to the system log. Read it with Console.app while the device is connected, filtered on the subsystem above. Photos, captions and comments are never logged. Off by default.")
+        }
     }
 
     private func linkRow(_ title: LocalizedStringKey, systemImage: String) -> some View {

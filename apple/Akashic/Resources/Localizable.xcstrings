@@ -1721,6 +1721,17 @@
         }
       }
     },
+    "Check again": {
+      "comment": "Journey list, DIFF-16: button that re-runs the cheap pre-fetch of what is waiting in iCloud.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sjekk på nytt"
+          }
+        }
+      }
+    },
     "Check your connection and try again.": {
       "localizations": {
         "nb": {
@@ -1983,6 +1994,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "Kunne ikke lagre originalfila: %@"
+          }
+        }
+      }
+    },
+    "Couldn't check iCloud": {
+      "comment": "Journey list, DIFF-16: heading shown when a download is being held back for Wi-Fi and the pre-fetch that would have named the waiting journeys failed. Deliberately claims nothing about whether journeys exist.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fikk ikke kontakt med iCloud"
           }
         }
       }
@@ -2523,6 +2545,17 @@
         }
       }
     },
+    "Diagnostics": {
+      "comment": "Settings section header (DIFF-16): the hidden diagnostics section, revealed by seven taps on the version row. Holds the sync-logging switch.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Diagnostikk"
+          }
+        }
+      }
+    },
     "Did you know?": {
       "localizations": {
         "nb": {
@@ -2696,6 +2729,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "Last ned bare over Wi-Fi"
+          }
+        }
+      }
+    },
+    "Downloading your journeys": {
+      "comment": "Journey list, DIFF-16: heading shown while the first heavy download is actually running and nothing has arrived locally yet.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Laster ned turene dine"
+          }
+        }
+      }
+    },
+    "Downloading…": {
+      "comment": "Journey list, DIFF-16: footer on a journey row whose download is in progress. Replaces “Waiting for Wi-Fi to download” on the same row.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Laster ned …"
           }
         }
       }
@@ -3646,6 +3701,17 @@
     "Hide developer tools": {
       "shouldTranslate": false
     },
+    "Hide diagnostics": {
+      "comment": "Settings › Diagnostics button (DIFF-16): hides the section again and turns sync logging off with it.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Skjul diagnostikk"
+          }
+        }
+      }
+    },
     "High": {
       "localizations": {
         "nb": {
@@ -4145,6 +4211,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "Posisjon"
+          }
+        }
+      }
+    },
+    "Log subsystem": {
+      "comment": "Settings › Diagnostics row label (DIFF-16): the os_log subsystem and category to filter on in Console.app. The value is a technical identifier and is not translated.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Loggsubsystem"
           }
         }
       }
@@ -5770,6 +5847,17 @@
     "Records saved": {
       "shouldTranslate": false
     },
+    "Records what iCloud sync does — account status, fetch counts, zone names and failures — to the system log. Read it with Console.app while the device is connected, filtered on the subsystem above. Photos, captions and comments are never logged. Off by default.": {
+      "comment": "Settings › Diagnostics section footer (DIFF-16): what sync logging records, how to read it, and what it never records.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Registrerer hva iCloud-synkroniseringen gjør – kontostatus, antall hentede endringer, sonenavn og feil – i systemloggen. Les den med Console.app mens enheten er koblet til, filtrert på subsystemet over. Bilder, bildetekster og kommentarer logges aldri. Av som standard."
+          }
+        }
+      }
+    },
     "Redraw route": {
       "localizations": {
         "nb": {
@@ -6860,6 +6948,17 @@
         }
       }
     },
+    "Sync logging": {
+      "comment": "Settings › Diagnostics toggle (DIFF-16): writes the iCloud sync engine's event stream to the system log so a TestFlight build can be diagnosed.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Synkroniseringslogg"
+          }
+        }
+      }
+    },
     "Syncing is unavailable in this build": {
       "comment": "Settings › iCloud sync status row: this build cannot sync at all.",
       "localizations": {
@@ -7163,6 +7262,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "Denne versjonen kan ikke dele turer – bygg på nytt med CloudKit-konfigurasjonen."
+          }
+        }
+      }
+    },
+    "This can take a few minutes on a slow connection. Journeys appear as they arrive.": {
+      "comment": "Journey list, DIFF-16: body of the downloading state. No percentage is shown because CloudKit reports none.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dette kan ta noen minutter på en treg forbindelse. Turene dukker opp etter hvert som de kommer."
           }
         }
       }
@@ -7926,6 +8036,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "Turene og bildene dine bor i din egen iCloud. Vi har ingen servere, og ser dem aldri."
+          }
+        }
+      }
+    },
+    "Your journeys download when you're on Wi-Fi. We couldn't reach iCloud just now to see what's waiting — nothing has been lost, and nothing has been changed.": {
+      "comment": "Journey list, DIFF-16: body of the could-not-check state. Reassures without claiming that journeys are waiting, because the query that would have established that is what failed.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Turene lastes ned når du er på Wi-Fi. Vi fikk ikke kontakt med iCloud akkurat nå for å se hva som venter – ingenting er tapt, og ingenting er endret."
           }
         }
       }
