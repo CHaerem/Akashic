@@ -108,6 +108,17 @@ export interface MKAnnotation {
     coordinate: MKCoordinate;
     data: unknown;
     draggable: boolean;
+    /**
+     * LIVE-MUTABLE on an annotation already on the map — measured (QUA-49): assigning it moved the marker and
+     * its hit region with no re-add. Same downward-negative convention as
+     * {@link MKAnnotationOptions.anchorOffset}, which is where it was declared ALONE until QUA-58; before that
+     * `setAnchorOffset` in `./annotations.ts` reached the property through a local intersection cast, because a
+     * type shared by the whole adapter was not QUA-49's to move.
+     *
+     * Optional, and deliberately not narrowed: what MapKit reports when the options omit it is UNMEASURED —
+     * this adapter always passes one — so declaring it required would assert something nobody has seen.
+     */
+    anchorOffset?: DOMPoint;
     element?: HTMLElement;
     addEventListener(name: string, handler: (event: unknown) => void): void;
 }
