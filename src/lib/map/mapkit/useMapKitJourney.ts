@@ -53,8 +53,9 @@ import {
     type ContainerPx, type Region,
 } from './camera';
 import {
-    arrivalFramePadding, attributionPadding, dayFramePadding, DAY_FIT_MAX_ZOOM, offRouteZoom, PHOTO_ZOOM,
+    arrivalFramePadding, attributionPadding, dayFramePadding, offRouteZoom, PHOTO_ZOOM,
 } from './chrome';
+import { APPLE_SATELLITE_BAND } from '../imagery';
 import { addRouteOverlays, regionOf, removeRouteOverlays, setActiveSegment, type RouteOverlays } from './overlays';
 import { CameraQueue } from './cameraQueue';
 import {
@@ -102,6 +103,21 @@ export interface UseMapKitJourneyReturn {
 
 function isMobileViewport(): boolean {
     return typeof window !== 'undefined' && window.matchMedia('(max-width: 768px)').matches;
+}
+
+/**
+ * The display's device-pixel ratio, for the imagery clamp. (QUA-47)
+ *
+ * Read here rather than inside `../imagery.ts` for the same reason `isMobileViewport` is: the pure modules stay
+ * testable in node, and a `window` read in the middle of the framing maths is a `window` read no unit test can
+ * vary. Defaults to 1 when there is no window and when the browser reports something absurd, which is the
+ * conservative direction — dpr 1 asks the LEAST of the tile service, so a wrong reading here loosens nothing
+ * that was already correct and merely fails to protect a display we could not identify.
+ */
+function deviceScale(): number {
+    if (typeof window === 'undefined') return 1;
+    const dpr = window.devicePixelRatio;
+    return Number.isFinite(dpr) && dpr > 0 ? dpr : 1;
 }
 
 export function useMapKitJourney(options: UseMapKitJourneyOptions): UseMapKitJourneyReturn {
@@ -496,6 +512,12 @@ export function useMapKitJourney(options: UseMapKitJourneyOptions): UseMapKitJou
      * The first case is the one the imagery gate makes non-negotiable: frame from ROUTE BOUNDS, never a fixed
      * wide zoom. At ~20 m/px over the Khumbu, Apple's mosaic carries heavy cloud; a trek's route bounds are
      * tighter than its massif and land where Apple is at parity or better.
+     *
+     * QUA-47: **route bounds alone were not enough**, and the live site proved it — a route spanning a few
+     * hundred metres fits to a resolution no imagery has, and the featureless brown smear that produced was
+     * the same defect as the cloudy mosaic seen from the other end. Every branch below therefore passes
+     * `APPLE_SATELLITE_BAND`; `../imagery.ts` carries the ladder measurement that set its two numbers, and
+     * `./camera.ts` explains why the fit gets the floor only.
      */
     const regionForSelection = useCallback((): Region | null => {
         const box = containerPx();
@@ -503,6 +525,7 @@ export function useMapKitJourney(options: UseMapKitJourneyOptions): UseMapKitJou
         const layout = chromeState();
         const isMobile = layout.isMobile;
         const attribution = attributionPadding(layout);
+        const imagery = { ...APPLE_SATELLITE_BAND, devicePixelRatio: deviceScale() };
 
         if (!selectedCamp) {
             const bounds = boundsOfRoute(trekData.route?.coordinates ?? []);
@@ -511,8 +534,9 @@ export function useMapKitJourney(options: UseMapKitJourneyOptions): UseMapKitJou
                 container: box,
                 framePadding: arrivalFramePadding({ isMobile }),
                 attributionPadding: attribution,
-                // A single-point route would otherwise ask for infinite zoom.
-                maxZoom: DAY_FIT_MAX_ZOOM,
+                // Also what stops a single-point route asking for infinite zoom: the floor bounds the scale
+                // from below, which is the job `maxZoom: DAY_FIT_MAX_ZOOM` used to do here.
+                imagery,
             });
         }
 
@@ -525,7 +549,7 @@ export function useMapKitJourney(options: UseMapKitJourneyOptions): UseMapKitJou
                     container: box,
                     framePadding: dayFramePadding({ isMobile }),
                     attributionPadding: attribution,
-                    maxZoom: DAY_FIT_MAX_ZOOM,
+                    imagery,
                 });
             }
         }
@@ -533,6 +557,7 @@ export function useMapKitJourney(options: UseMapKitJourneyOptions): UseMapKitJou
         return regionForZoom(selectedCamp.coordinates, offRouteZoom({ isMobile }), {
             container: box,
             attributionPadding: attribution,
+            imagery,
         });
     }, [containerPx, chromeState, selectedCamp, trekData]);
 
@@ -599,6 +624,9 @@ export function useMapKitJourney(options: UseMapKitJourneyOptions): UseMapKitJou
         requestCamera(regionForZoom(photo.coordinates as LngLat, PHOTO_ZOOM, {
             container: box,
             attributionPadding: attributionPadding(chromeState()),
+            // QUA-47: 16 is the request. A photo taken far north lands wider than 16, because that is where
+            // the imagery stops — a sharp pin over a magnified smear is not a better answer than a wider frame.
+            imagery: { ...APPLE_SATELLITE_BAND, devicePixelRatio: deviceScale() },
         }));
     }, [containerPx, requestCamera, chromeState]);
 

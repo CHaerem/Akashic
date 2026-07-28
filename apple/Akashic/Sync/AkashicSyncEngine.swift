@@ -254,9 +254,12 @@ final class AkashicSyncEngine: NSObject, CKSyncEngineDelegate {
         SyncLog.log("activate: accountStatus=\(account.rawValue) state=\(String(describing: Self.loadState() != nil))")
         if let blocked = SyncStatus.state(for: account) {
             status.set(blocked)          // .noAccount / .restricted / .unavailable -> engine OFF
-            // No account => sync can never deliver anything this session. Safe to decide the
-            // demo-seed question right now (see `onFreshInstallDetermined`'s doc comment).
-            if databaseScope == .private { onFreshInstallDetermined?() }
+            // No usable account => sync can never deliver anything this session. Safe to decide the
+            // demo-seed question right now — but ONLY for a status that actually says that; see
+            // `accountStatusIsConclusiveForDemoSeed`, which is the QUA-48 half of this branch.
+            if databaseScope == .private, Self.accountStatusIsConclusiveForDemoSeed(account) {
+                onFreshInstallDetermined?()
+            }
             return
         }
 
@@ -290,6 +293,43 @@ final class AkashicSyncEngine: NSObject, CKSyncEngineDelegate {
         //
         // `Task.detached`, NEVER `Task {}` — see `fetchOnActivation`.
         activationFetch = Task.detached { [weak self] in await self?.fetchOnActivation() }
+    }
+
+    /// Whether an account status is a CONCLUSIVE answer to "can sync deliver anything into this
+    /// store?" — the only kind of answer that may fire the once-ever `onFreshInstallDetermined`
+    /// decision without a fetch (QUA-48).
+    ///
+    /// This branch used to fire for every non-available status, on the strength of a comment that
+    /// read "No account => sync can never deliver anything this session". Two of the four say no
+    /// such thing. `.couldNotDetermine` is what CloudKit reports when it cannot reach the account at
+    /// all — the ordinary state of a cold launch with no network yet, i.e. exactly a fresh install
+    /// opened the moment it finishes downloading — and `.temporarilyUnavailable` says "retry" in its
+    /// name. Both mean *we do not know*, and both burned the irreversible seed decision anyway, so
+    /// the sample went in and the family's real archive arrived on top of it minutes later. Measured
+    /// on the tree before this fix, with a throwaway probe over all four statuses: every one of them
+    /// fired the hook, `.couldNotDetermine` (rawValue 0) and `.temporarilyUnavailable` (4) included.
+    /// `SampleJourneyRetirementTests` is that probe turned into the standing guard.
+    ///
+    /// `.available` returns false here too, and is not a bug: an available account defers the
+    /// decision to the first successful fetch (`fetchOnActivation`), which is a strictly better
+    /// answer than the account status could give.
+    ///
+    /// The cost of the narrowing is that a first launch with no network makes no decision at all —
+    /// no sample until the next launch. That is the right trade: a missing sample is a poorer first
+    /// screen, a duplicated one is the app inventing a fake copy of the family's own trip. Note
+    /// there is nothing to retry it with in-session — `engine` is not built on this path, so no
+    /// `.accountChange` event can arrive; the next launch decides.
+    static func accountStatusIsConclusiveForDemoSeed(_ status: CKAccountStatus) -> Bool {
+        switch status {
+        case .noAccount, .restricted:
+            return true                      // a known, decided state of this device
+        case .available:
+            return false                     // the first successful fetch decides instead
+        case .couldNotDetermine, .temporarilyUnavailable:
+            return false                     // "we do not know" is not a decision
+        @unknown default:
+            return false                     // a status we cannot reason about is not a decision
+        }
     }
 
     /// The explicit activation pull, isolated in its own method so every caller reaches it the

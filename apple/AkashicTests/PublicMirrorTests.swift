@@ -44,6 +44,12 @@ final class PublicMirrorTests: XCTestCase {
         /// slug -> creatorUserRecordID.recordName of an existing PublicJourney (for collision tests).
         var existingJourneyCreators: [String: String] = [:]
 
+        /// Make the journey-existence lookup THROW. The real `CKDatabase` extension only swallows
+        /// `.unknownItem` (that is the "keyspace is free" answer) and lets every other CKError out,
+        /// so a presence check has to distinguish "asked, nothing there" from "could not ask" —
+        /// which is untestable without a way to script the failure. (QUA-45.)
+        var existingJourneyCreatorError: Error?
+
         /// Make every save fail per-record (not by throwing), which is the shape CloudKit actually
         /// returns for a partial failure. Lets a test assert what the report says when nothing
         /// landed — e.g. that no share link is offered for a page that does not exist.
@@ -91,7 +97,8 @@ final class PublicMirrorTests: XCTestCase {
         }
 
         func ckExistingPublicJourneyCreator(slug: String) async throws -> String? {
-            existingJourneyCreators[slug]
+            if let existingJourneyCreatorError { throw existingJourneyCreatorError }
+            return existingJourneyCreators[slug]
         }
     }
 
@@ -823,6 +830,72 @@ final class PublicMirrorTests: XCTestCase {
         XCTAssertTrue(result.kept.isEmpty)
         XCTAssertEqual(result.heldBack, 10)
     }
+
+    // MARK: - Presence: what the LIVE mirror says, not what the local flag claims (QUA-45)
+
+    /// The measured defect, at the layer that can answer it. `isPublic` said published; the
+    /// production public database held zero `PublicJourney` records. An empty mirror must read
+    /// `.absent`, because that is what licenses the UI to stop claiming "published".
+    func testPresenceIsAbsentWhenTheMirrorHoldsNothing() async {
+        let mock = MockPublicDatabase()          // no existingJourneyCreators at all
+        let publisher = PublicMirrorPublisher(database: mock, ownerRecordName: "_me")
+        let presence = await publisher.presence(ofJourneySlug: "kilimanjaro")
+        XCTAssertEqual(presence, .absent, "an empty mirror is not a published journey")
+    }
+
+    func testPresenceIsPresentWhenOurOwnRecordIsThere() async {
+        let mock = MockPublicDatabase()
+        mock.existingJourneyCreators["kilimanjaro"] = "_me"
+        let publisher = PublicMirrorPublisher(database: mock, ownerRecordName: "_me")
+        let presence = await publisher.presence(ofJourneySlug: "kilimanjaro")
+        XCTAssertEqual(presence, .present(slug: "kilimanjaro"))
+    }
+
+    /// A cross-owner collision publishes under `kilimanjaro-a1b2c3` while the local journey keeps the
+    /// pretty slug. Checking only the pretty slug would report the mirror missing and prompt a
+    /// needless re-publish — the same class of wrong answer `unpublish` had before it swept both.
+    func testPresenceFindsAMirrorLivingUnderTheDisambiguatedSlug() async {
+        let mock = MockPublicDatabase()
+        let disambiguated = PublicMirrorBuilder.disambiguatedSlug("kilimanjaro", ownerRecordName: "_me")
+        mock.existingJourneyCreators["kilimanjaro"] = "_someone-else"   // they hold the pretty slug
+        mock.existingJourneyCreators[disambiguated] = "_me"             // ours is under the variant
+        let publisher = PublicMirrorPublisher(database: mock, ownerRecordName: "_me")
+        let presence = await publisher.presence(ofJourneySlug: "kilimanjaro")
+        XCTAssertEqual(presence, .present(slug: disambiguated))
+    }
+
+    /// Someone else's record under our pretty slug is NOT evidence that we published. Treating it as
+    /// present would re-assert the false "published" claim through the back door, and would offer a
+    /// share link to a stranger's page.
+    func testPresenceIgnoresAnotherOwnersRecordUnderTheSameSlug() async {
+        let mock = MockPublicDatabase()
+        mock.existingJourneyCreators["kilimanjaro"] = "_someone-else"
+        let publisher = PublicMirrorPublisher(database: mock, ownerRecordName: "_me")
+        let presence = await publisher.presence(ofJourneySlug: "kilimanjaro")
+        XCTAssertEqual(presence, .absent, "another family's page is not ours and not our evidence")
+    }
+
+    /// "We could not ask" must never be reported as "it is not published". Both are unhappy, but only
+    /// one of them is a fact, and the UI renders them differently.
+    func testPresenceIsUnknownWhenTheQueryFailsRatherThanAbsent() async {
+        let mock = MockPublicDatabase()
+        mock.existingJourneyCreatorError = CKError(.networkUnavailable)
+        let publisher = PublicMirrorPublisher(database: mock, ownerRecordName: "_me")
+        guard case .unknown = await publisher.presence(ofJourneySlug: "kilimanjaro") else {
+            return XCTFail("a failed lookup must be .unknown, never .absent")
+        }
+    }
+
+    /// With no owner identity (the dev/test path) there is nothing to compare a creator against, so
+    /// presence falls back to "a record exists under the pretty slug" — matching the assumption
+    /// `resolveEffectiveSlug` already makes on that same path.
+    func testPresenceWithNoOwnerIdentityAcceptsAnyRecordUnderThePrettySlug() async {
+        let mock = MockPublicDatabase()
+        mock.existingJourneyCreators["kilimanjaro"] = "_whoever"
+        let publisher = PublicMirrorPublisher(database: mock)   // ownerRecordName nil
+        let presence = await publisher.presence(ofJourneySlug: "kilimanjaro")
+        XCTAssertEqual(presence, .present(slug: "kilimanjaro"))
+    }
 }
 
 // MARK: - ShowcaseViewModel: flag flips only after the network op, and only for the owner
@@ -838,6 +911,10 @@ final class ShowcaseViewModelTests: XCTestCase {
         var report: PublicMirrorReport
         private(set) var publishCalled = false
         private(set) var unpublishCalled = false
+        /// What the live mirror will claim when asked (QUA-45). Defaults to `.absent`, which is the
+        /// state that matters: the flag says published and the web holds nothing.
+        var presence: PublicMirrorPresence = .absent
+        private(set) var presenceQueriedSlugs: [String] = []
         init(_ report: PublicMirrorReport) { self.report = report }
         func publish(journey: Journey, photos: [Photo],
                      progress: (@Sendable (PublicMirrorProgress) -> Void)?) async -> PublicMirrorReport {
@@ -846,6 +923,9 @@ final class ShowcaseViewModelTests: XCTestCase {
         func unpublish(slug: String,
                        progress: (@Sendable (PublicMirrorProgress) -> Void)?) async -> PublicMirrorReport {
             unpublishCalled = true; return report
+        }
+        func presence(ofJourneySlug slug: String) async -> PublicMirrorPresence {
+            presenceQueriedSlugs.append(slug); return presence
         }
     }
 
@@ -982,5 +1062,163 @@ final class ShowcaseViewModelTests: XCTestCase {
         XCTAssertFalse(publisher.unpublishCalled)
         XCTAssertTrue(flag.flips.isEmpty)
         XCTAssertEqual(vm.phase, .failed(ShowcaseViewModel.notOwnerMessage))
+    }
+
+    // MARK: Verification — the sheet may not assert "published" on the flag alone (QUA-45)
+
+    /// The state that was measured: `isPublic` true, mirror empty. The model must settle on
+    /// `.notOnShowcase`, which is what makes the sheet say "marked as published … but nothing for it
+    /// was found on the live showcase" instead of stating that it is on the web.
+    func testAnEmptyMirrorSettlesOnNotOnShowcase() async {
+        let publisher = FakePublisher(publishedReport())
+        publisher.presence = .absent
+        let vm = model(publisher)
+
+        vm.verifyPresence(slug: "kilimanjaro")
+        await vm.awaitVerification()
+
+        XCTAssertEqual(publisher.presenceQueriedSlugs, ["kilimanjaro"], "the mirror is actually asked")
+        XCTAssertEqual(vm.verification, .notOnShowcase)
+    }
+
+    func testAPresentMirrorIsTheOnlyStateThatLicensesThePublishedClaim() async {
+        let publisher = FakePublisher(publishedReport())
+        publisher.presence = .present(slug: "kilimanjaro-a1b2c3")
+        let vm = model(publisher)
+
+        vm.verifyPresence(slug: "kilimanjaro")
+        await vm.awaitVerification()
+
+        XCTAssertEqual(vm.verification, .onShowcase(slug: "kilimanjaro-a1b2c3"),
+                       "the verified slug is the disambiguated one the mirror actually lives under")
+    }
+
+    /// A failed lookup must land in `couldNotCheck`, never in `notOnShowcase`. Collapsing them would
+    /// tell a household with flaky Wi-Fi that its showcase is gone.
+    func testAFailedLookupIsUnverifiedNotUnpublished() async {
+        let publisher = FakePublisher(publishedReport())
+        publisher.presence = .unknown("networkUnavailable")
+        let vm = model(publisher)
+
+        vm.verifyPresence(slug: "kilimanjaro")
+        await vm.awaitVerification()
+
+        XCTAssertEqual(vm.verification, .couldNotCheck("networkUnavailable"))
+        XCTAssertNotEqual(vm.verification, .notOnShowcase)
+    }
+
+    /// No account / un-entitled build: the resolver fails before any publisher exists. That is still
+    /// "could not check", not "not published" — and it is the resting state of every non-CloudKit run.
+    func testNoAccountLeavesTheClaimUnverifiedRatherThanDenied() async {
+        let vm = ShowcaseViewModel(resolveMirror: { .unavailable("No iCloud account available.") })
+
+        vm.verifyPresence(slug: "kilimanjaro")
+        await vm.awaitVerification()
+
+        XCTAssertEqual(vm.verification, .couldNotCheck("No iCloud account available."))
+    }
+
+    /// The model starts out asserting nothing at all. This is what the sheet renders for a build that
+    /// cannot ask and for a journey shared into this account, so it has to be the default rather than
+    /// an optimistic guess.
+    func testVerificationStartsOutMakingNoClaim() {
+        XCTAssertEqual(model(FakePublisher(publishedReport())).verification, .notChecked)
+    }
+
+    /// A publish that just succeeded is first-hand evidence about the mirror, so the sheet must not
+    /// drop back to "not verified" immediately after watching it land.
+    func testASuccessfulPublishIsItsOwnVerification() async {
+        var report = publishedReport()
+        report.publishedSlug = "kilimanjaro"
+        let publisher = FakePublisher(report)
+        let flag = FlagRecorder()
+        let vm = model(publisher)
+
+        vm.publish(journey: journey(), photos: [], isOwner: true, setPublic: flag.apply)
+        await vm.awaitCurrentOperation()
+
+        XCTAssertEqual(vm.verification, .onShowcase(slug: "kilimanjaro"))
+    }
+
+    /// The other direction: a publish whose journey record never landed reports no slug, so there is
+    /// nothing verified and nothing claimed. (The flag is not flipped either — see the tests above.)
+    func testAFailedPublishClaimsNothingAboutTheMirror() async {
+        let publisher = FakePublisher(failedReport())
+        let flag = FlagRecorder()
+        let vm = model(publisher)
+
+        vm.publish(journey: journey(), photos: [], isOwner: true, setPublic: flag.apply)
+        await vm.awaitCurrentOperation()
+
+        XCTAssertEqual(vm.verification, .notChecked)
+    }
+
+    /// One check per sheet presentation: the guard exists so re-evaluating the view's `.task` (or a
+    /// second call racing the first) cannot restart a settled verification and flap the copy.
+    func testVerificationDoesNotRestartOnceItHasAnAnswer() async {
+        let publisher = FakePublisher(publishedReport())
+        publisher.presence = .absent
+        let vm = model(publisher)
+
+        vm.verifyPresence(slug: "kilimanjaro")
+        await vm.awaitVerification()
+        vm.verifyPresence(slug: "kilimanjaro")
+        await vm.awaitVerification()
+
+        XCTAssertEqual(publisher.presenceQueriedSlugs, ["kilimanjaro"], "asked once, not twice")
+    }
+}
+
+/// QUA-45's WIRING, which nothing guarded until this test.
+///
+/// `ShowcaseViewModel.verifyPresence` has fifteen unit tests and they are good ones. But the thing that
+/// CALLS it lives in a SwiftUI `.task` inside the view body, which no unit test can reach — and there is no
+/// showcase UI test (`grep -rln howcase apple/AkashicUITests/` finds nothing). An adversarial pass deleted
+/// that `.task` block, after which the sheet never asks the mirror and rests forever on "not checked", and
+/// all 841 native tests stayed green.
+///
+/// So this reads the source. That is a deliberate choice and an established pattern in this repo rather than
+/// a shortcut: `UniversalLinkTests` reads the shipped `.entitlements` to catch drift between the plist and
+/// the parser, and MAP-03's `chrome.test.ts` read `src/index.css` for a rule it translated — and that one
+/// fired correctly the moment MAP-05 deleted the rule, which is exactly the behaviour wanted here.
+///
+/// It is a coupling test, so it will go red if the wiring legitimately moves. That is the point: when it
+/// does, check the new call site still runs on presentation and update the pattern below — do not delete the
+/// assertion.
+final class ShowcaseVerificationWiringTests: XCTestCase {
+
+    private func sheetSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()          // AkashicTests/
+            .deletingLastPathComponent()          // apple/
+            .appendingPathComponent("Akashic/Views/Showcase/JourneyShowcaseSheet.swift")
+        guard let data = try? Data(contentsOf: url), let text = String(data: data, encoding: .utf8) else {
+            throw XCTSkip("JourneyShowcaseSheet.swift not readable from the test bundle")
+        }
+        return text
+    }
+
+    /// **The assertion the revert has to fail.** Without a call site, `verifyPresence` is unreachable code and
+    /// the sheet's honest-but-uninformative resting state becomes its only state.
+    func testTheSheetActuallyAsksTheMirrorOnPresentation() throws {
+        let source = try sheetSource()
+        XCTAssertTrue(source.contains("model.verifyPresence(slug:"),
+                      "the sheet never calls verifyPresence, so the mirror is never asked and the status row "
+                      + "can only ever say 'not verified' — see this class's doc comment")
+        XCTAssertTrue(source.contains(".task {"),
+                      "the verifyPresence call must run on presentation; a call from a button or an onAppear "
+                      + "that no longer fires would satisfy the check above while doing nothing")
+    }
+
+    /// The gate matters as much as the call. Verifying a journey the user does not own, or one whose flag was
+    /// never set, would ask the mirror about a slug this device has no claim to — and `presence` matches on
+    /// creator, so the answer would be a confusing `absent` rather than a useful one.
+    func testTheCallIsGatedOnThereBeingAClaimAndSomeoneWhoCanCheckIt() throws {
+        let source = try sheetSource()
+        for term in ["functional", "isOwner", "live.isPublic"] {
+            XCTAssertTrue(source.contains(term),
+                          "the presentation gate no longer mentions \(term); an ungated check asks the mirror "
+                          + "about journeys this device has no claim to")
+        }
     }
 }

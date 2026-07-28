@@ -161,8 +161,21 @@ export function offRouteZoom(state: { isMobile: boolean }): number {
     return state.isMobile ? 14.5 : 15;
 }
 
-/** Zoom `flyToPhoto` lands on (`useMapbox.ts:1644-1656`). Its pitch 45 has no MapKit equivalent. */
+/**
+ * Zoom `flyToPhoto` lands on (`useMapbox.ts:1644-1656`). Its pitch 45 has no MapKit equivalent.
+ *
+ * QUA-47: this is a REQUEST, not a result. Every camera in this adapter runs through the imagery band in
+ * `../imagery.ts`, so at a high enough latitude — or a high enough `devicePixelRatio` — the frame that lands
+ * is wider than 16. That is the point: 16 asks for 2.39 m/px in Tanzania and 0.62 m/px in Svalbard, and only
+ * one of those is imagery the tile service has.
+ */
 export const PHOTO_ZOOM = 16;
 
-/** Do not zoom in past this when fitting a day's segment (`useMapbox.ts:1103`). */
-export const DAY_FIT_MAX_ZOOM = 16;
+/*
+ * QUA-47 deleted `DAY_FIT_MAX_ZOOM = 16`, which was `regionForBounds`' `maxZoom` for both the arrival fit and
+ * the day fit. It was doing two jobs and doing the second one wrong: it kept a degenerate single-point bounds
+ * from asking for infinite zoom (fine, and `../imagery.ts`'s floor now does that better), and it was the only
+ * thing standing between a short route and a frame deeper than any imagery (not fine — a zoom level is not a
+ * ground resolution, and at 61.6 N zoom 16 is 1.13 m/px against a measured Khumbu limit of 1.2 m/DEVICE px).
+ * The replacement is `APPLE_SATELLITE_BAND`, which lives with the measurement rather than next to the padding.
+ */

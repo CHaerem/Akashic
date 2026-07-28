@@ -37,12 +37,19 @@ final class JourneyStore: ObservableObject {
     init(persistence: PersistenceController = .shared) {
         self.persistence = persistence
         reload()
+        // QUA-48: heal an install that already holds the sample NEXT TO the family's own archive.
+        // Deliberately at launch rather than on every `reload()` — see the method's doc comment.
+        retireSampleJourneyIfLibraryHasRealContent()
         // Pulled server changes land straight in Core Data, which this store does NOT observe —
         // it publishes a snapshot taken by `reload()`. Without this hook a clean `.cloudKit`
         // install downloaded the whole archive and still showed "No journeys" until the next
         // relaunch. The coordinator fires it on the main actor after each applied batch.
         persistence.syncCoordinator?.onRemoteChangesApplied = { [weak self] in
             self?.reload()
+            // QUA-48: this is the moment the family's real journeys arrive on a second device, and
+            // therefore the moment a sample seeded into what looked like an empty account becomes a
+            // near-duplicate of their own trek.
+            self?.retireSampleJourneyIfLibraryHasRealContent()
         }
     }
 
@@ -531,4 +538,65 @@ final class JourneyStore: ObservableObject {
 
     static let sampleBadgesVisible =
         sampleBadgesVisible(environment: ProcessInfo.processInfo.environment)
+
+    // MARK: - Sample retirement (QUA-48)
+
+    /// Remove the bundled SAMPLE journey once the library has proved it holds journeys of the
+    /// family's own after all.
+    ///
+    /// MEASURED 2026-07-27, fresh install signed into the owner's real account: the library ended
+    /// up with FOUR journeys, two of them Kilimanjaro — one badged SAMPLE dated Sep 29 – Oct 9 2023
+    /// and one unbadged dated Sep 30 – Oct 9 2023, identical distance (70 km), ascent (4 800 m) and
+    /// summit (Uhuru Peak, 5 895 m). A one-day-offset fake copy of the family's real trek.
+    ///
+    /// The seed itself is already deferred: `.cloudKit` does not decide at launch, it waits for
+    /// `AkashicSyncEngine.onFreshInstallDetermined` (see `PersistenceController+Sync.startSync`).
+    /// That closes the common case and cannot close all of them, because every trigger for that
+    /// hook is a *prediction* that nothing more is coming:
+    ///  - the account-status path fires without any fetch at all (and fired on transient states
+    ///    until QUA-48 narrowed it — see `AkashicSyncEngine.accountStatusIsConclusiveForDemoSeed`),
+    ///    so a customer who was signed out at first launch and signs in later gets the real archive
+    ///    delivered on top of an already-seeded sample;
+    ///  - the fetch path fires on the FIRST successful fetch, which is the first moment the store
+    ///    can be trusted — not a guarantee that the account had already handed over everything.
+    /// So this is the other half: not a better prediction, but a correction applied once the answer
+    /// is a fact. It is what makes the guarantee hold on the second device in every household
+    /// (SHIP-17 has ~10 of them, so this is the modal second-device experience, not an edge case).
+    ///
+    /// Deleting is safe and complete here in a way it is nowhere else in the app: the sample never
+    /// reached CloudKit (`isSeededFixture` → `AkashicSyncEngine.handles` is false for it, and
+    /// `deleteZones` skips it), so there is no server copy, no other device's copy, and nothing to
+    /// take down from the public showcase. It is bundled content, not the family's.
+    ///
+    /// ## Deliberate limits
+    /// - **`.fixtures` mode is exempt.** That is the in-memory dev/preview/screenshot store where
+    ///   every journey is a seeded fixture and seeding is the entire point.
+    /// - **Shared-in journeys do not count as "real content".** A brand-new customer whose only
+    ///   content is a journey someone shared with them has still never made one, so the sample
+    ///   keeps its job. `billableOwnedJourneyCount` already draws exactly that line.
+    /// - **Called at launch and on applied remote changes, never from `reload()`.** `reload()` runs
+    ///   after every edit, so sweeping there would delete the sample out from under a user the
+    ///   instant they created their first journey, mid-session. At those two points the effect is
+    ///   instead: a sample that is coexisting with the family's archive is gone by the next launch.
+    ///   (This does mean the sample retires once the customer has a journey of their own, which is
+    ///   a small onboarding behaviour change — D9's sample has done its job by then.)
+    ///
+    /// Returns the ids retired, for tests and for the log line.
+    @discardableResult
+    func retireSampleJourneyIfLibraryHasRealContent() -> [String] {
+        guard mode != .fixtures else { return [] }
+        let samples = journeys.map(\.id).filter { isSampleJourney($0) }
+        guard !samples.isEmpty else { return [] }
+        guard billableOwnedJourneyCount > 0 else { return [] }
+
+        var retired: [String] = []
+        for id in samples {
+            // Through the normal delete path, so `deleteBlocker` still gets its say: if the user
+            // published the sample to the showcase it has a live world-readable mirror, and taking
+            // that down is their action, not a sweep's. A blocked sample is simply left alone.
+            guard deleteJourney(id: id) else { continue }
+            retired.append(id)
+        }
+        return retired
+    }
 }

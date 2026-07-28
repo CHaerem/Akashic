@@ -117,6 +117,38 @@ final class DemoJourneyTests: XCTestCase {
         XCTAssertEqual(ids, ["demo-kilimanjaro"])
     }
 
+    /// QUA-45. The demo journey must land PRIVATE, because nothing about it has ever been published.
+    ///
+    /// It used to land with `isPublic == true`, inherited verbatim from `FixtureLoader.map`, and that
+    /// one boolean was the whole measured defect: opening Showcase on the sample Kilimanjaro read
+    /// "This journey is published to the world-readable showcase" while a REST query against the
+    /// production public database returned zero `PublicJourney` records. It also had two consequences
+    /// worse than the wrong sentence, both of which follow from the demo keeping the fixture's SLUG
+    /// (`remapToDemoIdentity` re-mints ids, deliberately not the slug):
+    ///   * `JourneyStore.deleteBlocker` returns `.stillPublished` for a published journey in CloudKit
+    ///     mode, so the onboarding sample was UNDELETABLE, for a reason that was not true.
+    ///   * the only way out of that was "Remove from showcase", which unpublishes `slug` — i.e. the
+    ///     owner's REAL, really-published `kilimanjaro` mirror, same creator, so the deletes succeed.
+    func testSeededDemoJourneyIsNotMarkedPublished() throws {
+        let storeURL = makeTempStoreURL()
+        let defaults = makeTempDefaults()
+        let controller = PersistenceController(mode: .local, seed: true, fixtureBundle: bundle,
+                                                storeURL: storeURL, defaults: defaults)
+
+        let demo = try XCTUnwrap(controller.loadJourneys().first)
+        XCTAssertFalse(demo.isPublic,
+                       "the sample journey has never been published anywhere — it must not claim to be")
+    }
+
+    /// Same claim for `.fixtures` dev mode, whose three journeys are equally unpublished. This is the
+    /// mode every preview and screenshot run uses, so a false "Public" here is what gets photographed.
+    @MainActor
+    func testDevFixturesAreNotMarkedPublished() {
+        let controller = PersistenceController(mode: .fixtures, seed: true, fixtureBundle: bundle)
+        let published = controller.loadJourneys().filter(\.isPublic).map(\.slug)
+        XCTAssertEqual(published, [], "no bundled fixture has a public mirror behind it")
+    }
+
     /// The other half of the same guarantee: even after the demo has seeded, a journey that later
     /// arrives by sync (or share) using the fixture's RAW id must not be mistaken for the sample —
     /// otherwise the real Kilimanjaro would silently inherit the demo's free-tier exemption and

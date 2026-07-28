@@ -312,6 +312,40 @@ struct PublicMirrorConfig: Equatable {
     static let `default` = PublicMirrorConfig()
 }
 
+/// What the LIVE public database says about a journey — as distinct from what the local `isPublic`
+/// flag claims (QUA-45).
+///
+/// ## Why the flag is not an answer
+/// `isPublic` is a boolean on the PRIVATE-database journey record, and it is **environment blind**.
+/// The CloudKit environment is chosen by the `icloud-container-environment` entitlement at signing
+/// time (see `CloudKitImportEnvironment`), and the local Core Data store survives a reinstall across
+/// configurations — so publish from `Debug-CloudKit` (Development), then run `Debug-Production` or a
+/// TestFlight build, and the flag says "published" while the Production public database has never
+/// held a record for this journey. Measured 2026-07-27: the Showcase sheet asserted "This journey is
+/// published to the world-readable showcase" while a REST query against the production public
+/// database returned ZERO `PublicJourney` records, twice, minutes apart. The inverse drifts too — a
+/// Production-published journey reads "published" in a Development build whose mirror is empty.
+///
+/// ## Why not simply scope the flag per environment
+/// Considered and rejected. It would need a new field on a *synced* record type, and it would still
+/// only cover the one drift cause: the flag would remain wrong when the mirror record was deleted in
+/// CloudKit Console, when a publish's `PublicJourney` save failed while photos landed, and when the
+/// flag arrived from somewhere with no CloudKit mirror at all (`ExportMapper` maps it straight out of
+/// a legacy export bundle; `FixtureLoader` used to hardcode `true`). The mirror is the authority on
+/// what is on the web, and asking it costs one record fetch, so the honest fix is to ask.
+enum PublicMirrorPresence: Equatable {
+    /// A `PublicJourney` published by THIS owner exists, under this slug (which may be the
+    /// disambiguated variant rather than the pretty one).
+    case present(slug: String)
+    /// The query succeeded and no `PublicJourney` of ours exists under any slug we could have
+    /// published under. This is the QUA-45 state: the flag says published, the web says nothing.
+    case absent
+    /// The query itself failed. Deliberately NOT folded into `absent`: "we asked and there is
+    /// nothing there" and "we could not ask" are different claims, and reporting a network failure
+    /// as "not published" would replace one confident lie with another.
+    case unknown(String)
+}
+
 /// Live progress for the UI: a 0…1 fraction and a short phase label.
 struct PublicMirrorProgress: Equatable {
     var fraction: Double
@@ -373,6 +407,10 @@ protocol PublicMirrorPublishing: Sendable {
                  progress: (@Sendable (PublicMirrorProgress) -> Void)?) async -> PublicMirrorReport
     func unpublish(slug: String,
                    progress: (@Sendable (PublicMirrorProgress) -> Void)?) async -> PublicMirrorReport
+    /// Ask the live public database whether this journey is actually on the showcase, so the UI can
+    /// stop asserting the local flag as fact (QUA-45). Never throws — a failed query is
+    /// `.unknown`, which the UI must render as "unverified", not as "not published".
+    func presence(ofJourneySlug slug: String) async -> PublicMirrorPresence
 }
 
 /// Executes publish / unpublish against a `PublicMirrorDatabase`. Not main-actor: pure record
@@ -417,6 +455,48 @@ final class PublicMirrorPublisher: PublicMirrorPublishing {
             return journey.slug   // no record, or it is already ours — the pretty slug is free
         }
         return PublicMirrorBuilder.disambiguatedSlug(journey.slug, ownerRecordName: ownerRecordName)
+    }
+
+    // MARK: Presence — what the live mirror says (QUA-45)
+
+    /// Whether a `PublicJourney` this owner published exists in the public database THIS build talks
+    /// to. Reuses `candidateSlugs`, so a mirror that lives under the owner-scoped disambiguated slug
+    /// is found rather than reported missing — the same reason `unpublish` sweeps both.
+    ///
+    /// **Why the creator has to match.** The public keyspace is global: another family's
+    /// `PublicJourney` can already sit under `kilimanjaro`, and `resolveEffectiveSlug` exists because
+    /// of it. A record we did not create is not evidence that *we* published, so accepting any record
+    /// would re-assert the exact false "published" claim this method was added to remove. With no
+    /// owner identity (dev/test paths, `ownerRecordName == nil`) there is nothing to compare against,
+    /// so presence falls back to "a record exists under the pretty slug" — the same assumption
+    /// `resolveEffectiveSlug` already makes on that path.
+    ///
+    /// **Unverified in the simulator.** The creator comparison shares its one unproven premise with
+    /// `resolveEffectiveSlug`: that `creatorUserRecordID.recordName` for a record the current user
+    /// created equals `userRecordID().recordName`. No simulator has an iCloud account, so this cannot
+    /// be observed here (same blind spot as the entitlements and the Vision code — see CLAUDE.md).
+    /// If that premise is wrong the comparison fails to match and this returns `.absent`, whose worst
+    /// consequence is a "publish again" prompt for a journey that is already there — an idempotent
+    /// upsert. The opposite default would resurrect the false claim, so the ambiguity is deliberately
+    /// resolved towards the harmless side. SHIP-15 is where it becomes a fact.
+    func presence(ofJourneySlug slug: String) async -> PublicMirrorPresence {
+        // A query failure on one candidate does not settle the question if another candidate answers
+        // "present" — so collect, and only fall back to `.unknown` when nothing was found AND
+        // something failed. Never report `.absent` on the strength of a failed lookup.
+        var failure: String?
+        for candidate in candidateSlugs(for: slug) {
+            do {
+                guard let creator = try await database.ckExistingPublicJourneyCreator(slug: candidate)
+                else { continue }   // keyspace free under this slug — try the next candidate
+                if ownerRecordName == nil || creator == ownerRecordName {
+                    return .present(slug: candidate)
+                }
+            } catch {
+                failure = "\(error)"
+            }
+        }
+        if let failure { return .unknown(failure) }
+        return .absent
     }
 
     // MARK: Chunking

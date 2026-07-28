@@ -101,7 +101,16 @@ enum FixtureLoader {
             heroImageURL: trek.heroImage,
             dateStarted: trek.dates?.start,
             dateEnded: trek.dates?.end,
-            isPublic: true,
+            // QUA-45: FALSE, and it is not a cosmetic choice. `isPublic` is not "was this journey
+            // public on the old web platform" — in this app it means "a PublicJourney record for this
+            // journey exists in the CloudKit public database", which drives the Showcase sheet's claim
+            // about the web and `JourneyStore.deleteBlocker`. No bundled fixture has ever had a mirror
+            // written for it, in either CloudKit environment, so `true` was a claim about the world
+            // that nothing backed. Measured: the sample Kilimanjaro read "This journey is published to
+            // the world-readable showcase" while a REST query against the production public database
+            // returned zero PublicJourney records. A journey becomes public exactly once, in
+            // `ShowcaseViewModel.run`, and only after the mirror write has landed.
+            isPublic: false,
             summitElevation: hp?.elevation,
             totalDistance: trek.stats.totalDistance,
             totalDays: trek.stats.duration,

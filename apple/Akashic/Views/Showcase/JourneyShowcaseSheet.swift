@@ -45,6 +45,16 @@ struct JourneyShowcaseSheet: View {
             // disabled Done button — otherwise a swipe leaves the CloudKit op running detached and
             // its failure (or partial-failure) reports to nobody. (finding #8.)
             .interactiveDismissDisabled(model.isWorking)
+            // Verify before the status row is read, not after (QUA-45). Only when there is a claim to
+            // check and someone who can check it: a still-private journey asserts nothing about the
+            // web, a non-CloudKit build cannot ask, and for a journey shared INTO this account the
+            // creator comparison would compare against the wrong identity and answer "absent" for a
+            // mirror that is really there. All three rest at `.notChecked`, whose copy says only
+            // "marked as published on this device".
+            .task {
+                guard functional, isOwner, live.isPublic else { return }
+                model.verifyPresence(slug: live.slug)
+            }
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Done") { dismiss() }.tint(Theme.accentText)
@@ -79,18 +89,69 @@ struct JourneyShowcaseSheet: View {
     private var statusSection: some View {
         Section {
             HStack {
-                Label(live.isPublic ? "Public" : "Private",
-                      systemImage: live.isPublic ? "globe" : "lock")
-                    .foregroundStyle(live.isPublic ? Theme.accent : Theme.textSecondary)
+                Label(statusTitle, systemImage: statusIcon)
+                    .foregroundStyle(statusTint)
                 Spacer()
                 Text(live.shortName).foregroundStyle(Theme.textSecondary)
             }
         } header: {
             Text("Public showcase")
         } footer: {
-            Text(live.isPublic
-                 ? "This journey is published to the world-readable showcase. Its route, day notes and photo thumbnails can be viewed on the web without signing in. Full-resolution photos are never uploaded."
-                 : "This journey is private. Publishing copies its route, day notes and photo thumbnails to a world-readable showcase that anyone can view without signing in. Full-resolution photos stay on your devices.")
+            Text(statusFooter)
+        }
+    }
+
+    // MARK: The status row is a claim about the WEB, not about a local flag (QUA-45)
+    //
+    // This row used to be `live.isPublic ? "Public" : "Private"` with a footer that stated, as fact,
+    // that the journey "is published to the world-readable showcase". Measured 2026-07-27 on the
+    // sample Kilimanjaro: it said exactly that while a REST query against the production public
+    // database returned zero PublicJourney records. `isPublic` is a local, environment-blind flag
+    // (see `PublicMirrorPresence`), so it can only ever support "marked as published here" — the
+    // stronger claim needs `model.verification` to have actually asked the mirror.
+    //
+    // Why this matters beyond the wrong sentence: SHIP-17 counts "showcase link sent" as a beta
+    // criterion. A household that believes it shared and did not is a false negative on exactly that
+    // number, and it has no reason to press "Update showcase" because the app already told it the job
+    // was done. The household cannot see the difference; only the mirror can.
+
+    private var statusTitle: LocalizedStringKey {
+        guard live.isPublic else { return "Private" }
+        if case .notOnShowcase = model.verification { return "Not on the showcase" }
+        return "Public"
+    }
+
+    private var statusIcon: String {
+        guard live.isPublic else { return "lock" }
+        if case .notOnShowcase = model.verification { return "globe.badge.chevron.backward" }
+        return "globe"
+    }
+
+    private var statusTint: Color {
+        guard live.isPublic else { return Theme.textSecondary }
+        if case .notOnShowcase = model.verification { return Theme.warning }
+        return Theme.accent
+    }
+
+    /// The footer says only what is known. Four states, and only one of them asserts anything about
+    /// the web — the three "we have not asked / could not ask / asked and it is gone" cases are
+    /// deliberately not collapsed into the confident sentence.
+    private var statusFooter: LocalizedStringKey {
+        guard live.isPublic else {
+            return "This journey is private. Publishing copies its route, day notes and photo thumbnails to a world-readable showcase that anyone can view without signing in. Full-resolution photos stay on your devices."
+        }
+        switch model.verification {
+        case .onShowcase:
+            return "This journey is published to the world-readable showcase. Its route, day notes and photo thumbnails can be viewed on the web without signing in. Full-resolution photos are never uploaded."
+        case .notOnShowcase:
+            return "This journey is marked as published on this device, but nothing for it was found on the live showcase — so it is not on the web right now, and its link would not open. Publish it again to put it back."
+        case .checking:
+            return "This journey is marked as published on this device. Checking the live showcase…"
+        // `couldNotCheck` and `notChecked` make the same weaker claim on purpose: a check that failed
+        // and a check that never ran (this build cannot ask, or the journey is not ours to ask about)
+        // support exactly the same statement, and neither supports "is published".
+        case .couldNotCheck, .notChecked:
+            return "This journey is marked as published on this device. That has not been verified against the live showcase, so what is actually on the web may differ."
         }
     }
 
@@ -130,8 +191,7 @@ struct JourneyShowcaseSheet: View {
                 Button {
                     Task { await runPublish() }
                 } label: {
-                    Label(live.isPublic ? "Update showcase" : "Publish to showcase",
-                          systemImage: "icloud.and.arrow.up")
+                    Label(publishButtonTitle, systemImage: "icloud.and.arrow.up")
                 }
                 .disabled(!canPublish)
                 .foregroundStyle(canPublish ? Theme.accent : Theme.textTertiary)
@@ -187,6 +247,15 @@ struct JourneyShowcaseSheet: View {
 
     /// A private journey needs the explicit consent toggle; a public one can always update.
     private var canPublish: Bool { live.isPublic || acknowledgeWorldReadable }
+
+    /// "Update showcase" claims there is something up there to update. When the live mirror says
+    /// there is not, the honest verb is Publish — and it is also the action that actually helps
+    /// (QUA-45). The consent gate is not re-imposed: the flag records that this owner already agreed
+    /// to world-readability for this journey, and re-asking would read as a new decision.
+    private var publishButtonTitle: LocalizedStringKey {
+        if case .notOnShowcase = model.verification { return "Publish to showcase" }
+        return live.isPublic ? "Update showcase" : "Publish to showcase"
+    }
 
     private func resultView(_ report: PublicMirrorReport) -> some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -306,10 +375,28 @@ final class ShowcaseViewModel: ObservableObject {
         case failed(String)
     }
 
+    /// What the LIVE mirror says about this journey, versus what the local flag claims (QUA-45).
+    ///
+    /// `notChecked` is the honest starting state and also the resting state on every build that
+    /// cannot ask (fixtures/local mode, un-entitled build) and for a non-owner. The UI must render
+    /// `notChecked`, `checking` and `couldNotCheck` all as "marked as published, not verified" —
+    /// only `onShowcase` licenses a claim about the web.
+    enum MirrorVerification: Equatable {
+        case notChecked
+        case checking
+        case onShowcase(slug: String)
+        case notOnShowcase
+        case couldNotCheck(String)
+    }
+
     @Published private(set) var phase: Phase = .idle
     @Published private(set) var progress: PublicMirrorProgress?
+    @Published private(set) var verification: MirrorVerification = .notChecked
 
     private var task: Task<Void, Never>?
+    /// Separate from `task` so a verification in flight never blocks (or is mistaken for) a
+    /// publish/remove, and so `awaitCurrentOperation` keeps meaning what it did.
+    private var verifyTask: Task<Void, Never>?
 
     /// The outcome of resolving the mirror publisher: either a ready publisher, or a user-facing
     /// reason it is unavailable (no iCloud account / unentitled build).
@@ -381,9 +468,35 @@ final class ShowcaseViewModel: ObservableObject {
         task?.cancel()
     }
 
+    /// Ask the live public database whether `slug` is actually on the showcase (QUA-45).
+    ///
+    /// Read-only and cheap — one or two record fetches, no assets — so it runs whenever the sheet
+    /// opens on a journey whose flag says published. It exists because the flag cannot answer the
+    /// question the sheet was answering with it: see `PublicMirrorPresence` for the measurement and
+    /// for why per-environment scoping of the flag was rejected.
+    func verifyPresence(slug: String) {
+        guard case .notChecked = verification else { return }   // one check per sheet presentation
+        verification = .checking
+        verifyTask = Task {
+            switch await self.resolveMirror() {
+            case .unavailable(let message):
+                self.verification = .couldNotCheck(message)
+            case .ready(let publisher):
+                switch await publisher.presence(ofJourneySlug: slug) {
+                case .present(let found): self.verification = .onShowcase(slug: found)
+                case .absent: self.verification = .notOnShowcase
+                case .unknown(let why): self.verification = .couldNotCheck(why)
+                }
+            }
+        }
+    }
+
     /// Test hook: await the in-flight publish/remove task, if any (mirrors the engine's
     /// `awaitActivationFetch`), so a test can assert on the settled phase without racing it.
     func awaitCurrentOperation() async { await task?.value }
+
+    /// Test hook: await the in-flight presence check.
+    func awaitVerification() async { await verifyTask?.value }
 
     /// Shared harness: resolve the publisher (account + entitlement gate), run `body`, and flip the
     /// domain flag ONLY when the network op actually did what the flag would claim.
@@ -407,6 +520,14 @@ final class ShowcaseViewModel: ObservableObject {
                 let report = await body(publisher)
                 let networkOK = newPublic ? report.journeyPublished : report.succeeded
                 if networkOK {
+                    // A completed network op is itself first-hand evidence about the mirror, so
+                    // record it rather than making the sheet say "unverified" straight after a
+                    // publish it just watched succeed (QUA-45). A publish that landed knows the slug
+                    // it landed under; an unpublish flips the flag to false, after which the
+                    // verification is not consulted at all.
+                    self.verification = newPublic
+                        ? (report.publishedSlug.map(MirrorVerification.onShowcase(slug:)) ?? .notChecked)
+                        : .notChecked
                     if !setPublic(newPublic) {
                         // The mirror op landed but the local flag write failed — do NOT claim
                         // success (that would leave state and reality disagreeing). Surface it in a

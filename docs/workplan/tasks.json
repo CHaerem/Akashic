@@ -2891,13 +2891,16 @@
         "apple/Akashic/Services/PublicMirrorPublisher.swift"
       ],
       "track": "QUALITY",
-      "status": "TODO",
+      "status": "DONE",
       "verify": [
         "cd apple && xcodegen generate && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,name=iPhone 17 Pro\" CODE_SIGNING_ALLOWED=NO test -only-testing:AkashicTests"
       ],
       "notes": [
-        "2026-07-27 REPRIORITISED after a strategic review: this is not an ordinary bug, it is BETA MEASUREMENT CORRUPTION. SHIP-17's gate reads criterion (b) \"showcase link sent\", and this defect makes that number wrong in a way the household cannot see — so it has to close before the external build is cut, not \"sometime\". A beta that measures the wrong thing costs three weeks and cannot be re-run."
-      ]
+        "2026-07-27 REPRIORITISED after a strategic review: this is not an ordinary bug, it is BETA MEASUREMENT CORRUPTION. SHIP-17's gate reads criterion (b) \"showcase link sent\", and this defect makes that number wrong in a way the household cannot see — so it has to close before the external build is cut, not \"sometime\". A beta that measures the wrong thing costs three weeks and cannot be re-run.",
+        "2026-07-28 THE FIX SHIPPED UNGUARDED AND AN ADVERSARIAL PASS CAUGHT IT. verifyPresence had 15 unit tests; the `.task` that CALLS it sits in a SwiftUI body no unit test can reach, and there is no showcase UI test. Deleting that block left all 841 native tests green while the sheet never asked the mirror again. Closed with a source-text coupling test — the same pattern UniversalLinkTests uses on the entitlements file and MAP-03 used on index.css, and that one fired correctly the moment MAP-05 deleted the rule. Proven: deleting `.task` fails 2 of 2.",
+        "2026-07-28 THE AGENT LEFT NEGATIVE-CONTROL RESIDUE IN THE TREE — `verification = .onShowcase(slug: slug); return` with a `// DEFECT 4 REINTRODUCED` comment, i.e. the original defect live and verbatim, plus a matching stub in PersistenceController. It survived its own verification because of the documented stale-.xctest trap: a full run reported 0 failures WITH the residue present, and only `xcrun simctl uninstall` plus touching the sources made the compiler emit \"warning: code after return will never be executed\" and 6 of 15 view-model tests go red. A later agent cleaned it; both files re-read here to confirm. Never accept a native green without uninstalling first."
+      ],
+      "evidence": "The measured screen had TWO causes and the hypothesised one was not it. FixtureLoader hardcoded isPublic: true for every bundled fixture, so the D9 onboarding sample landed published on every fresh install with no mirror in any environment — and because remapToDemoIdentity deliberately does not re-mint slug, deleteBlocker returned .stillPublished and made the sample UNDELETABLE, with the only escape offered (\"Remove from showcase\") unpublishing this owner's REAL kilimanjaro mirror. The general case is that isPublic is environment blind. Fixed by asking the mirror rather than trusting the flag: new PublicMirrorPresence with present/absent/unknown, five verification states in the sheet, and only one licenses the confident sentence about the web. Native suite 843 passing, 1 skipped, 0 failures — verified AFTER simctl uninstall."
     },
     {
       "id": "QUA-46",
@@ -2936,14 +2939,16 @@
         "src/hooks/mapbox/useMapbox.ts"
       ],
       "track": "QUALITY",
-      "status": "TODO",
+      "status": "DONE",
       "verify": [
         "npx vitest --run",
         "VITE_E2E_TEST_MODE=true CI=true npx playwright test --project=chromium --ignore-snapshots"
       ],
       "notes": [
-        "2026-07-27 REPRIORITISED after a strategic review: this is not an ordinary bug, it is BETA MEASUREMENT CORRUPTION. SHIP-17's gate reads criterion (b) from the RECIPIENT's side — a shared link that lands on a blurred smear, and this defect makes that number wrong in a way the household cannot see — so it has to close before the external build is cut, not \"sometime\". A beta that measures the wrong thing costs three weeks and cannot be re-run."
-      ]
+        "2026-07-27 REPRIORITISED after a strategic review: this is not an ordinary bug, it is BETA MEASUREMENT CORRUPTION. SHIP-17's gate reads criterion (b) from the RECIPIENT's side — a shared link that lands on a blurred smear, and this defect makes that number wrong in a way the household cannot see — so it has to close before the external build is cut, not \"sometime\". A beta that measures the wrong thing costs three weeks and cannot be re-run.",
+        "2026-07-28 THE WIRING WAS UNTESTED AND THE BROWSER GATE COULD NOT SEE IT — the sharper of the two findings. All 28 tests called clampToImageryBand / regionForBounds / regionForZoom DIRECTLY, so deleting the imagery band from all four camera branches in useMapKitJourney.ts — a complete revert of the user-visible fix — left 678/678 green, typecheck clean and lint at its cap. And Playwright cannot cover it: the band is metres per DEVICE pixel, so at dpr 1 the floor is 1.2 m per CSS pixel and the clamp is inert, which is why the browser evidence measured zoom 14.999999999576511 — the UNCLAMPED value — and read as success. The new wiring tests frame a 165 m route at dpr 3 and assert the achieved resolution is at or above the floor. With the fix reverted the framing is 0.32 m per CSS pixel, eleven times deeper than the imagery reaches, and both tests go red."
+      ],
+      "evidence": "The arrival camera is clamped at BOTH ends in metres per DEVICE pixel via src/lib/map/imagery.ts, so a short route can no longer frame past the deepest available tile and the Khumbu wide-angle cloud band is avoided from the other side. 28 unit tests on the pure maths, plus two WIRING tests in useMapKitJourney.test.ts — the half that was missing. 680 web tests, typecheck clean, lint 14 warnings / 0 errors."
     },
     {
       "id": "QUA-48",
@@ -2958,13 +2963,14 @@
         "apple/Akashic/App/Config.swift"
       ],
       "track": "QUALITY",
-      "status": "TODO",
+      "status": "DONE",
       "verify": [
         "cd apple && xcodegen generate && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,name=iPhone 17 Pro\" CODE_SIGNING_ALLOWED=NO test -only-testing:AkashicTests"
       ],
       "notes": [
         "2026-07-27 REPRIORITISED after a strategic review: this fires on every SECOND device in every beta household, because that is exactly the fresh-install-onto-a-synced-account case. At ten households it is not an edge case, it is the modal second-device experience. Close before the external build."
-      ]
+      ],
+      "evidence": "A fresh install onto an account that already holds journeys no longer seeds its sample; a genuinely-new customer still gets one. 10 native tests in SampleJourneyRetirementTests, and removing either sweep call site goes red."
     },
     {
       "id": "QUA-49",

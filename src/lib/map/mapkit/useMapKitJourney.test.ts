@@ -469,3 +469,105 @@ describe('useMapKitJourney — the map is built once (QUA-50)', () => {
         expect(probe.destroys).toBe(1);
     });
 });
+
+/**
+ * QUA-47's WIRING, which nothing guarded until this suite.
+ *
+ * The clamp itself has 28 unit tests, and every one of them calls `clampToImageryBand`,
+ * `regionForBounds` or `regionForZoom` DIRECTLY. So an adversarial pass deleted the imagery band from all
+ * four camera branches in `useMapKitJourney.ts` — a complete revert of the user-visible fix, restoring the
+ * original blurred-smear defect — and every gate stayed green: 678/678 unit tests, typecheck clean, lint at
+ * exactly its cap. The thing that makes the map crisp for a real person was proven by nothing.
+ *
+ * Playwright cannot cover it either, and the reason is the point of this file. The band is expressed in
+ * metres per DEVICE pixel, so at `devicePixelRatio === 1` the floor is 1.2 m per CSS pixel and a tight route
+ * frames inside it — the clamp is inert. Playwright runs at dpr 1, which is why the browser evidence for the
+ * fix measured `zoom 14.999999999576511`, i.e. the UNCLAMPED value, and read as success.
+ *
+ * These tests therefore assert on the region the hook actually hands MapKit, at a dpr where the clamp has
+ * something to do.
+ */
+describe('useMapKitJourney — the imagery band reaches the camera (QUA-47)', () => {
+    /** Metres of ground per CSS pixel, from the region the hook requested and the container it framed into. */
+    function achievedMetresPerCssPixel(region: FakeRegion, containerHeightPx: number): number {
+        return (region.span.latitudeDelta * 111_320) / containerHeightPx;
+    }
+
+    /** A route a few hundred metres across — the shape that provoked the live defect. */
+    function makeTightTrekData(id: string): TrekData {
+        const base = makeTrekData(id, 0);
+        const d = 0.0015;   // ~165 m of latitude, ~80 m of longitude at 61.6 N
+        return {
+            ...base,
+            camps: [
+                makeCamp(`${id}-c1`, 1, [START.longitude, START.latitude]),
+                makeCamp(`${id}-c2`, 2, [START.longitude + d, START.latitude + d]),
+            ],
+            route: {
+                type: 'LineString',
+                coordinates: [
+                    [START.longitude, START.latitude, 1000],
+                    [START.longitude + d / 2, START.latitude + d / 2, 1050],
+                    [START.longitude + d, START.latitude + d, 1100],
+                ],
+            } as TrekData['route'],
+        };
+    }
+
+    async function frameTightRoute(dpr: number): Promise<{ region: FakeRegion; height: number }> {
+        const original = window.devicePixelRatio;
+        Object.defineProperty(window, 'devicePixelRatio', { value: dpr, configurable: true });
+        try {
+            // The loader memoises its namespace promise and is only reset in `beforeEach`, so a second
+            // install inside ONE test silently reuses the first namespace and constructs no map. That is how
+            // this helper's first version failed — with "the map was never constructed", which is the message
+            // that told me rather than a green pass that hid it.
+            resetMapKitLoaderForTests();
+            delete (window as { mapkit?: unknown }).mapkit;
+            const probe = installFakeMapKit();
+            const containerRef = { current: makeContainer() };
+            const { unmount } = renderHook(() => useMapKitJourney({
+                containerRef,
+                selectedTrek: makeTrekConfig('tight'),
+                selectedCamp: null,
+                trekData: makeTightTrekData('tight'),
+                photos: [],
+                signedIn: true,
+                editMode: false,
+            }));
+            await settle();
+            const map = probe.constructions[0];
+            expect(map, 'the map was never constructed, so this test proves nothing').toBeTruthy();
+            const result = { region: map.region, height: containerRef.current.clientHeight };
+            unmount();
+            return result;
+        } finally {
+            Object.defineProperty(window, 'devicePixelRatio', { value: original, configurable: true });
+        }
+    }
+
+    /**
+     * **The assertion the revert has to fail.** At dpr 3 the band's floor is 1.2 x 3 = 3.6 m per CSS pixel,
+     * and a 165 m route in a 720 px container would otherwise frame at well under 1 m/px — deep past any
+     * satellite tile Apple has, which is what painted the featureless brown smear on the live site.
+     */
+    it('refuses to frame a few-hundred-metre route finer than the imagery can draw', async () => {
+        const { region, height } = await frameTightRoute(3);
+        const achieved = achievedMetresPerCssPixel(region, height);
+        // 1.2 m/device-px x dpr 3, with a little slack for the padding the arrival framing adds.
+        expect(achieved).toBeGreaterThanOrEqual(3.5);
+    });
+
+    /**
+     * The control, and it is what makes the test above mean something rather than merely pass. At dpr 1 the
+     * same route frames FINER, because the floor is three times looser in CSS pixels. If both dprs produced
+     * the same framing, this suite would be measuring the bounds fit rather than the clamp.
+     */
+    it('frames the same route finer at dpr 1, which is why the browser gate could not see this', async () => {
+        const at3 = await frameTightRoute(3);
+        const at1 = await frameTightRoute(1);
+        const clamped = achievedMetresPerCssPixel(at3.region, at3.height);
+        const unclamped = achievedMetresPerCssPixel(at1.region, at1.height);
+        expect(unclamped).toBeLessThan(clamped);
+    });
+});

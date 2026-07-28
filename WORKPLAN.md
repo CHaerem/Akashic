@@ -5,17 +5,17 @@
 
 # Akashic — work ledger
 
-135 tasks · **31 open** (7 agent-doable, 2.2 dev-days · 24 owner-only, 10.4 dev-days) · 104 done · 0 dropped
+135 tasks · **28 open** (4 agent-doable, 1.2 dev-days · 24 owner-only, 10.4 dev-days) · 107 done · 0 dropped
 
 > **`dev-days` are a human-developer estimate, not agent time.** They came from the review
 > that produced these tasks and they are the right unit for deciding whether something is
 > worth doing — they are the wrong unit for predicting how long an agent will take, and
 > summing them as "work remaining" overstates it substantially.
 >
-> Measured so far: **99 agent tasks estimated at 70.8 dev-days**.
+> Measured so far: **102 agent tasks estimated at 71.8 dev-days**.
 > Elapsed time is deliberately absent: nothing here can support it. Use `git log` for that.
 >
-> **Every large agent item is closed.** 9 of the tasks closed so far were 2 dev-days or more; nothing 2 dev-days or larger remains agent-doable, and the 2.2 remaining dev-days are all small tasks (7 at 0.5 or less). What is still genuinely large is OWNER work, which no amount of agent compression touches.
+> **Every large agent item is closed.** 9 of the tasks closed so far were 2 dev-days or more; nothing 2 dev-days or larger remains agent-doable, and the 1.2 remaining dev-days are all small tasks (4 at 0.5 or less). What is still genuinely large is OWNER work, which no amount of agent compression touches.
 
 Read [CLAUDE.md](CLAUDE.md) before touching anything. To find work:
 
@@ -146,7 +146,7 @@ node scripts/workplan.mjs next
 
 > Tests, types, CI, localisation, accessibility. Localisation and accessibility are in v1.0 by decision.
 
-9 open of 58 · 2.9 d remaining
+6 open of 58 · 1.9 d remaining
 
 | | Task | Days | Who | Deps | Finish line |
 |---|---|---|---|---|---|
@@ -199,10 +199,10 @@ node scripts/workplan.mjs next
 | `x` | `QUA-40` **E2E reaches live CloudKit, and shares its config with the live site** | 0.4 | agent | — | The E2E Tests workflow is green on main, and it stays green with no network access to Apple. |
 | ` ` | `QUA-41` **Replace the CloudKit canary that QUA-40 removed — check the deployed apex, not localhost** | 0.2 | owner | `QUA-40` | A documented owner check exists that fetches the deployed site's CloudKit path with a real Origin header, and it has been run once against akashic.no. |
 | ` ` | `QUA-42` **e2e/ is checked by neither tsc nor eslint, so the specs are verified only by running** | 0.3 | agent | `QUA-40` | A type error or lint error in e2e/ fails a gate without the suite having to run. |
-| ` ` | `QUA-45` **The Showcase sheet says a journey is published when the public mirror is empty** | 0.4 | agent | — | The publish state shown to the user reflects the mirror for the CURRENT CloudKit environment, or says it cannot tell. |
+| `x` | `QUA-45` **The Showcase sheet says a journey is published when the public mirror is empty** | 0.4 | agent | — | The publish state shown to the user reflects the mirror for the CURRENT CloudKit environment, or says it cannot tell. |
 | `x` | `QUA-46` **The showcase page shows two different day counts for the same journey** | 0.2 | agent | — | One journey reports one duration, and it matches the app. |
-| ` ` | `QUA-47` **The journey view frames past the imagery resolution and shows a blurred smear** | 0.3 | agent | — | Opening a journey shows legible terrain at the arrival framing, for a short route as well as a long one. |
-| ` ` | `QUA-48` **A SAMPLE journey seeded on top of a synced library, duplicating the real one** | 0.3 | agent | — | A fresh install signed into an account that already has journeys does not seed a sample. |
+| `x` | `QUA-47` **The journey view frames past the imagery resolution and shows a blurred smear** | 0.3 | agent | — | Opening a journey shows legible terrain at the arrival framing, for a short route as well as a long one. |
+| `x` | `QUA-48` **A SAMPLE journey seeded on top of a synced library, duplicating the real one** | 0.3 | agent | — | A fresh install signed into an account that already has journeys does not seed a sample. |
 | ` ` | `QUA-49` **On MapKit a photo stack hides a camp marker and eats its clicks — a regression versus Mapbox** | 0.3 | agent | `MAP-03` | A camp marker is clickable on the MapKit surface even with a photo stack over it, or the divergence from Mapbox is an accepted, recorded product decision. |
 | `x` | `QUA-50` **No test stops the MapKit map being destroyed and rebuilt on a prop change** | 0.3 | agent | `MAP-03` | A test fails if the MapKit map is constructed more than once across a journey switch and a sign-in. |
 | `x` | `QUA-51` **MAP-03 left four comments describing behaviour it does not have, and four dead symbols** | 0.3 | agent | `MAP-03` | Every comment listed below describes what the code does, and the dead symbols are gone or used. |

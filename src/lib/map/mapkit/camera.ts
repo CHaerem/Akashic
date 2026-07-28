@@ -44,6 +44,16 @@
  * Double-counting the two is the easy mistake: it is why this module takes them as separate arguments and
  * why nothing passes the attribution padding to a fit.
  *
+ * ## QUA-47: the fit is clamped in METRES PER PIXEL, not in zoom levels
+ *
+ * `regionForBounds` used to take `maxZoom` / `minZoom`, and both callers passed `maxZoom: 16`. That let a short
+ * route be framed at a resolution no imagery supports, and the live site showed a featureless brown smear
+ * because of it. Both options are gone, and `regionForZoom` — which took neither, so a fixed zoom went
+ * completely unchecked — now takes the clamp too. It is `../imagery.ts`'s measured band, in metres per DEVICE
+ * pixel, which is the unit tile coverage is actually indexed by. Read that file's header before changing either
+ * number: the reason zoom levels cannot express this is a 3.9x latitude spread with a factor of
+ * `devicePixelRatio` on top of it.
+ *
  * ## MAP-05: "the incumbent" is GONE, and every citation below is history
  *
  * This file was written against a shipping Mapbox surface and refers to it in the present tense as **"the
@@ -58,6 +68,7 @@
  */
 
 import type { LngLat, MapBounds } from '../types';
+import { clampToImageryBand, type ImageryBand } from '../imagery';
 
 /** Pixel size of the map container. */
 export interface ContainerPx {
@@ -148,11 +159,23 @@ function unitsPerPixel(zoom: number): number {
 }
 
 /**
+ * How a caller states the imagery clamp. `devicePixelRatio` rides along with the band because the band is in
+ * metres per DEVICE pixel while everything else in this file is in CSS pixels — see `../imagery.ts`.
+ *
+ * Passed as one object rather than as two loose options so the two can never be separated: a band applied at
+ * the wrong dpr is off by a factor of two or three and produces a frame that looks merely a bit wide.
+ */
+export interface ImageryClamp extends ImageryBand {
+    devicePixelRatio?: number;
+}
+
+/**
  * Build the region that puts `bounds` inside the padded sub-rect of the inset viewport.
  *
  * Mirrors the *fit maths* of `map.fitBounds(bounds, { padding, maxZoom })` at
- * `src/hooks/mapbox/useMapbox.ts:1079-1109` and `:1130-1162`: the constraining dimension wins, `maxZoom`
- * clamps the scale, and the centre shifts by half the padding asymmetry.
+ * `src/hooks/mapbox/useMapbox.ts:1079-1109` and `:1130-1162`: the constraining dimension wins, a clamp bounds
+ * the scale, and the centre shifts by half the padding asymmetry. QUA-47 replaced the clamp — it was
+ * `maxZoom`, mirroring Mapbox's, and it is now a ground-resolution floor for the reasons below.
  *
  * It does **not** mirror the incumbent's padding VALUES, and that is deliberate rather than an oversight —
  * an earlier version of this comment claimed the opposite, which is why the distinction is spelled out.
@@ -166,6 +189,15 @@ function unitsPerPixel(zoom: number): number {
  * arithmetic, not dead: every set is vertically asymmetric (mobile arrival `top: 80` over `bottom: 40`,
  * desktop day `bottom: 150` over `top: 120`), so `offsetYPx` always does work, and a future horizontal
  * asymmetry must move the centre rather than silently skew the fit.
+ *
+ * ## QUA-47: it takes the imagery FLOOR, and deliberately not the ceiling
+ *
+ * This function's contract is that the bounds end up inside the padded box. Loosening the frame preserves
+ * that; tightening it does not. So only `finestMetersPerDevicePixel` is honoured here, and a
+ * `coarsestMetersPerDevicePixel` in the band passed to it is ignored on purpose rather than quietly cropping
+ * the journey. `../imagery.ts`'s header carries the measurement that makes this a real choice and not a
+ * hypothetical one: the `e2e-alpine-loop` fixture's own route needs ~31 m/px to fit a desktop viewport, which
+ * is already coarser than the band's ceiling before any clamping happens.
  */
 export function regionForBounds(
     bounds: MapBounds,
@@ -175,10 +207,12 @@ export function regionForBounds(
         framePadding: EdgeInsets;
         /** What went into `map.padding`. The region describes the rect this insets. */
         attributionPadding?: EdgeInsets;
-        /** Do not zoom in past this. The incumbent's day fit uses 16. */
-        maxZoom?: number;
-        /** Do not zoom out past this. Guards a degenerate single-point bounds. */
-        minZoom?: number;
+        /**
+         * The imagery clamp. Only the floor applies — see above. It also subsumes what `maxZoom` used to do
+         * for a degenerate single-point bounds, whose fit scale is ~0: the floor is a lower bound on scale, so
+         * a point now frames at the deepest resolution the imagery has rather than at an arbitrary zoom 16.
+         */
+        imagery?: ImageryClamp;
     },
 ): Region {
     const attribution = options.attributionPadding ?? { top: 0, right: 0, bottom: 0, left: 0 };
@@ -200,10 +234,19 @@ export function regionForBounds(
     // Fit: the constraining dimension wins, exactly as fitBounds does.
     let scale = Math.max(spanX / availableWidth, spanY / availableHeight);
 
-    // maxZoom is a floor on the scale (zoomed in further = fewer world units per pixel). A single-point
-    // bounds makes `scale` ~0, which is why the clamp is not optional in practice.
-    if (options.maxZoom !== undefined) scale = Math.max(scale, unitsPerPixel(options.maxZoom));
-    if (options.minZoom !== undefined) scale = Math.min(scale, unitsPerPixel(options.minZoom));
+    // The imagery floor, at the latitude the frame is centred on — ground resolution depends on it, which is
+    // the whole reason this is not a zoom clamp. Taken from the BOUNDS centre rather than from the region
+    // centre computed below, because that one moves with `offsetYPx * scale` and would make the clamp
+    // circular for a gain of a few metres of latitude on a frame kilometres across.
+    if (options.imagery) {
+        const centerLat = latForWorldY((yNorth + ySouth) / 2);
+        scale = clampToImageryBand(
+            scale,
+            centerLat,
+            { finestMetersPerDevicePixel: options.imagery.finestMetersPerDevicePixel },
+            options.imagery.devicePixelRatio,
+        );
+    }
 
     // The bounds sit at the centre of the AVAILABLE box; the region describes the INSET box. Offset the
     // region centre by half the padding asymmetry so the two rects line up.
@@ -218,18 +261,43 @@ export function regionForBounds(
 /**
  * The region for a centre and a Mapbox-style zoom level — the off-route day branch
  * (`useMapbox.ts:1112-1125`: `flyTo({ center: camp, zoom: 15 })`) and `flyToPhoto` (zoom 16).
+ *
+ * ## QUA-47: this one takes BOTH ends of the band
+ *
+ * Nothing has to stay in frame here — the caller is choosing a resolution outright — so there is no
+ * containment argument against the ceiling, and a fixed zoom level is exactly the thing the band exists to
+ * correct: zoom 16 is 2.39 m/px at the equator and 0.62 m/px at 75 N, so `PHOTO_ZOOM` means four times the
+ * imagery demand in Svalbard that it means in Tanzania. The clamp converts "zoom 16" into "the closest
+ * resolution to zoom 16 that the imagery actually has here".
+ *
+ * One consequence to carry, because it is load-bearing for a test rather than for a user:
+ * `e2e/day-navigation.spec.ts` uses `cameraZoom > 14` to prove the off-route branch ran, and clamping
+ * `offRouteZoom`'s 15 pulls that number DOWN. It survives everywhere it is asserted — Playwright runs at dpr 1,
+ * where the clamp does not bind on the fixture at all — but the margin is not unlimited: at dpr 3 and ~75 N the
+ * clamped off-route frame lands below 14 and that assertion would stop discriminating. `camera.test.ts` pins
+ * the separation at dpr 1, 2 and 3 on the fixture's own latitude and names the combination that breaks it.
  */
 export function regionForZoom(
     center: LngLat,
     zoom: number,
-    options: { container: ContainerPx; attributionPadding?: EdgeInsets },
+    options: {
+        container: ContainerPx;
+        attributionPadding?: EdgeInsets;
+        /** The imagery clamp, both ends. */
+        imagery?: ImageryClamp;
+    },
 ): Region {
     const attribution = options.attributionPadding ?? { top: 0, right: 0, bottom: 0, left: 0 };
     const insetWidth = Math.max(1, options.container.width - attribution.left - attribution.right);
     const insetHeight = Math.max(1, options.container.height - attribution.top - attribution.bottom);
+    const scale = options.imagery
+        ? clampToImageryBand(
+            unitsPerPixel(zoom), center[1], options.imagery, options.imagery.devicePixelRatio,
+        )
+        : unitsPerPixel(zoom);
     return regionAtScale(
         { x: worldX(center[0]), y: worldY(center[1]) },
-        unitsPerPixel(zoom),
+        scale,
         insetWidth,
         insetHeight,
     );

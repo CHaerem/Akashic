@@ -48,13 +48,24 @@ final class SyncRecordCoderTests: XCTestCase {
     }
 
     func testJourneyFieldEncodings() {
-        let journey = try! FixtureLoader.load(named: "kilimanjaro", bundle: bundle)
+        // QUA-45: `isPublic` is set here rather than inherited from the fixture. The fixture used to
+        // hardcode `true` — a false claim that a public mirror existed for a bundled sample — and this
+        // assertion silently depended on it, so fixing the fixture failed a test about Bool encoding
+        // for reasons that had nothing to do with encoding. Both values are now asserted, which is
+        // what "Bool -> INT64 0/1" claimed to check all along.
+        var journey = try! FixtureLoader.load(named: "kilimanjaro", bundle: bundle)
+        journey.isPublic = true
         let record = RecordCoder.record(for: journey, in: zone)
 
         XCTAssertEqual(record.recordType, "Journey")
         XCTAssertEqual(record["slug"] as? String, journey.slug)
         XCTAssertEqual(record["journeyType"] as? String, "trek")
         XCTAssertEqual(record["isPublic"] as? Int, 1, "Bool -> INT64 0/1")
+
+        journey.isPublic = false
+        XCTAssertEqual(RecordCoder.record(for: journey, in: zone)["isPublic"] as? Int, 0,
+                       "false encodes as 0, not as an absent field")
+
         XCTAssertTrue(record["routeJSON"] is CKAsset, "route is an ASSET (temp-file JSON)")
         XCTAssertTrue(record["statsJSON"] is String, "stats is an inline STRING")
         XCTAssertTrue(record["centerLocation"] is CLLocation)

@@ -4717,6 +4717,16 @@
         }
       }
     },
+    "Not on the showcase": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ikke i utstillingen"
+          }
+        }
+      }
+    },
     "Not published": {
       "comment": "Showcase publish report label, for photographs the per-journey cap held back.",
       "extractionState": "manual",
@@ -7225,6 +7235,36 @@
           "stringUnit": {
             "state": "translated",
             "value": "Denne turen er tom"
+          }
+        }
+      }
+    },
+    "This journey is marked as published on this device, but nothing for it was found on the live showcase — so it is not on the web right now, and its link would not open. Publish it again to put it back.": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Denne turen er merket som publisert på denne enheten, men vi fant ingenting for den i den live utstillingen — så den ligger ikke på nett nå, og lenken til den vil ikke virke. Publiser den på nytt for å legge den ut igjen."
+          }
+        }
+      }
+    },
+    "This journey is marked as published on this device. Checking the live showcase…": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Denne turen er merket som publisert på denne enheten. Sjekker den live utstillingen …"
+          }
+        }
+      }
+    },
+    "This journey is marked as published on this device. That has not been verified against the live showcase, so what is actually on the web may differ.": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Denne turen er merket som publisert på denne enheten. Det er ikke bekreftet mot den live utstillingen, så det som faktisk ligger på nett kan være noe annet."
           }
         }
       }

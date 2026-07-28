@@ -344,6 +344,16 @@ final class PersistenceController {
     static func remapToDemoIdentity(_ journey: Journey) -> Journey {
         var demo = journey
         demo.id = "demo-\(journey.id)"
+        // QUA-45. Belt to `FixtureLoader.map`'s braces: this is the seam where a bundled fixture
+        // becomes a real row in a real, syncable, PUBLISHABLE store, so it is where the publish flag
+        // has to be sanitised regardless of what any future fixture sets. Nothing about the sample
+        // has been mirrored, so claiming otherwise is a false statement about the web — and because
+        // this function deliberately does NOT re-mint `slug` (see above; the slug carries no record
+        // identity), a published-looking sample is worse than a wrong sentence: `deleteBlocker`
+        // returns `.stillPublished` and makes the onboarding sample undeletable, and the only escape
+        // offered — "Remove from showcase" — unpublishes `kilimanjaro`, which for this owner is the
+        // REAL, really-published mirror under the same creator, so those deletes succeed.
+        demo.isPublic = false
         demo.camps = journey.camps.map { camp in
             var remapped = camp
             remapped.id = "demo-\(camp.id)"

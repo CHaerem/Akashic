@@ -111,10 +111,10 @@ These are measured, not guessed. Prefer them over inventing your own.
 
 | What | Command | Expected |
 |---|---|---|
-| Native build + tests | `cd apple && xcodegen generate && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination "platform=iOS Simulator,id=$(xcrun simctl list devices available \| grep -o '[0-9A-F-]\{36\}' \| tail -1)" CODE_SIGNING_ALLOWED=NO test` | 804 unit (1 skipped, device-only) + 14 UI tests, 0 failures (~6 s + ~190 s). Add `-only-testing:AkashicTests` for the fast unit-only loop; the UI suite relaunches the app per test |
+| Native build + tests | `cd apple && xcodegen generate && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination "platform=iOS Simulator,id=$(xcrun simctl list devices available \| grep -o '[0-9A-F-]\{36\}' \| tail -1)" CODE_SIGNING_ALLOWED=NO test` | **843 unit (1 skipped, device-only) + 14 UI tests**, 0 failures (~6 s + ~190 s), measured 2026-07-28. Add `-only-testing:AkashicTests` for the fast unit-only loop; the UI suite relaunches the app per test |
 | Native coverage | add `-enableCodeCoverage YES -resultBundlePath /tmp/cov.xcresult`, then `xcrun xccov view --report --only-targets /tmp/cov.xcresult` | app 48.4 %; `Views/` 34.4 % (was 30.2 % / 6.0 % before the UI test target — QUA-10) |
 | Built Info.plist | `plutil -p "$(find ~/Library/Developer/Xcode/DerivedData/Akashic-*/Build/Products -name Akashic.app -maxdepth 3 \| head -1)/Info.plist"` | see the trap below |
-| Web unit tests | `npx vitest --run` | 414 tests, ~5 s. Was 452 → 436 (LEG-12 deleted `workers/`, −16) → 414 (LEG-15 deleted the dead `mapMatching`, −22). Falling counts here have been deletions of dead code, not lost coverage — check `git log` before treating a drop as a regression. |
+| Web unit tests | `npx vitest --run` | **680 tests / 53 files**, ~6 s (measured 2026-07-28). The trail: 452 → 436 (LEG-12 deleted `workers/`) → 414 (LEG-15 deleted the dead `mapMatching`) → 462 → 473 (QUA-40's fixtures) → 566 (MAP-03) → 650 (MAP-02) → 680 (QUA-45/47/48). A FALL here has always been a deletion of dead code, not lost coverage — check `git log` before treating one as a regression. |
 | Web typecheck | `npm run typecheck` | clean, and a type error now fails CI and the commit |
 | Web lint | `npm run lint` | 205 files inspected, 0 errors, warnings capped at 14 (was 25; MAP-05 deleted `useMapbox.ts` and `MapboxGlobe.tsx`, which held 11 of them — a deletion, not a fix) |
 | Web build | `npm run build` | ~4 s, no env needed |
@@ -303,6 +303,21 @@ right: fix this file in the same commit.
   got worse. Always `clean` then `build-for-testing`, and check the error count is zero before you
   believe the warning count. And note `build` compiles the app target ONLY — the ledger's "63
   warnings" for QUA-08 was really 294, because `AkashicUITests` alone held 218 of them.
+- **Inserting a member "just before" a Swift declaration lands between that declaration and its
+  ATTRIBUTE, and the compiler then applies the attribute to your code instead.** Four times in one
+  session, the last costing a full native build: appending a test class immediately above
+  `final class ShowcaseViewModelTests` put it under that class's `@MainActor`, silently moving the
+  annotation onto the new class and producing seven "main actor-isolated property can not be
+  referenced" errors in code nobody had touched. Same shape for a `///` doc comment, a
+  `@ViewBuilder`, or an `@available`. Two habits that avoid it: append new types at END OF FILE
+  rather than before an anchor, and after any structural insertion check that no attribute line is
+  followed by anything but a declaration.
+- **Write multi-line `node -e` / `python3 -c` scripts to a FILE, always.** zsh parses a compound
+  command in full before running any of it, so one stray quote in a long inline script means
+  NOTHING executes — including the parts before the error. That silently skipped a ledger write in
+  this project and a commit message then asserted the write had happened, because the confirmation
+  line that never printed was in output already scrolled past. Three separate occurrences. If an
+  inline script is long enough to contain a quote you have to think about, it belongs in a file.
 - **Strict concurrency is on (`complete`, `project.yml:52`) and it earned its keep by finding two real
   races, not by tidying warnings.** `AkashicSyncEngine.nextBatch` read the main-queue Core Data
   context from CloudKit's own queue via the `@Sendable` `recordProvider`; `PhotoDayMatcher` shared two
