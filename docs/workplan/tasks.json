@@ -3680,7 +3680,7 @@
       "priority": 24,
       "deps": [],
       "track": "QUALITY",
-      "status": "TODO",
+      "status": "WIP",
       "owner": false,
       "title": "prove.mjs --native conflates a git pathspec with an xcodebuild test identifier",
       "done_when": "prove.mjs can prove a native test suite red-against-the-revert: the tests are named by FILE for the worktree copy and by TARGET/CLASS for -only-testing, as two inputs or a mapping.",
@@ -3694,7 +3694,12 @@
       ],
       "notes": [
         "2026-07-28 The fix shape the agent suggested: separate --tests (files, for the worktree carry) from a new --only-testing (xcodebuild identifiers), or derive the identifier from the file's basename (AkashicTests/<ClassName> for a single-class file). Derivation is convenient and lies for multi-class files; two explicit flags cannot."
-      ]
+      ],
+      "claim": {
+        "agent": "qua57-agent",
+        "branch": "agent/qua57",
+        "at": "2026-07-28"
+      }
     },
     {
       "id": "QUA-58",
@@ -3702,7 +3707,7 @@
       "priority": 21,
       "deps": [],
       "track": "QUALITY",
-      "status": "TODO",
+      "status": "WIP",
       "owner": false,
       "title": "QUA-49 follow-up: the regression test, the now-false e2e comment, and the two unit-test guards",
       "done_when": "The camp-over-stack precedence is guarded by an e2e click on a KNOWN coincident day and by unit tests over the re-add and push-off paths; the stale comment is corrected; the local cast is gone.",
@@ -3721,7 +3726,12 @@
       ],
       "notes": [
         "2026-07-28 Also carried from the agent's report, for whoever picks this up: MARKER_CLEARANCE_PX = 30 is coupled to the CSS marker sizes (36/42 and 32/40) — if those grow it must follow, and the re-add is the unconditional backstop. Edit-mode drag over anchorOffset is unverified (the fixture cannot reach edit mode). And the owner has not yet SEEN the up-to-30 px nudge of a coincident photo stack — worth one look on the deployed site before the beta."
-      ]
+      ],
+      "claim": {
+        "agent": "qua58-agent",
+        "branch": "agent/qua58",
+        "at": "2026-07-28"
+      }
     }
   ]
 }
