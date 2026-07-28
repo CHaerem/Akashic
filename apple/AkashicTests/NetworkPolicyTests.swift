@@ -129,8 +129,11 @@ final class NetworkPolicyTests: XCTestCase {
                        Int64(1543) * SyncSizeEstimate.averagePhotoBytes)
         XCTAssertEqual(SyncSizeEstimate.estimatedBytes(photoCount: 0), 0)
         XCTAssertEqual(SyncSizeEstimate.estimatedBytes(photoCount: -5), 0, "negative counts clamp to zero")
-        // 1543 × 3.5 MB ≈ 5.4 GB — the number the prompt should show.
-        XCTAssertTrue(SyncSizeEstimate.humanReadable(photoCount: 1543).contains("GB"))
+        // DIFF-15: this asserted "GB", which pinned the pre-v2 estimate of 3.5 MB/photo — originals
+        // the engine has not fetched on first sync since media zones were excluded from every fetch.
+        // A ~1500-photo archive is a *thumbnail* pull of ~97 MB (measured, `ARCHITECTURE.md`), so the
+        // honest unit is megabytes. `DeferredDownloadPreviewTests` pins the measurement itself.
+        XCTAssertTrue(SyncSizeEstimate.humanReadable(photoCount: 1543).contains("MB"))
     }
 
     func testDecisionFreshInstallWithRemoteCountPrompts() {

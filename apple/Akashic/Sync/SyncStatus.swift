@@ -36,6 +36,18 @@ final class SyncStatus: ObservableObject {
     /// (incremental syncs, no estimate, or after the user answers). Only ever holds a `.prompt`.
     @Published var firstSyncPrompt: FirstSyncDownloadDecision?
 
+    /// DIFF-15: journeys known to be waiting in iCloud while their download is deferred — names,
+    /// dates and photo counts fetched ahead of any asset bytes (see `RemoteJourneySummarizing`).
+    ///
+    /// Published so `JourneyListView` can show them as real, visibly un-downloaded rows instead of
+    /// the "Start your first journey" hero, which is what an empty local store used to render at a
+    /// family member whose whole archive was sitting there waiting for Wi-Fi.
+    ///
+    /// `nil` is the normal state and means "nothing to say": no deferral, or the pre-fetch could not
+    /// answer. It is cleared again the moment the real download succeeds, because from then on the
+    /// list has actual journeys to render.
+    @Published var remoteJourneySummaries: [RemoteJourneySummary]?
+
     /// Progress of the one-time v2 photo-storage repack (MAPPING §13), surfaced in consumer
     /// Settings as e.g. "Optimizing photo storage · 412/1538". Nil when no repack is running or
     /// pending (the common steady state, and on any non-owner / non-CloudKit device).

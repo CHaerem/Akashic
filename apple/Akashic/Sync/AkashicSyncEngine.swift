@@ -52,7 +52,20 @@ final class AkashicSyncEngine: NSObject, CKSyncEngineDelegate {
     /// means "no estimate available" → the prompt is skipped and the generic status shown.
     private let remotePhotoCounter: RemotePhotoCounting?
 
-    /// One-time guard so the first-sync prompt is evaluated at most once per engine lifetime.
+    /// DIFF-15: best-effort, **ungated** pre-fetch of what is waiting in iCloud by name, so a
+    /// deferred first sync can show real un-downloaded rows instead of the first-run hero.
+    ///
+    /// Unlike `remotePhotoCounter` this is NOT injected only from `startSync` — the initializer
+    /// defaults it to the real `CloudKitRemoteJourneySummarizer`. That is safe and deliberate:
+    /// constructing one touches nothing (it holds a container *identifier*, and the container itself
+    /// is only built inside `#if AKASHIC_CLOUDKIT_BUILD`), so outside an entitled build it returns
+    /// `nil` instantly with no network and no trap. Defaulting it means a future engine call site
+    /// cannot silently ship without the surface this task exists to provide, which is the failure
+    /// mode a nil default invites. Tests override it with a fake.
+    private let remoteJourneySummarizer: RemoteJourneySummarizing?
+
+    /// One-time guard so the deferred-download preview (prompt + journey summaries) is evaluated at
+    /// most once per engine lifetime.
     private var hasEvaluatedFirstSyncPrompt = false
 
     /// Which CloudKit database this engine drives.
@@ -167,7 +180,8 @@ final class AkashicSyncEngine: NSObject, CKSyncEngineDelegate {
          defaults: UserDefaults = .standard,
          engine: SyncEngineProtocol? = nil,
          networkPolicy: NetworkPolicyGate = AlwaysAllowHeavyTransfer(),
-         remotePhotoCounter: RemotePhotoCounting? = nil) {
+         remotePhotoCounter: RemotePhotoCounting? = nil,
+         remoteJourneySummarizer: RemoteJourneySummarizing? = nil) {
         self.store = store
         self.status = status
         self.accountProvider = accountProvider
@@ -177,6 +191,13 @@ final class AkashicSyncEngine: NSObject, CKSyncEngineDelegate {
         self.engine = engine
         self.networkPolicy = networkPolicy
         self.remotePhotoCounter = remotePhotoCounter
+        // Built in the body rather than as a default argument for a concrete reason: it needs
+        // `containerIdentifier`, and a Swift default-argument expression cannot reference another
+        // parameter. Taking `nil` and resolving here is also the SE-0411-safe shape by default — a
+        // default-argument expression is evaluated in a NONISOLATED context at the call site, so the
+        // day this seam gains any main-actor isolation, nothing has to be untangled.
+        self.remoteJourneySummarizer = remoteJourneySummarizer
+            ?? CloudKitRemoteJourneySummarizer(containerIdentifier: containerIdentifier)
         super.init()
         discoveredMediaZoneKeys = Set(defaults.stringArray(forKey: Self.discoveredMediaZonesKey(databaseScope)) ?? [])
     }
@@ -359,7 +380,7 @@ final class AkashicSyncEngine: NSObject, CKSyncEngineDelegate {
             deferredHeavyFetch = true
             status.set(.waitingForWiFi)
             SyncLog.log("activate: heavy fetch deferred — Wi-Fi-only policy on an expensive path")
-            await evaluateFirstSyncPromptIfNeeded()
+            await publishDeferredDownloadPreview()
             return
         }
         deferredHeavyFetch = false
@@ -371,6 +392,10 @@ final class AkashicSyncEngine: NSObject, CKSyncEngineDelegate {
             try await engine?.fetchChanges()
             SyncLog.log("activate: fetchChanges() returned")
             status.markSynced()
+            // DIFF-15: the real journeys have landed, so the un-downloaded placeholder rows have
+            // nothing left to stand in for. Cleared HERE rather than before the fetch, so a fetch
+            // that throws leaves the family still able to see what is waiting.
+            status.remoteJourneySummaries = nil
             // The heavy fetch completed: spend any one-occasion cellular exemption so the next one
             // re-evaluates the policy fresh.
             networkPolicy.heavyTransferDidComplete()
@@ -386,18 +411,36 @@ final class AkashicSyncEngine: NSObject, CKSyncEngineDelegate {
         }
     }
 
-    /// On a fresh install whose heavy download was just deferred, turn the generic status into an
-    /// honest sized prompt: classify fresh-install-vs-incremental from the local store size, get a
-    /// best-effort pre-fetch remote count (no asset bytes), and publish a `.prompt` decision for the
-    /// UI. Evaluated once, and only by the private engine (there is a single prompt, not one per
-    /// database). Any failure to estimate falls back to the plain "Waiting for Wi-Fi" status.
-    private func evaluateFirstSyncPromptIfNeeded() async {
+    /// On a fresh install whose heavy download was just deferred, replace two silences with facts:
+    /// **what** is waiting (named journey rows for `JourneyListView`) and **how big** it is (the
+    /// sized first-sync prompt). Evaluated once, and only by the private engine — there is a single
+    /// prompt and a single list, not one per database.
+    ///
+    /// Both halves are best-effort and independently nil-tolerant. Nothing here can make the state
+    /// worse than it was: a failed summary query renders the ordinary first-run hero, a failed count
+    /// falls back to the plain "Waiting for Wi-Fi" status.
+    private func publishDeferredDownloadPreview() async {
         guard databaseScope == .private, !hasEvaluatedFirstSyncPrompt else { return }
         hasEvaluatedFirstSyncPrompt = true
         let local = store.localPhotoCount()
-        // Only pay for the (network) remote count for a plausible fresh install.
+        // Only pay for the (network) pre-fetch for a plausible fresh install. An incremental sync
+        // already has journeys on screen and needs neither the rows nor the dialog.
         guard local <= FirstSyncDownloadDecision.freshInstallPhotoCeiling else { return }
-        let remote = await remotePhotoCounter?.remotePhotoCount()
+
+        // (a) The ungated summary pre-fetch — kilobytes, so it runs on the metered path the heavy
+        // fetch was just deferred from.
+        let summaries = await remoteJourneySummarizer?.remoteJourneySummaries()
+        status.remoteJourneySummaries = summaries
+
+        // The summaries already carry a per-zone photo count, so when they arrive the estimate is
+        // free and no second network round trip is spent. `remotePhotoCounter` remains the fallback
+        // for when they do not (and is what the CloudKit-less builds and the engine tests exercise).
+        let remote: Int?
+        if let summaries, !summaries.isEmpty {
+            remote = summaries.reduce(0) { $0 + $1.photoCount }
+        } else {
+            remote = await remotePhotoCounter?.remotePhotoCount()
+        }
         let decision = FirstSyncDownloadDecision.decide(localPhotoCount: local, remotePhotoCount: remote)
         if case .prompt = decision { status.firstSyncPrompt = decision }
     }

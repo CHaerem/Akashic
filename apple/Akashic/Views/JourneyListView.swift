@@ -8,6 +8,13 @@ struct JourneyListView: View {
     @State private var showingNewJourney = false
     @State private var showingPaywall = false
 
+    /// DIFF-15: an empty local store has two completely different meanings, and this list used to
+    /// render only one of them. `syncStatus` is what tells them apart — whether a download is being
+    /// held back, and whether we know by name what is waiting in it. Reached the same way
+    /// `SettingsView` and `RootView` reach them, because both are process-wide singletons.
+    @ObservedObject private var syncStatus = PersistenceController.shared.syncStatus
+    @ObservedObject private var networkPolicy = NetworkPolicy.shared
+
     /// Start a create attempt: below the free limit → open the creation sheet; at the limit →
     /// present the paywall instead (never silently blocked). See `EntitlementStore`.
     private func startCreate() {
@@ -18,12 +25,30 @@ struct JourneyListView: View {
         }
     }
 
+    /// The hero-versus-waiting-rows branch, decided by pure logic in `FirstSyncDownloadDecision` so
+    /// it is unit-testable without a view. Only consulted while `store.journeys` is empty.
+    private var emptyContent: FirstSyncDownloadDecision.EmptyListContent {
+        FirstSyncDownloadDecision.emptyListContent(
+            remoteSummaries: syncStatus.remoteJourneySummaries,
+            isDownloadDeferred: syncStatus.state == .waitingForWiFi)
+    }
+
     var body: some View {
         ScrollView {
             LazyVStack(spacing: 16) {
                 if store.journeys.isEmpty {
-                    JourneyEmptyState { startCreate() }
-                        .padding(.top, 60)
+                    switch emptyContent {
+                    case .firstRunHero:
+                        JourneyEmptyState { startCreate() }
+                            .padding(.top, 60)
+                    // The family archive exists and is waiting for Wi-Fi. Showing the "create your
+                    // first journey" hero here is not merely quiet, it is false — so show what is
+                    // actually there, and offer the one action that releases it.
+                    case .awaitingDownload(let summaries):
+                        JourneysAwaitingDownloadSection(summaries: summaries) {
+                            networkPolicy.grantOneOccasionCellularDownload()
+                        }
+                    }
                 } else {
                     ForEach(store.journeys) { journey in
                         NavigationLink(value: journey.id) {
@@ -220,4 +245,133 @@ struct SampleBadge: View {
         .environmentObject(JourneyStore(persistence: .preview))
         .environmentObject(EntitlementStore.previewFree)
         .preferredColorScheme(.dark)
+}
+
+// MARK: - Waiting to download (DIFF-15)
+
+/// What a family member sees when they install on cellular: the journeys that are already in iCloud,
+/// named, with an honest size, and one action that starts the download anyway.
+///
+/// The problem this replaces was not silence. `NetworkPolicy` correctly defers the first fetch on a
+/// metered path and `SyncStatus` correctly says so — in Settings, one screen away. The journey list
+/// meanwhile read an empty store as "new customer" and invited them to *create* their first journey
+/// while the family's three were sitting there waiting, which is the one wrong thing it could say.
+struct JourneysAwaitingDownloadSection: View {
+    let summaries: [RemoteJourneySummary]
+    /// Releases the deferred download for THIS occasion only — a one-time pass, never a change to
+    /// the "Download over Wi-Fi only" preference. See `NetworkPolicy.grantOneOccasionCellularDownload`.
+    var onDownloadNow: () -> Void
+
+    private var totalPhotos: Int { summaries.reduce(0) { $0 + $1.photoCount } }
+
+    /// Sized from what the first sync ACTUALLY fetches — metadata and thumbnails, not originals.
+    /// See `SyncSizeEstimate.averagePhotoBytes` for the measurement behind the number.
+    private var estimate: String { SyncSizeEstimate.humanReadable(photoCount: totalPhotos) }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Your journeys are in iCloud")
+                    .font(.title3.weight(.bold))
+                    .foregroundStyle(Theme.textPrimary)
+                    .accessibilityAddTraits(.isHeader)
+                Text("About \(estimate) of journey details and preview photos downloads when you're on Wi-Fi. Full-quality photos load when you open them.")
+                    .font(.subheadline)
+                    .foregroundStyle(Theme.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(.horizontal, 2)
+
+            ForEach(summaries) { summary in
+                JourneyAwaitingDownloadCard(summary: summary)
+            }
+
+            Button(action: onDownloadNow) {
+                // Same wording as the Settings row that does the same thing, deliberately sharing
+                // the catalogue key: two different sentences for one action is how a translation
+                // starts disagreeing with itself.
+                Label("Download now over cellular", systemImage: "arrow.down.circle")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(Theme.onAccent)
+                    .frame(maxWidth: .infinity)
+                    // 14 + 14 + the label's own line height clears the 44 pt minimum target with
+                    // room for larger Dynamic Type sizes (the enforced audit checks this).
+                    .padding(.vertical, 14)
+                    .background(Theme.accent, in: Capsule())
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier(A11yID.journeyListDownloadNow)
+        }
+        .padding(.top, 8)
+    }
+}
+
+/// One journey that exists in iCloud but not yet on this device: everything a real `JourneyCard`
+/// shows minus the parts that need bytes, plus an explicit statement that it has not arrived.
+///
+/// Visibly un-downloaded rather than a shimmering placeholder: the hero band is a flat fill with a
+/// download glyph instead of `Theme.heroGradient`, and the row is not tappable, because there is
+/// nothing behind it to open yet. A row that looked ready and then did nothing would be the same
+/// class of lie in a smaller font.
+struct JourneyAwaitingDownloadCard: View {
+    let summary: RemoteJourneySummary
+
+    @ScaledMetric(relativeTo: .largeTitle) private var glyphSize: CGFloat = 30
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            ZStack(alignment: .bottomLeading) {
+                Theme.fillSubtle
+                    .frame(height: 96)
+                    .overlay(alignment: .topTrailing) {
+                        Image(systemName: "icloud.and.arrow.down")
+                            .font(.system(size: glyphSize))
+                            .foregroundStyle(Theme.textTertiary)
+                            .padding(12)
+                            // The row says "waiting for Wi-Fi" in words two lines below; the glyph
+                            // is the same fact as a picture (same treatment as `JourneyCard`'s flag).
+                            .accessibilityHidden(true)
+                    }
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(summary.name)
+                        .font(.title3.weight(.bold))
+                        .foregroundStyle(Theme.textPrimary)
+                    if !summary.country.isEmpty {
+                        Text(summary.country)
+                            .font(.subheadline)
+                            .foregroundStyle(Theme.textSecondary)
+                    }
+                }
+                .padding(14)
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+
+            if let dates = Formatters.dateRange(summary.dateStarted, summary.dateEnded) {
+                Label(dates, systemImage: "calendar")
+                    .font(.footnote)
+                    .foregroundStyle(Theme.textSecondary)
+            }
+
+            HStack(spacing: 8) {
+                // Reuses the catalogue's plural-varied "%lld photos" — Norwegian pluralises
+                // "bilde → bilder", which appending an "s" cannot express.
+                Text("\(summary.photoCount) photos")
+                Text(verbatim: "·")
+                Text("Waiting for Wi-Fi to download")
+            }
+            .font(.footnote)
+            .foregroundStyle(Theme.textTertiary)
+        }
+        .padding(14)
+        .background(Theme.surface, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .strokeBorder(Theme.hairline, style: StrokeStyle(lineWidth: 1, dash: [5, 4]))
+        )
+        // One card is one journey, exactly as `JourneyCard` decided (QUA-07): combined, the row reads
+        // as "Kilimanjaro, Tanzania, 29 Sep – 9 Oct 2023, 412 photos, waiting for Wi-Fi to download"
+        // rather than as six fragments to swipe through, and the "·" is `verbatim` so it is never a
+        // catalogue string of its own.
+        .accessibilityElement(children: .combine)
+    }
 }
