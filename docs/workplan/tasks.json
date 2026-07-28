@@ -985,7 +985,8 @@
         "Manual: accept a CKShare on device B; edit on A and observe B without foregrounding"
       ],
       "notes": [
-        "2026-07-27 MISPRICED AT ONE DEV-DAY AND MISFRAMED AS A SMOKE TEST — raised to 2 and reframed here, because this is the FIRST EVER EXECUTION of the product's identity on real hardware. CKShare acceptance was dead in every build ever shipped (the CKSharingSupported plist key was silently dropped), so the family loop — invite, accept, two-engine sync, media-zone auto-accept, push-driven propagation — has never once run in the fixed configuration, by anyone, including the family the app was a gift for. All existing verification is simulator-bound, and CLAUDE.md establishes that simulator builds embed no entitlements at all. ARCHITECTURE.md meanwhile reads in the present tense (\"Sharing ... this IS the family product\", \"hardened by three adversarial review rounds\"), which describes code review rather than execution. If this session finds a real defect in zone sharing at 939 photos, or in media-share auto-accept, the beta clock has not started and the five-week runway is fiction. Run it within days, full matrix, before any further planning."
+        "2026-07-27 MISPRICED AT ONE DEV-DAY AND MISFRAMED AS A SMOKE TEST — raised to 2 and reframed here, because this is the FIRST EVER EXECUTION of the product's identity on real hardware. CKShare acceptance was dead in every build ever shipped (the CKSharingSupported plist key was silently dropped), so the family loop — invite, accept, two-engine sync, media-zone auto-accept, push-driven propagation — has never once run in the fixed configuration, by anyone, including the family the app was a gift for. All existing verification is simulator-bound, and CLAUDE.md establishes that simulator builds embed no entitlements at all. ARCHITECTURE.md meanwhile reads in the present tense (\"Sharing ... this IS the family product\", \"hardened by three adversarial review rounds\"), which describes code review rather than execution. If this session finds a real defect in zone sharing at 939 photos, or in media-share auto-accept, the beta clock has not started and the five-week runway is fiction. Run it within days, full matrix, before any further planning.",
+        "2026-07-28 TWO CHECKS INHERITED FROM CLOSED TASKS, both impossible outside a signed build. (1) DIFF-15: the CloudKitRemoteJourneySummarizer query has NEVER RUN — it compiles under Release-CloudKit and nothing more. On a device signed into the family account, put the app in Wi-Fi-only mode on cellular with a fresh install and confirm the journey list shows the named un-downloaded rows (not the first-run hero), that the photo counts are right (the query spans private AND shared databases — a participant device is the sharper test), and that \"Download now\" releases the fetch once without persisting the setting. If the rows never appear, suspect missing queryable indexes for the zone-scoped Photo query in the SHARED database — the failure is silent by design (nil -> hero). (2) SHIP-24: tap an akashic.no journey link and confirm the app opens — Pages serves the AASA document as application/octet-stream, and whether Apple's CDN accepts that content type is only observable here."
       ]
     },
     {
@@ -3598,7 +3599,7 @@
       "priority": 8,
       "deps": [],
       "track": "DIFF",
-      "status": "WIP",
+      "status": "DONE",
       "owner": false,
       "title": "On cellular, a fresh install shows \"Start your first journey\" while the whole archive waits silently",
       "done_when": "A fresh install on a metered connection shows the family's journeys as named, visibly un-downloaded rows with an honest size and a \"Download now\" action — instead of the first-run hero — and the first-sync estimate matches what the engine actually fetches.",
@@ -3621,7 +3622,57 @@
         "agent": "diff15-agent",
         "branch": "agent/diff15",
         "at": "2026-07-28"
-      }
+      },
+      "verification": {
+        "at": "2026-07-28T11:09:53.227Z",
+        "head": "230f409",
+        "ran": [
+          {
+            "command": "cd apple && xcodegen generate",
+            "ok": true,
+            "ms": 89,
+            "status": 0,
+            "signal": null
+          },
+          {
+            "command": "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,name=iPhone 17 Pro\" CODE_SIGNING_ALLOWED=NO -only-testing:AkashicTests test > /tmp/diff15.log 2>&1 && grep -q \"with 1 test skipped and 0 failures\" /tmp/diff15.log",
+            "ok": true,
+            "ms": 18582,
+            "status": 0,
+            "signal": null
+          }
+        ],
+        "attested": [
+          {
+            "kind": "manual",
+            "text": "with a fake expensive NetworkPathSource (the seam exists for tests), a store with zero journeys and a non-nil remote summary shows the un-downloaded rows, not JourneyEmptyState — assert in a unit/UI test, then observe once in the simulator"
+          }
+        ]
+      },
+      "attestation": "The unit/UI-assertion half of the MANUAL entry is done and verified: JourneyListWaitingSurfaceTests source-couples the view branch (the QUA-45 lesson) and DeferredDownloadPreviewTests drives both branches through the engine seam with a fake expensive path. The observe-in-simulator half is IMPOSSIBLE in an unsigned Debug build — the summarizer is gated behind AKASHIC_CLOUDKIT_BUILD and returns nil, so the simulator always shows the hero. That observation is recorded on SHIP-15's checklist, where the live query (private+shared DBs, queryable indexes in the shared DB) must also be proven on a participant device.",
+      "evidence": "Merged at 7ede7ad. 861 unit tests (843+18), 1 skipped, 0 failures on pinned iPhone 17 Pro; Release-CloudKit BUILD SUCCEEDED with -DAKASHIC_CLOUDKIT_BUILD confirmed in the swiftc invocation. Both-directions proof via prove.mjs's own mechanism (its --native plumbing is broken, QUA-57): RED = 8 tests / 10 genuine assertion failures against the pre-fix tree, GREEN = 18/18 after. Estimate corrected 3.5 MB -> 63 KB/photo, derived from measured repo figures (97 MB / 1538 photos), old prompt overstated 55x."
+    },
+    {
+      "id": "QUA-57",
+      "effort": 0.2,
+      "priority": 24,
+      "deps": [],
+      "track": "QUALITY",
+      "status": "TODO",
+      "owner": false,
+      "title": "prove.mjs --native conflates a git pathspec with an xcodebuild test identifier",
+      "done_when": "prove.mjs can prove a native test suite red-against-the-revert: the tests are named by FILE for the worktree copy and by TARGET/CLASS for -only-testing, as two inputs or a mapping.",
+      "why": "FOUND ON ITS FIRST NATIVE USE, by DIFF-15's agent. `--tests` is interpolated both as a git pathspec\n(`git ls-files <pattern>` to carry the new tests into the throwaway worktree) and as an xcodebuild\n`-only-testing:` identifier. No string is both: a path gives\n`-only-testing:apple/AkashicTests/Foo.swift` -> \"Tests in the target 'apple' can't be run\", and a\ntest identifier matches no files, so the tests are never carried over. Either way direction 1 (the\nRED run) dies on an environment error rather than a failing assertion — which prove.mjs's own\ncounts() guard correctly refuses, so the failure is at least loud, not silent.\n\nThe web path is unaffected (vitest takes file patterns). The agent worked around it with a manual\ndetached-worktree equivalent and got a real 10-assertion red, so the METHOD is sound; only the\nnative plumbing is wrong.",
+      "files": [
+        "scripts/prove.mjs"
+      ],
+      "verify": [
+        "node scripts/prove.mjs --tests src/lib/map/mapkit/useMapKitJourney.test.ts --revert src/lib/map/mapkit/useMapKitJourney.ts --against 31b8bac~1 > /tmp/qua57-web.log 2>&1; test \"$?\" = 0  # the web path must not regress",
+        "MANUAL: one native run proving a known-good historical pair red-then-green — pick a closed task with committed native tests (e.g. DIFF-15's SyncSizeEstimateTests against 7ede7ad~1) and paste both outcomes into the evidence"
+      ],
+      "notes": [
+        "2026-07-28 The fix shape the agent suggested: separate --tests (files, for the worktree carry) from a new --only-testing (xcodebuild identifiers), or derive the identifier from the file's basename (AkashicTests/<ClassName> for a single-class file). Derivation is convenient and lies for multi-class files; two explicit flags cannot."
+      ]
     }
   ]
 }
