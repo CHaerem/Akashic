@@ -657,32 +657,24 @@ html {
     inset 0 1px 0 rgba(255, 255, 255, 0.3),
     0 0 20px rgba(255, 255, 255, 0.1);
   transition: all var(--lg-transition-smooth);
-  /* INERT AS OF MAP-05 — and that is a statement about the product, not about this rule. Read this
-     before deleting it as dead CSS, because the deletion would take the only record of QUA-49 with
-     it.
-     History, all measured, because getting it wrong here once already turned a MapKit-only
-     regression into an apparently shared product decision:
-     - ON MAPBOX this rule was LOAD-BEARING. `.camp-marker` computed `position: absolute`,
-       `z-index: 22`, parent `.mapboxgl-canvas-container`, with NO wrapper — mapbox-gl took
-       `options.element` as its own `_element` and added `.mapboxgl-marker`, which is
-       `position: absolute`. `.photo-thumbnail-marker` computed `z-index: 5`. So on Mapbox camps sat
-       above photo stacks, and this rule is what put them there.
-     - ON MAPKIT it does NOTHING. Both elements compute `position: static`, so `z-index` does not
-       apply at all (`display: flex` above makes this element's CHILDREN flex items, not this
-       element). With a photo stack over the day-3 camp, `elementFromPoint` at the camp's centre
-       returns `.photo-stack-main` and the photo intercepts the camp's clicks. Three levers were
-       tried and none flipped it — `position: relative` plus explicit z-index on both,
-       `mapkit.Annotation.DisplayPriority` Required vs High, and moving the camp element to the end
-       of `.mk-annotation-container`.
-     MAP-05 deleted the Mapbox surface. It DID NOT FIX QUA-49 and must not be read as having done
-     so: it removed the surface on which camps were correctly stacked, so "a photo stack can hide a
-     camp marker" went from a regression on one of two surfaces to the ONLY shipped behaviour. That
-     is strictly worse for the user and QUA-49 stays open.
-     Kept rather than deleted for two reasons: it is the anchor for the measurement above, and any
-     fix for QUA-49 has to establish a positioned context on this element anyway — at which point
-     this declaration starts working again and the `20` is already the value it should be. If you
-     fix QUA-49, re-measure and rewrite this comment; do not just delete the words "INERT". */
-  z-index: 20 !important;
+  /* NO z-index HERE, AND THAT IS DELIBERATE — do not "restore" one. (QUA-49, closed.)
+     This rule used to carry `z-index: 20 !important`, plus 22/25 on the selected and hover states
+     below. On Mapbox those were load-bearing: mapbox-gl adopted `options.element` and added its own
+     `position: absolute` class, so `.camp-marker` computed `position: absolute; z-index: 22` against
+     `.photo-thumbnail-marker`'s 5, and camps painted above photo stacks.
+     On MapKit they were INERT, and the reason is not the one that is easy to guess. It is not just
+     that the element computes `position: static`: `div.mk-annotation-container` hosts a CLOSED SHADOW
+     ROOT (measured with CDP `DOM.getDocument({pierce:true})`; `element.shadowRoot` returns null for a
+     closed root, so the tree looks absent rather than shut). Our element stays a light-DOM child and
+     carries `slot="mk-slot-…"`; a wrapper INSIDE that shadow tree positions and stacks it. A z-index
+     on our element can only stack it within its own wrapper, so it can never cross to a sibling
+     marker — measured with the camp at 20 and the stack at 5, both `position: relative`: the stack
+     still won.
+     The fix is therefore not in this file. Paint order on MapKit is ADD ORDER, and
+     `src/lib/map/mapkit/annotations.ts` restores the Mapbox precedence by re-adding the camp
+     annotations after the photo stacks (`liftCampsAboveStacks`), plus a page-pixel clearance that
+     keeps a coincident photo stack clickable in its own right (`clearedAnchorOffset`). Read that
+     file's header before changing anything about marker stacking. */
 }
 
 .camp-marker-badge {
@@ -707,7 +699,6 @@ html {
     0 0 0 1px rgba(255, 255, 255, 0.2),
     inset 0 1px 0 rgba(255, 255, 255, 0.4),
     0 0 30px rgba(255, 255, 255, 0.15);
-  z-index: 25 !important;
 }
 
 .camp-marker-selected {
@@ -724,7 +715,6 @@ html {
     0 0 0 2px rgba(96, 165, 250, 0.4),
     inset 0 1px 0 rgba(255, 255, 255, 0.3),
     0 0 30px rgba(96, 165, 250, 0.3);
-  z-index: 22 !important;
 }
 
 .camp-marker-selected .camp-marker-badge {
@@ -737,7 +727,6 @@ html {
     0 0 0 2px rgba(96, 165, 250, 0.6),
     inset 0 1px 0 rgba(255, 255, 255, 0.4),
     0 0 40px rgba(96, 165, 250, 0.4);
-  z-index: 25 !important;
 }
 
 /* ============================================================================
