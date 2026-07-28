@@ -3562,6 +3562,32 @@
       },
       "attestation": "Watched run 30348160171 step by step: Build success, Test success (the four previously-failing paywall/settings tests among them), Release-CloudKit build and plist assertion success, conclusion=success.",
       "evidence": "apple-ci run 30348160171 on main (commit 0372904): completed success, every step green including Test — first green run since c864176 on 2026-07-25. Locally proven both directions first: the paywall test failed on an iPhone SE with byte-identical symptoms to CI before the fix, and after requireByScrolling the full suite is 843 unit + 14 UI, 0 failures on both the SE and iPhone 17 Pro (workplan verify records the SE suite at 249 s)."
+    },
+    {
+      "id": "DIFF-15",
+      "effort": 1,
+      "priority": 8,
+      "deps": [],
+      "track": "DIFF",
+      "status": "TODO",
+      "owner": false,
+      "title": "On cellular, a fresh install shows \"Start your first journey\" while the whole archive waits silently",
+      "done_when": "A fresh install on a metered connection shows the family's journeys as named, visibly un-downloaded rows with an honest size and a \"Download now\" action — instead of the first-run hero — and the first-sync estimate matches what the engine actually fetches.",
+      "why": "MEASURED 2026-07-28, owner-reported (\"enten laste ned alt eller ikke se noenting\"). Three findings:\n\n1. THE DEFERRED STATE IS INVISIBLE WHERE IT MATTERS. NetworkPolicy defaults to Wi-Fi-only downloads\n(the right protective default), and on an expensive path AkashicSyncEngine defers the ENTIRE first\nfetch and sets status .waitingForWiFi. That status surfaces in exactly one place: a row in Settings\n(SettingsView.swift:115). JourneyListView renders store.journeys.isEmpty as JourneyEmptyState — the\n\"Start your first journey\" onboarding hero. So a family member installing on cellular sees an empty\napp inviting them to CREATE their first journey while the family archive exists and waits. Actively\nmisleading, not merely quiet — and it is precisely the state a beta household on holiday installs in.\n\n2. THE ALL-OR-NOTHING IS THE GATE'S SCOPE, NOT THE ARCHITECTURE'S. The v2 media split already does\nthe hard half: media zones (originals, GBs) are excluded from every engine fetch\n(mediaZoneIDsToExclude) and originals stream on demand — MediaFetcher explicitly allows a tapped\nphoto on cellular by design. What the Wi-Fi gate defers is journey zones: metadata + thumbnails.\nThe metadata alone (names, dates, days, routes, captions) is KBs and would render most of the app.\n\n3. THE HONEST NUMBER IS STALE BY ~40x. SyncSizeEstimate.averagePhotoBytes is 3.5 MB, documented as\n\"originals + thumbnail\" — but post-v2 the engine never fetches originals on first sync, so the\nprompt would present a multi-GB figure for a ~75-97 MB thumbnail pull. A protective dialog that\noverstates by 40x teaches people to decline it.\n\nMINIMAL DESIGN (the owner asked for smarter WITHOUT overcomplicating):\n(a) A lightweight, ungated, no-asset pre-fetch of journey summaries — a CKQueryOperation with\ndesiredKeys (name, dates, photo count), same pattern as the existing RemotePhotoCounting seam —\nshown as real rows in JourneyListView in an un-downloaded state with \"Waiting for Wi-Fi\" and the\ncorrected size.\n(b) One \"Download now\" action on that surface, wired to the release mechanism that already exists\n(onAllowsHeavyTransferBecameTrue fires the deferred fetch); prefer a one-time override to flipping\nthe persistent setting.\n(c) Fix the estimate to thumbnail scale for what first sync actually pulls, and say that full-quality\nphotos load when viewed.\nEXPLICITLY OUT OF SCOPE, noted as the future option it is: per-journey selective download. The\nzone-per-journey design makes it expressible later via fetch scope, but it is exactly the\novercomplication to avoid in the first cut.",
+      "files": [
+        "apple/Akashic/Views/JourneyListView.swift",
+        "apple/Akashic/Sync/SyncDownloadPrompt.swift",
+        "apple/Akashic/Sync/SyncStatus.swift",
+        "apple/Akashic/Sync/AkashicSyncEngine.swift"
+      ],
+      "verify": [
+        "cd apple && xcodegen generate",
+        "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,name=iPhone 17 Pro\" CODE_SIGNING_ALLOWED=NO -only-testing:AkashicTests test > /tmp/diff15.log 2>&1 && grep -q \"with 1 test skipped and 0 failures\" /tmp/diff15.log",
+        "MANUAL: with a fake expensive NetworkPathSource (the seam exists for tests), a store with zero journeys and a non-nil remote summary shows the un-downloaded rows, not JourneyEmptyState — assert in a unit/UI test, then observe once in the simulator"
+      ],
+      "notes": [
+        "2026-07-28 THE PIECES THIS SHOULD REUSE, so nothing is invented twice: NetworkPolicy.allowsHeavyTransfer and its NetworkPathSource test seam; RemotePhotoCounting (the no-asset pre-fetch pattern, including returning nil on failure and deferring silently); FirstSyncDownloadDecision (pure, unit-tested branch logic — extend, do not fork); SyncStatus.waitingForWiFi; onAllowsHeavyTransferBecameTrue (the deferred-fetch release). The one genuinely new piece is the journey-summary query and the list row that renders it."
+      ]
     }
   ]
 }

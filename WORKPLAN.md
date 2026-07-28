@@ -5,7 +5,7 @@
 
 # Akashic — work ledger
 
-142 tasks · **30 open** (5 agent-doable, 1.5 dev-days · 25 owner-only, 10.6 dev-days) · 112 done · 0 dropped
+143 tasks · **31 open** (6 agent-doable, 2.5 dev-days · 25 owner-only, 10.6 dev-days) · 112 done · 0 dropped
 
 > **`dev-days` are a human-developer estimate, not agent time.** They came from the review
 > that produced these tasks and they are the right unit for deciding whether something is
@@ -15,7 +15,7 @@
 > Measured so far: **107 agent tasks estimated at 73.7 dev-days**.
 > Elapsed time is deliberately absent: nothing here can support it. Use `git log` for that.
 >
-> **Every large agent item is closed.** 9 of the tasks closed so far were 2 dev-days or more; nothing 2 dev-days or larger remains agent-doable, and the 1.5 remaining dev-days are all small tasks (5 at 0.5 or less). What is still genuinely large is OWNER work, which no amount of agent compression touches.
+> **Every large agent item is closed.** 9 of the tasks closed so far were 2 dev-days or more; nothing 2 dev-days or larger remains agent-doable, and the 2.5 remaining dev-days are all small tasks (5 at 0.5 or less). What is still genuinely large is OWNER work, which no amount of agent compression touches.
 
 Read [CLAUDE.md](CLAUDE.md) before touching anything. To find work:
 
@@ -127,7 +127,7 @@ node scripts/workplan.mjs next
 
 > Capability beyond what competitors offer. Order set by decision: share link, then Vision curation, then the book.
 
-1 open of 14 · 0.5 d remaining
+2 open of 15 · 1.5 d remaining
 
 | | Task | Days | Who | Deps | Finish line |
 |---|---|---|---|---|---|
@@ -145,6 +145,7 @@ node scripts/workplan.mjs next
 | ` ` | `DIFF-12` **Decide what photographs the demo journey ships with** | 0.5 | owner | `DIFF-10` | A decision is recorded, and the shipped demo images are the ones intended. |
 | `x` | `DIFF-13` **Accept/dismiss rows for curation, and make Vision link** | 1 | agent | `DIFF-04` | Each day proposes a best-of and a hero the user can accept or dismiss, and Vision links into the build. |
 | `x` | `DIFF-14` **Collapse duplicates on import, which needs a stored content hash** | 1 | agent | `DIFF-06` | Re-importing a byte-identical photograph is detected and skipped, not written twice. |
+| ` ` | `DIFF-15` **On cellular, a fresh install shows "Start your first journey" while the whole archive waits silently** | 1 | agent | — | A fresh install on a metered connection shows the family's journeys as named, visibly un-downloaded rows with an honest size and a "Download now" action — instead of the first-run hero — and the first-sync estimate matches what the engine actually fetches. |
 
 ## QUALITY
 
