@@ -34,18 +34,33 @@ final class NetworkPolicy: ObservableObject, NetworkPolicyGate {
 
     /// User setting: restrict heavy downloads to Wi-Fi. **DEFAULT TRUE** — the protective default.
     /// Persisted to `UserDefaults` on change. Flipping it OFF on an expensive path immediately
-    /// releases any deferred fetch (see `onAllowsHeavyTransferBecameTrue`).
+    /// releases any deferred fetch (see `onAllowsHeavyTransferBecameTrue`); flipping it ON while on
+    /// one immediately defers a first download that has not delivered yet (DIFF-16, see
+    /// `heavyTransferDisallowedObservers`).
     @Published var wifiOnlyDownloads: Bool = true {
         didSet {
             guard wifiOnlyDownloads != oldValue else { return }
             defaults.set(wifiOnlyDownloads, forKey: Self.wifiOnlyKey)
-            let before = Self.allows(wifiOnly: oldValue, expensive: isExpensivePath)
-            fireIfBecameAllowed(before: before)
+            // `oneOccasionExemption` is part of `allowsHeavyTransfer`, so the "before" value must
+            // include it — otherwise turning the setting ON while an exemption is outstanding looks
+            // like a true → false transition when the exemption still permits the download, and
+            // (since DIFF-16) that would defer a fetch the user explicitly allowed.
+            let before = Self.allows(wifiOnly: oldValue, expensive: isExpensivePath,
+                                     exemption: oneOccasionExemption)
+            fireTransition(from: before)
         }
     }
 
     /// Whether the current network path is "expensive" — cellular, a personal hotspot, or an
     /// otherwise metered link (`NWPath.isExpensive`). Updated by the path monitor.
+    ///
+    /// **This starts out LYING on a cellular launch, and that is DIFF-16's root cause.** `init`
+    /// seeds it from `NWPathMonitor.currentPath`, which before the monitor's first update always
+    /// reports not-expensive — so activation's gate passes, the multi-GB pull starts, and
+    /// milliseconds later the real path arrives. Nothing can be done about the seed (there is no
+    /// synchronous way to ask, and waiting for the first update would add launch latency to every
+    /// launch); what matters is that the correction, when it lands, is *acted on* — which is why the
+    /// true → false transition below exists as well as the false → true one.
     @Published private(set) var isExpensivePath: Bool = false
 
     /// A ONE-OCCASION cellular exemption for the pending heavy download, granted by the user from
@@ -64,6 +79,28 @@ final class NetworkPolicy: ObservableObject, NetworkPolicyGate {
     /// path became cheap, or the user turned the setting off. Wired by `startSync` to retry a
     /// deferred heavy fetch on both engines immediately, rather than waiting for the next launch.
     var onAllowsHeavyTransferBecameTrue: (() -> Void)?
+
+    /// DIFF-16: observers of the OTHER direction, **true → false**.
+    ///
+    /// This half did not exist, and its absence was the whole defect: on a cellular launch the seed
+    /// above says not-expensive, the heavy pull starts, the real path arrives a moment later, and the
+    /// per-operation hook (`nextFetchChangesOptions`) then hands CloudKit `allowsCellularAccess =
+    /// false` for every subsequent request. CloudKit defers them SILENTLY while the status still says
+    /// "Syncing", so the user sat at 0 journeys / 0 photos forever — measured on the owner's phone on
+    /// builds 101 and 102. With a one-directional transition the engine could never honestly enter
+    /// the deferred state after launch, no matter what the path did.
+    ///
+    /// A LIST, and self-registered by each engine (`AkashicSyncEngine.init` via
+    /// `observeHeavyTransferDisallowed`), where the true direction is a single closure that
+    /// `startSync` fans out to both engines by hand. That asymmetry is deliberate, for the reason
+    /// `AkashicSyncEngine.observeForeground` gives for subscribing in `init`: a subscription that
+    /// depends on a call site remembering to make it is a subscription that can ship missing. Both
+    /// engines share one policy, so a single closure would have let whichever registered last silently
+    /// replace the other.
+    ///
+    /// Observers must capture weakly (`[weak self]`), exactly as `startSync`'s closure does: this list
+    /// is never pruned, because in production it holds exactly two entries for the life of the process.
+    private var heavyTransferDisallowedObservers: [() -> Void] = []
 
     private let source: NetworkPathSource
     private let defaults: UserDefaults
@@ -99,13 +136,25 @@ final class NetworkPolicy: ObservableObject, NetworkPolicyGate {
         guard !oneOccasionExemption else { return }
         let before = allowsHeavyTransfer
         oneOccasionExemption = true
-        fireIfBecameAllowed(before: before)
+        fireTransition(from: before)
+    }
+
+    /// DIFF-16: register a callback for the **true → false** transition. Append-only; see
+    /// `heavyTransferDisallowedObservers` for why this is a list and why observers must capture weakly.
+    func observeHeavyTransferDisallowed(_ onDisallowed: @escaping () -> Void) {
+        heavyTransferDisallowedObservers.append(onDisallowed)
     }
 
     /// Spend the one-occasion exemption once the heavy fetch it permitted has completed, so the
     /// next heavy fetch re-evaluates the policy from scratch. Called by the engine on fetch
     /// success; a no-op when no exemption was outstanding.
     func heavyTransferDidComplete() {
+        // Deliberately does NOT fire the disallowed transition, even though spending the exemption can
+        // flip `allowsHeavyTransfer` true → false. This is called from INSIDE `fetchOnActivation`,
+        // immediately after a successful heavy fetch, and that method owns the status for the rest of
+        // its body — re-entering the deferred state from underneath it would have the engine contradict
+        // the round trip it just completed. The path-change and setting-change sites below are the
+        // honest triggers: something outside the fetch actually changed.
         oneOccasionExemption = false
     }
 
@@ -113,15 +162,27 @@ final class NetworkPolicy: ObservableObject, NetworkPolicyGate {
         guard expensive != isExpensivePath else { return }
         let before = allowsHeavyTransfer
         isExpensivePath = expensive
-        fireIfBecameAllowed(before: before)
+        fireTransition(from: before)
     }
 
-    private func fireIfBecameAllowed(before: Bool) {
-        if !before && allowsHeavyTransfer { onAllowsHeavyTransferBecameTrue?() }
+    /// Fire whichever direction `allowsHeavyTransfer` just moved in, or nothing if it did not move.
+    ///
+    /// One method for both directions so a new mutation site cannot pick up half the contract — which is
+    /// exactly what happened when only the false → true half existed.
+    private func fireTransition(from before: Bool) {
+        let now = allowsHeavyTransfer
+        guard now != before else { return }
+        if now {
+            onAllowsHeavyTransferBecameTrue?()
+        } else {
+            for observer in heavyTransferDisallowedObservers { observer() }
+        }
     }
 
-    private static func allows(wifiOnly: Bool, expensive: Bool) -> Bool {
-        !wifiOnly || !expensive
+    /// `allowsHeavyTransfer` evaluated against explicit inputs, for computing the "before" value in
+    /// `wifiOnlyDownloads.didSet` — where the stored property already holds the new value.
+    private static func allows(wifiOnly: Bool, expensive: Bool, exemption: Bool) -> Bool {
+        !wifiOnly || !expensive || exemption
     }
 }
 
@@ -135,6 +196,14 @@ protocol NetworkPolicyGate: AnyObject {
     /// Called by the engine once a heavy fetch it was permitted to run has completed, so a
     /// one-occasion cellular exemption is spent (the next heavy fetch re-evaluates fresh).
     func heavyTransferDidComplete()
+    /// DIFF-16: register a callback fired when `allowsHeavyTransfer` goes **true → false**, so the
+    /// engine can enter the honest deferred state instead of letting CloudKit defer its operations
+    /// silently behind a status that still says "Syncing".
+    ///
+    /// A requirement rather than a defaulted protocol extension on purpose: a gate that can say no and
+    /// forgets to implement this reproduces the exact defect, and a no-op default makes that
+    /// omission invisible. Gates that never disallow implement it as an explicit no-op and say so.
+    func observeHeavyTransferDisallowed(_ onDisallowed: @escaping () -> Void)
 }
 
 /// Permissive default for engines constructed without a policy (the existing unit tests, and any
@@ -146,6 +215,10 @@ final class AlwaysAllowHeavyTransfer: NetworkPolicyGate {
     nonisolated init() {}
     var allowsHeavyTransfer: Bool { true }
     func heavyTransferDidComplete() {}
+    /// Never fires: `allowsHeavyTransfer` is a constant `true` here, so there is no transition to
+    /// observe. Dropping the callback is correct rather than lossy — the alternative (storing it) would
+    /// only hold a closure that nothing could ever call.
+    func observeHeavyTransferDisallowed(_ onDisallowed: @escaping () -> Void) {}
 }
 
 // MARK: - Path source seam
@@ -168,6 +241,10 @@ final class NWPathSource: NetworkPathSource {
     private let monitor = NWPathMonitor()
     private let queue = DispatchQueue(label: "no.akashic.networkpath")
 
+    /// **Always `false` until the monitor has delivered its first path update** — `currentPath` on an
+    /// unstarted monitor is an empty path, and an empty path is not expensive. So this is not merely
+    /// "best effort": on a cellular launch it is reliably WRONG, which is why `NetworkPolicy` treats the
+    /// first real update as a correction it must act on rather than as a refinement (DIFF-16).
     var isExpensivePath: Bool { monitor.currentPath.isExpensive }
 
     func start(onChange: @escaping @Sendable (Bool) -> Void) {
