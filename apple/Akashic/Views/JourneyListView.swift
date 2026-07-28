@@ -15,6 +15,11 @@ struct JourneyListView: View {
     @ObservedObject private var syncStatus = PersistenceController.shared.syncStatus
     @ObservedObject private var networkPolicy = NetworkPolicy.shared
 
+    /// DIFF-16: whether the heavy first download is running RIGHT NOW. `SyncStatus.state` cannot
+    /// answer this — `.active` is also the steady state of a fully synced app — so the engine
+    /// publishes it separately, and only when it has evidence that content is actually coming.
+    @ObservedObject private var downloadProgress = FirstSyncDownloadProgress.shared
+
     /// Start a create attempt: below the free limit → open the creation sheet; at the limit →
     /// present the paywall instead (never silently blocked). See `EntitlementStore`.
     private func startCreate() {
@@ -30,7 +35,8 @@ struct JourneyListView: View {
     private var emptyContent: FirstSyncDownloadDecision.EmptyListContent {
         FirstSyncDownloadDecision.emptyListContent(
             remoteSummaries: syncStatus.remoteJourneySummaries,
-            isDownloadDeferred: syncStatus.state == .waitingForWiFi)
+            isDownloadDeferred: syncStatus.state == .waitingForWiFi,
+            isDownloadRunning: downloadProgress.isRunning)
     }
 
     var body: some View {
@@ -48,6 +54,26 @@ struct JourneyListView: View {
                         JourneysAwaitingDownloadSection(summaries: summaries) {
                             networkPolicy.grantOneOccasionCellularDownload()
                         }
+                    // DIFF-16: a download IS being held back and we could not find out what is in it.
+                    // Neither the hero (false: this family has an archive) nor the rows (we have no
+                    // names to put in them) — a neutral statement and a retry.
+                    case .couldNotCheck:
+                        JourneysCouldNotCheckSection(
+                            // Re-runs the (kilobyte) summary pre-fetch. Passed in from here rather
+                            // than defaulted inside the section: a default property value is
+                            // evaluated in a NONISOLATED context (SE-0411's shape again), and both
+                            // `PersistenceController` and `NetworkPolicy` are `@MainActor`.
+                            onCheckAgain: {
+                                PersistenceController.shared.syncCoordinator?
+                                    .retryDeferredDownloadPreview()
+                            },
+                            onDownloadNow: { networkPolicy.grantOneOccasionCellularDownload() })
+                    // DIFF-16, the owner's second point: the download is running and nothing has
+                    // landed yet. Named rows stay visible when we have them, each with a progress
+                    // affordance, so the surface does not blink to a blank at the moment it finally
+                    // starts working.
+                    case .downloading(let summaries):
+                        JourneysDownloadingSection(summaries: summaries)
                     }
                 } else {
                     ForEach(store.journeys) { journey in
@@ -315,6 +341,10 @@ struct JourneysAwaitingDownloadSection: View {
 /// class of lie in a smaller font.
 struct JourneyAwaitingDownloadCard: View {
     let summary: RemoteJourneySummary
+    /// DIFF-16: the same row while the download is actually running. Only the footer changes — the
+    /// row must not jump or re-layout at the moment the download starts, because a surface that
+    /// rebuilds itself is how "it's working" comes across as "something broke".
+    var isDownloading: Bool = false
 
     @ScaledMetric(relativeTo: .largeTitle) private var glyphSize: CGFloat = 30
 
@@ -357,7 +387,16 @@ struct JourneyAwaitingDownloadCard: View {
                 // "bilde → bilder", which appending an "s" cannot express.
                 Text("\(summary.photoCount) photos")
                 Text(verbatim: "·")
-                Text("Waiting for Wi-Fi to download")
+                if isDownloading {
+                    ProgressView()
+                        .controlSize(.mini)
+                        // The word next to it says the same thing; a spinner with no label is
+                        // exactly what `.sufficientElementDescription` is right to flag.
+                        .accessibilityHidden(true)
+                    Text("Downloading…")
+                } else {
+                    Text("Waiting for Wi-Fi to download")
+                }
             }
             .font(.footnote)
             .foregroundStyle(Theme.textTertiary)
@@ -373,5 +412,125 @@ struct JourneyAwaitingDownloadCard: View {
         // rather than as six fragments to swipe through, and the "·" is `verbatim` so it is never a
         // catalogue string of its own.
         .accessibilityElement(children: .combine)
+    }
+}
+
+// MARK: - Could not check (DIFF-16)
+
+/// What the list says when a download IS being held back and the pre-fetch could not find out what
+/// is in it.
+///
+/// ## Why this is not the first-run hero
+///
+/// MEASURED BY THE OWNER on TestFlight build 101 — fresh install, cellular, the exact scenario
+/// DIFF-15 was built for: the sized first-sync prompt appeared, so the remote photo COUNT query
+/// reached Production and answered, and the journey rows did not render. Under DIFF-15's branch a
+/// `nil` summary fell through to "Start your first journey", so the one screen a family sees on a new
+/// device invited them to create their first journey while their archive sat in iCloud. That is not a
+/// quiet failure, it is a confident wrong answer, and it is why `nil` and `[]` are now different
+/// states rather than the same fallback.
+///
+/// The copy claims nothing it cannot prove. It does not say journeys are waiting — the query that
+/// would have established that is precisely what failed — only that the check did not go through, and
+/// it offers the two things that can move the situation forward: check again, or stop waiting for Wi-Fi.
+struct JourneysCouldNotCheckSection: View {
+    /// Re-run the (kilobyte) summary pre-fetch.
+    var onCheckAgain: () -> Void
+    /// Releases the deferred download for THIS occasion only — a one-time pass, never a change to
+    /// the "Download over Wi-Fi only" preference. The honest PRIMARY action here: it downloads the
+    /// real journeys and does not depend on the query that just failed.
+    var onDownloadNow: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Couldn't check iCloud")
+                    .font(.title3.weight(.bold))
+                    .foregroundStyle(Theme.textPrimary)
+                    .accessibilityAddTraits(.isHeader)
+                Text("Your journeys download when you're on Wi-Fi. We couldn't reach iCloud just now to see what's waiting — nothing has been lost, and nothing has been changed.")
+                    .font(.subheadline)
+                    .foregroundStyle(Theme.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(.horizontal, 2)
+
+            Button(action: onDownloadNow) {
+                // Same wording, and deliberately the same catalogue key, as the waiting-rows surface
+                // and the Settings row: one action, one sentence, in every language.
+                Label("Download now over cellular", systemImage: "arrow.down.circle")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(Theme.onAccent)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 14)
+                    .background(Theme.accent, in: Capsule())
+            }
+            .buttonStyle(.plain)
+            // Shared with `JourneysAwaitingDownloadSection`: one identifier for "the control that
+            // releases this download", and the two surfaces are mutually exclusive by construction
+            // (they are two arms of one `switch`), so it can never be ambiguous on screen.
+            .accessibilityIdentifier(A11yID.journeyListDownloadNow)
+
+            Button(action: onCheckAgain) {
+                Label("Check again", systemImage: "arrow.clockwise")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(Theme.accentText)
+                    .frame(maxWidth: .infinity)
+                    // 44 pt plus a `contentShape`: a text-only button is exactly the shape that
+                    // produced six of the seven `.hitRegion` findings in QUA-29, and growing the
+                    // frame without the shape leaves the extra area untappable while the audit passes.
+                    .frame(minHeight: 44)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.top, 8)
+    }
+}
+
+// MARK: - Downloading (DIFF-16)
+
+/// The state between "the download was released" and "there are journeys on screen".
+///
+/// THE OWNER'S SECOND POINT, and it stands entirely on its own: sync happens invisibly in the
+/// background, so even the path that WORKS presents as an empty screen that fills in at some
+/// unannounced later moment — which reads as broken. There is no per-record progress here on purpose:
+/// `CKSyncEngine` does not report one, inventing a percentage would be a number nothing could stand
+/// behind, and what the user actually needs is the difference between "nothing is happening" and
+/// "this is happening now".
+///
+/// When names are known the rows stay, each with its own progress footer, so the surface does not
+/// blink to a blank at the moment it starts succeeding. When they are not — the build-101 case, where
+/// the count answered and the journey query did not — the header alone is still strictly more than the
+/// void it replaces.
+struct JourneysDownloadingSection: View {
+    let summaries: [RemoteJourneySummary]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 10) {
+                    ProgressView()
+                        .controlSize(.small)
+                        // Decorative: the heading beside it is the same fact in words, and a spinner
+                        // with no label is what `.sufficientElementDescription` is right to flag.
+                        .accessibilityHidden(true)
+                    Text("Downloading your journeys")
+                        .font(.title3.weight(.bold))
+                        .foregroundStyle(Theme.textPrimary)
+                        .accessibilityAddTraits(.isHeader)
+                }
+                Text("This can take a few minutes on a slow connection. Journeys appear as they arrive.")
+                    .font(.subheadline)
+                    .foregroundStyle(Theme.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(.horizontal, 2)
+
+            ForEach(summaries) { summary in
+                JourneyAwaitingDownloadCard(summary: summary, isDownloading: true)
+            }
+        }
+        .padding(.top, 8)
     }
 }

@@ -126,9 +126,18 @@ extension FirstSyncDownloadDecision {
         case firstRunHero
         /// Named, visibly un-downloaded rows for journeys we know are waiting in iCloud.
         case awaitingDownload([RemoteJourneySummary])
+        /// DIFF-16: a download IS being held back, but the pre-fetch could not say what is in it.
+        /// A neutral waiting state with a retry — never the hero, which would be a false statement
+        /// to a family whose archive exists.
+        case couldNotCheck
+        /// DIFF-16: the heavy first download is running right now and nothing has landed yet.
+        /// Carries the named rows when we have them, so the surface gains a progress affordance
+        /// rather than being replaced by a blank.
+        case downloading([RemoteJourneySummary])
     }
 
-    /// Decide between the first-run hero and the waiting-to-download rows.
+    /// Decide between the first-run hero, the waiting-to-download rows, the could-not-check state
+    /// and the in-progress state.
     ///
     /// Lives on `FirstSyncDownloadDecision` rather than in a decision type of its own because it is
     /// the same judgement `decide(localPhotoCount:remotePhotoCount:)` makes, asked about a different
@@ -136,21 +145,73 @@ extension FirstSyncDownloadDecision {
     /// nothing about a download", and a second enum would be free to drift out of agreement with the
     /// first about what `nil` means.
     ///
-    /// - `remoteSummaries`: `nil` when the pre-fetch was impossible or failed. `nil` **or empty** ⇒
-    ///   the hero. This is the branch that must never regress: a brand-new family with no remote
-    ///   journeys, and anyone whose summary query failed, gets the front door they expect rather
-    ///   than an empty "waiting" screen that never resolves.
+    /// - `remoteSummaries`: `nil` when the pre-fetch was impossible or failed, `[]` when it answered
+    ///   and the account genuinely holds no journeys. **The difference between those two is the
+    ///   DIFF-16 fix**: they used to collapse into the hero together.
     /// - `isDownloadDeferred`: whether a heavy download is actually being held back right now
     ///   (`SyncStatus.State.waitingForWiFi`). Required, because "Waiting for Wi-Fi" rows shown while
     ///   a download is in flight would be a second false statement replacing the first one.
+    /// - `isDownloadRunning`: whether the heavy first download — the one whose deferral produced the
+    ///   rows — is in flight *right now* (`FirstSyncDownloadProgress`). Defaulted, so the DIFF-15
+    ///   call sites and their tests keep their exact meaning.
+    ///
+    /// ## What changed in DIFF-16, and why the hero branch is still safe
+    ///
+    /// MEASURED BY THE OWNER on TestFlight build 101, fresh install on cellular: the sized prompt
+    /// appeared — so the remote photo COUNT query reached Production and answered — and no journey
+    /// rows rendered. `nil` summaries plus an active deferral therefore describes a family whose
+    /// archive demonstrably exists, and "Start your first journey" is the one thing that surface must
+    /// never say to them. It now says it only for `[]` (the pre-fetch answered: nothing is there) or
+    /// for no deferral context at all — both of which are positive evidence of a new family rather
+    /// than the absence of evidence about an old one.
     ///
     /// The caller keeps the "is the local store empty?" test — that is `store.journeys.isEmpty` in
     /// the view, and once it is false the view renders real cards and never asks this question.
     static func emptyListContent(remoteSummaries: [RemoteJourneySummary]?,
-                                 isDownloadDeferred: Bool) -> EmptyListContent {
-        guard isDownloadDeferred, let summaries = remoteSummaries, !summaries.isEmpty else {
-            return .firstRunHero
-        }
+                                 isDownloadDeferred: Bool,
+                                 isDownloadRunning: Bool = false) -> EmptyListContent {
+        // Running beats deferred: the download is no longer being held back, so nothing may claim it
+        // is. `FirstSyncDownloadProgress` is only ever true when the engine has evidence that content
+        // is coming, which is what keeps a brand-new family off this branch entirely.
+        if isDownloadRunning { return .downloading(remoteSummaries ?? []) }
+        guard isDownloadDeferred else { return .firstRunHero }
+        guard let summaries = remoteSummaries else { return .couldNotCheck }
+        guard !summaries.isEmpty else { return .firstRunHero }
         return .awaitingDownload(summaries)
     }
 }
+
+// MARK: - Is the first download running? (DIFF-16)
+
+/// The one fact the journey list needs that `SyncStatus` cannot express: **the heavy first download
+/// is in flight right now, and we know it has content.**
+///
+/// ## Why this is not a `SyncStatus.State`
+///
+/// `.active` means "the engine is running", which is also the steady state of a fully synced app —
+/// so `.active` plus an empty local store cannot tell a first sync in progress from a brand-new
+/// family whose fetch is about to return nothing. Rendering "Downloading your journeys…" at a new
+/// family, even for the second the empty fetch takes, is the same class of false statement DIFF-15
+/// existed to remove; it just points the other way. So this flag is set only where the engine has
+/// already established that there IS something to download — a non-empty summary pre-fetch, or a
+/// positive remote photo count (which is exactly the evidence the device had when DIFF-15 failed).
+///
+/// One published fact, one writer (`AkashicSyncEngine`), one reader (`JourneyListView`). Deliberately
+/// NOT a second copy of `SyncStatus.remoteJourneySummaries`: two sources for one fact is how the
+/// hero-versus-rows branch would start disagreeing with itself.
+@MainActor
+final class FirstSyncDownloadProgress: ObservableObject {
+
+    /// Process-wide, like `NetworkPolicy.shared`: there is one first download, not one per view.
+    static let shared = FirstSyncDownloadProgress()
+
+    /// True from just before the heavy fetch starts until it returns, success or failure.
+    @Published private(set) var isRunning = false
+
+    /// Tests build their own; production uses `shared`.
+    init() {}
+
+    func begin() { isRunning = true }
+    func end() { isRunning = false }
+}
+
