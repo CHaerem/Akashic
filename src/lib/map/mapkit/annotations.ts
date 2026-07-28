@@ -129,14 +129,17 @@ function isCampAnnotation(annotation: MKAnnotation): boolean {
 /**
  * The camp annotations currently on the map, identified by the `{ campId }` this module puts in `data`.
  *
- * `Array.isArray` rather than a bare read because the unit-test fake in `annotations.test.ts` models only
- * `addAnnotation`/`removeAnnotation`; without the guard every photo test throws on a property the real map
- * always has. Same reason for the `typeof` guard in {@link campMarkerPoints}. Both degrade to "no camps
- * known", which is why the e2e/probe measurement is what proves the real path — see the header.
+ * This used to read `Array.isArray(map.annotations) ? … : []`, with a sibling `typeof … !== 'function'` guard
+ * in {@link pagePoint}, because the unit-test fake in `annotations.test.ts` modelled only
+ * `addAnnotation`/`removeAnnotation` — so without them every photo test threw on a property the real map
+ * always has. Both are GONE (QUA-58), and the reason is worth keeping: each degraded silently to "no camps
+ * known", which made the two paths QUA-49 added unable to fail in the only place that could run them cheaply.
+ * The fake models both members now and asserts on both paths. Note what removing the guards does and does not
+ * buy: the fake reaches `MKMap` through `as unknown as`, so a member it stops modelling is NOT a type error —
+ * it is now a loud runtime failure in the test instead of a lift and a clearance that quietly do nothing.
  */
 function campAnnotations(map: MKMap): MKAnnotation[] {
-    const all = map.annotations;
-    return Array.isArray(all) ? all.filter(isCampAnnotation) : [];
+    return map.annotations.filter(isCampAnnotation);
 }
 
 /**
@@ -179,7 +182,6 @@ function liftCampsAboveStacks(map: MKMap): void {
 }
 
 function pagePoint(map: MKMap, coordinate: MKCoordinate): DOMPoint | null {
-    if (typeof map.convertCoordinateToPointOnPage !== 'function') return null;
     const point = map.convertCoordinateToPointOnPage(coordinate);
     // A degenerate point before the map has a transform is a documented hazard on this surface
     // (`geometry.test.ts:187`), and it would otherwise push every stack as if it sat on a camp.
@@ -246,12 +248,15 @@ function clearedAnchorOffset(
  * `anchorOffset` is live-mutable on an annotation already on the map — measured: writing it moved the marker
  * and its hit region, with no re-add.
  *
- * The cast is here because `MKAnnotation` (`./mapkitTypes.ts`) declares `anchorOffset` on the *options* only.
- * Adding it to the annotation interface is the clean fix and is deliberately NOT done in this commit: QUA-49
- * owns this file and `src/index.css`, and a type shared by the whole adapter is not mine to move.
+ * This used to assign through a local intersection cast that widened `MKAnnotation` with an optional
+ * `anchorOffset`, because `./mapkitTypes.ts` declared the property on the *options* only and a type shared by
+ * the whole adapter was not QUA-49's to move. QUA-58 moved it, so the assignment is now plain — and a one-line
+ * function around one assignment is kept deliberately: the measurement above is the reason a caller may write
+ * it at all, and it belongs where the write is. (The cast expression is not quoted here on purpose: QUA-58's
+ * ledger gate is a `grep` for it, and quoting the refuted code verbatim would keep that gate red for ever.)
  */
 function setAnchorOffset(annotation: MKAnnotation, offset: DOMPoint): void {
-    (annotation as MKAnnotation & { anchorOffset?: DOMPoint }).anchorOffset = offset;
+    annotation.anchorOffset = offset;
 }
 
 /* ------------------------------------------------------------------ camps */

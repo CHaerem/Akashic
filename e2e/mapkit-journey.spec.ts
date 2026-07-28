@@ -42,6 +42,30 @@ const OFF_ROUTE_TOLERANCE_KM = 0.5;
 /** Day 5 of the alpine fixture is MEASURED 12.28 km from its nearest route point. */
 const OFF_ROUTE_DAY = 5;
 
+/**
+ * A day whose fixture photo sits on its camp's EXACT coordinate — the case QUA-49 was measured on.
+ *
+ * `src/fixtures/publicShowcase.ts` puts photos on days 1, 3 and 5, each at its day camp's coordinate to the
+ * digit (`buildPublicPhotoRecords`'s `at` table against `e2e-alpine-loop.waypoints.json`). Day 3 is the one
+ * this had to be: day 5's camp is off-route and therefore outside the whole-route overview this test frames
+ * (QUA-49 measured four of the five camps on screen there), and day 1 is the day this test toggles OFF to reach
+ * that overview — so a click on day 1 could report success without having done anything, the moment the toggle
+ * regressed. Day 3 is also literally the marker the defect was found on: `elementFromPoint` at its centre
+ * returned `.photo-stack-main`. MEASURED here after the fix — the stack sits exactly 30 px off it and
+ * `div.camp-marker` owns the camp's centre.
+ */
+const PHOTO_ON_CAMP_DAY = 3;
+
+/**
+ * How far the pushed-off stack may be from the camp's centre and still count as "this is the coincident case".
+ *
+ * `MARKER_CLEARANCE_PX` in `src/lib/map/mapkit/annotations.ts` is 30, so a stack that began exactly on the
+ * camp settles ~30 px away. The slack above that is for the projection, not for a different fixture: at ~60 px
+ * the pair still reads as one place, while a stack at a different photo location on this route is hundreds of
+ * pixels away at overview zoom.
+ */
+const COINCIDENT_STACK_WITNESS_PX = 60;
+
 test.describe('MapKit journey surface', () => {
     test('renders the journey on a MapKit canvas, and on no other', async ({ page }) => {
         await openApp(page);
@@ -78,10 +102,14 @@ test.describe('MapKit journey surface', () => {
         expect(overlayCount).toBe(5);
     });
 
-    test('clicking a camp annotation selects that day', async ({ page }) => {
+    test('clicking a camp with a photo on its exact coordinate selects that day (QUA-49)', async ({ page }) => {
         await openApp(page);
         await navigateToTrekView(page);
         const camps = await getSelectedTrekCamps(page);
+        expect(
+            camps.some((c) => c.dayNumber === PHOTO_ON_CAMP_DAY),
+            `the fixture no longer has a day ${PHOTO_ON_CAMP_DAY} — see PHOTO_ON_CAMP_DAY`,
+        ).toBe(true);
 
         // TWO MEASURED MapKit behaviours make a naive `click()` on a named day flaky, and both are worth
         // knowing before writing any spec that touches a marker.
@@ -92,53 +120,79 @@ test.describe('MapKit journey surface', () => {
         //    bounding box", so `click()` fails with "element is not visible" on a marker that is genuinely
         //    there and genuinely not on screen. Hence: back out to the whole-route overview first, where
         //    every on-route camp is positioned.
-        // 2. A PHOTO STACK can cover a camp marker and intercept its clicks, and nothing the app can set
-        //    changes MapKit's annotation paint order — not z-index (the elements compute `position: static`),
-        //    not `DisplayPriority`, not DOM order. See `src/index.css`'s `.camp-marker` comment.
+        // 2. A PHOTO STACK CAN COVER A CAMP MARKER AND INTERCEPT ITS CLICKS. This comment used to continue
+        //    "and nothing the app can set changes MapKit's annotation paint order — not z-index (the elements
+        //    compute `position: static`), not `DisplayPriority`, not DOM order", and that conclusion was
+        //    FALSE, which is why this test changed shape. The three levers named are still measurably
+        //    useless — the elements do compute `position: static`, and z-index cannot cross out of the
+        //    per-slot wrapper inside `.mk-annotation-container`'s CLOSED shadow root. But paint order is ADD
+        //    ORDER, so re-adding an annotation does move it to the top, and QUA-49 fixed the defect with
+        //    exactly that: `src/lib/map/mapkit/annotations.ts` re-adds the camps after any photo diff that
+        //    creates a stack, and pushes a stack within 30 page px of a camp off along the camp→stack
+        //    direction. Read that file's header and `src/index.css`'s `.camp-marker` comment before touching
+        //    marker stacking.
         //
-        // So the day is DISCOVERED, not named: pick a camp whose own element is the topmost thing at its
-        // centre. That keeps the test about "does a marker click select its day" instead of silently becoming
-        // a test of marker precedence — and it fails loudly if EVERY camp is obscured, which would be a real
-        // regression rather than a fixture accident.
+        // So the day is NAMED, not discovered. The old version of this test scanned for "a camp whose own
+        // element is the topmost thing at its centre" and clicked whichever it found — which, with days 1, 3
+        // and 5 of the fixture each carrying a photo on the camp's exact coordinate, could only ever have
+        // found days 2 or 4, and so stayed green for the whole period the defect shipped. Naming a coincident
+        // day is what makes this a regression test, and it was PROVEN in both directions rather than argued:
+        // carried into a throwaway worktree at `87f4127~1` — the commit before the fix — this test fails on
+        // `campOwnsCentre: false` with `nearestStackOwnsCentre: true`, i.e. the stack owns the camp's centre
+        // and the camp owns nothing, which is the defect exactly. (`scripts/prove.mjs` does the same job
+        // mechanically for the unit half, in `annotations.test.ts`.)
         await page.evaluate(() => window.testHelpers?.selectDay(1));
+        // Asserted rather than assumed: if the toggle-out ever stopped working the camera would still be
+        // framed on day 1, and the click below would be asserting a selection that was already there.
+        await expect
+            .poll(() => getCurrentDay(page), {
+                timeout: 10_000,
+                message: 'selectDay(1) did not deselect day 1, so this test never reached the whole-route '
+                    + 'overview where every on-route camp is positioned',
+            })
+            .toBeNull();
         await waitForCameraSettled(page);
 
         // Polled, not sampled once: the photo stacks are re-diffed on every `region-change-end`, so a single
-        // snapshot can land in the moment where a stack is over the camp it is about to move away from.
-        let clickable: string | null = null;
+        // snapshot can land mid-diff, before the clearance for the settled projection has been written.
         await expect
-            .poll(async () => {
-                clickable = await page.evaluate(() => {
-                    for (const element of document.querySelectorAll('.mk-annotation-container .camp-marker')) {
-                        const rect = element.getBoundingClientRect();
-                        if (rect.width === 0 || rect.height === 0) continue;
-                        const topmost = document.elementFromPoint(
-                            rect.left + rect.width / 2, rect.top + rect.height / 2);
-                        if (topmost && element.contains(topmost)) return element.textContent?.trim() ?? null;
-                    }
-                    return null;
-                });
-                return clickable;
-            }, {
+            .poll(() => markerPrecedence(page, PHOTO_ON_CAMP_DAY), {
                 timeout: 15_000,
-                message: 'every camp marker is either off-screen or covered by a photo stack — no marker on '
-                    + 'this surface can be clicked at all',
+                message: `day ${PHOTO_ON_CAMP_DAY}'s camp has a fixture photo on its exact coordinate. Both `
+                    + 'halves of QUA-49 must hold: the camp owns its own centre (the re-add), and so does the '
+                    + 'stack that was pushed off it (the clearance). `campCentreHit` names what is on top '
+                    + 'instead — a `.photo-stack-*` there is the original defect back.',
             })
-            .not.toBeNull();
-        const targetDay = Number(clickable);
+            .toMatchObject({
+                found: true, onScreen: true, campOwnsCentre: true, nearestStackOwnsCentre: true,
+            });
+
+        // THE WITNESS, and it is load-bearing: everything above would also pass on a day with no photo
+        // anywhere near it, which is precisely how the discovery loop this replaced stayed green through the
+        // defect. `MARKER_CLEARANCE_PX` is 30, so a stack that started exactly on this camp ends up ~30 px
+        // from its centre. If the fixture ever moves the photo away, this fails and says so rather than
+        // quietly turning the test back into a plain marker click.
+        const sample = await markerPrecedence(page, PHOTO_ON_CAMP_DAY);
+        console.log(`[mapkit] day ${PHOTO_ON_CAMP_DAY} camp: nearest photo stack ${sample.nearestStackPx} px `
+            + `from its centre, topmost at the camp centre is ${sample.campCentreHit}`);
+        expect(sample.nearestStackPx, `no photo stack is near day ${PHOTO_ON_CAMP_DAY}'s camp any more, so `
+            + 'this test no longer exercises marker precedence at all — pick another coincident day (the '
+            + 'fixture puts photos on days 1, 3 and 5) or restore the fixture photo')
+            .toBeLessThanOrEqual(COINCIDENT_STACK_WITNESS_PX);
 
         // A DOM click on the factory element, not MapKit's own `select` event: onCampSelect TOGGLES, and
-        // map.selectedAnnotation is single-select map state that would desync from that toggle.
+        // map.selectedAnnotation is single-select map state that would desync from that toggle. Playwright's
+        // own hit-target check is part of the assertion here — it is what reported the interception before the
+        // fix, so a regression fails on `click()` even if the probe above were somehow satisfied.
         const marker = page.locator('.mk-annotation-container .camp-marker').filter({
-            has: page.locator('.camp-marker-badge', { hasText: String(targetDay) }),
+            has: page.locator('.camp-marker-badge', { hasText: String(PHOTO_ON_CAMP_DAY) }),
         });
         await expect(marker).toHaveCount(1, { timeout: 15_000 });
         await marker.click();
 
         await expect
             .poll(() => getCurrentDay(page), { timeout: 10_000 })
-            .toBe(targetDay);
-        expect(camps.some((c) => c.dayNumber === targetDay)).toBe(true);
+            .toBe(PHOTO_ON_CAMP_DAY);
     });
 
     test('rapid day switching lands on the final selection, despite no way to cancel a flight', async ({ page }) => {
@@ -311,6 +365,73 @@ test.describe('MapKit journey surface', () => {
 
 async function cameraZoom(page: Page): Promise<number | null> {
     return page.evaluate(() => window.testHelpers?.getMapState().cameraZoom ?? null);
+}
+
+/** One sample of who owns which centre around a camp marker. Uniform shape so a poll can match on it. */
+interface MarkerPrecedence {
+    /** The camp marker for that day number is in the annotation container at all. */
+    found: boolean;
+    /** …and has a non-empty bounding box, i.e. MapKit has it positioned rather than collapsed off-screen. */
+    onScreen: boolean;
+    /** `elementFromPoint` at the camp's own centre lands inside the camp marker. */
+    campOwnsCentre: boolean;
+    /** What it lands on instead, for the failure message — a `.photo-stack-*` here is QUA-49's defect. */
+    campCentreHit: string;
+    /** Page-pixel distance from the camp's centre to the nearest positioned photo stack's centre. */
+    nearestStackPx: number | null;
+    /** That stack owns ITS own centre too — the mirror defect `clearedAnchorOffset` exists for. */
+    nearestStackOwnsCentre: boolean;
+}
+
+/**
+ * Sample the paint order around one day's camp marker, in the page.
+ *
+ * `elementFromPoint` rather than anything MapKit exposes, because the thing being asserted lives inside
+ * `.mk-annotation-container`'s closed shadow root: there is no API for "which annotation is on top", and the
+ * light-DOM order is measurably not it. Hit testing at a centre is the only observation that answers the
+ * question a user's click asks.
+ */
+async function markerPrecedence(page: Page, dayNumber: number): Promise<MarkerPrecedence> {
+    return page.evaluate((day) => {
+        const centreOf = (element: Element) => {
+            const rect = element.getBoundingClientRect();
+            return { rect, x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+        };
+        const describe = (element: Element | null) => element
+            ? `${element.tagName.toLowerCase()}.${String(element.className) || '(no class)'}`
+            : 'none';
+        const empty: MarkerPrecedence = {
+            found: false, onScreen: false, campOwnsCentre: false, campCentreHit: 'none',
+            nearestStackPx: null, nearestStackOwnsCentre: false,
+        };
+
+        const camps = [...document.querySelectorAll('.mk-annotation-container .camp-marker')];
+        const camp = camps.find(
+            (c) => c.querySelector('.camp-marker-badge')?.textContent?.trim() === String(day));
+        if (!camp) return empty;
+        const at = centreOf(camp);
+        if (at.rect.width === 0 || at.rect.height === 0) return { ...empty, found: true };
+
+        const campHit = document.elementFromPoint(at.x, at.y);
+        let nearest: { distance: number; ownsCentre: boolean } | null = null;
+        for (const stack of document.querySelectorAll('.mk-annotation-container .photo-stack')) {
+            const stackAt = centreOf(stack);
+            if (stackAt.rect.width === 0 || stackAt.rect.height === 0) continue;
+            const distance = Math.hypot(stackAt.x - at.x, stackAt.y - at.y);
+            if (nearest && distance >= nearest.distance) continue;
+            const hit = document.elementFromPoint(stackAt.x, stackAt.y);
+            nearest = { distance, ownsCentre: !!hit && stack.contains(hit) };
+        }
+
+        return {
+            found: true,
+            onScreen: true,
+            campOwnsCentre: !!campHit && camp.contains(campHit),
+            campCentreHit: describe(campHit),
+            nearestStackPx: nearest ? Math.round(nearest.distance) : null,
+            nearestStackOwnsCentre: nearest ? nearest.ownsCentre : false,
+        };
+    }, dayNumber);
 }
 
 /**
