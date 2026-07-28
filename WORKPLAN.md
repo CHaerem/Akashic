@@ -29,7 +29,7 @@ node scripts/workplan.mjs next
 |---|---|---|---|
 | `MAP-04A` Mint the MapKit token in the build, and fail the build before it lapses | opus5 | `claude/remote-control-project-review-9462c1` | minter + health guard done and locally proven; the deploy-step wiring wants MAP-03 landed first |
 | `QUA-49` On MapKit a photo stack hides a camp marker and eats its clicks — a regression versus Mapbox | qua49-agent | `agent/qua49` | — |
-| `QUA-55` A 14.5 pt tap target on iPad, and the reason no run had ever seen it | qua55-agent | `agent/qua55` | — |
+| `QUA-55` A 14.5 pt tap target on iPad, and the reason no run had ever seen it | qua55-agent | `agent/qua55` | Fix merged (4a64b19) and proven red-to-green by its agent on iPad + green on iPhone/SE. The gate's two device legs then FAILED under machine contention — DIFF-15's clean Release-CloudKit build was saturating the cores and the UI tests' 30 s launch waits blew. Re-run 'workplan verify QUA-55' on a QUIET machine, then done. Lesson: gate verification with UI-test legs must be serialised after parallel agents finish. |
 | `DIFF-15` On cellular, a fresh install shows "Start your first journey" while the whole archive waits silently | diff15-agent | `agent/diff15` | — |
 
 ## LEGACY

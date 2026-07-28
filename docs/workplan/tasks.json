@@ -3501,7 +3501,36 @@
         "agent": "qua55-agent",
         "branch": "agent/qua55",
         "at": "2026-07-28"
-      }
+      },
+      "verification": {
+        "at": "2026-07-28T11:05:31.566Z",
+        "head": "4a64b19",
+        "ran": [
+          {
+            "command": "cd apple && xcodegen generate",
+            "ok": true,
+            "ms": 103,
+            "status": 0,
+            "signal": null
+          },
+          {
+            "command": "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,name=iPhone 17 Pro\" CODE_SIGNING_ALLOWED=NO -only-testing:AkashicUITests/AccessibilityAuditTests test > /tmp/qua55.log 2>&1 && grep -q \"with 0 failures\" /tmp/qua55.log",
+            "ok": false,
+            "ms": 108569,
+            "status": 65,
+            "signal": null
+          },
+          {
+            "command": "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,name=iPad (A16)\" CODE_SIGNING_ALLOWED=NO -only-testing:AkashicUITests/AccessibilityAuditTests test > /tmp/qua55.log 2>&1 && grep -q \"with 0 failures\" /tmp/qua55.log",
+            "ok": false,
+            "ms": 173911,
+            "status": 65,
+            "signal": null
+          }
+        ],
+        "attested": []
+      },
+      "resume": "Fix merged (4a64b19) and proven red-to-green by its agent on iPad + green on iPhone/SE. The gate's two device legs then FAILED under machine contention — DIFF-15's clean Release-CloudKit build was saturating the cores and the UI tests' 30 s launch waits blew. Re-run 'workplan verify QUA-55' on a QUIET machine, then done. Lesson: gate verification with UI-test legs must be serialised after parallel agents finish."
     },
     {
       "id": "QUA-56",
