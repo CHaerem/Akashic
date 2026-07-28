@@ -3991,6 +3991,26 @@
         ]
       },
       "resume": "Root-cause fix merged at 65b1c5d: fireTransition(from:) at all three policy mutation sites, became-false delivered via observer self-registration on the gate seam (PersistenceController wiring not needed), and the guard that makes it real — the in-flight fetch's success path no longer overwrites the honest deferral. 903 unit tests; prove receipt 16 assertion-reds in 5/7 against HEAD. Remaining: the owner's cellular observation on build 103, and the owner's 5G-data-mode product call (gate on literal WiFi vs reword the toggle)."
+    },
+    {
+      "id": "QUA-60",
+      "effort": 0.2,
+      "priority": 9,
+      "deps": [],
+      "track": "QUALITY",
+      "status": "TODO",
+      "owner": false,
+      "title": "The accessibility audit times out on slow runners and blocks the release pipeline — twice in one day",
+      "done_when": "performAccessibilityAudit's framework timeout (NSError code -56, Audit failed to complete in time) is retried a bounded number of times inside the audit helper, so a slow runner costs seconds instead of a manual rerun of a 15-minute job.",
+      "why": "MEASURED TWICE on 2026-07-28, runs 30367146530 and 30374998240, both on testCreateJourneyFlowClearsTheEnforcedAudit\n(the heaviest audited screen), both with the identical framework error: Error Domain=\ncom.apple.xcode.xctest.accessibilityAudit Code=-56 \"Audit failed to complete in time\". Not an accessibility\nfinding — the audit MACHINERY timed out on a loaded shared runner. Each occurrence blocked the TestFlight\npipeline (the green-gate correctly refuses a red apple-ci) and cost a manual rerun of a ~15-minute job.\n\nThe fix is a bounded retry on exactly that error inside audit(_:screen:) in AccessibilityAuditTests.swift —\ncatch the NSError, match domain+code, retry up to 2 times with a log line naming the attempt, rethrow\nanything else unchanged. A retry on -56 cannot mask a real finding: findings are returned, not thrown, and\nevery other error still propagates. Local runs never hit it (fast machine), so prove it by inspection plus\nthe suite staying green; the real proof is the next slow-runner day.",
+      "files": [
+        "apple/AkashicUITests/AccessibilityAuditTests.swift"
+      ],
+      "verify": [
+        "cd apple && xcodegen generate",
+        "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,name=iPhone 17 Pro\" CODE_SIGNING_ALLOWED=NO -only-testing:AkashicUITests/AccessibilityAuditTests test > /tmp/qua60.log 2>&1 && grep -q \"with 0 failures\" /tmp/qua60.log",
+        "grep -q \"Code=-56\\|failed to complete in time\" apple/AkashicUITests/AccessibilityAuditTests.swift  # the retry names the exact error it absorbs"
+      ]
     }
   ]
 }

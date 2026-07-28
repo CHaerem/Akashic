@@ -5,7 +5,7 @@
 
 # Akashic — work ledger
 
-148 tasks · **27 open** (2 agent-doable, 1.1 dev-days · 25 owner-only, 10.6 dev-days) · 121 done · 0 dropped
+149 tasks · **28 open** (3 agent-doable, 1.3 dev-days · 25 owner-only, 10.6 dev-days) · 121 done · 0 dropped
 
 > **`dev-days` are a human-developer estimate, not agent time.** They came from the review
 > that produced these tasks and they are the right unit for deciding whether something is
@@ -15,7 +15,7 @@
 > Measured so far: **115 agent tasks estimated at 76.7 dev-days**.
 > Elapsed time is deliberately absent: nothing here can support it. Use `git log` for that.
 >
-> **Every large agent item is closed.** 9 of the tasks closed so far were 2 dev-days or more; nothing 2 dev-days or larger remains agent-doable, and the 1.1 remaining dev-days are all small tasks (1 at 0.5 or less). What is still genuinely large is OWNER work, which no amount of agent compression touches.
+> **Every large agent item is closed.** 9 of the tasks closed so far were 2 dev-days or more; nothing 2 dev-days or larger remains agent-doable, and the 1.3 remaining dev-days are all small tasks (2 at 0.5 or less). What is still genuinely large is OWNER work, which no amount of agent compression touches.
 
 Read [CLAUDE.md](CLAUDE.md) before touching anything. To find work:
 
@@ -151,7 +151,7 @@ node scripts/workplan.mjs next
 
 > Tests, types, CI, localisation, accessibility. Localisation and accessibility are in v1.0 by decision.
 
-3 open of 66 · 0.8 d remaining
+4 open of 67 · 1 d remaining
 
 | | Task | Days | Who | Deps | Finish line |
 |---|---|---|---|---|---|
@@ -221,6 +221,7 @@ node scripts/workplan.mjs next
 | `x` | `QUA-57` **prove.mjs --native conflates a git pathspec with an xcodebuild test identifier** | 0.2 | agent | — | prove.mjs can prove a native test suite red-against-the-revert: the tests are named by FILE for the worktree copy and by TARGET/CLASS for -only-testing, as two inputs or a mapping. |
 | `x` | `QUA-58` **QUA-49 follow-up: the regression test, the now-false e2e comment, and the two unit-test guards** | 0.3 | agent | — | The camp-over-stack precedence is guarded by an e2e click on a KNOWN coincident day and by unit tests over the re-add and push-off paths; the stale comment is corrected; the local cast is gone. |
 | `x` | `QUA-59` **ITMS-90788 from Apple's own delivery feedback: the GPX document type lacked LSHandlerRank** | 0.1 | agent | — | The built Info.plist carries LSHandlerRank for the GPX Track entry, so the next delivery draws no ITMS-90788. |
+| ` ` | `QUA-60` **The accessibility audit times out on slow runners and blocks the release pipeline — twice in one day** | 0.2 | agent | — | performAccessibilityAudit's framework timeout (NSError code -56, Audit failed to complete in time) is retried a bounded number of times inside the audit helper, so a slow runner costs seconds instead of a manual rerun of a 15-minute job. |
 
 ## Decisions on record
 
