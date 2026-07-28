@@ -61,21 +61,41 @@ jobs:
           [ "$missing" = 0 ] || exit 1
           echo "ok: all three credentials present"
 
-      - name: Assert apple-ci is green for this exact commit
-        # No upload from a red commit. apple-ci runs on every push to main; this queries the
-        # SHA's check runs rather than trusting that someone looked. A build of a commit whose
-        # tests never ran (or failed) is refused with the run named.
+      - name: Assert apple-ci is green for the native code being shipped
+        # No upload from a red tree. The FIRST version of this step demanded a check-run on the
+        # exact dispatched SHA and was wrong on day one: apple-ci is PATH-FILTERED to `apple/**`,
+        # so a docs- or web-only push leaves main's tip with no check-run at all, and the gate
+        # refused with "absent" on a tree whose native code was fully tested. The honest question
+        # is two halves: is the LATEST completed apple-ci on main green, and has anything under
+        # `apple/**` (or apple-ci.yml itself) changed since the commit that run tested. If yes to
+        # both, the native code in this dispatch is exactly the code that went green.
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          conclusion=$(gh api "repos/${{ github.repository }}/commits/${{ github.sha }}/check-runs" \
-            --jq '[.check_runs[] | select(.name == "Build & test (iOS Simulator)")] | first | .conclusion // "absent"')
-          if [ "$conclusion" != "success" ]; then
-            echo "::error::apple-ci for ${{ github.sha }} is '$conclusion', not success — fix main before shipping it."
+          read -r tested conclusion < <(gh api \
+            "repos/${{ github.repository }}/actions/workflows/apple-ci.yml/runs?branch=main&status=completed&per_page=1" \
+            --jq '.workflow_runs[0] | .head_sha + " " + .conclusion')
+          if [ -z "${tested:-}" ]; then
+            echo "::error::no completed apple-ci run exists on main at all — run one before shipping."
             exit 1
           fi
-          echo "ok: apple-ci green for this commit"
+          if [ "$conclusion" != "success" ]; then
+            echo "::error::the latest apple-ci on main ($tested) concluded '$conclusion' — fix main before shipping it."
+            exit 1
+          fi
+          if ! git merge-base --is-ancestor "$tested" HEAD; then
+            echo "::error::the last green apple-ci tested $tested, which is not an ancestor of this dispatch — history moved; re-run apple-ci."
+            exit 1
+          fi
+          changed=$(git log --oneline "$tested"..HEAD -- apple/ .github/workflows/apple-ci.yml)
+          if [ -n "$changed" ]; then
+            echo "::error::apple/ changed after the last green apple-ci ($tested) with no newer run:"
+            echo "$changed"
+            echo "Push should have triggered one — wait for it, or the paths filter no longer covers what changed."
+            exit 1
+          fi
+          echo "ok: latest apple-ci green at $tested, and apple/ untouched since"
 
       - name: Select an Xcode that carries FoundationModels
         # THE ONE SHARP EDGE, and the reason this workflow could not be a copy of apple-ci's
