@@ -28,6 +28,7 @@ node scripts/workplan.mjs next
 | Task | Agent | Branch | Stopped at |
 |---|---|---|---|
 | `MAP-04A` Mint the MapKit token in the build, and fail the build before it lapses | opus5 | `claude/remote-control-project-review-9462c1` | minter + health guard done and locally proven; the deploy-step wiring wants MAP-03 landed first |
+| `QUA-56` apple-ci red for three days: the tests assumed a screen size, and the audit had never seen half of Settings | claude-opus | `main` | — |
 
 ## LEGACY
 
@@ -214,7 +215,7 @@ node scripts/workplan.mjs next
 | `x` | `QUA-53` **The ledger never ran its own verify list, and four CLAUDE.md rules were enforced only by memory** | 0.5 | agent | — | `workplan done` refuses a task whose runnable checks have not passed, and the rules that have already cost real time are enforced by the harness rather than remembered by the agent. |
 | `x` | `QUA-54` **A fresh-context verifier agent, because the implementer certifying its own tests is how three defects shipped green** | 0.2 | agent | `QUA-53` | The multi-model division of labour is written down where agents read it, and the verifier cannot edit what it judges. |
 | ` ` | `QUA-55` **A 14.5 pt tap target on iPad, and the reason no run had ever seen it** | 0.3 | agent | — | AccessibilityAuditTests passes on an iPad destination as well as an iPhone one, and the two entries that assert layout pin their device instead of taking whichever simulator is last. |
-| ` ` | `QUA-56` **apple-ci has been red since 2026-07-27 and nobody noticed — four UI tests the runner cannot pass** | 0.5 | agent | — | apple-ci is green on main, or the tests that cannot pass on a CI runner are skipped there with a stated reason and a removal condition, so a red run means something again. |
+| `~` | `QUA-56` **apple-ci red for three days: the tests assumed a screen size, and the audit had never seen half of Settings** | 0.5 | agent | — | The full UI suite passes on an iPhone SE (3rd generation) — the device apple-ci actually picks — as well as on a large phone, and the apple-ci run on main is green. |
 
 ## Decisions on record
 

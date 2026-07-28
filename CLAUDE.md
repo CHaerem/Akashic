@@ -24,14 +24,17 @@ Do not invent work. If something needs doing that is not in the ledger, add it t
 
 ### Three things to know before you pick anything up (2026-07-28)
 
-1. **`apple-ci` is RED on `main` and has been since 2026-07-27** — four UI tests a CI runner cannot
-   pass, because XcodeGen puts `storeKitConfiguration` in the Launch action only. That is `QUA-56`,
-   at priority 6. It was found by accident, which is the second half of the problem: a gate that
-   stays red carries no information, so do not read a red `apple-ci` as *your* breakage before
-   comparing it with the run before yours — and do not leave it red either.
+1. **`apple-ci` was red 2026-07-25 → 2026-07-28, and the first written diagnosis was wrong** — this
+   item used to blame the StoreKit trap, and the real cause (QUA-56, fixed) was that CI's
+   device-picking selects an iPhone SE, where the Settings row the tests anchor on is below the
+   fold — and a lazily-created SwiftUI List row that is offscreen does not EXIST in the
+   accessibility hierarchy. Two durable halves: a gate that stays red carries no information, so
+   compare a red `apple-ci` with the run before yours and never leave it red; and a UI-test result
+   is scoped to the screen size it ran on — `requireByScrolling` in the UI-test support exists so
+   tests do what a customer does instead of assuming a viewport.
 2. **The agent queue is nearly empty and the owner queue is the whole schedule** — roughly 2
-   agent-days against 10.6 owner-days. Of the ~19 claimable tasks only `QUA-49`, `QUA-55` and
-   `QUA-56` are yours; the rest need an Apple agreement, a device, or a decision. If you look for
+   agent-days against 10.6 owner-days. Of the ~19 claimable tasks only `QUA-49` and `QUA-55` are
+   yours; the rest need an Apple agreement, a device, or a decision. If you look for
    work and find almost none, that is the true state rather than a broken ledger. Say so.
 3. **`SHIP-24` is closed on the repo side and unproven on the device side.** An `applinks` document
    is served at `https://akashic.no/apple-app-site-association` (verified from two places), but Pages

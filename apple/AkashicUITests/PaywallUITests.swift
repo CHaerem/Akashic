@@ -33,7 +33,10 @@ final class PaywallUITests: AkashicUITestCase {
     func testSettingsPaywallShowsItsReasonAndOffersAWayForward() {
         let app = launchApp(["AKASHIC_SCREEN": "settings"])
 
-        let row = require(app.buttons[ID.settingsComplete], "the Settings 'Akashic Complete' row")
+        // Scrolling, not plain require: on an iPhone SE the membership row is below the fold and a
+        // lazily-created List row that is offscreen does not EXIST — see requireByScrolling (QUA-56).
+        let row = requireByScrolling(app.buttons[ID.settingsComplete], in: app,
+                                     "the Settings 'Akashic Complete' row")
         XCTAssertTrue(row.isEnabled, "A free-tier customer must be able to open the paywall.")
         XCTAssertTrue(row.label.contains("Free"),
                       "The membership row should read Free before a purchase, not \"\(row.label)\".")
@@ -77,7 +80,10 @@ final class PaywallUITests: AkashicUITestCase {
         // Always dismissible: no dark patterns, per the view's own contract.
         require(app.buttons[ID.paywallClose], "the paywall's Close button").tap()
         requireGone(app.staticTexts[ID.paywallHeadline], "the paywall after Close")
-        require(app.buttons[ID.settingsComplete], "Settings, back in view after dismissing")
+        // The Form keeps its scroll position across the sheet, so the row still exists here on
+        // every screen size — but the scrolling variant costs nothing if that ever changes.
+        requireByScrolling(app.buttons[ID.settingsComplete], in: app,
+                           "Settings, back in view after dismissing")
     }
 
     // MARK: - The free-tier wall
@@ -146,7 +152,8 @@ final class PaywallUITests: AkashicUITestCase {
     func testEntitledCustomerIsNeverOfferedAPurchaseSurface() {
         let app = launchApp(["AKASHIC_SCREEN": "settings", "AKASHIC_COMPLETE": "1"])
 
-        let row = require(app.buttons[ID.settingsComplete], "the Settings 'Akashic Complete' row")
+        let row = requireByScrolling(app.buttons[ID.settingsComplete], in: app,
+                                     "the Settings 'Akashic Complete' row")
         XCTAssertTrue(row.label.contains("Complete"),
                       "The membership row must state the entitlement, not \"\(row.label)\".")
         XCTAssertFalse(row.isEnabled,

@@ -3499,25 +3499,57 @@
       "priority": 6,
       "deps": [],
       "track": "QUALITY",
-      "status": "TODO",
+      "status": "WIP",
       "owner": false,
-      "title": "apple-ci has been red since 2026-07-27 and nobody noticed — four UI tests the runner cannot pass",
-      "done_when": "apple-ci is green on main, or the tests that cannot pass on a CI runner are skipped there with a stated reason and a removal condition, so a red run means something again.",
-      "why": "MEASURED 2026-07-28. `apple-ci` was last green at c864176 on 2026-07-25 and has failed EVERY run since:\nc8f1399, ded49ca, 9d9a568, 979b7e0 and 35b1b0d. Four UI tests fail, and the same three recur across runs\nfrom before this session's work:\n\n  AccessibilityAuditTests.testPaywallClearsTheEnforcedAudit\n  AccessibilityAuditTests.testSettingsClearsTheEnforcedAudit\n  PaywallUITests.testEntitledCustomerIsNeverOfferedAPurchaseSurface\n  PaywallUITests.testSettingsPaywallShowsItsReasonAndOffersAWayForward\n\nThe symptom is \"Never appeared: the Settings 'Akashic Complete' row\", and CLAUDE.md already documents the\ncause: XcodeGen writes `storeKitConfiguration` into the scheme's LAUNCH action only, with no `<TestAction>`\nequivalent in 2.45.4. So under `xcodebuild test` the app has no local store, `Product.products(for:)`\nreturns [], and the paywall renders its \"isn't available here yet\" row instead of the priced one. A local\nsimulator can pass these if it retains store state from an earlier launch; a fresh CI runner never can.\n\nTHE REAL DEFECT IS THE THREE DAYS, NOT THE FOUR TESTS. This repo's own working agreement says a red gate\nthat stays red trains everyone to ignore CI, and cites two gates that were red for months. It happened\nagain immediately, on the gate that guards the app being shipped to a store — and it was found by accident\nwhile waiting for an unrelated deploy, not by anything watching.\n\nTwo acceptable resolutions and one that is not. Acceptable: make the store available under test, or skip\nthese four on CI with XCTSkip naming the StoreKit limitation and the condition for removing the skip. NOT\nacceptable: leaving them failing, because then apple-ci carries no information and the next real\nregression lands unnoticed.",
+      "title": "apple-ci red for three days: the tests assumed a screen size, and the audit had never seen half of Settings",
+      "done_when": "The full UI suite passes on an iPhone SE (3rd generation) — the device apple-ci actually picks — as well as on a large phone, and the apple-ci run on main is green.",
+      "why": "THE FILED DIAGNOSIS WAS WRONG, AND IS KEPT HERE CORRECTED because the wrong version is instructive. This\ntask was opened blaming the StoreKit trap (storeKitConfiguration lives in the Launch action only, so under\n`xcodebuild test` there is no store). Plausible, already documented, and FALSE: the tests were written for\nthe no-store case and assert the \"isn't available here yet\" row. Reading the tests before theorising would\nhave killed the theory in a minute.\n\nTHE REAL CAUSE, reproduced locally: apple-ci's device-picking (`ids[-1]`) selects an iPhone SE (3rd\ngeneration), a 4.7-inch screen. On it, the Settings \"Akashic Complete\" row sits below the fold — and a\nSwiftUI List creates rows LAZILY, so an offscreen row does not EXIST in the accessibility hierarchy.\n`exists` is false, not merely unhittable. All four failing tests anchor on that row; they polled for 30 s\nand failed with \"Never appeared\" while the app ran fine underneath. On iPhone 17 Pro and iPad the row fits\non screen, so every local run passed. Both results were honest: the tests assumed a screen size instead of\ndoing what a customer does, which is scroll.\n\nTHE SECOND FINDING IS THE PAYOFF. Making the tests scroll let `performAccessibilityAudit` SEE the bottom\nof Settings for the first time, and it found a real defect there immediately: the developer rows render\nraw values (\"iCloud.no.akashic\") as standalone elements, which VoiceOver reads bare — flagged by\n`.sufficientElementDescription`, the audit type whose enforced status rests on \"reports zero\". It reported\nzero because it had never been shown the whole screen. The audit only audits what is instantiated, so on a\nlazy list its coverage is exactly as deep as the tests scroll.",
       "files": [
+        "apple/AkashicUITests/Support/AkashicUITestCase.swift",
         "apple/AkashicUITests/PaywallUITests.swift",
         "apple/AkashicUITests/AccessibilityAuditTests.swift",
-        ".github/workflows/apple-ci.yml"
+        "apple/Akashic/Views/SettingsView.swift"
       ],
       "verify": [
         "cd apple && xcodegen generate",
-        "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,name=iPhone 17 Pro\" CODE_SIGNING_ALLOWED=NO -only-testing:AkashicUITests test > /tmp/qua56.log 2>&1 && grep -q \"with 0 failures\" /tmp/qua56.log",
-        "MANUAL: the apple-ci run for the commit that closes this is GREEN on main — a local pass does not settle it, because a local simulator can retain StoreKit state a fresh runner never has"
+        "cd apple && xcrun simctl uninstall booted no.akashic.app 2>/dev/null; xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,name=iPhone SE (3rd generation)\" CODE_SIGNING_ALLOWED=NO -only-testing:AkashicUITests test > /tmp/qua56-se.log 2>&1 && grep -q \"Executed 14 tests, with 0 failures\" /tmp/qua56-se.log",
+        "MANUAL: the apple-ci run for the commit that closes this is GREEN on main — the runner picks its own simulator, so a local pass on the same device type is strong evidence but not the observation itself"
       ],
       "notes": [
-        "2026-07-28 NOT CAUSED BY THIS SESSION, and checked rather than assumed: the same three tests fail on 979b7e0 and 9d9a568, both of which predate the work in question. Recorded because \"my change did not break it\" is exactly the reasoning that lets a red gate stay red — the pre-existing failure is the finding, not the excuse.",
-        "2026-07-28 A LOCAL RUN DISAGREES WITH CI AND BOTH ARE HONEST. The full local suite on iPad (A16) reported 843 unit + 14 UI with ONE failure (the QUA-55 hit region) and the paywall tests PASSING, while CI on an iPhone reports four failures including those paywall tests. Two independent variables — the device (QUA-55) and whether a local StoreKit store lingers on the simulator — so \"it passes locally\" is not evidence here. Pin the destination and uninstall the app first: `xcrun simctl uninstall no.akashic.app`."
-      ]
+        "2026-07-28 PROVEN BOTH DIRECTIONS ON THE SAME DEVICE: before the fix, the paywall test failed on a local iPhone SE with byte-identical symptoms to CI (\"Never appeared: the Settings 'Akashic Complete' row\"); after `requireByScrolling`, the full suite is 843 unit + 14 UI, 0 failures on BOTH the SE and iPhone 17 Pro. The app-side half is one modifier: `labelled()` combines its title and value into one accessibility element, so VoiceOver reads \"Target container, iCloud.no.akashic\" instead of the bare identifier.",
+        "2026-07-28 WHAT WAS DELIBERATELY NOT DONE: apple-ci.yml is untouched. Its `ids[-1]` device-picking is the same idiom as the `tail -1` trap (QUA-55), but changing CI to a big phone would have hidden this bug instead of fixing it — the SE coverage is now the most valuable device in the rotation, because it is the one that keeps the tests honest about scrolling. If CI is ever pinned, pin it to the SE, not away from it."
+      ],
+      "claim": {
+        "agent": "claude-opus",
+        "branch": "main",
+        "at": "2026-07-28"
+      },
+      "verification": {
+        "at": "2026-07-28T09:48:17.255Z",
+        "head": "076fc1f",
+        "ran": [
+          {
+            "command": "cd apple && xcodegen generate",
+            "ok": true,
+            "ms": 101,
+            "status": 0,
+            "signal": null
+          },
+          {
+            "command": "cd apple && xcrun simctl uninstall booted no.akashic.app 2>/dev/null; xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,name=iPhone SE (3rd generation)\" CODE_SIGNING_ALLOWED=NO -only-testing:AkashicUITests test > /tmp/qua56-se.log 2>&1 && grep -q \"Executed 14 tests, with 0 failures\" /tmp/qua56-se.log",
+            "ok": true,
+            "ms": 249107,
+            "status": 0,
+            "signal": null
+          }
+        ],
+        "attested": [
+          {
+            "kind": "manual",
+            "text": "the apple-ci run for the commit that closes this is GREEN on main — the runner picks its own simulator, so a local pass on the same device type is strong evidence but not the observation itself"
+          }
+        ]
+      }
     }
   ]
 }

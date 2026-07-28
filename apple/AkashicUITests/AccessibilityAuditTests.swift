@@ -74,7 +74,8 @@ final class AccessibilityAuditTests: AkashicUITestCase {
     /// The paywall — the one screen in a paid app that has a single shot at making its case.
     func testPaywallClearsTheEnforcedAudit() throws {
         let app = launchApp(["AKASHIC_SCREEN": "settings"])
-        require(app.buttons[ID.settingsComplete], "the Settings 'Akashic Complete' row").tap()
+        requireByScrolling(app.buttons[ID.settingsComplete], in: app,
+                           "the Settings 'Akashic Complete' row").tap()
         require(app.staticTexts[ID.paywallHeadline], "the paywall's headline")
         try audit(app, screen: "paywall")
     }
@@ -104,7 +105,11 @@ final class AccessibilityAuditTests: AkashicUITestCase {
     /// membership row, and the one a localisation change most needs to be right on.
     func testSettingsClearsTheEnforcedAudit() throws {
         let app = launchApp(["AKASHIC_SCREEN": "settings"])
-        require(app.buttons[ID.settingsComplete], "the Settings 'Akashic Complete' row")
+        // On small screens this scrolls, so the audit below sees the BOTTOM of Settings there and
+        // the top elsewhere. That is inherent to auditing a live tree on differently-sized screens,
+        // and honest: performAccessibilityAudit only ever audits what is currently instantiated.
+        requireByScrolling(app.buttons[ID.settingsComplete], in: app,
+                           "the Settings 'Akashic Complete' row")
         try audit(app, screen: "settings")
     }
 

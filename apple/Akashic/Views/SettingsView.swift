@@ -605,6 +605,14 @@ struct SettingsView: View {
                 .foregroundStyle(Theme.textPrimary)
                 .multilineTextAlignment(.trailing)
         }
+        // One element, not two (QUA-56). The values here are technical strings — a container ID, an
+        // environment name — and as standalone elements VoiceOver reads them bare: "iCloud.no.akashic",
+        // which `performAccessibilityAudit` correctly flags as not human-readable. Combined, the row
+        // reads "Target container, iCloud.no.akashic": the title supplies the humanity and the value
+        // stays exact. Found the day the audit first SAW these rows — they sit below the fold on an
+        // iPhone SE, and the audit only audits what is instantiated, so until the tests scrolled,
+        // `.sufficientElementDescription`'s "reports zero" was a claim about the top of the screen.
+        .accessibilityElement(children: .combine)
     }
 }
 

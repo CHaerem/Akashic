@@ -103,6 +103,41 @@ extension XCTestCase {
         XCTAssertEqual(XCTWaiter.wait(for: [gone], timeout: timeout), .completed,
                        "Never went away: \(message())", file: file, line: line)
     }
+
+    /// Wait for `element`, scrolling to find it if the screen is too small to show it at launch —
+    /// and FAIL if it never appears.
+    ///
+    /// This exists because `require(_:)` alone carried a hidden assumption that held on every
+    /// device anyone happened to test on and broke on the first one nobody did. A SwiftUI `List`
+    /// creates rows LAZILY, so a row below the fold does not exist in the accessibility hierarchy
+    /// at all — `exists` is false, not merely "not hittable". Measured 2026-07-28 (QUA-56): the
+    /// Settings "Akashic Complete" row exists at launch on iPhone 17 Pro and iPad, and on the
+    /// iPhone SE (3rd generation) that apple-ci's device-picking happened to select, it does not —
+    /// which made all four paywall/settings tests fail on CI with "Never appeared" for three days
+    /// while passing on every device anyone ran locally. The app was never wrong: a customer
+    /// scrolls. The tests assumed a screen size instead of doing what the customer does.
+    ///
+    /// The swipe count is bounded so a genuinely missing element still fails fast, and the initial
+    /// wait is shorter than `AkashicUITestCase.timeout` on purpose: the generous timeout is for
+    /// cold launches on a loaded CI runner, but 30 s spent waiting for a row that is merely below
+    /// the fold would double every test that scrolls. 10 s is enough for the launch case measured
+    /// on CI (~4 s) with headroom, and the swipes retry existence anyway.
+    @discardableResult
+    func requireByScrolling(_ element: XCUIElement,
+                            in app: XCUIApplication,
+                            _ message: @autoclosure () -> String,
+                            maxSwipes: Int = 6,
+                            file: StaticString = #filePath,
+                            line: UInt = #line) -> XCUIElement {
+        if element.waitForExistence(timeout: 10) { return element }
+        for _ in 0..<maxSwipes {
+            app.swipeUp()
+            if element.waitForExistence(timeout: 1) { return element }
+        }
+        XCTFail("Never appeared, even after scrolling \(maxSwipes) screens: \(message())",
+                file: file, line: line)
+        return element
+    }
 }
 
 // MARK: - Identifiers (mirrored, deliberately)
