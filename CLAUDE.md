@@ -298,10 +298,15 @@ right: fix this file in the same commit.
   *and* nothing called `registerForRemoteNotifications`. Both are fixed (SHIP-01, SHIP-02) but
   neither can be proven without two devices on two Apple IDs — that is SHIP-15, and it is why
   SHIP-15 is sequenced before the rest of the owner list.
-- **CI still does not type-check the Intelligence code.** `apple-ci.yml` now builds
-  Release-CloudKit and asserts the built plist (QUA-01), but it runs on `macos-15` (Xcode 16.4),
-  so `canImport(FoundationModels)` is false and ~700 lines of shipped, paid-tier Intelligence
-  code are compiled by nothing automated. QUA-05 is the tripwire for it.
+- **Per-push CI still does not type-check the Intelligence code — per-dispatch CD now does.**
+  `apple-ci.yml` builds Release-CloudKit on the runner's default Xcode 16.4, where
+  `canImport(FoundationModels)` is false, so ~700 lines of shipped, paid-tier Intelligence code
+  are invisible to every push. This bullet used to end "compiled by nothing automated", and that
+  stopped being true on 2026-07-28: `testflight.yml` selects the newest installed Xcode (26.3 on
+  the current image) and archives with `AKASHIC_REQUIRE_INTELLIGENCE` armed, so every TestFlight
+  dispatch compiles the family or fails loudly — measured green on run 1, build 101. The gap that
+  remains is real but narrower: a push can still break Intelligence and stay green until the next
+  dispatch. QUA-05 is the tripwire for it.
 - **The web gates are closed now (QUA-02), and closing them found three live defects** that had
   been hiding behind them: a component importing a symbol that exists nowhere in the repo (so it
   threw whenever a journey had segments), an unguarded `getBounds()` that returns null until the
