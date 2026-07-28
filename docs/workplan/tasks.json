@@ -3950,7 +3950,7 @@
       "verify": [
         "cd apple && xcodegen generate",
         "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,name=iPhone 17 Pro\" CODE_SIGNING_ALLOWED=NO -only-testing:AkashicTests test > /tmp/diff16.log 2>&1 && grep -q \"with 1 test skipped and 0 failures\" /tmp/diff16.log",
-        "OWNER: on the next TestFlight build, enable sync logging in dev tools (seven taps on the version row), reproduce the cellular fresh-install state, and read the remoteJourneySummaries lines in Console.app — paste them into this task"
+        "MANUAL: on the next TestFlight build, enable sync logging in dev tools (seven taps on the version row), reproduce the cellular fresh-install state, and read the remoteJourneySummaries lines in Console.app — paste them into this task"
       ],
       "notes": [
         "2026-07-28 SEQUENCING: the log toggle (fix 1) ships FIRST and alone if needed — every other fix is a guess until the owner's device can say which hypothesis is true. Resist fixing (a)-(c) blind."

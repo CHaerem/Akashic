@@ -5,17 +5,17 @@
 
 # Akashic — work ledger
 
-146 tasks · **26 open** (1 agent-doable, 0.1 dev-days · 25 owner-only, 10.6 dev-days) · 120 done · 0 dropped
+148 tasks · **27 open** (2 agent-doable, 1.1 dev-days · 25 owner-only, 10.6 dev-days) · 121 done · 0 dropped
 
 > **`dev-days` are a human-developer estimate, not agent time.** They came from the review
 > that produced these tasks and they are the right unit for deciding whether something is
 > worth doing — they are the wrong unit for predicting how long an agent will take, and
 > summing them as "work remaining" overstates it substantially.
 >
-> Measured so far: **114 agent tasks estimated at 76.6 dev-days**.
+> Measured so far: **115 agent tasks estimated at 76.7 dev-days**.
 > Elapsed time is deliberately absent: nothing here can support it. Use `git log` for that.
 >
-> **Every large agent item is closed.** 9 of the tasks closed so far were 2 dev-days or more; nothing 2 dev-days or larger remains agent-doable, and the 0.1 remaining dev-days are all small tasks (1 at 0.5 or less). What is still genuinely large is OWNER work, which no amount of agent compression touches.
+> **Every large agent item is closed.** 9 of the tasks closed so far were 2 dev-days or more; nothing 2 dev-days or larger remains agent-doable, and the 1.1 remaining dev-days are all small tasks (1 at 0.5 or less). What is still genuinely large is OWNER work, which no amount of agent compression touches.
 
 Read [CLAUDE.md](CLAUDE.md) before touching anything. To find work:
 
@@ -120,7 +120,7 @@ node scripts/workplan.mjs next
 
 > Capability beyond what competitors offer. Order set by decision: share link, then Vision curation, then the book.
 
-1 open of 15 · 0.5 d remaining
+2 open of 16 · 1.5 d remaining
 
 | | Task | Days | Who | Deps | Finish line |
 |---|---|---|---|---|---|
@@ -139,12 +139,13 @@ node scripts/workplan.mjs next
 | `x` | `DIFF-13` **Accept/dismiss rows for curation, and make Vision link** | 1 | agent | `DIFF-04` | Each day proposes a best-of and a hero the user can accept or dismiss, and Vision links into the build. |
 | `x` | `DIFF-14` **Collapse duplicates on import, which needs a stored content hash** | 1 | agent | `DIFF-06` | Re-importing a byte-identical photograph is detected and skipped, not written twice. |
 | `x` | `DIFF-15` **On cellular, a fresh install shows "Start your first journey" while the whole archive waits silently** | 1 | agent | — | A fresh install on a metered connection shows the family's journeys as named, visibly un-downloaded rows with an honest size and a "Download now" action — instead of the first-run hero — and the first-sync estimate matches what the engine actually fetches. |
+| ` ` | `DIFF-16` **DIFF-15 on a real device: the prompt worked, the rows did not — and the failure is undiagnosable by design** | 1 | agent | — | The un-downloaded journeys surface renders on a real device against Production (or its failure is visible and diagnosable from the device), sync/download progress is visible in the journey list, and a TestFlight build can produce a sync log the owner can read. |
 
 ## QUALITY
 
 > Tests, types, CI, localisation, accessibility. Localisation and accessibility are in v1.0 by decision.
 
-3 open of 65 · 0.8 d remaining
+3 open of 66 · 0.8 d remaining
 
 | | Task | Days | Who | Deps | Finish line |
 |---|---|---|---|---|---|
@@ -213,6 +214,7 @@ node scripts/workplan.mjs next
 | `x` | `QUA-56` **apple-ci red for three days: the tests assumed a screen size, and the audit had never seen half of Settings** | 0.5 | agent | — | The full UI suite passes on an iPhone SE (3rd generation) — the device apple-ci actually picks — as well as on a large phone, and the apple-ci run on main is green. |
 | `x` | `QUA-57` **prove.mjs --native conflates a git pathspec with an xcodebuild test identifier** | 0.2 | agent | — | prove.mjs can prove a native test suite red-against-the-revert: the tests are named by FILE for the worktree copy and by TARGET/CLASS for -only-testing, as two inputs or a mapping. |
 | `x` | `QUA-58` **QUA-49 follow-up: the regression test, the now-false e2e comment, and the two unit-test guards** | 0.3 | agent | — | The camp-over-stack precedence is guarded by an e2e click on a KNOWN coincident day and by unit tests over the re-add and push-off paths; the stale comment is corrected; the local cast is gone. |
+| `x` | `QUA-59` **ITMS-90788 from Apple's own delivery feedback: the GPX document type lacked LSHandlerRank** | 0.1 | agent | — | The built Info.plist carries LSHandlerRank for the GPX Track entry, so the next delivery draws no ITMS-90788. |
 
 ## Decisions on record
 
