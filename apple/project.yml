@@ -88,6 +88,11 @@ targets:
         CFBundleDocumentTypes:
           - CFBundleTypeName: GPX Track
             CFBundleTypeRole: Viewer
+            # QUA-59, from Apple's own delivery feedback on build 101 (ITMS-90788): the entry needs
+            # an LSHandlerRank. `Alternate` is the honest rank — Akashic reads GPX to create a
+            # journey; it is not the system's primary GPX application and must not claim to be
+            # (`Owner`/`Default` would put it above actual GPX editors in the open-with list).
+            LSHandlerRank: Alternate
             LSItemContentTypes:
               - com.topografix.gpx
         UTImportedTypeDeclarations:

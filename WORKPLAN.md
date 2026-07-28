@@ -5,7 +5,7 @@
 
 # Akashic — work ledger
 
-146 tasks · **27 open** (1 agent-doable, 0.1 dev-days · 26 owner-only, 11.1 dev-days) · 119 done · 0 dropped
+146 tasks · **26 open** (1 agent-doable, 0.1 dev-days · 25 owner-only, 10.6 dev-days) · 120 done · 0 dropped
 
 > **`dev-days` are a human-developer estimate, not agent time.** They came from the review
 > that produced these tasks and they are the right unit for deciding whether something is
@@ -84,7 +84,7 @@ node scripts/workplan.mjs next
 
 > Hard requirements for a paid v1.0. Most of the remaining calendar time lives here, in items only the owner can do.
 
-15 open of 27 · 7.5 d remaining
+14 open of 27 · 7 d remaining
 
 | | Task | Days | Who | Deps | Finish line |
 |---|---|---|---|---|---|
@@ -114,7 +114,7 @@ node scripts/workplan.mjs next
 | ` ` | `SHIP-23` **Nominate the app for Apple featuring, and treat it as launch strategy rather than a lottery ticket** | 0.2 | owner | — | A featuring nomination is submitted in App Store Connect. |
 | `x` | `SHIP-24` **Universal Links are dead in production — the Pages artifact carries no dot-path at all** | 0.3 | agent | — | https://akashic.no/.well-known/apple-app-site-association returns 200 with an applinks document, and the deploy asserts it after every push so it cannot silently regress. |
 | ` ` | `SHIP-25` **Rotate the MapKit key that passed through a chat upload** | 0.2 | owner | — | A second Maps key is registered, MAPKIT_PRIVATE_KEY holds it, the Credential health check is green on main, and key 9UN97VBZR8 shows as revoked in the Apple Developer account. |
-| ` ` | `SHIP-26` **CD for the iOS app: a TestFlight upload is one click, gated on green CI** | 0.5 | owner | — | The owner can ship a TestFlight build from Actions -> TestFlight -> Run workflow, the upload refuses a commit whose apple-ci is not green, and the first dispatched run has produced a build visible in TestFlight. |
+| `x` | `SHIP-26` **CD for the iOS app: a TestFlight upload is one click, gated on green CI** | 0.5 | owner | — | The owner can ship a TestFlight build from Actions -> TestFlight -> Run workflow, the upload refuses a commit whose apple-ci is not green, and the first dispatched run has produced a build visible in TestFlight. |
 
 ## DIFF
 

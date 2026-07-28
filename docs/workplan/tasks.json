@@ -3814,7 +3814,7 @@
       "priority": 4,
       "deps": [],
       "track": "SHIP",
-      "status": "TODO",
+      "status": "DONE",
       "owner": true,
       "title": "CD for the iOS app: a TestFlight upload is one click, gated on green CI",
       "done_when": "The owner can ship a TestFlight build from Actions -> TestFlight -> Run workflow, the upload refuses a commit whose apple-ci is not green, and the first dispatched run has produced a build visible in TestFlight.",
@@ -3884,7 +3884,77 @@
             "text": "the build appears in TestFlight (~5-15 min processing) and installs on your iPhone"
           }
         ]
+      },
+      "attestation": "Owner confirms the new version appears in TestFlight on their iPhone ('1. ny versjon vises'). The dispatch was run by the agent on the owner's explicit request.",
+      "evidence": "First dispatch (run 30361935605) green end to end: build 101 archived on Xcode 26.3 with the Intelligence tripwire armed, exported and uploaded (UPLOAD SUCCEEDED, 1 deprecation warning), archived plist carries CKSharingSupported and UIBackgroundModes. Owner set ASC_PRIVATE_KEY; the two IDs are repo variables. Gate corrected on day one: exact-SHA semantics was wrong for a path-filtered apple-ci; now requires the latest completed run green AND apple/ untouched since the commit it tested."
+    },
+    {
+      "id": "QUA-59",
+      "effort": 0.1,
+      "priority": 15,
+      "deps": [],
+      "track": "QUALITY",
+      "status": "DONE",
+      "owner": false,
+      "title": "ITMS-90788 from Apple's own delivery feedback: the GPX document type lacked LSHandlerRank",
+      "done_when": "The built Info.plist carries LSHandlerRank for the GPX Track entry, so the next delivery draws no ITMS-90788.",
+      "why": "Apple's post-delivery mail on build 101 (the first CD upload): \"the CFBundleDocumentTypes\ndictionary array ... should contain an LSHandlerRank value for the CFBundleTypeName 'GPX Track'\nentry\". Delivery succeeded — this is a warning, not a rejection — but it recurs on every upload\nuntil fixed, and App Review reads the same report.\n\n`Alternate` is the honest rank: Akashic reads GPX to create a journey; it is not the system's\nprimary GPX application and must not claim to be — Owner/Default would put it above actual GPX\neditors in every open-with list.\n\nWorth noting WHERE the fix lives, because the INFOPLIST_KEY trap is exactly about this key:\nCFBundleDocumentTypes is an array of dicts, so it must sit in project.yml's `info: properties:`\nblock — an INFOPLIST_KEY_ would be silently dropped. Asserted against the BUILT plist, per the trap.",
+      "files": [
+        "apple/project.yml"
+      ],
+      "evidence": "Built Debug to a pinned derivedDataPath and read the artefact: the built Info.plist's CFBundleDocumentTypes[0] carries LSHandlerRank => Alternate alongside the existing name/role/content-type. Ships with the next TestFlight dispatch.",
+      "verify": [
+        "cd apple && xcodegen generate",
+        "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,name=iPhone 17 Pro\" -derivedDataPath /tmp/qua59-dd CODE_SIGNING_ALLOWED=NO build > /tmp/qua59-build.log 2>&1 && plutil -p /tmp/qua59-dd/Build/Products/Debug-iphonesimulator/Akashic.app/Info.plist | grep -q '\"LSHandlerRank\" => \"Alternate\"'"
+      ],
+      "verification": {
+        "at": "2026-07-28T13:20:47.722Z",
+        "head": "3b2ae3b",
+        "ran": [
+          {
+            "command": "cd apple && xcodegen generate",
+            "ok": true,
+            "ms": 87,
+            "status": 0,
+            "signal": null
+          },
+          {
+            "command": "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,name=iPhone 17 Pro\" -derivedDataPath /tmp/qua59-dd CODE_SIGNING_ALLOWED=NO build > /tmp/qua59-build.log 2>&1 && plutil -p /tmp/qua59-dd/Build/Products/Debug-iphonesimulator/Akashic.app/Info.plist | grep -q '\"LSHandlerRank\" => \"Alternate\"'",
+            "ok": true,
+            "ms": 1085,
+            "status": 0,
+            "signal": null
+          }
+        ],
+        "attested": []
       }
+    },
+    {
+      "id": "DIFF-16",
+      "effort": 1,
+      "priority": 7,
+      "deps": [],
+      "track": "DIFF",
+      "status": "TODO",
+      "owner": false,
+      "title": "DIFF-15 on a real device: the prompt worked, the rows did not — and the failure is undiagnosable by design",
+      "done_when": "The un-downloaded journeys surface renders on a real device against Production (or its failure is visible and diagnosable from the device), sync/download progress is visible in the journey list, and a TestFlight build can produce a sync log the owner can read.",
+      "why": "MEASURED BY THE OWNER on build 101, fresh TestFlight install on cellular, the exact scenario DIFF-15\nwas built for: the first-sync size prompt APPEARED (\"fikk beskjed om å vente på WiFi\") — so\nRemotePhotoCounting reached Production and returned a count — but the journey list showed NO\nun-downloaded rows. The one path no simulator could exercise is the one that failed.\n\nAND THE FAILURE CANNOT BE DIAGNOSED FROM THE DEVICE, WHICH IS THE FIRST DEFECT: the summarizer logs\nits errors and its success count through SyncLog, and SyncLog is enabled ONLY by the AKASHIC_SYNC_LOG\nenvironment variable — which a TestFlight install cannot set. The one surface where DIFF-15 can fail\n(signed build, real CloudKit) is the one surface with no way to see why. DIFF-15's ledger note\ncalled silent-nil \"quiet and safe\"; measured on device, silent means UNDIAGNOSABLE.\n\nHYPOTHESES, ordered by what the evidence supports — the count query working narrows it usefully:\n(a) UI/ordering: summaries publish after the list rendered, or the prompt interaction flips the\ndeferral state the row-branch requires (the third condition hides rows when no deferral is active);\n(b) the per-zone Journey CKQuery fails against the DEPLOYED Production schema even though\nschema.ckdb declares ___recordID QUERYABLE — deployed-vs-declared drift, checkable with a cktool\nschema export (owner credentials, SHIP-15 territory);\n(c) the summarizer runs exactly once at activation with no retry, so any transient failure is a\npermanent hero until relaunch.\n\nTHE FIX SET: (1) a persisted dev-tools toggle for SyncLog (UserDefaults, not env) so a TestFlight\nbuild can log and the owner can read it in Console.app — diagnosis before cleverness; (2) the\nrow-branch distinguishes \"no remote journeys\" from \"could not check\" while a deferral is active,\nso a query failure stops impersonating a brand-new family; (3) retry the summary on path change /\nforeground, same trigger family as onAllowsHeavyTransferBecameTrue; (4) THE OWNER'S SECOND POINT,\nwhich stands on its own: sync happens invisibly in the background — when a download is actually\nrunning, the list should show it (per-journey progress or an indeterminate state), because \"things\nappear eventually\" reads as broken even when it is working.",
+      "files": [
+        "apple/Akashic/Views/JourneyListView.swift",
+        "apple/Akashic/Sync/SyncLog.swift",
+        "apple/Akashic/Sync/SyncDownloadPrompt.swift",
+        "apple/Akashic/Sync/AkashicSyncEngine.swift",
+        "apple/Akashic/Views/SettingsView.swift"
+      ],
+      "verify": [
+        "cd apple && xcodegen generate",
+        "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,name=iPhone 17 Pro\" CODE_SIGNING_ALLOWED=NO -only-testing:AkashicTests test > /tmp/diff16.log 2>&1 && grep -q \"with 1 test skipped and 0 failures\" /tmp/diff16.log",
+        "OWNER: on the next TestFlight build, enable sync logging in dev tools (seven taps on the version row), reproduce the cellular fresh-install state, and read the remoteJourneySummaries lines in Console.app — paste them into this task"
+      ],
+      "notes": [
+        "2026-07-28 SEQUENCING: the log toggle (fix 1) ships FIRST and alone if needed — every other fix is a guess until the owner's device can say which hypothesis is true. Resist fixing (a)-(c) blind."
+      ]
     }
   ]
 }
