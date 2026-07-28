@@ -3492,6 +3492,32 @@
       "notes": [
         "2026-07-28 FOUND BY ACCIDENT during the pre-merge suite, because `tail -1` picked an iPad that session where it had picked an iPhone before. That is the whole lesson: an unpinned destination makes the suite non-deterministic across machines and across days, so a green run is not evidence about the device you care about. Written up as a trap in CLAUDE.md. Sweeping all ~40 ledger entries that carry the idiom is DELIBERATELY out of scope — pin the destination in the entries that assert layout and leave the rest, because a mechanical edit across forty entries at once is how unrelated breakage rides into a commit."
       ]
+    },
+    {
+      "id": "QUA-56",
+      "effort": 0.5,
+      "priority": 6,
+      "deps": [],
+      "track": "QUALITY",
+      "status": "TODO",
+      "owner": false,
+      "title": "apple-ci has been red since 2026-07-27 and nobody noticed — four UI tests the runner cannot pass",
+      "done_when": "apple-ci is green on main, or the tests that cannot pass on a CI runner are skipped there with a stated reason and a removal condition, so a red run means something again.",
+      "why": "MEASURED 2026-07-28. `apple-ci` was last green at c864176 on 2026-07-25 and has failed EVERY run since:\nc8f1399, ded49ca, 9d9a568, 979b7e0 and 35b1b0d. Four UI tests fail, and the same three recur across runs\nfrom before this session's work:\n\n  AccessibilityAuditTests.testPaywallClearsTheEnforcedAudit\n  AccessibilityAuditTests.testSettingsClearsTheEnforcedAudit\n  PaywallUITests.testEntitledCustomerIsNeverOfferedAPurchaseSurface\n  PaywallUITests.testSettingsPaywallShowsItsReasonAndOffersAWayForward\n\nThe symptom is \"Never appeared: the Settings 'Akashic Complete' row\", and CLAUDE.md already documents the\ncause: XcodeGen writes `storeKitConfiguration` into the scheme's LAUNCH action only, with no `<TestAction>`\nequivalent in 2.45.4. So under `xcodebuild test` the app has no local store, `Product.products(for:)`\nreturns [], and the paywall renders its \"isn't available here yet\" row instead of the priced one. A local\nsimulator can pass these if it retains store state from an earlier launch; a fresh CI runner never can.\n\nTHE REAL DEFECT IS THE THREE DAYS, NOT THE FOUR TESTS. This repo's own working agreement says a red gate\nthat stays red trains everyone to ignore CI, and cites two gates that were red for months. It happened\nagain immediately, on the gate that guards the app being shipped to a store — and it was found by accident\nwhile waiting for an unrelated deploy, not by anything watching.\n\nTwo acceptable resolutions and one that is not. Acceptable: make the store available under test, or skip\nthese four on CI with XCTSkip naming the StoreKit limitation and the condition for removing the skip. NOT\nacceptable: leaving them failing, because then apple-ci carries no information and the next real\nregression lands unnoticed.",
+      "files": [
+        "apple/AkashicUITests/PaywallUITests.swift",
+        "apple/AkashicUITests/AccessibilityAuditTests.swift",
+        ".github/workflows/apple-ci.yml"
+      ],
+      "verify": [
+        "cd apple && xcodegen generate",
+        "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,name=iPhone 17 Pro\" CODE_SIGNING_ALLOWED=NO -only-testing:AkashicUITests test > /tmp/qua56.log 2>&1 && grep -q \"with 0 failures\" /tmp/qua56.log",
+        "MANUAL: the apple-ci run for the commit that closes this is GREEN on main — a local pass does not settle it, because a local simulator can retain StoreKit state a fresh runner never has"
+      ],
+      "notes": [
+        "2026-07-28 NOT CAUSED BY THIS SESSION, and checked rather than assumed: the same three tests fail on 979b7e0 and 9d9a568, both of which predate the work in question. Recorded because \"my change did not break it\" is exactly the reasoning that lets a red gate stay red — the pre-existing failure is the finding, not the excuse.",
+        "2026-07-28 A LOCAL RUN DISAGREES WITH CI AND BOTH ARE HONEST. The full local suite on iPad (A16) reported 843 unit + 14 UI with ONE failure (the QUA-55 hit region) and the paywall tests PASSING, while CI on an iPhone reports four failures including those paywall tests. Two independent variables — the device (QUA-55) and whether a local StoreKit store lingers on the simulator — so \"it passes locally\" is not evidence here. Pin the destination and uninstall the app first: `xcrun simctl uninstall no.akashic.app`."
+      ]
     }
   ]
 }

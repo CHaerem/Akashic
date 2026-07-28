@@ -22,6 +22,22 @@ node scripts/workplan.mjs status        # counts by track
 Do not invent work. If something needs doing that is not in the ledger, add it to
 `tasks.json`, run `npm run workplan:render`, and commit both in the same commit.
 
+### Three things to know before you pick anything up (2026-07-28)
+
+1. **`apple-ci` is RED on `main` and has been since 2026-07-27** — four UI tests a CI runner cannot
+   pass, because XcodeGen puts `storeKitConfiguration` in the Launch action only. That is `QUA-56`,
+   at priority 6. It was found by accident, which is the second half of the problem: a gate that
+   stays red carries no information, so do not read a red `apple-ci` as *your* breakage before
+   comparing it with the run before yours — and do not leave it red either.
+2. **The agent queue is nearly empty and the owner queue is the whole schedule** — roughly 2
+   agent-days against 10.6 owner-days. Of the ~19 claimable tasks only `QUA-49`, `QUA-55` and
+   `QUA-56` are yours; the rest need an Apple agreement, a device, or a decision. If you look for
+   work and find almost none, that is the true state rather than a broken ledger. Say so.
+3. **`SHIP-24` is closed on the repo side and unproven on the device side.** An `applinks` document
+   is served at `https://akashic.no/apple-app-site-association` (verified from two places), but Pages
+   serves it as `application/octet-stream` where Apple has historically wanted `application/json`.
+   Whether iOS accepts that is a `SHIP-15` question and nothing in this repo can answer it.
+
 ## The loop
 
 1. `node scripts/workplan.mjs next` — pick one task. Prefer lower `priority` numbers.
