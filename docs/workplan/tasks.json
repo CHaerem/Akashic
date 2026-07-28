@@ -3499,7 +3499,7 @@
       "priority": 6,
       "deps": [],
       "track": "QUALITY",
-      "status": "WIP",
+      "status": "DONE",
       "owner": false,
       "title": "apple-ci red for three days: the tests assumed a screen size, and the audit had never seen half of Settings",
       "done_when": "The full UI suite passes on an iPhone SE (3rd generation) — the device apple-ci actually picks — as well as on a large phone, and the apple-ci run on main is green.",
@@ -3549,7 +3549,9 @@
             "text": "the apple-ci run for the commit that closes this is GREEN on main — the runner picks its own simulator, so a local pass on the same device type is strong evidence but not the observation itself"
           }
         ]
-      }
+      },
+      "attestation": "Watched run 30348160171 step by step: Build success, Test success (the four previously-failing paywall/settings tests among them), Release-CloudKit build and plist assertion success, conclusion=success.",
+      "evidence": "apple-ci run 30348160171 on main (commit 0372904): completed success, every step green including Test — first green run since c864176 on 2026-07-25. Locally proven both directions first: the paywall test failed on an iPhone SE with byte-identical symptoms to CI before the fix, and after requireByScrolling the full suite is 843 unit + 14 UI, 0 failures on both the SE and iPhone 17 Pro (workplan verify records the SE suite at 249 s)."
     }
   ]
 }
