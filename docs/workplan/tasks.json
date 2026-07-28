@@ -3680,7 +3680,7 @@
       "priority": 24,
       "deps": [],
       "track": "QUALITY",
-      "status": "WIP",
+      "status": "DONE",
       "owner": false,
       "title": "prove.mjs --native conflates a git pathspec with an xcodebuild test identifier",
       "done_when": "prove.mjs can prove a native test suite red-against-the-revert: the tests are named by FILE for the worktree copy and by TARGET/CLASS for -only-testing, as two inputs or a mapping.",
@@ -3699,7 +3699,28 @@
         "agent": "qua57-agent",
         "branch": "agent/qua57",
         "at": "2026-07-28"
-      }
+      },
+      "verification": {
+        "at": "2026-07-28T12:09:03.939Z",
+        "head": "a8df92a",
+        "ran": [
+          {
+            "command": "node scripts/prove.mjs --tests src/lib/map/mapkit/useMapKitJourney.test.ts --revert src/lib/map/mapkit/useMapKitJourney.ts --against 31b8bac~1 > /tmp/qua57-web.log 2>&1; test \"$?\" = 0  # the web path must not regress",
+            "ok": true,
+            "ms": 6266,
+            "status": 0,
+            "signal": null
+          }
+        ],
+        "attested": [
+          {
+            "kind": "manual",
+            "text": "one native run proving a known-good historical pair red-then-green — pick a closed task with committed native tests (e.g. DIFF-15's SyncSizeEstimateTests against 7ede7ad~1) and paste both outcomes into the evidence"
+          }
+        ]
+      },
+      "attestation": "Ran the native red/green pair myself on the merged tree after the merge (output pasted in evidence), exit 0, and confirmed git worktree list unchanged afterwards. The agent's four measured parse corrections (Selected tests roll-up, failures=assertions not tests, the '(3 failures)' build-tail ambiguity, the 1 MiB maxBuffer) are recorded in the file's comments where the parse lives.",
+      "evidence": "Merged at 4f632ca. --tests stays a git pathspec; new --only-testing <Target/Class> feeds -only-testing, required with --native, and refuses path-shaped values. Web path byte-identical (gate PASS: QUA-47 pair red 2-of-6 / green, exit 0). Native pair RUN FIRST-HAND on the merged tree: SyncSizeEstimateTests vs 7ede7ad~1 -> 'exit 65, 4 native tests, 4 failures' then 'exit 0, 4 native tests, 0 failures on the current tree', receipt names 4 failing assertions in 3 of 4 tests. Compile-red is REFUSED, not reported: DeferredDownloadPreviewTests against the same revert exits 1 with 'no tests ran — the build failed' plus the 8 cannot-find-type lines."
     },
     {
       "id": "QUA-58",
