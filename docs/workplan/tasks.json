@@ -3014,7 +3014,7 @@
         "src/index.css"
       ],
       "track": "QUALITY",
-      "status": "WIP",
+      "status": "DONE",
       "verify": [
         "npx vitest --run",
         "VITE_E2E_TEST_MODE=true CI=true npx playwright test --project=chromium --ignore-snapshots"
@@ -3023,7 +3023,29 @@
         "agent": "qua49-agent",
         "branch": "agent/qua49",
         "at": "2026-07-28"
-      }
+      },
+      "verification": {
+        "at": "2026-07-28T11:16:50.048Z",
+        "head": "ccf05b9",
+        "ran": [
+          {
+            "command": "npx vitest --run",
+            "ok": true,
+            "ms": 6365,
+            "status": 0,
+            "signal": null
+          },
+          {
+            "command": "VITE_E2E_TEST_MODE=true CI=true npx playwright test --project=chromium --ignore-snapshots",
+            "ok": true,
+            "ms": 51685,
+            "status": 0,
+            "signal": null
+          }
+        ],
+        "attested": []
+      },
+      "evidence": "Merged at 87f4127. Root cause found by the agent with CDP DOM.getDocument(pierce): mk-annotation-container hosts a CLOSED shadow root, so element.shadowRoot === null was a false negative and paint order is ADD order — which is why z-index, DisplayPriority and DOM order were all measured inert. Fix: camps re-added after any photo-annotation creation (restores Mapbox precedence) + a continuous 30 px push-off for coincident stacks, since all three fixture photos sit exactly on their camp. Probe before/after: elementFromPoint at camp centre div.photo-stack-main -> div.camp-marker; a real click selects the day; stack clicks still open the lightbox. Gate green: 680 vitest + 33 registered Playwright specs (27 passed, 6 mobile-skips) with a minted token."
     },
     {
       "id": "QUA-50",
@@ -3481,7 +3503,7 @@
       "priority": 18,
       "deps": [],
       "track": "QUALITY",
-      "status": "WIP",
+      "status": "DONE",
       "owner": false,
       "title": "A 14.5 pt tap target on iPad, and the reason no run had ever seen it",
       "done_when": "AccessibilityAuditTests passes on an iPad destination as well as an iPhone one, and the two entries that assert layout pin their device instead of taking whichever simulator is last.",
@@ -3504,34 +3526,34 @@
         "at": "2026-07-28"
       },
       "verification": {
-        "at": "2026-07-28T11:05:31.566Z",
-        "head": "4a64b19",
+        "at": "2026-07-28T11:20:17.167Z",
+        "head": "ccf05b9",
         "ran": [
           {
             "command": "cd apple && xcodegen generate",
             "ok": true,
-            "ms": 103,
+            "ms": 88,
             "status": 0,
             "signal": null
           },
           {
             "command": "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,name=iPhone 17 Pro\" CODE_SIGNING_ALLOWED=NO -only-testing:AkashicUITests/AccessibilityAuditTests test > /tmp/qua55.log 2>&1 && grep -q \"with 0 failures\" /tmp/qua55.log",
-            "ok": false,
-            "ms": 108569,
-            "status": 65,
+            "ok": true,
+            "ms": 79504,
+            "status": 0,
             "signal": null
           },
           {
             "command": "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,name=iPad (A16)\" CODE_SIGNING_ALLOWED=NO -only-testing:AkashicUITests/AccessibilityAuditTests test > /tmp/qua55.log 2>&1 && grep -q \"with 0 failures\" /tmp/qua55.log",
-            "ok": false,
-            "ms": 173911,
-            "status": 65,
+            "ok": true,
+            "ms": 118335,
+            "status": 0,
             "signal": null
           }
         ],
         "attested": []
       },
-      "resume": "Fix merged (4a64b19) and proven red-to-green by its agent on iPad + green on iPhone/SE. The gate's two device legs then FAILED under machine contention — DIFF-15's clean Release-CloudKit build was saturating the cores and the UI tests' 30 s launch waits blew. Re-run 'workplan verify QUA-55' on a QUIET machine, then done. Lesson: gate verification with UI-test legs must be serialised after parallel agents finish."
+      "evidence": "Merged at 5014c63. Red baseline captured by its agent on iPad (A16): hitRegion 104.5x14.5 pt on the Route options menu; green after .frame(minHeight: 44) + .contentShape(Rectangle()), the QUA-29 idiom. Instrumented probe measured 104.5x44.0 on iPad and 104.3x44.0 on iPhone. Gate green on a quiet machine: AccessibilityAuditTests 0 failures on both pinned destinations (the two earlier gate FAILs were measured machine contention — a concurrent clean Release-CloudKit build starved the 30 s launch waits). Why iPhone never saw it: the control sits at y=-113 there, above the audited viewport."
     },
     {
       "id": "QUA-56",
@@ -3672,6 +3694,33 @@
       ],
       "notes": [
         "2026-07-28 The fix shape the agent suggested: separate --tests (files, for the worktree carry) from a new --only-testing (xcodebuild identifiers), or derive the identifier from the file's basename (AkashicTests/<ClassName> for a single-class file). Derivation is convenient and lies for multi-class files; two explicit flags cannot."
+      ]
+    },
+    {
+      "id": "QUA-58",
+      "effort": 0.3,
+      "priority": 21,
+      "deps": [],
+      "track": "QUALITY",
+      "status": "TODO",
+      "owner": false,
+      "title": "QUA-49 follow-up: the regression test, the now-false e2e comment, and the two unit-test guards",
+      "done_when": "The camp-over-stack precedence is guarded by an e2e click on a KNOWN coincident day and by unit tests over the re-add and push-off paths; the stale comment is corrected; the local cast is gone.",
+      "why": "QUA-49's agent fixed the defect (paint order is ADD order, behind mk-annotation-container's CLOSED\nshadow root) and correctly stopped at four files it did not own. Each item here is a hole it named:\n\n1. e2e/mapkit-journey.spec.ts ~line 96 now asserts something FALSE: \"nothing the app can set changes\nMapKit's annotation paint order — not z-index, not DisplayPriority, not DOM order\". Re-adding IS the\nthing that changes it. Correct in place, keep the refuted claim. And the spec's \"discover an\nunobscured camp\" loop only ever found days 2/4 (days 1/3/5 have a photo on the exact coordinate);\nreplacing it with expect(camp).toBeVisible() + click on a KNOWN coincident day IS the regression test.\n\n2. annotations.test.ts's fake map lacks `annotations` and `convertCoordinateToPointOnPage`, so the\nagent added runtime guards and NEITHER new path is unit-covered — the cannot-fail shape. Extend the\nfake, assert camps land last in `added` and that a coincident stack gets a non-zero anchorOffset,\nthen delete the guards.\n\n3. mapkitTypes.ts declares anchorOffset on the options only; one line on MKAnnotation removes the\nlocal cast in annotations.ts setAnchorOffset.",
+      "files": [
+        "e2e/mapkit-journey.spec.ts",
+        "src/lib/map/mapkit/annotations.test.ts",
+        "src/lib/map/mapkit/mapkitTypes.ts",
+        "src/lib/map/mapkit/annotations.ts"
+      ],
+      "verify": [
+        "npx vitest --run",
+        "! grep -n \"not z-index, not .DisplayPriority., not DOM order\" e2e/mapkit-journey.spec.ts",
+        "! grep -n \"as MKAnnotation & { anchorOffset\" src/lib/map/mapkit/annotations.ts",
+        "VITE_E2E_TEST_MODE=true CI=true npx playwright test --project=chromium --ignore-snapshots"
+      ],
+      "notes": [
+        "2026-07-28 Also carried from the agent's report, for whoever picks this up: MARKER_CLEARANCE_PX = 30 is coupled to the CSS marker sizes (36/42 and 32/40) — if those grow it must follow, and the re-add is the unconditional backstop. Edit-mode drag over anchorOffset is unverified (the fixture cannot reach edit mode). And the owner has not yet SEEN the up-to-30 px nudge of a coincident photo stack — worth one look on the deployed site before the beta."
       ]
     }
   ]

@@ -186,6 +186,18 @@ plain `git worktree prune` will not remove it either — it honours `gc.worktree
 months by default, so a registration made seconds ago is exempt. Use `git worktree prune --expire
 now`. This repo really does accumulate them; there were seven agent worktrees at one point.
 
+**Nested worktrees multiply the test suite and leak other trees' state into your run.** Agent
+worktrees live under `.claude/worktrees/` INSIDE the main checkout, each carrying a full `src/`, so
+a vitest run from the repo root scanned every copy — measured at 300 files / 3852 tests against the
+53 / 680 baseline, and a gate run failed on a state that was not the merged tree's.
+`vite.config.js` now excludes `**/.claude/**`; keep that exclusion, and treat any test count far
+above baseline as this before anything else. Two more rules from the same afternoon of parallel
+agents: **remove merged agent worktrees promptly** (they are silent suite-multipliers until the
+exclusion, and stale ones linger — one from the QUA-10 era survived two weeks), and **gate
+verification with UI-test legs must wait for a quiet machine** — a concurrent clean Release build
+starves the 30 s launch waits and fails honest tests, which reads exactly like the merge broke
+them.
+
 `.env` and `.env.local` are gitignored and live only in the main checkout at
 `/Users/cher/Privat/Akashic/`. `git worktree add` does not copy them. Copy them first:
 

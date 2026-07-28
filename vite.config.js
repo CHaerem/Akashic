@@ -98,7 +98,13 @@ export default defineConfig({
 		globals: true,
 		environment: "jsdom",
 		setupFiles: "./vitest.setup.js",
-		exclude: ["**/node_modules/**", "**/e2e/**"],
+		// `.claude/**` is load-bearing, not tidiness (QUA-49's gate run found it): parallel agent
+		// worktrees live under `.claude/worktrees/` INSIDE this checkout, each carrying a full copy
+		// of `src/`. Without the exclusion, vitest run from the repo root scans every copy — the
+		// measured run was 300 files / 3852 tests against a 53 / 680 baseline — and another tree's
+		// state fails YOUR gate. The count you trust is only real from a checkout this glob is
+		// scoped to.
+		exclude: ["**/node_modules/**", "**/e2e/**", "**/.claude/**"],
 		// Timeout settings for more robust tests
 		testTimeout: 10000,
 		hookTimeout: 10000,
