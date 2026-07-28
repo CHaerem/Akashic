@@ -3965,20 +3965,20 @@
         "at": "2026-07-28"
       },
       "verification": {
-        "at": "2026-07-28T14:11:13.887Z",
-        "head": "786bd06",
+        "at": "2026-07-28T15:45:55.930Z",
+        "head": "2a323a8",
         "ran": [
           {
             "command": "cd apple && xcodegen generate",
             "ok": true,
-            "ms": 90,
+            "ms": 89,
             "status": 0,
             "signal": null
           },
           {
             "command": "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,name=iPhone 17 Pro\" CODE_SIGNING_ALLOWED=NO -only-testing:AkashicTests test > /tmp/diff16.log 2>&1 && grep -q \"with 1 test skipped and 0 failures\" /tmp/diff16.log",
             "ok": true,
-            "ms": 18885,
+            "ms": 17267,
             "status": 0,
             "signal": null
           }
@@ -3990,7 +3990,7 @@
           }
         ]
       },
-      "resume": "Code merged at 22b433b and gate-verified (890 unit / 14 UI green, Release-CloudKit builds, prove receipt: 37 assertion-reds in 12/12 against HEAD). Remaining: the MANUAL device observation — next TestFlight build, sync-logging toggle on, reproduce, paste the remoteJourneySummaries Console lines. The couldNotCheck-vs-rows-vs-hero outcome ALONE discriminates the hypotheses even without the log."
+      "resume": "Root-cause fix merged at 65b1c5d: fireTransition(from:) at all three policy mutation sites, became-false delivered via observer self-registration on the gate seam (PersistenceController wiring not needed), and the guard that makes it real — the in-flight fetch's success path no longer overwrites the honest deferral. 903 unit tests; prove receipt 16 assertion-reds in 5/7 against HEAD. Remaining: the owner's cellular observation on build 103, and the owner's 5G-data-mode product call (gate on literal WiFi vs reword the toggle)."
     }
   ]
 }

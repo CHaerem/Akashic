@@ -27,7 +27,7 @@ node scripts/workplan.mjs next
 
 | Task | Agent | Branch | Stopped at |
 |---|---|---|---|
-| `DIFF-16` DIFF-15 on a real device: the prompt worked, the rows did not — and the failure is undiagnosable by design | diff16-agent | `agent/diff16` | Code merged at 22b433b and gate-verified (890 unit / 14 UI green, Release-CloudKit builds, prove receipt: 37 assertion-reds in 12/12 against HEAD). Remaining: the MANUAL device observation — next TestFlight build, sync-logging toggle on, reproduce, paste the remoteJourneySummaries Console lines. The couldNotCheck-vs-rows-vs-hero outcome ALONE discriminates the hypotheses even without the log. |
+| `DIFF-16` DIFF-15 on a real device: the prompt worked, the rows did not — and the failure is undiagnosable by design | diff16-agent | `agent/diff16` | Root-cause fix merged at 65b1c5d: fireTransition(from:) at all three policy mutation sites, became-false delivered via observer self-registration on the gate seam (PersistenceController wiring not needed), and the guard that makes it real — the in-flight fetch's success path no longer overwrites the honest deferral. 903 unit tests; prove receipt 16 assertion-reds in 5/7 against HEAD. Remaining: the owner's cellular observation on build 103, and the owner's 5G-data-mode product call (gate on literal WiFi vs reword the toggle). |
 
 ## LEGACY
 
