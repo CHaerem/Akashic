@@ -1,0 +1,35 @@
+{
+  /* QUA-42 — type-check the Playwright suite, which nothing static looked at.
+   *
+   * `tsconfig.json` is `"include": ["src"]` and `eslint.config.js` had `globalIgnores(['e2e'])`, so 2 448
+   * lines across 7 spec and helper files were verified by exactly one thing: being executed. That is a worse
+   * gap than it sounds, because of what QUA-40 found inside them — a helper file imported by no spec, a
+   * lightbox assertion whose selector matched nothing in `src/` so its guard was permanently false, and ten
+   * `test.skip()` escapes that let 8 of 9 tests skip in silence. Every one of those is what an unused-symbol
+   * check or a type error surfaces instantly, and none of them could fail a RUN: they made the run pass
+   * while doing less.
+   *
+   * A separate file rather than widening `include`, and the reason is concrete rather than tidiness: the
+   * specs need Playwright's globals and `@playwright/test`'s own types, while `src/` needs Vitest's and
+   * jest-dom's. Merging the two `types` arrays puts `test`/`expect` from both frameworks in one global scope,
+   * and the first thing that breaks is a spec silently resolving Vitest's `expect` — which has no
+   * `toHaveScreenshot` and would fail in a way that reads as a Playwright problem.
+   *
+   * Run by `npm run typecheck`, so there is one command and no second thing to remember.
+   */
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    /* Playwright's types only. Deliberately NOT inheriting the parent's Vitest + jest-dom list — see above.
+       `@playwright/test` ships its own globals, so this is the whole ambient surface the specs need. */
+    "types": ["node", "@playwright/test"],
+
+    /* The specs run in Node against a browser they drive remotely, so DOM lib is still needed: every
+       `page.evaluate` callback body is type-checked as browser code inside this project. */
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "noEmit": true
+  },
+  "include": ["e2e", "playwright.config.ts"]
+}

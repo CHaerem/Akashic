@@ -10,11 +10,17 @@ export default defineConfig([
   // "tsc handles TypeScript" — which meant `eslint .` inspected ~20 JavaScript files and zero of
   // the 144 .ts/.tsx files under src/ (both counts measured). tsc checks types; it does not catch
   // unused vars, bad hook deps, or `any` creep. With TS included the run covers 171 files.
-  // e2e/ is Playwright's and has its own tsconfig, so it stays out of the type-aware program.
   // scripts/mapkit/imagery-compare/tokens.js is GENERATED (by tokens.mjs) and gitignored — but eslint's
   // flat config does not read .gitignore, so without this line the harness's generated browser globals
   // fail `no-undef` and put the lint gate at 1 error the moment anyone runs the imagery comparison.
-  globalIgnores(['dist', 'e2e', 'dev-dist', 'coverage', 'scripts/mapkit/imagery-compare/tokens.js']),
+  //
+  // QUA-42: `e2e` USED TO BE ON THIS LIST and is not any more. Between that and tsconfig's
+  // `"include": ["src"]`, 2 448 lines across 7 spec and helper files were checked by exactly one thing —
+  // being executed. QUA-40 found what hides there: a helper file imported by no spec, a lightbox assertion
+  // whose selector matched nothing in `src/` so its guard was permanently false, and ten `test.skip()`
+  // escapes that let 8 of 9 tests skip in silence. All three are what an unused-symbol check surfaces in a
+  // second, and none of them could fail a RUN — they made the run pass while doing less.
+  globalIgnores(['dist', 'dev-dist', 'coverage', 'scripts/mapkit/imagery-compare/tokens.js']),
   // Node.js scripts
   {
     files: ['scripts/**/*.{js,mjs}', 'vite.config.js'],
@@ -123,6 +129,36 @@ export default defineConfig([
       'react-hooks/immutability': 'warn',
       'react-hooks/set-state-in-effect': 'warn',
       'react-hooks/preserve-manual-memoization': 'warn',
+    },
+  },
+  // The Playwright suite. Its own block because the specs are Node code that drives a browser: they need
+  // node globals for the runner and browser globals for every `page.evaluate` callback body, and neither
+  // set alone is right. Type-aware checking lives in `tsconfig.e2e.json`, kept separate from `tsconfig.json`
+  // so Vitest's and Playwright's `test`/`expect` globals never share one scope — a spec silently resolving
+  // Vitest's `expect` would lose `toHaveScreenshot` and fail in a way that reads as a Playwright problem.
+  {
+    files: ['e2e/**/*.ts', 'playwright.config.ts'],
+    extends: [js.configs.recommended, tseslint.configs.recommended],
+    languageOptions: {
+      ecmaVersion: 2022,
+      globals: { ...globals.node, ...globals.browser },
+      sourceType: 'module',
+    },
+    rules: {
+      'no-unused-vars': 'off',
+      // THE RULE THIS BLOCK EXISTS FOR. An unused import or helper in a spec file is the signature of the
+      // QUA-40 defects: `e2e/utils/test-helpers.ts` was imported by no spec at all, and dead assertion
+      // bodies leave their locals behind. No `varsIgnorePattern` beyond the underscore convention, because a
+      // spec has no legitimate reason to declare something it does not use.
+      '@typescript-eslint/no-unused-vars': ['error', {
+        varsIgnorePattern: '^_',
+        argsIgnorePattern: '^_',
+        caughtErrorsIgnorePattern: '^_',
+      }],
+      // Playwright's `page.evaluate` returns `unknown`-ish shapes that genuinely need narrowing, and the
+      // specs already do that with declared types (see e2e/mapkit-window.d.ts). Kept an error so they keep
+      // doing it: `any` in a test is how an assertion stops asserting the thing it names.
+      '@typescript-eslint/no-explicit-any': 'error',
     },
   },
   // NOTE: there is deliberately no relaxed override block for *.test.ts(x). The obvious one to
