@@ -55,7 +55,13 @@ fi
 # is what `grep -rn verifyExport docs/` does and what this must not block. Neither script appears in
 # any task's `verify` list (checked), so nothing in the ledger needs this to be permissive.
 if printf '%s' "$cmd" | grep -Eq 'testflight-upload\.sh|verifyExport\.ts'; then
-  first=$(printf '%s' "$cmd" | awk '{print $1}')
+  # NR==1 is load-bearing: plain `awk '{print $1}'` prints the first field of EVERY line, so a
+  # multi-line command produced a multi-line "$first" that matched no case pattern — and the guard
+  # then blocked a read-only `head` because a `grep` on the NEXT line polluted the token. Found by
+  # being bitten: the guard refused an inspection it explicitly promises to allow. It also blocked
+  # the command that FIXED it (the heredoc carries the guarded string), which is what GUARD_OK=1
+  # is for.
+  first=$(printf '%s' "$cmd" | awk 'NR==1{print $1}')
   case "$first" in
     grep|rg|cat|head|tail|less|wc|ls|find|git|awk|sed|echo|python3) exit 0 ;;
   esac
