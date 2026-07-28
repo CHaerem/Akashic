@@ -27,10 +27,11 @@ import XCTest
 /// removes the check for every future screen too. Findings land in one of three buckets, and which
 /// bucket is the whole of the triage:
 ///
-///   1. **Fixed in the view.** Six sub-44 pt hit targets: four on the paywall (including "Restore
-///      purchases" at 131 × 18 pt) and two on the create-journey review screen (including
-///      "Remove day 1" at 17 × 17 pt, which deletes a day). After those fixes, `hitRegion` reports
-///      nothing app-owned on any of these screens.
+///   1. **Fixed in the view.** Seven sub-44 pt hit targets: four on the paywall (including "Restore
+///      purchases" at 131 × 18 pt), two on the create-journey review screen (including
+///      "Remove day 1" at 17 × 17 pt, which deletes a day), and one — QUA-55 — on `DraftMapCard`'s
+///      "Route options" menu at 104.5 × 14.5 pt, the only way to replace or remove a route. After
+///      those fixes, `hitRegion` reports nothing app-owned on any of these screens.
 ///   2. **Excused by `deliberate(_:)`**, which names the element and the reason. Two entries, both
 ///      MapKit's own drawing rather than anything in the app's view tree.
 ///   3. **Reported but not enforced** — see `audit(_:screen:)`, which explains exactly which three
@@ -83,6 +84,24 @@ final class AccessibilityAuditTests: AkashicUITestCase {
     /// The create-journey flow, both phases. One test rather than two because phase 2 is only
     /// reachable through phase 1, so splitting them would double the launch cost to audit the same
     /// two hierarchies.
+    ///
+    /// **QUA-55: this test's result depends on the DESTINATION, and that is how a real defect hid.**
+    /// `DraftMapCard`'s "Route options" menu was 14.5 pt tall and this test passed anyway from the day
+    /// the audit landed, because every run had happened to pick an iPhone. Measured on one commit,
+    /// both directions: on iPad (A16) phase 2 reports 24 findings and the menu's button sits at
+    /// y = 143; on iPhone 17 Pro it reports 13 and the same button sits at **y = −113** — tapping
+    /// "Add day" scrolls the ROUTE field off the top, so the control was not merely passing there, it
+    /// was never examined. The topmost element iPhone reports is COUNTRY, the field *below* ROUTE,
+    /// which is the tell.
+    ///
+    /// This is QUA-56's lesson a second time and it is worth stating as a rule: **the audit's coverage
+    /// is exactly as deep as the tests scroll, and exactly as wide as the destinations they run on.**
+    /// QUA-56 found the same shape vertically — the bottom of Settings had never been audited, and
+    /// scrolling to it immediately found a real `.sufficientElementDescription` defect. So a green run
+    /// on one simulator is not evidence about any other, and the reported-only totals in
+    /// `audit(_:screen:)` are per-destination rather than absolute. Note that CI's `ids[-1]` picks an
+    /// iPhone SE, which is the shortest screen and therefore audits *less* of this form than either
+    /// device above: run a tall destination too before believing this suite is clean.
     func testCreateJourneyFlowClearsTheEnforcedAudit() throws {
         let app = launchApp(["AKASHIC_EMPTY": "1"])
         require(app.buttons[ID.globeCreateFirstJourney], "the empty globe's call to action").tap()
@@ -133,12 +152,14 @@ final class AccessibilityAuditTests: AkashicUITestCase {
     ///     asserted.
     ///   * `.trait` — a control that does not announce as one. Also zero, which is `PhotosPicker`'s
     ///     hand-added `.isButton` trait actually holding at runtime.
-    ///   * `.hitRegion` — a target under 44 × 44 pt. Found **six** real defects across two files,
-    ///     not one: "Restore purchases" at 131 × 18 pt and the store-unreachable retry at
-    ///     90 × 19.7 pt in `PaywallView`, and "Edit dates" at 23 × 14 pt plus **"Remove day 1" at
-    ///     17 × 17 pt — a control that deletes a day** in `NewJourneySheet`. All six are fixed with
-    ///     `.frame(minWidth/minHeight: 44)` and a `contentShape`, because growing the frame without
-    ///     the shape leaves the extra area untappable and the audit still passing.
+    ///   * `.hitRegion` — a target under 44 × 44 pt. Found **seven** real defects across three
+    ///     files, not one: "Restore purchases" at 131 × 18 pt and the store-unreachable retry at
+    ///     90 × 19.7 pt in `PaywallView`; "Edit dates" at 23 × 14 pt plus **"Remove day 1" at
+    ///     17 × 17 pt — a control that deletes a day** in `NewJourneySheet`; and **"Route options" at
+    ///     104.5 × 14.5 pt — a menu that replaces or removes the route** in `DraftMapCard` (QUA-55).
+    ///     All seven are fixed with `.frame(minWidth/minHeight: 44)` and a `contentShape`, because
+    ///     growing the frame without the shape leaves the extra area untappable and the audit still
+    ///     passing.
     ///   * `.elementDetection` — pixels that look like text with no element behind them.
     static let enforced: XCUIAccessibilityAuditType = [
         .sufficientElementDescription, .trait, .hitRegion, .elementDetection,
