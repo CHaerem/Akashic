@@ -3953,7 +3953,8 @@
         "MANUAL: on the next TestFlight build, enable sync logging in dev tools (seven taps on the version row), reproduce the cellular fresh-install state, and read the remoteJourneySummaries lines in Console.app — paste them into this task"
       ],
       "notes": [
-        "2026-07-28 SEQUENCING: the log toggle (fix 1) ships FIRST and alone if needed — every other fix is a guess until the owner's device can say which hypothesis is true. Resist fixing (a)-(c) blind."
+        "2026-07-28 SEQUENCING: the log toggle (fix 1) ships FIRST and alone if needed — every other fix is a guess until the owner's device can say which hypothesis is true. Resist fixing (a)-(c) blind.",
+        "2026-07-28 BUILD 102 ON DEVICE, THIRD OUTCOME — neither rows, couldNotCheck, nor the hero-while-deferred: Settings shows Syncing (last update 15 sec ago), Library 0/0, Download-over-WiFi-only ON, connection 5G. The phone is NOT deferring at all: NetworkPolicy gates on NWPath.isExpensive, and iOS with 5G in the Allow-More-Data-on-5G data mode reports the path as NOT expensive — apps are told to treat it like WiFi. Two findings follow. (1) The toggle does not deliver what its label promises on 5G: either gate on interface type == .wifi literally, or the copy must tell the 5G truth. Owner call — Apple's own signal says this connection can take the download, and honoring it is defensible; lying about it is not. (2) The downloading state ships wired to the DEFERRED path only: on this direct-fetch first sync the list shows the first-run hero while the engine works — Settings says Syncing, the list says empty. The state should key on the engine actually fetching with an empty store, not on how the fetch was released. Build 101's prompt-but-no-rows remains unexplained (that session WAS deferred); the log toggle exists for its recurrence."
       ],
       "claim": {
         "agent": "diff16-agent",
