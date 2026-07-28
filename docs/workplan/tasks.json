@@ -3998,7 +3998,7 @@
       "priority": 9,
       "deps": [],
       "track": "QUALITY",
-      "status": "TODO",
+      "status": "DONE",
       "owner": false,
       "title": "The accessibility audit times out on slow runners and blocks the release pipeline — twice in one day",
       "done_when": "performAccessibilityAudit's framework timeout (NSError code -56, Audit failed to complete in time) is retried a bounded number of times inside the audit helper, so a slow runner costs seconds instead of a manual rerun of a 15-minute job.",
@@ -4010,7 +4010,41 @@
         "cd apple && xcodegen generate",
         "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,name=iPhone 17 Pro\" CODE_SIGNING_ALLOWED=NO -only-testing:AkashicUITests/AccessibilityAuditTests test > /tmp/qua60.log 2>&1 && grep -q \"with 0 failures\" /tmp/qua60.log",
         "grep -q \"Code=-56\\|failed to complete in time\" apple/AkashicUITests/AccessibilityAuditTests.swift  # the retry names the exact error it absorbs"
-      ]
+      ],
+      "claim": {
+        "agent": "opus5-main",
+        "branch": "main",
+        "at": "2026-07-28"
+      },
+      "verification": {
+        "at": "2026-07-28T16:23:18.251Z",
+        "head": "7fbbd3e",
+        "ran": [
+          {
+            "command": "cd apple && xcodegen generate",
+            "ok": true,
+            "ms": 92,
+            "status": 0,
+            "signal": null
+          },
+          {
+            "command": "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,name=iPhone 17 Pro\" CODE_SIGNING_ALLOWED=NO -only-testing:AkashicUITests/AccessibilityAuditTests test > /tmp/qua60.log 2>&1 && grep -q \"with 0 failures\" /tmp/qua60.log",
+            "ok": true,
+            "ms": 78879,
+            "status": 0,
+            "signal": null
+          },
+          {
+            "command": "grep -q \"Code=-56\\|failed to complete in time\" apple/AkashicUITests/AccessibilityAuditTests.swift  # the retry names the exact error it absorbs",
+            "ok": true,
+            "ms": 27,
+            "status": 0,
+            "signal": null
+          }
+        ],
+        "attested": []
+      },
+      "evidence": "Merged inline: audit(_:screen:) wraps auditOnce in a three-attempt loop that retries ONLY NSError domain com.apple.xcode.xctest.accessibilityAudit code -56 — findings are returned through the issue handler while this error is thrown by the machinery, so the retry cannot mask a finding, and every other error propagates on the first throw. Gate green: full AccessibilityAuditTests 7/7 on pinned iPhone 17 Pro (75 s), and the grep confirms the retry names the exact error it absorbs. The real proof is the next slow-runner day; three consecutive -56s today (runs 30367146530, 30374998240 x2) are the baseline it must beat."
     }
   ]
 }

@@ -214,6 +214,33 @@ final class AccessibilityAuditTests: AkashicUITestCase {
     /// the same commit. Nothing else in this file needs to change.
     private func audit(_ app: XCUIApplication, screen: String,
                        file: StaticString = #filePath, line: UInt = #line) throws {
+        // QUA-60: the audit FRAMEWORK times out on loaded CI runners — NSError domain
+        // com.apple.xcode.xctest.accessibilityAudit, code -56, "Audit failed to complete in time" —
+        // and it did so three consecutive times in one day on the heaviest screen (create-journey),
+        // each time blocking the TestFlight pipeline behind a manual rerun of a ~15-minute job. A
+        // bounded retry on EXACTLY that error cannot mask a finding: findings are RETURNED through
+        // the issue handler, this error is THROWN by the machinery, and every other error still
+        // propagates on the first throw. Three attempts total; a runner too slow for three is a
+        // runner problem the log will now name precisely.
+        let auditTimedOut: (Error) -> Bool = { error in
+            let e = error as NSError
+            return e.domain == "com.apple.xcode.xctest.accessibilityAudit" && e.code == -56
+        }
+        var attempt = 1
+        while true {
+            do {
+                try auditOnce(app, screen: screen, file: file, line: line)
+                return
+            } catch where auditTimedOut(error) && attempt < 3 {
+                print("[a11y audit] \(screen): framework timeout (code -56) on attempt \(attempt) — retrying")
+                attempt += 1
+            }
+        }
+    }
+
+    /// One audit pass — the retry wrapper above owns the -56 loop, nothing else changed.
+    private func auditOnce(_ app: XCUIApplication, screen: String,
+                           file: StaticString, line: UInt) throws {
         var failures: [String] = []
         var reported: [String] = []
 
