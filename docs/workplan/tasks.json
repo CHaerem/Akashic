@@ -2663,7 +2663,7 @@
         ".github/workflows/deploy-pages.yml"
       ],
       "track": "QUALITY",
-      "status": "WIP",
+      "status": "DONE",
       "notes": [
         "2026-07-27: minter written and green (26 tests, scripts/mapkit/mintToken.test.mjs) -- a generated P-256 key proves everything except \"does Apple accept it\", which needs the real key and is MAP-04. Workflow wiring is the remaining half and wants MAP-03 landed first so there is something to authenticate.",
         "2026-07-27: rewritten against Apple's DocC source after a research pass found THREE defects in the first version, two of which would have minted a token that signs cleanly and 401s. (1) No \"scope\" claim at all; Apple requires it and the browser SDK needs \"mapkit_js\". (2) The origin validator ENFORCED a scheme, so it threw on \"akashic.no\" -- the documented value -- and accepted \"https://akashic.no\", which Apple documents nowhere. That guard's own justification was the CloudKit trailing-slash trap: same word, two Apple services, opposite formats. (3) \"origin\" was optional; Apple requires it for any browser scope. 45 tests now, up from 26, pinning both directions of the origin format. See the new CLAUDE.md trap.",
@@ -2679,7 +2679,21 @@
         "branch": "claude/remote-control-project-review-9462c1",
         "at": "2026-07-27"
       },
-      "resume": "minter + health guard done and locally proven; the deploy-step wiring wants MAP-03 landed first"
+      "verification": {
+        "at": "2026-07-28T12:14:34.288Z",
+        "head": "a7d0d64",
+        "ran": [
+          {
+            "command": "npx vitest --run scripts/mapkit/mintToken.test.mjs",
+            "ok": true,
+            "ms": 1468,
+            "status": 0,
+            "signal": null
+          }
+        ],
+        "attested": []
+      },
+      "evidence": "The work has been live for a day and is measured in production: deploy-pages.yml mints per deploy (the 'Mint the MapKit JS token' step), asserts the bundle carries cdn.apple-mapkit.com and no Mapbox origin, and today's deployed AkashicApp chunk contains the CDN string (measured x1). mintToken.test.mjs green (gate PASS): the ieee-p1363 64-byte signature assertion and the origin refusals both hold. mapkit-token.yml proves credential health without gating. The task stayed WIP only because the map-track close-out never released it — the ledger entry was the missing half, not the work."
     },
     {
       "id": "MAP-04",
@@ -3412,7 +3426,7 @@
       "priority": 3,
       "deps": [],
       "track": "SHIP",
-      "status": "TODO",
+      "status": "DONE",
       "owner": false,
       "title": "Universal Links are dead in production — the Pages artifact carries no dot-path at all",
       "done_when": "https://akashic.no/.well-known/apple-app-site-association returns 200 with an applinks document, and the deploy asserts it after every push so it cannot silently regress.",
@@ -3436,34 +3450,34 @@
         "2026-07-28 HOW IT HID FOR SO LONG: SHIP-07 closed on a verify list that grepped the entitlements file and never fetched the URL iOS reads, and LEG-09 carried `curl -s <that URL> | head -5` — written to catch exactly this, and incapable of failing because its exit status was `head`'s. Making the ledger's entries capable of failing is what surfaced it. `public/.DS_Store` was tracked too, and was untracked in the same commit."
       ],
       "verification": {
-        "at": "2026-07-28T08:22:09.875Z",
-        "head": "35b1b0d",
+        "at": "2026-07-28T12:14:36.806Z",
+        "head": "a7d0d64",
         "ran": [
           {
             "command": "test -f public/apple-app-site-association",
             "ok": true,
-            "ms": 20,
+            "ms": 24,
             "status": 0,
             "signal": null
           },
           {
             "command": "grep -q applinks public/apple-app-site-association",
             "ok": true,
-            "ms": 14,
+            "ms": 19,
             "status": 0,
             "signal": null
           },
           {
             "command": "npm run build && test -f dist/apple-app-site-association",
             "ok": true,
-            "ms": 2371,
+            "ms": 2344,
             "status": 0,
             "signal": null
           },
           {
             "command": "grep -q \"apple-app-site-association\" .github/workflows/deploy-pages.yml  # the post-deploy assertion exists",
             "ok": true,
-            "ms": 29,
+            "ms": 28,
             "status": 0,
             "signal": null
           }
@@ -3474,7 +3488,9 @@
             "text": "read the Deploy to GitHub Pages run for the commit that lands this — the step \"Assert the served site serves an applinks document\" must be green. It cannot run until a push to main happens."
           }
         ]
-      }
+      },
+      "attestation": "Watched the assert step's output in run 30342131767 after the corrected fix (root-location AASA; .nojekyll disproven as cause by the artifact tar carrying zero dot-paths), and re-measured from a second vantage point with curl: HTTP 200, applinks present, .well-known still 404 as expected.",
+      "evidence": "Repo half merged at b23278b and verified by the gate (4/4 runnable green on the merged tree). The production observation happened today: deploy run 30342131767 step 'Assert the served site serves an applinks document' printed 'served: https://akashic.no/apple-app-site-association' and 'ok (attempt 1)', and an independent curl from this machine returned 200 with the applinks body. The device half (does iOS accept application/octet-stream from Pages) is deliberately NOT claimed here — it is on SHIP-15's checklist."
     },
     {
       "id": "SHIP-25",
