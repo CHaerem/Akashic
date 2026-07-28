@@ -264,8 +264,26 @@ ASSET-list of thumbs (D9 quota reasoning):**
 All 3 current journeys are `is_public = true`, so the first publish creates 3
 `PublicJourney` + ~1538 `PublicPhoto` records.
 
-Public identity/write model: only the owner writes the public mirror
-(`GRANT WRITE TO "_creator"`); the world only reads it.
+Public identity/write model — **read both grants, not one.** Every public type carries three, and
+this document previously quoted only the middle one and drew a conclusion the schema does not
+support:
+
+```
+GRANT WRITE TO "_creator",     -- only the record's creator may MODIFY it
+GRANT CREATE TO "_icloud",     -- ANY authenticated Apple ID may CREATE one
+GRANT READ TO "_world"         -- anyone may read it, signed in or not
+```
+
+So a stranger cannot alter our records, and **can add their own.** `PublicJourney` is world-readable
+and `_icloud`-creatable, and `src/lib/journeys/adapters/cloudkit/publicAdapter.ts` queries the type
+with no creator filter, so anything anybody creates renders on the globe at akashic.no. The
+marketing surface is defaceable by any Apple ID, and the public database is billed to us rather than
+to the customer, so the cost line is ours too.
+
+That is `SHIP-20`, and it is open. The cheap fix is a filter on `created.userRecordName` — the field
+is already typed in the adapter — but the decision is the owner's, because filtering client-side
+still lets a stranger's records exist and be billed. Do not read `GRANT WRITE TO "_creator"` on its
+own as "only the owner writes the public mirror"; that reading is how this shipped.
 
 ---
 

@@ -181,6 +181,18 @@ export async function fetchPublicJourneys(): Promise<{
     let records: CloudKitJS.Record[];
     try {
         const db = await getPublicDatabase();
+        // SHIP-20 — THIS QUERY HAS NO CREATOR FILTER, AND THE RECORD TYPE IS `_icloud`-CREATABLE.
+        // `apple/CloudKit/schema.ckdb` grants every public type `GRANT WRITE TO "_creator"` *and*
+        // `GRANT CREATE TO "_icloud"`, so any Apple ID can create a `PublicJourney` that this line
+        // then fetches and the globe renders at akashic.no. A stranger cannot modify our records;
+        // they can add their own. The public database is billed to us, not to the customer, so the
+        // traffic is our cost line too.
+        //
+        // The cheap half of the fix belongs here: filter on `created.userRecordName`, which is
+        // already typed on the record. It is deliberately NOT applied yet, because client-side
+        // filtering still lets a stranger's records exist and be billed, and choosing between that
+        // and a schema change is the owner's call. Do not "tidy" this comment away — it is the only
+        // marker on the defect at the line that carries it.
         records = await performQueryAll(db, { recordType: PUBLIC_JOURNEY_TYPE });
     } catch (err) {
         console.error('[cloudkit] Error fetching public journeys:', err);

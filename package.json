@@ -24,7 +24,8 @@
     "generate-og-image": "node scripts/generateOgImage.js",
     "import-gpx": "node scripts/importGpx.js",
     "view-routes": "node scripts/viewRoutes.js",
-    "prepare": "husky"
+    "prepare": "husky",
+    "prove": "node scripts/prove.mjs"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.15",

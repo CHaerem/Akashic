@@ -6,13 +6,16 @@ face of `akashic.no`. **All data lives in Apple CloudKit.** There is no backend 
 database to operate, and no server to run.
 
 > **Read this before you delete anything.** This document describes what exists on
-> **2026-07-26**. [`WORKPLAN.md`](./WORKPLAN.md) is the only authoritative statement of status;
+> **2026-07-28**. [`WORKPLAN.md`](./WORKPLAN.md) is the only authoritative statement of status;
 > where the two disagree, the ledger wins. The `LEG-*` track in the ledger is the ordered
-> decommission plan, and its dependency edges are load-bearing — `LEG-11` (deleting the
-> Cloudflare Pages project, the R2 bucket, the DNS zone, Supabase and the Google OAuth config)
-> is gated on `LEG-09`, the GitHub Pages + DNS cutover, because **akashic.no still resolves
-> through Cloudflare DNS to Cloudflare Pages today**. Deleting the DNS zone before the cutover
-> takes the site down.
+> decommission plan, and its dependency edges are load-bearing.
+>
+> The cutover has happened: **akashic.no resolves through Domeneshop DNS to GitHub Pages** and
+> Cloudflare is out of the serving path. So `LEG-11A` (the Cloudflare Pages project and DNS zone)
+> is now safe on the hosting side. What still gates deletion is **data, not serving**: `LEG-11B`
+> waits on `LEG-02`/`LEG-03` because 5080 objects in R2 (12.21 GB) exist only there and in the
+> local export, having never been imported. Deleting that bucket destroys the only two copies of
+> real family photographs, and no amount of green CI tells you so.
 
 ---
 
@@ -303,24 +306,28 @@ MapKit has no `map.stop()` to make the problem disappear.
 
 ## Hosting and DNS
 
-**Today:** `akashic.no` resolves through **Cloudflare DNS** to a **Cloudflare Pages** site,
-deployed on every push to `main` by
-[`.github/workflows/deploy.yml`](./.github/workflows/deploy.yml).
+**Today:** `akashic.no` resolves through **Domeneshop DNS** to **GitHub Pages**, deployed on every
+push to `main` by [`.github/workflows/deploy-pages.yml`](./.github/workflows/deploy-pages.yml).
+The site serves HTTPS on its own certificate. `deploy.yml` (Cloudflare) is deleted and Cloudflare
+is out of the serving path entirely.
 
-**Staged:** [`.github/workflows/deploy-pages.yml`](./.github/workflows/deploy-pages.yml) deploys
-the same bundle to GitHub Pages. It is deliberately `workflow_dispatch`-only so the two hosts
-never build the same commit in parallel. `public/CNAME` carries `akashic.no`; `404.html` is
-copied from `index.html` in CI and never committed (the app has no client-side router —
-navigation is `?journey=&day=` query params).
+`public/CNAME` carries `akashic.no` — but note that with `build_type: workflow` it does **not** set
+the custom domain; that lives in Settings → Pages and is set. `404.html` is copied from
+`index.html` in CI and never committed (the app has no client-side router — navigation is
+`?journey=&day=` query params). `public/.nojekyll` is load-bearing and easy to mistake for
+clutter: without it Pages serves **no path beginning with a dot**, which silently 404s
+`/.well-known/apple-app-site-association` and kills every Universal Link while every build-side
+check stays green. `deploy-pages.yml` asserts the served file after deploying, because nothing on
+the build side can see this.
 
-**The cutover** is `LEG-09` (= migration tasks T4.2 + T4.3): configure the custom domain, run
-the Pages workflow, verify with a hosts override or `curl --resolve` (**not** on the
-`github.io` URL — once a custom domain is set it 301s to `akashic.no`, which still resolves to
-Cloudflare, and `base: "/"` breaks the subpath render anyway), then flip DNS at the registrar,
-switch the workflow trigger to `push`, and delete `deploy.yml`. Rollback is re-pointing DNS.
-The full sequence is [`docs/github-pages-cutover.md`](./docs/github-pages-cutover.md).
+Only `main` may deploy — the `github-pages` environment carries a deployment branch policy, so a
+`workflow_dispatch` run from a branch builds successfully and then fails at the deploy job. That is
+a permissions setting, not a broken workflow.
 
-Only after that does deleting the Cloudflare DNS zone and Pages project become safe.
+**What remains** is `LEG-11A`/`LEG-11B`: deleting the now-unused Cloudflare Pages project and DNS
+zone, and `LEG-10B`, revoking the four dead credentials. Both are owner tasks. The historical
+cutover sequence is kept in
+[`docs/github-pages-cutover.md`](./docs/github-pages-cutover.md).
 
 ---
 
@@ -345,8 +352,12 @@ CI secrets still in use: `MAPKIT_PRIVATE_KEY` (the Apple `.p8`, plus the `MAPKIT
 `MAPKIT_TEAM_ID` repo *variables*) — `deploy-pages.yml` and `e2e.yml` mint a fresh token per run rather
 than storing one, so the token's lifetime is never load-bearing. `VITE_MAPBOX_TOKEN` is no longer read by
 any workflow after `MAP-05`; **revoking the Mapbox account key itself is the owner's outstanding task**,
-and `scripts/mapkit/imagery-compare/` is the one thing that still uses it. `CLOUDFLARE_API_TOKEN` and
-`CLOUDFLARE_ACCOUNT_ID` are used only by `deploy.yml` and are revoked in `LEG-10`.
+and `scripts/mapkit/imagery-compare/` is the one thing that still uses it. `CLOUDFLARE_API_TOKEN`
+and `CLOUDFLARE_ACCOUNT_ID` are read by nothing now that `deploy.yml` is deleted — they are still
+*present* in the repository settings, and `LEG-10B` is the owner task that deletes them and then
+revokes the tokens at the provider. Those are two separate acts: deleting the secret stops CI from
+holding the credential, revoking is what makes the credential dead, and only the second one matters
+if it has already leaked.
 
 ---
 

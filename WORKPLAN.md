@@ -5,7 +5,7 @@
 
 # Akashic — work ledger
 
-138 tasks · **27 open** (3 agent-doable, 0.9 dev-days · 24 owner-only, 10.4 dev-days) · 111 done · 0 dropped
+141 tasks · **30 open** (5 agent-doable, 1.5 dev-days · 25 owner-only, 10.6 dev-days) · 111 done · 0 dropped
 
 > **`dev-days` are a human-developer estimate, not agent time.** They came from the review
 > that produced these tasks and they are the right unit for deciding whether something is
@@ -15,7 +15,7 @@
 > Measured so far: **106 agent tasks estimated at 73.2 dev-days**.
 > Elapsed time is deliberately absent: nothing here can support it. Use `git log` for that.
 >
-> **Every large agent item is closed.** 9 of the tasks closed so far were 2 dev-days or more; nothing 2 dev-days or larger remains agent-doable, and the 0.9 remaining dev-days are all small tasks (3 at 0.5 or less). What is still genuinely large is OWNER work, which no amount of agent compression touches.
+> **Every large agent item is closed.** 9 of the tasks closed so far were 2 dev-days or more; nothing 2 dev-days or larger remains agent-doable, and the 1.5 remaining dev-days are all small tasks (5 at 0.5 or less). What is still genuinely large is OWNER work, which no amount of agent compression touches.
 
 Read [CLAUDE.md](CLAUDE.md) before touching anything. To find work:
 
@@ -90,7 +90,7 @@ node scripts/workplan.mjs next
 
 > Hard requirements for a paid v1.0. Most of the remaining calendar time lives here, in items only the owner can do.
 
-13 open of 24 · 6.8 d remaining
+15 open of 26 · 7.3 d remaining
 
 | | Task | Days | Who | Deps | Finish line |
 |---|---|---|---|---|---|
@@ -118,6 +118,8 @@ node scripts/workplan.mjs next
 | ` ` | `SHIP-21` **Request the Private Cloud Compute entitlement — it is a review, not a toggle** | 0.1 | owner | — | The entitlement request is submitted to Apple. |
 | ` ` | `SHIP-22` **Recruit the ten beta households — the longest lead time nobody owned** | 0.5 | owner | — | A written list of at least ten households who have agreed, with names and a start date. |
 | ` ` | `SHIP-23` **Nominate the app for Apple featuring, and treat it as launch strategy rather than a lottery ticket** | 0.2 | owner | — | A featuring nomination is submitted in App Store Connect. |
+| ` ` | `SHIP-24` **Universal Links are dead in production — GitHub Pages serves no dot-path without .nojekyll** | 0.3 | agent | — | https://akashic.no/.well-known/apple-app-site-association returns 200 with an applinks document, and the deploy asserts it after every push so it cannot silently regress. |
+| ` ` | `SHIP-25` **Rotate the MapKit key that passed through a chat upload** | 0.2 | owner | — | A second Maps key is registered, MAPKIT_PRIVATE_KEY holds it, the Credential health check is green on main, and key 9UN97VBZR8 shows as revoked in the Apple Developer account. |
 
 ## DIFF
 
@@ -146,7 +148,7 @@ node scripts/workplan.mjs next
 
 > Tests, types, CI, localisation, accessibility. Localisation and accessibility are in v1.0 by decision.
 
-5 open of 61 · 1.6 d remaining
+6 open of 62 · 1.9 d remaining
 
 | | Task | Days | Who | Deps | Finish line |
 |---|---|---|---|---|---|
@@ -211,6 +213,7 @@ node scripts/workplan.mjs next
 | `x` | `QUA-52` **scripts/prove.mjs — make "this test can actually fail" mechanical instead of remembered** | 0.4 | agent | — | A defect fix can be proven red-against-the-revert and green-on-HEAD with one command, in a throwaway worktree that cannot leak into the tree being committed from. |
 | `x` | `QUA-53` **The ledger never ran its own verify list, and four CLAUDE.md rules were enforced only by memory** | 0.5 | agent | — | `workplan done` refuses a task whose runnable checks have not passed, and the rules that have already cost real time are enforced by the harness rather than remembered by the agent. |
 | `x` | `QUA-54` **A fresh-context verifier agent, because the implementer certifying its own tests is how three defects shipped green** | 0.2 | agent | `QUA-53` | The multi-model division of labour is written down where agents read it, and the verifier cannot edit what it judges. |
+| ` ` | `QUA-55` **A 14.5 pt tap target on iPad, and the reason no run had ever seen it** | 0.3 | agent | — | AccessibilityAuditTests passes on an iPad destination as well as an iPhone one, and the two entries that assert layout pin their device instead of taking whichever simulator is last. |
 
 ## Decisions on record
 

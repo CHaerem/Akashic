@@ -54,6 +54,23 @@ Then commit what you have, even if incomplete, behind a flag or as a clearly-mar
 commit. **Never leave work only in an uncommitted worktree.** A fresh agent reads
 `WORKPLAN.md`, sees the claim and the note, and continues. That is the whole recovery story.
 
+**If the work is meant to run unattended, the turn that accepts it must START it.** Given an
+overnight instruction I once replied with a plan and launched nothing; nine hours passed with nothing
+done and no error anywhere, because an ordinary turn ends when the text is written and a plan is
+indistinguishable from work until the deadline is gone. There is no failure signal — which makes it
+worse than a crash, since a crash would have woken something. Before ending such a turn, check that
+something is actually running, or say plainly that nothing is.
+
+If the task fixes a defect, **prove the regression test can fail** before closing it:
+
+```bash
+npm run prove -- --tests <test file(s)> --revert <product file(s)> [--against <ref>] [--native]
+```
+
+That reverts the product files in a throwaway worktree and requires the new tests to go RED against
+the old code and GREEN against the new. It exists because three suites here shipped green while
+being incapable of failing — see the `verify` section below.
+
 `npm run workplan:check` runs in CI and fails if the ledger is invalid, if two in-flight
 tasks own the same files, or if `WORKPLAN.md` has drifted from `tasks.json`.
 
@@ -145,6 +162,11 @@ If the working agreement or the ledger is missing, you are on an old base. Say s
 work from `apple/README.md`, and expect the merge back to need real conflict resolution.
 
 
+**Removing a worktree directory does not deregister it.** `git worktree list` keeps the entry, and
+plain `git worktree prune` will not remove it either — it honours `gc.worktreePruneExpire`, three
+months by default, so a registration made seconds ago is exempt. Use `git worktree prune --expire
+now`. This repo really does accumulate them; there were seven agent worktrees at one point.
+
 `.env` and `.env.local` are gitignored and live only in the main checkout at
 `/Users/cher/Privat/Akashic/`. `git worktree add` does not copy them. Copy them first:
 
@@ -176,7 +198,7 @@ These are measured, not guessed. Prefer them over inventing your own.
 
 | What | Command | Expected |
 |---|---|---|
-| Native build + tests | `cd apple && xcodegen generate && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination "platform=iOS Simulator,id=$(xcrun simctl list devices available \| grep -o '[0-9A-F-]\{36\}' \| tail -1)" CODE_SIGNING_ALLOWED=NO test` | **843 unit (1 skipped, device-only) + 14 UI tests**, 0 failures (~6 s + ~190 s), measured 2026-07-28. Add `-only-testing:AkashicTests` for the fast unit-only loop; the UI suite relaunches the app per test |
+| Native build + tests | `cd apple && xcodegen generate && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination "platform=iOS Simulator,name=iPhone 17 Pro" CODE_SIGNING_ALLOWED=NO test` | **843 unit (1 skipped, device-only) + 14 UI tests**, 0 failures (~6 s + ~190 s), measured 2026-07-28 **on iPhone**. The destination is pinned by NAME on purpose — the old `\| tail -1` form takes whichever simulator is last, and on iPad the UI suite reports 1 failure (a real 14.5 pt target, `QUA-55`). Add `-only-testing:AkashicTests` for the fast unit-only loop; the UI suite relaunches the app per test |
 | Native coverage | add `-enableCodeCoverage YES -resultBundlePath /tmp/cov.xcresult`, then `xcrun xccov view --report --only-targets /tmp/cov.xcresult` | app 48.4 %; `Views/` 34.4 % (was 30.2 % / 6.0 % before the UI test target — QUA-10) |
 | Built Info.plist | `plutil -p "$(find ~/Library/Developer/Xcode/DerivedData/Akashic-*/Build/Products -name Akashic.app -maxdepth 3 \| head -1)/Info.plist"` | see the trap below |
 | Web unit tests | `npx vitest --run` | **680 tests / 53 files**, ~6 s (measured 2026-07-28). The trail: 452 → 436 (LEG-12 deleted `workers/`) → 414 (LEG-15 deleted the dead `mapMatching`) → 462 → 473 (QUA-40's fixtures) → 566 (MAP-03) → 650 (MAP-02) → 680 (QUA-45/47/48). A FALL here has always been a deletion of dead code, not lost coverage — check `git log` before treating one as a regression. |
@@ -197,6 +219,45 @@ These are durable lessons, not a status report — for status, read `WORKPLAN.md
 generated and cannot drift. If a claim here contradicts a command you just ran, the command is
 right: fix this file in the same commit.
 
+- **`$?`, `&&` and `||` after a pipeline test the LAST stage, so a check that ends in a pipe cannot
+  fail.** `cmd | wc -l` exits 0 whatever it counts; `cmd 2>&1 | grep -c warning:` exits 0 on a build
+  that failed outright, because a failure log is full of the word "warning:". This is not theoretical
+  here: sixteen ledger `verify` entries were written this way, and two of them were hiding real
+  defects the whole time — a 404 on `/.well-known/apple-app-site-association` that killed every
+  Universal Link, and a documentation link to a workflow deleted seven commits earlier. Both printed
+  their finding and exited 0. Put the comparison last (`test "$(… | wc -l)" -eq 12`), redirect to a
+  file instead of piping (`cmd > /tmp/log 2>&1 && test …`), or add `|| { echo …; exit 1; }` inside a
+  loop — and iterate with `for`, because `while read` in a pipeline is a subshell whose `exit` cannot
+  fail the entry. `workplan check` now rejects all three shapes; it found twelve and zero false
+  positives, the ~40 entries whose pipe lives inside `$(xcrun simctl … | tail -1)` being correctly
+  untouched.
+- **A 200 from your own machine is not a verification of a deployed site.** A split-DNS resolver, a
+  VPN or a CDN cache can answer with a stale copy, so the owner's `curl` can pass while every
+  visitor gets the old bundle — and the reverse, a green build-side check on an artefact the host
+  never serves. Two measured instances: GitHub Pages serves **no path beginning with a dot** without
+  `.nojekyll`, so `/.well-known/apple-app-site-association` 404'd in production while the file was
+  committed, copied into `dist/` by Vite, and green in every build-side assertion; and a hosting
+  cutover was once closed on an HTTP check while HTTPS was broken. Assert on the SERVED artefact,
+  from the exact scheme and host a browser would use, and check the CONTENT — a 200 serving the SPA
+  shell is exactly what the broken state looked like.
+- **Deleting a repository secret is not revoking the credential**, and the ledger had to say so twice
+  for two unrelated providers before it became a rule. Deleting the secret stops CI from holding it;
+  revoking at the provider is what makes it dead. Only the second one matters if it has already
+  leaked, and the order is: delete the secret, confirm nothing went red, then revoke.
+- **`npm run workplan:check` cannot see a task that was never added.** It validates what is there,
+  which means a ledger write that silently failed — a zsh parse error killing a compound command is
+  the measured cause — passes the gate while a commit message asserts the task exists. Read the write
+  back (`workplan show <id>`) before claiming it in a commit message.
+- **`--update-snapshots` will NOT rewrite a baseline whose diff is inside `maxDiffPixelRatio`.** So
+  the honest workflow — change a visual surface, regenerate, see success, commit — leaves the old
+  image on disk. Delete the PNGs and let them be recreated.
+- **A grep count is not a usage count.** Comments and tombstones recording a removal inflate it, so
+  "five occurrences remain" can mean the thing is entirely gone. Grep for the usage pattern (an
+  `env:` key, an import, a call) rather than the bare string, and read the hits.
+- **When a comment or doc claim turns out false, correct it in place and keep the refuted claim with
+  the measurement that killed it** — do not delete the sentence. A confidently wrong comment is
+  evidence about how the code misleads people, and the next reader needs to know the question was
+  asked. Same for a deleted symbol: leave a tombstone naming what went and why.
 - **`INFOPLIST_KEY_*` in `apple/project.yml` silently drops keys.** Xcode honours a fixed
   allowlist. `CKSharingSupported` and `UIBackgroundModes` were declared this way and are
   absent from every build shipped so far, which killed CKShare acceptance and push sync.
@@ -230,6 +291,16 @@ right: fix this file in the same commit.
 - **`knownRegions` must be declared in `project.yml`.** XcodeGen infers regions from `.lproj`
   directories and a String Catalog has none, so without it Xcode compiles English only and the app
   falls back with every translation present and unused.
+- **`… | tail -1` picks WHICHEVER simulator is last, so the native suite's device is not pinned —
+  and that hid a real iPad defect for the whole project.** The idiom is in this file's own
+  verification table and in ~40 ledger `verify` entries. Measured 2026-07-28: `tail -1` selected
+  *iPad (A16)*, and `AccessibilityAuditTests.testCreateJourneyFlowClearsTheEnforcedAudit` failed on
+  a "Route options" control at **104.5 × 14.5 pt**; the same test on *iPhone 17 Pro* passed. So the
+  documented "14 UI tests, 0 failures" baseline is true on iPhone and false on iPad, both runs were
+  honest, and nothing was flaky. Two consequences: pin the device when a result has to mean
+  something (`-destination "platform=iOS Simulator,name=iPhone 17 Pro"`), and treat a UI-test result
+  as scoped to the device it ran on. The layout-dependent audit types — `hitRegion` above all —
+  cannot be cleared once and trusted across size classes.
 - **`find DerivedData/Akashic-* | head -1` will hand you another worktree's build.** Xcode keys
   DerivedData by workspace path, so parallel agent worktrees each get their own — there were seven at
   one point. Installing the wrong one wastes real time: the app runs, the screenshot looks plausible,
@@ -345,8 +416,17 @@ right: fix this file in the same commit.
   work — the test can read the `.entitlements` file and assert its contents (see `UniversalLinkTests`),
   which catches drift between the plist and the code, but it cannot observe the capability. Same blind
   spot as the Vision and Intelligence code: anything gated on signing or on a compilation condition is
-  invisible to every tool that does not sign or compile it. The device session (SHIP-15) is the only
-  place these become facts.
+  invisible to every tool that does not sign or compile it.
+
+  **This bullet used to end "the device session (SHIP-15) is the only place these become facts", and
+  that sentence was false — it is corrected rather than deleted because the distinction it missed is
+  the useful part.** An entitlement is not *observable* in a simulator; the feature it gates often
+  still is. SHIP-10B measured the entire publish → public-mirror → signed-out-browser → takedown
+  path in a simulator signed into iCloud, which is exactly the kind of proof the old sentence said
+  was impossible. So the rule is narrower than it looked: ask whether you are testing the
+  *capability* (needs a device) or the *behaviour that depends on it* (often does not). SHIP-15 is
+  still required for CKShare acceptance across two Apple IDs and for push, because those genuinely
+  need two signed installs.
 - **No Vision ML request works in the simulator, so the whole curation feature has never run in CI —
   and it fails SILENTLY.** Measured on iOS 26.5: `VNGenerateImageFeaturePrintRequest`,
   `VNClassifyImageRequest` and `VNCalculateImageAestheticsScoresRequest` all return *"Failed to create

@@ -108,6 +108,59 @@ const runEntry = (text) => {
 const tail = (s, n = 12) => s.trimEnd().split('\n').slice(-n).join('\n');
 const secs = (ms) => (ms < 1000 ? `${ms} ms` : `${(ms / 1000).toFixed(1)} s`);
 
+/**
+ * Reject a verify entry whose exit status cannot express its assertion.
+ *
+ * This rule exists because building the runner created the hole it closes. Executing entries through
+ * `sh -c` made their exit status load-bearing for the first time, and sixteen entries could not
+ * carry that weight — they had been written as things a person would READ, and a reader forgives a
+ * command that prints the answer instead of asserting it. Two of them were hiding real defects the
+ * whole time, both found the moment the entries were made capable of failing:
+ *
+ *   - `curl -s https://akashic.no/.well-known/apple-app-site-association | head -5` — the file was
+ *     404ing in production and Pages was serving the SPA shell, so every Universal Link was dead.
+ *   - `grep -o '(\./[^)]*)' ARCHITECTURE.md | … | while read p; do test -e "$p" || echo DANGLING; done`
+ *     — a link to `.github/workflows/deploy.yml`, deleted seven commits earlier.
+ *
+ * Both printed their finding to a terminal nobody was reading and exited 0.
+ *
+ * The three shapes, and why each is a defect rather than a style:
+ *   1. A trailing pipe into a pure formatter (`wc`, `head`, `tail`, `cat`, `sort`, `tr`, `sed`,
+ *      `awk`, `tee`). Those exit 0 whatever they read, so the entry can NEVER fail. `| wc -l` is
+ *      the commonest and the most convincing, because `# expect 12` beside it reads like a check.
+ *   2. `cmd 2>&1 | grep …`, which masks cmd's own status. Worse than shape 1 rather than better: a
+ *      failing `xcodebuild` still exits 0 through `grep -c warning:`, because a failure log is full
+ *      of the word "warning:".
+ *   3. A `for`/`while` loop that ECHOES a failure with no `exit`. `for d in …; do … || echo MISSING; done`
+ *      is a report, not an assertion.
+ *
+ * The fix in every case is to put the comparison last: `test "$(… | wc -l)" -eq 12`, a redirect to
+ * a file instead of a pipe, or `|| { echo …; exit 1; }` inside the loop. Note `while read` in a
+ * pipeline runs in a SUBSHELL, so an `exit 1` there cannot fail the entry — iterate with `for`.
+ */
+const FORMATTERS = 'wc|head|tail|cat|sort|uniq|tr|sed|awk|tee|column|less|xxd|od';
+const unassertable = (entry) => {
+  // A pipe inside `$(…)` or backticks does not set the command's exit status, and forgetting that
+  // is how a first pass at this rule flagged forty innocent entries: every native-test entry ends
+  // in `$(xcrun simctl list devices available | grep -o … | tail -1)"`, where the pipe is a
+  // subshell producing a UDID and xcodebuild's own status is what `sh -c` reports.
+  let s = entry.split('#')[0];
+  let prev;
+  do { prev = s; s = s.replace(/\$\([^()]*\)/g, 'X'); } while (prev !== s);
+  s = s.replace(/`[^`]*`/g, 'X').trim();
+
+  if (new RegExp(`\\|\\s*(${FORMATTERS})\\b[^|]*$`).test(s)) {
+    return 'ends in a pipe to a formatter, which exits 0 whatever it reads — put the comparison last: test "$(… | wc -l)" -eq N';
+  }
+  if (/2>&1\s*\|/.test(s)) {
+    return 'pipes 2>&1 into a reader, which masks the command\'s own exit status — redirect to a file instead: cmd > /tmp/log 2>&1 && test "$(grep -c … /tmp/log)" -le N';
+  }
+  if (/\b(for|while)\b[^;]*;\s*do\b/.test(s) && /echo/.test(s) && !/\bexit\b/.test(s)) {
+    return 'a loop that echoes a failure without exiting — add || { echo …; exit 1; }, and iterate with `for` because `while read` in a pipeline is a subshell';
+  }
+  return null;
+};
+
 // ---------------------------------------------------------------- validation
 
 // Two tasks collide when their file lists overlap. Globs are compared on their
@@ -155,6 +208,10 @@ function validate(d) {
         errs.push(`${t.id}: an OWNER: verify entry on an agent task — mark the task owner:true or split it out`);
       }
       if (c.kind !== 'run' && !c.text.trim()) errs.push(`${t.id}: a ${c.kind.toUpperCase()}: verify entry says nothing`);
+      if (c.kind === 'run') {
+        const why = unassertable(c.text);
+        if (why) errs.push(`${t.id}: this verify entry cannot fail — ${why}\n      ${c.text}`);
+      }
     }
     if (t.status === 'WIP' && !(t.claim && t.claim.agent && t.claim.branch)) {
       errs.push(`${t.id}: WIP requires claim.agent and claim.branch so it can be picked up`);

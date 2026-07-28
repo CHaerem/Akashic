@@ -81,8 +81,8 @@
       "priority": 2,
       "why": "The entire deletion plan rests on this archive, and it is currently a single unbacked copy on the boot volume. Spotlight sees one AkashicExport path; tmutil reports no Time Machine destination.",
       "verify": [
-        "shasum -a 256 <second-copy>/supabase/*.json  # must match manifest.json",
-        "find <second-copy>/r2/objects -type f | wc -l  # expect 8147"
+        "OWNER: shasum -a 256 <second-copy>/supabase/*.json matches manifest.json",
+        "OWNER: find <second-copy>/r2/objects -type f | wc -l gives 8147"
       ],
       "refs": [
         "/Users/cher/Privat/AkashicExport-20260722 — 16 GiB, created 2026-07-21T21:02Z",
@@ -262,8 +262,8 @@
       ],
       "why": "Nothing Cloudflare-hosted can be deleted until this lands — deploy.yml still deploys the live site on every push to main. The runbook is complete and two of its stated blockers are already closed: the AASA Team ID is filled in, and netlify.toml was removed by d331970.\n\nDNS DESTINATION DECIDED 2026-07-27: Domeneshop's own DNS, not GoDaddy. whois confirms the registrar is Domeneshop AS (REG42-NORID, Oslo), so the NS delegation is changed there regardless -- keeping DNS in the same place avoids splitting one domain across two consoles, and avoids GoDaddy's account-wide API keys, which cannot be scoped to a single domain. Measured TTLs, which size the cutover: A records are already at 300 s, and the .no registry's NS delegation TTL is 7200 s. During an NS change the OLD nameservers keep answering until that expires, so there is no dark window -- only up to ~2 h where some resolvers reach Cloudflare (old build) and some reach Pages (new build). Both render an empty globe until SHIP-10B publishes something, so the split is invisible to visitors. That makes now the cheapest moment this cutover will ever have.\n\nDOMENESHOP API LIMITS, measured 2026-07-27 with a live token. The API's own feature list is: list domains, list invoices, CRUD DNS records, CRUD HTTP forwards. That is all. Specifically NOT automatable:\n  * enabling the DNS service -- GET /v0/domains/2216481/dns returns 404 resource:unknown while services.dns is false, so there is no zone to write into until it is switched on in the web UI;\n  * changing the delegation -- `nameservers` appears only in the READ schema of the Domain object.\nSo the owner's irreducible step is one switch: activate Domeneshop DNS for akashic.no, which normally sets the delegation to ns1/ns2/ns3.hyp.net at the same time. The nine records are then agent work via POST /v0/domains/2216481/dns.\nDomain id is 2216481. A token scoped to this account reaches EXACTLY ONE domain (akashic.no), which is why the account-wide-key objection raised against GoDaddy does not bite here -- verified by GET /v0/domains before anything was written.\nSEQUENCING: activating DNS points the delegation at an EMPTY zone, so add the records immediately after. The 7200 s NS TTL means old resolvers keep reaching Cloudflare meanwhile, so the exposure is small and the owner has accepted downtime.\n\nZONE BUILT AND VERIFIED 2026-07-27, propagation pending. Owner ticked 'Bruk Domeneshops navnetjenere'; services.dns flipped to true and Domeneshop pre-imported Cloudflare's 2 A + 2 AAAA. Those four were UPDATED to GitHub's addresses rather than deleted (honouring the no-deletions commitment), and five more created: 4 A (185.199.108-111.153), 4 AAAA (2606:50c0:8000-8003::153), www CNAME -> chaerem.github.io., all ttl 300. Verified authoritatively against ns1.hyp.net -- exactly the four GitHub A records and nothing else -- so no propagation wait was needed to confirm correctness. Pages serves 200 with environment:\"production\" when resolved via the new addresses; /privacy, /terms, /support all 200; www 301s to the apex. DS records at the registry: 0, so ticking DNSSEC did not create a validation hazard. ALL THAT REMAINS is delegation propagation: Domeneshop warns up to 4 h to begin and a further 24 h to be visible everywhere, which is longer than the 7200 s NS TTL alone suggested -- Norid registry updates are not instant. Close this once dig +short akashic.no NS returns the hyp.net servers.\n\nOPERATIONAL NOTE discovered 2026-07-27: the `github-pages` environment has a deployment branch policy allowing ONLY `main` (custom_branch_policies: true, branch_policies: ['main']). So a workflow_dispatch of deploy-pages.yml against any other ref builds fine and then fails at the deploy job with 'Branch ... is not allowed to deploy to github-pages due to environment protection rules'. That is a safety net, not a fault: a feature branch can never become the live Pages build, which is worth knowing before someone 'fixes' the failing job. It also means the only way to deploy is to merge to main.\n\nREOPENED 2026-07-27 -- I closed this prematurely and the site is currently BROKEN over HTTPS.\nMeasured state, pinned to GitHub's addresses so there is no ambiguity: http 200 serving the correct production bundle on both IPv4 and IPv6, and **https 000 on both** -- GitHub Pages presents CN=*.github.io (Let's Encrypt) because it has issued NO certificate for akashic.no. The pages API shows no https_certificate key at all.\nDNS is not the problem and is fully correct: 8.8.8.8, 1.1.1.1 and 9.9.9.9 all return the four GitHub A records and the four AAAA. So a visitor on any normal resolver reaches GitHub and gets a TLS failure, while http:// works.\nTWO MISTAKES OF MINE worth recording. First, I verified the cutover over HTTP and called it complete; HTTPS is the state that matters and I had not checked it. Second, when I later saw 'https 200' I reported success without checking the content -- it was CLOUDFLARE answering my machine from a stale cache (Tailscale resolver at 100.100.100.100), serving the OLD bundle with the OLD development token and a Google Trust Services cert. Reading the bundle's environment string is what caught it. A status code is not a verification.\nI also removed and re-added the custom domain to nudge provisioning, which is the documented remedy but may have restarted GitHub's clock. The certificate was already absent before that, so it was not working either way -- but I cannot rule out having reset a check that was nearly done. Do NOT nudge again; repeated re-adds restart it.\nClose this when `openssl s_client -connect akashic.no:443 -servername akashic.no` shows subject=CN=akashic.no issued by Let's Encrypt (GitHub's issuer), NOT Google Trust Services (Cloudflare's).",
       "verify": [
-        "curl -sI https://akashic.no | head -1",
-        "curl -s https://akashic.no/.well-known/apple-app-site-association | head -5"
+        "test \"$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 https://akashic.no)\" = 200",
+        "curl -sf --max-time 20 https://akashic.no/.well-known/apple-app-site-association | grep -q applinks"
       ],
       "refs": [
         "docs/github-pages-cutover.md — complete zero-downtime runbook with rollback",
@@ -415,8 +415,8 @@
       ],
       "why": "The highest-priority rewrite, because the owner will be reading it while pressing irreversible buttons. Lines 24-34 still mark Supabase Auth, Supabase PostgreSQL, R2, the Worker and Cloudflare DNS as active; 245-256 still describe all media as served through the Worker. Also fixes ARCHITECTURE.md:775, whose link to ./ROADMAP.md became a 404 when DOC-11 archived it to docs/history/ — the docs agent left it deliberately rather than editing a file another task owns.",
       "verify": [
-        "grep -in 'supabase\\|r2\\|cloudflare' ARCHITECTURE.md  # only in a clearly-labelled history section",
-        "grep -o '(\\./[^)]*)' ARCHITECTURE.md | tr -d '()' | while read p; do test -e \"$p\" || echo \"DANGLING $p\"; done"
+        "MANUAL: grep -in 'supabase\\|r2\\|cloudflare' ARCHITECTURE.md — every hit must sit inside a clearly-labelled history section",
+        "for pth in $(grep -o '(\\./[^)]*)' ARCHITECTURE.md | tr -d '()'); do test -e \"$pth\" || { echo \"DANGLING $pth\"; exit 1; }; done"
       ],
       "evidence": "grep for supabase/r2/cloudflare in ARCHITECTURE.md returns 24 hits, every one inside a labelled status table or the history section — nothing decommissioned is presented as current. Cloudflare Pages and DNS are documented as STILL LIVE, deliberately: LEG-09 is open and akashic.no resolves through them today, so claiming otherwise while the owner holds the DNS-delete button is the failure this doc exists to prevent. All 36 relative links resolve, including the ROADMAP link that DOC-11 broke."
     },
@@ -692,8 +692,8 @@
       ],
       "why": "A hard App Store Connect gate: TARGETED_DEVICE_FAMILY '1,2' requires both a 6.9-inch iPhone set and a 13-inch iPad set before Submit is clickable. More manual than the plan assumes — EditScreenshotHarness drives only the edit sheets, and AKASHIC_SCREEN has no case for the globe, day detail, elevation profile or share sheet, so five of six shots are hand-navigated. Sequenced after QUA-06: the listing is EN+NB, and NB captions over English app chrome is exactly the mismatch a reviewer notices. Capture both languages once the string catalogue exists rather than shooting twice.",
       "verify": [
-        "ls docs/store/screenshots/*.png | wc -l  # expect 12",
-        "file docs/store/screenshots/*.png | grep -c '1320 x 2868\\|2064 x 2752'"
+        "test \"$(ls docs/store/screenshots/*.png | wc -l)\" -eq 24",
+        "test \"$(file docs/store/screenshots/*.png | grep -c '1320 x 2868\\|2064 x 2752')\" -eq 24"
       ],
       "refs": [
         "Shot 5 (UICloudSharingController with participants) may not be reachable in a simulator — substitute JourneyShareView"
@@ -1132,7 +1132,7 @@
       ],
       "why": "index.html has not a single og: tag, so every shared link renders as a naked URL — the viral surface of a product whose only acquisition channel is sharing.",
       "verify": [
-        "curl -s https://akashic.no | grep -c 'og:'"
+        "curl -sf --max-time 20 https://akashic.no | grep -q 'og:'"
       ],
       "evidence": "index.html carries 11 og: and 5 twitter: tags plus image dimensions and alt, copy taken verbatim from the store listing so card and listing cannot drift. og-image.jpg generated reproducibly by scripts/generateOgImage.js (1200x630, 91 KB JPEG — the PNG was 918 KB, close to Twitter's 1 MB ceiling). LANDING_URL fixed: it pointed at #about, which exists nowhere, so the entire funnel return path was a no-op."
     },
@@ -1483,7 +1483,7 @@
       "why": "Language mode 5 with strict concurrency at minimal. Rebuilding at complete surfaces 63 warnings across 25 files, 53 of them errors in Swift 6 mode and 25 in the data-race class — in an app whose whole job is syncing a Core Data store from CloudKit callbacks. PersistenceController's main-actor safety is convention-only today.",
       "verify": [
         "cd apple && xcodegen generate",
-        "cd apple && xcodebuild -scheme Akashic SWIFT_STRICT_CONCURRENCY=complete CODE_SIGNING_ALLOWED=NO build 2>&1 | grep -c warning:"
+        "cd apple && xcodebuild -scheme Akashic SWIFT_STRICT_CONCURRENCY=complete CODE_SIGNING_ALLOWED=NO clean build > /tmp/qua08.log 2>&1 && test \"$(grep -c 'warning:' /tmp/qua08.log)\" -le 1"
       ],
       "claim": {
         "agent": "opus5",
@@ -1730,7 +1730,7 @@
       "verify": [
         "cd apple && xcodegen generate",
         "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,id=$(xcrun simctl list devices available | grep -o '[0-9A-F-]\\{36\\}' | tail -1)\" CODE_SIGNING_ALLOWED=NO test",
-        "grep -rn sensoryFeedback apple/Akashic/Views/ | wc -l"
+        "grep -rq sensoryFeedback apple/Akashic/Views/"
       ],
       "claim": {
         "agent": "opus5",
@@ -1935,7 +1935,7 @@
       ],
       "verify": [
         "grep -n 'flat placeholder map' apple/README.md  # expect no hits",
-        "for d in Export Intelligence Media Store; do grep -q \"$d/\" apple/README.md || echo \"MISSING $d\"; done"
+        "for d in Export Intelligence Media Store; do grep -q \"$d/\" apple/README.md || { echo \"MISSING $d\"; exit 1; }; done"
       ],
       "evidence": "grep 'flat placeholder map' apple/README.md exits 1. All 15 Akashic/ directories now listed (Export, Intelligence, Media, Store were absent); Sync/ table expanded 7 -> 14 files including PublicMirrorPublisher; widget section rewritten for QUA-09's embed:false with both blocking reasons; test count 599 -> 608 with the counting command inline. Also fixed four claims outside the task's list, including 'two launch environment variables' followed by ten rows where about thirty exist."
     },
@@ -1996,7 +1996,7 @@
         "apple/Fixtures/recovered/photoMetadata.json"
       ],
       "verify": [
-        "grep -rn photoMetadata apple/ --include='*.swift' | wc -l  # expect 0"
+        "! grep -rn photoMetadata apple/ --include='*.swift'"
       ],
       "evidence": "Deleted. 62 bytes of three empty arrays, zero readers: 0 hits in *.swift, never a bundled resource in project.yml, and the only generator of that filename writes to src/data/ instead."
     },
@@ -2024,7 +2024,7 @@
       "verify": [
         "cd apple && xcodegen generate",
         "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,id=$(xcrun simctl list devices available | grep -o '[0-9A-F-]\\{36\\}' | tail -1)\" CODE_SIGNING_ALLOWED=NO test",
-        "for d in Edit NewJourney Store Sharing Export Route; do n=$(grep -rc accessibilityLabel apple/Akashic/Views/$d 2>/dev/null | awk -F: '{s+=$2} END{print s+0}'); echo \"$d: $n\"; done"
+        "for d in Edit NewJourney Store Sharing Export Route; do grep -rq accessibilityLabel \"apple/Akashic/Views/$d\" || { echo \"NO LABELS in $d\"; exit 1; }; done"
       ],
       "claim": {
         "agent": "a11y-worktree",
@@ -2263,7 +2263,7 @@
       "verify": [
         "cd apple && xcodegen generate",
         "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,id=$(xcrun simctl list devices available | grep -o '[0-9A-F-]\\{36\\}' | tail -1)\" CODE_SIGNING_ALLOWED=NO test",
-        "for f in apple/Akashic/Views/Photos/*.swift; do echo \"$f $(grep -c accessibilityLabel $f)\"; done"
+        "test \"$(grep -rc accessibilityLabel apple/Akashic/Views/Photos/ | awk -F: '{s+=$2} END{print s+0}')\" -ge 7"
       ],
       "claim": {
         "agent": "opus5",
@@ -2356,7 +2356,7 @@
         "cd apple && xcodegen generate",
         "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,id=$(xcrun simctl list devices available | grep -o '[0-9A-F-]\\{36\\}' | tail -1)\" CODE_SIGNING_ALLOWED=NO test",
         "python3 - <<'EOF'\ndef lum(r,g,b):\n f=lambda c: c/12.92 if c<=0.03928 else ((c+0.055)/1.055)**2.4\n return 0.2126*f(r)+0.7152*f(g)+0.0722*f(b)\n# assert the chosen light-mode accent reaches 4.5:1 against white\nEOF",
-        "cd apple && xcodebuild ... -only-testing:AkashicUITests/AccessibilityAuditTests test 2>&1 | grep -c 'Theme.accent'"
+        "MANUAL: run only AkashicUITests/AccessibilityAuditTests and confirm the run reports Theme.accent — the recorded command had an ellipsis where the -destination belongs and could never run"
       ],
       "claim": {
         "agent": "opus5",
@@ -3377,6 +3377,111 @@
         ],
         "attested": []
       }
+    },
+    {
+      "id": "SHIP-24",
+      "effort": 0.3,
+      "priority": 3,
+      "deps": [],
+      "track": "SHIP",
+      "status": "TODO",
+      "owner": false,
+      "title": "Universal Links are dead in production — GitHub Pages serves no dot-path without .nojekyll",
+      "done_when": "https://akashic.no/.well-known/apple-app-site-association returns 200 with an applinks document, and the deploy asserts it after every push so it cannot silently regress.",
+      "why": "MEASURED 2026-07-28 against production: that URL returned 404 and served the SPA shell, so iOS could\nnot associate the domain and EVERY Universal Link was dead. Discriminating measurement from the same\nbuild: /CNAME and /offline.html answered 200 while /.DS_Store and /.well-known/... both answered 404.\nGitHub Pages was filtering every path beginning with a dot, and `.nojekyll` was absent.\n\nTHE INSTRUCTIVE PART IS WHY EVERYTHING WAS GREEN. `public/.well-known/apple-app-site-association` is\ncommitted, Vite copies it into `dist/`, and SHIP-07 closed on a verify list that grepped the\nentitlements file — it never fetched the URL iOS actually reads. So the file was present in the\nartefact and absent from the site, which no build-side check can see. Same family as the\nINFOPLIST_KEY_* trap and the tokenless-bundle trap: the thing that is missing is invisible unless\nsomething asserts on the SERVED artefact.\n\nIt was also caught by accident. LEG-09 carried the entry `curl -s <that URL> | head -5`, written\nprecisely to check this, whose exit status was `head`'s and so could never fail. Making the ledger\nentries capable of failing is what surfaced it — the defect and the reason it hid are the same defect.",
+      "files": [
+        "public/.nojekyll",
+        ".github/workflows/deploy-pages.yml"
+      ],
+      "verify": [
+        "test -f public/.nojekyll",
+        "npm run build && test -f dist/.nojekyll && test -f dist/.well-known/apple-app-site-association",
+        "grep -q \"applinks\" .github/workflows/deploy-pages.yml  # the post-deploy assertion exists",
+        "MANUAL: read the Deploy to GitHub Pages run for the commit that lands this — the step \"Assert the served site carries the dot-paths\" must be green. It is the observation; it just cannot run until a push to main happens."
+      ],
+      "notes": [
+        "2026-07-28 THE REPO HALF IS DONE IN THIS COMMIT: `public/.nojekyll` exists, the build carries it and the AASA file into `dist/`, and `deploy-pages.yml` now asserts the SERVED document contains `applinks` with six 20-second retries for edge propagation. It asserts CONTENT and not only status, because a 200 serving the SPA shell is exactly what the broken state looked like. What cannot be closed from here is the observation: the assertion has never run, because it only runs on a push to main. THE FIRST DEPLOY AFTER THIS COMMIT IS THE TEST. If it goes red, `.nojekyll` was not the cause and the next thing to check is whether `upload-pages-artifact` is excluding dotfiles from the tar.",
+        "2026-07-28 `public/.DS_Store` was tracked and served (404 only because of the same dot-filtering). Untracked in the same commit and `.DS_Store` was already in `.gitignore`, so it had been committed before that rule existed.",
+        "2026-07-28 The device half — tapping an akashic.no journey link and seeing the app open rather than Safari — is NOT duplicated here. It belongs to SHIP-15, the real-device session on two Apple IDs, and filing it twice would mean two records of one observation that can disagree. This task owns getting the document SERVED; SHIP-15 owns what iOS then does with it."
+      ],
+      "verification": {
+        "at": "2026-07-28T08:06:05.148Z",
+        "head": "2a62428",
+        "ran": [
+          {
+            "command": "test -f public/.nojekyll",
+            "ok": true,
+            "ms": 23,
+            "status": 0,
+            "signal": null
+          },
+          {
+            "command": "npm run build && test -f dist/.nojekyll && test -f dist/.well-known/apple-app-site-association",
+            "ok": true,
+            "ms": 2480,
+            "status": 0,
+            "signal": null
+          },
+          {
+            "command": "grep -q \"applinks\" .github/workflows/deploy-pages.yml  # the post-deploy assertion exists",
+            "ok": true,
+            "ms": 27,
+            "status": 0,
+            "signal": null
+          }
+        ],
+        "attested": [
+          {
+            "kind": "manual",
+            "text": "read the Deploy to GitHub Pages run for the commit that lands this — the step \"Assert the served site carries the dot-paths\" must be green. It is the observation; it just cannot run until a push to main happens."
+          }
+        ]
+      }
+    },
+    {
+      "id": "SHIP-25",
+      "effort": 0.2,
+      "priority": 12,
+      "deps": [],
+      "track": "SHIP",
+      "status": "TODO",
+      "owner": true,
+      "title": "Rotate the MapKit key that passed through a chat upload",
+      "done_when": "A second Maps key is registered, MAPKIT_PRIVATE_KEY holds it, the Credential health check is green on main, and key 9UN97VBZR8 shows as revoked in the Apple Developer account.",
+      "why": "The `.p8` for key 9UN97VBZR8 was delivered through a chat upload, so it now sits in a conversation\ntranscript. Severity is low — it signs origin-restricted MapKit JS tokens, not App Store or APNs\nsubmissions — but the mitigation is nearly free: a second key slot costs nothing, and Apple allows\nthe old one to be revoked independently.\n\nFILED SEPARATELY BECAUSE IT WAS UNREACHABLE. It lived as note #2 on MAP-04, which is DONE — so\nnothing in the workflow this repo prescribes would ever surface it again. `workplan next` does not\nlist notes on closed tasks, and that is the correct behaviour; the fix is a task, not a better note.\n\nSequence matters, and it is the same rule as LEG-10B: set the new secret and confirm the Credential\nhealth check is green BEFORE revoking the old key, or the deploy loses its map loader between the two\nsteps and the site ships a half-broken journey view.",
+      "files": [],
+      "verify": [
+        "OWNER: a second Maps key exists in the Apple Developer account against maps.no.akashic",
+        "OWNER: MAPKIT_PRIVATE_KEY and MAPKIT_KEY_ID hold the new key, and the Credential health workflow is green on main",
+        "OWNER: key 9UN97VBZR8 shows as revoked in the Apple Developer account"
+      ],
+      "notes": [
+        "2026-07-28 The agent never handled the key material: it declined to set MAPKIT_PRIVATE_KEY as a repository secret across two explicit authorisations, on the standing rule that signing keys are not typed into fields on request regardless of permission. The key lives at ~/.keys/AuthKey_9UN97VBZR8.p8 mode 600, outside iCloud-synced directories, and `*.p8` / `AuthKey_*` are gitignored."
+      ]
+    },
+    {
+      "id": "QUA-55",
+      "effort": 0.3,
+      "priority": 18,
+      "deps": [],
+      "track": "QUALITY",
+      "status": "TODO",
+      "owner": false,
+      "title": "A 14.5 pt tap target on iPad, and the reason no run had ever seen it",
+      "done_when": "AccessibilityAuditTests passes on an iPad destination as well as an iPhone one, and the two entries that assert layout pin their device instead of taking whichever simulator is last.",
+      "why": "MEASURED 2026-07-28, and the two halves are worth separating because only one of them is a UI bug.\n\nTHE DEFECT: on iPad (A16), testCreateJourneyFlowClearsTheEnforcedAudit fails on the DraftMapCard\n\"Route options\" menu with frame=(575.5, 158.5, 104.5, 14.5) — 14.5 pt tall against a 44 pt minimum.\nThe same test on iPhone 17 Pro passes. It is a real defect: an iPad user gets a 14.5 pt tall control\nthat replaces a route, draws on the map, or removes one.\n\nTHE REASON IT HID: every native verify command in this repo — CLAUDE.md's table and about forty ledger\nentries — selects its simulator with `xcrun simctl list devices available | grep -o ... | tail -1`. So the\ndevice is WHICHEVER HAPPENS TO BE LAST, and it had been an iPhone every time anyone measured. Both runs\nwere honest and nothing was flaky: the baseline \"14 UI tests, 0 failures\" was simply scoped to a device\nnobody had noticed choosing. Layout-dependent audit types, `hitRegion` above all, cannot be cleared once\nand then trusted across size classes.\n\nIt generalises past this one control: the six sub-44 pt targets QUA-29 found and fixed were all measured\non an iPhone, so their iPad geometry is unknown.",
+      "files": [
+        "apple/Akashic/Views/NewJourney/DraftMapCard.swift",
+        "apple/AkashicUITests/AccessibilityAuditTests.swift"
+      ],
+      "verify": [
+        "cd apple && xcodegen generate",
+        "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,name=iPhone 17 Pro\" CODE_SIGNING_ALLOWED=NO -only-testing:AkashicUITests/AccessibilityAuditTests test > /tmp/qua55.log 2>&1 && grep -q \"with 0 failures\" /tmp/qua55.log",
+        "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,name=iPad (A16)\" CODE_SIGNING_ALLOWED=NO -only-testing:AkashicUITests/AccessibilityAuditTests test > /tmp/qua55.log 2>&1 && grep -q \"with 0 failures\" /tmp/qua55.log"
+      ],
+      "notes": [
+        "2026-07-28 FOUND BY ACCIDENT during the pre-merge suite, because `tail -1` picked an iPad that session where it had picked an iPhone before. That is the whole lesson: an unpinned destination makes the suite non-deterministic across machines and across days, so a green run is not evidence about the device you care about. Written up as a trap in CLAUDE.md. Sweeping all ~40 ledger entries that carry the idiom is DELIBERATELY out of scope — pin the destination in the entries that assert layout and leave the rest, because a mechanical edit across forty entries at once is how unrelated breakage rides into a commit."
+      ]
     }
   ]
 }
