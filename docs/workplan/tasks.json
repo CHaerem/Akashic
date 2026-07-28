@@ -3308,6 +3308,75 @@
         ],
         "attested": []
       }
+    },
+    {
+      "id": "QUA-54",
+      "effort": 0.2,
+      "priority": 22,
+      "deps": [
+        "QUA-53"
+      ],
+      "track": "QUALITY",
+      "status": "DONE",
+      "title": "A fresh-context verifier agent, because the implementer certifying its own tests is how three defects shipped green",
+      "done_when": "The multi-model division of labour is written down where agents read it, and the verifier cannot edit what it judges.",
+      "why": "Anthropic's published guidance, checked against what this project has actually paid for:\n\nSEPARATE FRESH-CONTEXT VERIFIERS OUTPERFORM SELF-CRITIQUE. This is the finding with the most weight here,\nbecause QUA-47, QUA-45 and the bundle guard each shipped a test suite that could not fail, and each passed\nevery check that existed. `my test passes and looks plausible` is not self-detecting. So the verifier gets\nNO WRITE TOOLS: a verifier that can edit the thing it is judging stops being one the first moment editing\nis easier than reporting.\n\nA SINGLE VERIFICATION CALL BEAT A PANEL in Anthropic's measurements — multiple judges were WORSE, not\nbetter. That inverted my own plan, which had a reviewer panel in it. One agent, run once.\n\nCODING IS NAMED THE WORST FIT FOR PARALLEL MULTI-AGENT WORK: subagents cannot share the running context\nthat keeps edits consistent. Fan out to READ, never to write. `claim`'s file lock already encodes this.\n\nAND THE TOOL OBSOLETED AN AGENT. A cheap Haiku `measurer` was planned alongside this to run verify lists.\nQUA-53 does that deterministically for almost nothing, so the agent was dropped rather than shipped as\nredundant surface. Worth noticing when a script removes the need for a model instead of the reverse.",
+      "files": [
+        ".claude/agents/verifier.md"
+      ],
+      "evidence": "Frontmatter validated: name matches the filename, model is a real tier, all four tools are real tool names, and neither Write nor Edit is among them — which is the one assertion that would catch the regression that matters. Its instructions are drawn from measured incidents in this repo (the three cannot-fail suites, and eight places where a passing check means nothing) rather than from generic review advice. HONEST LIMIT, recorded in CLAUDE.md too: the agent has never been INVOKED, so its behaviour is unobserved. The first run is an experiment.",
+      "verify": [
+        "test -f .claude/agents/verifier.md",
+        "grep -q \"^name: verifier$\" .claude/agents/verifier.md",
+        "grep -Eq \"^model: (opus|fable)$\" .claude/agents/verifier.md",
+        "! grep -Eq \"^tools:.*(Write|Edit)\" .claude/agents/verifier.md  # a verifier must not be able to write",
+        "grep -q \"Working across models\" CLAUDE.md"
+      ],
+      "notes": [
+        "2026-07-28 `effort:` IS DELIBERATELY ABSENT from the frontmatter. My own proposal wanted `xhigh` on this agent, and I could not substantiate the key: `CLAUDE_CODE_EFFORT_LEVEL` appears ZERO times in Anthropic's published documentation. Shipping a config key that silently does nothing is the same failure class as a test that cannot fail — it reads as a mechanism and is not one. Add it when a run shows it takes effect."
+      ],
+      "verification": {
+        "at": "2026-07-28T07:21:32.701Z",
+        "head": "7934ecf",
+        "ran": [
+          {
+            "command": "test -f .claude/agents/verifier.md",
+            "ok": true,
+            "ms": 24,
+            "status": 0,
+            "signal": null
+          },
+          {
+            "command": "grep -q \"^name: verifier$\" .claude/agents/verifier.md",
+            "ok": true,
+            "ms": 22,
+            "status": 0,
+            "signal": null
+          },
+          {
+            "command": "grep -Eq \"^model: (opus|fable)$\" .claude/agents/verifier.md",
+            "ok": true,
+            "ms": 20,
+            "status": 0,
+            "signal": null
+          },
+          {
+            "command": "! grep -Eq \"^tools:.*(Write|Edit)\" .claude/agents/verifier.md  # a verifier must not be able to write",
+            "ok": true,
+            "ms": 20,
+            "status": 0,
+            "signal": null
+          },
+          {
+            "command": "grep -q \"Working across models\" CLAUDE.md",
+            "ok": true,
+            "ms": 19,
+            "status": 0,
+            "signal": null
+          }
+        ],
+        "attested": []
+      }
     }
   ]
 }

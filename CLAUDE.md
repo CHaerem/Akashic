@@ -91,6 +91,36 @@ entries are there to make the intent visible in a file people read. And **a hook
 block** — exit 1 is treated as a non-fatal hook error and the command runs anyway, so a guard
 written with `exit 1` reads exactly like a working guard and stops nothing.
 
+## Working across models
+
+Four findings from Anthropic's own published guidance, kept because each one contradicts something
+that felt obviously right here:
+
+- **Fan out to read, not to write.** Coding is named as the *worst* fit for parallel multi-agent
+  work: subagents cannot share the running context that makes edits consistent, so parallel writers
+  produce conflicting changes. Parallel *readers* over separate subsystems are the pattern that
+  pays. `claim`'s file lock is the mechanical version of this rule and it is why it exists.
+- **A single verification pass beats a panel.** Measured: one call with one prompt was the most
+  consistent and the most aligned with human judgement; multiple judges were *worse*. So there is no
+  reviewer panel here. `.claude/agents/verifier.md` is one agent, run once.
+- **A fresh-context verifier beats self-critique**, which is the finding that carries the most weight
+  on this project — the implementer certifying its own tests is exactly how QUA-47, QUA-45 and the
+  bundle guard all shipped green. Hence the verifier has **no write tools**: it cannot quietly fix
+  what it was asked to judge.
+- **Multi-agent work costs roughly 15× the tokens**, and token usage explains about 80% of the
+  variance in outcome. Spend the tokens where a wrong answer is expensive — verification — and not
+  on parallelising edits.
+
+The division of labour that fell out of building this: `workplan verify` answers *did the commands
+pass*, deterministically and for almost nothing. The verifier agent answers *would those commands
+have caught the defect*, which no command can. Building the first one removed the need for the cheap
+measuring agent that was planned alongside it — a deterministic script does that job better than any
+model, and it is worth noticing when a tool obsoletes an agent rather than the other way round.
+
+**Untested, and say so if you rely on it:** the verifier agent has never been invoked. Its
+frontmatter is validated and its instructions are drawn from measured incidents in this repo, but
+its behaviour is unobserved. Treat the first run as an experiment and report what it actually did.
+
 ## Before you build anything native
 
 `apple/Akashic.xcodeproj` is **generated and not committed** (`apple/.gitignore:2`). Every
