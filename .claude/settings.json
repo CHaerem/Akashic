@@ -1,0 +1,46 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx vitest:*)",
+      "Bash(npm run typecheck)",
+      "Bash(npm run lint)",
+      "Bash(npm run build)",
+      "Bash(npm run workplan:*)",
+      "Bash(node scripts/workplan.mjs:*)",
+      "Bash(node scripts/prove.mjs:*)",
+      "Bash(node scripts/export/smoke.ts)",
+      "Bash(npx tsc -p scripts/export/tsconfig.json)",
+      "Bash(xcodegen generate)",
+      "Bash(git status:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(git show:*)"
+    ],
+    "deny": [
+      "Bash(apple/Scripts/testflight-upload.sh)",
+      "Bash(./apple/Scripts/testflight-upload.sh)",
+      "Bash(sh apple/Scripts/testflight-upload.sh)",
+      "Bash(bash apple/Scripts/testflight-upload.sh)",
+      "Bash(npx tsx scripts/export/verifyExport.ts)",
+      "Bash(node scripts/export/verifyExport.ts)",
+      "Bash(git add -A)",
+      "Bash(git add --all)",
+      "Bash(git add .)",
+      "Bash(git push --force:*)",
+      "Bash(git push -f:*)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/guard-bash.sh"
+          }
+        ]
+      }
+    ]
+  }
+}

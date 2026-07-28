@@ -29,7 +29,8 @@ Do not invent work. If something needs doing that is not in the ledger, add it t
    write-lock. It refuses if another in-flight task owns overlapping files.
 3. Do the work. Touch only the files in the task's `files` list. If you need a file outside
    it, stop and check whether another task owns it.
-4. Run every command in the task's `verify` list. They must pass.
+4. `node scripts/workplan.mjs verify <id>` — this **runs** the task's `verify` list and records
+   what passed. It is no longer your job to remember to.
 5. `node scripts/workplan.mjs done <id> --evidence "<the command that passed, or the URL>"`
 6. Commit the code **and** the ledger together. A commit that changes behaviour without
    moving the ledger is the failure mode this system exists to prevent.
@@ -55,6 +56,40 @@ commit. **Never leave work only in an uncommitted worktree.** A fresh agent read
 
 `npm run workplan:check` runs in CI and fails if the ledger is invalid, if two in-flight
 tasks own the same files, or if `WORKPLAN.md` has drifted from `tasks.json`.
+
+### `verify` is a gate now, not a suggestion
+
+`done` refuses a task whose runnable checks have never actually run, whose last run failed, or
+whose `verify` list was edited after being verified — that last one because editing the list is
+the cheapest possible way to launder an unverified claim through the gate. `--force` overrides
+and records that it was overridden.
+
+The runnable/attestable split lives **in the ledger**, never in a guess: an entry prefixed
+`MANUAL:` needs a person, `OWNER:` needs the owner specifically (a device, an Apple ID, a paid
+agreement), and everything else is executed through `sh -c` from the repo root. I tried twice to
+tell commands from prose by inspection and got a different answer each time — a command-word
+allowlist called `test -f CLAUDE.md` prose; resolving the first token against `PATH` called
+`for d in …; do` and `! grep` prose, because those are shell keywords rather than executables.
+Write prose without a prefix and `verify` fails loudly on it, which is the right direction to
+fail in. Closing a task that has `MANUAL:`/`OWNER:` entries needs `--attest "what you saw"`.
+
+Measured when this landed: 207 of 259 entries are runnable, and **every** prose entry on an open
+task sits on an owner task — so the runner covers the whole remaining agent queue.
+
+### What the harness now blocks for you
+
+`.claude/settings.json` denies the two scripts that mutate the owner's world and wires
+`.claude/hooks/guard-bash.sh`, which enforces three rules from this file that had each already
+cost real time: whole-tree `git add`, those two scripts, and a commit carrying staged renames or
+deletions (`R`/`D`) that may be another agent's. Each block names an escape hatch — prefix the
+command with `GUARD_OK=1` — because a guard with no way past it gets deleted the first time it is
+wrong, and then it protects nothing.
+
+Two things to know before you trust it. **The `deny` list alone is exact-string matching**, so it
+catches `git add -A` and not `git add -A .`; the hook does the real pattern work, and the deny
+entries are there to make the intent visible in a file people read. And **a hook must exit 2 to
+block** — exit 1 is treated as a non-fatal hook error and the command runs anyway, so a guard
+written with `exit 1` reads exactly like a working guard and stops nothing.
 
 ## Before you build anything native
 

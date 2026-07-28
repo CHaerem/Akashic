@@ -12,12 +12,39 @@
 //   node scripts/workplan.mjs show <id>          everything about one task
 //   node scripts/workplan.mjs claim <id> --agent NAME --branch BRANCH
 //   node scripts/workplan.mjs note <id> "where I stopped"
+//   node scripts/workplan.mjs verify <id>         RUN the task's verify list and record the result
 //   node scripts/workplan.mjs done <id> --evidence "what proves it"
 //   node scripts/workplan.mjs block <id> --reason "why"
 //
-// Exit codes: 0 ok, 1 validation or sync failure, 2 usage error.
+// Exit codes: 0 ok, 1 validation, sync or verification failure, 2 usage error,
+//             3 every runnable check passed but something still needs a human (see `verify`).
+//
+// ------------------------------------------------------------------ on `verify`
+//
+// For most of this ledger's life `verify` was a list of strings that nothing ever executed. It was
+// printed by `show`, quoted in commit messages, and trusted. That is the project's documented
+// failure class — a claim decoupled from the mechanism that would make it true — sitting in the
+// tool built to prevent it: `done` accepted any free-text `--evidence`, so "804 tests pass" was
+// as acceptable as running them, and the ledger could not tell the difference.
+//
+// The one design decision worth explaining. About four fifths of the 259 entries are shell
+// commands and the rest are instructions to a person ("Run in the simulator with the system
+// language set to Norwegian"). I tried to tell them apart by inspection twice and got a different
+// answer each time — a command-word allowlist called `test -f CLAUDE.md` prose, and resolving the
+// first token against PATH called `for d in ...; do` and `! grep` prose, because those are shell
+// keywords rather than executables. Every heuristic I could write was wrong somewhere, and a
+// misclassification is not a harmless one: prose executed as shell fails and reads as a broken
+// task, while a real command classified as prose is silently never run, which is the exact hole
+// this closes.
+//
+// So the classification lives in the DATA, where it is a deliberate act. An entry prefixed
+// `MANUAL:` needs a person; `OWNER:` needs the owner specifically — a device, an Apple ID, a paid
+// agreement. Everything else is executed. An author who writes prose and forgets the prefix gets
+// a loud FAIL on the first run, which is the right direction to fail in: it asks them to declare
+// what they meant instead of quietly deciding for them.
 
 import { readFileSync, writeFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -31,6 +58,55 @@ const OPEN = ['TODO', 'WIP', 'BLOCKED'];
 
 const read = () => JSON.parse(readFileSync(LEDGER, 'utf8'));
 const write = (d) => writeFileSync(LEDGER, JSON.stringify(d, null, 2) + '\n');
+
+// ------------------------------------------------------------------ verify
+
+// See the header note: the runnable/attestable split is declared in the ledger, never guessed.
+// Case-insensitive on purpose: one entry already said `Manual:` in prose before this existed, and
+// no shell command begins with either word followed by a colon, so there is nothing to collide with.
+const ATTEST_PREFIX = /^(MANUAL|OWNER):\s*/i;
+const classify = (entry) => {
+  const m = entry.match(ATTEST_PREFIX);
+  return m
+    ? { kind: m[1].toLowerCase(), text: entry.slice(m[0].length) }
+    : { kind: 'run', text: entry };
+};
+
+// The native suite is ~190 s and a clean build with tests is longer, so the ceiling has to be
+// generous or the tool fails the very checks that matter most. 25 minutes is above the slowest
+// measured entry (`xcodegen generate && xcodebuild ... test`, ~4 min from cold) with room for a
+// cold Swift module cache, and still low enough that a hung command does not strand an agent.
+const ENTRY_TIMEOUT_MS = 25 * 60 * 1000;
+
+/**
+ * Execute one verify entry through `sh -c` from the repo root.
+ *
+ * `sh -c` rather than parsing the string ourselves, because the entries legitimately use shell
+ * grammar the ledger should not have to give up: `&&` chains, `!` negation, `for` loops, pipes
+ * into `wc -l`, and `$(...)` substitution that finds the current simulator UDID. Anything that
+ * runs when pasted into a terminal runs here identically, which is the property that makes the
+ * ledger's entries worth trusting as documentation.
+ */
+const runEntry = (text) => {
+  const started = Date.now();
+  const r = spawnSync('sh', ['-c', text], {
+    cwd: ROOT,
+    encoding: 'utf8',
+    timeout: ENTRY_TIMEOUT_MS,
+    maxBuffer: 64 * 1024 * 1024, // a full xcodebuild log is tens of MB and truncating it hides the failure
+  });
+  const ms = Date.now() - started;
+  // A timeout kills the child and reports signal SIGTERM with status null; treat it as its own
+  // outcome rather than a plain failure, because "took longer than 25 minutes" and "exited 1" call
+  // for completely different responses from whoever reads the report.
+  if (r.error?.code === 'ETIMEDOUT' || (r.status === null && r.signal)) {
+    return { ok: false, ms, status: null, signal: r.signal || 'ETIMEDOUT', out: r.stdout || '', err: r.stderr || '' };
+  }
+  return { ok: r.status === 0, ms, status: r.status, signal: null, out: r.stdout || '', err: r.stderr || '' };
+};
+
+const tail = (s, n = 12) => s.trimEnd().split('\n').slice(-n).join('\n');
+const secs = (ms) => (ms < 1000 ? `${ms} ms` : `${(ms / 1000).toFixed(1)} s`);
 
 // ---------------------------------------------------------------- validation
 
@@ -68,6 +144,17 @@ function validate(d) {
     // their proof is the owner's word (a dashboard, a device, a legal register).
     if (!t.owner && !(t.verify || []).length && t.status !== 'DROPPED') {
       errs.push(`${t.id}: agent task with no verify command`);
+    }
+    // `OWNER:` means "only the owner can make this check" — a device, an Apple ID, a paid
+    // agreement. On a task an agent is expected to close, that is a contradiction rather than a
+    // detail: it makes the task unclosable by whoever picks it up, and the honest fix is to either
+    // mark the task `owner: true` or split the owner-only part into its own task.
+    for (const v of t.verify || []) {
+      const c = classify(v);
+      if (c.kind === 'owner' && !t.owner) {
+        errs.push(`${t.id}: an OWNER: verify entry on an agent task — mark the task owner:true or split it out`);
+      }
+      if (c.kind !== 'run' && !c.text.trim()) errs.push(`${t.id}: a ${c.kind.toUpperCase()}: verify entry says nothing`);
     }
     if (t.status === 'WIP' && !(t.claim && t.claim.agent && t.claim.branch)) {
       errs.push(`${t.id}: WIP requires claim.agent and claim.branch so it can be picked up`);
@@ -380,12 +467,118 @@ switch (cmd) {
     break;
   }
 
+  case 'verify': {
+    const d = read();
+    const t = d.tasks.find((x) => x.id === positional[0]);
+    if (!t) die(`no such task: ${positional[0]}`);
+    const entries = t.verify || [];
+    if (!entries.length) die(`${t.id} has no verify list — add one to the ledger before claiming it is done`, 2);
+
+    const groups = entries.map(classify);
+    const toRun = groups.filter((g) => g.kind === 'run');
+    const toAttest = groups.filter((g) => g.kind !== 'run');
+    console.log(`verify ${t.id} — ${toRun.length} to run, ${toAttest.length} needing a human\n`);
+
+    const ran = [];
+    for (const [i, g] of toRun.entries()) {
+      process.stdout.write(`  [${i + 1}/${toRun.length}] ${g.text}\n`);
+      const r = runEntry(g.text);
+      ran.push({ command: g.text, ok: r.ok, ms: r.ms, status: r.status, signal: r.signal });
+      if (r.ok) {
+        console.log(`        PASS  ${secs(r.ms)}\n`);
+      } else {
+        const how = r.signal ? `killed by ${r.signal} after ${secs(r.ms)}` : `exit ${r.status} after ${secs(r.ms)}`;
+        console.log(`        FAIL  ${how}`);
+        const output = tail(r.err || r.out);
+        if (output) console.log(output.split('\n').map((l) => `        │ ${l}`).join('\n'));
+        console.log('');
+      }
+    }
+
+    // Recorded on the task so `done` can tell a verified close from an asserted one, and so a
+    // later reader can see WHEN it was verified — a record from before the last ten commits is a
+    // weaker claim than a fresh one, and `done` says so rather than silently accepting it.
+    const record = {
+      at: new Date().toISOString(),
+      head: (spawnSync('git', ['rev-parse', '--short', 'HEAD'], { cwd: ROOT, encoding: 'utf8' }).stdout || '').trim() || null,
+      ran,
+      attested: toAttest.map((g) => ({ kind: g.kind, text: g.text })),
+    };
+
+    // Re-read before writing, and patch only this one task. Found by this command's own first run:
+    // QUA-53's verify list contains `workplan verify LEG-16`, so the nested run wrote LEG-16's
+    // record and the outer run then wrote the whole ledger from the copy it had read MINUTES
+    // earlier — silently discarding it. Last-write-wins on a whole-file JSON ledger loses records
+    // the same way whenever two agents verify different tasks at once, which is precisely the
+    // situation `claim`'s file lock exists to make normal. A verification that vanishes is worse
+    // than one that never ran: `done` then reports the task as never verified, and the next agent
+    // re-runs a suite that already passed.
+    const fresh = read();
+    const target = fresh.tasks.find((x) => x.id === t.id);
+    target.verification = record;
+    write(fresh);
+
+    const failed = ran.filter((r) => !r.ok);
+    if (failed.length) {
+      console.error(`verify: ${t.id} FAILED — ${failed.length} of ${ran.length} check(s) did not pass`);
+      console.error('  the ledger records the failure; fix the work, not the record');
+      process.exit(1);
+    }
+    if (toAttest.length) {
+      console.log(`verify: ${t.id} — ${ran.length}/${ran.length} runnable check(s) PASS, but ${toAttest.length} still need a human:`);
+      for (const g of toAttest) console.log(`  ${g.kind.toUpperCase()}  ${g.text}`);
+      console.log('\n  These cannot be automated — a device, an Apple ID, a signed build, a pair of eyes.');
+      console.log('  Close with:  workplan done ' + t.id + ' --evidence "..." --attest "who did what, and what they saw"');
+      process.exit(3);
+    }
+    console.log(`verify: ${t.id} PASS — ${ran.length} check(s), all green`);
+    break;
+  }
+
   case 'done': {
     const d = read();
     const t = d.tasks.find((x) => x.id === positional[0]);
     if (!t) die(`no such task: ${positional[0]}`);
     const evidence = flag('evidence');
     if (!evidence) die('done needs --evidence "what proves it" — a command that passed, a URL, a commit');
+
+    // The gate this whole file exists for. `--evidence` is free text and always was, so on its own
+    // it cannot distinguish a command that ran from a sentence that sounds like one. If the task
+    // has runnable checks, they must have actually run and passed.
+    const groups = (t.verify || []).map(classify);
+    const runnable = groups.filter((g) => g.kind === 'run');
+    const attestable = groups.filter((g) => g.kind !== 'run');
+    const v = t.verification;
+    const force = rest.includes('--force');
+    if (runnable.length && !force) {
+      if (!v) {
+        die(`${t.id} has ${runnable.length} runnable check(s) that have never been run.\n`
+          + `  node scripts/workplan.mjs verify ${t.id}\n`
+          + `  (--force overrides, and records that it was overridden)`, 1);
+      }
+      const failed = (v.ran || []).filter((r) => !r.ok);
+      if (failed.length) die(`${t.id}'s last verification FAILED on: ${failed[0].command}`, 1);
+      // Compare against the entries as they stand NOW: editing a verify entry after verifying it
+      // is the cheapest possible way to launder an unverified claim through this gate.
+      const verified = new Set((v.ran || []).map((r) => r.command));
+      const missing = runnable.map((g) => g.text).filter((c) => !verified.has(c));
+      if (missing.length) {
+        die(`${t.id}'s verify list has changed since it was verified — never run:\n`
+          + missing.map((c) => `    ${c}`).join('\n')
+          + `\n  node scripts/workplan.mjs verify ${t.id}`, 1);
+      }
+    }
+    // Attestations are the honest half: nothing here can check them, so the most a tool can do is
+    // refuse to let them pass unmentioned. A named `--attest` is a person putting their account
+    // behind an observation, which is a different kind of claim from a blank field.
+    const attest = flag('attest');
+    if (attestable.length && !attest && !force) {
+      die(`${t.id} has ${attestable.length} check(s) only a human can make:\n`
+        + attestable.map((g) => `    ${g.kind.toUpperCase()}  ${g.text}`).join('\n')
+        + `\n  --attest "what you did and what you saw"  (or --force)`, 1);
+    }
+    if (attest) t.attestation = attest;
+    if (force) t.verification = { ...(v || {}), forced_at: new Date().toISOString() };
     t.status = 'DONE';
     t.evidence = evidence;
     delete t.resume;

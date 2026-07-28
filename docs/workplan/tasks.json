@@ -58,10 +58,10 @@
       "why": "A live unauthenticated-JWT bypass guarding a service_role key, readable in a public repo. Verified by live reproduction: no token gives 401, a garbage-signed HS256 token gives 404 — auth passed. Independent of every data-retention gate: nothing reads the Worker.",
       "verify": [
         "curl -s -i --max-time 12 https://akashic-media.chris-haerem.workers.dev/journeys/x/photos/y | grep -E 'error code: 1042'",
-        "# 1042 is Cloudflare's edge saying NO WORKER IS DEPLOYED. Do NOT accept a bare 404 as proof:",
-        "# the pre-deletion auth bypass ALSO returned 404 (garbage token -> auth passed -> no route match),",
-        "# so the status code alone cannot distinguish 'deleted' from 'still vulnerable'. Check the body.",
-        "# Second half, dashboard-only: confirm SUPABASE_SERVICE_KEY exists in no Worker env or account secret."
+        "OWNER: # 1042 is Cloudflare's edge saying NO WORKER IS DEPLOYED. Do NOT accept a bare 404 as proof:",
+        "OWNER: # the pre-deletion auth bypass ALSO returned 404 (garbage token -> auth passed -> no route match),",
+        "OWNER: # so the status code alone cannot distinguish 'deleted' from 'still vulnerable'. Check the body.",
+        "OWNER: # Second half, dashboard-only: confirm SUPABASE_SERVICE_KEY exists in no Worker env or account secret."
       ],
       "refs": [
         "workers/media-proxy/src/index.ts:236-241 — HS256 branch returns payload unverified",
@@ -103,7 +103,7 @@
       ],
       "why": "5080 of 8147 objects (69% of bucket bytes) are referenced by no surviving DB row and were never imported into CloudKit. They are not format leftovers as the verification report suggests: 2750 originals with 2327 matching thumbnails, none sharing a UUID with a live row — the signature of deleted-photo remnants. After R2 deletion they exist only in the archive.",
       "verify": [
-        "A decision recorded in docs/workplan/tasks.json evidence field, or in ARCHITECTURE.md"
+        "OWNER: A decision recorded in docs/workplan/tasks.json evidence field, or in ARCHITECTURE.md"
       ],
       "refs": [
         "APPLE-MIGRATION-TASKS.md:130 claims they are 'old formats, spot-checked clean' — only partly substantiated"
@@ -122,7 +122,7 @@
       ],
       "why": "The snapshot is dated 2026-07-21T21:02Z and the project was resumed ~23:00 that same night and left running, so a write window is formally unaccounted for. This is read-only and must happen before the irreversible deletion.",
       "verify": [
-        "Compare per-table counts + max(updated_at) against /Users/cher/Privat/AkashicExport-20260722/manifest.json"
+        "OWNER: Compare per-table counts + max(updated_at) against /Users/cher/Privat/AkashicExport-20260722/manifest.json"
       ],
       "refs": [
         "APPLE-MIGRATION-TASKS.md T5.1 still open"
@@ -340,8 +340,8 @@
       "priority": 90,
       "why": "The hosting half of the old LEG-11, freed from the stability gate because the owner waived hosting rollback on 2026-07-27. Nothing here holds data: the Pages project is a build output that GitHub Pages now reproduces, and the DNS zone is replaced by GoDaddy. Do it AFTER confirming akashic.no resolves to GitHub's addresses through GoDaddy -- deleting the Cloudflare zone while it is still authoritative takes the domain down until NS propagates. Order: confirm resolution, then Pages project, then zone.",
       "verify": [
-        "Dashboards show no akashic resources",
-        "Archive verified on two physical media (LEG-02)"
+        "OWNER: Dashboards show no akashic resources",
+        "OWNER: Archive verified on two physical media (LEG-02)"
       ],
       "refs": [
         "Also confirm whether the R2 bucket has a public r2.dev URL or custom domain — deleting the Worker does not close that route"
@@ -362,8 +362,8 @@
       "priority": 91,
       "why": "The data half of the old LEG-11, and the half that is genuinely irreversible. R2 holds the 16 GiB / 8147-object archive and Supabase the rows it was exported from. The real gate is LEG-02 -- a verified second copy on a volume that is not the boot disk -- and LEG-03/LEG-04, which decide the 5080 un-catalogued objects and confirm no Supabase delta was missed. The calendar month is belt and braces on top of that; the second medium is the part that must not be skipped. Waiving hosting rollback does not touch this task.",
       "verify": [
-        "Dashboards show no akashic resources",
-        "Archive verified on two physical media (LEG-02)"
+        "OWNER: Dashboards show no akashic resources",
+        "OWNER: Archive verified on two physical media (LEG-02)"
       ],
       "refs": [
         "Also confirm whether the R2 bucket has a public r2.dev URL or custom domain — deleting the Worker does not close that route"
@@ -865,7 +865,7 @@
       "why": "Confirmed live on 2026-07-27, not inferred: akashic.no is public, shows \"CLICK A MARKER TO EXPLORE\" with no journeys, and a PublicJourney query run in the page returns 0 records with NO error — so it is not auth and not code, the development public database is simply empty while T2.5 imported into Production. No repo change is needed: all four workflows already read ${{ vars.VITE_CLOUDKIT_ENV || 'development' }}, and the variable is explicitly set to development. Two repository VARIABLES must change TOGETHER -- VITE_CLOUDKIT_ENV to production and VITE_CLOUDKIT_API_TOKEN to a token minted for Production with akashic.no in allowed origins. Flipping the environment alone leaves a development token pointed at production and turns an empty showcase into an erroring one. The token is correctly a variable rather than a secret: CloudKit JS tokens are public by design (they are inlined into the client bundle) and restricted by origin allowlist, not by secrecy.\n\nTOKEN SCOPING PROVEN 2026-07-27, not assumed. The old SHIP-10 said this 'needs a Console step to mint a production CloudKit JS token' without evidence, so it was worth testing before sending the owner to the Console. Queried CloudKit Web Services directly from the akashic.no origin with the CURRENT token, same container, changing only the environment in the URL path:\n  development -> HTTP 200, 0 records\n  production  -> HTTP 401 AUTHENTICATION_FAILED, 'please check you have the correct API Token for this container'\nSo a CloudKit JS API token IS environment-scoped and the existing one cannot be reused. Tested via REST rather than CloudKit JS on purpose: calling CloudKit.configure() twice on one container could have produced the same error for an unrelated reason, and did.\n\nNote for whoever explains this to the owner: the token is NOT a secret. It is compiled into the client bundle and readable by any visitor (grep the live JS). Its protection is the allowed-origins list, which is why akashic.no must be on it. Storing it in `vars` rather than `secrets` is therefore correct, and 'moving it to secrets for safety' would change nothing except how safe it looks.\n\nCORRECTION 2026-07-27, after the owner sent a Console screenshot: the note above concluded the owner-supplied token was 'not valid for this container in either environment'. WRONG. It is a valid Production token for iCloud.no.akashic (name Akashic-ci). Two mistakes produced that conclusion:\n  1. My server-side curl sent no Origin header. An origin-restricted token rejects that outright, and the development token it was compared against is on 'Any Domain' -- so the comparison measured origin policy, not token validity.\n  2. Allowed Origins was entered as 'akashic.no/' WITH A TRAILING SLASH, which Console stores verbatim. Measured: Origin: https://akashic.no -> 401; Origin: https://akashic.no/ -> 200. Browsers never send a path in Origin, so every real visitor would have got 401 while a curl matching the stored string passed.\nThe remaining owner action is therefore one character: drop the trailing slash. www.akashic.no is also not listed (401), which is acceptable only because GitHub Pages redirects www to the apex.",
       "verify": [
         "curl -s https://akashic.no/assets/index-*.js | grep -o 'environment:\"[a-z]*\"'   # expect production",
-        "In the page: CloudKit.getDefaultContainer().publicCloudDatabase.performQuery({recordType:'PublicJourney'}) must not return an auth error"
+        "OWNER: In the page: CloudKit.getDefaultContainer().publicCloudDatabase.performQuery({recordType:'PublicJourney'}) must not return an auth error"
       ],
       "refs": [
         "src/lib/cloudkit.ts:21, deploy.yml:35, deploy-pages.yml:63",
@@ -915,7 +915,7 @@
       "priority": 6,
       "why": "Three documents list this as the go/no-go before any brand or screenshot spend. 'Akashic Books' is a registered US publisher in the books class; no software-class conflict was found, but that is not a clearance.",
       "verify": [
-        "A recorded search result from both registers"
+        "OWNER: A recorded search result from both registers"
       ]
     },
     {
@@ -929,7 +929,7 @@
       "priority": 7,
       "why": "The one calendar item that runs entirely outside the build queue and can silently add two weeks. No in-app purchase can go live without it. Start today, in parallel with everything else.",
       "verify": [
-        "App Store Connect → Business shows the agreement active"
+        "OWNER: App Store Connect → Business shows the agreement active"
       ]
     },
     {
@@ -946,7 +946,7 @@
       ],
       "why": "The code side is ready and consistent — product id and both free-tier limits match the plan. Trader status gates EU storefronts rather than release (Norway is EEA, not EU), and it is a form plus Apple-side verification, so it can run in parallel.",
       "verify": [
-        "App Store Connect shows the IAP ready to submit"
+        "OWNER: App Store Connect shows the IAP ready to submit"
       ]
     },
     {
@@ -964,7 +964,7 @@
       ],
       "why": "Owner-only data entry; the source content is written and paste-ready. App Privacy must reflect that User Content reaches a developer-readable public database — 'Data Not Collected' is affirmatively false for the showcase.",
       "verify": [
-        "ASC Prepare for Submission shows no missing required fields"
+        "OWNER: ASC Prepare for Submission shows no missing required fields"
       ]
     },
     {
@@ -1001,7 +1001,7 @@
       ],
       "why": "The two-week clock only starts once testers have a build, so this gates the largest calendar item in the project. Beta App Review takes 1-2 days for the first external build.",
       "verify": [
-        "TestFlight shows an external group with an approved build"
+        "OWNER: TestFlight shows an external group with an approved build"
       ]
     },
     {
@@ -1019,7 +1019,7 @@
       "priority": 95,
       "why": "The gate every document defers to and the only item nothing shortens — roughly three weeks minimum. It is also what decides whether the remaining DIFF work is worth building at all.",
       "verify": [
-        "Recorded results against the three criteria in COMMERCIALIZATION-PLAN §11 phase 2"
+        "OWNER: Recorded results against the three criteria in COMMERCIALIZATION-PLAN §11 phase 2"
       ],
       "notes": [
         "2026-07-27 THIS GATE'S PURPOSE HAS QUIETLY CHANGED AND ITS CRITERIA HAVE NOT. Everywhere in the documents it is described as deciding \"whether the remaining differentiation work is worth building\" — but the DIFF track is 13 of 14 done, including the 6-day PDF book. The investment decision the gate exists to make has already been made, by cheap agent labour, and that was probably right given the cost. But it means this is now a QUALITY gate, not an investment gate, and criteria (a)-(c) do not measure the things that actually sell the paid tier: whether photo curation, Intelligence day-note drafting and the PDF book land with real households. Rewrite the criteria before the beta starts, or it will measure the wrong three things and the three weeks will not be repeatable."
@@ -1040,7 +1040,7 @@
       "priority": 96,
       "why": "Manual release for v1.0 so go-live is controlled; phased release only for later updates. Submit a few days early to absorb one rejection round.",
       "verify": [
-        "ASC shows Ready for Sale, pending developer release"
+        "OWNER: ASC shows Ready for Sale, pending developer release"
       ]
     },
     {
@@ -1057,7 +1057,7 @@
       "priority": 97,
       "why": "With zero crash reporting in the binary, Xcode Organizer is the only signal there is — which makes checking it a process requirement rather than a nice-to-have.",
       "verify": [
-        "A written day-one runbook exists"
+        "OWNER: A written day-one runbook exists"
       ]
     },
     {
@@ -2127,7 +2127,7 @@
       "done_when": "A decision is recorded, and the shipped demo images are the ones intended.",
       "why": "DIFF-10 built the pipeline and had nothing real to put through it: the repo contains no photographs at all — all 76 images are AI-generated art or earth textures — so the three bundled JPEGs are re-encoded hero artwork. Illustrative scenery, not trek photographs, in the demo that is a new customer's first impression of a photo app. Real ones mean the family archive at /Users/cher/Privat/AkashicExport-20260722, and shipping private family photographs inside a public App Store binary is a decision only the owner can take. Swapping them is a file copy plus a manifest edit — no code change.",
       "verify": [
-        "The three files under apple/Fixtures/demo-media/ are the intended images"
+        "OWNER: The three files under apple/Fixtures/demo-media/ are the intended images"
       ]
     },
     {
@@ -2311,7 +2311,7 @@
       "why": "All three code items in the original QUA-30 are fixed (A4-3 alignment, A4-5 page indicator, A4-6 brand mark). A4-4 is not a fix but a choice, and both suggestions in the finding were tested and ruled out. Camera framing is impossible: centerCoordinateDistance is already at MapKit's clamp, and 42,000 km vs 52,000 km render pixel-identically (the disc spans x=0..1205 of 1206 either way), so the globe always overflows the screen width. Label suppression is unavailable: ocean names are base-map labels rather than POIs, so pointsOfInterest: .excludingAll does not reach them and MapKit offers no other switch. That leaves exactly one lever -- .imagery instead of .hybrid -- which removes EUROPE/AFRICA/ASIA along with the clipped ocean names. Those continent labels genuinely help a reader orient on a globe, so trading them away to tidy an edge is an aesthetic judgement about the app's signature screen, not an engineering call. Both states are already screenshotted in the scratchpad from this session.",
       "files": [],
       "verify": [
-        "Record the decision in apple/Docs/DESIGN-PLAN.md A4-4"
+        "OWNER: Record the decision in apple/Docs/DESIGN-PLAN.md A4-4"
       ],
       "resume": "Released rather than held: the two concrete A4 defects are fixed and committed; what is left is four taste calls I judged better made by the owner than by me — card/tab-bar alignment, MapKit ocean labels clipping, the page-indicator pill, and whether onboarding should lead with the app mark (needs a new imageset; the mark is appiconset-only today).",
       "owner": true
@@ -2492,7 +2492,7 @@
       "why": "Measured, not suspected. Every Vision ML request fails in the iOS 26.5 simulator: VNGenerateImageFeaturePrintRequest, VNClassifyImageRequest and VNCalculateImageAestheticsScoresRequest all return 'Failed to create espresso context', and VNDetectFaceRectanglesRequest returns 'Could not create inference context'. So DIFF-04 (aesthetics + near-duplicate grouping) and DIFF-05 (subject labels) have NEVER executed anywhere automated and cannot be covered by CI, which also runs simulators. This is the same blind spot as the Intelligence code CI never type-checks (QUA-05), but more dangerous, because this code IS compiled and so looks covered. Worse, VisionPhotoScorer.score catches the failure and degrades to 'unscored', after which PhotoCuration falls back to sortOrder -- so a simulator run of Curate photos is a silent no-op that looks like a working feature. Every screenshot and demo taken so far has therefore never exercised curation. Pair this with SHIP-15's device session; it needs no second Apple ID, so it is cheaper than that one.",
       "files": [],
       "verify": [
-        "Run on a physical device: create a journey with a photo burst, tap Curate, and confirm a hero is proposed, a best-of selection appears, and burst frames are grouped as duplicates."
+        "OWNER: Run on a physical device: create a journey with a photo burst, tap Curate, and confirm a hero is proposed, a best-of selection appears, and burst frames are grouped as duplicates."
       ]
     },
     {
@@ -2775,7 +2775,28 @@
       "verify": [
         "! test -d public/textures",
         "npm run build && ! test -d dist/textures"
-      ]
+      ],
+      "verification": {
+        "at": "2026-07-28T07:17:41.037Z",
+        "head": "b82395c",
+        "ran": [
+          {
+            "command": "! test -d public/textures",
+            "ok": true,
+            "ms": 22,
+            "status": 0,
+            "signal": null
+          },
+          {
+            "command": "npm run build && ! test -d dist/textures",
+            "ok": true,
+            "ms": 2011,
+            "status": 0,
+            "signal": null
+          }
+        ],
+        "attested": []
+      }
     },
     {
       "id": "LEG-17",
@@ -2851,7 +2872,7 @@
       "track": "QUALITY",
       "status": "TODO",
       "verify": [
-        "See the why: an owner-run curl with an explicit Origin header against the production container"
+        "OWNER: See the why: an owner-run curl with an explicit Origin header against the production container"
       ]
     },
     {
@@ -3124,7 +3145,7 @@
       "track": "SHIP",
       "status": "TODO",
       "verify": [
-        "A submitted entitlement request in the Apple Developer account"
+        "OWNER: A submitted entitlement request in the Apple Developer account"
       ]
     },
     {
@@ -3140,7 +3161,7 @@
       "track": "SHIP",
       "status": "TODO",
       "verify": [
-        "A written list of households and a start date, before SHIP-16 begins"
+        "OWNER: A written list of households and a start date, before SHIP-16 begins"
       ]
     },
     {
@@ -3156,7 +3177,7 @@
       "track": "SHIP",
       "status": "TODO",
       "verify": [
-        "A submitted featuring nomination in App Store Connect"
+        "OWNER: A submitted featuring nomination in App Store Connect"
       ]
     },
     {
@@ -3174,7 +3195,7 @@
       "track": "LEGACY",
       "status": "TODO",
       "verify": [
-        "The key shows as revoked in the Mapbox account"
+        "OWNER: The key shows as revoked in the Mapbox account"
       ]
     },
     {
@@ -3200,6 +3221,93 @@
         "2026-07-28 THREE SEPARATE WAYS THE CLEANUP DIDN'T RUN, each found by measuring rather than reasoning. (1) `git worktree prune` honours gc.worktreePruneExpire — three months by default — so a registration made seconds ago is exempt; it needs `--expire now`. (2) Piping the output gives SIGPIPE when the reader exits, the process dies, and `finally` never completes — so signal handlers are load-bearing, not defensive. (3) `process.exit()` DOES NOT RUN `finally` blocks, and both rejection paths call it, so the negative control leaked a worktree even with the signal handlers in place; only `process.on(\"exit\", cleanup)` covers a deliberate early exit. A cleanup that runs only on the happy path is the same shape as a test that only passes: it looks like a mechanism and is not one.",
         "2026-07-28 NOT YET WIRED INTO `workplan done`. The review's full proposal was to require the receipt in `evidence` for any defect fix, which would make the cannot-fail suite unclosable rather than merely detectable. Deliberately left as a separate step: only four small agent tasks remain and the owner queue is now the constraint, so enforcing it project-wide today would cost more than it can return. The script is the durable part; the enforcement is a two-line change to `done` when it pays."
       ]
+    },
+    {
+      "id": "QUA-53",
+      "effort": 0.5,
+      "priority": 20,
+      "deps": [],
+      "track": "QUALITY",
+      "status": "DONE",
+      "title": "The ledger never ran its own verify list, and four CLAUDE.md rules were enforced only by memory",
+      "done_when": "`workplan done` refuses a task whose runnable checks have not passed, and the rules that have already cost real time are enforced by the harness rather than remembered by the agent.",
+      "why": "THE LEDGER DID NOT EXECUTE ITS OWN VERIFY LIST. `scripts/workplan.mjs` imported no child_process; the\n259 `verify` entries were printed by `show`, quoted in commit messages, and trusted. `done` accepted any\nfree-text `--evidence`, so \"804 tests pass\" was exactly as acceptable to it as running them. That is this\nproject's documented failure class — a claim decoupled from the mechanism that would make it true —\nsitting inside the tool built to prevent it, which is why it survived several reviews: everybody was\nreading the ledger for status and nobody was asking what enforced it.\n\nTHE CLASSIFICATION PROBLEM IS THE WHOLE DESIGN, and getting it wrong in either direction is worse than\nnot building it. About four fifths of the entries are shell; the rest are instructions to a person. Prose\nexecuted as shell fails and reads as a broken task. A real command misfiled as prose is silently never\nrun — the exact hole being closed. I tried twice to tell them apart by inspection and got a different\nanswer each time: a command-word allowlist called `test -f CLAUDE.md` prose, and resolving the first\ntoken against PATH called `for d in ...; do` and `! grep` prose, because those are shell keywords rather\nthan executables. So the split is declared in the DATA (`MANUAL:` / `OWNER:` prefixes) where it is a\ndeliberate act, and an unprefixed prose entry fails loudly instead of being quietly decided for.\n\nFOUR RULES IN CLAUDE.md WERE LOAD-BEARING AND UNENFORCED, each already paid for once: whole-tree\n`git add` pulling a concurrent agent's half-finished file into the wrong commit; `git mv`/`git rm`\nstaging themselves so another worktree's move lands in your commit no matter how careful your `git add`\nis; and two scripts that mutate the owner's world, one of which overwrites the dated verification report\ninside the archive bundle. A rule in a markdown file is enforced by whether the agent read that far.",
+      "files": [
+        "scripts/workplan.mjs",
+        ".claude/settings.json",
+        ".claude/hooks/guard-bash.sh"
+      ],
+      "evidence": "Proven in both directions, which is the only way a gate is worth anything. THE GATE: a failing check reports FAIL and exits 1; `done` then refuses it; `done` refuses a task never verified at all; and appending an entry to `verify` AFTER verifying is refused by name — the cheapest laundering route, closed. THE GUARD: 13 command shapes, 6 blocked (`-A`, `--all`, bare `.`, one buried mid-chain, and both mutating scripts) and 7 allowed (explicit path lists, `git add -p`, a grep that merely MENTIONS a forbidden script, and the GUARD_OK=1 escape); staged `D` and `R100` each blocked in a scratch repo, with a clean index passing. MEASURED: 207 of 259 entries runnable, and every prose entry on an open task is on an owner task, so the runner covers the entire remaining agent queue. `workplan check` ok at 136 tasks.",
+      "verify": [
+        "node scripts/workplan.mjs check",
+        "node scripts/workplan.mjs verify LEG-16",
+        "jq -e . .claude/settings.json > /dev/null",
+        "printf '{\"tool_input\":{\"command\":\"git add -A\"}}' | CLAUDE_PROJECT_DIR=\"$PWD\" .claude/hooks/guard-bash.sh >/dev/null 2>&1; test \"$?\" = 2  # 2 blocks; 1 would NOT",
+        "printf '{\"tool_input\":{\"command\":\"npx tsx scripts/export/verifyExport.ts\"}}' | CLAUDE_PROJECT_DIR=\"$PWD\" .claude/hooks/guard-bash.sh >/dev/null 2>&1; test \"$?\" = 2",
+        "printf '{\"tool_input\":{\"command\":\"git add WORKPLAN.md docs/workplan/tasks.json\"}}' | CLAUDE_PROJECT_DIR=\"$PWD\" .claude/hooks/guard-bash.sh >/dev/null 2>&1",
+        "printf '{\"tool_input\":{\"command\":\"grep -rn verifyExport.ts docs/\"}}' | CLAUDE_PROJECT_DIR=\"$PWD\" .claude/hooks/guard-bash.sh >/dev/null 2>&1"
+      ],
+      "notes": [
+        "2026-07-28 A HOOK MUST EXIT 2 TO BLOCK. Exit 1 is treated as a non-fatal hook error and the command runs anyway, so a guard written with `exit 1` reads exactly like a working guard and stops nothing — the same shape as a test that only passes. Two of this task's verify entries assert the number 2 specifically rather than merely non-zero, because that is the assertion that would catch the regression.",
+        "2026-07-28 THE DENY LIST IS EXACT-STRING MATCHING and cannot carry this on its own: it catches `git add -A` and not `git add -A .`. The hook does the real pattern work; the deny entries earn their place by making the intent visible in a file people actually read. Do not add a rule to `deny` and consider it enforced.",
+        "2026-07-28 DELIBERATELY NOT DONE: the 25 prose entries on already-CLOSED tasks are unprefixed. They are historical record, nothing will run them again, and prefixing them would be 25 edits to closed work for no behaviour change. Every prose entry on an OPEN task is prefixed, which is the set that matters. Also unbuilt: an `--effort`/model-tier convention for subagents. `CLAUDE_CODE_EFFORT_LEVEL` appears ZERO times in Anthropic's published documentation — it was in my own proposal and I could not substantiate it, so it stayed out rather than shipping a config key that silently does nothing."
+      ],
+      "verification": {
+        "at": "2026-07-28T07:17:41.374Z",
+        "head": "b82395c",
+        "ran": [
+          {
+            "command": "node scripts/workplan.mjs check",
+            "ok": true,
+            "ms": 115,
+            "status": 0,
+            "signal": null
+          },
+          {
+            "command": "node scripts/workplan.mjs verify LEG-16",
+            "ok": true,
+            "ms": 2164,
+            "status": 0,
+            "signal": null
+          },
+          {
+            "command": "jq -e . .claude/settings.json > /dev/null",
+            "ok": true,
+            "ms": 29,
+            "status": 0,
+            "signal": null
+          },
+          {
+            "command": "printf '{\"tool_input\":{\"command\":\"git add -A\"}}' | CLAUDE_PROJECT_DIR=\"$PWD\" .claude/hooks/guard-bash.sh >/dev/null 2>&1; test \"$?\" = 2  # 2 blocks; 1 would NOT",
+            "ok": true,
+            "ms": 67,
+            "status": 0,
+            "signal": null
+          },
+          {
+            "command": "printf '{\"tool_input\":{\"command\":\"npx tsx scripts/export/verifyExport.ts\"}}' | CLAUDE_PROJECT_DIR=\"$PWD\" .claude/hooks/guard-bash.sh >/dev/null 2>&1; test \"$?\" = 2",
+            "ok": true,
+            "ms": 83,
+            "status": 0,
+            "signal": null
+          },
+          {
+            "command": "printf '{\"tool_input\":{\"command\":\"git add WORKPLAN.md docs/workplan/tasks.json\"}}' | CLAUDE_PROJECT_DIR=\"$PWD\" .claude/hooks/guard-bash.sh >/dev/null 2>&1",
+            "ok": true,
+            "ms": 62,
+            "status": 0,
+            "signal": null
+          },
+          {
+            "command": "printf '{\"tool_input\":{\"command\":\"grep -rn verifyExport.ts docs/\"}}' | CLAUDE_PROJECT_DIR=\"$PWD\" .claude/hooks/guard-bash.sh >/dev/null 2>&1",
+            "ok": true,
+            "ms": 66,
+            "status": 0,
+            "signal": null
+          }
+        ],
+        "attested": []
+      }
     }
   ]
 }
