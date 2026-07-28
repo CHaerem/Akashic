@@ -3569,7 +3569,7 @@
       "priority": 8,
       "deps": [],
       "track": "DIFF",
-      "status": "TODO",
+      "status": "WIP",
       "owner": false,
       "title": "On cellular, a fresh install shows \"Start your first journey\" while the whole archive waits silently",
       "done_when": "A fresh install on a metered connection shows the family's journeys as named, visibly un-downloaded rows with an honest size and a \"Download now\" action — instead of the first-run hero — and the first-sync estimate matches what the engine actually fetches.",
@@ -3587,7 +3587,12 @@
       ],
       "notes": [
         "2026-07-28 THE PIECES THIS SHOULD REUSE, so nothing is invented twice: NetworkPolicy.allowsHeavyTransfer and its NetworkPathSource test seam; RemotePhotoCounting (the no-asset pre-fetch pattern, including returning nil on failure and deferring silently); FirstSyncDownloadDecision (pure, unit-tested branch logic — extend, do not fork); SyncStatus.waitingForWiFi; onAllowsHeavyTransferBecameTrue (the deferred-fetch release). The one genuinely new piece is the journey-summary query and the list row that renders it."
-      ]
+      ],
+      "claim": {
+        "agent": "diff15-agent",
+        "branch": "agent/diff15",
+        "at": "2026-07-28"
+      }
     }
   ]
 }

@@ -30,6 +30,7 @@ node scripts/workplan.mjs next
 | `MAP-04A` Mint the MapKit token in the build, and fail the build before it lapses | opus5 | `claude/remote-control-project-review-9462c1` | minter + health guard done and locally proven; the deploy-step wiring wants MAP-03 landed first |
 | `QUA-49` On MapKit a photo stack hides a camp marker and eats its clicks — a regression versus Mapbox | qua49-agent | `agent/qua49` | — |
 | `QUA-55` A 14.5 pt tap target on iPad, and the reason no run had ever seen it | qua55-agent | `agent/qua55` | — |
+| `DIFF-15` On cellular, a fresh install shows "Start your first journey" while the whole archive waits silently | diff15-agent | `agent/diff15` | — |
 
 ## LEGACY
 
@@ -145,7 +146,7 @@ node scripts/workplan.mjs next
 | ` ` | `DIFF-12` **Decide what photographs the demo journey ships with** | 0.5 | owner | `DIFF-10` | A decision is recorded, and the shipped demo images are the ones intended. |
 | `x` | `DIFF-13` **Accept/dismiss rows for curation, and make Vision link** | 1 | agent | `DIFF-04` | Each day proposes a best-of and a hero the user can accept or dismiss, and Vision links into the build. |
 | `x` | `DIFF-14` **Collapse duplicates on import, which needs a stored content hash** | 1 | agent | `DIFF-06` | Re-importing a byte-identical photograph is detected and skipped, not written twice. |
-| ` ` | `DIFF-15` **On cellular, a fresh install shows "Start your first journey" while the whole archive waits silently** | 1 | agent | — | A fresh install on a metered connection shows the family's journeys as named, visibly un-downloaded rows with an honest size and a "Download now" action — instead of the first-run hero — and the first-sync estimate matches what the engine actually fetches. |
+| `~` | `DIFF-15` **On cellular, a fresh install shows "Start your first journey" while the whole archive waits silently** | 1 | agent | — | A fresh install on a metered connection shows the family's journeys as named, visibly un-downloaded rows with an honest size and a "Download now" action — instead of the first-run hero — and the first-sync estimate matches what the engine actually fetches. |
 
 ## QUALITY
 
