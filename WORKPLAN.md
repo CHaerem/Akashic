@@ -23,6 +23,12 @@ Read [CLAUDE.md](CLAUDE.md) before touching anything. To find work:
 node scripts/workplan.mjs next
 ```
 
+## In flight
+
+| Task | Agent | Branch | Stopped at |
+|---|---|---|---|
+| `DIFF-16` DIFF-15 on a real device: the prompt worked, the rows did not — and the failure is undiagnosable by design | diff16-agent | `agent/diff16` | — |
+
 ## LEGACY
 
 > Retire Supabase, Cloudflare and R2. Repo-side removal can happen now; the infrastructure deletions are gated on the archive being duplicated and on the Pages cutover. LEG-01 is independent of every gate and should happen today.
@@ -139,7 +145,7 @@ node scripts/workplan.mjs next
 | `x` | `DIFF-13` **Accept/dismiss rows for curation, and make Vision link** | 1 | agent | `DIFF-04` | Each day proposes a best-of and a hero the user can accept or dismiss, and Vision links into the build. |
 | `x` | `DIFF-14` **Collapse duplicates on import, which needs a stored content hash** | 1 | agent | `DIFF-06` | Re-importing a byte-identical photograph is detected and skipped, not written twice. |
 | `x` | `DIFF-15` **On cellular, a fresh install shows "Start your first journey" while the whole archive waits silently** | 1 | agent | — | A fresh install on a metered connection shows the family's journeys as named, visibly un-downloaded rows with an honest size and a "Download now" action — instead of the first-run hero — and the first-sync estimate matches what the engine actually fetches. |
-| ` ` | `DIFF-16` **DIFF-15 on a real device: the prompt worked, the rows did not — and the failure is undiagnosable by design** | 1 | agent | — | The un-downloaded journeys surface renders on a real device against Production (or its failure is visible and diagnosable from the device), sync/download progress is visible in the journey list, and a TestFlight build can produce a sync log the owner can read. |
+| `~` | `DIFF-16` **DIFF-15 on a real device: the prompt worked, the rows did not — and the failure is undiagnosable by design** | 1 | agent | — | The un-downloaded journeys surface renders on a real device against Production (or its failure is visible and diagnosable from the device), sync/download progress is visible in the journey list, and a TestFlight build can produce a sync log the owner can read. |
 
 ## QUALITY
 

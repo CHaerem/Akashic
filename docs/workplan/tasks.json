@@ -3935,7 +3935,7 @@
       "priority": 7,
       "deps": [],
       "track": "DIFF",
-      "status": "TODO",
+      "status": "WIP",
       "owner": false,
       "title": "DIFF-15 on a real device: the prompt worked, the rows did not — and the failure is undiagnosable by design",
       "done_when": "The un-downloaded journeys surface renders on a real device against Production (or its failure is visible and diagnosable from the device), sync/download progress is visible in the journey list, and a TestFlight build can produce a sync log the owner can read.",
@@ -3954,7 +3954,12 @@
       ],
       "notes": [
         "2026-07-28 SEQUENCING: the log toggle (fix 1) ships FIRST and alone if needed — every other fix is a guess until the owner's device can say which hypothesis is true. Resist fixing (a)-(c) blind."
-      ]
+      ],
+      "claim": {
+        "agent": "diff16-agent",
+        "branch": "agent/diff16",
+        "at": "2026-07-28"
+      }
     }
   ]
 }
