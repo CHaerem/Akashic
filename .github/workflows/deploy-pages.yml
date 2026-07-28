@@ -208,37 +208,56 @@ jobs:
         id: deployment
         uses: actions/deploy-pages@v5
 
-      - name: Assert the served site carries the dot-paths, not just the artifact
-        # MEASURED 2026-07-28, and it was a live production defect for a day:
-        # https://akashic.no/.well-known/apple-app-site-association returned 404 and served the
-        # SPA shell, so iOS could not associate the domain and EVERY Universal Link was dead —
-        # while `public/.well-known/apple-app-site-association` was committed, Vite copied it into
-        # `dist/`, and every build-side check was green. Discriminating measurement: from the same
-        # build, `/CNAME` and `/offline.html` answered 200 while `/.DS_Store` and
-        # `/.well-known/...` both answered 404. Pages was filtering paths beginning with a dot;
-        # `.nojekyll` (now in `public/`, so Vite carries it through) is the documented fix.
+      - name: Assert the served site serves an applinks document
+        # MEASURED 2026-07-28, a live production defect: BOTH
+        # https://akashic.no/.well-known/apple-app-site-association and the artifact's own
+        # `.nojekyll` returned 404, so iOS could not associate the domain and EVERY Universal Link
+        # was dead — while `public/.well-known/apple-app-site-association` was committed, Vite
+        # copied it into `dist/`, and every build-side check was green.
         #
-        # This step exists because NO BUILD-SIDE CHECK CAN SEE THIS. The file is present in the
-        # artifact and absent from the site, which is the same shape as the INFOPLIST_KEY trap and
-        # the tokenless-bundle trap: the thing that is missing is invisible unless something
-        # asserts on the SERVED artefact. SHIP-07 shipped green with a verify list that grepped the
-        # entitlements file and never fetched the URL iOS actually reads.
+        # THE CAUSE IS THE UPLOAD, NOT THE SERVING, and the first hypothesis was wrong in a way
+        # worth keeping. `.nojekyll` was added on the theory that Pages filters dot-paths through
+        # Jekyll; this step then went red anyway, and the artifact tar listing settled it:
+        # `actions/upload-pages-artifact@v4` tarred 55 files from `dist/` and NOT ONE dot-path. So
+        # `dist/.well-known/` and `dist/.nojekyll` never reach the artifact at all, and no
+        # serving-side setting could ever have fixed it. `.nojekyll` is kept because it is free and
+        # correct if the upload ever carries dotfiles — but it is not what makes this work.
         #
-        # Deliberately asserts the CONTENT, not only the status: a 200 serving the SPA shell is
-        # exactly what the broken state looked like, so `applinks` is the only honest signal.
+        # What makes it work is `public/apple-app-site-association`, the ROOT location, which Apple
+        # still supports and which has no leading dot. iOS tries `.well-known` first, then the root.
+        #
+        # This step exists because NO BUILD-SIDE CHECK CAN SEE ANY OF IT: the file was present in
+        # `dist/` and absent from both the artifact and the site. Same shape as the INFOPLIST_KEY
+        # trap and the tokenless-bundle trap. SHIP-07 shipped green on a verify list that grepped
+        # the entitlements file and never fetched the URL iOS reads.
+        #
+        # Asserts CONTENT, not only status: a 200 serving the SPA shell is exactly what the broken
+        # state looked like, so `applinks` is the only honest signal. Accepts either location and
+        # requires at least one, because which one Apple reads is not ours to decide.
         run: |
           set -euo pipefail
-          url="https://akashic.no/.well-known/apple-app-site-association"
+          root="https://akashic.no/apple-app-site-association"
+          wk="https://akashic.no/.well-known/apple-app-site-association"
           for attempt in 1 2 3 4 5 6; do
-            code=$(curl -s -o /tmp/aasa -w '%{http_code}' --max-time 20 "$url" || echo 000)
-            if [ "$code" = 200 ] && grep -q applinks /tmp/aasa; then
-              echo "ok: AASA served with applinks (attempt $attempt)"
+            ok=""
+            for url in "$root" "$wk"; do
+              code=$(curl -s -o /tmp/aasa -w '%{http_code}' --max-time 20 "$url" || echo 000)
+              if [ "$code" = 200 ] && grep -q applinks /tmp/aasa; then
+                echo "  served: $url"
+                ok=yes
+              else
+                echo "  not served: $url (HTTP $code)"
+              fi
+            done
+            if [ -n "$ok" ]; then
+              echo "ok: an applinks document is served (attempt $attempt)"
               exit 0
             fi
-            echo "attempt $attempt: HTTP $code, applinks $(grep -c applinks /tmp/aasa || true) — waiting for edge propagation"
+            echo "attempt $attempt: neither location served applinks — waiting for edge propagation"
             sleep 20
           done
-          echo "::error::$url did not serve an applinks document. Universal Links are dead until it does."
-          echo "Most likely cause: dist/.nojekyll is missing, so Pages filters every path beginning with a dot."
+          echo "::error::no applinks document is served at either location. Universal Links are dead until one is."
+          echo "Check the 'Upload Pages artifact' tar listing: if it carries no dot-paths, .well-known cannot work"
+          echo "and the ROOT copy (public/apple-app-site-association) is the one that has to be present."
           head -c 400 /tmp/aasa || true
           exit 1

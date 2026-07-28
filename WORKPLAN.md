@@ -118,7 +118,7 @@ node scripts/workplan.mjs next
 | ` ` | `SHIP-21` **Request the Private Cloud Compute entitlement — it is a review, not a toggle** | 0.1 | owner | — | The entitlement request is submitted to Apple. |
 | ` ` | `SHIP-22` **Recruit the ten beta households — the longest lead time nobody owned** | 0.5 | owner | — | A written list of at least ten households who have agreed, with names and a start date. |
 | ` ` | `SHIP-23` **Nominate the app for Apple featuring, and treat it as launch strategy rather than a lottery ticket** | 0.2 | owner | — | A featuring nomination is submitted in App Store Connect. |
-| ` ` | `SHIP-24` **Universal Links are dead in production — GitHub Pages serves no dot-path without .nojekyll** | 0.3 | agent | — | https://akashic.no/.well-known/apple-app-site-association returns 200 with an applinks document, and the deploy asserts it after every push so it cannot silently regress. |
+| ` ` | `SHIP-24` **Universal Links are dead in production — the Pages artifact carries no dot-path at all** | 0.3 | agent | — | https://akashic.no/.well-known/apple-app-site-association returns 200 with an applinks document, and the deploy asserts it after every push so it cannot silently regress. |
 | ` ` | `SHIP-25` **Rotate the MapKit key that passed through a chat upload** | 0.2 | owner | — | A second Maps key is registered, MAPKIT_PRIVATE_KEY holds it, the Credential health check is green on main, and key 9UN97VBZR8 shows as revoked in the Apple Developer account. |
 
 ## DIFF

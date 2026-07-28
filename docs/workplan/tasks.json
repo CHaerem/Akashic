@@ -3386,46 +3386,56 @@
       "track": "SHIP",
       "status": "TODO",
       "owner": false,
-      "title": "Universal Links are dead in production — GitHub Pages serves no dot-path without .nojekyll",
+      "title": "Universal Links are dead in production — the Pages artifact carries no dot-path at all",
       "done_when": "https://akashic.no/.well-known/apple-app-site-association returns 200 with an applinks document, and the deploy asserts it after every push so it cannot silently regress.",
       "why": "MEASURED 2026-07-28 against production: that URL returned 404 and served the SPA shell, so iOS could\nnot associate the domain and EVERY Universal Link was dead. Discriminating measurement from the same\nbuild: /CNAME and /offline.html answered 200 while /.DS_Store and /.well-known/... both answered 404.\nGitHub Pages was filtering every path beginning with a dot, and `.nojekyll` was absent.\n\nTHE INSTRUCTIVE PART IS WHY EVERYTHING WAS GREEN. `public/.well-known/apple-app-site-association` is\ncommitted, Vite copies it into `dist/`, and SHIP-07 closed on a verify list that grepped the\nentitlements file — it never fetched the URL iOS actually reads. So the file was present in the\nartefact and absent from the site, which no build-side check can see. Same family as the\nINFOPLIST_KEY_* trap and the tokenless-bundle trap: the thing that is missing is invisible unless\nsomething asserts on the SERVED artefact.\n\nIt was also caught by accident. LEG-09 carried the entry `curl -s <that URL> | head -5`, written\nprecisely to check this, whose exit status was `head`'s and so could never fail. Making the ledger\nentries capable of failing is what surfaced it — the defect and the reason it hid are the same defect.",
       "files": [
         "public/.nojekyll",
+        "public/apple-app-site-association",
         ".github/workflows/deploy-pages.yml"
       ],
       "verify": [
-        "test -f public/.nojekyll",
-        "npm run build && test -f dist/.nojekyll && test -f dist/.well-known/apple-app-site-association",
-        "grep -q \"applinks\" .github/workflows/deploy-pages.yml  # the post-deploy assertion exists",
-        "MANUAL: read the Deploy to GitHub Pages run for the commit that lands this — the step \"Assert the served site carries the dot-paths\" must be green. It is the observation; it just cannot run until a push to main happens."
+        "test -f public/apple-app-site-association",
+        "grep -q applinks public/apple-app-site-association",
+        "npm run build && test -f dist/apple-app-site-association",
+        "grep -q \"apple-app-site-association\" .github/workflows/deploy-pages.yml  # the post-deploy assertion exists",
+        "MANUAL: read the Deploy to GitHub Pages run for the commit that lands this — the step \"Assert the served site serves an applinks document\" must be green. It cannot run until a push to main happens."
       ],
       "notes": [
-        "2026-07-28 THE REPO HALF IS DONE IN THIS COMMIT: `public/.nojekyll` exists, the build carries it and the AASA file into `dist/`, and `deploy-pages.yml` now asserts the SERVED document contains `applinks` with six 20-second retries for edge propagation. It asserts CONTENT and not only status, because a 200 serving the SPA shell is exactly what the broken state looked like. What cannot be closed from here is the observation: the assertion has never run, because it only runs on a push to main. THE FIRST DEPLOY AFTER THIS COMMIT IS THE TEST. If it goes red, `.nojekyll` was not the cause and the next thing to check is whether `upload-pages-artifact` is excluding dotfiles from the tar.",
-        "2026-07-28 `public/.DS_Store` was tracked and served (404 only because of the same dot-filtering). Untracked in the same commit and `.DS_Store` was already in `.gitignore`, so it had been committed before that rule existed.",
-        "2026-07-28 The device half — tapping an akashic.no journey link and seeing the app open rather than Safari — is NOT duplicated here. It belongs to SHIP-15, the real-device session on two Apple IDs, and filing it twice would mean two records of one observation that can disagree. This task owns getting the document SERVED; SHIP-15 owns what iOS then does with it."
+        "2026-07-28 THE FIRST FIX WAS WRONG, AND THE ASSERTION IS WHAT CAUGHT IT — which is the whole argument for asserting on the served artefact rather than the build. I added `public/.nojekyll` on the theory that Pages filters dot-paths through Jekyll, pushed, and the new post-deploy step went RED anyway: both the AASA and `.nojekyll` itself answered 404. The artifact tar listing settled it — `actions/upload-pages-artifact@v4` tarred 55 files out of `dist/` and NOT ONE dot-path. So the exclusion happens at UPLOAD, not at serving, and no serving-side setting could ever have fixed it. Jekyll was never involved. Had I shipped the `.nojekyll` theory with a build-side check only, it would have looked fixed and stayed broken.",
+        "2026-07-28 THE FIX IS THE ROOT LOCATION. `public/apple-app-site-association` has no leading dot, so it reaches the artifact; Apple tries `/.well-known/` first and falls back to the root, so the root alone is sufficient. The `.well-known` copy and `.nojekyll` are kept because they cost nothing and become correct if the upload action ever carries dotfiles — but they are NOT what makes this work, and a future reader should not delete the root copy on the assumption that `.well-known` covers it.",
+        "2026-07-28 UNVERIFIED AND IT NEEDS A DEVICE: GitHub Pages serves an extensionless file as `application/octet-stream`, and Apple historically wanted `application/json`. iOS fetches the document through Apple's own CDN, which is more lenient, so this may be fine — but the only place it becomes a fact is SHIP-15, tapping a real link on a real device. If Universal Links still fail with the document served and valid, Content-Type is the next thing to check, and Pages cannot set it — that would mean moving the document to a host that can.",
+        "2026-07-28 HOW IT HID FOR SO LONG: SHIP-07 closed on a verify list that grepped the entitlements file and never fetched the URL iOS reads, and LEG-09 carried `curl -s <that URL> | head -5` — written to catch exactly this, and incapable of failing because its exit status was `head`'s. Making the ledger's entries capable of failing is what surfaced it. `public/.DS_Store` was tracked too, and was untracked in the same commit."
       ],
       "verification": {
-        "at": "2026-07-28T08:06:05.148Z",
-        "head": "2a62428",
+        "at": "2026-07-28T08:22:09.875Z",
+        "head": "35b1b0d",
         "ran": [
           {
-            "command": "test -f public/.nojekyll",
+            "command": "test -f public/apple-app-site-association",
             "ok": true,
-            "ms": 23,
+            "ms": 20,
             "status": 0,
             "signal": null
           },
           {
-            "command": "npm run build && test -f dist/.nojekyll && test -f dist/.well-known/apple-app-site-association",
+            "command": "grep -q applinks public/apple-app-site-association",
             "ok": true,
-            "ms": 2480,
+            "ms": 14,
             "status": 0,
             "signal": null
           },
           {
-            "command": "grep -q \"applinks\" .github/workflows/deploy-pages.yml  # the post-deploy assertion exists",
+            "command": "npm run build && test -f dist/apple-app-site-association",
             "ok": true,
-            "ms": 27,
+            "ms": 2371,
+            "status": 0,
+            "signal": null
+          },
+          {
+            "command": "grep -q \"apple-app-site-association\" .github/workflows/deploy-pages.yml  # the post-deploy assertion exists",
+            "ok": true,
+            "ms": 29,
             "status": 0,
             "signal": null
           }
@@ -3433,7 +3443,7 @@
         "attested": [
           {
             "kind": "manual",
-            "text": "read the Deploy to GitHub Pages run for the commit that lands this — the step \"Assert the served site carries the dot-paths\" must be green. It is the observation; it just cannot run until a push to main happens."
+            "text": "read the Deploy to GitHub Pages run for the commit that lands this — the step \"Assert the served site serves an applinks document\" must be green. It cannot run until a push to main happens."
           }
         ]
       }
