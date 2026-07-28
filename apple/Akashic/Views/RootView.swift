@@ -97,9 +97,14 @@ struct RootView: View {
     }
 }
 
-/// One-time first-sync sheet shown at the 5.4 GB moment: an honest estimate with a Wi-Fi
-/// recommendation and an explicit cellular escape hatch. The default (and recommended) action is
-/// to wait; choosing cellular grants a one-occasion pass, never a standing preference.
+/// One-time first-sync sheet: an honest estimate with a Wi-Fi recommendation and an explicit
+/// cellular escape hatch. The default (and recommended) action is to wait; choosing cellular grants
+/// a one-occasion pass, never a standing preference.
+///
+/// DIFF-15: this used to say "the 5.4 GB moment", which is no longer the moment it is. Photo
+/// architecture v2 excludes the media zones from every engine fetch, so first sync pulls metadata
+/// and thumbnails — a measured ~97 MB for the family archive, not 5.4 GB of originals. The number in
+/// `estimateSummary` now reflects that (`SyncSizeEstimate.averagePhotoBytes`).
 private struct FirstSyncDownloadPromptView: View {
     let estimateSummary: String
     let onWait: () -> Void

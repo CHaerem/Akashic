@@ -51,6 +51,11 @@ enum A11yID {
 
     static let journeyListCreate = "journeyList.create"
 
+    /// DIFF-15: the one-occasion "download over cellular anyway" action on the waiting-to-download
+    /// surface. A label query cannot address it — the same sentence is a Settings row doing the same
+    /// job, so "the button reading 'Download now over cellular'" is ambiguous across screens.
+    static let journeyListDownloadNow = "journeyList.downloadNow"
+
     // MARK: Paywall (the money path)
 
     static let paywallHeadline = "paywall.headline"

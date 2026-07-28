@@ -1142,6 +1142,17 @@
         }
       }
     },
+    "About %@ of journey details and preview photos downloads when you're on Wi-Fi. Full-quality photos load when you open them.": {
+      "comment": "Journeys list, under the \"Your journeys are in iCloud\" heading: what the deferred first sync will actually fetch. The placeholder is an already-formatted size, e.g. \"97.2 MB\". Says explicitly that originals are NOT part of this download — they stream when a photo is opened.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Omtrent %@ med turdetaljer og forhåndsvisningsbilder lastes ned når du er på Wi-Fi. Bilder i full kvalitet lastes når du åpner dem."
+          }
+        }
+      }
+    },
     "About %@ to download": {
       "localizations": {
         "nb": {
@@ -7894,6 +7905,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "Turene dine"
+          }
+        }
+      }
+    },
+    "Your journeys are in iCloud": {
+      "comment": "Journeys list heading, shown INSTEAD of the \"Start your first journey\" hero when the family's journeys exist in iCloud but their download is waiting for Wi-Fi.",
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Turene dine ligger i iCloud"
           }
         }
       }
