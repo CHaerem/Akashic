@@ -3728,7 +3728,7 @@
       "priority": 21,
       "deps": [],
       "track": "QUALITY",
-      "status": "WIP",
+      "status": "DONE",
       "owner": false,
       "title": "QUA-49 follow-up: the regression test, the now-false e2e comment, and the two unit-test guards",
       "done_when": "The camp-over-stack precedence is guarded by an e2e click on a KNOWN coincident day and by unit tests over the re-add and push-off paths; the stale comment is corrected; the local cast is gone.",
@@ -3741,18 +3741,56 @@
       ],
       "verify": [
         "npx vitest --run",
-        "! grep -n \"not z-index, not .DisplayPriority., not DOM order\" e2e/mapkit-journey.spec.ts",
+        "grep -qF \"clicking a camp with a photo on its exact coordinate selects that day (QUA-49)\" e2e/mapkit-journey.spec.ts && grep -q \"paint order is ADD\" e2e/mapkit-journey.spec.ts",
         "! grep -n \"as MKAnnotation & { anchorOffset\" src/lib/map/mapkit/annotations.ts",
         "VITE_E2E_TEST_MODE=true CI=true npx playwright test --project=chromium --ignore-snapshots"
       ],
       "notes": [
-        "2026-07-28 Also carried from the agent's report, for whoever picks this up: MARKER_CLEARANCE_PX = 30 is coupled to the CSS marker sizes (36/42 and 32/40) — if those grow it must follow, and the re-add is the unconditional backstop. Edit-mode drag over anchorOffset is unverified (the fixture cannot reach edit mode). And the owner has not yet SEEN the up-to-30 px nudge of a coincident photo stack — worth one look on the deployed site before the beta."
+        "2026-07-28 Also carried from the agent's report, for whoever picks this up: MARKER_CLEARANCE_PX = 30 is coupled to the CSS marker sizes (36/42 and 32/40) — if those grow it must follow, and the re-add is the unconditional backstop. Edit-mode drag over anchorOffset is unverified (the fixture cannot reach edit mode). And the owner has not yet SEEN the up-to-30 px nudge of a coincident photo stack — worth one look on the deployed site before the beta.",
+        "2026-07-28 THE ORIGINAL verify[1] WAS VACUOUS, found by the task's own agent: the negative grep for the false sentence never matched even the PRE-FIX file (the sentence carried a line break and a parenthetical inside the pattern), so the gate would have passed with the false comment intact. Replaced with two POSITIVE greps for markers proven absent from the pre-fix spec and present now — a negative grep on prose also collides with the keep-the-refuted-claim convention, since correcting a comment in place deliberately keeps the refuted words. Same lesson as the unassertable-entries sweep: an entry is only a check if it has been seen to fail."
       ],
       "claim": {
         "agent": "qua58-agent",
         "branch": "agent/qua58",
         "at": "2026-07-28"
-      }
+      },
+      "verification": {
+        "at": "2026-07-28T12:13:05.623Z",
+        "head": "e790329",
+        "ran": [
+          {
+            "command": "npx vitest --run",
+            "ok": true,
+            "ms": 6441,
+            "status": 0,
+            "signal": null
+          },
+          {
+            "command": "grep -qF \"clicking a camp with a photo on its exact coordinate selects that day (QUA-49)\" e2e/mapkit-journey.spec.ts && grep -q \"paint order is ADD\" e2e/mapkit-journey.spec.ts",
+            "ok": true,
+            "ms": 16,
+            "status": 0,
+            "signal": null
+          },
+          {
+            "command": "! grep -n \"as MKAnnotation & { anchorOffset\" src/lib/map/mapkit/annotations.ts",
+            "ok": true,
+            "ms": 12,
+            "status": 0,
+            "signal": null
+          },
+          {
+            "command": "VITE_E2E_TEST_MODE=true CI=true npx playwright test --project=chromium --ignore-snapshots",
+            "ok": true,
+            "ms": 52071,
+            "status": 0,
+            "signal": null
+          }
+        ],
+        "attested": []
+      },
+      "attestation": "Re-verified the gate myself on the merged tree after replacing verify[1], which the agent proved VACUOUS — the negative grep never matched even the pre-fix file. The replacement is two positive greps I proved falsifiable against 87f4127~1 before trusting them (both markers absent there, present now).",
+      "evidence": "Merged at c624439. prove.mjs both directions: 4 of 11 assertions genuinely RED against 87f4127~1 (deep-equal mismatches on add-order and clearance, hand-verified as assertions not imports), 11/11 green on HEAD — plus an unasked-for e2e revert proof showing the rewritten spec fails pre-fix on campOwnsCentre:false. Gates on the merged tree: 685 vitest (680+5), typecheck clean, lint 0/14, e2e 33 registered / 27 passed / 6 documented mobile-skips with the regression click running on day 3 — the day QUA-49 measured. The two runtime guards are gone, the cast is gone, and the false paint-order sentence is corrected in place with the refuted claim kept."
     }
   ]
 }
