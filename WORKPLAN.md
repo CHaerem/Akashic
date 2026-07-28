@@ -5,7 +5,7 @@
 
 # Akashic — work ledger
 
-149 tasks · **27 open** (2 agent-doable, 1.1 dev-days · 25 owner-only, 10.6 dev-days) · 122 done · 0 dropped
+150 tasks · **28 open** (3 agent-doable, 2.6 dev-days · 25 owner-only, 10.6 dev-days) · 122 done · 0 dropped
 
 > **`dev-days` are a human-developer estimate, not agent time.** They came from the review
 > that produced these tasks and they are the right unit for deciding whether something is
@@ -15,7 +15,7 @@
 > Measured so far: **116 agent tasks estimated at 76.9 dev-days**.
 > Elapsed time is deliberately absent: nothing here can support it. Use `git log` for that.
 >
-> **Every large agent item is closed.** 9 of the tasks closed so far were 2 dev-days or more; nothing 2 dev-days or larger remains agent-doable, and the 1.1 remaining dev-days are all small tasks (1 at 0.5 or less). What is still genuinely large is OWNER work, which no amount of agent compression touches.
+> **Every large agent item is closed.** 9 of the tasks closed so far were 2 dev-days or more; nothing 2 dev-days or larger remains agent-doable, and the 2.6 remaining dev-days are all small tasks (1 at 0.5 or less). What is still genuinely large is OWNER work, which no amount of agent compression touches.
 
 Read [CLAUDE.md](CLAUDE.md) before touching anything. To find work:
 
@@ -126,7 +126,7 @@ node scripts/workplan.mjs next
 
 > Capability beyond what competitors offer. Order set by decision: share link, then Vision curation, then the book.
 
-2 open of 16 · 1.5 d remaining
+3 open of 17 · 3 d remaining
 
 | | Task | Days | Who | Deps | Finish line |
 |---|---|---|---|---|---|
@@ -146,6 +146,7 @@ node scripts/workplan.mjs next
 | `x` | `DIFF-14` **Collapse duplicates on import, which needs a stored content hash** | 1 | agent | `DIFF-06` | Re-importing a byte-identical photograph is detected and skipped, not written twice. |
 | `x` | `DIFF-15` **On cellular, a fresh install shows "Start your first journey" while the whole archive waits silently** | 1 | agent | — | A fresh install on a metered connection shows the family's journeys as named, visibly un-downloaded rows with an honest size and a "Download now" action — instead of the first-run hero — and the first-sync estimate matches what the engine actually fetches. |
 | `~` | `DIFF-16` **DIFF-15 on a real device: the prompt worked, the rows did not — and the failure is undiagnosable by design** | 1 | agent | — | The un-downloaded journeys surface renders on a real device against Production (or its failure is visible and diagnosable from the device), sync/download progress is visible in the journey list, and a TestFlight build can produce a sync log the owner can read. |
+| ` ` | `DIFF-17` **One sync card, one truth: the sync story becomes a single composed value with five states** | 1.5 | agent | — | The journey list carries ONE sync card driven by one pure decision function; Settings keeps only the toggle and a last-synced line; the first-sync sheet is retired; no two surfaces can disagree by construction; and a first sync on ANY network shows real "N of M photos" progress. |
 
 ## QUALITY
 
