@@ -28,6 +28,8 @@ node scripts/workplan.mjs next
 | Task | Agent | Branch | Stopped at |
 |---|---|---|---|
 | `MAP-04A` Mint the MapKit token in the build, and fail the build before it lapses | opus5 | `claude/remote-control-project-review-9462c1` | minter + health guard done and locally proven; the deploy-step wiring wants MAP-03 landed first |
+| `QUA-49` On MapKit a photo stack hides a camp marker and eats its clicks — a regression versus Mapbox | qua49-agent | `agent/qua49` | — |
+| `QUA-55` A 14.5 pt tap target on iPad, and the reason no run had ever seen it | qua55-agent | `agent/qua55` | — |
 
 ## LEGACY
 
@@ -205,7 +207,7 @@ node scripts/workplan.mjs next
 | `x` | `QUA-46` **The showcase page shows two different day counts for the same journey** | 0.2 | agent | — | One journey reports one duration, and it matches the app. |
 | `x` | `QUA-47` **The journey view frames past the imagery resolution and shows a blurred smear** | 0.3 | agent | — | Opening a journey shows legible terrain at the arrival framing, for a short route as well as a long one. |
 | `x` | `QUA-48` **A SAMPLE journey seeded on top of a synced library, duplicating the real one** | 0.3 | agent | — | A fresh install signed into an account that already has journeys does not seed a sample. |
-| ` ` | `QUA-49` **On MapKit a photo stack hides a camp marker and eats its clicks — a regression versus Mapbox** | 0.3 | agent | `MAP-03` | A camp marker is clickable on the MapKit surface even with a photo stack over it, or the divergence from Mapbox is an accepted, recorded product decision. |
+| `~` | `QUA-49` **On MapKit a photo stack hides a camp marker and eats its clicks — a regression versus Mapbox** | 0.3 | agent | `MAP-03` | A camp marker is clickable on the MapKit surface even with a photo stack over it, or the divergence from Mapbox is an accepted, recorded product decision. |
 | `x` | `QUA-50` **No test stops the MapKit map being destroyed and rebuilt on a prop change** | 0.3 | agent | `MAP-03` | A test fails if the MapKit map is constructed more than once across a journey switch and a sign-in. |
 | `x` | `QUA-51` **MAP-03 left four comments describing behaviour it does not have, and four dead symbols** | 0.3 | agent | `MAP-03` | Every comment listed below describes what the code does, and the dead symbols are gone or used. |
 | `x` | `QUA-43` **The live showcase told first-time visitors to click a marker that does not exist** | 0.2 | agent | — | The globe hint appears only when there is at least one marker to click, and it is not overlapped by the "Made with Akashic" chip at any viewport width. |
@@ -213,7 +215,7 @@ node scripts/workplan.mjs next
 | `x` | `QUA-52` **scripts/prove.mjs — make "this test can actually fail" mechanical instead of remembered** | 0.4 | agent | — | A defect fix can be proven red-against-the-revert and green-on-HEAD with one command, in a throwaway worktree that cannot leak into the tree being committed from. |
 | `x` | `QUA-53` **The ledger never ran its own verify list, and four CLAUDE.md rules were enforced only by memory** | 0.5 | agent | — | `workplan done` refuses a task whose runnable checks have not passed, and the rules that have already cost real time are enforced by the harness rather than remembered by the agent. |
 | `x` | `QUA-54` **A fresh-context verifier agent, because the implementer certifying its own tests is how three defects shipped green** | 0.2 | agent | `QUA-53` | The multi-model division of labour is written down where agents read it, and the verifier cannot edit what it judges. |
-| ` ` | `QUA-55` **A 14.5 pt tap target on iPad, and the reason no run had ever seen it** | 0.3 | agent | — | AccessibilityAuditTests passes on an iPad destination as well as an iPhone one, and the two entries that assert layout pin their device instead of taking whichever simulator is last. |
+| `~` | `QUA-55` **A 14.5 pt tap target on iPad, and the reason no run had ever seen it** | 0.3 | agent | — | AccessibilityAuditTests passes on an iPad destination as well as an iPhone one, and the two entries that assert layout pin their device instead of taking whichever simulator is last. |
 | `x` | `QUA-56` **apple-ci red for three days: the tests assumed a screen size, and the audit had never seen half of Settings** | 0.5 | agent | — | The full UI suite passes on an iPhone SE (3rd generation) — the device apple-ci actually picks — as well as on a large phone, and the apple-ci run on main is green. |
 
 ## Decisions on record

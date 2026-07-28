@@ -3013,11 +3013,16 @@
         "src/index.css"
       ],
       "track": "QUALITY",
-      "status": "TODO",
+      "status": "WIP",
       "verify": [
         "npx vitest --run",
         "VITE_E2E_TEST_MODE=true CI=true npx playwright test --project=chromium --ignore-snapshots"
-      ]
+      ],
+      "claim": {
+        "agent": "qua49-agent",
+        "branch": "agent/qua49",
+        "at": "2026-07-28"
+      }
     },
     {
       "id": "QUA-50",
@@ -3475,7 +3480,7 @@
       "priority": 18,
       "deps": [],
       "track": "QUALITY",
-      "status": "TODO",
+      "status": "WIP",
       "owner": false,
       "title": "A 14.5 pt tap target on iPad, and the reason no run had ever seen it",
       "done_when": "AccessibilityAuditTests passes on an iPad destination as well as an iPhone one, and the two entries that assert layout pin their device instead of taking whichever simulator is last.",
@@ -3491,7 +3496,12 @@
       ],
       "notes": [
         "2026-07-28 FOUND BY ACCIDENT during the pre-merge suite, because `tail -1` picked an iPad that session where it had picked an iPhone before. That is the whole lesson: an unpinned destination makes the suite non-deterministic across machines and across days, so a green run is not evidence about the device you care about. Written up as a trap in CLAUDE.md. Sweeping all ~40 ledger entries that carry the idiom is DELIBERATELY out of scope — pin the destination in the entries that assert layout and leave the rest, because a mechanical edit across forty entries at once is how unrelated breakage rides into a commit."
-      ]
+      ],
+      "claim": {
+        "agent": "qua55-agent",
+        "branch": "agent/qua55",
+        "at": "2026-07-28"
+      }
     },
     {
       "id": "QUA-56",
