@@ -5,14 +5,14 @@
 
 # Akashic — work ledger
 
-135 tasks · **27 open** (3 agent-doable, 0.9 dev-days · 24 owner-only, 10.4 dev-days) · 108 done · 0 dropped
+136 tasks · **27 open** (3 agent-doable, 0.9 dev-days · 24 owner-only, 10.4 dev-days) · 109 done · 0 dropped
 
 > **`dev-days` are a human-developer estimate, not agent time.** They came from the review
 > that produced these tasks and they are the right unit for deciding whether something is
 > worth doing — they are the wrong unit for predicting how long an agent will take, and
 > summing them as "work remaining" overstates it substantially.
 >
-> Measured so far: **103 agent tasks estimated at 72.1 dev-days**.
+> Measured so far: **104 agent tasks estimated at 72.5 dev-days**.
 > Elapsed time is deliberately absent: nothing here can support it. Use `git log` for that.
 >
 > **Every large agent item is closed.** 9 of the tasks closed so far were 2 dev-days or more; nothing 2 dev-days or larger remains agent-doable, and the 0.9 remaining dev-days are all small tasks (3 at 0.5 or less). What is still genuinely large is OWNER work, which no amount of agent compression touches.
@@ -146,7 +146,7 @@ node scripts/workplan.mjs next
 
 > Tests, types, CI, localisation, accessibility. Localisation and accessibility are in v1.0 by decision.
 
-5 open of 58 · 1.6 d remaining
+5 open of 59 · 1.6 d remaining
 
 | | Task | Days | Who | Deps | Finish line |
 |---|---|---|---|---|---|
@@ -208,6 +208,7 @@ node scripts/workplan.mjs next
 | `x` | `QUA-51` **MAP-03 left four comments describing behaviour it does not have, and four dead symbols** | 0.3 | agent | `MAP-03` | Every comment listed below describes what the code does, and the dead symbols are gone or used. |
 | `x` | `QUA-43` **The live showcase told first-time visitors to click a marker that does not exist** | 0.2 | agent | — | The globe hint appears only when there is at least one marker to click, and it is not overlapped by the "Made with Akashic" chip at any viewport width. |
 | `x` | `QUA-44` **Debug console.log ships to production and runs on every visit** | 0.2 | agent | — | A production build emits no debug console output on load, and the mechanism that ensures it is a build setting rather than a promise to remember. |
+| `x` | `QUA-52` **scripts/prove.mjs — make "this test can actually fail" mechanical instead of remembered** | 0.4 | agent | — | A defect fix can be proven red-against-the-revert and green-on-HEAD with one command, in a throwaway worktree that cannot leak into the tree being committed from. |
 
 ## Decisions on record
 
