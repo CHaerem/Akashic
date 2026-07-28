@@ -22,10 +22,13 @@ import CloudKit
 ///
 /// ## Best-effort, always
 ///
-/// Every failure path returns `nil`, and `FirstSyncDownloadDecision.emptyListContent` renders the
-/// first-run hero for `nil`. A missing queryable index, a revoked share, no account, a transient
-/// error: all of them mean "we cannot prove anything is waiting", and the honest response to that
-/// is the ordinary front door, never an empty screen promising a download.
+/// Every failure path returns `nil`. This paragraph used to continue "and
+/// `FirstSyncDownloadDecision.emptyListContent` renders the first-run hero for `nil` … the honest
+/// response is the ordinary front door" — and build 101 on a real phone proved that reasoning
+/// WRONG (DIFF-16): showing a family "Start your first journey" because a query failed is a false
+/// statement, not a safe default. `nil` while a deferral is active now renders `.couldNotCheck` —
+/// honest copy, a retry, never the hero. The hero remains only for POSITIVE evidence of a new
+/// family (an empty result), which is a claim this query can actually support.
 ///
 /// `CKContainer` is constructed ONLY inside `#if AKASHIC_CLOUDKIT_BUILD` — it traps (SIGTRAP) in a
 /// binary without the `com.apple.developer.icloud-services` entitlement. Outside that build every

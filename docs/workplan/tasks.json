@@ -3959,7 +3959,34 @@
         "agent": "diff16-agent",
         "branch": "agent/diff16",
         "at": "2026-07-28"
-      }
+      },
+      "verification": {
+        "at": "2026-07-28T14:11:13.887Z",
+        "head": "786bd06",
+        "ran": [
+          {
+            "command": "cd apple && xcodegen generate",
+            "ok": true,
+            "ms": 90,
+            "status": 0,
+            "signal": null
+          },
+          {
+            "command": "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,name=iPhone 17 Pro\" CODE_SIGNING_ALLOWED=NO -only-testing:AkashicTests test > /tmp/diff16.log 2>&1 && grep -q \"with 1 test skipped and 0 failures\" /tmp/diff16.log",
+            "ok": true,
+            "ms": 18885,
+            "status": 0,
+            "signal": null
+          }
+        ],
+        "attested": [
+          {
+            "kind": "manual",
+            "text": "on the next TestFlight build, enable sync logging in dev tools (seven taps on the version row), reproduce the cellular fresh-install state, and read the remoteJourneySummaries lines in Console.app — paste them into this task"
+          }
+        ]
+      },
+      "resume": "Code merged at 22b433b and gate-verified (890 unit / 14 UI green, Release-CloudKit builds, prove receipt: 37 assertion-reds in 12/12 against HEAD). Remaining: the MANUAL device observation — next TestFlight build, sync-logging toggle on, reproduce, paste the remoteJourneySummaries Console lines. The couldNotCheck-vs-rows-vs-hero outcome ALONE discriminates the hypotheses even without the log."
     }
   ]
 }
