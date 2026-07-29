@@ -119,11 +119,38 @@ enum Config {
     }
 
     static var resolvedPersistenceMode: PersistenceMode {
-        let override = UserDefaults.standard.string(forKey: persistenceModeOverrideKey)
+        let stored = UserDefaults.standard.string(forKey: persistenceModeOverrideKey)
             .flatMap(PersistenceMode.init(rawValue:))
+        #if DEBUG
+        // AKASHIC_FORCE_LOCAL (demo/screenshot seam) is process-scoped now. It used to be
+        // PERSISTED via `setPersistenceModeOverride(.local)` in `AkashicApp.init`, so a one-shot
+        // screenshot run permanently repointed that install until the key was cleared by hand
+        // (QUA-62). Read here instead of written anywhere: the seam dies with the process.
+        let processOverride: PersistenceMode? =
+            ProcessInfo.processInfo.environment["AKASHIC_FORCE_LOCAL"] != nil ? .local : nil
+        let override = processOverride ?? effectiveOverride(stored: stored, isDebugBuild: true)
+        #else
+        // QUA-62: SHIP-09's decision, applied to the mode override too. A leftover DEBUG override
+        // must never repoint a customer's Release install at `.fixtures`/`.local` — the archive
+        // would present as gone with sync silently off, and Release has no UI to clear the key.
+        // Heal rather than merely ignore: remove the stray key so it cannot linger for years and
+        // resurface the day a TestFlight tester sideloads a DEBUG build again.
+        let override = effectiveOverride(stored: stored, isDebugBuild: false)
+        if stored != nil { UserDefaults.standard.removeObject(forKey: persistenceModeOverrideKey) }
+        #endif
         return resolvePersistenceMode(override: override,
                                       envCloudKit: FeatureFlags.cloudKitEnvOverride,
                                       cloudKitBuild: FeatureFlags.cloudKitEnabled)
+    }
+
+    /// QUA-62, pure so the Release decision is testable from the Debug-run unit suite (the same
+    /// reason `resolvePersistenceMode` is pure): the stored Settings override is a DEBUG
+    /// affordance, and outside DEBUG it must be inert no matter what an earlier build persisted.
+    /// `DeveloperTools.isUnlocked` made this exact call for the unlock flag under SHIP-09; the
+    /// mode override had missed the same gate, which meant any device that ever ran a DEBUG build
+    /// with the override set would run the paid Release binary against the wrong store.
+    static func effectiveOverride(stored: PersistenceMode?, isDebugBuild: Bool) -> PersistenceMode? {
+        isDebugBuild ? stored : nil
     }
 
     /// Pure resolver — the whole persistence-mode decision as data, so every branch is unit-tested

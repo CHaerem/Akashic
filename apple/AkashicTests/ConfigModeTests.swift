@@ -305,3 +305,34 @@ final class DemoJourneyTests: XCTestCase {
                      "the decision is made once ever, not once per call")
     }
 }
+
+/// QUA-62: the stored Settings override is a DEBUG affordance. Outside DEBUG it must be inert —
+/// any device that ever ran a DEBUG build with the override set (the SHIP-16 internal-TestFlight
+/// population; UserDefaults survive across builds of one bundle id) would otherwise run the paid
+/// Release binary in `.fixtures`/`.local`: archive apparently gone, sync silently off, no UI left
+/// to clear the key. `DeveloperTools.isUnlocked` made this call under SHIP-09; the mode override
+/// had missed the same gate.
+final class ReleaseOverrideGateTests: XCTestCase {
+
+    func testDebugBuildsHonourTheStoredOverride() {
+        XCTAssertEqual(Config.effectiveOverride(stored: .local, isDebugBuild: true), .local)
+        XCTAssertEqual(Config.effectiveOverride(stored: .fixtures, isDebugBuild: true), .fixtures)
+        XCTAssertNil(Config.effectiveOverride(stored: nil, isDebugBuild: true))
+    }
+
+    func testReleaseBuildsIgnoreTheStoredOverride() {
+        XCTAssertNil(Config.effectiveOverride(stored: .local, isDebugBuild: false),
+                     "a leftover DEBUG override must never repoint a customer's Release install")
+        XCTAssertNil(Config.effectiveOverride(stored: .fixtures, isDebugBuild: false))
+    }
+
+    func testReleaseResolutionLandsOnTheBuildDefaultDespiteAStrayOverride() {
+        // The customer scenario end to end: entitled Release build, stray `.fixtures` override
+        // from an old DEBUG run — the archive must still open in `.cloudKit`.
+        let mode = Config.resolvePersistenceMode(
+            override: Config.effectiveOverride(stored: .fixtures, isDebugBuild: false),
+            envCloudKit: false,
+            cloudKitBuild: true)
+        XCTAssertEqual(mode, .cloudKit)
+    }
+}

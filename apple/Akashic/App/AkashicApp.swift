@@ -105,12 +105,12 @@ struct AkashicApp: App {
     }
 
     init() {
-        // Demo/screenshot hook: force the on-disk `.local` store before the store is first
-        // built (so the import persists and photos display). Gated on an env var, so normal
-        // launches are unaffected.
-        if ProcessInfo.processInfo.environment["AKASHIC_FORCE_LOCAL"] != nil {
-            Config.setPersistenceModeOverride(.local)
-        }
+        // Demo/screenshot hook (AKASHIC_FORCE_LOCAL): handled inside
+        // `Config.resolvedPersistenceMode` now. This init used to call
+        // `Config.setPersistenceModeOverride(.local)` here, which PERSISTED the override in
+        // UserDefaults — so a single screenshot run durably repointed the install at `.local`
+        // until the key was cleared by hand (QUA-62). The env seam is process-scoped today and
+        // nothing writes the override outside the Settings screen.
         // Exports are transient: the file matters until it has been shared, and an archive of
         // a photo-heavy journey is gigabytes. Clearing at launch keeps them from accumulating.
         ExportWorkspace.purge()

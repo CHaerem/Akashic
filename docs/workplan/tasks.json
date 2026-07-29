@@ -4152,7 +4152,7 @@
       "priority": 1,
       "deps": [],
       "track": "QUALITY",
-      "status": "TODO",
+      "status": "DONE",
       "owner": false,
       "title": "Release builds honour the DEBUG persistence-mode override — a leftover flag silently hides the customer archive",
       "done_when": "Config.resolvedPersistenceMode ignores (and Release launch actively clears) the akashic.persistenceMode.override UserDefaults key outside DEBUG, mirroring the SHIP-09 decision DeveloperTools.isUnlocked already implements; AKASHIC_FORCE_LOCAL becomes an in-memory override instead of a durable UserDefaults write; unit tests pin both.",
@@ -4166,7 +4166,41 @@
         "cd apple && xcodegen generate",
         "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,name=iPhone 17 Pro\" CODE_SIGNING_ALLOWED=NO -only-testing:AkashicTests test > /tmp/qua62.log 2>&1 && grep -q \"with 1 test skipped and 0 failures\" /tmp/qua62.log",
         "grep -q \"persistenceModeOverrideKey\" apple/Akashic/App/Config.swift  # the override key still exists and is handled deliberately"
-      ]
+      ],
+      "claim": {
+        "agent": "fable5-review",
+        "branch": "claude/project-review-code-ux-c5c48b",
+        "at": "2026-07-29"
+      },
+      "verification": {
+        "at": "2026-07-29T07:50:27.158Z",
+        "head": "7997486",
+        "ran": [
+          {
+            "command": "cd apple && xcodegen generate",
+            "ok": true,
+            "ms": 107,
+            "status": 0,
+            "signal": null
+          },
+          {
+            "command": "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,name=iPhone 17 Pro\" CODE_SIGNING_ALLOWED=NO -only-testing:AkashicTests test > /tmp/qua62.log 2>&1 && grep -q \"with 1 test skipped and 0 failures\" /tmp/qua62.log",
+            "ok": true,
+            "ms": 14095,
+            "status": 0,
+            "signal": null
+          },
+          {
+            "command": "grep -q \"persistenceModeOverrideKey\" apple/Akashic/App/Config.swift  # the override key still exists and is handled deliberately",
+            "ok": true,
+            "ms": 20,
+            "status": 0,
+            "signal": null
+          }
+        ],
+        "attested": []
+      },
+      "evidence": "effectiveOverride(stored:isDebugBuild:) gates the Settings override to DEBUG (Release also heals by removing the stray key), AKASHIC_FORCE_LOCAL is process-scoped (read in resolvedPersistenceMode, written nowhere). Falsifiability: prove would compile-fail against old code (new symbol), so proven by mutation — gate removed => 3/3 assertions RED, restored => green. Full unit suite green via verify."
     },
     {
       "id": "QUA-63",
