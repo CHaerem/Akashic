@@ -556,6 +556,29 @@ right: fix this file in the same commit.
   surviving CSS rule as evidence the problem is handled", and the 2026-07-29 review found that sentence
   stale; the durable half is the mechanism, which is why the paragraph stays. The iOS map had the same
   defect class unfixed (photo annotations declared after camps steal their taps) — that is QUA-83.
+- **A FOURTH presentation modifier on one SwiftUI view breaks presentation for the whole view — and the
+  symptom is a sheet that dismisses itself on an unrelated state change.** Measured 2026-07-29 (QUA-64):
+  `NewJourneySheet.reviewBody` already carried two `.sheet`s and a `.fileImporter`; adding a
+  `.confirmationDialog` to that chain made *typing the journey name* dismiss the entire creation sheet
+  back to the globe. Moving the dialog to the outer `body` (which carries none) fixed it. This is the
+  same failure mode the one-`GlobeSheet`-enum design exists to avoid, so the rule generalises: count the
+  presentation modifiers on a view before adding one, and host the new one somewhere else. The bisect
+  receipt is in QUA-64's ledger notes — base commit green, the QUA-64 commit red.
+- **A control the keyboard covers still EXISTS, so `require(...).tap()` taps the keyboard and the NEXT
+  assertion fails on an innocent screen.** Same session, same task: making the creation form one line
+  taller (the free-tier budget caption) put "Add day" under the software keyboard, and two UI tests
+  failed with "never appeared" pointing at a form that was perfectly fine. Two halves worth keeping.
+  (1) `AkashicUITests/Support` now has `scrollToAndTap`, which swipes until `isHittable` — use it for
+  anything low in a long form, the way `requireByScrolling` is used for anything below the fold.
+  (2) The layout change was reverted anyway, because with the keyboard up a tap on that button
+  dismissed the sheet and lost the draft: **a UI test failing on a screen that looks fine is still
+  evidence about the app, not about the test.** The budget now rides the picker's existing line.
+- **A gate you have not run against the base commit tells you nothing about what you broke.** The same
+  three UI failures were initially read as pre-existing flake; running the identical test in a scratch
+  worktree at the base commit (green in 22 s) is what turned "probably fragile tests" into a bisect that
+  found two real defects. `git worktree add /tmp/<name> <base-sha>` + `xcodegen generate` costs one build
+  and one minute. Do it before believing a red gate is not yours — and remove the worktree afterwards
+  (`git worktree remove … --force` then `git worktree prune --expire now`).
 
 ## Conventions
 
