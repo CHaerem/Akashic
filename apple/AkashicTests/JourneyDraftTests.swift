@@ -312,3 +312,47 @@ final class JourneyDraftTests: XCTestCase {
               coordinates: coordinates, takenAt: takenAt)
     }
 }
+
+/// QUA-69: the day bucket has an early-morning boundary — photos taken 00:00–03:59 belong to the
+/// evening they ended, not a spurious new "day". Strict calendar-date bucketing minted an extra
+/// day from every aurora session and after-midnight arrival, shifted the derived date range, and
+/// produced days the review screen can only delete, not merge.
+final class EarlyMorningBoundaryTests: XCTestCase {
+
+    /// Wall-clock-as-UTC, the ingest convention dayKey operates in.
+    private func date(_ iso: String) -> Date {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime]
+        return formatter.date(from: iso + "Z")!
+    }
+
+    func testBoundaryCases() {
+        XCTAssertEqual(JourneyDraft.dayKey(from: date("2026-03-14T23:59:00")), "2026-03-14",
+                       "just before midnight stays on its own day")
+        XCTAssertEqual(JourneyDraft.dayKey(from: date("2026-03-15T00:30:00")), "2026-03-14",
+                       "the 00:30 aurora photo belongs to the evening it ended")
+        XCTAssertEqual(JourneyDraft.dayKey(from: date("2026-03-15T03:59:59")), "2026-03-14",
+                       "up to 03:59 joins the previous day")
+        XCTAssertEqual(JourneyDraft.dayKey(from: date("2026-03-15T04:00:00")), "2026-03-15",
+                       "04:00 starts the new day")
+        XCTAssertEqual(JourneyDraft.dayKey(from: date("2026-03-15T12:00:00")), "2026-03-15")
+    }
+
+    func testAfterMidnightSessionDoesNotMintASpuriousDay() {
+        func photo(_ id: String, takenAt: String) -> Photo {
+            Photo(id: id, journeyId: "j", waypointId: nil, url: "u/\(id).jpg",
+                  thumbnailURL: nil, caption: nil, coordinates: nil, takenAt: takenAt)
+        }
+        let photos = [
+            photo("evening", takenAt: "2026-03-14T21:00:00Z"),
+            photo("aurora", takenAt: "2026-03-15T00:45:00Z"),
+            photo("morning", takenAt: "2026-03-15T09:00:00Z"),
+        ]
+        let (days, assignments) = JourneyDraft.daysWithAssignments(fromPhotos: photos)
+        XCTAssertEqual(days.count, 2,
+                       "evening + its aurora tail are ONE day; the real morning is the second")
+        XCTAssertEqual(assignments["evening"], assignments["aurora"],
+                       "the after-midnight photo lands with the evening it belongs to")
+        XCTAssertNotEqual(assignments["aurora"], assignments["morning"])
+    }
+}

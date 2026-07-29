@@ -95,15 +95,17 @@ final class RouteInferenceTests: XCTestCase {
     // MARK: Day segmentation
 
     func testSegmentsByUTCDayContiguously() {
-        // Two calendar days: 12h apart crosses midnight boundaries deterministically.
+        // Two calendar days. QUA-69 moved the day boundary to 04:00 (photos before it belong to
+        // the previous evening), so the fixes sit mid-morning where the boundary is unambiguous;
+        // the boundary itself is pinned in EarlyMorningBoundaryTests.
         let day0 = Date(timeIntervalSince1970: 1_695_945_600) // 2023-09-29 00:00 UTC
         func f(_ lng: Double, offset: TimeInterval) -> PhotoFix {
             PhotoFix(coordinate: [lng, -3.1], timestamp: day0.addingTimeInterval(offset), altitude: nil)
         }
         let fixes = [
-            f(37.0, offset: 3600),          // day 1
-            f(37.1, offset: 7200),          // day 1
-            f(37.2, offset: 90_000),        // day 2 (25h later)
+            f(37.0, offset: 28_800),        // day 1, 08:00
+            f(37.1, offset: 32_400),        // day 1, 09:00
+            f(37.2, offset: 118_800),       // day 2, 09:00 (25h later)
         ]
         let result = RouteInference.infer(from: fixes)
         XCTAssertEqual(result.daySegments.count, 2)
@@ -112,6 +114,23 @@ final class RouteInferenceTests: XCTestCase {
         XCTAssertEqual(result.daySegments[0].pointCount, 2)
         XCTAssertEqual(result.daySegments[1].startIndex, 2)
         XCTAssertEqual(result.daySegments[1].dayKey, "2023-09-30")
+    }
+
+    func testAfterMidnightFixesStayWithTheEveningSegment() {
+        // QUA-69: a 00:30 photo-fix (aurora, late arrival) must not split the route into a
+        // spurious extra day-segment — same boundary the draft's photo bucketing uses.
+        let day0 = Date(timeIntervalSince1970: 1_695_945_600) // 2023-09-29 00:00 UTC
+        func f(_ lng: Double, offset: TimeInterval) -> PhotoFix {
+            PhotoFix(coordinate: [lng, -3.1], timestamp: day0.addingTimeInterval(offset), altitude: nil)
+        }
+        let fixes = [
+            f(37.0, offset: 75_600),        // day 1, 21:00
+            f(37.1, offset: 88_200),        // 00:30 the next calendar date — same day segment
+        ]
+        let result = RouteInference.infer(from: fixes)
+        XCTAssertEqual(result.daySegments.count, 1,
+                       "the after-midnight fix belongs to the evening it ended")
+        XCTAssertEqual(result.daySegments[0].pointCount, 2)
     }
 
     // MARK: Confidence / gaps

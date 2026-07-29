@@ -4847,7 +4847,7 @@
       "priority": 6,
       "deps": [],
       "track": "QUALITY",
-      "status": "TODO",
+      "status": "DONE",
       "owner": false,
       "title": "Day clustering splits at midnight — the 00:30 aurora photo becomes its own 'day'",
       "done_when": "Photo-to-day bucketing applies an early-morning cutoff (photos before 04:00 join the previous day) in JourneyDraft.dayKey derivation; JourneyDraftTests pin the boundary (23:59, 00:30, 03:59, 04:00) and the derived date range no longer grows a spurious day from an after-midnight session.",
@@ -4859,7 +4859,34 @@
       "verify": [
         "cd apple && xcodegen generate",
         "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,name=iPhone 17 Pro\" CODE_SIGNING_ALLOWED=NO -only-testing:AkashicTests test > /tmp/qua69.log 2>&1 && grep -q \"with 1 test skipped and 0 failures\" /tmp/qua69.log"
-      ]
+      ],
+      "claim": {
+        "agent": "fable5-review",
+        "branch": "claude/project-review-code-ux-c5c48b",
+        "at": "2026-07-29"
+      },
+      "verification": {
+        "at": "2026-07-29T08:52:43.211Z",
+        "head": "88b571e",
+        "ran": [
+          {
+            "command": "cd apple && xcodegen generate",
+            "ok": true,
+            "ms": 102,
+            "status": 0,
+            "signal": null
+          },
+          {
+            "command": "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,name=iPhone 17 Pro\" CODE_SIGNING_ALLOWED=NO -only-testing:AkashicTests test > /tmp/qua69.log 2>&1 && grep -q \"with 1 test skipped and 0 failures\" /tmp/qua69.log",
+            "ok": true,
+            "ms": 16296,
+            "status": 0,
+            "signal": null
+          }
+        ],
+        "attested": []
+      },
+      "evidence": "dayKey applies a 04:00 early-morning cutoff (shift on the wall-clock-as-UTC frame the ingest convention defines); RouteInference segments share the boundary by construction; GPXTrackDays deliberately untouched (true-UTC + offset convention, documented at the dayKey site). Prove receipt: 4 failing assertions in 2/2 tests against HEAD, green now; suite 917 green."
     },
     {
       "id": "QUA-76",

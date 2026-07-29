@@ -338,9 +338,24 @@ struct JourneyDraft: Equatable {
 
     // MARK: - Date / clustering helpers
 
-    /// UTC `yyyy-MM-dd` bucket key (sorts chronologically as a plain string).
+    /// QUA-69: photos before this hour belong to the PREVIOUS day. In this product's home market
+    /// (midnight sun, aurora season, late city dinners) after-midnight photos are the norm, and a
+    /// strict calendar-date bucket minted a spurious extra "day" from every such session —
+    /// shifting the derived date range and creating days the review screen can only delete, not
+    /// merge. An early-morning boundary is the industry-standard fix.
+    static let earlyMorningCutoffHour = 4
+
+    /// UTC `yyyy-MM-dd` bucket key (sorts chronologically as a plain string), with the
+    /// early-morning cutoff applied: 00:00–03:59 buckets with the previous calendar day.
+    ///
+    /// The shift operates on the photographer's local clock because EXIF wall-clock time is
+    /// deliberately reinterpreted as UTC at ingest (`PhotoIngestService`) — the same convention
+    /// that makes the bucket the LOCAL calendar day. `RouteInference` shares this key, so photo-
+    /// derived route segments split at the same boundary. GPX day derivation (`GPXTrackDays`)
+    /// keeps its own convention deliberately: trackpoint timestamps are true UTC with an offset,
+    /// not reinterpreted wall-clock.
     static func dayKey(from date: Date) -> String {
-        Self.keyFormatter.string(from: date)
+        Self.keyFormatter.string(from: date.addingTimeInterval(-TimeInterval(earlyMorningCutoffHour) * 3600))
     }
 
     /// Median `[lng, lat]` of a set of coordinates (per-axis median), or nil when empty.

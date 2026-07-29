@@ -5,17 +5,17 @@
 
 # Akashic — work ledger
 
-184 tasks · **52 open** (27 agent-doable, 17.3 dev-days · 25 owner-only, 10.6 dev-days) · 132 done · 0 dropped
+184 tasks · **51 open** (26 agent-doable, 17.1 dev-days · 25 owner-only, 10.6 dev-days) · 133 done · 0 dropped
 
 > **`dev-days` are a human-developer estimate, not agent time.** They came from the review
 > that produced these tasks and they are the right unit for deciding whether something is
 > worth doing — they are the wrong unit for predicting how long an agent will take, and
 > summing them as "work remaining" overstates it substantially.
 >
-> Measured so far: **126 agent tasks estimated at 79.8 dev-days**.
+> Measured so far: **127 agent tasks estimated at 80 dev-days**.
 > Elapsed time is deliberately absent: nothing here can support it. Use `git log` for that.
 >
-> 9 of the closed tasks were 2 dev-days or more, and 7.5 of the 17.3 remaining dev-days still sit in 3 such task(s): DIFF-18, DIFF-19, DIFF-20. Those turn on design judgement rather than localised edits, so do not assume the compression above holds.
+> 9 of the closed tasks were 2 dev-days or more, and 7.5 of the 17.1 remaining dev-days still sit in 3 such task(s): DIFF-18, DIFF-19, DIFF-20. Those turn on design judgement rather than localised edits, so do not assume the compression above holds.
 
 Read [CLAUDE.md](CLAUDE.md) before touching anything. To find work:
 
@@ -157,7 +157,7 @@ node scripts/workplan.mjs next
 
 > Tests, types, CI, localisation, accessibility. Localisation and accessibility are in v1.0 by decision.
 
-22 open of 96 · 6.5 d remaining
+21 open of 96 · 6.3 d remaining
 
 | | Task | Days | Who | Deps | Finish line |
 |---|---|---|---|---|---|
@@ -246,7 +246,7 @@ node scripts/workplan.mjs next
 | ` ` | `QUA-84` **Camera flights are single linear interpolations and the idle globe spin is a 30 Hz main-thread timer that never rests** | 0.3 | agent | `QUA-66` | Transitions between distant targets use MapCameraKeyframeAnimator with a distance-dependent apex (rise–traverse–descend), built by a unit-tested MapGeoMath keyframe builder; the idle spin pauses when the Explore tab is hidden and stops on ANY gesture (including two-finger rotate); ideally the spin itself moves to a system-interpolated animation instead of 30 Hz cameraPosition assignments. |
 | ` ` | `QUA-67` **Story mode builds the whole journey eagerly, re-fetches all photos per day per body pass — and strip taps open the wrong photo when the cover is not first** | 0.3 | agent | — | Chapters render in a LazyVStack and DayPhotoStrip in a LazyHStack; the journey's photos are fetched once and sliced per chapter instead of one full Core Data fetch per day per body evaluation; the strip tap resolves the photo by IDENTITY (not index+1), fixing the off-by-one when a mid-day photo is the cover; the hero image is a real button for VoiceOver; a unit test pins the tap-index resolution. |
 | ` ` | `QUA-68` **The lightbox decodes full-resolution originals with no downsampling inside a non-lazy pager — jetsam risk on the most-used photo surface** | 0.3 | agent | — | Lightbox pages decode at bounded size (CGImageSource thumbnail at ~2× screen scale, orientation-honoured, off-main) with the full-res file used only for ShareLink and re-decode on deep zoom; pan offsets clamp to the scaled bounds; VideoPage gets the same failed-state + Retry treatment ResolvingImagePage already has; a unit test covers the downsample helper. |
-| ` ` | `QUA-69` **Day clustering splits at midnight — the 00:30 aurora photo becomes its own 'day'** | 0.2 | agent | — | Photo-to-day bucketing applies an early-morning cutoff (photos before 04:00 join the previous day) in JourneyDraft.dayKey derivation; JourneyDraftTests pin the boundary (23:59, 00:30, 03:59, 04:00) and the derived date range no longer grows a spurious day from an after-midnight session. |
+| `x` | `QUA-69` **Day clustering splits at midnight — the 00:30 aurora photo becomes its own 'day'** | 0.2 | agent | — | Photo-to-day bucketing applies an early-morning cutoff (photos before 04:00 join the previous day) in JourneyDraft.dayKey derivation; JourneyDraftTests pin the boundary (23:59, 00:30, 03:59, 04:00) and the derived date range no longer grows a spurious day from an after-midnight session. |
 | ` ` | `QUA-76` **No fetch indexes on the hot lookup columns — every id lookup and photo load is a table scan** | 0.2 | agent | — | A fifth model version adds fetch indexes on CDJourney.id, CDPhoto.id, CDPhoto.journeyId, CDPhoto.waypointId, CDWaypoint.id and CDDayComment.waypointId (index-only lightweight migration, no mapping); StoreMigrationTests prove a v4 store opens under v5. |
 | ` ` | `QUA-87` **reload() republishes the entire library with synchronous file I/O after every single edit** | 0.4 | agent | — | Widget thumbnail copies happen only when the source path/mtime changed; Spotlight/widget publishing is debounced off the mutation path; single-row edits reload only the affected journey where the seam allows; an os_signpost measurement on a photo-heavy fixture before/after is recorded in the evidence. |
 | `x` | `QUA-72` **A stranger opening a shared web link hits four silent dead ends: empty globe on any CloudKit failure, fuzzy slug matching, a 15 s token timeout with an unwired Retry, and developer jargon as error copy** | 0.5 | agent | — | Adapter failures reach JourneysContext.error and the globe renders a 'Couldn't load journeys — retry' state (refetch plumbing exists); ?journey= matches exactly on id (case-insensitive) and a non-matching param shows 'This journey isn't available' instead of nothing; MapKitJourneyMap passes onRetry to MapErrorFallback (loader already resets its memo) and shows a loading treatment until ready; on-screen error strings are customer sentences, with the JWT/origin diagnostics kept for the console. |
