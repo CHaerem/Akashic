@@ -8397,6 +8397,46 @@
           }
         }
       }
+    },
+    "Save as PDF book": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lagre som PDF-bok"
+          }
+        }
+      }
+    },
+    "Share PDF book": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Del PDF-boken"
+          }
+        }
+      }
+    },
+    "Renders this story as a printable PDF": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lager en utskrivbar PDF av denne fortellingen"
+          }
+        }
+      }
+    },
+    "Rendering the PDF book": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lager PDF-boken"
+          }
+        }
+      }
     }
   }
 }

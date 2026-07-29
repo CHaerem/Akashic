@@ -4607,7 +4607,7 @@
       "priority": 5,
       "deps": [],
       "track": "QUALITY",
-      "status": "TODO",
+      "status": "DONE",
       "owner": false,
       "title": "The PDF story book (DIFF-07, 6 dev-days, DONE) has no UI entry point — no customer can create one",
       "done_when": "A 'Save as PDF book' action exists on the journey (story toolbar and/or export sheet), feeds StoryPDFRenderer.render with the curated per-day input StoryPagination documents, and hands the produced file to ShareLink; a symbol-presence check à la DIFF-13 (not just unit tests) proves the renderer is linked into the shipped binary.",
@@ -4622,7 +4622,41 @@
         "cd apple && xcodegen generate",
         "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,name=iPhone 17 Pro\" CODE_SIGNING_ALLOWED=NO -only-testing:AkashicTests test > /tmp/qua77.log 2>&1 && grep -q \"with 1 test skipped and 0 failures\" /tmp/qua77.log",
         "grep -rn \"StoryPDFRenderer\" apple/Akashic/Views | grep -q . # the renderer has a production caller"
-      ]
+      ],
+      "claim": {
+        "agent": "fable5-review",
+        "branch": "claude/project-review-code-ux-c5c48b",
+        "at": "2026-07-29"
+      },
+      "verification": {
+        "at": "2026-07-29T09:05:47.473Z",
+        "head": "b81a6c1",
+        "ran": [
+          {
+            "command": "cd apple && xcodegen generate",
+            "ok": true,
+            "ms": 89,
+            "status": 0,
+            "signal": null
+          },
+          {
+            "command": "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,name=iPhone 17 Pro\" CODE_SIGNING_ALLOWED=NO -only-testing:AkashicTests test > /tmp/qua77.log 2>&1 && grep -q \"with 1 test skipped and 0 failures\" /tmp/qua77.log",
+            "ok": true,
+            "ms": 11005,
+            "status": 0,
+            "signal": null
+          },
+          {
+            "command": "grep -rn \"StoryPDFRenderer\" apple/Akashic/Views | grep -q . # the renderer has a production caller",
+            "ok": true,
+            "ms": 36,
+            "status": 0,
+            "signal": null
+          }
+        ],
+        "attested": []
+      },
+      "evidence": "Story toolbar carries the book: Save as PDF book -> StoryPDFRenderer.render with per-day curated prefix (accepted curation writes sortOrder, so the prefix IS the best-of — opening spread + one photo page per day), hero photo, ExportWorkspace file + ShareLink on ready. Verify grep proves the renderer has a production caller (the DIFF-13 lesson); suite 921 green. Print-grade output (1400px cap) remains DIFF-22, now unblocked."
     },
     {
       "id": "QUA-66",

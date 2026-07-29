@@ -5,17 +5,17 @@
 
 # Akashic — work ledger
 
-184 tasks · **50 open** (25 agent-doable, 16.8 dev-days · 25 owner-only, 10.6 dev-days) · 134 done · 0 dropped
+184 tasks · **49 open** (24 agent-doable, 16.5 dev-days · 25 owner-only, 10.6 dev-days) · 135 done · 0 dropped
 
 > **`dev-days` are a human-developer estimate, not agent time.** They came from the review
 > that produced these tasks and they are the right unit for deciding whether something is
 > worth doing — they are the wrong unit for predicting how long an agent will take, and
 > summing them as "work remaining" overstates it substantially.
 >
-> Measured so far: **128 agent tasks estimated at 80.3 dev-days**.
+> Measured so far: **129 agent tasks estimated at 80.6 dev-days**.
 > Elapsed time is deliberately absent: nothing here can support it. Use `git log` for that.
 >
-> 9 of the closed tasks were 2 dev-days or more, and 7.5 of the 16.8 remaining dev-days still sit in 3 such task(s): DIFF-18, DIFF-19, DIFF-20. Those turn on design judgement rather than localised edits, so do not assume the compression above holds.
+> 9 of the closed tasks were 2 dev-days or more, and 7.5 of the 16.5 remaining dev-days still sit in 3 such task(s): DIFF-18, DIFF-19, DIFF-20. Those turn on design judgement rather than localised edits, so do not assume the compression above holds.
 
 Read [CLAUDE.md](CLAUDE.md) before touching anything. To find work:
 
@@ -157,7 +157,7 @@ node scripts/workplan.mjs next
 
 > Tests, types, CI, localisation, accessibility. Localisation and accessibility are in v1.0 by decision.
 
-20 open of 96 · 6 d remaining
+19 open of 96 · 5.7 d remaining
 
 | | Task | Days | Who | Deps | Finish line |
 |---|---|---|---|---|---|
@@ -240,7 +240,7 @@ node scripts/workplan.mjs next
 | `x` | `QUA-65` **The showcase link exists only in the seconds after a publish run, 'Remove from showcase' has no confirmation, and 'Sharing' vs 'Showcase' assumes knowledge a customer lacks** | 0.3 | agent | — | A published journey's showcase sheet always renders the ShareLink + URL row (driven by the verified .onShowcase slug, not the transient .done phase); 'Remove from showcase' asks for confirmation with consequence-stating copy in the house style; the journey overflow menu uses intent-based labels ('Invite family…' / 'Publish web link…'). |
 | `x` | `QUA-70` **Get Journey Photos is a fixtures-era stub: Siri/Shortcuts confidently answer 'no photos' against a 939-photo archive** | 0.2 | agent | — | GetJourneyPhotosIntent resolves the journey, loads its photos through the persistence layer, applies the waypointId filter and the already-computed limit clamp, and returns real results; IntentQueryTests cover the wired path. |
 | `x` | `QUA-71` **DIFF-05/DIFF-08 are engines without wires: Vision subjects never reach the day-note prompt, and drafting failures show the exact generic message the code condemns** | 0.3 | agent | — | WaypointEditSheet.draftNote() populates DayNoteInput.photoSubjects via VisionPhotoScorer.subjects(in:) before generating; the catch maps errors through DayNoteDrafter.failure(from:), shows failure.message, and gates the retry affordance on isWorthRetrying; DIFF-05's and DIFF-08's ledger evidence is corrected to name this task as the wiring that made them reachable. |
-| ` ` | `QUA-77` **The PDF story book (DIFF-07, 6 dev-days, DONE) has no UI entry point — no customer can create one** | 0.3 | agent | — | A 'Save as PDF book' action exists on the journey (story toolbar and/or export sheet), feeds StoryPDFRenderer.render with the curated per-day input StoryPagination documents, and hands the produced file to ShareLink; a symbol-presence check à la DIFF-13 (not just unit tests) proves the renderer is linked into the shipped binary. |
+| `x` | `QUA-77` **The PDF story book (DIFF-07, 6 dev-days, DONE) has no UI entry point — no customer can create one** | 0.3 | agent | — | A 'Save as PDF book' action exists on the journey (story toolbar and/or export sheet), feeds StoryPDFRenderer.render with the curated per-day input StoryPagination documents, and hands the produced file to ShareLink; a symbol-presence check à la DIFF-13 (not just unit tests) proves the renderer is linked into the shipped binary. |
 | `x` | `QUA-66` **The signature day fly-in lands with its subject half-hidden behind the sheet** | 0.3 | agent | — | Day (and overview) camera framing accounts for the covered region: a pure MapGeoMath function takes the visible-rect fraction and biases the fitting camera so the day's bbox lands in the visible half (iPhone medium-detent bottom sheet) or the uncovered width (iPad 400pt left panel); MapMathTests pin the offset math; the fly-in visibly lands its subject. |
 | ` ` | `QUA-83` **iOS map has no photo clustering, and photo markers steal taps from camp badges — the unfixed iOS twin of the web's QUA-49** | 0.5 | agent | — | Geotagged photos cluster by screen-space proximity at the current camera distance into stack markers with a count badge (matching the web surface); camp badges keep tap precedence over photo markers (declared later / filtered within a clearance radius, mirroring the web decision); coincident camps (rest days) merge into one badge offering both days; a rendered-annotation cap bounds the overview; precedence and clustering are unit-tested like QUA-58 did for the web. |
 | ` ` | `QUA-84` **Camera flights are single linear interpolations and the idle globe spin is a 30 Hz main-thread timer that never rests** | 0.3 | agent | `QUA-66` | Transitions between distant targets use MapCameraKeyframeAnimator with a distance-dependent apex (rise–traverse–descend), built by a unit-tested MapGeoMath keyframe builder; the idle spin pauses when the Explore tab is hidden and stops on ANY gesture (including two-finger rotate); ideally the spin itself moves to a system-interpolated animation instead of 30 Hz cameraPosition assignments. |

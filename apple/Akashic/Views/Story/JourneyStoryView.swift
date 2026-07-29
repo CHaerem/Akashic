@@ -18,6 +18,12 @@ struct JourneyStoryView: View {
 
     @State private var lightbox: LightboxData?
 
+    /// QUA-77: the PDF-book render lifecycle. `.ready` holds the written file for ShareLink.
+    private enum PDFBookState: Equatable {
+        case idle, rendering, ready(URL), failed
+    }
+    @State private var pdfBookState: PDFBookState = .idle
+
     /// True when this journey lives in our own database — a shared-in viewer reads exactly the
     /// same story but never sees the notes' write affordance (S3).
     private var isOwner: Bool { store.isOwnedByCurrentUser(journeyID: journey.id) }
@@ -70,8 +76,71 @@ struct JourneyStoryView: View {
         .background(Theme.background.ignoresSafeArea())
         .navigationTitle(live.shortName)
         .navigationBarTitleDisplayMode(.inline)
+        // QUA-77: the book's entry point. StoryPDFRenderer + StoryPagination shipped complete and
+        // tested under DIFF-07 (6 dev-days, the largest DIFF item) with ZERO production callers —
+        // the store-subtitle strategy anchors on the book and no customer could create one. The
+        // reader is already ON the finished thing here; saving it as the book is one tap.
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) { pdfBookButton }
+        }
         .fullScreenCover(item: $lightbox) { data in
             PhotoLightboxView(data: data, journey: live).environmentObject(store)
+        }
+    }
+
+    // MARK: - PDF book (QUA-77)
+
+    /// Per-day photo budget for the book: the opening spread plus one photo page. Accepted
+    /// curation (DIFF-04/06) applies itself by writing `sortOrder` — the best photos already sort
+    /// first — so a prefix IS the curated best-of, exactly the input `StoryPagination`'s doc asks
+    /// for ("a 939-photo journey with 449 unique images produces a book nobody wants" otherwise).
+    private static let bookPhotosPerDay =
+        StoryPagination.photosOnOpeningPage + StoryPagination.photosPerPhotoPage
+
+    @ViewBuilder
+    private var pdfBookButton: some View {
+        switch pdfBookState {
+        case .idle, .failed:
+            Button {
+                renderPDFBook()
+            } label: {
+                Label("Save as PDF book", systemImage: "book.closed")
+            }
+            .accessibilityHint("Renders this story as a printable PDF")
+        case .rendering:
+            ProgressView()
+                .accessibilityLabel("Rendering the PDF book")
+        case .ready(let url):
+            ShareLink(item: url) {
+                Label("Share PDF book", systemImage: "square.and.arrow.up")
+            }
+        }
+    }
+
+    private func renderPDFBook() {
+        guard pdfBookState != .rendering else { return }
+        pdfBookState = .rendering
+        let journey = live
+        let (byDay, _) = store.photosByDay(forJourneyID: journey.id)
+        let curated = byDay.mapValues { photos in
+            Array(photos.sorted { $0.sortOrder < $1.sortOrder }.prefix(Self.bookPhotosPerDay))
+        }
+        let hero = journeyPhotos.first(where: { $0.isHero }) ?? journeyPhotos.first
+        Task {
+            guard let data = await StoryPDFRenderer.render(journey: journey,
+                                                           photosByDay: curated,
+                                                           heroPhoto: hero) else {
+                pdfBookState = .failed
+                return
+            }
+            do {
+                let workspace = try ExportWorkspace.make()
+                let url = workspace.appendingPathComponent("\(journey.slug)-book.pdf")
+                try data.write(to: url)
+                pdfBookState = .ready(url)
+            } catch {
+                pdfBookState = .failed
+            }
         }
     }
 
