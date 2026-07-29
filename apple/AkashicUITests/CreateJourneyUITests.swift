@@ -75,6 +75,10 @@ final class CreateJourneyUITests: AkashicUITestCase {
         name.typeText("Abandoned draft")
 
         require(app.buttons[ID.editSheetCancel], "the review screen's Cancel button").tap()
+        // QUA-64: a non-empty draft now confirms before discarding — one accidental swipe or
+        // mistap used to delete every staged photo file with no confirmation and no recovery.
+        // The deliberate second tap IS the contract this test exists to protect.
+        require(app.buttons["Discard journey"], "the discard confirmation").tap()
 
         requireGone(app.textFields[ID.newJourneyName], "the review screen after Cancel")
         XCTAssertFalse(app.staticTexts["Abandoned draft"].exists,
@@ -98,16 +102,18 @@ final class CreateJourneyUITests: AkashicUITestCase {
         name.tap()
         name.typeText("Jotunheimen")
 
-        let addDay = require(app.buttons[ID.newJourneyAddDay], "the 'Add day' button")
-        addDay.tap()
+        scrollToAndTap(app.buttons[ID.newJourneyAddDay], in: app, "the 'Add day' button")
         // QUA-24 gave each day row's name field the label "Name of day <n>", which is what makes
         // this assertable at all — before that pass every day row was three anonymous buttons and
-        // an unlabelled field.
-        require(app.textFields["Name of day 1"], "the first hand-added day's name field")
-        addDay.tap()
-        require(app.textFields["Name of day 2"], "the second hand-added day's name field")
+        // an unlabelled field. QUA-56's lesson applies to the rows themselves: a SwiftUI row below
+        // the fold does not EXIST in the accessibility hierarchy, and QUA-64's free-tier budget
+        // line made this form one line taller — so scroll like a customer instead of assuming a
+        // viewport.
+        requireByScrolling(app.textFields["Name of day 1"], in: app, "the first hand-added day's name field")
+        scrollToAndTap(app.buttons[ID.newJourneyAddDay], in: app, "the 'Add day' button again")
+        requireByScrolling(app.textFields["Name of day 2"], in: app, "the second hand-added day's name field")
 
-        require(app.buttons[ID.editSheetSave], "Create").tap()
+        scrollToAndTap(app.buttons[ID.editSheetSave], in: app, "Create")
         requireGone(app.textFields[ID.newJourneyName], "the review screen after Create")
         require(app.staticTexts["Jotunheimen"], "the created journey on the globe")
     }

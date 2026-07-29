@@ -104,6 +104,31 @@ extension XCTestCase {
                        "Never went away: \(message())", file: file, line: line)
     }
 
+    /// Scroll `element` into reach and tap it.
+    ///
+    /// `require(_:).tap()` is not enough for a control near the bottom of a long form: `require`
+    /// waits for EXISTENCE, and an element covered by the keyboard exists — the synthesized tap
+    /// then lands on the keyboard, and the NEXT assertion fails as "never appeared" pointing at a
+    /// screen that is perfectly fine. Measured 2026-07-29 (QUA-64): adding the free-tier budget
+    /// line to the creation form pushed "Add day" one line lower, under the keyboard raised by
+    /// typing the name, and three UI tests failed that way — the app was correct in every one of
+    /// them. Swiping first is what a customer does; `isHittable` then holds.
+    @discardableResult
+    func scrollToAndTap(_ element: XCUIElement,
+                        in app: XCUIApplication,
+                        _ message: @autoclosure () -> String,
+                        maxSwipes: Int = 4,
+                        file: StaticString = #filePath,
+                        line: UInt = #line) -> XCUIElement {
+        let found = requireByScrolling(element, in: app, message(), file: file, line: line)
+        for _ in 0..<maxSwipes where !found.isHittable {
+            app.swipeUp()
+        }
+        XCTAssertTrue(found.isHittable, "Never became tappable: \(message())", file: file, line: line)
+        found.tap()
+        return found
+    }
+
     /// Wait for `element`, scrolling to find it if the screen is too small to show it at launch —
     /// and FAIL if it never appears.
     ///

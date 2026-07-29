@@ -301,6 +301,19 @@ struct NewJourneySheet: View {
         .onAppear {
             store.isPresentingJourneyCreation = true
         }
+        // QUA-64: the discard confirmation, hosted on the OUTER view. It cannot live in
+        // `reviewBody`'s modifier chain — MEASURED 2026-07-29: adding a fourth presentation
+        // modifier there (two `.sheet`s plus `.fileImporter`) broke presentation for the whole
+        // sheet, and typing the name dismissed the creation sheet back to the globe. Same
+        // stacked-presentation failure mode `GlobeSheet`'s one-enum design exists to avoid.
+        .confirmationDialog("Discard this journey?",
+                            isPresented: $showingDiscardConfirm,
+                            titleVisibility: .visible) {
+            Button("Discard journey", role: .destructive) { cancel() }
+            Button("Keep editing", role: .cancel) {}
+        } message: {
+            Text("Staged photos and everything on this screen will be removed.")
+        }
         .task {
             guard needsInitialSuggestionsRun else { return }
             needsInitialSuggestionsRun = false
@@ -335,17 +348,15 @@ struct NewJourneySheet: View {
         }
         // QUA-64: `isSaving` was the ONLY dismissal lock, so after minutes of staging one
         // accidental swipe on this long, scrolling sheet deleted every staged file with no
-        // confirmation and no recovery (there is no persisted draft). The dialog is the ~20-line
-        // insurance that makes the aggressive cleanup-on-dismiss contract safe to keep.
+        // confirmation and no recovery (there is no persisted draft). The discard dialog is the
+        // insurance that makes the aggressive cleanup-on-dismiss contract safe to keep — and it
+        // lives on the OUTER `body`, not here: MEASURED 2026-07-29, adding a fourth presentation
+        // modifier to this chain (two `.sheet`s plus `.fileImporter`) broke presentation for the
+        // WHOLE sheet — typing the name dismissed the creation sheet back to the globe, and three
+        // UI tests failed with "never appeared" pointing at a screen that was perfectly fine.
+        // Same stacked-presentation-modifier failure mode `GlobeSheet`'s one-enum design exists
+        // to avoid; bisect receipt in the QUA-64 ledger notes.
         .interactiveDismissDisabled(isSaving || hasUncommittedWork)
-        .confirmationDialog("Discard this journey?",
-                            isPresented: $showingDiscardConfirm,
-                            titleVisibility: .visible) {
-            Button("Discard journey", role: .destructive) { cancel() }
-            Button("Keep editing", role: .cancel) {}
-        } message: {
-            Text("Staged photos and everything on this screen will be removed.")
-        }
         .sheet(isPresented: $showPaywall) {
             PaywallView(reason: .journeyLimit)
                 .environmentObject(entitlements)
@@ -822,13 +833,6 @@ struct NewJourneySheet: View {
                             pickerLabel
                                 .font(.subheadline.weight(.semibold))
                                 .foregroundStyle(Theme.textPrimary)
-                            // Stated up front, so the number is a budget rather than a surprise
-                            // (the same sentence `PhotoImportSheet` shows).
-                            if let remaining = allowance {
-                                Text("\(remaining) left on the free tier")
-                                    .font(.caption2)
-                                    .foregroundStyle(Theme.textSecondary)
-                            }
                         }
                         Spacer()
                     }
@@ -872,6 +876,18 @@ struct NewJourneySheet: View {
     /// `Text` already-resolved, so they never entered the catalogue — the silent half of QUA-06.
     private var photoPickerLabel: LocalizedStringKey {
         if isStagingPhotos { return "Preparing photos… \(photoStageDone) of \(photoStageTotal)" }
+        // QUA-64: the free-tier budget rides the line that is already here rather than adding a
+        // second one. MEASURED 2026-07-29 and the reason this is not a caption under the picker
+        // (which is how `PhotoImportSheet` shows it): making this form one line taller made an
+        // unrelated tap on "Add day", with the keyboard up, dismiss the whole creation sheet —
+        // bisected to exactly that `Text`, reproduced in two UI tests, and gone the moment the
+        // line went away. A sheet that vanishes with the user's draft is a worse defect than the
+        // one this budget exists to prevent, so the information stays and the height does not.
+        if let remaining = creationPhotoAllowance {
+            return stagedPhotos.isEmpty
+                ? "Pick photos to propose days · \(remaining) left"
+                : "Pick more photos · \(remaining) left"
+        }
         return stagedPhotos.isEmpty ? "Pick photos to propose days" : "Pick more photos"
     }
 

@@ -115,8 +115,10 @@ final class AccessibilityAuditTests: AkashicUITestCase {
         // suggestion rows and the nudges, which is most of what QUA-24 labelled.
         name.tap()
         name.typeText("Besseggen")
-        require(app.buttons[ID.newJourneyAddDay], "the 'Add day' button").tap()
-        require(app.textFields["Name of day 1"], "the first day row")
+        scrollToAndTap(app.buttons[ID.newJourneyAddDay], in: app, "the 'Add day' button")
+        // QUA-56's lesson, hit again by QUA-64's one-line-taller form: a SwiftUI row below the
+        // fold does not exist in the accessibility hierarchy, so scroll to it like a customer.
+        requireByScrolling(app.textFields["Name of day 1"], in: app, "the first day row")
         try audit(app, screen: "new journey — review (phase 2, one day)")
     }
 
