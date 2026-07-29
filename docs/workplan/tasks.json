@@ -4368,7 +4368,7 @@
       "priority": 4,
       "deps": [],
       "track": "QUALITY",
-      "status": "TODO",
+      "status": "DONE",
       "owner": false,
       "title": "Creation-funnel photo hygiene: free-tier cap in the creation pickers, draft-loss protection, and PhotoImportSheet's orphaned batch tail",
       "done_when": "Both creation pickers (chooser card + review screen) pass the remaining free-tier allowance as maxSelectionCount with the 'N left' caption (QUA-16's fix, mirrored); at allowance 0 the picker row is replaced by the paywall CTA instead of an unlimited picker; cancelling/interactively dismissing a non-empty draft asks for confirmation before deleting staged files; PhotoImportSheet's mid-batch cancel deletes the tail (stagingCancelled mirrored back) and failures are counted in QUA-14's sentence instead of showing only the last error.",
@@ -4385,7 +4385,48 @@
         "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,name=iPhone 17 Pro\" CODE_SIGNING_ALLOWED=NO -only-testing:AkashicTests test > /tmp/qua64.log 2>&1 && grep -q \"with 1 test skipped and 0 failures\" /tmp/qua64.log",
         "! grep -q \"maxSelectionCount: 0,\" apple/Akashic/Views/NewJourney/NewJourneySheet.swift  # the review picker is budgeted",
         "! grep -q \"maxSelectionCount: 0,\" apple/Akashic/Views/NewJourney/NewJourneyChooser.swift  # the chooser picker is budgeted"
-      ]
+      ],
+      "claim": {
+        "agent": "fable5-review",
+        "branch": "claude/project-review-code-ux-c5c48b",
+        "at": "2026-07-29"
+      },
+      "verification": {
+        "at": "2026-07-29T08:10:29.074Z",
+        "head": "b152086",
+        "ran": [
+          {
+            "command": "cd apple && xcodegen generate",
+            "ok": true,
+            "ms": 97,
+            "status": 0,
+            "signal": null
+          },
+          {
+            "command": "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,name=iPhone 17 Pro\" CODE_SIGNING_ALLOWED=NO -only-testing:AkashicTests test > /tmp/qua64.log 2>&1 && grep -q \"with 1 test skipped and 0 failures\" /tmp/qua64.log",
+            "ok": true,
+            "ms": 11170,
+            "status": 0,
+            "signal": null
+          },
+          {
+            "command": "! grep -q \"maxSelectionCount: 0,\" apple/Akashic/Views/NewJourney/NewJourneySheet.swift  # the review picker is budgeted",
+            "ok": true,
+            "ms": 20,
+            "status": 0,
+            "signal": null
+          },
+          {
+            "command": "! grep -q \"maxSelectionCount: 0,\" apple/Akashic/Views/NewJourney/NewJourneyChooser.swift  # the chooser picker is budgeted",
+            "ok": true,
+            "ms": 28,
+            "status": 0,
+            "signal": null
+          }
+        ],
+        "attested": []
+      },
+      "evidence": "Both creation pickers budgeted (creationPhotoAllowance mirrors PhotoImportSheet's QUA-16 allowance, staged photos counted; chooser card states the budget up front); at-cap allowance 0 renders the paywall CTA instead of flowing into PhotosPicker's 0=unlimited sentinel (both sheets); interactive dismiss + Cancel confirm before deleting a non-empty draft; PhotoImportSheet got the stagingCancelled backport (mid-batch cancel deletes the tail instead of orphaning it) and QUA-14's counted-failures sentence; 7 new catalog keys shipped with nb translations. Suite 910 green; verify greps pin that no creation picker passes maxSelectionCount: 0 any more."
     },
     {
       "id": "QUA-65",

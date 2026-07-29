@@ -16,6 +16,11 @@ struct NewJourneyChooser: View {
     /// seeds days from photos today keeps doing exactly that — picking up the result is the sheet's
     /// job, not this view's.
     @Binding var photoSelection: [PhotosPickerItem]
+    /// QUA-64: the free-tier photo budget for the journey about to be created (nil = no cap),
+    /// computed by the sheet (which owns the entitlement view) and enforced HERE by the picker —
+    /// this card used to pass `maxSelectionCount: 0` (unlimited), so the first-journey funnel
+    /// user could pick 400 photos, wait through the full serial ingest, and lose 300 at Create.
+    var photoAllowance: Int?
     /// Called with a successfully parsed file; the sheet applies it to the draft and moves to review.
     var onGPXImported: (GPXFile) -> Void
     /// "Start with just a name" — straight to review, empty, with the name field focused.
@@ -61,13 +66,15 @@ struct NewJourneyChooser: View {
     /// and a drafted trip.
     private var photosCard: some View {
         PhotosPicker(selection: $photoSelection,
-                     maxSelectionCount: 0,
+                     // QUA-64: budgeted by the free tier (nil = no cap; see `photoAllowance`).
+                     maxSelectionCount: photoAllowance ?? 0,
                      matching: .images,
                      photoLibrary: .shared()) {
             card(icon: "photo.on.rectangle.angled",
                  title: "Start from your photos",
                  subtitle: "Pick the trip's photos — Akashic drafts the days, route and map, and adds the photos.",
-                 promoted: true)
+                 promoted: true,
+                 budget: photoAllowance)
         }
         .buttonStyle(.plain)
         // QUA-24: a `PhotosPicker` is not a `Button`, so it does not carry the button trait its
@@ -127,7 +134,7 @@ struct NewJourneyChooser: View {
     // nonisolated is the real answer, and it is honest: this function reads nothing but its own
     // parameters and `Theme`'s immutable `Color` statics.
     nonisolated private func card(icon: String, title: LocalizedStringKey, subtitle: LocalizedStringKey,
-                       promoted: Bool, isLoading: Bool = false) -> some View {
+                       promoted: Bool, isLoading: Bool = false, budget: Int? = nil) -> some View {
         HStack(alignment: .top, spacing: 14) {
             ZStack {
                 Circle()
@@ -157,6 +164,13 @@ struct NewJourneyChooser: View {
                     .font(.subheadline)
                     .foregroundStyle(Theme.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
+                // QUA-64: the free-tier budget, stated before the pick — the same up-front
+                // sentence `PhotoImportSheet` shows, so the cap is never a post-ingest surprise.
+                if let budget {
+                    Text("Up to \(budget) photos on the free tier")
+                        .font(.caption)
+                        .foregroundStyle(Theme.textSecondary)
+                }
             }
             Spacer(minLength: 0)
         }

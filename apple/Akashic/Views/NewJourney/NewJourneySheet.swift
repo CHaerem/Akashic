@@ -118,6 +118,34 @@ struct NewJourneySheet: View {
     /// at a time) stops handing new photos to `stagedPhotos` and instead deletes them the instant
     /// they land — otherwise a cancel mid-pick could leave the tail of the batch orphaned on disk.
     @State private var stagingCancelled = false
+    /// QUA-64: a mistap must not erase minutes of staging. Cancel and interactive dismiss route
+    /// through a confirmation whenever the draft holds anything worth keeping.
+    @State private var showingDiscardConfirm = false
+
+    /// QUA-64: the free-tier photo budget for the journey being CREATED — the mirror of
+    /// `PhotoImportSheet.remainingAllowance` (QUA-16), which only covers journeys that already
+    /// exist. Both creation pickers used to pass 0 (unlimited), so the first-journey funnel user
+    /// could pick 400 photos, sit through the full serial ingest, and lose 300 at Create. Staged
+    /// photos count against the budget so "pick more" mid-review stays bounded. Nil = no cap.
+    private var creationPhotoAllowance: Int? {
+        guard !entitlements.isComplete else { return nil }
+        return max(0, EntitlementPolicy.freePhotosPerOwnedJourney - stagedPhotos.count)
+    }
+
+    /// QUA-64: anything the user would lose on dismissal — staged photo files, a typed name, or
+    /// proposed days. `committed`/`createdJourney` mean the work is already safe.
+    private var hasUncommittedWork: Bool {
+        createdJourney == nil && !committed && (!stagedPhotos.isEmpty || draft.isValid || !draft.days.isEmpty)
+    }
+
+    /// Route Cancel through the discard confirmation when there is something to lose.
+    private func requestCancel() {
+        if hasUncommittedWork {
+            showingDiscardConfirm = true
+        } else {
+            cancel()
+        }
+    }
 
     /// Set only by `init(preloadedGPX:...)`: the suggestion pass needs `entitlements`/
     /// `intelligence` from the environment, which aren't available at init time, so it is deferred
@@ -227,6 +255,9 @@ struct NewJourneySheet: View {
             case .chooser:
                 NewJourneyChooser(
                     photoSelection: $photoSelection,
+                    // QUA-64: the free-tier budget, enforced by the picker itself (QUA-16's
+                    // contract) instead of discovered at Create after the full serial ingest.
+                    photoAllowance: creationPhotoAllowance,
                     onGPXImported: { file in
                         applyImportedGPX(file)
                         phase = .review(origin: .gpx)
@@ -285,7 +316,7 @@ struct NewJourneySheet: View {
             saveTitle: createdJourney == nil ? "Create" : "Done",
             saveDisabled: createdJourney == nil && (!draft.isValid || isSaving || isStagingPhotos),
             isSaving: isSaving,
-            onCancel: cancel,
+            onCancel: requestCancel,
             onSave: createdJourney == nil ? create : finishAfterPartialImport
         ) {
             // Order per the design review: name, route summary, country, dates, days, suggestions.
@@ -302,7 +333,19 @@ struct NewJourneySheet: View {
                 Text(saveError).font(.footnote).foregroundStyle(.red)
             }
         }
-        .interactiveDismissDisabled(isSaving)
+        // QUA-64: `isSaving` was the ONLY dismissal lock, so after minutes of staging one
+        // accidental swipe on this long, scrolling sheet deleted every staged file with no
+        // confirmation and no recovery (there is no persisted draft). The dialog is the ~20-line
+        // insurance that makes the aggressive cleanup-on-dismiss contract safe to keep.
+        .interactiveDismissDisabled(isSaving || hasUncommittedWork)
+        .confirmationDialog("Discard this journey?",
+                            isPresented: $showingDiscardConfirm,
+                            titleVisibility: .visible) {
+            Button("Discard journey", role: .destructive) { cancel() }
+            Button("Keep editing", role: .cancel) {}
+        } message: {
+            Text("Staged photos and everything on this screen will be removed.")
+        }
         .sheet(isPresented: $showPaywall) {
             PaywallView(reason: .journeyLimit)
                 .environmentObject(entitlements)
@@ -725,11 +768,46 @@ struct NewJourneySheet: View {
         // which hoisting the key itself would not have preserved.
         let staging = isStagingPhotos
         let pickerLabel = Text(photoPickerLabel)
+        // QUA-64: read out here for the same nonisolated-label reason as `staging`.
+        let allowance = creationPhotoAllowance
         return GlassField(label: "Days from photos", systemImage: "photo.on.rectangle.angled") {
             VStack(alignment: .leading, spacing: 10) {
+                if allowance == 0 {
+                    // At the cap, a picker would be a trap: 0 is `PhotosPicker`'s "unlimited"
+                    // sentinel, so passing it through would invite a pick whose every photo gets
+                    // deleted at commit. Offer the upgrade instead — before wasted work, not after.
+                    Button {
+                        showPhotoPaywall = true
+                    } label: {
+                        HStack(spacing: 10) {
+                            Image(systemName: "photo.badge.exclamationmark").font(.title3)
+                                .foregroundStyle(Theme.accentText)
+                                .accessibilityHidden(true)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Photo limit reached")
+                                    .font(.subheadline.weight(.semibold))
+                                    .foregroundStyle(Theme.textPrimary)
+                                Text("Unlock unlimited photos with Akashic Complete")
+                                    .font(.caption2)
+                                    .foregroundStyle(Theme.textSecondary)
+                            }
+                            Spacer()
+                        }
+                        .padding(14)
+                        .frame(maxWidth: .infinity)
+                        .background(Theme.surface, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                .strokeBorder(Theme.accent.opacity(0.4), lineWidth: 1)
+                        )
+                    }
+                    .buttonStyle(.plain)
+                } else {
                 PhotosPicker(
                     selection: $photoSelection,
-                    maxSelectionCount: 0,
+                    // QUA-64: the QUA-16 contract, mirrored from `PhotoImportSheet` — the cap is a
+                    // limit the picker enforces, not a failure reported after minutes of staging.
+                    maxSelectionCount: allowance ?? 0,
                     matching: .images,
                     photoLibrary: .shared()
                 ) {
@@ -740,9 +818,18 @@ struct NewJourneySheet: View {
                             Image(systemName: "calendar.badge.plus").font(.title3).foregroundStyle(Theme.accentText)
                                 .accessibilityHidden(true)
                         }
-                        pickerLabel
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(Theme.textPrimary)
+                        VStack(alignment: .leading, spacing: 2) {
+                            pickerLabel
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundStyle(Theme.textPrimary)
+                            // Stated up front, so the number is a budget rather than a surprise
+                            // (the same sentence `PhotoImportSheet` shows).
+                            if let remaining = allowance {
+                                Text("\(remaining) left on the free tier")
+                                    .font(.caption2)
+                                    .foregroundStyle(Theme.textSecondary)
+                            }
+                        }
                         Spacer()
                     }
                     .padding(14)
@@ -757,6 +844,7 @@ struct NewJourneySheet: View {
                 // A `PhotosPicker` carries no button trait of its own — see `NewJourneyChooser`.
                 .accessibilityAddTraits(.isButton)
                 .accessibilityHint("Opens your photo library")
+                }
 
                 if isStagingPhotos {
                     ProgressView(value: Double(photoStageDone), total: Double(max(photoStageTotal, 1)))

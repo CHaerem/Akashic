@@ -8267,6 +8267,76 @@
           }
         }
       }
+    },
+    "Photo limit reached": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bildegrensen er nådd"
+          }
+        }
+      }
+    },
+    "Unlock unlimited photos with Akashic Complete": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lås opp ubegrenset med bilder med Akashic Complete"
+          }
+        }
+      }
+    },
+    "Discard this journey?": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Forkaste denne turen?"
+          }
+        }
+      }
+    },
+    "Discard journey": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Forkast turen"
+          }
+        }
+      }
+    },
+    "Keep editing": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fortsett å redigere"
+          }
+        }
+      }
+    },
+    "Staged photos and everything on this screen will be removed.": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Klargjorte bilder og alt på denne skjermen fjernes."
+          }
+        }
+      }
+    },
+    "Up to %lld photos on the free tier": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Opptil %lld bilder på gratisnivået"
+          }
+        }
+      }
     }
   }
 }

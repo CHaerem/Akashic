@@ -24,6 +24,10 @@ struct PhotoImportSheet: View {
     @State private var isCommitting = false
     @State private var committed = false
     @State private var errorMessage: String?
+    /// QUA-64: set by `cancel()`/`onDisappear` so an ingest batch still in flight deletes its
+    /// remaining items the instant they land instead of appending them to a `pending` list that
+    /// `cleanupUncommitted()` has already emptied — the mirror of `NewJourneySheet`'s flag.
+    @State private var stagingCancelled = false
     /// After a partial import (free tier, owned journey over the photo cap): how many were left out.
     @State private var partialRemainder = 0
     @State private var showPaywall = false
@@ -124,7 +128,39 @@ struct PhotoImportSheet: View {
         // `NewJourneySheet.photosSection` hoists a `Text`.
         let label = Text(pending.isEmpty ? "Select photos or videos" : "Select more")
         let allowance = remainingAllowance
-        return PhotosPicker(
+        // QUA-64: at exactly the cap, `remainingAllowance` is 0 — and 0 is `PhotosPicker`'s
+        // documented "unlimited" sentinel, so the ONE user who should have been stopped got an
+        // unbounded picker whose every ingested photo was deleted again at commit. Offer the
+        // upgrade before the wasted work instead of a picker that can only end in a full drop.
+        if allowance == 0 {
+            return AnyView(Button {
+                showPaywall = true
+            } label: {
+                HStack(spacing: 10) {
+                    Image(systemName: "photo.badge.exclamationmark")
+                        .font(.title3).foregroundStyle(Theme.accentText)
+                        .accessibilityHidden(true)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Photo limit reached")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(Theme.textPrimary)
+                        Text("Unlock unlimited photos with Akashic Complete")
+                            .font(.caption2)
+                            .foregroundStyle(Theme.textSecondary)
+                    }
+                    Spacer()
+                }
+                .padding(16)
+                .frame(maxWidth: .infinity)
+                .background(Theme.surface, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .strokeBorder(Theme.accent.opacity(0.4), lineWidth: 1)
+                )
+            }
+            .buttonStyle(.plain))
+        }
+        return AnyView(PhotosPicker(
             selection: $selection,
             // QUA-16: the cap is a limit the picker enforces, not a failure reported afterwards.
             // It used to be 0 (unlimited), so a free-tier user could pick 300 photos, wait while
@@ -163,7 +199,7 @@ struct PhotoImportSheet: View {
         }
         // A `PhotosPicker` is not a `Button` and carries no button trait — see `NewJourneyChooser`.
         .accessibilityAddTraits(.isButton)
-        .accessibilityHint("Opens your photo library")
+        .accessibilityHint("Opens your photo library"))
     }
 
     // MARK: Review row
@@ -256,17 +292,34 @@ struct PhotoImportSheet: View {
 
         let service = PhotoIngestService()
         var order = store.nextPhotoSortOrder(forJourneyID: journey.id) + pending.count
+        var failed = 0
         for pickerItem in items {
             do {
                 let photo = try await service.ingest(pickerItem: pickerItem,
                                                      journeyId: journey.id, sortOrder: order)
-                order += 1
-                let suggested = presetWaypointID
-                    ?? PhotoIngestService.suggestedWaypointId(for: photo, in: journey)
-                pending.append(PendingIngest(id: photo.id, photo: photo, waypointID: suggested))
+                if stagingCancelled {
+                    // QUA-64: the sheet was cancelled while this item was still loading — its
+                    // bytes were just written, so delete them immediately rather than leaving
+                    // them orphaned. `NewJourneySheet.seedDaysFromPhotos` documents this exact
+                    // hazard and claims to mirror this sheet; the fix had never been back-ported,
+                    // so a pick-100-then-cancel leaked most of the staged files permanently.
+                    PhotoEditService().deleteFiles(for: photo)
+                } else {
+                    order += 1
+                    let suggested = presetWaypointID
+                        ?? PhotoIngestService.suggestedWaypointId(for: photo, in: journey)
+                    pending.append(PendingIngest(id: photo.id, photo: photo, waypointID: suggested))
+                }
             } catch {
-                errorMessage = error.localizedDescription
+                // QUA-64 (QUA-14's contract, mirrored): count the failures instead of keeping
+                // only the LAST error — ten failures out of fifty used to read as one raw
+                // NSError line, and the uncounted shortfall read as the app losing photos.
+                failed += 1
             }
+        }
+        if failed > 0, !stagingCancelled {
+            errorMessage = String(localized: "\(failed) couldn't be read and were skipped",
+                                  comment: "Photo import: how many picked items failed to ingest.")
         }
     }
 
@@ -324,11 +377,13 @@ struct PhotoImportSheet: View {
     }
 
     private func cancel() {
+        stagingCancelled = true
         cleanupUncommitted()
         dismiss()
     }
 
     private func cleanupUncommitted() {
+        stagingCancelled = true   // QUA-64: also the onDisappear path — the in-flight batch must stop appending.
         let service = PhotoEditService()
         for item in pending { service.deleteFiles(for: item.photo) }
         pending = []
