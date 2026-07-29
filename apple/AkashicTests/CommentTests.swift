@@ -180,3 +180,80 @@ final class CommentTests: XCTestCase {
         XCTAssertEqual(service.authorName, "Chris", "name is trimmed on write")
     }
 }
+
+/// QUA-86: comment identity must survive the same person's other devices. The per-install UUID
+/// made your own comments read-only from your iPad; the fix prefers the CloudKit user record
+/// name once resolved and migrates this install's own comments onto it through the normal write
+/// path (so the change syncs). These tests cover the migration and the preference order; the
+/// CKContainer fetch itself is CloudKit-gated and lands in SHIP-15's device session.
+@MainActor
+final class CommentIdentityTests: XCTestCase {
+
+    private var bundle: Bundle { Bundle(for: type(of: self)) }
+
+    private func makeDefaults() -> UserDefaults {
+        UserDefaults(suiteName: "qua86-\(UUID().uuidString)")!
+    }
+
+    private func seeded() throws -> (PersistenceController, Journey) {
+        let controller = PersistenceController(mode: .fixtures, seed: false, fixtureBundle: bundle)
+        let journey = try FixtureLoader.load(named: "kilimanjaro", bundle: bundle)
+        CoreDataMapping.upsertJourney(journey, into: controller.viewContext)
+        try controller.viewContext.save()
+        return (controller, journey)
+    }
+
+    func testLocalUserIdPrefersTheResolvedCloudIdentity() throws {
+        let (controller, _) = try seeded()
+        let defaults = makeDefaults()
+        let service = CommentService(persistence: controller, defaults: defaults)
+
+        let uuid = service.localUserId
+        XCTAssertFalse(uuid.isEmpty)
+        XCTAssertEqual(service.localUserId, uuid, "the per-install id is stable")
+
+        defaults.set("_cloud-user-1", forKey: "akashic.comments.cloudUserId")
+        XCTAssertEqual(service.localUserId, "_cloud-user-1",
+                       "once resolved, the CloudKit user record name IS the identity")
+    }
+
+    func testReassignCommentAuthorMigratesOwnershipSoIsMineSurvivesDevices() throws {
+        let (controller, journey) = try seeded()
+        let camp = journey.camps[0]
+        let created = try XCTUnwrap(controller.createComment(
+            waypointID: camp.id, journeyID: journey.id,
+            userID: "install-uuid", authorName: "Tester", content: "mine"))
+
+        XCTAssertTrue(controller.reassignCommentAuthor(from: "install-uuid", to: "_cloud-user-1"))
+
+        let asCloudUser = controller.loadComments(forWaypointID: camp.id, currentUserId: "_cloud-user-1")
+        XCTAssertEqual(asCloudUser.first { $0.id == created.id }?.isMine, true,
+                       "after migration the same person's comments are editable under the cloud id")
+        let asOldInstall = controller.loadComments(forWaypointID: camp.id, currentUserId: "install-uuid")
+        XCTAssertEqual(asOldInstall.first { $0.id == created.id }?.isMine, false,
+                       "the stale per-install id no longer owns them")
+    }
+
+    func testReassignIsSafeToRetryAndHonestAboutFailure() throws {
+        let (controller, journey) = try seeded()
+        let camp = journey.camps[0]
+        _ = try XCTUnwrap(controller.createComment(
+            waypointID: camp.id, journeyID: journey.id,
+            userID: "install-uuid", authorName: "Tester", content: "mine"))
+
+        XCTAssertTrue(controller.reassignCommentAuthor(from: "install-uuid", to: "_cloud-user-1"))
+        XCTAssertTrue(controller.reassignCommentAuthor(from: "install-uuid", to: "_cloud-user-1"),
+                      "no rows left to migrate is success, not failure — the retry is idempotent")
+
+        _ = try XCTUnwrap(controller.createComment(
+            waypointID: camp.id, journeyID: journey.id,
+            userID: "install-uuid-2", authorName: "Tester", content: "later"))
+        // Poison the migration's own save (createComment saves directly, without the seam).
+        controller.nextSaveErrorForTesting = NSError(domain: "qua86", code: 2)
+        XCTAssertFalse(controller.reassignCommentAuthor(from: "install-uuid-2", to: "_cloud-user-2"),
+                       "a failed migration save must be reported so the cloud id is not persisted")
+        let unmigrated = controller.loadComments(forWaypointID: camp.id, currentUserId: "install-uuid-2")
+        XCTAssertEqual(unmigrated.filter { $0.isMine }.count, 1,
+                       "the rollback keeps the old ownership intact for the retry")
+    }
+}

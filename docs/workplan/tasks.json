@@ -4350,7 +4350,7 @@
       "priority": 3,
       "deps": [],
       "track": "QUALITY",
-      "status": "TODO",
+      "status": "DONE",
       "owner": false,
       "title": "Comment identity is per-install: a person's own comments are not editable from their other devices",
       "done_when": "isMine keys on a CloudKit user record name when available (local UUID as offline fallback), authorName syncs via iCloud KVS, and the same person's comments are editable from all their devices; unit tests pin the identity resolution order.",
@@ -4362,7 +4362,34 @@
       "verify": [
         "cd apple && xcodegen generate",
         "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,name=iPhone 17 Pro\" CODE_SIGNING_ALLOWED=NO -only-testing:AkashicTests test > /tmp/qua86.log 2>&1 && grep -q \"with 1 test skipped and 0 failures\" /tmp/qua86.log"
-      ]
+      ],
+      "claim": {
+        "agent": "fable5-review",
+        "branch": "claude/project-review-code-ux-c5c48b",
+        "at": "2026-07-29"
+      },
+      "verification": {
+        "at": "2026-07-29T08:42:07.051Z",
+        "head": "5703f08",
+        "ran": [
+          {
+            "command": "cd apple && xcodegen generate",
+            "ok": true,
+            "ms": 90,
+            "status": 0,
+            "signal": null
+          },
+          {
+            "command": "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,name=iPhone 17 Pro\" CODE_SIGNING_ALLOWED=NO -only-testing:AkashicTests test > /tmp/qua86.log 2>&1 && grep -q \"with 1 test skipped and 0 failures\" /tmp/qua86.log",
+            "ok": true,
+            "ms": 11894,
+            "status": 0,
+            "signal": null
+          }
+        ],
+        "attested": []
+      },
+      "evidence": "Identity resolution order: resolved CloudKit userRecordID.recordName (stable across the person's devices) > per-install UUID fallback; resolution migrates this install's own comments onto the cloud id through the normal write path (syncs), and the cloud id is persisted only after the migration save succeeds so failures retry next launch. authorName double-writes iCloud KVS (entitlement already present in Release .entitlements) + UserDefaults fallback. 3 new tests cover preference order, isMine migration, idempotent retry and honest failure; suite 914 green. End-to-end across two Apple IDs remains SHIP-15."
     },
     {
       "id": "QUA-64",

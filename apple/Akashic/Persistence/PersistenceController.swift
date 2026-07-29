@@ -634,6 +634,27 @@ final class PersistenceController {
         return CoreDataMapping.dayComment(from: cd, currentUserId: currentUserId)
     }
 
+    /// QUA-86: rewrite this install's own comment authorship from the per-install UUID onto the
+    /// resolved CloudKit user record name. Runs through the view context and a normal save, so
+    /// the change reaches CloudKit like any edit and the same person's identity converges across
+    /// their devices. Returns true when every matching row was migrated (or none existed) —
+    /// the caller persists the cloud id only then, so a failed save is retried next launch.
+    @discardableResult
+    func reassignCommentAuthor(from oldUserId: String, to newUserId: String) -> Bool {
+        guard oldUserId != newUserId, !newUserId.isEmpty else { return false }
+        let request = NSFetchRequest<CDDayComment>(entityName: "CDDayComment")
+        request.predicate = NSPredicate(format: "userId == %@", oldUserId)
+        guard let rows = try? viewContext.fetch(request) else { return false }
+        guard !rows.isEmpty else { return true }
+        for row in rows { row.userId = newUserId }
+        do {
+            try saveOrRollback(viewContext)
+        } catch {
+            return false
+        }
+        return true
+    }
+
     /// Delete a comment by id. Returns false if the id is unknown.
     @discardableResult
     func deleteComment(id: String) -> Bool {

@@ -1,3 +1,4 @@
+import CloudKit
 import Foundation
 
 /// Day-comments API for the native app — web parity with `src/lib/journeys/commentAPI.ts`
@@ -32,10 +33,15 @@ final class CommentService {
     // Comment-scoped UserDefaults keys (namespaced so they never collide with other features).
     private static let localUserIdKey = "akashic.comments.localUserId"
     private static let authorNameKey = "akashic.comments.authorName"
+    /// QUA-86: the resolved CloudKit user record name — the identity that is stable across the
+    /// SAME person's devices, which the per-install UUID is not.
+    private static let cloudUserIdKey = "akashic.comments.cloudUserId"
 
     init(persistence: PersistenceController, defaults: UserDefaults = .standard) {
         self.persistence = persistence
         self.defaults = defaults
+        // QUA-86: resolve once per install (idempotent, silent when signed out or unentitled).
+        Task { [weak self] in await self?.resolveCloudIdentityIfNeeded() }
     }
 
     // MARK: - Local author identity
@@ -43,6 +49,13 @@ final class CommentService {
     /// Stable local user id (generated once, then persisted). Locally this stands in for the
     /// CloudKit `creatorUserRecordID`, so `isMine` is meaningful before sync exists.
     var localUserId: String {
+        // QUA-86: prefer the CloudKit user record name once resolved. The per-install UUID made
+        // a person's OWN comments read-only from their other devices — the iPad saw the iPhone's
+        // comments as someone else's, which multi-device beta households would report as data
+        // loss within days. The UUID remains the offline/signed-out fallback.
+        if let cloud = defaults.string(forKey: Self.cloudUserIdKey), !cloud.isEmpty {
+            return cloud
+        }
         if let existing = defaults.string(forKey: Self.localUserIdKey), !existing.isEmpty {
             return existing
         }
@@ -51,10 +64,38 @@ final class CommentService {
         return fresh
     }
 
+    /// QUA-86: fetch the CloudKit user record name and migrate this install's own comments from
+    /// the per-install UUID onto it — through the normal write path, so the change syncs and the
+    /// same person's identity converges across their devices. Ordering matters: the key is only
+    /// stored once the migration save succeeded, so a failure is retried on the next launch.
+    func resolveCloudIdentityIfNeeded() async {
+        #if AKASHIC_CLOUDKIT_BUILD
+        guard persistence.mode == .cloudKit else { return }
+        guard defaults.string(forKey: Self.cloudUserIdKey) == nil else { return }
+        let legacyLocalId = localUserId   // capture BEFORE the cloud id takes precedence
+        do {
+            let container = CKContainer(identifier: Config.cloudKitContainerIdentifier)
+            let recordID = try await container.userRecordID()
+            let cloudId = recordID.recordName
+            guard persistence.reassignCommentAuthor(from: legacyLocalId, to: cloudId) else { return }
+            defaults.set(cloudId, forKey: Self.cloudUserIdKey)
+        } catch {
+            // Signed out or transient — the per-install UUID keeps working; retried next init.
+        }
+        #endif
+    }
+
     /// The "Your name" setting, or `nil` until the user sets it. `nil` drives the inline
     /// first-comment name prompt in the UI.
     var authorName: String? {
         get {
+            // QUA-86: iCloud key-value store first — the "Your name" typed on the iPhone should
+            // greet the same person on their iPad. Entitled on Release builds
+            // (ubiquity-kvstore-identifier); where the entitlement is absent (simulator, plain
+            // Debug) KVS degrades to a local cache and the UserDefaults fallback still rules.
+            let cloud = NSUbiquitousKeyValueStore.default.string(forKey: Self.authorNameKey)?
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            if let cloud, !cloud.isEmpty { return cloud }
             let raw = defaults.string(forKey: Self.authorNameKey)?
                 .trimmingCharacters(in: .whitespacesAndNewlines)
             return (raw?.isEmpty == false) ? raw : nil
@@ -63,8 +104,10 @@ final class CommentService {
             let trimmed = newValue?.trimmingCharacters(in: .whitespacesAndNewlines)
             if let trimmed, !trimmed.isEmpty {
                 defaults.set(trimmed, forKey: Self.authorNameKey)
+                NSUbiquitousKeyValueStore.default.set(trimmed, forKey: Self.authorNameKey)
             } else {
                 defaults.removeObject(forKey: Self.authorNameKey)
+                NSUbiquitousKeyValueStore.default.removeObject(forKey: Self.authorNameKey)
             }
         }
     }
