@@ -1,5 +1,6 @@
 import XCTest
 import CloudKit
+import Combine
 import CoreData
 @testable import Akashic
 
@@ -965,4 +966,58 @@ final class FakeLocalStore: SyncLocalStore {
 struct MockAccountProvider: AccountStatusProviding {
     let status: CKAccountStatus
     func accountStatus() async -> CKAccountStatus { status }
+}
+
+/// QUA-61: shared-database batches must reach the UI. Each engine's `onRemoteChangesApplied` is a
+/// SINGLE mutable closure, and before this fix the two slots were consumed by different parties —
+/// private → `JourneyStore.reload()` (set by the store reaching into the engine), shared →
+/// `autoAcceptMediaSharesIfNeeded()` — so a journey a family member accepted through the shared
+/// engine landed in Core Data and stayed invisible until relaunch. The fix: assigning either
+/// coordinator property wires its signal into the controller's one multiplexed hook, and
+/// `JourneyStore` subscribes to the controller. These tests name only symbols that predate the
+/// fix (the coordinator properties, `handleFetchedChanges`, `objectWillChange`), so they compile
+/// against the old code and fail there on ASSERTION — the shared batch never republished.
+@MainActor
+final class SyncUIRefreshForwardingTests: XCTestCase {
+
+    private func makeEngine(scope: CKDatabase.Scope) -> AkashicSyncEngine {
+        AkashicSyncEngine(store: FakeLocalStore(),
+                          status: SyncStatus(),
+                          accountProvider: MockAccountProvider(status: .available),
+                          databaseScope: scope,
+                          defaults: UserDefaults(suiteName: "qua61-\(UUID().uuidString)")!,
+                          engine: MockSyncEngine())
+    }
+
+    private func journeyRecord(_ name: String) -> CKRecord {
+        CKRecord(recordType: RecordCoder.RecordType.journey,
+                 recordID: CKRecord.ID(recordName: name,
+                                       zoneID: RecordCoder.zoneID(forJourneyID: name)))
+    }
+
+    func testBatchesFromBothEnginesRepublishTheStoreSnapshot() {
+        let controller = PersistenceController(mode: .fixtures, seed: false)
+        controller.syncCoordinator = makeEngine(scope: .private)
+        controller.sharedSyncCoordinator = makeEngine(scope: .shared)
+        let store = JourneyStore(persistence: controller)
+
+        var republished = 0
+        let subscription = store.objectWillChange.sink { _ in republished += 1 }
+        defer { subscription.cancel() }
+
+        // The regression: a batch applied by the SHARED engine (a family member's accepted
+        // journey arriving, or any later edit from the owner) must re-take the store's published
+        // snapshot — it used to fire only the media-share auto-accept and the UI stayed stale
+        // until relaunch.
+        controller.sharedSyncCoordinator?.handleFetchedChanges(
+            modifications: [journeyRecord("j-shared")], deletions: [])
+        XCTAssertGreaterThan(republished, 0,
+            "a shared-database batch must republish the journey snapshot — it used to vanish")
+
+        let afterShared = republished
+        controller.syncCoordinator?.handleFetchedChanges(
+            modifications: [journeyRecord("j-own")], deletions: [])
+        XCTAssertGreaterThan(republished, afterShared,
+            "private-database batches keep republishing through the same multiplexed hook")
+    }
 }

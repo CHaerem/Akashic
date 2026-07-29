@@ -43,8 +43,13 @@ final class JourneyStore: ObservableObject {
         // Pulled server changes land straight in Core Data, which this store does NOT observe —
         // it publishes a snapshot taken by `reload()`. Without this hook a clean `.cloudKit`
         // install downloaded the whole archive and still showed "No journeys" until the next
-        // relaunch. The coordinator fires it on the main actor after each applied batch.
-        persistence.syncCoordinator?.onRemoteChangesApplied = { [weak self] in
+        // relaunch. QUA-61: this used to set the hook on the persistence layer's PRIVATE engine
+        // directly (and only that engine) — so a journey accepted through the SHARED engine
+        // (a family member's whole experience) landed in Core Data and never on screen until
+        // relaunch. The controller now multiplexes both engines into this one hook; the store
+        // must never reach into an engine again, because each engine's closure slot is single
+        // and already has another consumer.
+        persistence.onRemoteChangesApplied = { [weak self] in
             self?.reload()
             // QUA-48: this is the moment the family's real journeys arrive on a second device, and
             // therefore the moment a sample seeded into what looked like an empty account becomes a

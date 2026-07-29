@@ -75,9 +75,22 @@ final class PersistenceController {
     /// Observable sync status for the UI. Always present but `.disabled` outside `.cloudKit`.
     let syncStatus = SyncStatus()
     /// The sync coordinator for our own journeys (private database); nil unless `.cloudKit`.
-    var syncCoordinator: AkashicSyncEngine?
+    /// QUA-61: assignment wires the engine's applied-batch signal into the controller's
+    /// multiplexed hook — see `wireSyncEngineForwarding()` for why the wiring lives on `didSet`.
+    var syncCoordinator: AkashicSyncEngine? { didSet { wireSyncEngineForwarding() } }
     /// The coordinator for journeys shared with us (shared database, T2.8); nil unless `.cloudKit`.
-    var sharedSyncCoordinator: AkashicSyncEngine?
+    var sharedSyncCoordinator: AkashicSyncEngine? { didSet { wireSyncEngineForwarding() } }
+    /// UI-facing "remote changes were applied" signal — the ONE place the app layer subscribes
+    /// (`JourneyStore.init` sets it to re-take its published snapshot).
+    ///
+    /// QUA-61: `AkashicSyncEngine.onRemoteChangesApplied` is a single mutable closure per engine,
+    /// and the two engines' slots were consumed by DIFFERENT parties — the private engine's by
+    /// `JourneyStore.reload()`, the shared engine's by `autoAcceptMediaSharesIfNeeded()` — so
+    /// shared-database batches never reached the UI: a participant accepting a CKShare had the
+    /// journey in Core Data and "No journeys" on screen until relaunch. Both engines now forward
+    /// here (`wireSyncEngineForwarding`), and the store subscribes to the controller instead of
+    /// reaching into an engine it must not share with other consumers.
+    var onRemoteChangesApplied: (() -> Void)?
     /// Observes local Core Data saves and feeds them to the engine; nil unless `.cloudKit`.
     var syncScheduler: SyncScheduler?
     /// The one-time v2 photo-storage repack (MAPPING §13). Held so a Wi-Fi path change can resume

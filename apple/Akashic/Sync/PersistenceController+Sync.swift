@@ -59,9 +59,11 @@ extension PersistenceController: SyncLocalStore {
             guard let self else { return }
             self.seedDemoJourneyIfFreshInstall(bundle: self.fixtureBundle)
         }
-        // v2 participant side: when the shared engine applies fetched changes (which may carry a
-        // newly-set Journey.mediaShareURL), auto-accept any media share not yet accepted.
-        sharedCoordinator.onRemoteChangesApplied = { [weak self] in self?.autoAcceptMediaSharesIfNeeded() }
+        // QUA-61: both engines already forward applied batches to the controller's UI-facing hook
+        // — wired by `didSet` on the two coordinator properties the moment they were assigned
+        // above. A line here used to set ONLY the media-share auto-accept closure on the shared
+        // engine, which consumed its single slot and left shared-database batches invisible to
+        // the UI until relaunch; the auto-accept side effect now lives inside the forwarding.
         // When the path becomes cheap (or the user turns the setting off), release any deferred
         // heavy fetch on BOTH engines immediately — the NWPathMonitor callback, not next launch —
         // and resume the Wi-Fi-gated repack if one was paused.
@@ -85,6 +87,28 @@ extension PersistenceController: SyncLocalStore {
         #else
         syncStatus.set(.notEntitled)
         #endif
+    }
+
+    /// QUA-61: route BOTH engines' applied-batch signal into the controller's single UI-facing
+    /// `onRemoteChangesApplied`. The shared engine keeps its media-share auto-accept side effect
+    /// (a fetched batch may carry a newly-set `Journey.mediaShareURL`).
+    ///
+    /// Called from `didSet` on `syncCoordinator`/`sharedSyncCoordinator` rather than inline in
+    /// `startSync`, for a testability reason: engine construction in `startSync` sits behind
+    /// `#if AKASHIC_CLOUDKIT_BUILD`, which the Debug unit suite never compiles — wiring done only
+    /// there would be untestable in the loop that runs on every push. Assignment-driven wiring
+    /// means a test can hand the controller two seam-built engines through the pre-existing
+    /// properties and drive a fetched batch through the shared one; `SyncUIRefreshForwardingTests`
+    /// does exactly that.
+    @MainActor
+    func wireSyncEngineForwarding() {
+        syncCoordinator?.onRemoteChangesApplied = { [weak self] in
+            self?.onRemoteChangesApplied?()
+        }
+        sharedSyncCoordinator?.onRemoteChangesApplied = { [weak self] in
+            self?.autoAcceptMediaSharesIfNeeded()
+            self?.onRemoteChangesApplied?()
+        }
     }
 
     // MARK: Sharing (T2.8)

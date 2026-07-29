@@ -4087,7 +4087,7 @@
       "priority": 1,
       "deps": [],
       "track": "QUALITY",
-      "status": "TODO",
+      "status": "DONE",
       "owner": false,
       "title": "Shared-database sync never refreshes the UI — participants see a stale journey list until relaunch",
       "done_when": "Remote changes applied by EITHER engine (private or shared) trigger JourneyStore.reload(), through one multicast point owned by PersistenceController; a unit test drives a fetched batch through a shared-scope engine and asserts the store republished; JourneyStore no longer reaches into an engine directly.",
@@ -4103,7 +4103,48 @@
         "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,name=iPhone 17 Pro\" CODE_SIGNING_ALLOWED=NO -only-testing:AkashicTests test > /tmp/qua61.log 2>&1 && grep -q \"with 1 test skipped and 0 failures\" /tmp/qua61.log",
         "grep -q \"onRemoteChangesApplied\" apple/Akashic/Persistence/PersistenceController.swift  # the multicast point lives on the controller",
         "! grep -q \"syncCoordinator?.onRemoteChangesApplied\" apple/Akashic/App/JourneyStore.swift  # the store no longer reaches into an engine"
-      ]
+      ],
+      "claim": {
+        "agent": "fable5-review",
+        "branch": "claude/project-review-code-ux-c5c48b",
+        "at": "2026-07-29"
+      },
+      "verification": {
+        "at": "2026-07-29T07:45:49.002Z",
+        "head": "094a338",
+        "ran": [
+          {
+            "command": "cd apple && xcodegen generate",
+            "ok": true,
+            "ms": 76,
+            "status": 0,
+            "signal": null
+          },
+          {
+            "command": "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,name=iPhone 17 Pro\" CODE_SIGNING_ALLOWED=NO -only-testing:AkashicTests test > /tmp/qua61.log 2>&1 && grep -q \"with 1 test skipped and 0 failures\" /tmp/qua61.log",
+            "ok": true,
+            "ms": 13656,
+            "status": 0,
+            "signal": null
+          },
+          {
+            "command": "grep -q \"onRemoteChangesApplied\" apple/Akashic/Persistence/PersistenceController.swift  # the multicast point lives on the controller",
+            "ok": true,
+            "ms": 28,
+            "status": 0,
+            "signal": null
+          },
+          {
+            "command": "! grep -q \"syncCoordinator?.onRemoteChangesApplied\" apple/Akashic/App/JourneyStore.swift  # the store no longer reaches into an engine",
+            "ok": true,
+            "ms": 28,
+            "status": 0,
+            "signal": null
+          }
+        ],
+        "attested": []
+      },
+      "evidence": "wireSyncEngineForwarding on didSet of both coordinator properties multiplexes both engines into PersistenceController.onRemoteChangesApplied; JourneyStore subscribes to the controller. Regression test SyncUIRefreshForwardingTests names only pre-fix symbols and was proven RED on assertion against HEAD~ (prove receipt: 1 failing assertion against HEAD, 0 failures current) and GREEN now; full unit suite 905/905 green (1 skipped)."
     },
     {
       "id": "QUA-62",

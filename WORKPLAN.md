@@ -5,17 +5,17 @@
 
 # Akashic — work ledger
 
-184 tasks · **62 open** (37 agent-doable, 20.2 dev-days · 25 owner-only, 10.6 dev-days) · 122 done · 0 dropped
+184 tasks · **61 open** (36 agent-doable, 19.9 dev-days · 25 owner-only, 10.6 dev-days) · 123 done · 0 dropped
 
 > **`dev-days` are a human-developer estimate, not agent time.** They came from the review
 > that produced these tasks and they are the right unit for deciding whether something is
 > worth doing — they are the wrong unit for predicting how long an agent will take, and
 > summing them as "work remaining" overstates it substantially.
 >
-> Measured so far: **116 agent tasks estimated at 76.9 dev-days**.
+> Measured so far: **117 agent tasks estimated at 77.2 dev-days**.
 > Elapsed time is deliberately absent: nothing here can support it. Use `git log` for that.
 >
-> 9 of the closed tasks were 2 dev-days or more, and 7.5 of the 20.2 remaining dev-days still sit in 3 such task(s): DIFF-18, DIFF-19, DIFF-20. Those turn on design judgement rather than localised edits, so do not assume the compression above holds.
+> 9 of the closed tasks were 2 dev-days or more, and 7.5 of the 19.9 remaining dev-days still sit in 3 such task(s): DIFF-18, DIFF-19, DIFF-20. Those turn on design judgement rather than localised edits, so do not assume the compression above holds.
 
 Read [CLAUDE.md](CLAUDE.md) before touching anything. To find work:
 
@@ -157,7 +157,7 @@ node scripts/workplan.mjs next
 
 > Tests, types, CI, localisation, accessibility. Localisation and accessibility are in v1.0 by decision.
 
-32 open of 96 · 9.4 d remaining
+31 open of 96 · 9.1 d remaining
 
 | | Task | Days | Who | Deps | Finish line |
 |---|---|---|---|---|---|
@@ -228,7 +228,7 @@ node scripts/workplan.mjs next
 | `x` | `QUA-58` **QUA-49 follow-up: the regression test, the now-false e2e comment, and the two unit-test guards** | 0.3 | agent | — | The camp-over-stack precedence is guarded by an e2e click on a KNOWN coincident day and by unit tests over the re-add and push-off paths; the stale comment is corrected; the local cast is gone. |
 | `x` | `QUA-59` **ITMS-90788 from Apple's own delivery feedback: the GPX document type lacked LSHandlerRank** | 0.1 | agent | — | The built Info.plist carries LSHandlerRank for the GPX Track entry, so the next delivery draws no ITMS-90788. |
 | `x` | `QUA-60` **The accessibility audit times out on slow runners and blocks the release pipeline — twice in one day** | 0.2 | agent | — | performAccessibilityAudit's framework timeout (NSError code -56, Audit failed to complete in time) is retried a bounded number of times inside the audit helper, so a slow runner costs seconds instead of a manual rerun of a 15-minute job. |
-| ` ` | `QUA-61` **Shared-database sync never refreshes the UI — participants see a stale journey list until relaunch** | 0.3 | agent | — | Remote changes applied by EITHER engine (private or shared) trigger JourneyStore.reload(), through one multicast point owned by PersistenceController; a unit test drives a fetched batch through a shared-scope engine and asserts the store republished; JourneyStore no longer reaches into an engine directly. |
+| `x` | `QUA-61` **Shared-database sync never refreshes the UI — participants see a stale journey list until relaunch** | 0.3 | agent | — | Remote changes applied by EITHER engine (private or shared) trigger JourneyStore.reload(), through one multicast point owned by PersistenceController; a unit test drives a fetched batch through a shared-scope engine and asserts the store republished; JourneyStore no longer reaches into an engine directly. |
 | ` ` | `QUA-62` **Release builds honour the DEBUG persistence-mode override — a leftover flag silently hides the customer archive** | 0.2 | agent | — | Config.resolvedPersistenceMode ignores (and Release launch actively clears) the akashic.persistenceMode.override UserDefaults key outside DEBUG, mirroring the SHIP-09 decision DeveloperTools.isUnlocked already implements; AKASHIC_FORCE_LOCAL becomes an in-memory override instead of a durable UserDefaults write; unit tests pin both. |
 | ` ` | `QUA-63` **deleteJourney condemns CloudKit zones before the local commit and destroys media on a failed save; comment writes report success on failure** | 0.3 | agent | — | deleteJourney commits the local cascade FIRST and only then enqueues zone deletes and removes the media directory; a failed save rolls back and returns false, and JourneyStore surfaces it instead of returning true unconditionally. updateComment/deleteComment get the same rollback-and-report contract every other write path already has. Unit tests with a poisoned context pin all three. |
 | ` ` | `QUA-78` **Owner-device journey deletion is undone by the second device: the protective zone re-upload resurrects it everywhere** | 0.4 | agent | `DIFF-16` | A locally initiated zone deletion is recorded in a durable tombstone consulted by handleZoneDeletions, so a zone THIS install deleted is never protectively re-uploaded; a two-engine unit test proves delete on A + .deleted event on B no longer re-enqueues the journey; the SHIP-15 checklist gains the two-device delete scenario. |
