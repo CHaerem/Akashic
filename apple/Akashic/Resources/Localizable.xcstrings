@@ -8337,6 +8337,66 @@
           }
         }
       }
+    },
+    "Invite family…": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Inviter familien …"
+          }
+        }
+      }
+    },
+    "Publish web link…": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Publiser weblenke …"
+          }
+        }
+      }
+    },
+    "Share showcase link": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Del showcase-lenken"
+          }
+        }
+      }
+    },
+    "Remove from showcase?": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fjerne fra showcasen?"
+          }
+        }
+      }
+    },
+    "Keep published": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Behold publisert"
+          }
+        }
+      }
+    },
+    "The public link stops working for everyone who has it. Your journey and photos are not affected.": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Den offentlige lenken slutter å virke for alle som har den. Turen og bildene dine påvirkes ikke."
+          }
+        }
+      }
     }
   }
 }

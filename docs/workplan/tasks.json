@@ -4434,7 +4434,7 @@
       "priority": 4,
       "deps": [],
       "track": "QUALITY",
-      "status": "TODO",
+      "status": "DONE",
       "owner": false,
       "title": "The showcase link exists only in the seconds after a publish run, 'Remove from showcase' has no confirmation, and 'Sharing' vs 'Showcase' assumes knowledge a customer lacks",
       "done_when": "A published journey's showcase sheet always renders the ShareLink + URL row (driven by the verified .onShowcase slug, not the transient .done phase); 'Remove from showcase' asks for confirmation with consequence-stating copy in the house style; the journey overflow menu uses intent-based labels ('Invite family…' / 'Publish web link…').",
@@ -4448,7 +4448,34 @@
       "verify": [
         "cd apple && xcodegen generate",
         "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,name=iPhone 17 Pro\" CODE_SIGNING_ALLOWED=NO -only-testing:AkashicTests test > /tmp/qua65.log 2>&1 && grep -q \"with 1 test skipped and 0 failures\" /tmp/qua65.log"
-      ]
+      ],
+      "claim": {
+        "agent": "fable5-review",
+        "branch": "claude/project-review-code-ux-c5c48b",
+        "at": "2026-07-29"
+      },
+      "verification": {
+        "at": "2026-07-29T08:13:35.617Z",
+        "head": "545a200",
+        "ran": [
+          {
+            "command": "cd apple && xcodegen generate",
+            "ok": true,
+            "ms": 94,
+            "status": 0,
+            "signal": null
+          },
+          {
+            "command": "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,name=iPhone 17 Pro\" CODE_SIGNING_ALLOWED=NO -only-testing:AkashicTests test > /tmp/qua65.log 2>&1 && grep -q \"with 1 test skipped and 0 failures\" /tmp/qua65.log",
+            "ok": true,
+            "ms": 10740,
+            "status": 0,
+            "signal": null
+          }
+        ],
+        "attested": []
+      },
+      "evidence": "Share link + URL row renders whenever model.verification == .onShowcase (verified slug, not the transient .done phase) — published once now means shareable forever; Remove from showcase confirms with consequence-stating house copy; overflow menu renamed to intent-based labels (Invite family… / Publish web link…). 6 new catalog keys with nb. Suite 910 green."
     },
     {
       "id": "QUA-70",

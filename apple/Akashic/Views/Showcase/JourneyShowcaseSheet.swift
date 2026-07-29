@@ -20,6 +20,8 @@ struct JourneyShowcaseSheet: View {
     /// Set when the user taps Publish on an expensive path with Wi-Fi-only on — publishing tens of
     /// MB over cellular warns (never blocks): the mirror is small enough to be a choice, not a bill.
     @State private var showCellularPublishConfirm = false
+    /// QUA-65: unpublishing kills a shared link for everyone holding it — confirm first.
+    @State private var showingRemoveConfirm = false
 
     /// The freshest copy of this journey (its `isPublic` may flip during a publish).
     private var live: Journey { store.journey(withID: journey.id) ?? journey }
@@ -93,6 +95,24 @@ struct JourneyShowcaseSheet: View {
                     .foregroundStyle(statusTint)
                 Spacer()
                 Text(live.shortName).foregroundStyle(Theme.textSecondary)
+            }
+            // QUA-65: the link is the point of publishing, and it used to render ONLY in the
+            // seconds after a publish run (`resultView`) — an owner who published yesterday saw
+            // Public / Update / Remove and no link anywhere, and the only in-app recovery was
+            // re-running a publish. SHIP-17 counts "showcase link sent" as a beta criterion;
+            // this row is what makes "published once" mean "shareable forever". The VERIFIED
+            // slug is the only correct source (cross-owner collision: the pretty slug can lose),
+            // so the row appears exactly when the mirror check confirmed presence.
+            if case .onShowcase(let slug) = model.verification,
+               let url = AppInfo.showcaseURL(slug: slug) {
+                ShareLink(item: url) {
+                    Label("Share showcase link", systemImage: "square.and.arrow.up")
+                }
+                .foregroundStyle(Theme.accent)
+                Text(url.absoluteString)
+                    .font(.footnote)
+                    .foregroundStyle(Theme.textSecondary)
+                    .textSelection(.enabled)
             }
         } header: {
             Text("Public showcase")
@@ -197,10 +217,25 @@ struct JourneyShowcaseSheet: View {
                 .foregroundStyle(canPublish ? Theme.accent : Theme.textTertiary)
 
                 if live.isPublic {
+                    // QUA-65: this was the only destructive action across the consumption
+                    // surfaces without a confirmation — yet unpublishing kills a world-shared
+                    // link for everyone holding it, and a later re-publish may land under a
+                    // different slug in the collision case. House style: consequence-stating
+                    // copy, like delete-journey and stop-sharing.
                     Button(role: .destructive) {
-                        Task { await runRemove() }
+                        showingRemoveConfirm = true
                     } label: {
                         Label("Remove from showcase", systemImage: "globe.badge.chevron.backward")
+                    }
+                    .confirmationDialog("Remove from showcase?",
+                                        isPresented: $showingRemoveConfirm,
+                                        titleVisibility: .visible) {
+                        Button("Remove from showcase", role: .destructive) {
+                            Task { await runRemove() }
+                        }
+                        Button("Keep published", role: .cancel) {}
+                    } message: {
+                        Text("The public link stops working for everyone who has it. Your journey and photos are not affected.")
                     }
                 }
 

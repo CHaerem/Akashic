@@ -5,17 +5,17 @@
 
 # Akashic — work ledger
 
-184 tasks · **58 open** (33 agent-doable, 19 dev-days · 25 owner-only, 10.6 dev-days) · 126 done · 0 dropped
+184 tasks · **57 open** (32 agent-doable, 18.7 dev-days · 25 owner-only, 10.6 dev-days) · 127 done · 0 dropped
 
 > **`dev-days` are a human-developer estimate, not agent time.** They came from the review
 > that produced these tasks and they are the right unit for deciding whether something is
 > worth doing — they are the wrong unit for predicting how long an agent will take, and
 > summing them as "work remaining" overstates it substantially.
 >
-> Measured so far: **120 agent tasks estimated at 78.1 dev-days**.
+> Measured so far: **121 agent tasks estimated at 78.4 dev-days**.
 > Elapsed time is deliberately absent: nothing here can support it. Use `git log` for that.
 >
-> 9 of the closed tasks were 2 dev-days or more, and 7.5 of the 19 remaining dev-days still sit in 3 such task(s): DIFF-18, DIFF-19, DIFF-20. Those turn on design judgement rather than localised edits, so do not assume the compression above holds.
+> 9 of the closed tasks were 2 dev-days or more, and 7.5 of the 18.7 remaining dev-days still sit in 3 such task(s): DIFF-18, DIFF-19, DIFF-20. Those turn on design judgement rather than localised edits, so do not assume the compression above holds.
 
 Read [CLAUDE.md](CLAUDE.md) before touching anything. To find work:
 
@@ -157,7 +157,7 @@ node scripts/workplan.mjs next
 
 > Tests, types, CI, localisation, accessibility. Localisation and accessibility are in v1.0 by decision.
 
-28 open of 96 · 8.2 d remaining
+27 open of 96 · 7.9 d remaining
 
 | | Task | Days | Who | Deps | Finish line |
 |---|---|---|---|---|---|
@@ -237,7 +237,7 @@ node scripts/workplan.mjs next
 | ` ` | `QUA-81` **Media-share auto-accept is sticky per journey ID: owner unshare→re-share permanently strands participants on thumbnails** | 0.2 | agent | `DIFF-16` | The accepted marker is keyed by share URL (journeyID→acceptedURL), so a re-created media share with a new URL is re-accepted; account switch clears the stored set; the fake-accepter suite covers unshare→re-share. |
 | ` ` | `QUA-86` **Comment identity is per-install: a person's own comments are not editable from their other devices** | 0.3 | agent | — | isMine keys on a CloudKit user record name when available (local UUID as offline fallback), authorName syncs via iCloud KVS, and the same person's comments are editable from all their devices; unit tests pin the identity resolution order. |
 | `x` | `QUA-64` **Creation-funnel photo hygiene: free-tier cap in the creation pickers, draft-loss protection, and PhotoImportSheet's orphaned batch tail** | 0.4 | agent | — | Both creation pickers (chooser card + review screen) pass the remaining free-tier allowance as maxSelectionCount with the 'N left' caption (QUA-16's fix, mirrored); at allowance 0 the picker row is replaced by the paywall CTA instead of an unlimited picker; cancelling/interactively dismissing a non-empty draft asks for confirmation before deleting staged files; PhotoImportSheet's mid-batch cancel deletes the tail (stagingCancelled mirrored back) and failures are counted in QUA-14's sentence instead of showing only the last error. |
-| ` ` | `QUA-65` **The showcase link exists only in the seconds after a publish run, 'Remove from showcase' has no confirmation, and 'Sharing' vs 'Showcase' assumes knowledge a customer lacks** | 0.3 | agent | — | A published journey's showcase sheet always renders the ShareLink + URL row (driven by the verified .onShowcase slug, not the transient .done phase); 'Remove from showcase' asks for confirmation with consequence-stating copy in the house style; the journey overflow menu uses intent-based labels ('Invite family…' / 'Publish web link…'). |
+| `x` | `QUA-65` **The showcase link exists only in the seconds after a publish run, 'Remove from showcase' has no confirmation, and 'Sharing' vs 'Showcase' assumes knowledge a customer lacks** | 0.3 | agent | — | A published journey's showcase sheet always renders the ShareLink + URL row (driven by the verified .onShowcase slug, not the transient .done phase); 'Remove from showcase' asks for confirmation with consequence-stating copy in the house style; the journey overflow menu uses intent-based labels ('Invite family…' / 'Publish web link…'). |
 | ` ` | `QUA-70` **Get Journey Photos is a fixtures-era stub: Siri/Shortcuts confidently answer 'no photos' against a 939-photo archive** | 0.2 | agent | — | GetJourneyPhotosIntent resolves the journey, loads its photos through the persistence layer, applies the waypointId filter and the already-computed limit clamp, and returns real results; IntentQueryTests cover the wired path. |
 | ` ` | `QUA-71` **DIFF-05/DIFF-08 are engines without wires: Vision subjects never reach the day-note prompt, and drafting failures show the exact generic message the code condemns** | 0.3 | agent | — | WaypointEditSheet.draftNote() populates DayNoteInput.photoSubjects via VisionPhotoScorer.subjects(in:) before generating; the catch maps errors through DayNoteDrafter.failure(from:), shows failure.message, and gates the retry affordance on isWorthRetrying; DIFF-05's and DIFF-08's ledger evidence is corrected to name this task as the wiring that made them reachable. |
 | ` ` | `QUA-77` **The PDF story book (DIFF-07, 6 dev-days, DONE) has no UI entry point — no customer can create one** | 0.3 | agent | — | A 'Save as PDF book' action exists on the journey (story toolbar and/or export sheet), feeds StoryPDFRenderer.render with the curated per-day input StoryPagination documents, and hands the produced file to ShareLink; a symbol-presence check à la DIFF-13 (not just unit tests) proves the renderer is linked into the shipped binary. |

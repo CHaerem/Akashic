@@ -115,11 +115,17 @@ struct JourneyDetailView: View {
                     Button { showImport = true } label: {
                         Label("Add photos", systemImage: "photo.badge.plus")
                     }
+                    // QUA-65: these two read "Sharing" and "Showcase" — both meaning "show this
+                    // to other people", with nothing saying which one sends grandma a link. A
+                    // household wanting exactly that plausibly opened Sharing and landed in the
+                    // CKShare invitation flow (which needs recipients with iCloud accounts and
+                    // SHIP-15-class conditions), never finding the frictionless web link.
+                    // Intent-based labels, per the review; the feature names stay in the sheets.
                     Button { showSharing = true } label: {
-                        Label("Sharing", systemImage: "person.2")
+                        Label("Invite family…", systemImage: "person.2")
                     }
                     Button { showShowcase = true } label: {
-                        Label("Showcase", systemImage: "globe")
+                        Label("Publish web link…", systemImage: "globe")
                     }
                     Button { showExport = true } label: {
                         Label("Export journey", systemImage: "square.and.arrow.up")
