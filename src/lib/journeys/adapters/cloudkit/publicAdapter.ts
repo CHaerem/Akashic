@@ -195,8 +195,13 @@ export async function fetchPublicJourneys(): Promise<{
         // marker on the defect at the line that carries it.
         records = await performQueryAll(db, { recordType: PUBLIC_JOURNEY_TYPE });
     } catch (err) {
+        // QUA-72: this used to swallow the failure and return empty — so a visitor opening a
+        // shared link during ANY outage (network down, CDN script blocked, an origin/token
+        // misconfiguration of the QUA-40 class) saw a dark globe with no markers, no message and
+        // no retry: indistinguishable from "this family published nothing". JourneysContext owns
+        // the error/refetch state; it can only own it if the failure reaches it.
         console.error('[cloudkit] Error fetching public journeys:', err);
-        return { treks: [], trekDataMap: {} };
+        throw err instanceof Error ? err : new Error('CloudKit public journey fetch failed');
     }
 
     if (records.length === 0) {

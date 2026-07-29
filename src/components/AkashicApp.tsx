@@ -37,7 +37,9 @@ export default function AkashicApp() {
     const flyToPhotoRef = useRef<((photo: Photo) => void) | null>(null);
     const recenterRef = useRef<(() => void) | null>(null);
     const { getMediaUrl } = useMedia();
-    const { treks, refetch: refetchJourneys } = useJourneys();
+    // QUA-72: `error` was dead code — the adapters swallowed every failure, so an outage
+    // rendered a silently empty globe. They rethrow now, and this surface owns the recovery.
+    const { treks, loading: journeysLoading, error: journeysError, refetch: refetchJourneys } = useJourneys();
     // Signed-out visitors get the read-only public showcase — no edit affordances.
     const { signedIn } = useAuth();
     const stagingBranch = import.meta.env.VITE_STAGING_BRANCH;
@@ -66,6 +68,9 @@ export default function AkashicApp() {
         trekData,
         extendedStats,
         elevationProfile,
+        // QUA-72: the ?journey= deep link's not-found state (see useTrekData).
+        sharedLinkMiss,
+        clearSharedLinkMiss,
         // Sheet state (Find My redesign)
         sheetSnapPoint,
         activeMode,
@@ -320,6 +325,43 @@ export default function AkashicApp() {
 
             {/* Globe Hint - shown when no trek selected */}
             {!selectedTrek && view === 'globe' && <GlobeHint isMobile={isMobile} />}
+
+            {/* QUA-72: an outage is a state, not an empty globe. Shown only when the load
+                finished with an error; the refetch plumbing always existed — it was unreachable. */}
+            {!selectedTrek && view === 'globe' && !journeysLoading && journeysError && (
+                <div
+                    role="alert"
+                    className="absolute left-1/2 -translate-x-1/2 bottom-24 z-20 flex items-center gap-3 rounded-xl border border-white/10 bg-black/60 px-4 py-3 backdrop-blur-xl"
+                >
+                    <span className="text-sm text-white/80">Couldn’t load journeys.</span>
+                    <button
+                        onClick={() => { void refetchJourneys(); }}
+                        className="min-h-9 cursor-pointer rounded-lg border border-white/15 px-3 py-1.5 text-xs font-medium text-white/95 transition-all duration-200 hover:bg-white/15"
+                    >
+                        Retry
+                    </button>
+                </div>
+            )}
+
+            {/* QUA-72: a shared link whose journey isn't on the showcase (typo, unpublished,
+                taken down) used to land here with zero explanation — reading as a broken share. */}
+            {!selectedTrek && view === 'globe' && !journeysLoading && !journeysError && sharedLinkMiss && (
+                <div
+                    role="status"
+                    className="absolute left-1/2 -translate-x-1/2 bottom-24 z-20 flex items-center gap-3 rounded-xl border border-white/10 bg-black/60 px-4 py-3 backdrop-blur-xl"
+                >
+                    <span className="text-sm text-white/80">
+                        This journey isn’t available — it may have been unpublished.
+                    </span>
+                    <button
+                        onClick={clearSharedLinkMiss}
+                        aria-label="Dismiss"
+                        className="min-h-9 cursor-pointer rounded-lg border border-white/15 px-3 py-1.5 text-xs font-medium text-white/95 transition-all duration-200 hover:bg-white/15"
+                    >
+                        OK
+                    </button>
+                </div>
+            )}
 
             {/* Test Mode Overlay - shows current state for visual testing */}
             <TestModeOverlay

@@ -57,7 +57,7 @@ export function MapKitJourneyMap({
     // reads the same context in the same way (`MapboxGlobe.tsx:175`, `useMapbox.ts:39`).
     const trekData = selectedTrek ? trekDataMap[selectedTrek.id] ?? null : null;
 
-    const { ready, error, flyToPhoto, recenter, getCameraState } = useMapKitJourney({
+    const { ready, error, retry, flyToPhoto, recenter, getCameraState } = useMapKitJourney({
         containerRef,
         selectedTrek,
         selectedCamp,
@@ -100,8 +100,20 @@ export function MapKitJourneyMap({
     }, [recenterRef, recenter]);
 
     if (error) {
-        return <MapErrorFallback error={error} />;
+        // QUA-72: the precise diagnostics (origin claims, exp, the token-minting hint) are for
+        // developers — keep them in the console, where they always went. A customer whose network
+        // blocks Apple's CDN gets one honest sentence and a Retry that genuinely re-attempts:
+        // loader.ts resets its memo on failure precisely so this works, but the button was never
+        // wired (`MapErrorFallback` has supported `onRetry` all along).
+        console.error('[mapkit] map failed to load:', error);
+        return (
+            <MapErrorFallback
+                error="The map couldn’t load. Check your connection and try again."
+                onRetry={retry}
+            />
+        );
     }
+
 
     return (
         <div style={{ position: 'absolute', inset: 0, background: colors.background.base }}>
@@ -113,6 +125,19 @@ export function MapKitJourneyMap({
                 data-testid={`mapkit-journey-${view}`}
                 style={{ position: 'absolute', inset: 0 }}
             />
+            {/* QUA-72: map-node-ready is measured at ~0.9–1.1 s plus tile loading — this used to
+                be a bare dark box (and on a token failure, 15 silent seconds before the fallback).
+                An overlay veil, NOT a separate render branch: the map attaches to the container
+                above at init, so the container must never be swapped out mid-load. */}
+            {!ready && (
+                <div
+                    className="pointer-events-none absolute inset-0 flex items-center justify-center"
+                    role="status"
+                    aria-live="polite"
+                >
+                    <span className="animate-pulse text-sm text-white/50">Loading map…</span>
+                </div>
+            )}
         </div>
     );
 }

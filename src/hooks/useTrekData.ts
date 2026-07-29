@@ -37,6 +37,9 @@ interface UseTrekDataReturn {
     extendedStats: ExtendedStats | null;
     elevationProfile: ElevationProfile | null;
     loading: boolean;
+    /** QUA-72: the ?journey= slug that matched nothing (typo/unpublished), for a visible notice. */
+    sharedLinkMiss: string | null;
+    clearSharedLinkMiss: () => void;
 
     // Sheet state (Find My redesign)
     sheetSnapPoint: SheetSnapPoint;
@@ -85,6 +88,9 @@ export function useTrekData(): UseTrekDataReturn {
     // Track if URL params have been processed
     const urlParamsProcessed = useRef(false);
 
+    // QUA-72: the ?journey= slug that matched nothing, for a visible "isn't available" notice.
+    const [sharedLinkMiss, setSharedLinkMiss] = useState<string | null>(null);
+
     // Auto-select journey from URL parameters (e.g., ?journey=kilimanjaro&day=3)
     // When ?journey= is provided, automatically skip to trek view (no Start button)
     useEffect(() => {
@@ -93,11 +99,13 @@ export function useTrekData(): UseTrekDataReturn {
         const { journeySlug, day } = parseUrlParams();
         if (!journeySlug) return;
 
-        // Find trek by slug (case-insensitive partial match)
-        const trek = treks.find(t =>
-            t.id.toLowerCase().includes(journeySlug.toLowerCase()) ||
-            t.name.toLowerCase().includes(journeySlug.toLowerCase())
-        );
+        // QUA-72: EXACT id match (case-insensitive). This used to be `includes()` against both
+        // id and name, which meant (a) `?journey=kilimanjaro` with kilimanjaro-2023 AND
+        // kilimanjaro-2024 published opened whichever sorted first — a link could open the WRONG
+        // journey — and (b) the fuzziness bought nothing on the real path, because
+        // AppInfo.showcaseURL always emits the exact slug. A miss is now reported instead of
+        // silently rendering the globe (`sharedLinkMiss` below).
+        const trek = treks.find(t => t.id.toLowerCase() === journeySlug.toLowerCase());
 
         if (trek) {
             urlParamsProcessed.current = true;
@@ -118,6 +126,12 @@ export function useTrekData(): UseTrekDataReturn {
                     }
                 }
             }
+        } else {
+            // QUA-72: a typo'd, unpublished or taken-down slug used to land the visitor on the
+            // bare globe with zero explanation — which reads as "the share is broken". Report it
+            // once; the notice renders in AkashicApp and clears when a journey is opened.
+            urlParamsProcessed.current = true;
+            setSharedLinkMiss(journeySlug);
         }
     }, [loading, treks, trekDataMap, startTransition]);
 
@@ -192,6 +206,9 @@ export function useTrekData(): UseTrekDataReturn {
         extendedStats,
         elevationProfile,
         loading,
+        // QUA-72: non-null when a ?journey= deep link matched nothing; cleared on selection.
+        sharedLinkMiss,
+        clearSharedLinkMiss: () => setSharedLinkMiss(null),
 
         // Sheet state (Find My redesign)
         sheetSnapPoint,

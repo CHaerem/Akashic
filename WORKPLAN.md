@@ -5,17 +5,17 @@
 
 # Akashic — work ledger
 
-184 tasks · **57 open** (32 agent-doable, 18.7 dev-days · 25 owner-only, 10.6 dev-days) · 127 done · 0 dropped
+184 tasks · **56 open** (31 agent-doable, 18.2 dev-days · 25 owner-only, 10.6 dev-days) · 128 done · 0 dropped
 
 > **`dev-days` are a human-developer estimate, not agent time.** They came from the review
 > that produced these tasks and they are the right unit for deciding whether something is
 > worth doing — they are the wrong unit for predicting how long an agent will take, and
 > summing them as "work remaining" overstates it substantially.
 >
-> Measured so far: **121 agent tasks estimated at 78.4 dev-days**.
+> Measured so far: **122 agent tasks estimated at 78.9 dev-days**.
 > Elapsed time is deliberately absent: nothing here can support it. Use `git log` for that.
 >
-> 9 of the closed tasks were 2 dev-days or more, and 7.5 of the 18.7 remaining dev-days still sit in 3 such task(s): DIFF-18, DIFF-19, DIFF-20. Those turn on design judgement rather than localised edits, so do not assume the compression above holds.
+> 9 of the closed tasks were 2 dev-days or more, and 7.5 of the 18.2 remaining dev-days still sit in 3 such task(s): DIFF-18, DIFF-19, DIFF-20. Those turn on design judgement rather than localised edits, so do not assume the compression above holds.
 
 Read [CLAUDE.md](CLAUDE.md) before touching anything. To find work:
 
@@ -157,7 +157,7 @@ node scripts/workplan.mjs next
 
 > Tests, types, CI, localisation, accessibility. Localisation and accessibility are in v1.0 by decision.
 
-27 open of 96 · 7.9 d remaining
+26 open of 96 · 7.4 d remaining
 
 | | Task | Days | Who | Deps | Finish line |
 |---|---|---|---|---|---|
@@ -249,7 +249,7 @@ node scripts/workplan.mjs next
 | ` ` | `QUA-69` **Day clustering splits at midnight — the 00:30 aurora photo becomes its own 'day'** | 0.2 | agent | — | Photo-to-day bucketing applies an early-morning cutoff (photos before 04:00 join the previous day) in JourneyDraft.dayKey derivation; JourneyDraftTests pin the boundary (23:59, 00:30, 03:59, 04:00) and the derived date range no longer grows a spurious day from an after-midnight session. |
 | ` ` | `QUA-76` **No fetch indexes on the hot lookup columns — every id lookup and photo load is a table scan** | 0.2 | agent | — | A fifth model version adds fetch indexes on CDJourney.id, CDPhoto.id, CDPhoto.journeyId, CDPhoto.waypointId, CDWaypoint.id and CDDayComment.waypointId (index-only lightweight migration, no mapping); StoreMigrationTests prove a v4 store opens under v5. |
 | ` ` | `QUA-87` **reload() republishes the entire library with synchronous file I/O after every single edit** | 0.4 | agent | — | Widget thumbnail copies happen only when the source path/mtime changed; Spotlight/widget publishing is debounced off the mutation path; single-row edits reload only the affected journey where the seam allows; an os_signpost measurement on a photo-heavy fixture before/after is recorded in the evidence. |
-| ` ` | `QUA-72` **A stranger opening a shared web link hits four silent dead ends: empty globe on any CloudKit failure, fuzzy slug matching, a 15 s token timeout with an unwired Retry, and developer jargon as error copy** | 0.5 | agent | — | Adapter failures reach JourneysContext.error and the globe renders a 'Couldn't load journeys — retry' state (refetch plumbing exists); ?journey= matches exactly on id (case-insensitive) and a non-matching param shows 'This journey isn't available' instead of nothing; MapKitJourneyMap passes onRetry to MapErrorFallback (loader already resets its memo) and shows a loading treatment until ready; on-screen error strings are customer sentences, with the JWT/origin diagnostics kept for the console. |
+| `x` | `QUA-72` **A stranger opening a shared web link hits four silent dead ends: empty globe on any CloudKit failure, fuzzy slug matching, a 15 s token timeout with an unwired Retry, and developer jargon as error copy** | 0.5 | agent | — | Adapter failures reach JourneysContext.error and the globe renders a 'Couldn't load journeys — retry' state (refetch plumbing exists); ?journey= matches exactly on id (case-insensitive) and a non-matching param shows 'This journey isn't available' instead of nothing; MapKitJourneyMap passes onRetry to MapErrorFallback (loader already resets its memo) and shows a loading treatment until ready; on-screen error strings are customer sentences, with the JWT/origin diagnostics kept for the console. |
 | ` ` | `QUA-73` **Web: URL, history and document.title never track navigation — the share loop breaks after one hop and Back exits the site** | 0.2 | agent | — | Selecting a journey/day writes ?journey=<slug>&day=<n> via history state with a popstate listener so Back/forward navigate within the app; document.title reads "<journey> — Akashic" per selection; a copied address bar is always a correct share link; tests cover the param round-trip. |
 | ` ` | `QUA-74` **Web: the service worker precaches ~6 MB on every first visit; ~4.4 MB is hero PNGs referenced nowhere** | 0.1 | agent | — | The four unused hero PNGs leave public/ (landing-hero stays available to the build-time OG-image script from a non-published path); iOS splash images are excluded from precache globPatterns; the measured precache total drops from ~6.1 MB to well under 2 MB and the number is recorded in the evidence. |
 | ` ` | `QUA-75` **Web: the full photo collection is fetched twice per journey and re-fetched on every Photos-tab visit — billed to the owner** | 0.2 | agent | — | Photo state lives once (lifted to AkashicApp or a per-slug memo mirroring journeyCache) and PhotosTab consumes it as props; opening the Photos tab or toggling day/photos mode issues zero additional full-collection fetches; a test pins the single-fetch behaviour. |

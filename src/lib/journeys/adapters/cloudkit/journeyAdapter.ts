@@ -91,8 +91,10 @@ export async function fetchJourneys(): Promise<{
         journeyRecords = await queryAllZones({ recordType: 'Journey' });
         waypointRecords = await queryAllZones({ recordType: 'Waypoint' });
     } catch (err) {
+        // QUA-72: same contract as fetchPublicJourneys — a swallowed failure rendered a signed-in
+        // family member an empty globe with no explanation. Let JourneysContext see it.
         console.error('[cloudkit] Error fetching journeys:', err);
-        return { treks: [], trekDataMap: {} };
+        throw err instanceof Error ? err : new Error('CloudKit journey fetch failed');
     }
 
     if (journeyRecords.length === 0) {

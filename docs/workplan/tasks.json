@@ -4825,7 +4825,7 @@
       "priority": 4,
       "deps": [],
       "track": "QUALITY",
-      "status": "TODO",
+      "status": "DONE",
       "owner": false,
       "title": "A stranger opening a shared web link hits four silent dead ends: empty globe on any CloudKit failure, fuzzy slug matching, a 15 s token timeout with an unwired Retry, and developer jargon as error copy",
       "done_when": "Adapter failures reach JourneysContext.error and the globe renders a 'Couldn't load journeys — retry' state (refetch plumbing exists); ?journey= matches exactly on id (case-insensitive) and a non-matching param shows 'This journey isn't available' instead of nothing; MapKitJourneyMap passes onRetry to MapErrorFallback (loader already resets its memo) and shows a loading treatment until ready; on-screen error strings are customer sentences, with the JWT/origin diagnostics kept for the console.",
@@ -4844,7 +4844,41 @@
         "npx vitest --run > /tmp/qua72.log 2>&1 && grep -qE \"Test Files +[0-9]+ passed\" /tmp/qua72.log",
         "npm run typecheck",
         "npm run lint"
-      ]
+      ],
+      "claim": {
+        "agent": "fable5-review",
+        "branch": "claude/project-review-code-ux-c5c48b",
+        "at": "2026-07-29"
+      },
+      "verification": {
+        "at": "2026-07-29T08:29:13.746Z",
+        "head": "d6b2d6c",
+        "ran": [
+          {
+            "command": "npx vitest --run > /tmp/qua72.log 2>&1 && grep -qE \"Test Files +[0-9]+ passed\" /tmp/qua72.log",
+            "ok": true,
+            "ms": 6525,
+            "status": 0,
+            "signal": null
+          },
+          {
+            "command": "npm run typecheck",
+            "ok": true,
+            "ms": 2744,
+            "status": 0,
+            "signal": null
+          },
+          {
+            "command": "npm run lint",
+            "ok": true,
+            "ms": 3982,
+            "status": 0,
+            "signal": null
+          }
+        ],
+        "attested": []
+      },
+      "evidence": "Adapters rethrow so JourneysContext.error is live; globe renders Couldn't-load + Retry (verified live against the dev server's real CloudKit 401 — screenshot in session); ?journey= resolves by exact id and reports a miss ('This journey isn't available'); MapErrorFallback finally gets its onRetry (loader memo already reset on failure) with customer copy, diagnostics to console; !ready shows a loading veil over the SAME container (no node swap). Falsifiability: useTrekDataDeepLink tests measured 3/3 assertion-RED against the old hook (manual revert; prove's throwaway worktree can't run vitest — no node_modules), 685+3 green now; typecheck clean; lint 0 errors/14 warnings (cap)."
     },
     {
       "id": "QUA-73",

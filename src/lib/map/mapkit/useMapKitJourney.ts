@@ -96,6 +96,8 @@ export interface UseMapKitJourneyOptions {
 export interface UseMapKitJourneyReturn {
     ready: boolean;
     error: string | null;
+    /** QUA-72: clears the error and re-runs the init effect — the loader's memo resets on failure. */
+    retry: () => void;
     flyToPhoto: (photo: Photo) => void;
     recenter: () => void;
     getCameraState: () => MapCameraState;
@@ -129,6 +131,14 @@ export function useMapKitJourney(options: UseMapKitJourneyOptions): UseMapKitJou
 
     const [ready, setReady] = useState(false);
     const [loadError, setLoadError] = useState<string | null>(null);
+    // QUA-72: bumping the seed re-runs the init effect. `loadMapKit` deliberately resets its
+    // memo on failure (loader.ts) precisely so a retry would work — but nothing ever offered
+    // one: MapErrorFallback supports onRetry and MapKitJourneyMap never passed it.
+    const [retrySeed, setRetrySeed] = useState(0);
+    const retry = useCallback(() => {
+        setLoadError(null);
+        setRetrySeed((n) => n + 1);
+    }, []);
 
     // A missing token is knowable at render, so it is DERIVED rather than pushed into state from an effect.
     // Not just to satisfy `react-hooks/set-state-in-effect`: state for a value that cannot change gives the
@@ -439,8 +449,9 @@ export function useMapKitJourney(options: UseMapKitJourneyOptions): UseMapKitJou
             setReady(false);
         };
         // emitViewport / syncPhotos are stable (useCallback with stable deps); the map must be built once and
-        // never on a prop change.
-    }, [containerRef, token, emitViewport, syncPhotos]);
+        // never on a prop change. `retrySeed` is the QUA-72 exception: an explicit user retry after a
+        // load failure is the one legitimate second build.
+    }, [containerRef, token, emitViewport, syncPhotos, retrySeed]);
 
     /* ---------------------------------------------------------- attribution padding */
 
@@ -660,7 +671,7 @@ export function useMapKitJourney(options: UseMapKitJourneyOptions): UseMapKitJou
         };
     }, [containerPx, chromeState]);
 
-    return { ready, error, flyToPhoto, recenter, getCameraState };
+    return { ready, error, retry, flyToPhoto, recenter, getCameraState };
 }
 
 /** Re-exported for the pure fit test, which needs the same projector the hook reasons with. */
