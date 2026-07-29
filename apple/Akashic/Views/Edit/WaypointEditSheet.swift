@@ -31,7 +31,11 @@ struct WaypointEditSheet: View {
 
     // M6 — on-device day-note drafting (Apple Intelligence).
     @State private var isDrafting = false
-    @State private var draftFailed = false
+    /// QUA-71 (DIFF-08's wiring): the typed failure, not a bool — the UI used to render the
+    /// literal "Couldn't draft — try again" for every error, the exact message the failure
+    /// type's own doc calls wrong three ways (a guardrail refusal will refuse again, an
+    /// oversized day will overflow again, a downloading model succeeds later untouched).
+    @State private var draftFailure: DayNoteDraftFailure?
     /// A generated draft awaiting the user's confirmation to replace existing notes.
     @State private var pendingDraft: String?
     @State private var showReplaceConfirm = false
@@ -129,6 +133,7 @@ struct WaypointEditSheet: View {
     @ViewBuilder
     private var draftButton: some View {
         VStack(alignment: .leading, spacing: 4) {
+            if draftFailure?.isWorthRetrying != false {
             Button(action: draftNote) {
                 HStack(spacing: 6) {
                     if isDrafting {
@@ -146,20 +151,28 @@ struct WaypointEditSheet: View {
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(isDrafting ? "Drafting the day's notes" : "Draft the day's notes with Apple Intelligence")
             .accessibilityAddTraits(.isButton)
-            if draftFailed {
-                Text("Couldn't draft — try again")
+            }
+            if let draftFailure {
+                Text(draftFailure.message)
                     .font(.caption2)
                     .foregroundStyle(Theme.textTertiary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        // QUA-71: a non-retryable failure (declined / too much input) hides the button until the
+        // user actually changes the input — offering a retry that cannot work is how a feature
+        // earns distrust (the failure type's isWorthRetrying exists precisely for this gate).
+        .onChange(of: description) { _, _ in
+            if draftFailure?.isWorthRetrying == false { draftFailure = nil }
+        }
     }
 
     /// Build the day's facts from data we already store and fill the notes field with a draft. The
     /// result is only ever placed in the editable field — it is NEVER auto-saved.
     private func draftNote() {
         guard !isDrafting else { return }
-        draftFailed = false
+        draftFailure = nil
         guard let journey = store.journey(withID: journeyID) else { return }
         let photos = store.photos(forDay: camp.dayNumber, journeyID: journeyID)
         var input = DayNoteInput(journey: journey, camp: camp, photos: photos)
@@ -182,8 +195,13 @@ struct WaypointEditSheet: View {
                     let knowledge = await KnowledgeRetrieval(client: LiveWikimediaClient(userAgent: AppInfo.wikimediaUserAgent))
                         .retrieve(retrievalRequest)
                     if !knowledge.isEmpty { input.referenceText = knowledge.referenceText }
+                    // QUA-71 (DIFF-05's wiring): the classifier ran nowhere in production —
+                    // photoSubjects was always [], so the prompt never contained "The photos
+                    // appear to show…" while the ledger marked the feature DONE. Returns [] in
+                    // any simulator (espresso context); on-device quality is QUA-38's session.
+                    input.photoSubjects = await VisionPhotoScorer.subjects(in: photos)
                     let draft = try await DayNoteDrafter.generate(for: input)
-                    guard !draft.isEmpty else { draftFailed = true; return }
+                    guard !draft.isEmpty else { draftFailure = .unknown(nil); return }
                     switch DayNoteDrafter.decision(fieldAtRequest: fieldAtRequest, fieldNow: description) {
                     case .apply:
                         description = draft
@@ -194,13 +212,15 @@ struct WaypointEditSheet: View {
                         break   // the user edited the field mid-generation — never clobber it
                     }
                 } catch {
-                    draftFailed = true
+                    // QUA-71: map to the typed failure so the message says what actually
+                    // happened and the retry gate can be honest.
+                    draftFailure = DayNoteDrafter.failure(from: error)
                 }
             } else {
-                draftFailed = true
+                draftFailure = .unknown(nil)
             }
             #else
-            draftFailed = true
+            draftFailure = .unknown(nil)
             #endif
         }
     }

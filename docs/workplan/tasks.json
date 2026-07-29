@@ -1186,7 +1186,8 @@
         "branch": "claude/remote-control-project-review-9462c1",
         "at": "2026-07-26"
       },
-      "evidence": "DayNoteInput gains photoSubjects, fed by a new VisionPhotoScorer.subjects that classifies a day's thumbnails on-device and aggregates by how many photographs agree — one confident label on one frame says much less than the same label on six, and a day note should describe the day rather than its most photogenic second. Ranked deterministically so the same day does not draft differently on each tap. The prompt says 'the photos appear to show', not 'the photos show': a Vision label is an observation with a confidence, and handing the model a guess dressed as ground truth would undermine the anti-invention contract in the same prompt. Labels only — never pixels, never paths — so the privacy claim is unchanged. Also fixed a real defect found here: the memberwise init accepted referenceText and discarded it, so every caller that passed reference text, tests included, was silently exercising the UNGROUNDED path while appearing to test the grounded one. 779 tests pass."
+      "evidence": "DayNoteInput gains photoSubjects, fed by a new VisionPhotoScorer.subjects that classifies a day's thumbnails on-device and aggregates by how many photographs agree — one confident label on one frame says much less than the same label on six, and a day note should describe the day rather than its most photogenic second. Ranked deterministically so the same day does not draft differently on each tap. The prompt says 'the photos appear to show', not 'the photos show': a Vision label is an observation with a confidence, and handing the model a guess dressed as ground truth would undermine the anti-invention contract in the same prompt. Labels only — never pixels, never paths — so the privacy claim is unchanged. Also fixed a real defect found here: the memberwise init accepted referenceText and discarded it, so every caller that passed reference text, tests included, was silently exercising the UNGROUNDED path while appearing to test the grounded one. 779 tests pass.",
+      "resume": "CORRECTION 2026-07-29 (QUA-71): the engine was built and tested but subjects(in:) had zero production callers — photoSubjects was always [] at the only DayNoteInput construction, so the shipped prompt never carried the labels. QUA-71 wired it in WaypointEditSheet.draftNote(); on-device quality assessment remains QUA-38."
     },
     {
       "id": "DIFF-06",
@@ -1266,7 +1267,8 @@
         "branch": "claude/remote-control-project-review-9462c1",
         "at": "2026-07-26"
       },
-      "evidence": "prewarm on both paths, streaming via streamResponse, and typed failures. The design constraint is honoured rather than worked around: generateStreaming's onPartial must NOT write into the notes field, because the clobber guard compares field-now against field-at-request and streaming into it would make the view see staleness it caused itself and discard its own draft — so partial text goes to a separate buffer and the final value passes the guard exactly once. That is why it is a separate method rather than a flag. DayNoteDraftFailure distinguishes declined / tooMuchInput / modelNotReady / unknown with an isWorthRetrying flag, because telling someone to retry when retrying cannot work is worse than saying nothing. Defined outside canImport so the UI and tests reason about it on any toolchain. Verified locally on Xcode 26.6 where canImport is true, so the FM API surface is genuinely type-checked. 782 tests pass."
+      "evidence": "prewarm on both paths, streaming via streamResponse, and typed failures. The design constraint is honoured rather than worked around: generateStreaming's onPartial must NOT write into the notes field, because the clobber guard compares field-now against field-at-request and streaming into it would make the view see staleness it caused itself and discard its own draft — so partial text goes to a separate buffer and the final value passes the guard exactly once. That is why it is a separate method rather than a flag. DayNoteDraftFailure distinguishes declined / tooMuchInput / modelNotReady / unknown with an isWorthRetrying flag, because telling someone to retry when retrying cannot work is worse than saying nothing. Defined outside canImport so the UI and tests reason about it on any toolchain. Verified locally on Xcode 26.6 where canImport is true, so the FM API surface is genuinely type-checked. 782 tests pass.",
+      "resume": "CORRECTION 2026-07-29 (QUA-71): typed failures/isWorthRetrying had zero callers — the UI showed the generic message the type's doc condemns, and retry was offered for non-retryable failures. QUA-71 wired failure(from:) + the retry gate. generateStreaming and session reuse remain unwired (prewarm still warms a discarded session)."
     },
     {
       "id": "DIFF-09",
@@ -4530,7 +4532,7 @@
       "priority": 5,
       "deps": [],
       "track": "QUALITY",
-      "status": "TODO",
+      "status": "DONE",
       "owner": false,
       "title": "DIFF-05/DIFF-08 are engines without wires: Vision subjects never reach the day-note prompt, and drafting failures show the exact generic message the code condemns",
       "done_when": "WaypointEditSheet.draftNote() populates DayNoteInput.photoSubjects via VisionPhotoScorer.subjects(in:) before generating; the catch maps errors through DayNoteDrafter.failure(from:), shows failure.message, and gates the retry affordance on isWorthRetrying; DIFF-05's and DIFF-08's ledger evidence is corrected to name this task as the wiring that made them reachable.",
@@ -4543,7 +4545,34 @@
       "verify": [
         "cd apple && xcodegen generate",
         "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,name=iPhone 17 Pro\" CODE_SIGNING_ALLOWED=NO -only-testing:AkashicTests test > /tmp/qua71.log 2>&1 && grep -q \"with 1 test skipped and 0 failures\" /tmp/qua71.log"
-      ]
+      ],
+      "claim": {
+        "agent": "fable5-review",
+        "branch": "claude/project-review-code-ux-c5c48b",
+        "at": "2026-07-29"
+      },
+      "verification": {
+        "at": "2026-07-29T08:37:44.243Z",
+        "head": "ce71b5b",
+        "ran": [
+          {
+            "command": "cd apple && xcodegen generate",
+            "ok": true,
+            "ms": 98,
+            "status": 0,
+            "signal": null
+          },
+          {
+            "command": "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,name=iPhone 17 Pro\" CODE_SIGNING_ALLOWED=NO -only-testing:AkashicTests test > /tmp/qua71.log 2>&1 && grep -q \"with 1 test skipped and 0 failures\" /tmp/qua71.log",
+            "ok": true,
+            "ms": 12261,
+            "status": 0,
+            "signal": null
+          }
+        ],
+        "attested": []
+      },
+      "evidence": "WaypointEditSheet.draftNote() now populates input.photoSubjects via VisionPhotoScorer.subjects(in:) (returns [] in simulators — device quality is QUA-38), maps errors through DayNoteDrafter.failure(from:) showing the typed message, and gates the retry affordance on isWorthRetrying (non-retryable failures hide the button until the input changes). DIFF-05/DIFF-08 carry correction notes naming this task. Streaming/session-reuse remain unwired and are named in DIFF-08's note. Suite 911 green."
     },
     {
       "id": "QUA-77",
