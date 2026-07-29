@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-07-26",
+  "updated": "2026-07-29",
   "about": "Source of truth for Akashic delivery work. WORKPLAN.md is generated from this file. See CLAUDE.md for the protocol.",
   "track_notes": {
     "LEGACY": "Retire Supabase, Cloudflare and R2. Repo-side removal can happen now; the infrastructure deletions are gated on the archive being duplicated and on the Pages cutover. LEG-01 is independent of every gate and should happen today.",
@@ -4064,7 +4064,8 @@
         "apple/Akashic/Sync/SyncStatus.swift",
         "apple/Akashic/Sync/SyncDownloadPrompt.swift",
         "apple/Akashic/Sync/AkashicSyncEngine.swift",
-        "apple/Akashic/Resources/Localizable.xcstrings"
+        "apple/Akashic/Resources/Localizable.xcstrings",
+        "apple/Akashic/Views/Map/GlobeExperienceView.swift"
       ],
       "verify": [
         "cd apple && xcodegen generate",
@@ -4076,7 +4077,764 @@
       "notes": [
         "2026-07-28 THE SEVEN DISAGREEMENTS this must eliminate BY CONSTRUCTION (each with file:line evidence in the investigation, workflow wf_ccab1381-0c9): (1) Settings waitingForWiFi + live button during a released download; (2) an ungated send's markSynced erasing the deferral story everywhere; (3) the sized sheet on top of a couldNotCheck list; (4) the ~50x stale \"several GB\" footer; (5) waitingForWiFi claimed before evidence exists (new family on cellular: Settings claims a download, the list proves none); (6) .error making preserved summaries unreachable; (7) the Wi-Fi first sync showing the hero for its whole multi-minute run. A unit test per pair — construct the disagreement's input state and assert every projection of the composed SyncStory agrees — is the regression suite this needs.",
         "2026-07-28 STILL OPEN UNDERNEATH THIS: the owner's device could not download even over mobile data on build 103 — undiagnosed until the device log or the two discriminating answers arrive. The card's stall heartbeat makes that failure VISIBLE, but its cause is a separate hunt. Do not close DIFF-16 or this task on design alone.",
-        "2026-07-28 OWNER DECISION FOLDED IN, pending his word: whether \"Download over Wi-Fi only\" gates on literal interfaceType == .wifi or keeps iOS's isExpensive semantics with honest copy. The card design works with either; state 1's copy changes one word."
+        "2026-07-28 OWNER DECISION FOLDED IN, pending his word: whether \"Download over Wi-Fi only\" gates on literal interfaceType == .wifi or keeps iOS's isExpensive semantics with honest copy. The card design works with either; state 1's copy changes one word.",
+        "2026-07-29 SCOPE +GlobeExperienceView.swift (review finding): the landing globe branches solely on store.journeys.isEmpty (GlobeExperienceView.swift:510) and never consults syncStatus/remoteJourneySummaries — so the cellular fresh-install lands on \"Start your first journey\" while the archive waits in iCloud. The one sync card must also drive the globe's bottom chrome, or the front door keeps telling the one wrong story it can tell."
+      ]
+    },
+    {
+      "id": "QUA-61",
+      "effort": 0.3,
+      "priority": 1,
+      "deps": [],
+      "track": "QUALITY",
+      "status": "TODO",
+      "owner": false,
+      "title": "Shared-database sync never refreshes the UI — participants see a stale journey list until relaunch",
+      "done_when": "Remote changes applied by EITHER engine (private or shared) trigger JourneyStore.reload(), through one multicast point owned by PersistenceController; a unit test drives a fetched batch through a shared-scope engine and asserts the store republished; JourneyStore no longer reaches into an engine directly.",
+      "why": "REVIEW 2026-07-29, verified by grep: AkashicSyncEngine.onRemoteChangesApplied is a single mutable closure (AkashicSyncEngine.swift:145). JourneyStore.init consumes the PRIVATE engine's slot (JourneyStore.swift:47) and PersistenceController+Sync.swift:64 consumes the SHARED engine's slot for autoAcceptMediaSharesIfNeeded — so the shared engine has NO reload consumer. A family member accepting a CKShare gets the journey in Core Data but not on screen until relaunch; every later remote edit from the owner is equally invisible. This is the modal experience for every non-owner family member and it will read as \"sync is broken\" in SHIP-15. Fix without touching AkashicSyncEngine.swift (locked by DIFF-16): PersistenceController owns a forwarding hook, wires both engines to it in startSync, and JourneyStore subscribes to the controller.",
+      "files": [
+        "apple/Akashic/App/JourneyStore.swift",
+        "apple/Akashic/Persistence/PersistenceController.swift",
+        "apple/Akashic/Sync/PersistenceController+Sync.swift",
+        "apple/AkashicTests/SyncEngineTests.swift"
+      ],
+      "verify": [
+        "cd apple && xcodegen generate",
+        "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,name=iPhone 17 Pro\" CODE_SIGNING_ALLOWED=NO -only-testing:AkashicTests test > /tmp/qua61.log 2>&1 && grep -q \"with 1 test skipped and 0 failures\" /tmp/qua61.log",
+        "grep -q \"onRemoteChangesApplied\" apple/Akashic/Persistence/PersistenceController.swift  # the multicast point lives on the controller",
+        "! grep -q \"syncCoordinator?.onRemoteChangesApplied\" apple/Akashic/App/JourneyStore.swift  # the store no longer reaches into an engine"
+      ]
+    },
+    {
+      "id": "QUA-62",
+      "effort": 0.2,
+      "priority": 1,
+      "deps": [],
+      "track": "QUALITY",
+      "status": "TODO",
+      "owner": false,
+      "title": "Release builds honour the DEBUG persistence-mode override — a leftover flag silently hides the customer archive",
+      "done_when": "Config.resolvedPersistenceMode ignores (and Release launch actively clears) the akashic.persistenceMode.override UserDefaults key outside DEBUG, mirroring the SHIP-09 decision DeveloperTools.isUnlocked already implements; AKASHIC_FORCE_LOCAL becomes an in-memory override instead of a durable UserDefaults write; unit tests pin both.",
+      "why": "REVIEW 2026-07-29, verified by inspection: Config.resolvedPersistenceMode (Config.swift:121) reads the override unconditionally, and AkashicApp.init persists it durably whenever AKASHIC_FORCE_LOCAL is set (AkashicApp.swift:111). Any device that ever ran a DEBUG build with the override set — exactly the SHIP-16 internal-TestFlight population, since UserDefaults survive across builds of one bundle id — runs the paid Release binary in .fixtures/.local: archive apparently gone, sync silently off, and no Release UI exists to clear the key. SHIP-09 already made this call for the developer-tools unlock flag; the mode override missed the same gate.",
+      "files": [
+        "apple/Akashic/App/Config.swift",
+        "apple/Akashic/App/AkashicApp.swift",
+        "apple/AkashicTests/ConfigModeTests.swift"
+      ],
+      "verify": [
+        "cd apple && xcodegen generate",
+        "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,name=iPhone 17 Pro\" CODE_SIGNING_ALLOWED=NO -only-testing:AkashicTests test > /tmp/qua62.log 2>&1 && grep -q \"with 1 test skipped and 0 failures\" /tmp/qua62.log",
+        "grep -q \"persistenceModeOverrideKey\" apple/Akashic/App/Config.swift  # the override key still exists and is handled deliberately"
+      ]
+    },
+    {
+      "id": "QUA-63",
+      "effort": 0.3,
+      "priority": 1,
+      "deps": [],
+      "track": "QUALITY",
+      "status": "TODO",
+      "owner": false,
+      "title": "deleteJourney condemns CloudKit zones before the local commit and destroys media on a failed save; comment writes report success on failure",
+      "done_when": "deleteJourney commits the local cascade FIRST and only then enqueues zone deletes and removes the media directory; a failed save rolls back and returns false, and JourneyStore surfaces it instead of returning true unconditionally. updateComment/deleteComment get the same rollback-and-report contract every other write path already has. Unit tests with a poisoned context pin all three.",
+      "why": "REVIEW 2026-07-29: PersistenceController.deleteJourney (PersistenceController.swift:459-488) runs syncCoordinator?.deleteZones first, then `try? context.save()`, then removes the journey's media directory unconditionally — on a failed save the remote mirror is condemned and local bytes are gone while rows remain, and JourneyStore.deleteJourney returns true regardless (JourneyStore.swift:481-486). updateComment/deleteComment (PersistenceController.swift:565-580) use `try?` + no rollback, so a failed comment save shows the edit applied and evaporates on relaunch while dirtying the context for the next unrelated save. Every other write in the file uses rollback-and-report; the one place failure costs real data is the one place failure is ignored.",
+      "files": [
+        "apple/Akashic/Persistence/PersistenceController.swift",
+        "apple/Akashic/App/JourneyStore.swift",
+        "apple/AkashicTests/DeleteJourneyTests.swift",
+        "apple/AkashicTests/CommentTests.swift"
+      ],
+      "verify": [
+        "cd apple && xcodegen generate",
+        "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,name=iPhone 17 Pro\" CODE_SIGNING_ALLOWED=NO -only-testing:AkashicTests test > /tmp/qua63.log 2>&1 && grep -q \"with 1 test skipped and 0 failures\" /tmp/qua63.log"
+      ]
+    },
+    {
+      "id": "QUA-78",
+      "effort": 0.4,
+      "priority": 2,
+      "deps": [
+        "DIFF-16"
+      ],
+      "track": "QUALITY",
+      "status": "TODO",
+      "owner": false,
+      "title": "Owner-device journey deletion is undone by the second device: the protective zone re-upload resurrects it everywhere",
+      "done_when": "A locally initiated zone deletion is recorded in a durable tombstone consulted by handleZoneDeletions, so a zone THIS install deleted is never protectively re-uploaded; a two-engine unit test proves delete on A + .deleted event on B no longer re-enqueues the journey; the SHIP-15 checklist gains the two-device delete scenario.",
+      "why": "REVIEW 2026-07-29: handleZoneDeletions never honours a remote zone deletion and responds in private scope by purging tags and RE-UPLOADING the whole journey (AkashicSyncEngine.swift:947-984, pinned by SyncEngineTests that .deleted == .purged) — but the app's own delete path IS a client zone delete (PersistenceController.swift:463 -> deleteZones, whose doc claims it removes the journey 'on every device'). iPhone deletes, iPad receives .deleted, keeps its copy and re-uploads; iPhone fetches it back. Deletion never propagates between the owner's devices and actively un-deletes itself. Blocked on DIFF-16's claim of AkashicSyncEngine.swift; the participant-keeps-copy trade (lines 960-967) stays as documented.",
+      "files": [
+        "apple/Akashic/Sync/AkashicSyncEngine.swift",
+        "apple/Akashic/Persistence/PersistenceController.swift",
+        "apple/AkashicTests/SyncEngineTests.swift"
+      ],
+      "verify": [
+        "cd apple && xcodegen generate",
+        "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,name=iPhone 17 Pro\" CODE_SIGNING_ALLOWED=NO -only-testing:AkashicTests test > /tmp/qua78.log 2>&1 && grep -q \"with 1 test skipped and 0 failures\" /tmp/qua78.log"
+      ]
+    },
+    {
+      "id": "QUA-79",
+      "effort": 0.4,
+      "priority": 2,
+      "deps": [
+        "DIFF-16"
+      ],
+      "track": "QUALITY",
+      "status": "TODO",
+      "owner": false,
+      "title": "Fetch-apply overwrites rows holding unsent local edits — the fetch-before-send race silently loses the later writer",
+      "done_when": "applyFetchedRecord consults the engine's pending changes (or a local dirty marker) before overwriting; a pending local save either skips the apply (letting the send surface serverRecordChanged) or wins a newest-wins comparison on domain timestamps; a unit test reproduces the race (local edit pending, remote version fetched) and asserts the local edit survives to upload.",
+      "why": "REVIEW 2026-07-29: applyFetchedRecord and its per-type upserts (PersistenceController+Sync.swift:374, applyComment:606, applyPhoto:530) are unconditionally server-authoritative. Sequence measured in code: A edits a comment (save pending, coalescing) -> push-triggered fetch delivers B's version -> apply overwrites A's row AND records the new change tag -> A's pending save materialises from the CURRENT row (B's content) and sends cleanly. A's edit vanishes everywhere with no conflict reported, even though A was the later writer — worse than the documented last-writer-wins. In a family app with two members journaling the same trip concurrently this is the direct \"family loses journal entries\" scenario.",
+      "files": [
+        "apple/Akashic/Sync/PersistenceController+Sync.swift",
+        "apple/Akashic/Sync/AkashicSyncEngine.swift",
+        "apple/AkashicTests/SyncEngineTests.swift"
+      ],
+      "verify": [
+        "cd apple && xcodegen generate",
+        "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,name=iPhone 17 Pro\" CODE_SIGNING_ALLOWED=NO -only-testing:AkashicTests test > /tmp/qua79.log 2>&1 && grep -q \"with 1 test skipped and 0 failures\" /tmp/qua79.log"
+      ]
+    },
+    {
+      "id": "QUA-80",
+      "effort": 0.5,
+      "priority": 3,
+      "deps": [
+        "DIFF-16"
+      ],
+      "track": "QUALITY",
+      "status": "TODO",
+      "owner": false,
+      "title": "Local writes while the sync engine is not running are silently dropped; the activation heal only recovers never-uploaded journeys",
+      "done_when": "Local intent is durable independent of engine state: edits/creates/deletes made while isRunning is false are persisted (dirty side-table or per-record dirty flag on CDSyncRecordMeta) and drained on activate(); the heal covers edited and added child records of already-uploaded journeys, and queued deletions propagate. Unit tests drive each of the three loss shapes (edit, new child, delete) through a stopped-then-activated engine.",
+      "why": "REVIEW 2026-07-29: localStoreDidChange drops changes when !isRunning (AkashicSyncEngine.swift:771) and durability begins only at CKSyncEngine; enqueueUnsyncedJourneysIfNeeded (:730-747) skips any journey whose root has a meta row. While signed out / .couldNotDetermine / pre-activation: an edit to a synced record never uploads (and is later silently overwritten), a new photo/comment on an uploaded journey exists on one device only, and deletions never propagate. The engine's own doc ('no edit made while a download is deferred is ever lost', :537) is true for deferral and false for the stopped state. Related, same fix window: a transient account status at launch disables sync for the whole session with no in-session retry (:437-446) — re-run activate() on willEnterForeground when the last status was unavailable.",
+      "files": [
+        "apple/Akashic/Sync/AkashicSyncEngine.swift",
+        "apple/Akashic/Sync/PersistenceController+Sync.swift",
+        "apple/AkashicTests/SyncEngineTests.swift"
+      ],
+      "verify": [
+        "cd apple && xcodegen generate",
+        "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,name=iPhone 17 Pro\" CODE_SIGNING_ALLOWED=NO -only-testing:AkashicTests test > /tmp/qua80.log 2>&1 && grep -q \"with 1 test skipped and 0 failures\" /tmp/qua80.log"
+      ]
+    },
+    {
+      "id": "QUA-81",
+      "effort": 0.2,
+      "priority": 3,
+      "deps": [
+        "DIFF-16"
+      ],
+      "track": "QUALITY",
+      "status": "TODO",
+      "owner": false,
+      "title": "Media-share auto-accept is sticky per journey ID: owner unshare→re-share permanently strands participants on thumbnails",
+      "done_when": "The accepted marker is keyed by share URL (journeyID→acceptedURL), so a re-created media share with a new URL is re-accepted; account switch clears the stored set; the fake-accepter suite covers unshare→re-share.",
+      "why": "REVIEW 2026-07-29: MediaShareAutoAccepter.autoAcceptIfNeeded skips whenever hasAccepted(journeyID:) (MediaShareAutoAccepter.swift:44), recorded forever in UserDefaults by journey ID only. stopMediaShare deletes the CKShare and a later ensureMediaShare mints a NEW URL, but the participant's device still has the ID marked accepted — originals silently stop streaming for that participant with no error and no recovery short of reinstall. Cheap fix, testable in the existing fake-accepter suite, and it must land before SHIP-15 (the only place the flow is observable end to end). Deps DIFF-16 only for scheduling hygiene — files do not overlap; claim as soon as convenient.",
+      "files": [
+        "apple/Akashic/Media/MediaShareAutoAccepter.swift",
+        "apple/AkashicTests/MediaV2Tests.swift"
+      ],
+      "verify": [
+        "cd apple && xcodegen generate",
+        "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,name=iPhone 17 Pro\" CODE_SIGNING_ALLOWED=NO -only-testing:AkashicTests test > /tmp/qua81.log 2>&1 && grep -q \"with 1 test skipped and 0 failures\" /tmp/qua81.log"
+      ]
+    },
+    {
+      "id": "QUA-86",
+      "effort": 0.3,
+      "priority": 3,
+      "deps": [],
+      "track": "QUALITY",
+      "status": "TODO",
+      "owner": false,
+      "title": "Comment identity is per-install: a person's own comments are not editable from their other devices",
+      "done_when": "isMine keys on a CloudKit user record name when available (local UUID as offline fallback), authorName syncs via iCloud KVS, and the same person's comments are editable from all their devices; unit tests pin the identity resolution order.",
+      "why": "REVIEW 2026-07-29: CommentService.localUserId is a random UUID minted per install (CommentService.swift:45) and CommentRow gates Edit/Delete on it — the same person on their iPad sees their iPhone comments as someone else's, which ten multi-device beta households will hit within days and report as data loss. Author names are free-text with an 'Anonymous' fallback so any name can be claimed within a family. The file's own doc names creatorUserRecordID as the eventual owner; the beta needs the interim to be coherent.",
+      "files": [
+        "apple/Akashic/Services/CommentService.swift",
+        "apple/AkashicTests/CommentTests.swift"
+      ],
+      "verify": [
+        "cd apple && xcodegen generate",
+        "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,name=iPhone 17 Pro\" CODE_SIGNING_ALLOWED=NO -only-testing:AkashicTests test > /tmp/qua86.log 2>&1 && grep -q \"with 1 test skipped and 0 failures\" /tmp/qua86.log"
+      ]
+    },
+    {
+      "id": "QUA-64",
+      "effort": 0.4,
+      "priority": 4,
+      "deps": [],
+      "track": "QUALITY",
+      "status": "TODO",
+      "owner": false,
+      "title": "Creation-funnel photo hygiene: free-tier cap in the creation pickers, draft-loss protection, and PhotoImportSheet's orphaned batch tail",
+      "done_when": "Both creation pickers (chooser card + review screen) pass the remaining free-tier allowance as maxSelectionCount with the 'N left' caption (QUA-16's fix, mirrored); at allowance 0 the picker row is replaced by the paywall CTA instead of an unlimited picker; cancelling/interactively dismissing a non-empty draft asks for confirmation before deleting staged files; PhotoImportSheet's mid-batch cancel deletes the tail (stagingCancelled mirrored back) and failures are counted in QUA-14's sentence instead of showing only the last error.",
+      "why": "REVIEW 2026-07-29, verified by grep: NewJourneyChooser.swift:64 and NewJourneySheet.swift:732 pass maxSelectionCount: 0 (unlimited) while PhotoImportSheet got QUA-16's cap — so the first-journey funnel user picks 400, waits through the full serial ingest, and loses 300 at Create. Worse boundary: at exactly the cap, remainingAllowance 0 flows into maxSelectionCount where 0 means UNLIMITED (PhotoImportSheet.swift:135). Draft fragility: cancel() and onDisappear (NewJourneySheet.swift:1357, :259) delete every staged file with interactiveDismissDisabled only while isSaving — one accidental swipe on a long sheet erases minutes of staging. And PhotoImportSheet.process (:259-270) never back-ported NewJourneySheet's stagingCancelled fix, so mid-batch cancel orphans the tail on disk, while :267-269 overwrites errorMessage per failure.",
+      "files": [
+        "apple/Akashic/Views/NewJourney/NewJourneySheet.swift",
+        "apple/Akashic/Views/NewJourney/NewJourneyChooser.swift",
+        "apple/Akashic/Views/Edit/PhotoImportSheet.swift",
+        "apple/Akashic/Resources/Localizable.xcstrings",
+        "apple/AkashicTests/NewJourneyCreationTests.swift"
+      ],
+      "verify": [
+        "cd apple && xcodegen generate",
+        "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,name=iPhone 17 Pro\" CODE_SIGNING_ALLOWED=NO -only-testing:AkashicTests test > /tmp/qua64.log 2>&1 && grep -q \"with 1 test skipped and 0 failures\" /tmp/qua64.log",
+        "! grep -q \"maxSelectionCount: 0,\" apple/Akashic/Views/NewJourney/NewJourneySheet.swift  # the review picker is budgeted",
+        "! grep -q \"maxSelectionCount: 0,\" apple/Akashic/Views/NewJourney/NewJourneyChooser.swift  # the chooser picker is budgeted"
+      ]
+    },
+    {
+      "id": "QUA-65",
+      "effort": 0.3,
+      "priority": 4,
+      "deps": [],
+      "track": "QUALITY",
+      "status": "TODO",
+      "owner": false,
+      "title": "The showcase link exists only in the seconds after a publish run, 'Remove from showcase' has no confirmation, and 'Sharing' vs 'Showcase' assumes knowledge a customer lacks",
+      "done_when": "A published journey's showcase sheet always renders the ShareLink + URL row (driven by the verified .onShowcase slug, not the transient .done phase); 'Remove from showcase' asks for confirmation with consequence-stating copy in the house style; the journey overflow menu uses intent-based labels ('Invite family…' / 'Publish web link…').",
+      "why": "REVIEW 2026-07-29: AppInfo.showcaseURL is referenced from exactly one UI location — resultView, which renders only in the model's .done phase right after publishing (JourneyShowcaseSheet.swift:290). An owner who published yesterday sees Public/Update/Remove and no link; the only in-app recovery is re-publishing. SHIP-17 counts 'showcase link sent' as a beta criterion — this is its likeliest silent failure. Remove executes immediately (:200), the only destructive action in the app without a confirm. And JourneyDetailView.swift:118 offers 'Sharing' above 'Showcase' with no cue which one sends grandma a link — the CKShare invite (needing SHIP-15-class conditions) is the plausible wrong pick.",
+      "files": [
+        "apple/Akashic/Views/Showcase/JourneyShowcaseSheet.swift",
+        "apple/Akashic/Views/JourneyDetailView.swift",
+        "apple/Akashic/Resources/Localizable.xcstrings",
+        "apple/AkashicTests/PublicMirrorTests.swift"
+      ],
+      "verify": [
+        "cd apple && xcodegen generate",
+        "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,name=iPhone 17 Pro\" CODE_SIGNING_ALLOWED=NO -only-testing:AkashicTests test > /tmp/qua65.log 2>&1 && grep -q \"with 1 test skipped and 0 failures\" /tmp/qua65.log"
+      ]
+    },
+    {
+      "id": "QUA-70",
+      "effort": 0.2,
+      "priority": 5,
+      "deps": [],
+      "track": "QUALITY",
+      "status": "TODO",
+      "owner": false,
+      "title": "Get Journey Photos is a fixtures-era stub: Siri/Shortcuts confidently answer 'no photos' against a 939-photo archive",
+      "done_when": "GetJourneyPhotosIntent resolves the journey, loads its photos through the persistence layer, applies the waypointId filter and the already-computed limit clamp, and returns real results; IntentQueryTests cover the wired path.",
+      "why": "REVIEW 2026-07-29: JourneyQuery.photos() always returns JourneyPhotosResult(photos: [], total: 0) with a comment ('Fixtures carry no photos; the photo pipeline arrives with Phase 2 import') that has been false since import and sync landed; waypointId and limit are parsed and discarded (JourneyQuery.swift:135). The intent is exposed to Siri/Shortcuts with phrases (AkashicShortcuts.swift:67-75), so a shipped surface returns confidently wrong data and Shortcuts automations silently get empty JSON. Same file, related honesty gap: list()'s total/hasMore ignore the country filter to mirror an MCP Worker deleted in LEG-12 — fix the pagination metadata over the filtered set while in here.",
+      "files": [
+        "apple/Akashic/Intents/JourneyQuery.swift",
+        "apple/AkashicTests/IntentQueryTests.swift"
+      ],
+      "verify": [
+        "cd apple && xcodegen generate",
+        "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,name=iPhone 17 Pro\" CODE_SIGNING_ALLOWED=NO -only-testing:AkashicTests test > /tmp/qua70.log 2>&1 && grep -q \"with 1 test skipped and 0 failures\" /tmp/qua70.log"
+      ]
+    },
+    {
+      "id": "QUA-71",
+      "effort": 0.3,
+      "priority": 5,
+      "deps": [],
+      "track": "QUALITY",
+      "status": "TODO",
+      "owner": false,
+      "title": "DIFF-05/DIFF-08 are engines without wires: Vision subjects never reach the day-note prompt, and drafting failures show the exact generic message the code condemns",
+      "done_when": "WaypointEditSheet.draftNote() populates DayNoteInput.photoSubjects via VisionPhotoScorer.subjects(in:) before generating; the catch maps errors through DayNoteDrafter.failure(from:), shows failure.message, and gates the retry affordance on isWorthRetrying; DIFF-05's and DIFF-08's ledger evidence is corrected to name this task as the wiring that made them reachable.",
+      "why": "REVIEW 2026-07-29: VisionPhotoScorer.subjects(in:) has zero production callers, and the only production DayNoteInput construction sets photoSubjects = [] (DayNoteDrafter.swift:58-76) — so the shipped prompt never contains 'The photos appear to show…' and DIFF-05's acceptance is unmet in the app while marked DONE. DayNoteDraftFailure/failure(from:)/isWorthRetrying (DayNoteDrafter.swift:115-152) also have zero callers: WaypointEditSheet catches any error as draftFailed = true and renders the literal 'Couldn't draft — try again' — the message the failure type's own doc calls wrong three ways — offering retry for non-retryable failures. Subjects return [] in the simulator (espresso context), so end-to-end quality lands in QUA-38's device session; the wiring itself is unit-testable.",
+      "files": [
+        "apple/Akashic/Views/Edit/WaypointEditSheet.swift",
+        "apple/Akashic/Resources/Localizable.xcstrings",
+        "apple/AkashicTests/IntelligenceTests.swift"
+      ],
+      "verify": [
+        "cd apple && xcodegen generate",
+        "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,name=iPhone 17 Pro\" CODE_SIGNING_ALLOWED=NO -only-testing:AkashicTests test > /tmp/qua71.log 2>&1 && grep -q \"with 1 test skipped and 0 failures\" /tmp/qua71.log"
+      ]
+    },
+    {
+      "id": "QUA-77",
+      "effort": 0.3,
+      "priority": 5,
+      "deps": [],
+      "track": "QUALITY",
+      "status": "TODO",
+      "owner": false,
+      "title": "The PDF story book (DIFF-07, 6 dev-days, DONE) has no UI entry point — no customer can create one",
+      "done_when": "A 'Save as PDF book' action exists on the journey (story toolbar and/or export sheet), feeds StoryPDFRenderer.render with the curated per-day input StoryPagination documents, and hands the produced file to ShareLink; a symbol-presence check à la DIFF-13 (not just unit tests) proves the renderer is linked into the shipped binary.",
+      "why": "REVIEW 2026-07-29: StoryPDFRenderer.render, StoryPagination and StoryPageView are referenced only by StoryBookTests — zero references from Views/ or App/ (grep), and JourneyExportSheet produces only the zip archive. This is the exact failure mode DIFF-13 documented for curation (engine written, tested, absent from the app until a surface called it; otool showed Vision unlinked). The ledger's own strategy note wants the store subtitle anchored on the BOOK, and the market research (2026-07-29) shows every rival monetising print books €36-150 with 'blurry photos' as their best-documented complaint — the free PDF is the value headline and it is currently unreachable. Follow-up DIFF-22 handles print-grade output; this task is the wire.",
+      "files": [
+        "apple/Akashic/Views/Export/JourneyExportSheet.swift",
+        "apple/Akashic/Views/Story/JourneyStoryView.swift",
+        "apple/Akashic/Resources/Localizable.xcstrings",
+        "apple/AkashicTests/StoryBookTests.swift"
+      ],
+      "verify": [
+        "cd apple && xcodegen generate",
+        "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,name=iPhone 17 Pro\" CODE_SIGNING_ALLOWED=NO -only-testing:AkashicTests test > /tmp/qua77.log 2>&1 && grep -q \"with 1 test skipped and 0 failures\" /tmp/qua77.log",
+        "grep -rn \"StoryPDFRenderer\" apple/Akashic/Views | grep -q . # the renderer has a production caller"
+      ]
+    },
+    {
+      "id": "QUA-66",
+      "effort": 0.3,
+      "priority": 6,
+      "deps": [],
+      "track": "QUALITY",
+      "status": "TODO",
+      "owner": false,
+      "title": "The signature day fly-in lands with its subject half-hidden behind the sheet",
+      "done_when": "Day (and overview) camera framing accounts for the covered region: a pure MapGeoMath function takes the visible-rect fraction and biases the fitting camera so the day's bbox lands in the visible half (iPhone medium-detent bottom sheet) or the uncovered width (iPad 400pt left panel); MapMathTests pin the offset math; the fly-in visibly lands its subject.",
+      "why": "REVIEW 2026-07-29: dayCamera() fits the day segment to the whole screen while selecting a day simultaneously presents DayDetailSheet at .medium covering the lower half (TrekCameraController.swift:142, GlobeExperienceView.swift:233-234) — the landing shot hides the selected camp and much of the cyan segment; screen centre sits at the sheet's top edge. Nothing compensates (fitFactor only adds symmetric margin). Cheapest visible-quality win on the map surface, and it upgrades the single most-repeated interaction in the app.",
+      "files": [
+        "apple/Akashic/Views/Map/MapGeoMath.swift",
+        "apple/Akashic/Views/Map/TrekCameraController.swift",
+        "apple/Akashic/Views/Map/GlobeExperienceView.swift",
+        "apple/AkashicTests/MapMathTests.swift"
+      ],
+      "verify": [
+        "cd apple && xcodegen generate",
+        "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,name=iPhone 17 Pro\" CODE_SIGNING_ALLOWED=NO -only-testing:AkashicTests test > /tmp/qua66.log 2>&1 && grep -q \"with 1 test skipped and 0 failures\" /tmp/qua66.log"
+      ]
+    },
+    {
+      "id": "QUA-83",
+      "effort": 0.5,
+      "priority": 6,
+      "deps": [],
+      "track": "QUALITY",
+      "status": "TODO",
+      "owner": false,
+      "title": "iOS map has no photo clustering, and photo markers steal taps from camp badges — the unfixed iOS twin of the web's QUA-49",
+      "done_when": "Geotagged photos cluster by screen-space proximity at the current camera distance into stack markers with a count badge (matching the web surface); camp badges keep tap precedence over photo markers (declared later / filtered within a clearance radius, mirroring the web decision); coincident camps (rest days) merge into one badge offering both days; a rendered-annotation cap bounds the overview; precedence and clustering are unit-tested like QUA-58 did for the web.",
+      "why": "REVIEW 2026-07-29: trekOverlays() renders one SwiftUI Annotation per visible MapPhoto with AsyncImage (GlobeExperienceView.swift:382-388) — hundreds of live annotation views on a photo-heavy journey, thumbnails shingling over the route. Camps are declared first (:372-378) so photos draw ABOVE camp badges, and both carry invisible 44pt tap frames (GlobeMapComponents.swift:210,:257): a photo taken at camp — the most common geotag — fully covers the camp's hit region and taps open the lightbox instead of selecting the day. Found, fixed and regression-guarded on the web (QUA-49/QUA-58); those tasks touched only src/. Multi-night stays additionally leave only the later day tappable (:372).",
+      "files": [
+        "apple/Akashic/Views/Map/GlobeExperienceView.swift",
+        "apple/Akashic/Views/Map/GlobeMapComponents.swift",
+        "apple/Akashic/Views/Map/MapGeoMath.swift",
+        "apple/AkashicTests/MapMathTests.swift"
+      ],
+      "verify": [
+        "cd apple && xcodegen generate",
+        "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,name=iPhone 17 Pro\" CODE_SIGNING_ALLOWED=NO -only-testing:AkashicTests test > /tmp/qua83.log 2>&1 && grep -q \"with 1 test skipped and 0 failures\" /tmp/qua83.log"
+      ]
+    },
+    {
+      "id": "QUA-84",
+      "effort": 0.3,
+      "priority": 7,
+      "deps": [
+        "QUA-66"
+      ],
+      "track": "QUALITY",
+      "status": "TODO",
+      "owner": false,
+      "title": "Camera flights are single linear interpolations and the idle globe spin is a 30 Hz main-thread timer that never rests",
+      "done_when": "Transitions between distant targets use MapCameraKeyframeAnimator with a distance-dependent apex (rise–traverse–descend), built by a unit-tested MapGeoMath keyframe builder; the idle spin pauses when the Explore tab is hidden and stops on ANY gesture (including two-finger rotate); ideally the spin itself moves to a system-interpolated animation instead of 30 Hz cameraPosition assignments.",
+      "why": "REVIEW 2026-07-29: all flights are one easeInOut of one camera (TrekCameraController.setCamera) — between non-adjacent days that is a low-altitude lateral sweep with tile-streaming blur. tickRotation assigns cameraPosition 30×/s on a main-thread Timer (TrekCameraController.swift:234-248), keeps running while Stats/Settings are frontmost (TabView keeps tab 0 mounted), cannot match ProMotion interpolation, and fights two-finger rotate/pitch gestures (only drag/magnify stop it, GlobeExperienceView.swift:315-320). Deps on QUA-66 because both edit the same three files.",
+      "files": [
+        "apple/Akashic/Views/Map/TrekCameraController.swift",
+        "apple/Akashic/Views/Map/GlobeExperienceView.swift",
+        "apple/Akashic/Views/Map/MapGeoMath.swift",
+        "apple/AkashicTests/MapMathTests.swift"
+      ],
+      "verify": [
+        "cd apple && xcodegen generate",
+        "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,name=iPhone 17 Pro\" CODE_SIGNING_ALLOWED=NO -only-testing:AkashicTests test > /tmp/qua84.log 2>&1 && grep -q \"with 1 test skipped and 0 failures\" /tmp/qua84.log"
+      ]
+    },
+    {
+      "id": "DIFF-18",
+      "effort": 2.5,
+      "priority": 6,
+      "deps": [
+        "QUA-66",
+        "QUA-83"
+      ],
+      "track": "DIFF",
+      "status": "TODO",
+      "owner": false,
+      "title": "'Play journey': an animated day-by-day trip replay over MapKit's real 3D terrain",
+      "done_when": "A replay mode chains day fly-ins automatically (camera flight → dwell with the day's photos surfacing → advance), with pause-on-touch, a scrubber built from the day pill strip, and a Reduce Motion step-through fallback; the sequencing lives in a pure, unit-tested replay-sequencer model; entering and leaving replay never leaves the camera controller in a stuck state.",
+      "why": "REVIEW + MARKET RESEARCH 2026-07-29: trip replay is the Polarsteps bar (3D replay is their PAID headline feature) and FindPenguins ships a flyover video; an entire app category (TripReel, Trip Replay, Travel Animator) exists for animated trip routes. Every primitive already exists in this repo: selectDay choreography, day segments, per-day photos, haptics, Reduce Motion handling (TrekCameraController.swift). Over MapKit's genuinely 3D terrain this beats Polarsteps' flat web replay — their paywall is our free tier, again. DIFF-19 (video export) builds on the same sequencer; do this first.",
+      "files": [
+        "apple/Akashic/Views/Map/TrekCameraController.swift",
+        "apple/Akashic/Views/Map/GlobeExperienceView.swift",
+        "apple/Akashic/Views/Map/DayNavigationView.swift",
+        "apple/AkashicTests/MapMathTests.swift"
+      ],
+      "verify": [
+        "cd apple && xcodegen generate",
+        "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,name=iPhone 17 Pro\" CODE_SIGNING_ALLOWED=NO -only-testing:AkashicTests test > /tmp/diff18.log 2>&1 && grep -q \"with 1 test skipped and 0 failures\" /tmp/diff18.log"
+      ]
+    },
+    {
+      "id": "DIFF-19",
+      "effort": 3,
+      "priority": 7,
+      "deps": [
+        "DIFF-18"
+      ],
+      "track": "DIFF",
+      "status": "TODO",
+      "owner": false,
+      "title": "Flyover video export: render the replay to a shareable 20–30 s vertical video",
+      "done_when": "A journey can be exported as a vertical video (choreographed map flyover interleaved with curated hero photos, AVAssetWriter over offscreen map rendering) and handed to the share sheet; the export survives Reduce Motion (cuts instead of flights) and reports progress; the file carries no tokens or private data beyond what the user chose to show.",
+      "why": "MARKET RESEARCH 2026-07-29: the single largest genuine feature gap vs the market. Polarsteps markets shareable reels as a headline output; families share iMessage/WhatsApp videos far more than links, and every exported video is organic marketing carrying the akashic.no showcase link at zero server cost — which matters for a product whose §5 math needs 15-35k downloads/year. The hard part (camera choreography + curation picking hero photos) already exists; this is the rendering pipeline.",
+      "files": [
+        "apple/Akashic/Export/",
+        "apple/Akashic/Views/Map/TrekCameraController.swift"
+      ],
+      "verify": [
+        "cd apple && xcodegen generate",
+        "MANUAL: export a video from a real journey on device and play it back — offscreen MapKit rendering cannot be proven in unit tests alone"
+      ]
+    },
+    {
+      "id": "DIFF-20",
+      "effort": 2,
+      "priority": 8,
+      "deps": [],
+      "track": "DIFF",
+      "status": "TODO",
+      "owner": false,
+      "title": "Trip detection from the photo library: 'Looks like a trip — create this journey?'",
+      "done_when": "With limited photo-library authorization, Akashic scans asset dates/locations, detects away-from-home clusters, and offers one-tap journey creation ('Lofoten, 12–19 July, 412 photos'); detection is a pure, unit-tested function over asset metadata; the prompt appears only when a plausible trip exists and never nags.",
+      "why": "REVIEW 2026-07-29: the dominant remaining creation friction is manually selecting hundreds of photos in the system picker. This is the retrospective answer to Polarsteps' auto-tracking — for families who did NOT track during the trip (Polarsteps' weak spot: their retrospective flow is worse than their live one). Related lever: Apple's Journaling Suggestions API surfaces trip photos/visits/workouts on-device — only an Apple-native privacy-first app can use it credibly.",
+      "files": [
+        "apple/Akashic/Services/",
+        "apple/Akashic/Views/NewJourney/"
+      ],
+      "verify": [
+        "cd apple && xcodegen generate",
+        "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,name=iPhone 17 Pro\" CODE_SIGNING_ALLOWED=NO -only-testing:AkashicTests test > /tmp/diff20.log 2>&1 && grep -q \"with 1 test skipped and 0 failures\" /tmp/diff20.log"
+      ]
+    },
+    {
+      "id": "DIFF-21",
+      "effort": 1,
+      "priority": 8,
+      "deps": [],
+      "track": "DIFF",
+      "status": "TODO",
+      "owner": false,
+      "title": "Polarsteps-export importer: turn the market's loudest lock-in complaint into a switching funnel",
+      "done_when": "Akashic imports a Polarsteps data-export ZIP (trips, steps, photos with dates/locations) into journeys/days/photos through the existing ImportSink machinery; a fixture ZIP round-trips in tests; 'bring your old trips with you' appears in the creation chooser when a Polarsteps export is picked.",
+      "why": "MARKET RESEARCH 2026-07-29: Polarsteps offers a data-export ZIP and 'your travels live inside its ecosystem' is a recurring reviewer complaint (wandria.app, Trustpilot); no rival imports a competitor's export. The GPX/day/draft machinery (DIFF-09/11) is already shaped to receive it. First-launch story no competitor offers.",
+      "files": [
+        "apple/Akashic/Import/"
+      ],
+      "verify": [
+        "cd apple && xcodegen generate",
+        "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,name=iPhone 17 Pro\" CODE_SIGNING_ALLOWED=NO -only-testing:AkashicTests test > /tmp/diff21.log 2>&1 && grep -q \"with 1 test skipped and 0 failures\" /tmp/diff21.log"
+      ]
+    },
+    {
+      "id": "DIFF-22",
+      "effort": 0.5,
+      "priority": 8,
+      "deps": [
+        "QUA-77"
+      ],
+      "track": "DIFF",
+      "status": "TODO",
+      "owner": false,
+      "title": "Print-shop-honest PDF: the book's 1400 px image cap yields ~170 dpi on the A4 page its own header promises to a print shop",
+      "done_when": "The PDF export offers (or defaults to) print-quality output targeting ~300 dpi for full-width images, with incremental page rendering bounding memory; the header's 'handed to a print shop' claim matches the artefact; a test asserts the effective dpi of a full-width image.",
+      "why": "MARKET RESEARCH 2026-07-29: StoryPDFRenderer.swift:29 caps maxImageEdge at 1400 px — ~170 dpi full-width on A4 against the 300 dpi print standard — while the file header promises a PDF 'meant to be printable... or handed to a print shop'. Blurry print photos are Polarsteps' best-documented Travel Book complaint (books €36-150); 'a book for the price of the app, printed wherever you like' is the counter-position and it must not import their top complaint. Deps QUA-77: wire the surface first, then upgrade the artefact.",
+      "files": [
+        "apple/Akashic/Export/StoryPDFRenderer.swift",
+        "apple/AkashicTests/StoryBookTests.swift"
+      ],
+      "verify": [
+        "cd apple && xcodegen generate",
+        "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,name=iPhone 17 Pro\" CODE_SIGNING_ALLOWED=NO -only-testing:AkashicTests test > /tmp/diff22.log 2>&1 && grep -q \"with 1 test skipped and 0 failures\" /tmp/diff22.log"
+      ]
+    },
+    {
+      "id": "QUA-67",
+      "effort": 0.3,
+      "priority": 6,
+      "deps": [],
+      "track": "QUALITY",
+      "status": "TODO",
+      "owner": false,
+      "title": "Story mode builds the whole journey eagerly, re-fetches all photos per day per body pass — and strip taps open the wrong photo when the cover is not first",
+      "done_when": "Chapters render in a LazyVStack and DayPhotoStrip in a LazyHStack; the journey's photos are fetched once and sliced per chapter instead of one full Core Data fetch per day per body evaluation; the strip tap resolves the photo by IDENTITY (not index+1), fixing the off-by-one when a mid-day photo is the cover; the hero image is a real button for VoiceOver; a unit test pins the tap-index resolution.",
+      "why": "REVIEW 2026-07-29: JourneyStoryView lays chapters in a non-lazy VStack (:39) and calls store.photos(forDay:journeyID:) per chapter inside body — that method re-fetches ALL the journey's photos per call, so a 20-day journey performs 21 full fetches per body evaluation, re-run on every store publish. DayPhotoStrip is a non-lazy HStack (DayPhotoStrip.swift:19) firing all AsyncImages at once. And StoryChapterCard's tap handler maps strip index to full list with 'hero != nil ? index+1 : index', correct only when the hero is photos[0] — any 'Set as cover' on a mid-day photo makes taps open the wrong photo (day [A,B,C(hero),D] → strip [A,B,D]; tapping A opens B). Check the web's DayChapter.onPhotoClick for the same copied assumption.",
+      "files": [
+        "apple/Akashic/Views/Story/JourneyStoryView.swift",
+        "apple/Akashic/Views/Photos/DayPhotoStrip.swift",
+        "apple/AkashicTests/DayContentTests.swift"
+      ],
+      "verify": [
+        "cd apple && xcodegen generate",
+        "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,name=iPhone 17 Pro\" CODE_SIGNING_ALLOWED=NO -only-testing:AkashicTests test > /tmp/qua67.log 2>&1 && grep -q \"with 1 test skipped and 0 failures\" /tmp/qua67.log"
+      ]
+    },
+    {
+      "id": "QUA-68",
+      "effort": 0.3,
+      "priority": 6,
+      "deps": [],
+      "track": "QUALITY",
+      "status": "TODO",
+      "owner": false,
+      "title": "The lightbox decodes full-resolution originals with no downsampling inside a non-lazy pager — jetsam risk on the most-used photo surface",
+      "done_when": "Lightbox pages decode at bounded size (CGImageSource thumbnail at ~2× screen scale, orientation-honoured, off-main) with the full-res file used only for ShareLink and re-decode on deep zoom; pan offsets clamp to the scaled bounds; VideoPage gets the same failed-state + Retry treatment ResolvingImagePage already has; a unit test covers the downsample helper.",
+      "why": "REVIEW 2026-07-29: ZoomableImage displays the resolved original via AsyncImage on a local file URL — full native decode (24 MP HEIC ≈ 96 MB RGBA, 48 MP ≈ 190 MB) inside TabView(.page) which keeps neighbours alive: several such bitmaps at once is a realistic jetsam on 3-4 GB devices (PhotoLightboxView.swift:342, :113). The codebase already owns the correct pattern — StoryPDFRenderer.downscaledImage with kCGImageSourceThumbnailMaxPixelSize, chosen precisely because 'a page may hold six of these'. Also: VideoPage's failure is a dead-end play.slash with no retry and no a11y label (:437) while the image path has a labelled Retry pill.",
+      "files": [
+        "apple/Akashic/Views/Photos/PhotoLightboxView.swift",
+        "apple/AkashicTests/EditTests.swift"
+      ],
+      "verify": [
+        "cd apple && xcodegen generate",
+        "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,name=iPhone 17 Pro\" CODE_SIGNING_ALLOWED=NO -only-testing:AkashicTests test > /tmp/qua68.log 2>&1 && grep -q \"with 1 test skipped and 0 failures\" /tmp/qua68.log"
+      ]
+    },
+    {
+      "id": "QUA-69",
+      "effort": 0.2,
+      "priority": 6,
+      "deps": [],
+      "track": "QUALITY",
+      "status": "TODO",
+      "owner": false,
+      "title": "Day clustering splits at midnight — the 00:30 aurora photo becomes its own 'day'",
+      "done_when": "Photo-to-day bucketing applies an early-morning cutoff (photos before 04:00 join the previous day) in JourneyDraft.dayKey derivation; JourneyDraftTests pin the boundary (23:59, 00:30, 03:59, 04:00) and the derived date range no longer grows a spurious day from an after-midnight session.",
+      "why": "REVIEW 2026-07-29: daysWithAssignments buckets by strict calendar date (JourneyDraft.swift:145-165 via dayKey :342). In the product's home market (midnight sun, aurora season) after-00:00 photos are the norm; each such session mints a spurious extra day, shifts the derived range, and produces days the user must merge by hand — which the review screen cannot do. Industry practice is a ~04:00 boundary. Two-line pure change, unit-testable, improves the map's day-pin story directly.",
+      "files": [
+        "apple/Akashic/Services/JourneyDraft.swift",
+        "apple/AkashicTests/JourneyDraftTests.swift"
+      ],
+      "verify": [
+        "cd apple && xcodegen generate",
+        "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,name=iPhone 17 Pro\" CODE_SIGNING_ALLOWED=NO -only-testing:AkashicTests test > /tmp/qua69.log 2>&1 && grep -q \"with 1 test skipped and 0 failures\" /tmp/qua69.log"
+      ]
+    },
+    {
+      "id": "QUA-76",
+      "effort": 0.2,
+      "priority": 7,
+      "deps": [],
+      "track": "QUALITY",
+      "status": "TODO",
+      "owner": false,
+      "title": "No fetch indexes on the hot lookup columns — every id lookup and photo load is a table scan",
+      "done_when": "A fifth model version adds fetch indexes on CDJourney.id, CDPhoto.id, CDPhoto.journeyId, CDPhoto.waypointId, CDWaypoint.id and CDDayComment.waypointId (index-only lightweight migration, no mapping); StoreMigrationTests prove a v4 store opens under v5.",
+      "why": "REVIEW 2026-07-29: the only fetch index in the model is CDSyncRecordMeta.recordName; the predicates behind fetchOne(id ==) — the primitive of every edit — and loadPhotos(journeyId ==) (called once per journey per reload) are unindexed. On the 939-row Kilimanjaro photo table and the 1538-photo archive every lookup is a sequential scan that multiplies into the per-edit reload cost.",
+      "files": [
+        "apple/Akashic/Persistence/Akashic.xcdatamodeld/",
+        "apple/AkashicTests/StoreMigrationTests.swift"
+      ],
+      "verify": [
+        "cd apple && xcodegen generate",
+        "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,name=iPhone 17 Pro\" CODE_SIGNING_ALLOWED=NO -only-testing:AkashicTests test > /tmp/qua76.log 2>&1 && grep -q \"with 1 test skipped and 0 failures\" /tmp/qua76.log"
+      ]
+    },
+    {
+      "id": "QUA-87",
+      "effort": 0.4,
+      "priority": 7,
+      "deps": [],
+      "track": "QUALITY",
+      "status": "TODO",
+      "owner": false,
+      "title": "reload() republishes the entire library with synchronous file I/O after every single edit",
+      "done_when": "Widget thumbnail copies happen only when the source path/mtime changed; Spotlight/widget publishing is debounced off the mutation path; single-row edits reload only the affected journey where the seam allows; an os_signpost measurement on a photo-heavy fixture before/after is recorded in the evidence.",
+      "why": "REVIEW 2026-07-29: every mutation calls reload() (JourneyStore.swift:58) which re-fetches and re-decodes every journey (DayStats.annotate over full route geometry per journey), re-fetches EVERY photo row of EVERY journey for hero thumbnails (:86-97), and WidgetPublisher.publish deletes and re-copies every hero JPEG into the App Group container synchronously on the main actor (WidgetSnapshot+Journey.swift:53-67) — shipped behaviour on Release (App Group entitled). Scales with exactly the photo-heavy archives paying customers bring. Measure first (signpost), then restructure; QUA-76's indexes land first and shrink the same cost.",
+      "files": [
+        "apple/Akashic/App/JourneyStore.swift",
+        "apple/Akashic/Services/WidgetSnapshot+Journey.swift",
+        "apple/AkashicTests/WidgetSnapshotTests.swift"
+      ],
+      "verify": [
+        "cd apple && xcodegen generate",
+        "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,name=iPhone 17 Pro\" CODE_SIGNING_ALLOWED=NO -only-testing:AkashicTests test > /tmp/qua87.log 2>&1 && grep -q \"with 1 test skipped and 0 failures\" /tmp/qua87.log"
+      ]
+    },
+    {
+      "id": "QUA-72",
+      "effort": 0.5,
+      "priority": 4,
+      "deps": [],
+      "track": "QUALITY",
+      "status": "TODO",
+      "owner": false,
+      "title": "A stranger opening a shared web link hits four silent dead ends: empty globe on any CloudKit failure, fuzzy slug matching, a 15 s token timeout with an unwired Retry, and developer jargon as error copy",
+      "done_when": "Adapter failures reach JourneysContext.error and the globe renders a 'Couldn't load journeys — retry' state (refetch plumbing exists); ?journey= matches exactly on id (case-insensitive) and a non-matching param shows 'This journey isn't available' instead of nothing; MapKitJourneyMap passes onRetry to MapErrorFallback (loader already resets its memo) and shows a loading treatment until ready; on-screen error strings are customer sentences, with the JWT/origin diagnostics kept for the console.",
+      "why": "REVIEW 2026-07-29, empty-globe state confirmed hands-on against the dev server: fetchPublicJourneys catches every error and returns empty (publicAdapter.ts:199), JourneysContext.error is consumed by zero components, and GlobeHint suppresses its text when treks is empty — an outage is indistinguishable from 'this family published nothing'. The ?journey= deep link resolves via includes() against id AND name (useTrekData.ts:97) so a typo lands silently on the globe and a partial value can open the WRONG journey. MapKitJourneyMap renders MapErrorFallback without onRetry (MapKitJourneyMap.tsx:103) even though the fallback supports it and loader.ts deliberately resets pending on failure; the timeout copy is JWT-claim jargon (loader.ts:62-78).",
+      "files": [
+        "src/lib/journeys/adapters/cloudkit/publicAdapter.ts",
+        "src/lib/journeys/adapters/cloudkit/journeyAdapter.ts",
+        "src/contexts/JourneysContext.tsx",
+        "src/hooks/useTrekData.ts",
+        "src/components/home/GlobeHint.tsx",
+        "src/components/MapKitJourneyMap.tsx",
+        "src/lib/map/mapkit/loader.ts",
+        "src/components/ErrorBoundary.tsx"
+      ],
+      "verify": [
+        "npx vitest --run > /tmp/qua72.log 2>&1 && grep -qE \"Test Files +[0-9]+ passed\" /tmp/qua72.log",
+        "npm run typecheck",
+        "npm run lint"
+      ]
+    },
+    {
+      "id": "QUA-73",
+      "effort": 0.2,
+      "priority": 5,
+      "deps": [],
+      "track": "QUALITY",
+      "status": "TODO",
+      "owner": false,
+      "title": "Web: URL, history and document.title never track navigation — the share loop breaks after one hop and Back exits the site",
+      "done_when": "Selecting a journey/day writes ?journey=<slug>&day=<n> via history state with a popstate listener so Back/forward navigate within the app; document.title reads \"<journey> — Akashic\" per selection; a copied address bar is always a correct share link; tests cover the param round-trip.",
+      "why": "REVIEW 2026-07-29: parseUrlParams is read-once at load and the only history write is clearing the share-target param (AkashicApp.tsx:98); document.title is never updated anywhere in src/ (grep). A visitor who arrives at the root and finds a journey copies the bare globe; Back — the most common mobile gesture — leaves the site entirely from deep inside a journey. The og:-scraper limitation is a recorded decision (DIFF-03), but URL/title sync is client-side and cheap; that argument does not cover it.",
+      "files": [
+        "src/hooks/useTrekData.ts",
+        "src/components/AkashicApp.tsx"
+      ],
+      "verify": [
+        "npx vitest --run > /tmp/qua73.log 2>&1 && grep -qE \"Test Files +[0-9]+ passed\" /tmp/qua73.log",
+        "npm run typecheck"
+      ]
+    },
+    {
+      "id": "QUA-74",
+      "effort": 0.1,
+      "priority": 5,
+      "deps": [],
+      "track": "QUALITY",
+      "status": "TODO",
+      "owner": false,
+      "title": "Web: the service worker precaches ~6 MB on every first visit; ~4.4 MB is hero PNGs referenced nowhere",
+      "done_when": "The four unused hero PNGs leave public/ (landing-hero stays available to the build-time OG-image script from a non-published path); iOS splash images are excluded from precache globPatterns; the measured precache total drops from ~6.1 MB to well under 2 MB and the number is recorded in the evidence.",
+      "why": "REVIEW 2026-07-29, measured: 'precache 48 entries (6127.96 KiB)'. globPatterns sweeps public/hero-images/*.png — five files ~4.4 MB referenced by nothing in src/ (only scripts/generateOgImage.js reads landing-hero.png at build time) — plus ~1.5 MB of splash PNGs useful only after PWA install. A first-time visitor on mobile data pays it all in background downloads competing with the CloudKit photos they actually want (public-DB reads are billed to the owner).",
+      "files": [
+        "vite.config.js",
+        "public/hero-images/",
+        "scripts/generateOgImage.js"
+      ],
+      "verify": [
+        "npx vitest --run > /tmp/qua74.log 2>&1 && grep -qE \"Test Files +[0-9]+ passed\" /tmp/qua74.log",
+        "npm run typecheck",
+        "npm run build > /tmp/qua74build.log 2>&1 && grep -E \"precache +[0-9]+ entries\" /tmp/qua74build.log"
+      ]
+    },
+    {
+      "id": "QUA-75",
+      "effort": 0.2,
+      "priority": 6,
+      "deps": [],
+      "track": "QUALITY",
+      "status": "TODO",
+      "owner": false,
+      "title": "Web: the full photo collection is fetched twice per journey and re-fetched on every Photos-tab visit — billed to the owner",
+      "done_when": "Photo state lives once (lifted to AkashicApp or a per-slug memo mirroring journeyCache) and PhotosTab consumes it as props; opening the Photos tab or toggling day/photos mode issues zero additional full-collection fetches; a test pins the single-fetch behaviour.",
+      "why": "REVIEW 2026-07-29: AkashicApp fetches the journey's entire photo set for the map (AkashicApp.tsx:113-134); PhotosTab, mounted per mode toggle, fetches the identical set again in its own effect and again on every re-mount (PhotosTab.tsx:317) — on Kilimanjaro that is 939 records = 5 paginated CloudKit queries per fetch, 10 where 5 would do, repeated per toggle. Public-database reads are billed to the owner (CLAUDE.md), so this is a cost line as well as time-to-photos on exactly the journeys the product is proudest of.",
+      "files": [
+        "src/components/AkashicApp.tsx",
+        "src/components/trek/PhotosTab.tsx",
+        "src/components/trek/BottomSheetContent.tsx"
+      ],
+      "verify": [
+        "npx vitest --run > /tmp/qua75.log 2>&1 && grep -qE \"Test Files +[0-9]+ passed\" /tmp/qua75.log",
+        "npm run typecheck"
+      ]
+    },
+    {
+      "id": "QUA-82",
+      "effort": 0.3,
+      "priority": 8,
+      "deps": [],
+      "track": "QUALITY",
+      "status": "TODO",
+      "owner": false,
+      "title": "Web map polish batch: stale stack visuals after zoom regroup, stale chrome padding across the 768 px breakpoint, no hover identity, reduced-motion ignored by camera flights",
+      "done_when": "Photo-stack backing cards and thumbnails update in applyPhotoState so a reused marker never lies about its group (plus a count badge); a matchMedia listener re-applies map.padding and re-frames on breakpoint crossings (phone rotation) so Apple attribution is never obscured; camp markers get name tooltips and globe pins hover labels; prefers-reduced-motion passes animate=false to camera requests and zeroes globe tween durations.",
+      "why": "REVIEW 2026-07-29: syncPhotoAnnotations' reuse path updates coordinates and state classes but never the backing cards built at creation (annotations.ts:472-480) — zooming out onto a merged group renders a single photo for a 5-photo stack, the normal zoom path. Nothing observes viewport-breakpoint crossings, so map.padding keeps the old orientation's shape (useMapKitJourney.ts:452-459) — an attribution-compliance surface per chrome.ts. Camp markers show only a day number; pins are anonymous dots (Polarsteps' embeds surface names/counts on hover). requestCamera always animates with no reduced-motion branch (useMapKitJourney.ts:584) — the unanimated queue path already exists.",
+      "files": [
+        "src/lib/map/mapkit/annotations.ts",
+        "src/lib/map/mapkit/useMapKitJourney.ts",
+        "src/components/AkashicGlobe.tsx",
+        "src/lib/globe/render.ts"
+      ],
+      "verify": [
+        "npx vitest --run > /tmp/qua82.log 2>&1 && grep -qE \"Test Files +[0-9]+ passed\" /tmp/qua82.log",
+        "npm run typecheck",
+        "npm run lint"
+      ]
+    },
+    {
+      "id": "QUA-85",
+      "effort": 0.3,
+      "priority": 9,
+      "deps": [],
+      "track": "QUALITY",
+      "status": "TODO",
+      "owner": false,
+      "title": "First-run surfaces are excluded from the enforced accessibility audit and carry sub-44pt targets; five surfaces bypass themedMaterial",
+      "done_when": "One UI-test leg launches WITHOUT AKASHIC_SKIP_ONBOARDING and runs the enforced audit over the onboarding cards; the onboarding Skip button, DayNotesField Save/Cancel, DayDetailSheet 'Edit day' pill and the elevation Reset pill get the QUA-29 pairing (minHeight 44 + contentShape); the five raw .ultraThinMaterial sites (comments composer/name/cards, day-sheet chevrons, story DAY badge) route through themedMaterial; FunFactsCarousel's height scales with Dynamic Type instead of character count.",
+      "why": "REVIEW 2026-07-29: every UI test launches with AKASHIC_SKIP_ONBOARDING=1 (AkashicUITestCase.swift:16), so performAccessibilityAudit has never instantiated OnboardingView — the first customer screen is the least-tested one, with a sub-44pt Skip (QUA-56's lesson: the audit measures only what is on screen). Theme.swift documents themedMaterial as the one Reduce Transparency seam; five surfaces bypass it (DayCommentsSection.swift:75,:122,:297; DayDetailSheet.swift:207; JourneyStoryView.swift:248). FunFactsCarousel picks 160/190/230pt from character count and clips at accessibility sizes (FunFactsCarousel.swift:89).",
+      "files": [
+        "apple/Akashic/Views/OnboardingView.swift",
+        "apple/Akashic/Views/Day/DayNotesField.swift",
+        "apple/Akashic/Views/Day/DayDetailSheet.swift",
+        "apple/Akashic/Views/Day/FunFactsCarousel.swift",
+        "apple/Akashic/Views/Comments/DayCommentsSection.swift",
+        "apple/Akashic/Views/Charts/InteractiveElevationProfileView.swift",
+        "apple/AkashicUITests/AccessibilityAuditTests.swift",
+        "apple/AkashicUITests/Support/AkashicUITestCase.swift"
+      ],
+      "verify": [
+        "cd apple && xcodegen generate",
+        "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,name=iPhone 17 Pro\" CODE_SIGNING_ALLOWED=NO -only-testing:AkashicTests test > /tmp/qua85.log 2>&1 && grep -q \"with 1 test skipped and 0 failures\" /tmp/qua85.log"
+      ]
+    },
+    {
+      "id": "QUA-88",
+      "effort": 0.2,
+      "priority": 8,
+      "deps": [],
+      "track": "QUALITY",
+      "status": "TODO",
+      "owner": false,
+      "title": "Norwegian-market data entry and display gaps: decimal-comma input silently dropped, day labels hardcoded English, Intelligence drafts English into a Norwegian journal",
+      "done_when": "Weather/distance fields parse with a locale-aware formatter (accepting ',' and '.') and show a validation hint instead of silently dropping; persisted day dateLabels stay POSIX for round-tripping but render localized at the read sites; the Intelligence instruction sets carry a Locale-driven output-language line (with on-device nb quality assessment deferred to QUA-38's session and recorded there).",
+      "why": "REVIEW 2026-07-29: composedWeather parses with Double.init which only accepts '.' — a Norwegian typing '12,5' gets nil, silently dropped on save (WaypointEditSheet.swift:472); JourneyEditSheet:37 has the same %g/Double pattern for distance. JourneyDraft's labelFormatter is en_US_POSIX 'd MMM yyyy' shown verbatim in a QUA-06-localised app (JourneyDraft.swift:449, NewJourneySheet.swift:1157). And all Intelligence prompts are hardcoded English with no output-language directive (DayNoteDrafter.swift:186-203, DayNamer.swift:59-64, FactDrafter.swift:89-109) — AI text inserted into the customer's own journal will be English on a product whose decision log says Norwegian-first.",
+      "files": [
+        "apple/Akashic/Views/Edit/WaypointEditSheet.swift",
+        "apple/Akashic/Views/Edit/JourneyEditSheet.swift",
+        "apple/Akashic/Services/JourneyDraft.swift",
+        "apple/Akashic/Views/NewJourney/NewJourneySheet.swift",
+        "apple/Akashic/Intelligence/DayNoteDrafter.swift",
+        "apple/Akashic/Intelligence/DayNamer.swift",
+        "apple/Akashic/Intelligence/FactDrafter.swift",
+        "apple/AkashicTests/IntelligenceTests.swift",
+        "apple/AkashicTests/JourneyDraftTests.swift"
+      ],
+      "verify": [
+        "cd apple && xcodegen generate",
+        "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,name=iPhone 17 Pro\" CODE_SIGNING_ALLOWED=NO -only-testing:AkashicTests test > /tmp/qua88.log 2>&1 && grep -q \"with 1 test skipped and 0 failures\" /tmp/qua88.log"
+      ]
+    },
+    {
+      "id": "QUA-89",
+      "effort": 0.2,
+      "priority": 8,
+      "deps": [],
+      "track": "QUALITY",
+      "status": "TODO",
+      "owner": false,
+      "title": "Unassigned photos are invisible from the day-centric surfaces — the count mismatch reads as photo loss (observed hands-on)",
+      "done_when": "When a journey has photos not matched to any day, the journey detail and/or day sheet surface it ('N photos aren't matched to a day — review'), routing to the existing all-photos grid which already renders the Unassigned section; the no-route journey's map fallback no longer frames Null Island (stay on globe or show a designed placeholder).",
+      "why": "OBSERVED IN SIMULATOR 2026-07-29: created a journey from 3 photos; the create sheet said '3 photos ready · grouped into 1 day'; the day sheet showed 2. The third sat safely under 'Unassigned — Not matched to a day' in View all photos, but nothing in the day flow hints at it, so the arithmetic reads as silent loss until the grid is found. Same session: a journey whose photos carry no GPS lands the trek view and the detail mini-map on a black void at (0,0) — dark satellite over open ocean with one glowing '1' marker. Honest '—' stats, dishonest map.",
+      "files": [
+        "apple/Akashic/Views/JourneyDetailView.swift",
+        "apple/Akashic/Views/Day/DayDetailSheet.swift",
+        "apple/Akashic/Views/Map/GlobeExperienceView.swift",
+        "apple/Akashic/Resources/Localizable.xcstrings"
+      ],
+      "verify": [
+        "cd apple && xcodegen generate",
+        "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,name=iPhone 17 Pro\" CODE_SIGNING_ALLOWED=NO -only-testing:AkashicTests test > /tmp/qua89.log 2>&1 && grep -q \"with 1 test skipped and 0 failures\" /tmp/qua89.log"
       ]
     }
   ]

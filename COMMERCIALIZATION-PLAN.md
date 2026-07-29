@@ -270,9 +270,18 @@ buys is +50 % net per household for identical effort, and a far better subtitle.
 The reframe toward "the story of your trip, told" lands us next to **Polarsteps**,
 not away from it. They are the incumbent for this exact job and they are good. Facts
 as of July 2026: the app is free (trip planning, automatic GPS logging, sharing,
-following other people's trips); **Polarsteps Plus** is a subscription that unlocks
-3D maps, advanced trip statistics and extra map styles, plus 20 % off books; and
-**Travel Books cost €36–150** (24 pages minimum, free worldwide shipping).
+following other people's trips); **Polarsteps Plus** is a subscription (€8.99/mo or
+€29.99/yr, verified 2026-07-29) that unlocks 3D trip replay with terrain, advanced
+trip statistics and extra map styles, plus 20 % off books; and **Travel Books cost
+€36–150** (24 pages minimum, free worldwide shipping). Since 2024 they also ship
+**Travel Buddies** — collaborative trips, 5 contributors free and 10 with Plus — so
+family/collaborative contribution is contested ground now, not an open flank: our
+CKShare answer is *free and ungated* where theirs is a Plus feature, but it is
+unproven across two Apple IDs until SHIP-15 runs. They still have **no GPX import**
+(their support doc offers manual lat/long on the desktop site), and their loudest
+verified complaint themes remain trips lost to failed syncs, GPS teleportation, and
+blurry book photos — each one structural or self-inflicted in ways §5b's three
+claims already answer.
 
 **The striking data point: their paid upsell is our baseline.** 3D maps and advanced
 trip statistics are what Plus sells. The globe, the elevation profiles, the per-day

@@ -32,10 +32,15 @@ Do not invent work. If something needs doing that is not in the ledger, add it t
    compare a red `apple-ci` with the run before yours and never leave it red; and a UI-test result
    is scoped to the screen size it ran on — `requireByScrolling` in the UI-test support exists so
    tests do what a customer does instead of assuming a viewport.
-2. **The agent queue is nearly empty and the owner queue is the whole schedule** — roughly 2
-   agent-days against 10.6 owner-days. Of the ~19 claimable tasks only `QUA-49` and `QUA-55` are
-   yours; the rest need an Apple agreement, a device, or a decision. If you look for
-   work and find almost none, that is the true state rather than a broken ledger. Say so.
+2. **The agent queue was nearly empty; the 2026-07-29 full review refilled it.** This bullet used to
+   say "of the ~19 claimable tasks only `QUA-49` and `QUA-55` are yours" — both closed since, and the
+   three-surface review (11 parallel readers + a hands-on simulator/web session) added ~34 tasks:
+   P0 multi-device sync integrity (`QUA-61`..`QUA-63` now, `QUA-78`..`QUA-81` gated on `DIFF-16`'s
+   file lock), the conversion funnel (`QUA-64`/`QUA-65`), map quality (`QUA-66`, `QUA-83`, `QUA-84`,
+   `DIFF-18`/`DIFF-19`), photo-heavy performance (`QUA-67`..`QUA-69`, `QUA-76`, `QUA-87`), built-but-
+   never-wired engines (`QUA-70`, `QUA-71`, `QUA-77`), and the web showcase (`QUA-72`..`QUA-75`,
+   `QUA-82`). The owner queue is unchanged and still gates the calendar. Read `WORKPLAN.md`, not this
+   sentence, for current counts.
 3. **`SHIP-24` is closed on the repo side and unproven on the device side.** An `applinks` document
    is served at `https://akashic.no/apple-app-site-association` (verified from two places), but Pages
    serves it as `application/octet-stream` where Apple has historically wanted `application/json`.
@@ -545,8 +550,12 @@ right: fix this file in the same commit.
   `options.element` and adds its own absolutely-positioned class; on MapKit both the camp marker and the
   photo stack compute `position: static`, and neither `DisplayPriority` nor DOM order changes the paint
   order. So a photo stack can hide a camp marker and eat its clicks, and after MAP-05 there is no longer
-  a surface where it cannot. That is QUA-49, and it is open — do not read the surviving CSS rule as
-  evidence the problem is handled.
+  a surface where it cannot. That was QUA-49 — **closed since, with regression guards added under
+  QUA-58** (`liftCampsAboveStacks` re-adds camps after any stack creation, because paint order is add
+  order under MapKit's closed shadow root). This bullet used to end "it is open — do not read the
+  surviving CSS rule as evidence the problem is handled", and the 2026-07-29 review found that sentence
+  stale; the durable half is the mechanism, which is why the paragraph stays. The iOS map had the same
+  defect class unfixed (photo annotations declared after camps steal their taps) — that is QUA-83.
 
 ## Conventions
 
