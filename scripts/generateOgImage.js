@@ -39,7 +39,12 @@ const ACCENT = '#A9B4FF';
 // The source hero is a 1024x1024 square; `cover` crops it to the card's 1.905 aspect ratio.
 // Centre, not top: cropping to the top gave 400px of empty sky with the peaks squeezed against
 // the bottom edge, right where the wordmark sits. Centre puts the skyline through the middle.
-const source = join(publicDir, 'hero-images', 'landing-hero.png');
+//
+// QUA-74: the source lives under scripts/og/, NOT public/ — it is a build-time INPUT, and
+// public/ is the publish dir: parked there it rode the service worker's precache glob, and a
+// first-time visitor on mobile data paid ~900 KB (plus ~3.5 MB of three sibling heroes no code
+// referenced at all, deleted the same day) for zero rendered pixels.
+const source = join(__dirname, 'og', 'landing-hero.png');
 
 /**
  * Scrim + mark + wordmark. The scrim is the load-bearing part: the photo's sky is bright, and

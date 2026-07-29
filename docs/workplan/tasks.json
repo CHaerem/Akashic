@@ -4989,7 +4989,7 @@
       "priority": 5,
       "deps": [],
       "track": "QUALITY",
-      "status": "TODO",
+      "status": "DONE",
       "owner": false,
       "title": "Web: the service worker precaches ~6 MB on every first visit; ~4.4 MB is hero PNGs referenced nowhere",
       "done_when": "The four unused hero PNGs leave public/ (landing-hero stays available to the build-time OG-image script from a non-published path); iOS splash images are excluded from precache globPatterns; the measured precache total drops from ~6.1 MB to well under 2 MB and the number is recorded in the evidence.",
@@ -5003,7 +5003,41 @@
         "npx vitest --run > /tmp/qua74.log 2>&1 && grep -qE \"Test Files +[0-9]+ passed\" /tmp/qua74.log",
         "npm run typecheck",
         "npm run build > /tmp/qua74build.log 2>&1 && grep -E \"precache +[0-9]+ entries\" /tmp/qua74build.log"
-      ]
+      ],
+      "claim": {
+        "agent": "fable5-review",
+        "branch": "claude/project-review-code-ux-c5c48b",
+        "at": "2026-07-29"
+      },
+      "verification": {
+        "at": "2026-07-29T08:46:36.266Z",
+        "head": "702b231",
+        "ran": [
+          {
+            "command": "npx vitest --run > /tmp/qua74.log 2>&1 && grep -qE \"Test Files +[0-9]+ passed\" /tmp/qua74.log",
+            "ok": true,
+            "ms": 7726,
+            "status": 0,
+            "signal": null
+          },
+          {
+            "command": "npm run typecheck",
+            "ok": true,
+            "ms": 3010,
+            "status": 0,
+            "signal": null
+          },
+          {
+            "command": "npm run build > /tmp/qua74build.log 2>&1 && grep -E \"precache +[0-9]+ entries\" /tmp/qua74build.log",
+            "ok": true,
+            "ms": 2546,
+            "status": 0,
+            "signal": null
+          }
+        ],
+        "attested": []
+      },
+      "evidence": "Measured: precache 48 entries / 6127.96 KiB -> 31 entries / 837.96 KiB (-86%). Four unreferenced hero PNGs deleted (~3.5 MB); landing-hero moved to scripts/og/ as the build-time OG input (script re-run green, 91 KB og-image.jpg); splash/** excluded from precache but still served on demand via index.html's startup-image links."
     },
     {
       "id": "QUA-75",

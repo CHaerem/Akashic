@@ -58,6 +58,14 @@ export default defineConfig({
 				importScripts: ["sw-share-target.js"],
 				// Pre-cache app shell and trek data
 				globPatterns: ["**/*.{js,css,html,ico,png,svg,json,woff,woff2}"],
+				// QUA-74: measured 2026-07-29 — precache was 48 entries / ~6.1 MB, of which
+				// ~1.5 MB was twelve iOS splash PNGs that only matter to an INSTALLED PWA (they
+				// are still served on demand via index.html's apple-touch-startup-image links)
+				// and ~4.4 MB was hero PNGs referenced by nothing in src/ (deleted; the OG-image
+				// build input moved to scripts/og/). A first-time visitor opening a shared link
+				// on mobile data paid all of it in background downloads, competing with the
+				// CloudKit photos they actually wanted.
+				globIgnores: ["splash/**"],
 				// Raised for large photos. MEASURED after MAP-05 deleted mapbox-gl (which was the
 				// original reason, at 1626 KB): the largest precached asset is now
 				// dist/assets/index-*.js at ~244 KB, so 20 MB is far above what the build needs and

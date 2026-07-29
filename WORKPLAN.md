@@ -5,17 +5,17 @@
 
 # Akashic — work ledger
 
-184 tasks · **53 open** (28 agent-doable, 17.4 dev-days · 25 owner-only, 10.6 dev-days) · 131 done · 0 dropped
+184 tasks · **52 open** (27 agent-doable, 17.3 dev-days · 25 owner-only, 10.6 dev-days) · 132 done · 0 dropped
 
 > **`dev-days` are a human-developer estimate, not agent time.** They came from the review
 > that produced these tasks and they are the right unit for deciding whether something is
 > worth doing — they are the wrong unit for predicting how long an agent will take, and
 > summing them as "work remaining" overstates it substantially.
 >
-> Measured so far: **125 agent tasks estimated at 79.7 dev-days**.
+> Measured so far: **126 agent tasks estimated at 79.8 dev-days**.
 > Elapsed time is deliberately absent: nothing here can support it. Use `git log` for that.
 >
-> 9 of the closed tasks were 2 dev-days or more, and 7.5 of the 17.4 remaining dev-days still sit in 3 such task(s): DIFF-18, DIFF-19, DIFF-20. Those turn on design judgement rather than localised edits, so do not assume the compression above holds.
+> 9 of the closed tasks were 2 dev-days or more, and 7.5 of the 17.3 remaining dev-days still sit in 3 such task(s): DIFF-18, DIFF-19, DIFF-20. Those turn on design judgement rather than localised edits, so do not assume the compression above holds.
 
 Read [CLAUDE.md](CLAUDE.md) before touching anything. To find work:
 
@@ -157,7 +157,7 @@ node scripts/workplan.mjs next
 
 > Tests, types, CI, localisation, accessibility. Localisation and accessibility are in v1.0 by decision.
 
-23 open of 96 · 6.6 d remaining
+22 open of 96 · 6.5 d remaining
 
 | | Task | Days | Who | Deps | Finish line |
 |---|---|---|---|---|---|
@@ -251,7 +251,7 @@ node scripts/workplan.mjs next
 | ` ` | `QUA-87` **reload() republishes the entire library with synchronous file I/O after every single edit** | 0.4 | agent | — | Widget thumbnail copies happen only when the source path/mtime changed; Spotlight/widget publishing is debounced off the mutation path; single-row edits reload only the affected journey where the seam allows; an os_signpost measurement on a photo-heavy fixture before/after is recorded in the evidence. |
 | `x` | `QUA-72` **A stranger opening a shared web link hits four silent dead ends: empty globe on any CloudKit failure, fuzzy slug matching, a 15 s token timeout with an unwired Retry, and developer jargon as error copy** | 0.5 | agent | — | Adapter failures reach JourneysContext.error and the globe renders a 'Couldn't load journeys — retry' state (refetch plumbing exists); ?journey= matches exactly on id (case-insensitive) and a non-matching param shows 'This journey isn't available' instead of nothing; MapKitJourneyMap passes onRetry to MapErrorFallback (loader already resets its memo) and shows a loading treatment until ready; on-screen error strings are customer sentences, with the JWT/origin diagnostics kept for the console. |
 | ` ` | `QUA-73` **Web: URL, history and document.title never track navigation — the share loop breaks after one hop and Back exits the site** | 0.2 | agent | — | Selecting a journey/day writes ?journey=<slug>&day=<n> via history state with a popstate listener so Back/forward navigate within the app; document.title reads "<journey> — Akashic" per selection; a copied address bar is always a correct share link; tests cover the param round-trip. |
-| ` ` | `QUA-74` **Web: the service worker precaches ~6 MB on every first visit; ~4.4 MB is hero PNGs referenced nowhere** | 0.1 | agent | — | The four unused hero PNGs leave public/ (landing-hero stays available to the build-time OG-image script from a non-published path); iOS splash images are excluded from precache globPatterns; the measured precache total drops from ~6.1 MB to well under 2 MB and the number is recorded in the evidence. |
+| `x` | `QUA-74` **Web: the service worker precaches ~6 MB on every first visit; ~4.4 MB is hero PNGs referenced nowhere** | 0.1 | agent | — | The four unused hero PNGs leave public/ (landing-hero stays available to the build-time OG-image script from a non-published path); iOS splash images are excluded from precache globPatterns; the measured precache total drops from ~6.1 MB to well under 2 MB and the number is recorded in the evidence. |
 | ` ` | `QUA-75` **Web: the full photo collection is fetched twice per journey and re-fetched on every Photos-tab visit — billed to the owner** | 0.2 | agent | — | Photo state lives once (lifted to AkashicApp or a per-slug memo mirroring journeyCache) and PhotosTab consumes it as props; opening the Photos tab or toggling day/photos mode issues zero additional full-collection fetches; a test pins the single-fetch behaviour. |
 | ` ` | `QUA-82` **Web map polish batch: stale stack visuals after zoom regroup, stale chrome padding across the 768 px breakpoint, no hover identity, reduced-motion ignored by camera flights** | 0.3 | agent | — | Photo-stack backing cards and thumbnails update in applyPhotoState so a reused marker never lies about its group (plus a count badge); a matchMedia listener re-applies map.padding and re-frames on breakpoint crossings (phone rotation) so Apple attribution is never obscured; camp markers get name tooltips and globe pins hover labels; prefers-reduced-motion passes animate=false to camera requests and zeroes globe tween durations. |
 | ` ` | `QUA-85` **First-run surfaces are excluded from the enforced accessibility audit and carry sub-44pt targets; five surfaces bypass themedMaterial** | 0.3 | agent | — | One UI-test leg launches WITHOUT AKASHIC_SKIP_ONBOARDING and runs the enforced audit over the onboarding cards; the onboarding Skip button, DayNotesField Save/Cancel, DayDetailSheet 'Edit day' pill and the elevation Reset pill get the QUA-29 pairing (minHeight 44 + contentShape); the five raw .ultraThinMaterial sites (comments composer/name/cards, day-sheet chevrons, story DAY badge) route through themedMaterial; FunFactsCarousel's height scales with Dynamic Type instead of character count. |
