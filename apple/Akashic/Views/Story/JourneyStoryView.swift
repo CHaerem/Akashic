@@ -41,14 +41,21 @@ struct JourneyStoryView: View {
 
     var body: some View {
         let live = self.live
+        // QUA-67: ONE fetch + ONE matcher pass for the whole story. This used to call
+        // store.photos(forDay:journeyID:) per chapter inside body — and that method re-fetches
+        // ALL of the journey's photos per call, so a 20-day journey performed 21 full Core Data
+        // fetches per body evaluation, re-run on every store publish (every note save).
+        let photosByDay = store.photosByDay(forJourneyID: live.id).byDay
         ScrollView {
-            VStack(alignment: .leading, spacing: 24) {
+            // QUA-67: lazy — the flagship hand-to-a-grandparent surface instantiated every
+            // chapter, hero AsyncImage, carousel and photo strip on first render.
+            LazyVStack(alignment: .leading, spacing: 24) {
                 coverHeader(live)
 
                 ForEach(orderedCamps) { camp in
                     StoryChapterCard(
                         camp: camp,
-                        photos: store.photos(forDay: camp.dayNumber, journeyID: live.id),
+                        photos: photosByDay[camp.dayNumber] ?? [],
                         dateLabel: Formatters.dayDate(dateStarted: live.dateStarted, dayNumber: camp.dayNumber),
                         isOwner: isOwner,
                         onNotesSave: { saveNotes($0, camp: camp) },
@@ -279,10 +286,15 @@ private struct StoryChapterCard: View {
                     isOwner: isOwner,
                     onNotesSave: onNotesSave,
                     onPhotoTap: { index in
-                        // The hero photo (shown above, outside the strip) occupies slot 0 in the
-                        // lightbox's day-photo list, so an index into `stripPhotos` needs +1 —
-                        // same adjustment the web `DayChapter.onPhotoClick` makes.
-                        onPhotoTap(photos, heroPhoto != nil ? index + 1 : index)
+                        // QUA-67: resolve the tapped photo by IDENTITY. This used to be
+                        // `heroPhoto != nil ? index + 1 : index`, which is only correct when the
+                        // hero is photos[0] — any "Set as cover" on a mid-day photo made every
+                        // strip tap before it open the WRONG photo (day [A,B,C(hero),D] →
+                        // strip [A,B,D]; tapping A opened B). The hero image above already
+                        // resolves by identity; the strip now matches it.
+                        guard let fullIndex = StoryPhotoIndexing.lightboxIndex(
+                            forStripIndex: index, strip: stripPhotos, all: photos) else { return }
+                        onPhotoTap(photos, fullIndex)
                     }
                 )
             }
@@ -325,6 +337,17 @@ private struct StoryChapterCard: View {
             guard let index = photos.firstIndex(where: { $0.id == photo.id }) else { return }
             onPhotoTap(photos, index)
         }
+    }
+}
+
+/// QUA-67: pure strip→lightbox index resolution, extracted so the off-by-one that shipped
+/// (`hero != nil ? index + 1 : index`, correct only when the hero is photos[0]) stays pinned by
+/// a unit test rather than re-fixable only by hand-testing taps.
+enum StoryPhotoIndexing {
+    static func lightboxIndex(forStripIndex index: Int, strip: [Photo], all: [Photo]) -> Int? {
+        guard strip.indices.contains(index) else { return nil }
+        let tapped = strip[index]
+        return all.firstIndex(where: { $0.id == tapped.id })
     }
 }
 

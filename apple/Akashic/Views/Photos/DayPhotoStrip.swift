@@ -16,7 +16,8 @@ struct DayPhotoStrip: View {
             VStack(alignment: .leading, spacing: 8) {
                 SectionLabel(icon: "📷", title: "Photos", trailing: "\(photos.count)")
                 ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 8) {
+                    // QUA-67: lazy — a 100-photo day fired 100 AsyncImages at once.
+                    LazyHStack(spacing: 8) {
                         if let onAdd {
                             Button(action: onAdd) { AddTile() }
                                 .buttonStyle(.plain)

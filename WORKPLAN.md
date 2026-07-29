@@ -5,17 +5,17 @@
 
 # Akashic — work ledger
 
-184 tasks · **48 open** (23 agent-doable, 16.3 dev-days · 25 owner-only, 10.6 dev-days) · 136 done · 0 dropped
+184 tasks · **47 open** (22 agent-doable, 16 dev-days · 25 owner-only, 10.6 dev-days) · 137 done · 0 dropped
 
 > **`dev-days` are a human-developer estimate, not agent time.** They came from the review
 > that produced these tasks and they are the right unit for deciding whether something is
 > worth doing — they are the wrong unit for predicting how long an agent will take, and
 > summing them as "work remaining" overstates it substantially.
 >
-> Measured so far: **130 agent tasks estimated at 80.8 dev-days**.
+> Measured so far: **131 agent tasks estimated at 81.1 dev-days**.
 > Elapsed time is deliberately absent: nothing here can support it. Use `git log` for that.
 >
-> 9 of the closed tasks were 2 dev-days or more, and 7.5 of the 16.3 remaining dev-days still sit in 3 such task(s): DIFF-18, DIFF-19, DIFF-20. Those turn on design judgement rather than localised edits, so do not assume the compression above holds.
+> 9 of the closed tasks were 2 dev-days or more, and 7.5 of the 16 remaining dev-days still sit in 3 such task(s): DIFF-18, DIFF-19, DIFF-20. Those turn on design judgement rather than localised edits, so do not assume the compression above holds.
 
 Read [CLAUDE.md](CLAUDE.md) before touching anything. To find work:
 
@@ -157,7 +157,7 @@ node scripts/workplan.mjs next
 
 > Tests, types, CI, localisation, accessibility. Localisation and accessibility are in v1.0 by decision.
 
-18 open of 96 · 5.5 d remaining
+17 open of 96 · 5.2 d remaining
 
 | | Task | Days | Who | Deps | Finish line |
 |---|---|---|---|---|---|
@@ -244,7 +244,7 @@ node scripts/workplan.mjs next
 | `x` | `QUA-66` **The signature day fly-in lands with its subject half-hidden behind the sheet** | 0.3 | agent | — | Day (and overview) camera framing accounts for the covered region: a pure MapGeoMath function takes the visible-rect fraction and biases the fitting camera so the day's bbox lands in the visible half (iPhone medium-detent bottom sheet) or the uncovered width (iPad 400pt left panel); MapMathTests pin the offset math; the fly-in visibly lands its subject. |
 | ` ` | `QUA-83` **iOS map has no photo clustering, and photo markers steal taps from camp badges — the unfixed iOS twin of the web's QUA-49** | 0.5 | agent | — | Geotagged photos cluster by screen-space proximity at the current camera distance into stack markers with a count badge (matching the web surface); camp badges keep tap precedence over photo markers (declared later / filtered within a clearance radius, mirroring the web decision); coincident camps (rest days) merge into one badge offering both days; a rendered-annotation cap bounds the overview; precedence and clustering are unit-tested like QUA-58 did for the web. |
 | ` ` | `QUA-84` **Camera flights are single linear interpolations and the idle globe spin is a 30 Hz main-thread timer that never rests** | 0.3 | agent | `QUA-66` | Transitions between distant targets use MapCameraKeyframeAnimator with a distance-dependent apex (rise–traverse–descend), built by a unit-tested MapGeoMath keyframe builder; the idle spin pauses when the Explore tab is hidden and stops on ANY gesture (including two-finger rotate); ideally the spin itself moves to a system-interpolated animation instead of 30 Hz cameraPosition assignments. |
-| ` ` | `QUA-67` **Story mode builds the whole journey eagerly, re-fetches all photos per day per body pass — and strip taps open the wrong photo when the cover is not first** | 0.3 | agent | — | Chapters render in a LazyVStack and DayPhotoStrip in a LazyHStack; the journey's photos are fetched once and sliced per chapter instead of one full Core Data fetch per day per body evaluation; the strip tap resolves the photo by IDENTITY (not index+1), fixing the off-by-one when a mid-day photo is the cover; the hero image is a real button for VoiceOver; a unit test pins the tap-index resolution. |
+| `x` | `QUA-67` **Story mode builds the whole journey eagerly, re-fetches all photos per day per body pass — and strip taps open the wrong photo when the cover is not first** | 0.3 | agent | — | Chapters render in a LazyVStack and DayPhotoStrip in a LazyHStack; the journey's photos are fetched once and sliced per chapter instead of one full Core Data fetch per day per body evaluation; the strip tap resolves the photo by IDENTITY (not index+1), fixing the off-by-one when a mid-day photo is the cover; the hero image is a real button for VoiceOver; a unit test pins the tap-index resolution. |
 | ` ` | `QUA-68` **The lightbox decodes full-resolution originals with no downsampling inside a non-lazy pager — jetsam risk on the most-used photo surface** | 0.3 | agent | — | Lightbox pages decode at bounded size (CGImageSource thumbnail at ~2× screen scale, orientation-honoured, off-main) with the full-res file used only for ShareLink and re-decode on deep zoom; pan offsets clamp to the scaled bounds; VideoPage gets the same failed-state + Retry treatment ResolvingImagePage already has; a unit test covers the downsample helper. |
 | `x` | `QUA-69` **Day clustering splits at midnight — the 00:30 aurora photo becomes its own 'day'** | 0.2 | agent | — | Photo-to-day bucketing applies an early-morning cutoff (photos before 04:00 join the previous day) in JourneyDraft.dayKey derivation; JourneyDraftTests pin the boundary (23:59, 00:30, 03:59, 04:00) and the derived date range no longer grows a spurious day from an after-midnight session. |
 | ` ` | `QUA-76` **No fetch indexes on the hot lookup columns — every id lookup and photo load is a table scan** | 0.2 | agent | — | A fifth model version adds fetch indexes on CDJourney.id, CDPhoto.id, CDPhoto.journeyId, CDPhoto.waypointId, CDWaypoint.id and CDDayComment.waypointId (index-only lightweight migration, no mapping); StoreMigrationTests prove a v4 store opens under v5. |

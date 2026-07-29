@@ -4867,7 +4867,7 @@
       "priority": 6,
       "deps": [],
       "track": "QUALITY",
-      "status": "TODO",
+      "status": "DONE",
       "owner": false,
       "title": "Story mode builds the whole journey eagerly, re-fetches all photos per day per body pass — and strip taps open the wrong photo when the cover is not first",
       "done_when": "Chapters render in a LazyVStack and DayPhotoStrip in a LazyHStack; the journey's photos are fetched once and sliced per chapter instead of one full Core Data fetch per day per body evaluation; the strip tap resolves the photo by IDENTITY (not index+1), fixing the off-by-one when a mid-day photo is the cover; the hero image is a real button for VoiceOver; a unit test pins the tap-index resolution.",
@@ -4880,7 +4880,34 @@
       "verify": [
         "cd apple && xcodegen generate",
         "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,name=iPhone 17 Pro\" CODE_SIGNING_ALLOWED=NO -only-testing:AkashicTests test > /tmp/qua67.log 2>&1 && grep -q \"with 1 test skipped and 0 failures\" /tmp/qua67.log"
-      ]
+      ],
+      "claim": {
+        "agent": "fable5-review",
+        "branch": "claude/project-review-code-ux-c5c48b",
+        "at": "2026-07-29"
+      },
+      "verification": {
+        "at": "2026-07-29T09:13:38.336Z",
+        "head": "65ff1d2",
+        "ran": [
+          {
+            "command": "cd apple && xcodegen generate",
+            "ok": true,
+            "ms": 92,
+            "status": 0,
+            "signal": null
+          },
+          {
+            "command": "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,name=iPhone 17 Pro\" CODE_SIGNING_ALLOWED=NO -only-testing:AkashicTests test > /tmp/qua67.log 2>&1 && grep -q \"with 1 test skipped and 0 failures\" /tmp/qua67.log",
+            "ok": true,
+            "ms": 11111,
+            "status": 0,
+            "signal": null
+          }
+        ],
+        "attested": []
+      },
+      "evidence": "Story body: ONE photosByDay fetch per evaluation (was 21 full fetches on a 20-day journey, re-run per note save), LazyVStack chapters, LazyHStack strip (was 100 AsyncImages at once on a 100-photo day). Strip tap resolves by identity via extracted pure StoryPhotoIndexing (the shipped +1 mapping opened the wrong photo whenever the cover was mid-day) — pinned by 3 unit tests incl. the exact [A,B,C(hero),D] case; hero tap already resolved by identity. Web checked: no equivalent off-by-one (only alt-text indexing). Suite 924 green."
     },
     {
       "id": "QUA-68",

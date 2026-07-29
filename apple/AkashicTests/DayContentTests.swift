@@ -222,3 +222,42 @@ final class DayContentTests: XCTestCase {
         XCTAssertEqual(grouped.unassigned.count, 1)
     }
 }
+
+/// QUA-67: the story strip's tap → lightbox index resolves by IDENTITY. The shipped mapping was
+/// `hero != nil ? index + 1 : index`, correct only when the cover photo is the day's first —
+/// 'Set as cover' on a mid-day photo made every strip tap before it open the WRONG photo.
+final class StoryPhotoIndexingTests: XCTestCase {
+
+    private func photo(_ id: String, hero: Bool = false, order: Int) -> Photo {
+        Photo(id: id, journeyId: "j", waypointId: nil, url: "u/\(id).jpg",
+              thumbnailURL: nil, caption: nil, coordinates: nil, takenAt: nil,
+              isHero: hero, sortOrder: order)
+    }
+
+    func testMidDayCoverPhotoNoLongerShiftsEveryEarlierTap() {
+        // Day [A, B, C(hero), D] → strip [A, B, D]. Tapping A must open A (index 0) —
+        // the old +1 mapping opened B.
+        let all = [photo("A", order: 0), photo("B", order: 1),
+                   photo("C", hero: true, order: 2), photo("D", order: 3)]
+        let strip = all.filter { $0.id != "C" }
+
+        XCTAssertEqual(StoryPhotoIndexing.lightboxIndex(forStripIndex: 0, strip: strip, all: all), 0,
+                       "tapping A opens A — the old mapping opened B")
+        XCTAssertEqual(StoryPhotoIndexing.lightboxIndex(forStripIndex: 1, strip: strip, all: all), 1)
+        XCTAssertEqual(StoryPhotoIndexing.lightboxIndex(forStripIndex: 2, strip: strip, all: all), 3,
+                       "D sits after the hero in the full list")
+    }
+
+    func testFirstPhotoAsCoverKeepsTheOldHappyPath() {
+        let all = [photo("A", hero: true, order: 0), photo("B", order: 1), photo("C", order: 2)]
+        let strip = Array(all.dropFirst())
+        XCTAssertEqual(StoryPhotoIndexing.lightboxIndex(forStripIndex: 0, strip: strip, all: all), 1)
+        XCTAssertEqual(StoryPhotoIndexing.lightboxIndex(forStripIndex: 1, strip: strip, all: all), 2)
+    }
+
+    func testOutOfBoundsAndUnknownAreNil() {
+        let all = [photo("A", order: 0)]
+        XCTAssertNil(StoryPhotoIndexing.lightboxIndex(forStripIndex: 5, strip: all, all: all))
+        XCTAssertNil(StoryPhotoIndexing.lightboxIndex(forStripIndex: 0, strip: all, all: []))
+    }
+}
