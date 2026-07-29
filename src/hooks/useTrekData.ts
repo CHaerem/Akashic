@@ -97,7 +97,14 @@ export function useTrekData(): UseTrekDataReturn {
         if (urlParamsProcessed.current || loading || treks.length === 0) return;
 
         const { journeySlug, day } = parseUrlParams();
-        if (!journeySlug) return;
+        // QUA-73: the ARRIVAL url is processed exactly once, match or not. Without marking the
+        // no-param case processed too, a later dependency change could re-run this effect after
+        // the user has navigated (the URL now carries QUA-73's synced params) and silently
+        // re-open a journey the user just left.
+        if (!journeySlug) {
+            urlParamsProcessed.current = true;
+            return;
+        }
 
         // QUA-72: EXACT id match (case-insensitive). This used to be `includes()` against both
         // id and name, which meant (a) `?journey=kilimanjaro` with kilimanjaro-2023 AND
@@ -141,6 +148,63 @@ export function useTrekData(): UseTrekDataReturn {
             setViewState(newView);
         });
     }, []);
+
+    // QUA-73: the URL and document.title FOLLOW the selection. parseUrlParams was read-once at
+    // load and nothing ever wrote back, so a visitor who found a journey and copied the address
+    // bar shared the bare globe; one who arrived on ?journey=X and browsed to Y shared X; and
+    // every tab/bookmark read the site slogan. Opening/leaving a journey pushes (so Back — the
+    // most common mobile gesture — navigates within the app instead of exiting the site); a day
+    // change only replaces, so scrubbing days does not bury history.
+    useEffect(() => {
+        const params = new URLSearchParams(window.location.search);
+        const beforeJourney = params.get('journey');
+        if (selectedTrek && view === 'trek') {
+            params.set('journey', selectedTrek.id);
+            if (selectedCamp) params.set('day', String(selectedCamp.dayNumber));
+            else params.delete('day');
+        } else {
+            params.delete('journey');
+            params.delete('day');
+        }
+        const after = params.toString();
+        const current = window.location.search.replace(/^\?/, '');
+        if (after !== current) {
+            const url = after ? `${window.location.pathname}?${after}` : window.location.pathname;
+            const journeyChanged = (selectedTrek && view === 'trek' ? selectedTrek.id : null) !== beforeJourney;
+            if (journeyChanged) {
+                window.history.pushState({ akashic: true }, '', url);
+            } else {
+                window.history.replaceState(window.history.state, '', url);
+            }
+        }
+        document.title = selectedTrek && view === 'trek'
+            ? `${selectedTrek.name} — Akashic`
+            : 'Akashic — Your treks on a living globe';
+    }, [selectedTrek, selectedCamp, view]);
+
+    // QUA-73: Back/forward drive the same state the URL now records.
+    useEffect(() => {
+        const onPopState = () => {
+            const params = new URLSearchParams(window.location.search);
+            const slug = params.get('journey');
+            if (!slug) {
+                setSelectedTrek(null);
+                setSelectedCamp(null);
+                setViewState('globe');
+                return;
+            }
+            const trek = treks.find(t => t.id.toLowerCase() === slug.toLowerCase());
+            if (!trek) return;
+            setSelectedTrek(trek);
+            setViewState('trek');
+            const dayRaw = params.get('day');
+            const day = dayRaw ? Number(dayRaw) : NaN;
+            const camps = trekDataMap[trek.id]?.camps ?? [];
+            setSelectedCamp(Number.isNaN(day) ? null : camps.find(c => c.dayNumber === day) ?? null);
+        };
+        window.addEventListener('popstate', onPopState);
+        return () => window.removeEventListener('popstate', onPopState);
+    }, [treks, trekDataMap]);
 
     // Get trek data for selected trek
     const trekData = selectedTrek ? trekDataMap[selectedTrek.id] || null : null;

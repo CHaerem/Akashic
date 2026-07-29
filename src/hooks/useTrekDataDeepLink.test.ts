@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { renderHook, waitFor } from '@testing-library/react';
+import { renderHook, waitFor, act } from '@testing-library/react';
 import { useTrekData } from './useTrekData';
 import type { TrekConfig } from '../types/trek';
 
@@ -81,5 +81,59 @@ describe('useTrekData ?journey= deep link (QUA-72)', () => {
         await waitFor(() => {
             expect(result.current.sharedLinkMiss).toBeNull();
         });
+    });
+});
+
+describe('useTrekData URL/title sync (QUA-73)', () => {
+    beforeEach(() => {
+        window.history.replaceState({}, '', '/');
+        document.title = 'Akashic — Your treks on a living globe';
+    });
+
+    it('writes ?journey= and the document title when a journey is opened', async () => {
+        const { result } = renderHook(() => useTrekData());
+
+        await act(async () => {
+            result.current.selectTrek(treks[0]);
+        });
+        await act(async () => {
+            result.current.handleExplore();
+        });
+
+        await waitFor(() => {
+            expect(window.location.search).toContain('journey=kilimanjaro-2023');
+        });
+        expect(document.title).toBe('Kilimanjaro — Akashic');
+    });
+
+    it('clears the params and title when returning to the globe', async () => {
+        const { result } = renderHook(() => useTrekData());
+        await act(async () => { result.current.selectTrek(treks[0]); });
+        await act(async () => { result.current.handleExplore(); });
+        await waitFor(() => expect(window.location.search).toContain('journey='));
+
+        await act(async () => { result.current.handleBackToGlobe(); });
+
+        await waitFor(() => expect(window.location.search).not.toContain('journey='));
+        expect(document.title).toBe('Akashic — Your treks on a living globe');
+    });
+
+    it('Back navigates within the app instead of leaving the site', async () => {
+        const { result } = renderHook(() => useTrekData());
+        await act(async () => { result.current.selectTrek(treks[0]); });
+        await act(async () => { result.current.handleExplore(); });
+        await waitFor(() => expect(window.location.search).toContain('journey=kilimanjaro-2023'));
+
+        // Simulate the browser Back gesture: history pops to the pre-journey URL and fires
+        // popstate — the hook must return to the globe rather than the site being exited.
+        await act(async () => {
+            window.history.replaceState({}, '', '/');
+            window.dispatchEvent(new PopStateEvent('popstate'));
+        });
+
+        await waitFor(() => {
+            expect(result.current.view).toBe('globe');
+        });
+        expect(result.current.selectedTrek).toBeNull();
     });
 });

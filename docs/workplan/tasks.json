@@ -5057,7 +5057,7 @@
       "priority": 5,
       "deps": [],
       "track": "QUALITY",
-      "status": "TODO",
+      "status": "DONE",
       "owner": false,
       "title": "Web: URL, history and document.title never track navigation — the share loop breaks after one hop and Back exits the site",
       "done_when": "Selecting a journey/day writes ?journey=<slug>&day=<n> via history state with a popstate listener so Back/forward navigate within the app; document.title reads \"<journey> — Akashic\" per selection; a copied address bar is always a correct share link; tests cover the param round-trip.",
@@ -5069,7 +5069,34 @@
       "verify": [
         "npx vitest --run > /tmp/qua73.log 2>&1 && grep -qE \"Test Files +[0-9]+ passed\" /tmp/qua73.log",
         "npm run typecheck"
-      ]
+      ],
+      "claim": {
+        "agent": "fable5-review",
+        "branch": "claude/project-review-code-ux-c5c48b",
+        "at": "2026-07-29"
+      },
+      "verification": {
+        "at": "2026-07-29T09:10:00.553Z",
+        "head": "5684bb7",
+        "ran": [
+          {
+            "command": "npx vitest --run > /tmp/qua73.log 2>&1 && grep -qE \"Test Files +[0-9]+ passed\" /tmp/qua73.log",
+            "ok": true,
+            "ms": 6111,
+            "status": 0,
+            "signal": null
+          },
+          {
+            "command": "npm run typecheck",
+            "ok": true,
+            "ms": 2610,
+            "status": 0,
+            "signal": null
+          }
+        ],
+        "attested": []
+      },
+      "evidence": "One sync effect writes ?journey=/&day= and document.title from selection state (push on journey open/close so Back navigates in-app; replace on day changes so scrubbing doesn't bury history); a popstate listener drives the same state back. The arrival URL is processed exactly once — found and fixed a real re-open edge where the auto-select effect could re-fire against QUA-73's own synced params. 3 new tests incl. the Back gesture; 691 web tests, typecheck and lint green."
     },
     {
       "id": "QUA-74",
