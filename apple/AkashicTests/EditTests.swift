@@ -265,3 +265,47 @@ final class EditTests: XCTestCase {
             route: .empty, camps: camps)
     }
 }
+
+/// QUA-68: the lightbox decodes at bounded size (the jetsam fix) and clamps pan to the scaled
+/// bounds. The decode helper is exercised against a real written image; the clamp is pure math.
+@MainActor
+final class LightboxBoundedDecodeTests: XCTestCase {
+
+    func testBoundedDecodeCapsTheLargestEdge() async throws {
+        // A 300×150 PNG decoded with a 100 px bound must come back ≤ 100 on its longest edge.
+        let size = CGSize(width: 300, height: 150)
+        let image = UIGraphicsImageRenderer(size: size).image { ctx in
+            UIColor.systemIndigo.setFill()
+            ctx.fill(CGRect(origin: .zero, size: size))
+        }
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("qua68-\(UUID().uuidString).png")
+        try image.pngData()!.write(to: url)
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let loaded = await BoundedImageLoader.load(url: url, maxPixelSize: 100)
+        let decoded = try XCTUnwrap(loaded)
+        XCTAssertLessThanOrEqual(max(decoded.size.width * decoded.scale,
+                                     decoded.size.height * decoded.scale), 100.5,
+                                 "the decode must be bounded — full-res decode is the jetsam")
+        let missing = await BoundedImageLoader.load(
+            url: FileManager.default.temporaryDirectory.appendingPathComponent("missing.png"))
+        XCTAssertNil(missing, "a missing file reports nil so the view can show its failure state")
+    }
+
+    func testPanClampKeepsAZoomedPhotoOnScreen() {
+        let container = CGSize(width: 400, height: 800)
+        // At 2× the photo overhangs by half a container per axis — beyond that is black void.
+        let clamped = LightboxImageMath.clampedPanOffset(CGSize(width: 5_000, height: -5_000),
+                                                         scale: 2, container: container)
+        XCTAssertEqual(clamped.width, 200)
+        XCTAssertEqual(clamped.height, -400)
+        // Inside the bounds passes through untouched.
+        let inside = LightboxImageMath.clampedPanOffset(CGSize(width: 50, height: -100),
+                                                        scale: 2, container: container)
+        XCTAssertEqual(inside, CGSize(width: 50, height: -100))
+        // At 1× there is no overhang — every offset snaps home.
+        XCTAssertEqual(LightboxImageMath.clampedPanOffset(CGSize(width: 30, height: 30),
+                                                          scale: 1, container: container), .zero)
+    }
+}

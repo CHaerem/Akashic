@@ -1,4 +1,6 @@
+import ImageIO
 import SwiftUI
+import UIKit
 import AVKit
 
 /// Reduce Transparency fallback for the lightbox's glass chrome buttons (both here and in
@@ -330,26 +332,37 @@ private struct ZoomableImage: View {
                 .scaleEffect(scale)
                 .offset(offset)
                 .gesture(magnify)
-                .simultaneousGesture(scale > 1 ? pan : nil)
+                .simultaneousGesture(scale > 1 ? pan(in: geo.size) : nil)
                 .onTapGesture(count: 2) { toggleZoom() }
                 .animation(.easeInOut(duration: 0.2), value: scale)
         }
     }
 
+    @State private var decoded: UIImage?
+    @State private var decodeFailed = false
+
     @ViewBuilder
     private var content: some View {
         if let url {
-            AsyncImage(url: url) { phase in
-                switch phase {
-                case let .success(image):
-                    image.resizable().scaledToFit()
-                case .failure:
+            Group {
+                if let decoded {
+                    Image(uiImage: decoded).resizable().scaledToFit()
+                } else if decodeFailed {
                     fallback(icon: "exclamationmark.triangle")
-                case .empty:
+                } else {
                     ProgressView().tint(.white)
-                @unknown default:
-                    fallback(icon: "photo")
                 }
+            }
+            // QUA-68: bounded decode instead of AsyncImage. AsyncImage decodes a local file at
+            // FULL native resolution — a 24 MP HEIC is ~96 MB decoded, 48 MP ~190 MB — inside a
+            // TabView(.page) that keeps neighbouring pages alive: several such bitmaps at once
+            // is a realistic jetsam on 3–4 GB devices. StoryPDFRenderer.downscaledImage chose
+            // CGImageSource thumbnails for exactly this reason; the lightbox now uses the same
+            // pattern, keeping the full-resolution file only for ShareLink.
+            .task(id: url) {
+                decodeFailed = false
+                decoded = await BoundedImageLoader.load(url: url)
+                if decoded == nil { decodeFailed = true }
             }
         } else {
             fallback(icon: "icloud.and.arrow.down")
@@ -374,13 +387,20 @@ private struct ZoomableImage: View {
             }
     }
 
-    private var pan: some Gesture {
+    private func pan(in container: CGSize) -> some Gesture {
         DragGesture()
             .onChanged { value in
                 offset = CGSize(width: lastOffset.width + value.translation.width,
                                 height: lastOffset.height + value.translation.height)
             }
-            .onEnded { _ in lastOffset = offset }
+            .onEnded { _ in
+                // QUA-68: snap back inside the scaled bounds — a zoomed photo could be dragged
+                // fully off-screen and "lost" behind black.
+                withAnimation(.easeOut(duration: 0.2)) {
+                    offset = LightboxImageMath.clampedPanOffset(offset, scale: scale, container: container)
+                }
+                lastOffset = offset
+            }
     }
 
     private func toggleZoom() {
@@ -404,6 +424,7 @@ private struct VideoPage: View {
     var fetcher: MediaFetcher?
     @State private var player: AVPlayer?
     @State private var isLoading = false
+    @State private var failed = false
 
     var body: some View {
         Group {
@@ -415,29 +436,97 @@ private struct VideoPage: View {
                     Color.black
                     if isLoading {
                         ProgressView().tint(.white)
+                    } else if failed {
+                        // QUA-68: parity with ResolvingImagePage. This used to settle on a bare
+                        // play.slash glyph over black, permanently, with no words, no retry and
+                        // no accessibility label — a family member on hotel Wi-Fi who tapped a
+                        // video hit a dead end while the image path had a labelled Retry pill.
+                        VStack(spacing: 14) {
+                            Image(systemName: "play.slash")
+                                .font(.largeTitle)
+                                .foregroundStyle(.white.opacity(0.4))
+                                .accessibilityHidden(true)
+                            Button {
+                                Task { await load() }
+                            } label: {
+                                Label("Retry", systemImage: "arrow.clockwise")
+                                    .font(.footnote.weight(.semibold))
+                                    .foregroundStyle(.white)
+                                    .padding(.horizontal, 14).padding(.vertical, 8)
+                                    .themedMaterial(Capsule(), opaqueFill: lightboxChromeOpaqueFill)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                        .accessibilityElement(children: .contain)
+                        .accessibilityLabel("The video could not load")
                     } else {
                         Image(systemName: "play.slash")
                             .font(.largeTitle)
                             .foregroundStyle(.white.opacity(0.4))
+                            .accessibilityLabel("Video unavailable")
                     }
                 }
             }
         }
         // v2: the video original may live on a PhotoMedia record — resolve it on demand before
         // building the player (a local hit returns immediately with no download).
-        .task(id: photo.id) {
-            guard player == nil else { return }
-            if let url = photo.originalFileURL {
-                player = AVPlayer(url: url)
-                return
-            }
-            guard let fetcher else { return }
-            isLoading = true
-            defer { isLoading = false }
-            if let url = try? await fetcher.originalURL(for: photo) {
-                player = AVPlayer(url: url)
-            }
-        }
+        .task(id: photo.id) { await load() }
         .onDisappear { player?.pause() }
+    }
+
+    private func load() async {
+        guard player == nil else { return }
+        failed = false
+        if let url = photo.originalFileURL {
+            player = AVPlayer(url: url)
+            return
+        }
+        guard let fetcher else { return }
+        isLoading = true
+        defer { isLoading = false }
+        do {
+            let url = try await fetcher.originalURL(for: photo)
+            player = AVPlayer(url: url)
+        } catch {
+            failed = true
+        }
+    }
+}
+
+// MARK: - Bounded decode + pan math (QUA-68)
+
+/// Pure pan-clamp math, extracted for unit tests: at `scale`, a fitted image overhangs the
+/// container by `(scale − 1) × side / 2` per edge — offsets beyond that show only black.
+enum LightboxImageMath {
+    static func clampedPanOffset(_ offset: CGSize, scale: CGFloat, container: CGSize) -> CGSize {
+        let maxX = max(0, (scale - 1) * container.width / 2)
+        let maxY = max(0, (scale - 1) * container.height / 2)
+        return CGSize(width: min(max(offset.width, -maxX), maxX),
+                      height: min(max(offset.height, -maxY), maxY))
+    }
+}
+
+/// QUA-68: decode a local image at bounded pixel size, off the main actor.
+/// `kCGImageSourceCreateThumbnailWithTransform` honours EXIF orientation, matching what
+/// `AsyncImage` displayed; the app's own stored display `rotation` is applied by the view.
+enum BoundedImageLoader {
+    /// Sharp through 2× of the double-tap zoom on the largest current screens, hard-capped so a
+    /// 48 MP original decodes to ≤ ~16 MP (~64 MB RGBA) instead of ~190 MB.
+    static let maxPixelSize: CGFloat = 4096
+
+    static func load(url: URL, maxPixelSize: CGFloat = BoundedImageLoader.maxPixelSize) async -> UIImage? {
+        let boxed = url
+        return await Task.detached(priority: .userInitiated) {
+            let sourceOptions = [kCGImageSourceShouldCache: false] as CFDictionary
+            guard let source = CGImageSourceCreateWithURL(boxed as CFURL, sourceOptions) else { return nil }
+            let options = [
+                kCGImageSourceCreateThumbnailFromImageAlways: true,
+                kCGImageSourceCreateThumbnailWithTransform: true,
+                kCGImageSourceShouldCacheImmediately: true,
+                kCGImageSourceThumbnailMaxPixelSize: maxPixelSize,
+            ] as CFDictionary
+            guard let cg = CGImageSourceCreateThumbnailAtIndex(source, 0, options) else { return nil }
+            return UIImage(cgImage: cg)
+        }.value
     }
 }

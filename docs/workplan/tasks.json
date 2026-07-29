@@ -4915,7 +4915,7 @@
       "priority": 6,
       "deps": [],
       "track": "QUALITY",
-      "status": "TODO",
+      "status": "DONE",
       "owner": false,
       "title": "The lightbox decodes full-resolution originals with no downsampling inside a non-lazy pager — jetsam risk on the most-used photo surface",
       "done_when": "Lightbox pages decode at bounded size (CGImageSource thumbnail at ~2× screen scale, orientation-honoured, off-main) with the full-res file used only for ShareLink and re-decode on deep zoom; pan offsets clamp to the scaled bounds; VideoPage gets the same failed-state + Retry treatment ResolvingImagePage already has; a unit test covers the downsample helper.",
@@ -4927,7 +4927,34 @@
       "verify": [
         "cd apple && xcodegen generate",
         "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,name=iPhone 17 Pro\" CODE_SIGNING_ALLOWED=NO -only-testing:AkashicTests test > /tmp/qua68.log 2>&1 && grep -q \"with 1 test skipped and 0 failures\" /tmp/qua68.log"
-      ]
+      ],
+      "claim": {
+        "agent": "fable5-review",
+        "branch": "claude/project-review-code-ux-c5c48b",
+        "at": "2026-07-29"
+      },
+      "verification": {
+        "at": "2026-07-29T09:18:07.952Z",
+        "head": "7efc8f4",
+        "ran": [
+          {
+            "command": "cd apple && xcodegen generate",
+            "ok": true,
+            "ms": 86,
+            "status": 0,
+            "signal": null
+          },
+          {
+            "command": "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,name=iPhone 17 Pro\" CODE_SIGNING_ALLOWED=NO -only-testing:AkashicTests test > /tmp/qua68.log 2>&1 && grep -q \"with 1 test skipped and 0 failures\" /tmp/qua68.log",
+            "ok": true,
+            "ms": 13098,
+            "status": 0,
+            "signal": null
+          }
+        ],
+        "attested": []
+      },
+      "evidence": "ZoomableImage decodes via BoundedImageLoader (CGImageSource thumbnail, EXIF transform, 4096px hard cap — a 48MP original decodes to ~16MP/~64MB instead of ~190MB, off-main) with a failure state; pan snaps back inside the scaled bounds via pure LightboxImageMath (unit-tested); VideoPage gets ResolvingImagePage's failed-state + labelled Retry parity (was a dead play.slash glyph). Decode test runs against a real written PNG (300x150 @ bound 100 => longest edge <= 100). Suite 926 green."
     },
     {
       "id": "QUA-69",
