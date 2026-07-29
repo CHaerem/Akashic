@@ -55,8 +55,13 @@ enum JourneyQuery {
             filtered = filtered.filter { $0.country.range(of: country, options: .caseInsensitive) != nil }
         }
 
-        // MCP's count query ignores the country filter and pagination.
-        let total = journeys.count
+        // QUA-70: `total`/`hasMore` count the FILTERED set. They used to count ALL journeys "to
+        // mirror the MCP Worker, whose count query ignores the country filter" — but that Worker
+        // was deleted (LEG-01/LEG-12), this file became the only definition, and the preserved
+        // quirk was just wrong pagination metadata: filter by country and `hasMore` could be true
+        // with nothing more to fetch. Deliberate divergence from the dead Worker, per the
+        // tombstone convention.
+        let total = filtered.count
 
         let page = Array(filtered.dropFirst(off).prefix(clamped))
         let items = page.map(listItem(from:))
@@ -124,15 +129,41 @@ enum JourneyQuery {
 
     // MARK: get_journey_photos
 
-    static func photos(_ journeys: [Journey], idOrSlug: String, waypointId: String?, limit: Int?) -> Outcome<JourneyPhotosResult> {
+    /// QUA-70: this was a fixtures-era stub that ALWAYS answered `photos: [], total: 0` — with
+    /// `waypointId` and `limit` parsed and discarded — long after import and sync landed. The
+    /// intent is exposed to Siri/Shortcuts with phrases, so a customer with a 939-photo journey
+    /// was confidently told "no photos", and Shortcuts automations silently got empty JSON.
+    /// Photos arrive through a provider closure so the function stays pure and fixture-testable.
+    static func photos(_ journeys: [Journey],
+                       photosForJourney: (String) -> [Photo],
+                       idOrSlug: String, waypointId: String?, limit: Int?) -> Outcome<JourneyPhotosResult> {
         guard !idOrSlug.isEmpty else { return .failure("journey_id is required") }
-        guard JourneyResolver.resolve(idOrSlug, in: journeys) != nil else {
+        guard let journey = JourneyResolver.resolve(idOrSlug, in: journeys) else {
             return .failure("Journey not found: \(idOrSlug)")
         }
-        _ = clampedLimit(limit, default: 50, max: 200)
-        // Fixtures carry no photos; the photo pipeline arrives with Phase 2 import (see README).
-        // The journey still resolves so bad ids surface "Journey not found" identically.
-        return .success(JourneyPhotosResult(photos: [], total: 0))
+        let clamped = clampedLimit(limit, default: 50, max: 200)
+        var photos = photosForJourney(journey.id).sorted { $0.sortOrder < $1.sortOrder }
+        if let waypointId, !waypointId.isEmpty {
+            photos = photos.filter { $0.waypointId == waypointId }
+        }
+        // `total` counts the FILTERED set — the metadata must describe the list it ships with
+        // (see `list()`'s corrected pagination note).
+        let total = photos.count
+        let page = Array(photos.prefix(clamped)).map(mcpPhoto(from:))
+        return .success(JourneyPhotosResult(photos: page, total: total))
+    }
+
+    static func mcpPhoto(from photo: Photo) -> MCPPhoto {
+        MCPPhoto(id: photo.id,
+                 journeyId: photo.journeyId,
+                 waypointId: photo.waypointId,
+                 url: photo.url,
+                 thumbnailURL: photo.thumbnailURL,
+                 caption: photo.caption,
+                 coordinates: photo.coordinates,
+                 takenAt: photo.takenAt,
+                 isHero: photo.isHero,
+                 sortOrder: photo.sortOrder)
     }
 
     // MARK: - Mapping helpers

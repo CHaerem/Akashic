@@ -4483,7 +4483,7 @@
       "priority": 5,
       "deps": [],
       "track": "QUALITY",
-      "status": "TODO",
+      "status": "DONE",
       "owner": false,
       "title": "Get Journey Photos is a fixtures-era stub: Siri/Shortcuts confidently answer 'no photos' against a 939-photo archive",
       "done_when": "GetJourneyPhotosIntent resolves the journey, loads its photos through the persistence layer, applies the waypointId filter and the already-computed limit clamp, and returns real results; IntentQueryTests cover the wired path.",
@@ -4495,7 +4495,34 @@
       "verify": [
         "cd apple && xcodegen generate",
         "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,name=iPhone 17 Pro\" CODE_SIGNING_ALLOWED=NO -only-testing:AkashicTests test > /tmp/qua70.log 2>&1 && grep -q \"with 1 test skipped and 0 failures\" /tmp/qua70.log"
-      ]
+      ],
+      "claim": {
+        "agent": "fable5-review",
+        "branch": "claude/project-review-code-ux-c5c48b",
+        "at": "2026-07-29"
+      },
+      "verification": {
+        "at": "2026-07-29T08:34:40.585Z",
+        "head": "00b23b8",
+        "ran": [
+          {
+            "command": "cd apple && xcodegen generate",
+            "ok": true,
+            "ms": 100,
+            "status": 0,
+            "signal": null
+          },
+          {
+            "command": "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,name=iPhone 17 Pro\" CODE_SIGNING_ALLOWED=NO -only-testing:AkashicTests test > /tmp/qua70.log 2>&1 && grep -q \"with 1 test skipped and 0 failures\" /tmp/qua70.log",
+            "ok": true,
+            "ms": 14519,
+            "status": 0,
+            "signal": null
+          }
+        ],
+        "attested": []
+      },
+      "evidence": "get_journey_photos wired: photos flow through a provider closure (store passes photos(forJourneyID:)), sorted by sortOrder, waypointId filter and limit clamp actually applied, total describes the filtered set. list()'s total/hasMore corrected over the filtered set (the preserved dead-Worker quirk — the old test pinning it rewritten to pin the honest contract). Falsifiability by mutation: restoring the stub => 7 assertion failures; suite 911 green."
     },
     {
       "id": "QUA-71",

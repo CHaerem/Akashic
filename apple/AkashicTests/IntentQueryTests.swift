@@ -58,11 +58,16 @@ final class IntentQueryTests: XCTestCase {
         XCTAssertEqual(secondPage.total, 150)
     }
 
-    func testListCountryFilterDoesNotAffectTotal() throws {
+    func testListCountryFilterDrivesTotalAndHasMore() throws {
+        // QUA-70: this test used to pin the OPPOSITE — "total mirrors MCP: ignores the country
+        // filter" — preserving a quirk of the deleted Worker (LEG-01/LEG-12). With the Worker
+        // gone this file is the only definition, and pagination metadata must describe the list
+        // it ships with: filtered by country, total is the filtered count and hasMore is honest.
         let result = JourneyQuery.list(try fixtures(), limit: 20, offset: 0, country: "tanzania")
         XCTAssertEqual(result.journeys.count, 1, "only Kilimanjaro is in Tanzania")
         XCTAssertEqual(result.journeys.first?.slug, "kilimanjaro")
-        XCTAssertEqual(result.total, 3, "total mirrors MCP: ignores the country filter")
+        XCTAssertEqual(result.total, 1, "total counts the filtered set, not all journeys")
+        XCTAssertFalse(result.hasMore, "one match, one returned — nothing more to fetch")
     }
 
     // MARK: - search
@@ -137,11 +142,59 @@ final class IntentQueryTests: XCTestCase {
 
     func testPhotosEmptyAndNotFound() throws {
         let journeys = try fixtures()
-        // Fixtures carry no photos → correct empty shape.
-        XCTAssertEqual(JourneyQuery.photos(journeys, idOrSlug: "kilimanjaro", waypointId: nil, limit: 50),
+        // A journey with no photos → correct empty shape.
+        XCTAssertEqual(JourneyQuery.photos(journeys, photosForJourney: { _ in [] },
+                                           idOrSlug: "kilimanjaro", waypointId: nil, limit: 50),
                        .success(JourneyPhotosResult(photos: [], total: 0)))
         // Bad id still resolves to the MCP not-found message.
-        XCTAssertEqual(JourneyQuery.photos(journeys, idOrSlug: "nope", waypointId: nil, limit: 50),
+        XCTAssertEqual(JourneyQuery.photos(journeys, photosForJourney: { _ in [] },
+                                           idOrSlug: "nope", waypointId: nil, limit: 50),
                        .failure("Journey not found: nope"))
+    }
+
+    // QUA-70: the query was a fixtures-era stub that ALWAYS returned `photos: [], total: 0`,
+    // with waypointId and limit parsed and discarded — shipped to Siri/Shortcuts. These pin the
+    // wired behaviour: real photos flow through, the waypoint filter filters, the limit clamps,
+    // and `total` describes the filtered set.
+    func testPhotosReturnsRealPhotosFilteredAndClamped() throws {
+        let journeys = try fixtures()
+        guard let journey = journeys.first(where: { $0.slug == "kilimanjaro" }) else {
+            return XCTFail("fixture journey missing")
+        }
+        func photo(_ n: Int, waypoint: String?) -> Photo {
+            Photo(id: "p\(n)", journeyId: journey.id, waypointId: waypoint,
+                  url: "journeys/\(journey.id)/photos/p\(n).jpg",
+                  thumbnailURL: nil, caption: nil, coordinates: nil, takenAt: nil,
+                  isHero: n == 1, sortOrder: n)
+        }
+        let bank = [photo(3, waypoint: "w2"), photo(1, waypoint: "w1"), photo(2, waypoint: "w1")]
+
+        // All photos, sorted by sortOrder.
+        guard case .success(let all) = JourneyQuery.photos(
+            journeys, photosForJourney: { _ in bank },
+            idOrSlug: "kilimanjaro", waypointId: nil, limit: 50) else {
+            return XCTFail("expected success")
+        }
+        XCTAssertEqual(all.total, 3)
+        XCTAssertEqual(all.photos.map(\.id), ["p1", "p2", "p3"], "sorted by sortOrder")
+        XCTAssertEqual(all.photos.first?.isHero, true)
+
+        // Waypoint filter: total describes the FILTERED set.
+        guard case .success(let filtered) = JourneyQuery.photos(
+            journeys, photosForJourney: { _ in bank },
+            idOrSlug: "kilimanjaro", waypointId: "w1", limit: 50) else {
+            return XCTFail("expected success")
+        }
+        XCTAssertEqual(filtered.total, 2)
+        XCTAssertEqual(filtered.photos.map(\.id), ["p1", "p2"])
+
+        // Limit clamps the page but not the total.
+        guard case .success(let paged) = JourneyQuery.photos(
+            journeys, photosForJourney: { _ in bank },
+            idOrSlug: "kilimanjaro", waypointId: nil, limit: 2) else {
+            return XCTFail("expected success")
+        }
+        XCTAssertEqual(paged.photos.count, 2)
+        XCTAssertEqual(paged.total, 3)
     }
 }

@@ -25,7 +25,11 @@ extension JourneyStore {
     }
 
     func photosOutcome(idOrSlug: String, waypointId: String?, limit: Int?) -> JourneyQuery.Outcome<JourneyPhotosResult> {
-        JourneyQuery.photos(journeys, idOrSlug: idOrSlug, waypointId: waypointId, limit: limit)
+        // QUA-70: real photos from the persistence layer — the query was a fixtures-era stub
+        // that answered "no photos" for every journey, shipped to Siri/Shortcuts.
+        JourneyQuery.photos(journeys,
+                            photosForJourney: { photos(forJourneyID: $0) },
+                            idOrSlug: idOrSlug, waypointId: waypointId, limit: limit)
     }
 }
 
