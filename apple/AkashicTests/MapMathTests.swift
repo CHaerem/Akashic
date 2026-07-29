@@ -180,3 +180,63 @@ final class MapMathTests: XCTestCase {
         XCTAssertEqual(TrekCameraController.maxObliquePitch, 35, accuracy: 0.001)
     }
 }
+
+/// QUA-66: the day fly-in must land its subject in the region the day sheet leaves visible.
+/// `fittingCamera` used to centre the bbox at SCREEN centre while the medium-detent sheet covered
+/// the lower half (iPhone) or the 400pt panel the leading edge (iPad) — the signature interaction
+/// hid its own subject. The bias is pure math: widen the distance for the visible remainder and
+/// walk the centre toward the covered edge (screen-bottom = reverse bearing; leading = heading−90°).
+final class SheetAwareFramingTests: XCTestCase {
+
+    private let leg = [
+        CLLocationCoordinate2D(latitude: -3.10, longitude: 37.20),
+        CLLocationCoordinate2D(latitude: -3.05, longitude: 37.30),
+    ]
+
+    func testNoCoverIsByteForByteTheOldFraming() {
+        let old = MapGeoMath.fittingCamera(coords: leg, pitch: 35, heading: 0,
+                                           fitFactor: 2.0, minDistance: 2_800)
+        let new = MapGeoMath.fittingCamera(coords: leg, pitch: 35, heading: 0,
+                                           fitFactor: 2.0, minDistance: 2_800, covered: .none)
+        XCTAssertEqual(old.centerCoordinate.latitude, new.centerCoordinate.latitude)
+        XCTAssertEqual(old.centerCoordinate.longitude, new.centerCoordinate.longitude)
+        XCTAssertEqual(old.centerCoordinateDistance, new.centerCoordinateDistance)
+    }
+
+    func testBottomCoverWalksTheCentreTowardTheViewerAndWidens() {
+        let base = MapGeoMath.fittingCamera(coords: leg, pitch: 35, heading: 0,
+                                            fitFactor: 2.0, minDistance: 2_800)
+        let biased = MapGeoMath.fittingCamera(coords: leg, pitch: 35, heading: 0,
+                                              fitFactor: 2.0, minDistance: 2_800,
+                                              covered: .bottom(fraction: 0.45))
+        // Heading 0 looks north; screen-bottom is south — the centre moves south so the leg
+        // slides up into the visible top half.
+        XCTAssertLessThan(biased.centerCoordinate.latitude, base.centerCoordinate.latitude)
+        XCTAssertEqual(biased.centerCoordinate.longitude, base.centerCoordinate.longitude, accuracy: 1e-9)
+        XCTAssertGreaterThan(biased.centerCoordinateDistance, base.centerCoordinateDistance,
+                             "the subject must fit the visible remainder, so the camera widens")
+    }
+
+    func testLeadingCoverWalksTheCentreLeftOfTheHeading() {
+        let base = MapGeoMath.fittingCamera(coords: leg, pitch: 35, heading: 90,
+                                            fitFactor: 2.0, minDistance: 2_800)
+        let biased = MapGeoMath.fittingCamera(coords: leg, pitch: 35, heading: 90,
+                                              fitFactor: 2.0, minDistance: 2_800,
+                                              covered: .leading(fraction: 0.35))
+        // Heading 90 looks east; screen-left is north — the centre moves north so the leg
+        // slides toward the uncovered trailing side.
+        XCTAssertGreaterThan(biased.centerCoordinate.latitude, base.centerCoordinate.latitude)
+        XCTAssertGreaterThan(biased.centerCoordinateDistance, base.centerCoordinateDistance)
+    }
+
+    func testGreatCircleStepMatchesCLLocationDistance() {
+        let origin = CLLocationCoordinate2D(latitude: 61.6, longitude: 8.3)
+        let stepped = MapGeoMath.coordinate(from: origin, bearingDegrees: 137, distanceMeters: 12_000)
+        let measured = CLLocation(latitude: origin.latitude, longitude: origin.longitude)
+            .distance(from: CLLocation(latitude: stepped.latitude, longitude: stepped.longitude))
+        // Measured: the spherical step differs from CLLocation's ellipsoidal distance by ~35 m
+        // over 12 km at 61.6°N (0.3%) — far inside a pixel at camera-offset scales.
+        XCTAssertEqual(measured, 12_000, accuracy: 60,
+                       "spherical step within ellipsoid tolerance at camera-offset scales")
+    }
+}

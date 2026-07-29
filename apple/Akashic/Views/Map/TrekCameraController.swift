@@ -44,6 +44,16 @@ final class TrekCameraController: ObservableObject {
     private(set) var reduceMotion = false
 
     /// Called by the view whenever the environment's Reduce Motion value is known or changes.
+    /// QUA-66: the screen region the day sheet/panel will cover when a day is selected —
+    /// pushed in by the hosting view per size class (medium-detent bottom sheet on compact,
+    /// 400pt leading panel on regular), exactly like `setReduceMotion` pushes its value.
+    /// Applied to DAY framing only: the overview presents no covering sheet.
+    private(set) var dayVisibleCover: MapGeoMath.CoveredEdge = .none
+
+    func setDayVisibleCover(_ cover: MapGeoMath.CoveredEdge) {
+        dayVisibleCover = cover
+    }
+
     func setReduceMotion(_ enabled: Bool) {
         guard enabled != reduceMotion else { return }
         reduceMotion = enabled
@@ -144,7 +154,9 @@ final class TrekCameraController: ObservableObject {
             pitch: Self.maxObliquePitch,
             heading: heading,
             fitFactor: 2.0,
-            minDistance: 2_800
+            minDistance: 2_800,
+            // QUA-66: land the leg in the half the day sheet leaves visible.
+            covered: dayVisibleCover
         )
     }
 

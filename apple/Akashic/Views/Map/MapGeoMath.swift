@@ -197,13 +197,63 @@ enum MapGeoMath {
                               pitch: Double,
                               heading: Double,
                               fitFactor: Double,
-                              minDistance: CLLocationDistance) -> MKMapCamera {
+                              minDistance: CLLocationDistance,
+                              covered: CoveredEdge = .none) -> MKMapCamera {
         let box = bbox(of: coords)
+        var center = box.center
+        var distance = max(box.maxSpanMeters * fitFactor, minDistance)
+
+        // QUA-66: bias for the part of the screen the presented chrome covers. The day fly-in
+        // used to fit its leg for the FULL viewport while selecting a day simultaneously presents
+        // the day sheet at .medium (iPhone, lower half) or the 400pt panel (iPad, leading edge) —
+        // so the choreographed landing shot ended with the selected camp behind the sheet: the
+        // signature interaction hid its own subject. The bias is two moves: widen the distance so
+        // the subject fits the visible remainder, and walk the centre TOWARD the covered edge so
+        // the subject slides into the uncovered half. Screen-bottom on a heading-rotated camera is
+        // the reverse bearing; screen-leading is heading − 90°.
+        switch covered {
+        case .none:
+            break
+        case .bottom(let fraction):
+            let f = min(max(fraction, 0), 0.6)
+            distance /= max(1 - f, 0.4)
+            center = coordinate(from: center, bearingDegrees: heading + 180, distanceMeters: distance * f / 2)
+        case .leading(let fraction):
+            let f = min(max(fraction, 0), 0.6)
+            distance /= max(1 - f, 0.4)
+            center = coordinate(from: center, bearingDegrees: heading - 90, distanceMeters: distance * f / 2)
+        }
+
         let cam = MKMapCamera()
-        cam.centerCoordinate = box.center
-        cam.centerCoordinateDistance = max(box.maxSpanMeters * fitFactor, minDistance)
+        cam.centerCoordinate = center
+        cam.centerCoordinateDistance = distance
         cam.pitch = pitch
         cam.heading = heading
         return cam
+    }
+
+    /// QUA-66: which screen edge presented chrome covers, as a fraction of the viewport.
+    /// `Equatable` so hosts can push it on size-class changes without redundant work.
+    enum CoveredEdge: Equatable {
+        case none
+        case bottom(fraction: Double)
+        case leading(fraction: Double)
+    }
+
+    /// Great-circle destination point: `distanceMeters` from `origin` along `bearingDegrees`.
+    /// Pure spherical math (mean Earth radius), unit-tested — precision at camera-offset scales
+    /// (kilometres) is far inside a pixel.
+    static func coordinate(from origin: CLLocationCoordinate2D,
+                           bearingDegrees: Double,
+                           distanceMeters: Double) -> CLLocationCoordinate2D {
+        let radius = 6_371_000.0
+        let bearing = bearingDegrees * .pi / 180
+        let lat1 = origin.latitude * .pi / 180
+        let lon1 = origin.longitude * .pi / 180
+        let angular = distanceMeters / radius
+        let lat2 = asin(sin(lat1) * cos(angular) + cos(lat1) * sin(angular) * cos(bearing))
+        let lon2 = lon1 + atan2(sin(bearing) * sin(angular) * cos(lat1),
+                                cos(angular) - sin(lat1) * sin(lat2))
+        return CLLocationCoordinate2D(latitude: lat2 * 180 / .pi, longitude: lon2 * 180 / .pi)
     }
 }

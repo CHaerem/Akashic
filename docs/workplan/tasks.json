@@ -4630,7 +4630,7 @@
       "priority": 6,
       "deps": [],
       "track": "QUALITY",
-      "status": "TODO",
+      "status": "DONE",
       "owner": false,
       "title": "The signature day fly-in lands with its subject half-hidden behind the sheet",
       "done_when": "Day (and overview) camera framing accounts for the covered region: a pure MapGeoMath function takes the visible-rect fraction and biases the fitting camera so the day's bbox lands in the visible half (iPhone medium-detent bottom sheet) or the uncovered width (iPad 400pt left panel); MapMathTests pin the offset math; the fly-in visibly lands its subject.",
@@ -4644,7 +4644,34 @@
       "verify": [
         "cd apple && xcodegen generate",
         "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,name=iPhone 17 Pro\" CODE_SIGNING_ALLOWED=NO -only-testing:AkashicTests test > /tmp/qua66.log 2>&1 && grep -q \"with 1 test skipped and 0 failures\" /tmp/qua66.log"
-      ]
+      ],
+      "claim": {
+        "agent": "fable5-review",
+        "branch": "claude/project-review-code-ux-c5c48b",
+        "at": "2026-07-29"
+      },
+      "verification": {
+        "at": "2026-07-29T09:01:53.331Z",
+        "head": "d654cb8",
+        "ran": [
+          {
+            "command": "cd apple && xcodegen generate",
+            "ok": true,
+            "ms": 88,
+            "status": 0,
+            "signal": null
+          },
+          {
+            "command": "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,name=iPhone 17 Pro\" CODE_SIGNING_ALLOWED=NO -only-testing:AkashicTests test > /tmp/qua66.log 2>&1 && grep -q \"with 1 test skipped and 0 failures\" /tmp/qua66.log",
+            "ok": true,
+            "ms": 10918,
+            "status": 0,
+            "signal": null
+          }
+        ],
+        "attested": []
+      },
+      "evidence": "fittingCamera takes CoveredEdge (default .none — byte-for-byte the old framing, pinned by test): widens distance for the visible remainder and walks the centre toward the covered edge via a great-circle step (validated against CLLocation within 0.3%). dayCamera passes the host-supplied cover (bottom 45% compact / leading 35% regular, updated on size-class change). Falsifiability by mutation: disabling the bias => 4/4 SheetAwareFramingTests red. Suite 921 green."
     },
     {
       "id": "QUA-83",

@@ -129,6 +129,11 @@ struct GlobeExperienceView: View {
         .onAppear {
             controller.configure(journeys: store.journeys)
             controller.setReduceMotion(reduceMotion)
+            // QUA-66: tell the camera what the day sheet will cover, so the fly-in lands its
+            // subject in the visible region — medium detent ≈ the lower 45% on compact, the
+            // regularDayPanel ≈ the leading 35% on regular.
+            controller.setDayVisibleCover(isRegularWidth ? .leading(fraction: 0.35)
+                                                         : .bottom(fraction: 0.45))
             guard !didApplyLaunch else { return }
             didApplyLaunch = true
             controller.applyLaunchScene()
@@ -140,6 +145,11 @@ struct GlobeExperienceView: View {
         }
         .onChange(of: reduceMotion) { _, newValue in
             controller.setReduceMotion(newValue)
+        }
+        .onChange(of: isRegularWidth) { _, regular in
+            // QUA-66: size class flips on iPad multitasking/rotation; keep the cover honest.
+            controller.setDayVisibleCover(regular ? .leading(fraction: 0.35)
+                                                  : .bottom(fraction: 0.45))
         }
         .onChange(of: controller.selectedJourneyID) { _, _ in
             loadPhotos(for: controller.selectedJourney)
