@@ -215,3 +215,78 @@ final class DeleteJourneyTests: XCTestCase {
         XCTAssertNil(store.journey(withID: journey.id), "the journey is gone from the store's published snapshot")
     }
 }
+
+/// QUA-63: nothing irreversible may happen until the local commit has succeeded, and a failed
+/// save must be reported — not swallowed. The failure is injected through the DEBUG-only
+/// `nextSaveErrorForTesting` seam, because a genuine `save()` throw is not constructible here:
+/// every model attribute is optional (no validation error exists), the view context's merge
+/// policy resolves constraint conflicts instead of throwing, and SQLite keeps honouring file
+/// descriptors opened before a chmod. Falsifiability is proven by mutation instead of `prove`
+/// (the seam is a new symbol): swallowing the failure inside `saveOrRollback` turns every
+/// assertion here red — receipt in the ledger evidence.
+@MainActor
+final class WriteFailureHonestyTests: XCTestCase {
+
+    private var bundle: Bundle { Bundle(for: type(of: self)) }
+
+    private enum Poison: Error { case forcedSaveFailure }
+
+    private func seededController() throws -> (PersistenceController, Journey) {
+        let controller = PersistenceController(mode: .fixtures, seed: false, fixtureBundle: bundle)
+        let journey = try FixtureLoader.load(named: "kilimanjaro", bundle: bundle)
+        CoreDataMapping.upsertJourney(journey, into: controller.viewContext)
+        try controller.viewContext.save()
+        return (controller, journey)
+    }
+
+    func testDeleteJourneyOnAFailedSaveKeepsEveryRowAndReportsFalse() throws {
+        let (controller, journey) = try seededController()
+
+        controller.nextSaveErrorForTesting = Poison.forcedSaveFailure
+        let result = controller.deleteJourney(id: journey.id)
+
+        XCTAssertFalse(result, "a failed local commit must be reported, not swallowed")
+        XCTAssertNotNil(
+            controller.loadJourneys().first { $0.id == journey.id },
+            "the journey must survive a failed delete — rows pointing at destroyed data is the old defect")
+
+        // The seam is one-shot; the same call now commits honestly.
+        XCTAssertTrue(controller.deleteJourney(id: journey.id))
+        XCTAssertNil(controller.loadJourneys().first { $0.id == journey.id })
+    }
+
+    func testUpdateCommentOnAFailedSaveRollsBackAndReturnsNil() throws {
+        let (controller, journey) = try seededController()
+        let camp = journey.camps[0]
+        let created = try XCTUnwrap(controller.createComment(
+            waypointID: camp.id, journeyID: journey.id,
+            userID: "u1", authorName: "Tester", content: "original"))
+
+        controller.nextSaveErrorForTesting = Poison.forcedSaveFailure
+        let updated = controller.updateComment(id: created.id, content: "edited", currentUserId: "u1")
+
+        XCTAssertNil(updated, "a failed comment save must not report the edit as applied")
+        let reloaded = controller.loadComments(forWaypointID: camp.id, currentUserId: "u1")
+        XCTAssertEqual(reloaded.first { $0.id == created.id }?.content, "original",
+                       "the store must still hold the pre-edit content after rollback")
+
+        // The context is clean after rollback: the retry must not inherit the failure.
+        XCTAssertNotNil(controller.updateComment(id: created.id, content: "edited", currentUserId: "u1"))
+    }
+
+    func testDeleteCommentOnAFailedSaveRollsBackAndReturnsFalse() throws {
+        let (controller, journey) = try seededController()
+        let camp = journey.camps[0]
+        let created = try XCTUnwrap(controller.createComment(
+            waypointID: camp.id, journeyID: journey.id,
+            userID: "u1", authorName: "Tester", content: "keep me"))
+
+        controller.nextSaveErrorForTesting = Poison.forcedSaveFailure
+        XCTAssertFalse(controller.deleteComment(id: created.id),
+                       "a failed comment delete must be reported")
+        XCTAssertEqual(controller.loadComments(forWaypointID: camp.id, currentUserId: "u1").count, 1,
+                       "the comment must survive the failed delete")
+
+        XCTAssertTrue(controller.deleteComment(id: created.id))
+    }
+}

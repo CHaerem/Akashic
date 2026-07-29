@@ -114,6 +114,36 @@ final class PersistenceController {
 
     var viewContext: NSManagedObjectContext { container.viewContext }
 
+    #if DEBUG
+    /// QUA-63 test seam: when set, the next write-path save throws this instead of committing
+    /// (consumed one-shot by `saveOrRollback`). It exists because a genuine `save()` failure is
+    /// not constructible from tests here: every model attribute is optional (no validation error
+    /// exists to trigger), the view context's merge policy resolves constraint conflicts instead
+    /// of throwing, and SQLite keeps honouring file descriptors opened before a chmod — so a
+    /// read-only store directory does not fail an already-open store. Compiled out of Release.
+    var nextSaveErrorForTesting: Error?
+    #endif
+
+    /// QUA-63: the one write-path save contract — commit, or roll the context back and rethrow.
+    /// Every destructive/report-bearing write routes through this so a failed save can never
+    /// leave the context dirty (where the pending change would piggyback on the next unrelated
+    /// save, or keep poisoning it) while the caller reports success.
+    func saveOrRollback(_ context: NSManagedObjectContext) throws {
+        #if DEBUG
+        if let forced = nextSaveErrorForTesting {
+            nextSaveErrorForTesting = nil
+            context.rollback()
+            throw forced
+        }
+        #endif
+        do {
+            try context.save()
+        } catch {
+            context.rollback()
+            throw error
+        }
+    }
+
     /// - Parameter storeURL: overrides the on-disk file for `.local`/`.cloudKit` (nil keeps the
     ///   default Application Support location). Exists so a test that specifically needs
     ///   `mode == .cloudKit` (e.g. to exercise a mode-gated branch like `deleteBlocker`'s
@@ -468,36 +498,50 @@ final class PersistenceController {
     ///
     /// Caller contract (enforced in `JourneyStore.deleteJourney`): owner-only, and never while
     /// the journey is still published to the public showcase.
+    ///
+    /// QUA-63 reordered this method around one invariant: **nothing irreversible happens until
+    /// the local commit has succeeded.** It used to (1) enqueue the remote zone deletes, then
+    /// (2) `try?` the local save, then (3) remove the media directory unconditionally — so a
+    /// failed save (disk full, validation error) left local rows pointing at deleted bytes on a
+    /// device whose remote mirror was being destroyed, and the caller reported success. Now the
+    /// local cascade commits first; on failure everything rolls back and the method returns
+    /// false with the zones untouched and every media byte still on disk.
     @MainActor
-    func deleteJourney(id: String) {
+    @discardableResult
+    func deleteJourney(id: String) -> Bool {
         let context = container.viewContext
 
-        // 1. Remote: the two zone deletes, enqueued while we still know the journey exists.
-        syncCoordinator?.deleteZones(forJourneyID: id)
+        let request = NSFetchRequest<CDJourney>(entityName: "CDJourney")
+        request.predicate = NSPredicate(format: "id == %@", id)
+        guard let journey = (try? context.fetch(request))?.first else { return false }
+        // Collect every record name BEFORE the cascade erases the children — the meta purge and
+        // the media cleanup need names only rows can provide, but both run AFTER the commit.
+        let photoIDs = (journey.photos as? Set<CDPhoto> ?? []).compactMap(\.id)
+        let metaNames = [id] + childRecordNames(of: journey) + photoIDs.map { "media-\($0)" }
 
-        // 2. Local rows, suppressed so the cascade never reaches the scheduler.
+        // 1. Local rows FIRST, suppressed so the cascade never reaches the scheduler.
         let wasSuppressing = syncIsApplyingRemoteChanges
         syncIsApplyingRemoteChanges = true
         defer { syncIsApplyingRemoteChanges = wasSuppressing }
 
-        let request = NSFetchRequest<CDJourney>(entityName: "CDJourney")
-        request.predicate = NSPredicate(format: "id == %@", id)
-        guard let journey = (try? context.fetch(request))?.first else { return }
-        // Collect photo ids first — the meta purge and file cleanup need names the cascade
-        // is about to erase (purgeSystemFields(forJourneyID:) walks the journey's children,
-        // so it must run while the rows still exist).
-        let photoIDs = (journey.photos as? Set<CDPhoto> ?? []).compactMap(\.id)
-        purgeSystemFields(forJourneyID: id)
-        purgeSystemFields(forRecordNames: photoIDs.map { "media-\($0)" })
-
         context.delete(journey)   // cascade: waypoints, photos, comments
-        if context.hasChanges { try? context.save() }
+        do {
+            try saveOrRollback(context)
+        } catch {
+            // The one place a swallowed failure costs real data. Rolled back to a coherent
+            // store; report honestly — no zone was condemned and no file was touched.
+            return false
+        }
 
-        // 4. Local media files for this journey.
+        // 2. Only now the irreversible parts: meta purge, the two remote zone deletes, and the
+        //    local media files. (`purgeSystemFields` saves internally; the domain rows are gone.)
+        purgeSystemFields(forRecordNames: metaNames)
+        syncCoordinator?.deleteZones(forJourneyID: id)
         let mediaDir = MediaLibrary.shared.root
             .appendingPathComponent("journeys", isDirectory: true)
             .appendingPathComponent(id, isDirectory: true)
         try? FileManager.default.removeItem(at: mediaDir)
+        return true
     }
 
     func resetJourneys() {
@@ -579,7 +623,14 @@ final class PersistenceController {
         guard let cd = fetchOne(CDDayComment.self, matching: "id == %@", id) else { return nil }
         cd.content = content
         cd.updatedAt = now
-        try? viewContext.save()
+        do {
+            try saveOrRollback(viewContext)
+        } catch {
+            // QUA-63: a `try?` here reported the edit as applied while leaving the context dirty
+            // — the pending change piggybacked on the next unrelated save or kept failing it,
+            // and the "saved" edit evaporated on relaunch. Rollback-and-report, like editPhoto.
+            return nil
+        }
         return CoreDataMapping.dayComment(from: cd, currentUserId: currentUserId)
     }
 
@@ -588,7 +639,11 @@ final class PersistenceController {
     func deleteComment(id: String) -> Bool {
         guard let cd = fetchOne(CDDayComment.self, matching: "id == %@", id) else { return false }
         viewContext.delete(cd)
-        try? viewContext.save()
+        do {
+            try saveOrRollback(viewContext)   // QUA-63: same contract as updateComment.
+        } catch {
+            return false
+        }
         return true
     }
 

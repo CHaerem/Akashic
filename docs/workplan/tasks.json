@@ -4208,7 +4208,7 @@
       "priority": 1,
       "deps": [],
       "track": "QUALITY",
-      "status": "TODO",
+      "status": "DONE",
       "owner": false,
       "title": "deleteJourney condemns CloudKit zones before the local commit and destroys media on a failed save; comment writes report success on failure",
       "done_when": "deleteJourney commits the local cascade FIRST and only then enqueues zone deletes and removes the media directory; a failed save rolls back and returns false, and JourneyStore surfaces it instead of returning true unconditionally. updateComment/deleteComment get the same rollback-and-report contract every other write path already has. Unit tests with a poisoned context pin all three.",
@@ -4222,7 +4222,34 @@
       "verify": [
         "cd apple && xcodegen generate",
         "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,name=iPhone 17 Pro\" CODE_SIGNING_ALLOWED=NO -only-testing:AkashicTests test > /tmp/qua63.log 2>&1 && grep -q \"with 1 test skipped and 0 failures\" /tmp/qua63.log"
-      ]
+      ],
+      "claim": {
+        "agent": "fable5-review",
+        "branch": "claude/project-review-code-ux-c5c48b",
+        "at": "2026-07-29"
+      },
+      "verification": {
+        "at": "2026-07-29T08:01:11.755Z",
+        "head": "91bd19e",
+        "ran": [
+          {
+            "command": "cd apple && xcodegen generate",
+            "ok": true,
+            "ms": 86,
+            "status": 0,
+            "signal": null
+          },
+          {
+            "command": "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,name=iPhone 17 Pro\" CODE_SIGNING_ALLOWED=NO -only-testing:AkashicTests test > /tmp/qua63.log 2>&1 && grep -q \"with 1 test skipped and 0 failures\" /tmp/qua63.log",
+            "ok": true,
+            "ms": 14435,
+            "status": 0,
+            "signal": null
+          }
+        ],
+        "attested": []
+      },
+      "evidence": "deleteJourney: local commit first via saveOrRollback (rollback + false on failure; zones and media only after success); updateComment/deleteComment rollback-and-report; JourneyStore propagates. Save failure injected via DEBUG-only nextSaveErrorForTesting seam (no genuine save() throw is constructible: all model attributes optional, merge policy resolves conflicts, SQLite honours pre-chmod fds — measured, the chmod approach ran green). Falsifiability by mutation: swallowing the failure in saveOrRollback => 8 assertion failures across 3 tests; restored => 910/910 green."
     },
     {
       "id": "QUA-78",

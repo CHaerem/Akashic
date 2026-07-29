@@ -481,11 +481,13 @@ final class JourneyStore: ObservableObject {
     }
 
     /// Delete an owned, unpublished journey everywhere. Returns false when blocked — callers
-    /// should have consulted `deleteBlocker` first and shown the reason.
+    /// should have consulted `deleteBlocker` first and shown the reason — or when the local
+    /// commit failed (QUA-63: this used to return true unconditionally, so a failed delete
+    /// reported success while the journey was still there).
     @discardableResult
     func deleteJourney(id: String) -> Bool {
         guard deleteBlocker(forJourneyID: id) == nil else { return false }
-        persistence.deleteJourney(id: id)
+        guard persistence.deleteJourney(id: id) else { return false }
         reload()
         return true
     }

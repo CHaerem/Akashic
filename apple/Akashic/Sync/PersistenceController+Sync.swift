@@ -685,7 +685,7 @@ extension PersistenceController: SyncLocalStore {
 
     /// Every child record name of a journey (waypoints, photos, comments) — used to clean up the
     /// meta side table when a journey delete cascades in Core Data.
-    private func childRecordNames(of journey: CDJourney) -> [String] {
+    func childRecordNames(of journey: CDJourney) -> [String] {
         var names: [String] = []
         names += (journey.waypoints as? Set<CDWaypoint> ?? []).compactMap(\.id)
         names += (journey.photos as? Set<CDPhoto> ?? []).compactMap(\.id)
