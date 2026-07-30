@@ -579,6 +579,26 @@ right: fix this file in the same commit.
   found two real defects. `git worktree add /tmp/<name> <base-sha>` + `xcodegen generate` costs one build
   and one minute. Do it before believing a red gate is not yours — and remove the worktree afterwards
   (`git worktree remove … --force` then `git worktree prune --expire now`).
+- **A wrong property name inside a SwiftUI closure is reported as a wrong ARGUMENT COUNT, and the
+  error points at the closure instead of at the mistake.** SwiftUI's `MapCamera` calls it `distance`;
+  `centerCoordinateDistance` is `MKMapCamera`'s name for the same value, and the two types sit
+  side by side in this codebase — `MapGeoMath` returns `MKMapCamera`, while `onMapCameraChange` hands
+  you a `MapCamera`. Using the wrong one gave `contextual closure type '() -> Void' expects 0
+  arguments, but 1 was used in closure body`, on the line of the closure. The cause is overload
+  resolution: `onMapCameraChange` has a zero-argument and a one-argument form, the one-argument form
+  stopped type-checking because of the bad property, and Swift silently fell back to the other and
+  complained about the shape of the closure. Generalise it — when a result-builder or modifier
+  closure is blamed for its own signature, suspect a type error *inside* it and check the member
+  names first, because the diagnostic will not mention them (QUA-83).
+- **`npm run prove` cannot prove a fix whose tests name new symbols, and it correctly refuses rather
+  than pretending.** Measured on QUA-83: every one of 15 new `MapMathTests` calls a function the fix
+  introduced, so the reverted worktree fails to BUILD and no assertion ever runs — `prove` detects
+  "0 tests collected" and declines, because a red build says nothing about whether the assertions
+  can fail. This is not a gap in the tool, it is the honest answer, and the consequence is worth
+  planning for: **a fix delivered as new API arrives unprovable by construction.** If the defect
+  must be guarded, the guard has to be a test that names only pre-existing symbols (DIFF-15 split a
+  test file for exactly this), or the fix's own small revert has to be the thing you point
+  `--against`. Decide which before writing the tests, not after.
 
 ## Conventions
 
