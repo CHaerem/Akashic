@@ -406,6 +406,33 @@ ok('a journey with no coordinates at all is an honest state, not a broken pipeli
   );
 });
 
+ok('two camps claiming one day number are flagged (Kilimanjaro numbers day 6 twice)', () => {
+    const waypoints = [
+        { journey_id: 'j-inca', name: 'Uhuru Peak', day_number: 6 },
+        { journey_id: 'j-inca', name: 'Mweka Camp', day_number: 6 },
+        { journey_id: 'j-inca', name: 'Mweka Gate', day_number: 7 },
+    ];
+    const findings = auditJourneyCoherence([CLEAN_JOURNEY], cleanPhotos(5), {}, waypoints);
+    const dup = findings.find((f) => f.kind === 'duplicate-day-numbers');
+    assert.ok(dup, `expected duplicate-day-numbers, got ${JSON.stringify(findings.map((f) => f.kind))}`);
+    assert.match(dup.detail, /day 6 is claimed by Uhuru Peak and Mweka Camp/);
+    assert.equal(dup.count, 1);
+});
+
+ok('distinct day numbers are not flagged, and no waypoints is silent', () => {
+    const clean = [
+        { journey_id: 'j-inca', name: 'A', day_number: 1 },
+        { journey_id: 'j-inca', name: 'B', day_number: 2 },
+    ];
+    for (const wps of [clean, []]) {
+        assert.deepEqual(
+            auditJourneyCoherence([CLEAN_JOURNEY], cleanPhotos(5), {}, wps)
+                .filter((f) => f.kind === 'duplicate-day-numbers'),
+            [],
+        );
+    }
+});
+
 ok('a malformed coordinate does not count as located', () => {
   const photos = cleanPhotos(10).map((p) => ({
     ...p, coordinates: ['37.3', null] as unknown, location_source: 'estimated',

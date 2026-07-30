@@ -606,9 +606,17 @@ export interface CoherencePhoto {
 export type CoherenceKind =
   | 'dates-exclude-photos'
   | 'implausible-span'
+  | 'duplicate-day-numbers'
   | 'collapsed-coordinate'
   | 'no-day-assignment'
   | 'no-real-location';
+
+/** A camp/waypoint, for the day-structure check. */
+export interface CoherenceWaypoint {
+  journey_id?: string | null;
+  name?: string | null;
+  day_number?: number | null;
+}
 
 export interface CoherenceFinding {
   journey: string;
@@ -653,6 +661,7 @@ export function auditJourneyCoherence(
   journeys: CoherenceJourney[],
   photos: CoherencePhoto[],
   options: CoherenceOptions = {},
+  waypoints: CoherenceWaypoint[] = [],
 ): CoherenceFinding[] {
   const maxSpanDays = options.maxSpanDays ?? 90;
   const collapsedShare = options.collapsedShare ?? 0.25;
@@ -727,6 +736,29 @@ export function auditJourneyCoherence(
           });
         }
       }
+    }
+
+    // QUA-95: two camps claiming one day number make "which day is this photo on" unanswerable
+    // before any photo is examined. Kilimanjaro numbers Uhuru Peak and Mweka Camp both day 6, and
+    // Mount Kenya numbers two camps day 4. Mirrors `JourneyCoherence.Finding.duplicateDayNumbers`.
+    const mineWaypoints = waypoints.filter((w) => w.journey_id === journey.id);
+    const dayTally = new Map<number, string[]>();
+    for (const w of mineWaypoints) {
+      if (typeof w.day_number !== 'number') continue;
+      const names = dayTally.get(w.day_number) ?? [];
+      names.push(w.name ?? '(unnamed)');
+      dayTally.set(w.day_number, names);
+    }
+    const duplicated = [...dayTally.entries()].filter(([, names]) => names.length > 1);
+    if (duplicated.length > 0) {
+      findings.push({
+        journey: label,
+        kind: 'duplicate-day-numbers',
+        detail: duplicated
+          .map(([day, names]) => `day ${day} is claimed by ${names.join(' and ')}`)
+          .join('; '),
+        count: duplicated.length,
+      });
     }
 
     const withDay = mine.filter((p) => typeof p.waypoint_id === 'string' && p.waypoint_id.length > 0);

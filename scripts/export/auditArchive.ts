@@ -25,6 +25,7 @@ import {
   auditJourneyCoherence,
   type CoherenceJourney,
   type CoherencePhoto,
+  type CoherenceWaypoint,
 } from './lib.ts';
 
 const root = process.argv[2];
@@ -57,10 +58,18 @@ function load<T>(...candidates: string[]): T[] {
 
 const journeys = load<CoherenceJourney>('supabase/journeys.json', 'normalized/journeys.json');
 const photos = load<CoherencePhoto>('normalized/photos.json', 'supabase/photos.json');
+// Waypoints are optional: a bundle without them simply skips the day-structure check rather than
+// failing, which is why `load` is not used here.
+let waypoints: CoherenceWaypoint[] = [];
+try {
+  waypoints = rows<CoherenceWaypoint>(readFileSync(join(root, 'supabase/waypoints.json'), 'utf8'));
+} catch {
+  console.log('  (no waypoints.json — skipping the duplicate-day check)');
+}
 
-console.log(`\naudit: ${journeys.length} journeys, ${photos.length} photos under ${root}\n`);
+console.log(`\naudit: ${journeys.length} journeys, ${photos.length} photos, ${waypoints.length} waypoints under ${root}\n`);
 
-const findings = auditJourneyCoherence(journeys, photos);
+const findings = auditJourneyCoherence(journeys, photos, {}, waypoints);
 
 if (findings.length === 0) {
   console.log('✅ no coherence findings — every journey agrees with its own photographs\n');

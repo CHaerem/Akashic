@@ -5570,20 +5570,67 @@
         "QUA-94"
       ],
       "track": "QUALITY",
-      "status": "TODO",
+      "status": "DONE",
       "owner": false,
       "title": "\"Check this journey\": the coherence audit in the app, each finding linked to the screen that fixes it",
       "done_when": "A journey surface runs the coherence rules and lists what is inconsistent — dates that exclude their own photos, an implausible span, duplicate day numbers, photos with no day, photos sharing one coordinate, no photo with real GPS — and each row navigates to the existing edit surface that corrects it (JourneyEditSheet, WaypointEditSheet, MovePhotoToDaySheet, PhotoPlacementSheet). A clean journey says so. Unit-tested against the three real journeys' shapes, and the rules must agree with the TypeScript implementation in scripts/export/lib.ts on the same inputs.",
       "why": "MEASURED 2026-07-30: the owner's three journeys carry two wrong years, 939 photos with no day, 144 photos on one coordinate 265 km off route and one journey with zero EXIF locations — and the ONLY way any of it surfaced was an agent auditing a 16 GiB export offline. Nothing in the app says a word. The correction surfaces already exist (JourneyEditSheet edits dates, WaypointEditSheet edits day numbers, MovePhotoToDaySheet reassigns a photo's day, PhotoPlacementSheet sets a coordinate, RouteCorrection has a before/after preview and apply), so this is not new editing capability — it is the missing half: knowing WHAT to correct. Without it, correcting a library means finding the defects by eye across 1538 photographs. This is a customer feature and not owner tooling: DIFF-21 imports Polarsteps exports, which will arrive with exactly these defects, and QUA-89 already records that unassigned photos read as loss. The rules exist and are tested in scripts/export/lib.ts (auditJourneyCoherence, QUA-93) — port them rather than re-deriving them, and keep the two in agreement.",
       "files": [
         "apple/Akashic/Services/JourneyCoherence.swift",
-        "apple/Akashic/Views/Edit/JourneyCheckupSheet.swift",
-        "apple/AkashicTests/JourneyCoherenceTests.swift"
+        "apple/Akashic/Views/Edit/JourneyCheckupSection.swift",
+        "apple/Akashic/Views/Edit/JourneyEditSheet.swift",
+        "apple/AkashicTests/JourneyCoherenceTests.swift",
+        "scripts/export/lib.ts",
+        "scripts/export/smoke.ts",
+        "scripts/export/auditArchive.ts"
       ],
       "verify": [
         "cd apple && xcodegen generate",
-        "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,name=iPhone 17 Pro\" CODE_SIGNING_ALLOWED=NO -only-testing:AkashicTests test > /tmp/qua95.log 2>&1 && grep -q \"with 1 test skipped and 0 failures\" /tmp/qua95.log"
-      ]
+        "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,name=iPhone 17 Pro\" CODE_SIGNING_ALLOWED=NO -only-testing:AkashicTests test > /tmp/qua95.log 2>&1 && grep -q \"with 1 test skipped and 0 failures\" /tmp/qua95.log",
+        "npx tsc -p scripts/export/tsconfig.json",
+        "node scripts/export/smoke.ts"
+      ],
+      "claim": {
+        "agent": "claude-remote",
+        "branch": "claude/remote-control-d38598",
+        "at": "2026-07-30"
+      },
+      "verification": {
+        "at": "2026-07-30T09:44:09.490Z",
+        "head": "7686d4f",
+        "ran": [
+          {
+            "command": "cd apple && xcodegen generate",
+            "ok": true,
+            "ms": 85,
+            "status": 0,
+            "signal": null
+          },
+          {
+            "command": "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,name=iPhone 17 Pro\" CODE_SIGNING_ALLOWED=NO -only-testing:AkashicTests test > /tmp/qua95.log 2>&1 && grep -q \"with 1 test skipped and 0 failures\" /tmp/qua95.log",
+            "ok": true,
+            "ms": 13669,
+            "status": 0,
+            "signal": null
+          },
+          {
+            "command": "npx tsc -p scripts/export/tsconfig.json",
+            "ok": true,
+            "ms": 891,
+            "status": 0,
+            "signal": null
+          },
+          {
+            "command": "node scripts/export/smoke.ts",
+            "ok": true,
+            "ms": 171,
+            "status": 0,
+            "signal": null
+          }
+        ],
+        "attested": []
+      },
+      "evidence": "957 unit (1 skipped) 0 failures on pinned iPhone 17 Pro, up from 945 — 12 new JourneyCoherenceTests. Export side: tsc clean, smoke 40 checks (was 38). Both rule sets now carry the same six checks, and a test asserts the thresholds match so they cannot drift silently. Run against the real archive: 6 findings including the new duplicate-day check (Kilimanjaro day 6 claimed by Mweka Camp and Uhuru Peak), inca-trail clean."
     },
     {
       "id": "QUA-96",

@@ -77,6 +77,10 @@ struct JourneyEditSheet: View {
             // recompute stats. Each applies immediately (its own edit-path save), independent of the
             // fields above, which commit on Save.
             RouteCorrectionSection(journey: journey).environmentObject(store)
+            // QUA-95: what does not add up, next to the controls that fix it. Read-only — it
+            // presents nothing, which is deliberate: this screen already presents sheets and a
+            // fourth presentation modifier on one view breaks presentation for the whole view.
+            JourneyCheckupSection(journey: journey).environmentObject(store)
         }
     }
 
