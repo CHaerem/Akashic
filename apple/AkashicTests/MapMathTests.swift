@@ -239,4 +239,178 @@ final class SheetAwareFramingTests: XCTestCase {
         XCTAssertEqual(measured, 12_000, accuracy: 60,
                        "spherical step within ellipsoid tolerance at camera-offset scales")
     }
+
+    // MARK: - Photo clustering (QUA-83)
+
+    private func mapPhoto(_ id: String, _ lat: Double, _ lon: Double, day: Int? = nil) -> MapPhoto {
+        MapPhoto(id: id, latitude: lat, longitude: lon, dayNumber: day, thumbnailURL: nil)
+    }
+
+    private func camp(_ id: String, day: Int, _ lat: Double, _ lon: Double) -> Camp {
+        Camp(id: id, name: "Camp \(day)", dayNumber: day, elevation: 0,
+             coordinates: [lon, lat], notes: "", highlights: [])
+    }
+
+    func testZoomAndDistanceAreInverses() {
+        for zoom in [4.0, 8.0, 12.0, 15.0, 18.0] {
+            let back = MapGeoMath.zoom(forDistance: MapGeoMath.distance(forZoom: zoom))
+            XCTAssertEqual(back, zoom, accuracy: 0.0001, "zoom \(zoom) must round-trip")
+        }
+    }
+
+    func testZoomForDistanceSurvivesDegenerateCameras() {
+        // The cell size divides by 2^(zoom − 8) and the quotient is converted to Int, which TRAPS
+        // in Swift on a non-finite or out-of-range Double. A zero or infinite camera distance must
+        // therefore be clamped rather than propagated — this test is here to keep the clamp.
+        for bad in [0, -1, .infinity, .nan] as [CLLocationDistance] {
+            let z = MapGeoMath.zoom(forDistance: bad)
+            XCTAssertTrue(z.isFinite, "zoom must stay finite for distance \(bad)")
+            XCTAssertTrue((0...24).contains(z), "zoom must stay in range for distance \(bad)")
+            // The real assertion is that this line RUNS: an out-of-range Int conversion inside
+            // the grid traps the process, so a regression here crashes the suite rather than
+            // failing it. Asserting on the result keeps the call from being optimised away.
+            XCTAssertEqual(MapGeoMath.photoClusters([mapPhoto("p", 60, 10)], zoom: z).count, 1)
+        }
+    }
+
+    func testNearbyPhotosCollapseIntoOneClusterWithACount() {
+        // Three photos a few metres apart at a close-in camera: one marker, count 3.
+        let photos = [mapPhoto("a", 60.0000, 10.0000),
+                      mapPhoto("b", 60.0001, 10.0001),
+                      mapPhoto("c", 60.0002, 10.0002)]
+        let clusters = MapGeoMath.photoClusters(photos, zoom: 12)
+        XCTAssertEqual(clusters.count, 1)
+        XCTAssertEqual(clusters.first?.count, 3)
+        // The marker sits at the centroid, not on the representative.
+        XCTAssertEqual(clusters.first?.latitude ?? 0, 60.0001, accuracy: 0.00001)
+    }
+
+    func testDistantPhotosStaySeparateAndZoomingInSplitsACluster() {
+        let photos = [mapPhoto("a", 60.00, 10.00), mapPhoto("b", 60.02, 10.02)]
+        // Far out, one cell holds both; far in, the same two photos must separate. This is the
+        // property that makes the grid "screen-space proximity at the current camera distance"
+        // rather than a fixed geographic radius.
+        XCTAssertEqual(MapGeoMath.photoClusters(photos, zoom: 6).count, 1)
+        XCTAssertEqual(MapGeoMath.photoClusters(photos, zoom: 16).count, 2)
+    }
+
+    func testClusterOrderIsStableAcrossRepeatedGrouping() {
+        // Swift's Dictionary has no order guarantee, so an unsorted result would hand SwiftUI's
+        // ForEach a different identity sequence on an unrelated redraw and rebuild every
+        // annotation view. Same input must give the same order every time, including across
+        // input permutations.
+        let photos = (0..<12).map { mapPhoto("p\($0)", 60 + Double($0) * 0.05, 10 + Double($0) * 0.05) }
+        let first = MapGeoMath.photoClusters(photos, zoom: 14).map(\.id)
+        XCTAssertEqual(MapGeoMath.photoClusters(photos, zoom: 14).map(\.id), first)
+        XCTAssertEqual(MapGeoMath.photoClusters(photos.reversed(), zoom: 14).map(\.id), first)
+        XCTAssertEqual(first, first.sorted(), "clusters must come back in cell-key order")
+    }
+
+    func testClusteringSkipsNonFiniteCoordinates() {
+        let clusters = MapGeoMath.photoClusters([mapPhoto("bad", .nan, 10),
+                                                mapPhoto("good", 60, 10)], zoom: 12)
+        XCTAssertEqual(clusters.flatMap(\.photos).map(\.id), ["good"])
+    }
+
+    // MARK: - Camp clearance (QUA-83)
+
+    func testPhotoAtCampIsPushedClearOfTheCampBadge() {
+        // The exact defect case: a photo geotagged AT the camp. Its marker centre must end up a
+        // full clearance away, so the two 44 pt tap frames stop overlapping.
+        let atCamp = camp("c1", day: 1, 60, 10)
+        let clusters = MapGeoMath.photoClusters([mapPhoto("p", 60, 10, day: 1)], zoom: 15)
+        let cleared = MapGeoMath.clustersCleared(clusters, of: [atCamp], metersPerPoint: 2)
+
+        XCTAssertEqual(cleared.count, 1, "the cluster must be MOVED, never dropped — dropping hides photos")
+        XCTAssertEqual(cleared.first?.photos.map(\.id), ["p"])
+        guard let moved = cleared.first else { return XCTFail("no cluster survived the clearance") }
+        XCTAssertEqual(MapGeoMath.meters(from: atCamp.clCoordinate, to: moved.coordinate),
+                       MapGeoMath.markerClearancePoints * 2, accuracy: 1,
+                       "a photo on the camp must be pushed exactly one clearance away")
+    }
+
+    func testClearanceLeavesDistantClustersUntouched() {
+        let clusters = MapGeoMath.photoClusters([mapPhoto("p", 60.01, 10.01)], zoom: 15)
+        let cleared = MapGeoMath.clustersCleared(clusters, of: [camp("c1", day: 1, 60, 10)],
+                                                 metersPerPoint: 2)
+        XCTAssertEqual(cleared, clusters, "a cluster already clear of every camp must not move")
+    }
+
+    func testClearanceIsSkippedWhenTheProjectionIsUnavailable() {
+        // metersPerPoint is 0 until the map has reported a camera. The clearance must degrade to
+        // "no nudge" — never to something that moves markers by a garbage distance.
+        let clusters = MapGeoMath.photoClusters([mapPhoto("p", 60, 10)], zoom: 15)
+        for bad in [0, -1, .nan, .infinity] as [Double] {
+            XCTAssertEqual(MapGeoMath.clustersCleared(clusters, of: [camp("c1", day: 1, 60, 10)],
+                                                      metersPerPoint: bad),
+                           clusters, "metersPerPoint \(bad) must leave clusters untouched")
+        }
+    }
+
+    // MARK: - Annotation cap (QUA-83)
+
+    func testTopClustersCapsTheRenderedSetAndKeepsTheBiggest() {
+        // 80 single-photo cells plus one cell holding 5: the big one must survive a cap of 10.
+        var photos = (0..<80).map { mapPhoto("s\($0)", 10 + Double($0) * 0.5, 10) }
+        photos += (0..<5).map { mapPhoto("big\($0)", 60, 100) }
+        let clusters = MapGeoMath.photoClusters(photos, zoom: 14)
+        let capped = MapGeoMath.topClusters(clusters, limit: 10)
+
+        XCTAssertEqual(capped.count, 10)
+        XCTAssertEqual(capped.map(\.id), capped.map(\.id).sorted(), "cap must preserve key order")
+        XCTAssertEqual(capped.map(\.count).max(), clusters.map(\.count).max(),
+                       "the biggest cluster must never be the one dropped")
+    }
+
+    func testTopClustersLeavesASmallSetAlone() {
+        let clusters = MapGeoMath.photoClusters([mapPhoto("a", 60, 10), mapPhoto("b", 61, 11)], zoom: 14)
+        XCTAssertEqual(MapGeoMath.topClusters(clusters, limit: 60), clusters)
+    }
+
+    // MARK: - Coincident camps (QUA-83)
+
+    func testCoincidentCampsMergeIntoOneBadgeOfferingBothDays() {
+        // A rest day: two camps at one coordinate. Before QUA-83 both badges were drawn on top of
+        // each other and only the later-declared day could be tapped at all.
+        let camps = [camp("c1", day: 1, 60, 10),
+                     camp("c2", day: 2, 60, 10),
+                     camp("c3", day: 3, 60.5, 10.5)]
+        let groups = MapGeoMath.campGroups(camps)
+
+        XCTAssertEqual(groups.count, 2)
+        XCTAssertEqual(groups[0].indices, [0, 1])
+        XCTAssertEqual(groups[0].dayNumbers, [1, 2])
+        XCTAssertTrue(groups[0].isMerged)
+        XCTAssertFalse(groups[1].isMerged)
+    }
+
+    func testARevisitedBaseCampMergesWithItsFirstVisit() {
+        // Grouping is greedy against every group, not only the previous camp, so a base camp
+        // returned to on a later day still merges.
+        let camps = [camp("c1", day: 1, 60, 10),
+                     camp("c2", day: 2, 61, 11),
+                     camp("c3", day: 3, 60, 10)]
+        let groups = MapGeoMath.campGroups(camps)
+        XCTAssertEqual(groups.count, 2)
+        XCTAssertEqual(groups[0].dayNumbers, [1, 3])
+    }
+
+    func testDistinctCampsNeverMerge() {
+        let camps = [camp("c1", day: 1, 60, 10), camp("c2", day: 2, 60.01, 10.01)]
+        XCTAssertEqual(MapGeoMath.campGroups(camps).count, 2,
+                       "camps ~1.3 km apart are different places")
+    }
+
+    func testTappingAMergedBadgeWalksThroughItsDays() {
+        let camps = [camp("c1", day: 1, 60, 10), camp("c2", day: 2, 60, 10)]
+        let group = MapGeoMath.campGroups(camps)[0]
+
+        // Nothing selected → the first day. Then each tap advances, wrapping at the end. This is
+        // what makes one 44 pt target able to offer both days.
+        XCTAssertEqual(MapGeoMath.tapSelection(in: group, current: nil), 0)
+        XCTAssertEqual(MapGeoMath.tapSelection(in: group, current: 0), 1)
+        XCTAssertEqual(MapGeoMath.tapSelection(in: group, current: 1), 0)
+        // A selection outside the group falls back to its first day.
+        XCTAssertEqual(MapGeoMath.tapSelection(in: group, current: 7), 0)
+    }
 }

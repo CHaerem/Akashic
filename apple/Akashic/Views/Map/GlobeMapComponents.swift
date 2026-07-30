@@ -179,6 +179,12 @@ struct CampBadge: View {
     let day: Int
     let selected: Bool
 
+    /// Every day this badge stands for when coincident camps merged into one (QUA-83), in day
+    /// order. Empty or single-element for an ordinary camp; `day` is whichever of them the badge
+    /// currently reads as. A rest day used to draw two badges exactly on top of each other, where
+    /// only the later-declared one could be tapped.
+    var mergedDays: [Int] = []
+
     // The circles were sized to fit fixed 10/13 pt digits; scale them with the text so a
     // two-digit day number (day 10+) doesn't outgrow its badge at larger text sizes.
     @ScaledMetric(relativeTo: .caption2) private var glowDiameter: CGFloat = 26
@@ -207,10 +213,45 @@ struct CampBadge: View {
                 .font(.system(selected ? .caption : .caption2, design: .rounded).weight(.bold))
                 .foregroundStyle(selected ? MapPalette.campTextSelected : MapPalette.campTextDefault)
         }
+        .overlay(alignment: .topTrailing) {
+            if mergedDays.count > 1 {
+                MarkerCountChip(count: mergedDays.count)
+                    .offset(x: 6, y: -6)
+            }
+        }
         .frame(minWidth: 44, minHeight: 44)
         .contentShape(Rectangle())
-        .accessibilityLabel("Day \(day) camp")
+        // The single-day key is kept exactly as it was so the catalogue does not churn; the merged
+        // case is a separate key with a locale-formatted list, because "2 and 3" is "2 og 3" in
+        // Norwegian and joining it by hand in Swift would ship an English conjunction everywhere.
+        .accessibilityLabel(mergedDays.count > 1
+            ? Text("Camp for days \(mergedDays.map(String.init).formatted(.list(type: .and)))")
+            : Text("Day \(day) camp"))
         .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
+    }
+}
+
+// MARK: - Marker count chip (QUA-83)
+
+/// The small dark count chip a clustered photo stack or a merged camp badge carries.
+///
+/// Shared by both so the two "this marker stands for several things" surfaces read identically —
+/// the web's stacks made the same choice with their count badge.
+struct MarkerCountChip: View {
+    let count: Int
+
+    @ScaledMetric(relativeTo: .caption2) private var diameter: CGFloat = 16
+
+    var body: some View {
+        Text("\(count)")
+            .font(.system(.caption2, design: .rounded).weight(.bold))
+            .foregroundStyle(.white)
+            .frame(minWidth: diameter, minHeight: diameter)
+            .background(Circle().fill(Color.black.opacity(0.75)))
+            .overlay(Circle().stroke(Color.white.opacity(0.6), lineWidth: 1))
+            // Decorative: the count is already spoken by the owning marker's own label, and a
+            // second element here would make VoiceOver read every stack twice.
+            .accessibilityHidden(true)
     }
 }
 
@@ -220,6 +261,9 @@ struct CampBadge: View {
 /// URL is present, otherwise shows a camera glyph placeholder.
 struct PhotoMarker: View {
     let photo: MapPhoto
+
+    /// How many photos the marker stands for once clustered (QUA-83). 1 draws no chip.
+    var count: Int = 1
 
     // The card was sized to fit a fixed 12 pt glyph; scale it with `.caption` so the
     // placeholder icon/thumbnail isn't left cramped in an undersized frame.
@@ -254,9 +298,27 @@ struct PhotoMarker: View {
                     .foregroundStyle(MapPalette.photoStroke)
             }
         }
+        .overlay(alignment: .topTrailing) {
+            if count > 1 {
+                MarkerCountChip(count: count)
+                    .offset(x: 6, y: -6)
+            }
+        }
         .frame(minWidth: 44, minHeight: 44)
         .contentShape(Rectangle())
-        .accessibilityLabel(photo.dayNumber.map { "Photo, day \($0)" } ?? "Photo")
+        // Four keys rather than a composed string: the single-photo pair is kept verbatim so the
+        // catalogue does not churn, and a stack says how many it holds, since "Photo" on a marker
+        // that opens twelve of them is the wrong promise.
+        .accessibilityLabel(photoLabel)
         .accessibilityAddTraits(.isButton)
+    }
+
+    private var photoLabel: Text {
+        switch (photo.dayNumber, count > 1) {
+        case let (day?, true):  return Text("\(count) photos, day \(day)")
+        case (nil, true):       return Text("\(count) photos")
+        case let (day?, false): return Text("Photo, day \(day)")
+        case (nil, false):      return Text("Photo")
+        }
     }
 }

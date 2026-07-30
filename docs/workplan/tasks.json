@@ -4714,7 +4714,7 @@
       "priority": 6,
       "deps": [],
       "track": "QUALITY",
-      "status": "TODO",
+      "status": "WIP",
       "owner": false,
       "title": "iOS map has no photo clustering, and photo markers steal taps from camp badges — the unfixed iOS twin of the web's QUA-49",
       "done_when": "Geotagged photos cluster by screen-space proximity at the current camera distance into stack markers with a count badge (matching the web surface); camp badges keep tap precedence over photo markers (declared later / filtered within a clearance radius, mirroring the web decision); coincident camps (rest days) merge into one badge offering both days; a rendered-annotation cap bounds the overview; precedence and clustering are unit-tested like QUA-58 did for the web.",
@@ -4728,7 +4728,34 @@
       "verify": [
         "cd apple && xcodegen generate",
         "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,name=iPhone 17 Pro\" CODE_SIGNING_ALLOWED=NO -only-testing:AkashicTests test > /tmp/qua83.log 2>&1 && grep -q \"with 1 test skipped and 0 failures\" /tmp/qua83.log"
-      ]
+      ],
+      "claim": {
+        "agent": "claude-remote",
+        "branch": "claude/remote-control-d38598",
+        "at": "2026-07-30"
+      },
+      "verification": {
+        "at": "2026-07-30T05:49:40.634Z",
+        "head": "581591f",
+        "ran": [
+          {
+            "command": "cd apple && xcodegen generate",
+            "ok": true,
+            "ms": 94,
+            "status": 0,
+            "signal": null
+          },
+          {
+            "command": "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,name=iPhone 17 Pro\" CODE_SIGNING_ALLOWED=NO -only-testing:AkashicTests test > /tmp/qua83.log 2>&1 && grep -q \"with 1 test skipped and 0 failures\" /tmp/qua83.log",
+            "ok": true,
+            "ms": 13694,
+            "status": 0,
+            "signal": null
+          }
+        ],
+        "attested": []
+      },
+      "resume": "Clustering + clearance + coincident-camp merge landed with 15 pure tests in MapMathTests (926 -> 941 unit). prove REFUSED as designed: every symbol the tests name is new, so the reverted build cannot compile and there is no honest RED. The camp-over-photo TAP PRECEDENCE half is view declaration order and is guarded by nothing automated -- CampBadge/PhotoMarker carry no accessibilityIdentifier, so no UI test can address them without adding to A11yID.swift, which is outside this task's files list."
     },
     {
       "id": "QUA-84",

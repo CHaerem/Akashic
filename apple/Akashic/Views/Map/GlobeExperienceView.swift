@@ -40,6 +40,11 @@ struct GlobeExperienceView: View {
     // used both for the map's photo markers and for opening the lightbox.
     @State private var journeyPhotos: [Photo] = []
     @State private var photoDayByID: [String: Int] = [:]
+    /// QUA-83: the camera distance that sizes the photo-clustering grid, and the measured
+    /// projection scale that sizes the camp clearance. Seeded to the globe framing so the first
+    /// frame clusters at a sane cell size before any camera change has been reported.
+    @State private var cameraDistance: CLLocationDistance = MapGeoMath.globeDistance
+    @State private var metersPerPoint: Double = 0
     // Split lightbox state so a day-mode photo-marker tap can present *over* the day sheet:
     // the overview cover lives on the map overlays, the day cover inside the day sheet's own
     // presentation hierarchy (a background cover can't appear above an active sheet).
@@ -316,18 +321,60 @@ struct GlobeExperienceView: View {
     // MARK: - Map
 
     private var map: some View {
-        Map(position: $controller.cameraPosition, interactionModes: .all) {
-            mapContent
+        MapReader { proxy in
+            Map(position: $controller.cameraPosition, interactionModes: .all) {
+                mapContent
+            }
+            .mapStyle(.hybrid(elevation: .realistic, pointsOfInterest: .excludingAll))
+            .mapControlVisibility(.hidden)
+            // Stop the idle spin on any user pan / zoom gesture (spec §1b).
+            .simultaneousGesture(DragGesture().onChanged { _ in
+                if controller.isRotating { controller.stopRotation() }
+            })
+            .simultaneousGesture(MagnifyGesture().onChanged { _ in
+                if controller.isRotating { controller.stopRotation() }
+            })
+            .coordinateSpace(.named(Self.mapSpace))
+            // QUA-83 needs the camera distance to size the clustering grid and the live projection
+            // to size the camp clearance. `.onEnd` rather than `.continuous` on purpose: regrouping
+            // photos is real work, and doing it per frame of a pinch would trade the annotation
+            // storm this task removes for a different one. Stacks are briefly stale mid-gesture.
+            .onMapCameraChange(frequency: .onEnd) { context in
+                // SwiftUI's `MapCamera` calls this `distance`; `centerCoordinateDistance` is
+                // `MKMapCamera`'s name for the same thing, and using it here fails as
+                // "closure expects 0 arguments" — the one-argument `onMapCameraChange` overload
+                // stops type-checking and resolution silently falls back to the zero-argument one,
+                // so the error points at the argument count rather than at the wrong property.
+                cameraDistance = context.camera.distance
+                if let m = Self.metersPerPoint(proxy: proxy, center: context.camera.centerCoordinate) {
+                    metersPerPoint = m
+                }
+            }
         }
-        .mapStyle(.hybrid(elevation: .realistic, pointsOfInterest: .excludingAll))
-        .mapControlVisibility(.hidden)
-        // Stop the idle spin on any user pan / zoom gesture (spec §1b).
-        .simultaneousGesture(DragGesture().onChanged { _ in
-            if controller.isRotating { controller.stopRotation() }
-        })
-        .simultaneousGesture(MagnifyGesture().onChanged { _ in
-            if controller.isRotating { controller.stopRotation() }
-        })
+    }
+
+    private static let mapSpace = "akashicMapProjection"
+
+    /// Metres per point in the live projection, measured at the map's centre.
+    ///
+    /// **Measured, not derived.** Converting `centerCoordinateDistance` into metres-per-point needs
+    /// the viewport height and the pitch, and a formula guessing at both would produce a number that
+    /// looks authoritative and is not — the kind of claim this project keeps having to retract. Two
+    /// points 100 pt apart, round-tripped through the map's own coordinate space, is the same
+    /// projection the web's `pagePoint` uses for the identical clearance decision.
+    ///
+    /// Anchored on the camera centre because a pitched camera's scale varies down the screen: the
+    /// centre is where the selected day's subject sits, so it is the right place to measure.
+    /// Returns nil until the projection is ready, and the clearance then simply moves nothing.
+    private static func metersPerPoint(proxy: MapProxy,
+                                       center: CLLocationCoordinate2D) -> Double? {
+        let span: CGFloat = 100
+        guard let origin = proxy.convert(center, to: .named(mapSpace)),
+              let a = proxy.convert(origin, from: .named(mapSpace)),
+              let b = proxy.convert(CGPoint(x: origin.x + span, y: origin.y),
+                                    from: .named(mapSpace)) else { return nil }
+        let perPoint = MapGeoMath.meters(from: a, to: b) / Double(span)
+        return perPoint.isFinite && perPoint > 0 ? perPoint : nil
     }
 
     @MapContentBuilder
@@ -378,24 +425,75 @@ struct GlobeExperienceView: View {
                         style: StrokeStyle(lineWidth: 4, lineCap: .round, lineJoin: .round))
         }
 
-        // Amber day-number camp badges (selected bigger + brighter).
-        ForEach(Array(journey.camps.enumerated()), id: \.element.id) { index, camp in
-            Annotation(camp.name, coordinate: camp.clCoordinate, anchor: .center) {
-                CampBadge(day: camp.dayNumber, selected: controller.selectedDayIndex == index)
-                    .onTapGesture { controller.selectDay(index) }
+        // Photo stacks (only the selected day's when a day is active), clustered at the current
+        // camera distance. Tapping one opens the lightbox scoped to that day's photos.
+        //
+        // QUA-83: these are declared BEFORE the camp badges, and that order IS the tap fix. Later
+        // map content draws above earlier, and the topmost view takes the tap — so with camps first
+        // a photo taken AT camp (the most common geotag there is) fully covered the camp's 44 pt
+        // frame and opened the lightbox instead of selecting the day. The web reached the same
+        // conclusion the expensive way: paint order there is annotation ADD order, and it was the
+        // ONLY lever that reached it — `collisionMode` and `displayPriority` were measured and do
+        // nothing (`src/lib/map/mapkit/annotations.ts:27`). Do not "tidy" this back into
+        // camps-then-photos; it reads more natural and reintroduces the defect.
+        ForEach(photoClusters(for: journey)) { cluster in
+            Annotation("Photo", coordinate: cluster.coordinate, anchor: .center) {
+                PhotoMarker(photo: cluster.representative, count: cluster.count)
+                    .onTapGesture { openLightbox(for: cluster.representative) }
             }
             .annotationTitles(.hidden)
         }
 
-        // Optional photo thumbnail markers (only the selected day's when a day is active).
-        // Tapping one opens the lightbox scoped to that day's photos.
-        ForEach(visiblePhotos(for: journey)) { photo in
-            Annotation("Photo", coordinate: photo.coordinate, anchor: .center) {
-                PhotoMarker(photo: photo)
-                    .onTapGesture { openLightbox(for: photo) }
+        // Amber day-number camp badges (selected bigger + brighter), declared LAST so they keep tap
+        // precedence over the stacks above. Coincident camps are merged into one badge, because two
+        // badges at one coordinate left only the later-declared day reachable.
+        ForEach(MapGeoMath.campGroups(journey.camps)) { group in
+            Annotation(campGroupName(group, in: journey), coordinate: group.coordinate, anchor: .center) {
+                CampBadge(day: campBadgeDay(group, in: journey),
+                          selected: isSelected(group),
+                          mergedDays: group.isMerged ? group.dayNumbers : [])
+                    .onTapGesture {
+                        controller.selectDay(MapGeoMath.tapSelection(in: group,
+                                                                    current: controller.selectedDayIndex))
+                    }
             }
             .annotationTitles(.hidden)
         }
+    }
+
+    // MARK: Camp group / photo cluster helpers (QUA-83)
+
+    private func isSelected(_ group: MapGeoMath.CampGroup) -> Bool {
+        guard let selected = controller.selectedDayIndex else { return false }
+        return group.indices.contains(selected)
+    }
+
+    /// The day number a merged badge reads as: the selected one when the selection is inside the
+    /// group, otherwise its first day.
+    private func campBadgeDay(_ group: MapGeoMath.CampGroup, in journey: Journey) -> Int {
+        if let selected = controller.selectedDayIndex,
+           group.indices.contains(selected),
+           journey.camps.indices.contains(selected) {
+            return journey.camps[selected].dayNumber
+        }
+        return group.dayNumbers.first ?? 1
+    }
+
+    private func campGroupName(_ group: MapGeoMath.CampGroup, in journey: Journey) -> String {
+        guard let first = group.indices.first, journey.camps.indices.contains(first) else { return "" }
+        return journey.camps[first].name
+    }
+
+    /// The photo stacks to render: grouped at the current camera distance, pushed clear of the camp
+    /// badges, then capped so a photo-heavy overview cannot build hundreds of live `AsyncImage`
+    /// annotation views at once.
+    private func photoClusters(for journey: Journey) -> [MapGeoMath.PhotoCluster] {
+        let grouped = MapGeoMath.photoClusters(visiblePhotos(for: journey),
+                                               zoom: MapGeoMath.zoom(forDistance: cameraDistance))
+        let cleared = MapGeoMath.clustersCleared(grouped,
+                                                 of: journey.camps,
+                                                 metersPerPoint: metersPerPoint)
+        return MapGeoMath.topClusters(cleared)
     }
 
     private func selectedSegment(for journey: Journey) -> [CLLocationCoordinate2D]? {

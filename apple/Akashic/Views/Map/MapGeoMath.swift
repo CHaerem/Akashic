@@ -256,4 +256,220 @@ enum MapGeoMath {
                                 cos(angular) - sin(lat1) * sin(lat2))
         return CLLocationCoordinate2D(latitude: lat2 * 180 / .pi, longitude: lon2 * 180 / .pi)
     }
+
+    // MARK: - Photo clustering and marker precedence (QUA-83)
+    //
+    // The iOS twin of the web's QUA-49/QUA-58. Everything here is pure so the two decisions that
+    // actually caused the defect — how photos group, and who wins a tap — are unit-testable
+    // without a live map, which is what let the web guard its own regression cheaply.
+
+    /// A grid cell of geotagged photos drawn as one stack marker — the iOS counterpart of the
+    /// web's `PhotoGroup` (`src/lib/map/mapkit/geometry.ts:175`).
+    ///
+    /// Stores latitude/longitude rather than a `CLLocationCoordinate2D` for the same reason
+    /// `MapPhoto` does (`GlobeMapComponents.swift:75`): `CLLocationCoordinate2D` is not
+    /// `Equatable`, so a stored one would cost this type its synthesised conformance.
+    struct PhotoCluster: Identifiable, Equatable {
+        /// Grid cell key. Stable for a given camera distance and deliberately NOT across
+        /// distances — re-clustering on zoom is the point.
+        var id: String
+        var photos: [MapPhoto]
+        /// The photo whose thumbnail is drawn for the stack.
+        var representative: MapPhoto
+        var latitude: Double
+        var longitude: Double
+
+        var count: Int { photos.count }
+        var coordinate: CLLocationCoordinate2D {
+            CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
+        }
+    }
+
+    /// Inverse of ``distance(forZoom:)``, so the web's zoom-derived grid can be driven from an
+    /// `MKMapCamera`'s `centerCoordinateDistance`.
+    ///
+    /// Clamped to `0...24`, and the clamp is load-bearing rather than tidiness: the cell size below
+    /// divides by `2^(zoom − 8)`, and converting the resulting quotient to `Int` **traps** in Swift
+    /// when the value is non-finite or outside `Int`'s range. A zero or absurd camera distance would
+    /// therefore crash the map rather than mis-draw it. MapKit's real range here is about −0.1
+    /// (globe, 42,000 km) to 18.6 (100 m), so the clamp never touches a genuine camera.
+    static func zoom(forDistance distance: CLLocationDistance) -> Double {
+        guard distance > 0, distance.isFinite else { return 24 }
+        return min(max(log2(earthCircumference / distance), 0), 24)
+    }
+
+    /// Group photos into a camera-derived spatial grid, one stack marker per cell.
+    ///
+    /// The cell size is the web's formula verbatim — `0.1 / 2^(zoom − 8)`
+    /// (`src/lib/map/mapkit/geometry.ts:197`) — reached from the camera through
+    /// ``zoom(forDistance:)`` so both surfaces cluster identically at the same framing. The web's
+    /// note that MapKit's own clustering (`clusteringIdentifier`) was deliberately declined applies
+    /// here too: these markers carry a count badge the built-in cluster annotation cannot draw.
+    ///
+    /// One deliberate difference from the web: the result is **sorted by cell key**. JavaScript's
+    /// `Map` iterates in insertion order, so the web's array is stable for free; a Swift
+    /// `Dictionary` guarantees no order at all, and an unstable one would give SwiftUI's `ForEach`
+    /// a different sequence of identities on an unrelated redraw and rebuild every annotation view.
+    static func photoClusters(_ photos: [MapPhoto], zoom: Double) -> [PhotoCluster] {
+        guard !photos.isEmpty else { return [] }
+        let z = min(max(zoom.isFinite ? zoom : 24, 0), 24)
+        let cellSize = 0.1 / pow(2, z - 8)
+
+        var cells: [String: [MapPhoto]] = [:]
+        for photo in photos {
+            guard photo.latitude.isFinite, photo.longitude.isFinite else { continue }
+            let key = "\(Int(floor(photo.longitude / cellSize))),\(Int(floor(photo.latitude / cellSize)))"
+            cells[key, default: []].append(photo)
+        }
+
+        return cells.keys.sorted().compactMap { key in
+            guard let bucket = cells[key], let first = bucket.first else { return nil }
+            let n = Double(bucket.count)
+            return PhotoCluster(id: key,
+                                photos: bucket,
+                                representative: first,
+                                latitude: bucket.reduce(0) { $0 + $1.latitude } / n,
+                                longitude: bucket.reduce(0) { $0 + $1.longitude } / n)
+        }
+    }
+
+    /// Clearance kept between a photo stack's centre and the nearest camp badge's centre, in
+    /// points — the web's `MARKER_CLEARANCE_PX` (`src/lib/map/mapkit/annotations.ts:77`).
+    ///
+    /// Sized there off the two elements' own boxes rather than picked: 36 pt camp (42 selected),
+    /// 32 pt stack (40 highlighted), so 30 pt puts each marker's centre outside the other's box
+    /// with 9 pt to spare in the worst combination, while staying small enough that the pair still
+    /// reads as one place. It ports unchanged because the iOS markers carry the same 44 pt minimum
+    /// tap frames (`GlobeMapComponents.swift:210`, `:257`).
+    static let markerClearancePoints: Double = 30
+
+    /// Push any cluster sitting within `clearancePoints` of a camp badge directly away from it, so
+    /// the two tap frames stop overlapping.
+    ///
+    /// **This mirrors the web and not the ledger entry.** QUA-83's finish line describes clusters
+    /// "filtered within a clearance radius"; the web does not filter — `clearedAnchorOffset`
+    /// OFFSETS the stack and keeps it (`src/lib/map/mapkit/annotations.ts:70-77`). Dropping a
+    /// cluster would silently hide photos, which is a worse failure than the overlap being fixed,
+    /// so the web's choice is the one ported. The ledger text is the looser statement of intent.
+    ///
+    /// `metersPerPoint` comes from the live projection rather than a formula, because the honest
+    /// conversion depends on viewport size and pitch. When it is unavailable the clusters are
+    /// returned untouched: the tap-precedence half of QUA-83 is declaration order and does not
+    /// depend on this, so a missing projection degrades to "no nudge", never to "camps unreachable".
+    static func clustersCleared(_ clusters: [PhotoCluster],
+                                of camps: [Camp],
+                                metersPerPoint: Double,
+                                clearancePoints: Double = markerClearancePoints) -> [PhotoCluster] {
+        guard metersPerPoint > 0, metersPerPoint.isFinite, !camps.isEmpty else { return clusters }
+        let clearance = clearancePoints * metersPerPoint
+
+        return clusters.map { cluster in
+            var nearest: (coordinate: CLLocationCoordinate2D, meters: CLLocationDistance)?
+            for camp in camps {
+                let d = meters(from: camp.clCoordinate, to: cluster.coordinate)
+                if nearest == nil || d < nearest!.meters { nearest = (camp.clCoordinate, d) }
+            }
+            guard let hit = nearest, hit.meters < clearance else { return cluster }
+
+            // A photo geotagged exactly at the camp — the most common case in the defect report,
+            // since that is what "a photo taken at camp" produces — has no away-direction at all.
+            // Due north is chosen so the result is deterministic rather than dependent on
+            // floating-point noise inside `bearing`.
+            let away = hit.meters == 0
+                ? 0
+                : bearing(from: hit.coordinate, to: cluster.coordinate)
+            let moved = coordinate(from: hit.coordinate,
+                                   bearingDegrees: away,
+                                   distanceMeters: clearance)
+            var out = cluster
+            out.latitude = moved.latitude
+            out.longitude = moved.longitude
+            return out
+        }
+    }
+
+    /// Upper bound on rendered photo stack markers.
+    ///
+    /// Each one is a live SwiftUI `Annotation` hosting an `AsyncImage`, so a photo-heavy journey's
+    /// overview built hundreds of them at once — the first half of QUA-83's finding. Clustering
+    /// removes most of that; this bounds what remains when the photos are spread widely enough
+    /// that nearly every cell holds one.
+    static let maxRenderedPhotoClusters = 60
+
+    /// The `limit` biggest clusters, ties broken by cell key, returned back in key order.
+    ///
+    /// Sorted twice on purpose: by size to choose, then by key so the rendered sequence keeps the
+    /// stable `ForEach` identity that ``photoClusters(_:zoom:)`` establishes.
+    static func topClusters(_ clusters: [PhotoCluster],
+                            limit: Int = maxRenderedPhotoClusters) -> [PhotoCluster] {
+        guard limit > 0 else { return [] }
+        guard clusters.count > limit else { return clusters }
+        return clusters
+            .sorted { $0.count != $1.count ? $0.count > $1.count : $0.id < $1.id }
+            .prefix(limit)
+            .sorted { $0.id < $1.id }
+    }
+
+    // MARK: - Coincident camps (QUA-83)
+
+    /// Camps sharing one location, drawn as a single badge.
+    struct CampGroup: Identifiable, Equatable {
+        /// The first member camp's id.
+        var id: String
+        /// Indices into the journey's `camps`, in day order — what selection is expressed in.
+        var indices: [Int]
+        /// Day numbers the badge offers, in the same order as `indices`.
+        var dayNumbers: [Int]
+        var latitude: Double
+        var longitude: Double
+
+        var coordinate: CLLocationCoordinate2D {
+            CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
+        }
+        var isMerged: Bool { indices.count > 1 }
+    }
+
+    /// Merge camps within `radiusMeters` of one another into one badge.
+    ///
+    /// A multi-night stay — a rest day, an acclimatisation day, a base camp returned to — writes
+    /// two camps at the same coordinate. Both badges were drawn exactly on top of each other, and
+    /// since SwiftUI's later declaration takes the tap, **only the later day was ever reachable**
+    /// and the earlier one was permanently unselectable. That is the ":372" half of QUA-83's
+    /// finding, and grouping is what makes the badge able to offer both days.
+    ///
+    /// Grouping is greedy against every existing group rather than only the previous camp, so a
+    /// base camp returned to on a much later day merges with its first visit too.
+    ///
+    /// `radiusMeters` is a judgement, not a measurement: large enough that two camps typed with the
+    /// same coordinate — or one re-derived from a GPS fix a few metres off — merge, and far smaller
+    /// than the kilometres between two genuinely different camps.
+    static func campGroups(_ camps: [Camp], radiusMeters: Double = 25) -> [CampGroup] {
+        var groups: [CampGroup] = []
+        for (index, camp) in camps.enumerated() {
+            let coord = camp.clCoordinate
+            if let hit = groups.firstIndex(where: { meters(from: $0.coordinate, to: coord) <= radiusMeters }) {
+                groups[hit].indices.append(index)
+                groups[hit].dayNumbers.append(camp.dayNumber)
+            } else {
+                groups.append(CampGroup(id: camp.id,
+                                        indices: [index],
+                                        dayNumbers: [camp.dayNumber],
+                                        latitude: coord.latitude,
+                                        longitude: coord.longitude))
+            }
+        }
+        return groups
+    }
+
+    /// Which camp index a tap on `group` should select, given what is selected now.
+    ///
+    /// A merged badge is one tap target standing for several days, so it advances: tapping it
+    /// selects its first day, and tapping again walks to the next, wrapping at the end. That is how
+    /// a badge "offers both days" without inventing a second control on a 44 pt target.
+    static func tapSelection(in group: CampGroup, current: Int?) -> Int {
+        guard let current, let position = group.indices.firstIndex(of: current) else {
+            return group.indices.first ?? 0
+        }
+        return group.indices[(position + 1) % group.indices.count]
+    }
 }
