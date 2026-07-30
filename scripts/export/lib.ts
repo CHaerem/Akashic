@@ -572,3 +572,184 @@ export function humanBytes(bytes: number): string {
   }
   return `${n.toFixed(u === 0 ? 0 : 2)} ${units[u]}`;
 }
+
+// ---------------------------------------------------------------------------
+// Coherence audit (QUA-93)
+//
+// Everything above this line validates SHAPE: does the row parse, is the field present, does the
+// coordinate unwrap. That is the whole reason the defects QUA-92 records survived every gate in this
+// repo — a journey can claim a 374-day trip, attach none of its 939 photographs to a day, and place
+// 144 of them on one coordinate in the wrong country, while every existing check passes.
+//
+// These functions ask a different question: does the data agree WITH ITSELF. They are pure so the
+// smoke test can exercise every branch with inline fixtures, and `auditArchive.ts` can point the
+// same code at a real export without CI depending on a path outside the repo.
+// ---------------------------------------------------------------------------
+
+export interface CoherenceJourney {
+  id: string;
+  slug?: string | null;
+  name?: string | null;
+  date_started?: string | null;
+  date_ended?: string | null;
+}
+
+export interface CoherencePhoto {
+  id: string;
+  journey_id?: string | null;
+  waypoint_id?: string | null;
+  coordinates?: unknown;
+  taken_at?: string | null;
+  location_source?: string | null;
+}
+
+export type CoherenceKind =
+  | 'dates-exclude-photos'
+  | 'implausible-span'
+  | 'collapsed-coordinate'
+  | 'no-day-assignment'
+  | 'no-real-location';
+
+export interface CoherenceFinding {
+  journey: string;
+  kind: CoherenceKind;
+  /** One line, naming the numbers — this is what a failing gate prints. */
+  detail: string;
+  count: number;
+}
+
+export interface CoherenceOptions {
+  /** A trek longer than this is a typo until proven otherwise. Kilimanjaro's bad row reads 374. */
+  maxSpanDays?: number;
+  /** Flag a shared coordinate at or above this share of a journey's located photos. */
+  collapsedShare?: number;
+  /** …but never on a handful of photos, where "all three at camp" is ordinary. */
+  collapsedMinimum?: number;
+}
+
+const DAY_MS = 86_400_000;
+
+/** `[lng, lat]` for anything the export stores, or null. Deliberately stricter than a truthiness check. */
+function locatedAt(coordinates: unknown): [number, number] | null {
+  if (Array.isArray(coordinates) && coordinates.length >= 2 &&
+      typeof coordinates[0] === 'number' && typeof coordinates[1] === 'number' &&
+      Number.isFinite(coordinates[0]) && Number.isFinite(coordinates[1])) {
+    return [coordinates[0], coordinates[1]];
+  }
+  return null;
+}
+
+/**
+ * Every way a journey's photographs contradict the journey itself.
+ *
+ * Returns an empty array for coherent data, so a caller can treat a non-empty result as failure. The
+ * checks deliberately do NOT include "photo is far from the route": measured on the real archive,
+ * that flags Inca Trail's day-1 Cusco photographs at 55 km and they are entirely correct — day 1 is
+ * a city preparation day. Distance off route only means something relative to the day a photo
+ * belongs to, so it needs day assignment to be trustworthy first, which is one of the things being
+ * checked here.
+ */
+export function auditJourneyCoherence(
+  journeys: CoherenceJourney[],
+  photos: CoherencePhoto[],
+  options: CoherenceOptions = {},
+): CoherenceFinding[] {
+  const maxSpanDays = options.maxSpanDays ?? 90;
+  const collapsedShare = options.collapsedShare ?? 0.25;
+  const collapsedMinimum = options.collapsedMinimum ?? 20;
+
+  const findings: CoherenceFinding[] = [];
+
+  for (const journey of journeys) {
+    const label = journey.slug ?? journey.name ?? journey.id;
+    const mine = photos.filter((p) => p.journey_id === journey.id);
+    if (mine.length === 0) continue;
+
+    const start = journey.date_started ? Date.parse(journey.date_started) : NaN;
+    const end = journey.date_ended ? Date.parse(journey.date_ended) : NaN;
+
+    if (Number.isFinite(start) && Number.isFinite(end)) {
+      const span = Math.round((end - start) / DAY_MS);
+      if (span > maxSpanDays) {
+        findings.push({
+          journey: label,
+          kind: 'implausible-span',
+          detail: `recorded span is ${span} days (${journey.date_started} to ${journey.date_ended})`,
+          count: span,
+        });
+      }
+
+      // `date_ended` is a DATE, so it parses to midnight at the START of that day — a photo taken at
+      // 14:00 on the last day of the trek is already "after the end" before any slack is applied.
+      // Caught by the smoke test's own slack case, and it would have made this check cry wolf on the
+      // final afternoon of every journey. The end of the recorded range is the end of that day.
+      const endOfDay = end + DAY_MS - 1;
+      // Then a day of slack at each end: a photo taken just before setting off or just after getting
+      // back belongs to the trip, and time zones move a timestamp by hours.
+      const outside = mine.filter((p) => {
+        if (!p.taken_at) return false;
+        const t = Date.parse(p.taken_at);
+        return Number.isFinite(t) && (t < start - DAY_MS || t > endOfDay + DAY_MS);
+      });
+      if (outside.length > 0) {
+        const stamps = outside
+          .map((p) => Date.parse(p.taken_at as string))
+          .sort((a, b) => a - b);
+        const iso = (n: number) => new Date(n).toISOString().slice(0, 10);
+        findings.push({
+          journey: label,
+          kind: 'dates-exclude-photos',
+          detail:
+            `${outside.length} of ${mine.length} photos fall outside the recorded ` +
+            `${journey.date_started}..${journey.date_ended}; they span ` +
+            `${iso(stamps[0])}..${iso(stamps[stamps.length - 1])}`,
+          count: outside.length,
+        });
+      }
+    }
+
+    const located = mine.map((p) => locatedAt(p.coordinates)).filter((c): c is [number, number] => c !== null);
+    if (located.length >= collapsedMinimum) {
+      const tally = new Map<string, number>();
+      for (const c of located) {
+        const key = `${c[0]},${c[1]}`;
+        tally.set(key, (tally.get(key) ?? 0) + 1);
+      }
+      for (const [key, count] of tally) {
+        if (count >= collapsedMinimum && count / located.length >= collapsedShare) {
+          findings.push({
+            journey: label,
+            kind: 'collapsed-coordinate',
+            detail:
+              `${count} of ${located.length} located photos share the single coordinate [${key}] — ` +
+              `an estimate collapsing to one point, not a place people stood`,
+            count,
+          });
+        }
+      }
+    }
+
+    const withDay = mine.filter((p) => typeof p.waypoint_id === 'string' && p.waypoint_id.length > 0);
+    if (withDay.length === 0) {
+      findings.push({
+        journey: label,
+        kind: 'no-day-assignment',
+        detail: `none of ${mine.length} photos is attached to a day, so the day surfaces show nothing`,
+        count: mine.length,
+      });
+    }
+
+    // Only meaningful once something IS located: a journey with no coordinates at all is a different
+    // (and honest) state, not a broken location pipeline.
+    if (located.length > 0 && !mine.some((p) => p.location_source === 'exif')) {
+      findings.push({
+        journey: label,
+        kind: 'no-real-location',
+        detail: `${located.length} located photos and not one from EXIF — every coordinate is a guess`,
+        count: located.length,
+      });
+    }
+  }
+
+  return findings;
+}

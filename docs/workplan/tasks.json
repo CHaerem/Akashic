@@ -5465,18 +5465,55 @@
       "priority": 5,
       "deps": [],
       "track": "QUALITY",
-      "status": "TODO",
+      "status": "DONE",
       "owner": false,
       "title": "Nothing detects a journey whose photos disagree with its own dates, or 144 photos pinned to one point 265 km off the route",
       "done_when": "A data-integrity check (extending scripts/export/smoke.ts, which already runs 26 checks) fails on: a journey whose date range does not contain its own photos' taken_at range, a journey span implausible for its day count, and a single coordinate shared by an outsized share of a journey's photos. Each failure names the journey and the counts. Proven by pointing it at the 2026-07-22 archive, where it must flag Kilimanjaro's 374-day span, Mount Kenya's year offset and the 144-photo cluster — and pass once those are corrected.",
       "why": "MEASURED 2026-07-30 on the real archive. Three findings that no gate in this repo could have caught, because every existing check validates SHAPE (does the row parse, is the field present) and none validates COHERENCE. (1) Kilimanjaro's recorded span is 374 days against 9 days of photos; Mount Kenya's year is off by one — see QUA-92. (2) 144 of Mount Kenya's 318 photos sit at the SINGLE coordinate [35.26,-1.37], measured 265 km off its route, in northern Tanzania rather than on Mount Kenya; 272 of that journey's photos carry location_source=estimated, so an estimator collapsed a large share of them onto one wrong point. On the map those 144 render as a cluster in the wrong country, and QUA-83's clustering will happily group them there. (3) 200 photos across the three journeys have NO coordinates at all (143 Kilimanjaro, 46 Mount Kenya, 11 Inca Trail), so they never appear on a map at all — related to QUA-89, which is about them being invisible from the day surfaces. NOTE the false positive this audit produced, because the next person will hit it too: a raw 'distance from route' check flags Inca Trail's day-1 Cusco photos at 55 km, which are CORRECT — day 1 is a city preparation day and is legitimately nowhere near the trail. Distance-off-route is only a defect signal relative to the day the photo belongs to.",
       "files": [
-        "scripts/export/smoke.ts"
+        "scripts/export/lib.ts",
+        "scripts/export/smoke.ts",
+        "scripts/export/auditArchive.ts",
+        "scripts/export/tsconfig.json"
       ],
       "verify": [
         "npx tsc -p scripts/export/tsconfig.json",
-        "node scripts/export/smoke.ts"
-      ]
+        "node scripts/export/smoke.ts",
+        "MANUAL: node scripts/export/auditArchive.ts <archive-root> against a real export — it must report the known findings and exit 1, and report nothing once the data is corrected (QUA-92)."
+      ],
+      "claim": {
+        "agent": "claude-remote",
+        "branch": "claude/remote-control-d38598",
+        "at": "2026-07-30"
+      },
+      "verification": {
+        "at": "2026-07-30T08:30:03.756Z",
+        "head": "c1c81e6",
+        "ran": [
+          {
+            "command": "npx tsc -p scripts/export/tsconfig.json",
+            "ok": true,
+            "ms": 810,
+            "status": 0,
+            "signal": null
+          },
+          {
+            "command": "node scripts/export/smoke.ts",
+            "ok": true,
+            "ms": 165,
+            "status": 0,
+            "signal": null
+          }
+        ],
+        "attested": [
+          {
+            "kind": "manual",
+            "text": "node scripts/export/auditArchive.ts <archive-root> against a real export — it must report the known findings and exit 1, and report nothing once the data is corrected (QUA-92)."
+          }
+        ]
+      },
+      "attestation": "Ran node scripts/export/auditArchive.ts /Users/cher/Privat/AkashicExport-20260722 (read-only, 3 journeys / 1538 photos) on 2026-07-30 and read the output: 5 findings, exit 1. mount-kenya dates-exclude-photos 264/318 spanning 2024-10-10..2024-10-17 against a 2023 record, collapsed-coordinate 144/272 at [35.26,-1.37], no-real-location 272 located and zero EXIF; kilimanjaro implausible-span 374 days, no-day-assignment none of 939 photos attached to a day; inca-trail reported clean. The PASS case is not yet observed on real data — it needs QUA-92's two date corrections first, and that is the owner's.",
+      "evidence": "npx tsc -p scripts/export/tsconfig.json clean (first time since 61b455c retired Supabase — TS2307 had been failing, and because the documented command is 'tsc && node smoke.ts' the smoke test never ran either); node scripts/export/smoke.ts 38 checks passed, up from 26."
     }
   ]
 }

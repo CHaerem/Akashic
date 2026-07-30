@@ -33,6 +33,9 @@ import {
   normalizeEtag,
   mapWithConcurrency,
   humanBytes,
+  auditJourneyCoherence,
+  type CoherenceJourney,
+  type CoherencePhoto,
   type RecoveredFixture,
   type TrekConfig,
   type FixtureCamp,
@@ -261,5 +264,156 @@ async function ok2(name: string, fn: () => Promise<void>): Promise<void> {
   passed++;
   console.log(`  ✓ ${name}`);
 }
+
+// --- coherence audit (QUA-93) -------------------------------------------------
+//
+// Every check above this line asks whether a row is well FORMED. These ask whether the data agrees
+// with itself, which is the question that was never asked — and the reason a journey recording a
+// 374-day trip, with none of its 939 photographs attached to a day, passed every gate in this repo.
+//
+// The fixtures below are shaped from the real defects measured on the 2026-07-22 archive
+// (see QUA-92/QUA-93), so each one is a case that actually happened rather than an invented shape.
+
+const CLEAN_JOURNEY: CoherenceJourney = {
+  id: 'j-inca', slug: 'inca-trail', date_started: '2017-09-29', date_ended: '2017-10-06',
+};
+
+/** `n` coherent photos: located from EXIF, attached to a day, taken inside the range. */
+function cleanPhotos(n: number, journeyId = 'j-inca'): CoherencePhoto[] {
+  return Array.from({ length: n }, (_, i) => ({
+    id: `p${i}`,
+    journey_id: journeyId,
+    waypoint_id: `w${i % 5}`,
+    // Spread the coordinates so nothing trips the collapsed-coordinate check.
+    coordinates: [-72.54 + i * 0.0001, -13.18 - i * 0.0001],
+    taken_at: `2017-10-0${(i % 6) + 1}T09:00:00Z`,
+    location_source: 'exif',
+  }));
+}
+
+ok('coherent data produces no findings', () => {
+  assert.deepEqual(auditJourneyCoherence([CLEAN_JOURNEY], cleanPhotos(30)), []);
+});
+
+ok('a journey with no photos is not audited', () => {
+  assert.deepEqual(auditJourneyCoherence([CLEAN_JOURNEY], []), []);
+});
+
+ok('implausible span is flagged (Kilimanjaro read as 374 days)', () => {
+  const journey: CoherenceJourney = {
+    id: 'j-kili', slug: 'kilimanjaro', date_started: '2022-09-30', date_ended: '2023-10-09',
+  };
+  const findings = auditJourneyCoherence([journey], cleanPhotos(5, 'j-kili'));
+  const span = findings.find((f) => f.kind === 'implausible-span');
+  assert.ok(span, `expected implausible-span, got ${JSON.stringify(findings.map((f) => f.kind))}`);
+  assert.equal(span.count, 374);
+  assert.equal(span.journey, 'kilimanjaro');
+});
+
+ok('photos outside the recorded range are flagged (Mount Kenya year offset)', () => {
+  const journey: CoherenceJourney = {
+    id: 'j-mk', slug: 'mount-kenya', date_started: '2023-10-10', date_ended: '2023-10-17',
+  };
+  const photos: CoherencePhoto[] = Array.from({ length: 10 }, (_, i) => ({
+    id: `p${i}`, journey_id: 'j-mk', waypoint_id: 'w1',
+    coordinates: [37.3 + i * 0.01, -0.15],
+    taken_at: `2024-10-1${i % 8}T09:00:00Z`,   // a year later than the record
+    location_source: 'exif',
+  }));
+  const findings = auditJourneyCoherence([journey], photos);
+  const off = findings.find((f) => f.kind === 'dates-exclude-photos');
+  assert.ok(off, 'expected dates-exclude-photos');
+  assert.equal(off.count, 10);
+  assert.match(off.detail, /2024-10-1/);
+});
+
+ok('the last afternoon and a day of slack at each end are allowed', () => {
+  const photos = cleanPhotos(4);
+  // The evening before departure and the morning after getting back.
+  photos[0].taken_at = '2017-09-28T20:00:00Z';
+  photos[1].taken_at = '2017-10-07T06:00:00Z';
+  // And the ordinary case that first broke this: 14:00 on the LAST recorded day. `date_ended`
+  // parses to midnight at the start of that day, so without treating it as end-of-day this photo
+  // reads as "after the trip" — every journey's final afternoon would have been flagged.
+  photos[2].taken_at = '2017-10-06T14:00:00Z';
+  assert.deepEqual(
+    auditJourneyCoherence([CLEAN_JOURNEY], photos).filter((f) => f.kind === 'dates-exclude-photos'),
+    [],
+  );
+});
+
+ok('a coordinate shared by many photos is flagged (144 at one point, 265 km off route)', () => {
+  const photos: CoherencePhoto[] = Array.from({ length: 40 }, (_, i) => ({
+    id: `p${i}`, journey_id: 'j-inca', waypoint_id: 'w1',
+    // 30 of 40 collapsed onto one estimate; the rest genuinely spread.
+    coordinates: i < 30 ? [35.26, -1.37] : [-72.54 + i * 0.001, -13.18],
+    taken_at: '2017-10-01T09:00:00Z',
+    location_source: i < 30 ? 'estimated' : 'exif',
+  }));
+  const findings = auditJourneyCoherence([CLEAN_JOURNEY], photos);
+  const collapsed = findings.find((f) => f.kind === 'collapsed-coordinate');
+  assert.ok(collapsed, 'expected collapsed-coordinate');
+  assert.equal(collapsed.count, 30);
+  assert.match(collapsed.detail, /35\.26,-1\.37/);
+});
+
+ok('a few photos at one camp is ordinary, not a collapsed estimate', () => {
+  // The same coordinate on a handful of photos is what standing at a camp looks like. Below the
+  // minimum this must stay silent, or the check cries wolf on every short journey.
+  const photos: CoherencePhoto[] = Array.from({ length: 8 }, (_, i) => ({
+    id: `p${i}`, journey_id: 'j-inca', waypoint_id: 'w1',
+    coordinates: [-72.5413, -13.186],
+    taken_at: '2017-10-01T09:00:00Z', location_source: 'exif',
+  }));
+  assert.deepEqual(
+    auditJourneyCoherence([CLEAN_JOURNEY], photos).filter((f) => f.kind === 'collapsed-coordinate'),
+    [],
+  );
+});
+
+ok('a journey with no day assignment at all is flagged (all 939 Kilimanjaro photos)', () => {
+  const photos = cleanPhotos(12).map((p) => ({ ...p, waypoint_id: null }));
+  const findings = auditJourneyCoherence([CLEAN_JOURNEY], photos);
+  const noDay = findings.find((f) => f.kind === 'no-day-assignment');
+  assert.ok(noDay, 'expected no-day-assignment');
+  assert.equal(noDay.count, 12);
+});
+
+ok('a partially assigned journey is not flagged for day assignment', () => {
+  const photos = cleanPhotos(12);
+  photos.slice(0, 6).forEach((p) => { p.waypoint_id = null; });
+  assert.deepEqual(
+    auditJourneyCoherence([CLEAN_JOURNEY], photos).filter((f) => f.kind === 'no-day-assignment'),
+    [],
+  );
+});
+
+ok('a journey where no coordinate came from EXIF is flagged', () => {
+  const photos = cleanPhotos(10).map((p, i) => ({
+    ...p,
+    location_source: 'estimated',
+    coordinates: [37.3 + i * 0.01, -0.15],
+  }));
+  const findings = auditJourneyCoherence([CLEAN_JOURNEY], photos);
+  assert.ok(findings.some((f) => f.kind === 'no-real-location'), 'expected no-real-location');
+});
+
+ok('a journey with no coordinates at all is an honest state, not a broken pipeline', () => {
+  const photos = cleanPhotos(10).map((p) => ({ ...p, coordinates: null, location_source: null }));
+  assert.deepEqual(
+    auditJourneyCoherence([CLEAN_JOURNEY], photos).filter((f) => f.kind === 'no-real-location'),
+    [],
+  );
+});
+
+ok('a malformed coordinate does not count as located', () => {
+  const photos = cleanPhotos(10).map((p) => ({
+    ...p, coordinates: ['37.3', null] as unknown, location_source: 'estimated',
+  }));
+  // Nothing is located, so neither the collapsed nor the EXIF check may fire.
+  const kinds = auditJourneyCoherence([CLEAN_JOURNEY], photos).map((f) => f.kind);
+  assert.ok(!kinds.includes('collapsed-coordinate'));
+  assert.ok(!kinds.includes('no-real-location'));
+});
 
 console.log(`\n✅ smoke: ${passed} checks passed\n`);

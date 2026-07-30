@@ -242,7 +242,8 @@ These are measured, not guessed. Prefer them over inventing your own.
 | Web lint | `npm run lint` | 205 files inspected, 0 errors, warnings capped at 14 (was 25; MAP-05 deleted `useMapbox.ts` and `MapboxGlobe.tsx`, which held 11 of them — a deletion, not a fix) |
 | Web build | `npm run build` | ~4 s, no env needed |
 | Web e2e | `VITE_E2E_TEST_MODE=true CI=true npx playwright test --project=chromium --ignore-snapshots` | needs `.env.local` |
-| Export tooling | `npx tsc -p scripts/export/tsconfig.json && node scripts/export/smoke.ts` | clean; 26 checks |
+| Export tooling | `npx tsc -p scripts/export/tsconfig.json && node scripts/export/smoke.ts` | clean; **38 checks** (was 26). This row asserted "clean; 26 checks" while the typecheck had been RED since `61b455c` retired Supabase and deleted `@supabase/supabase-js` from `package.json` — `tsc` failed TS2307, and because the command is `tsc && …` the **smoke test never ran either**, so the 26 was a figure nobody had re-measured. QUA-93 excluded the two retired migration scripts from the tsconfig; keep that exclusion |
+| Archive coherence | `node scripts/export/auditArchive.ts <archive-root>` | read-only, exit 1 on findings. On the 2026-07-22 archive: 5 findings (Kilimanjaro's 374-day span + 939 photos with no day; Mount Kenya's year offset, 144 photos on one coordinate, zero EXIF), `inca-trail` clean. Safe to run — unlike `verifyExport.ts`, it writes nothing |
 | Ledger | `npm run workplan:check` | ok |
 
 Do not run `apple/Scripts/testflight-upload.sh` or `scripts/export/verifyExport.ts` — both

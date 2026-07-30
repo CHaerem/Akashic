@@ -17,5 +17,7 @@
     "strict": true,
     "forceConsistentCasingInFileNames": true
   },
-  "include": ["*.ts"]
+  "include": ["*.ts"],
+  "//exclude": "QUA-93: these two are one-time migration tools whose providers are retired, and their imports are no longer installable — `@supabase/supabase-js` was deleted from package.json by 61b455c ('Retire Supabase; CloudKit is the only backend') and `@aws-sdk/client-s3` is likewise absent. So `tsc -p scripts/export/tsconfig.json` has failed with TS2307 ever since, which matters more than it looks: the documented command is `tsc && node smoke.ts`, so the `&&` meant the SMOKE TEST never ran either, and CLAUDE.md's '26 checks' was a figure nobody had re-measured since the retirement. The scripts are kept, not deleted, because they document how the data got here; excluding them restores a typecheck that covers the code still in use.",
+  "exclude": ["exportFromSupabase.ts", "pullR2Archive.ts"]
 }
