@@ -5,7 +5,7 @@
 
 # Akashic — work ledger
 
-186 tasks · **46 open** (21 agent-doable, 15.5 dev-days · 25 owner-only, 10.6 dev-days) · 140 done · 0 dropped
+188 tasks · **48 open** (22 agent-doable, 15.9 dev-days · 26 owner-only, 10.8 dev-days) · 140 done · 0 dropped
 
 > **`dev-days` are a human-developer estimate, not agent time.** They came from the review
 > that produced these tasks and they are the right unit for deciding whether something is
@@ -15,7 +15,7 @@
 > Measured so far: **134 agent tasks estimated at 82.4 dev-days**.
 > Elapsed time is deliberately absent: nothing here can support it. Use `git log` for that.
 >
-> 9 of the closed tasks were 2 dev-days or more, and 7.5 of the 15.5 remaining dev-days still sit in 3 such task(s): DIFF-18, DIFF-19, DIFF-20. Those turn on design judgement rather than localised edits, so do not assume the compression above holds.
+> 9 of the closed tasks were 2 dev-days or more, and 7.5 of the 15.9 remaining dev-days still sit in 3 such task(s): DIFF-18, DIFF-19, DIFF-20. Those turn on design judgement rather than localised edits, so do not assume the compression above holds.
 
 Read [CLAUDE.md](CLAUDE.md) before touching anything. To find work:
 
@@ -158,7 +158,7 @@ node scripts/workplan.mjs next
 
 > Tests, types, CI, localisation, accessibility. Localisation and accessibility are in v1.0 by decision.
 
-16 open of 98 · 4.7 d remaining
+18 open of 100 · 5.3 d remaining
 
 | | Task | Days | Who | Deps | Finish line |
 |---|---|---|---|---|---|
@@ -260,6 +260,8 @@ node scripts/workplan.mjs next
 | ` ` | `QUA-89` **Unassigned photos are invisible from the day-centric surfaces — the count mismatch reads as photo loss (observed hands-on)** | 0.2 | agent | — | When a journey has photos not matched to any day, the journey detail and/or day sheet surface it ('N photos aren't matched to a day — review'), routing to the existing all-photos grid which already renders the Unassigned section; the no-route journey's map fallback no longer frames Null Island (stay on globe or show a designed placeholder). |
 | `x` | `QUA-90` **Nothing automated guards camp-over-photo tap precedence on the iOS map — the headline half of QUA-83 ships unproven** | 0.5 | agent | `QUA-83` | CampBadge and PhotoMarker carry accessibilityIdentifiers in A11yID.swift; a UI test seeds a journey with a photo geotagged AT a camp, taps the camp badge, and asserts the day is selected rather than the lightbox opening; the test is shown to FAIL when trekOverlays() declares camps before the photo stacks (the pre-QUA-83 order), which is the only way to know it guards anything. |
 | `~` | `QUA-91` **SwiftUI Map declutters camp badges on its own — only 3 of 8 are reachable on the Kilimanjaro overview** | 0.3 | agent | — | The overview's camp badges are all reachable, or the decluttering is a documented, deliberate decision with a stated rule for which camps survive. Whichever it is, a test asserts the count that ships, so this cannot regress silently — QUA-90's identifier prefixes already make the badges enumerable. |
+| ` ` | `QUA-92` **Two of the three real journeys carry a wrong YEAR, and one of them reads as a 374-day trip** | 0.2 | owner | — | Kilimanjaro's date_ended reads 2022-10-09 and Mount Kenya's date_started/date_ended read 2024, in CloudKit (and in the public mirror for any published journey). Verified by re-running the archive audit: every journey's own date range then contains its photos' EXIF range. |
+| ` ` | `QUA-93` **Nothing detects a journey whose photos disagree with its own dates, or 144 photos pinned to one point 265 km off the route** | 0.4 | agent | — | A data-integrity check (extending scripts/export/smoke.ts, which already runs 26 checks) fails on: a journey whose date range does not contain its own photos' taken_at range, a journey span implausible for its day count, and a single coordinate shared by an outsized share of a journey's photos. Each failure names the journey and the counts. Proven by pointing it at the 2026-07-22 archive, where it must flag Kilimanjaro's 374-day span, Mount Kenya's year offset and the 144-photo cluster — and pass once those are corrected. |
 
 ## Decisions on record
 

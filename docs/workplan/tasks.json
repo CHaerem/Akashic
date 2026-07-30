@@ -5441,6 +5441,42 @@
         "at": "2026-07-30"
       },
       "resume": "CORRECTION to the previous note, measured not inferred. metersPerPoint is 38.06 m/pt on the Kilimanjaro overview (probe AKASHIC_MAP_PROBE=1, now asserted by testTheLiveProjectionIsEstablishedOnTheOverview). So the projection IS established, campGroups(for:) DOES take its live branch, and QUA-83's photo clearance DOES run -- the previous note's claim that metersPerPoint was 0, and the two consequences drawn from it, are refuted. Why 44 pt and 96 pt looked identical: only SURVIVING annotations appear in the tree, and the survivors (camps 1, 2, 7) are singletons at either threshold. At 96 pt the middle camps did merge and MapKit culled the merged badge anyway; Barranco and Barafu are 4.4 km apart, about 116 pt at this framing, and are still culled. OPEN QUESTION for whoever takes this: MapKit's culling is either more aggressive than any pairwise separation that keeps day-level framing usable, or it is not distance-based at all. Next step is a threshold sweep to find the floor, or a different shape entirely (fewer annotations: draw camps into the polyline layer, or one badge per visible screen region). The reusable lesson: two rounds of confident reasoning from symptoms were both wrong and one probe settled it."
+    },
+    {
+      "id": "QUA-92",
+      "effort": 0.2,
+      "priority": 5,
+      "deps": [],
+      "track": "QUALITY",
+      "status": "TODO",
+      "owner": true,
+      "title": "Two of the three real journeys carry a wrong YEAR, and one of them reads as a 374-day trip",
+      "done_when": "Kilimanjaro's date_ended reads 2022-10-09 and Mount Kenya's date_started/date_ended read 2024, in CloudKit (and in the public mirror for any published journey). Verified by re-running the archive audit: every journey's own date range then contains its photos' EXIF range.",
+      "why": "MEASURED 2026-07-30 against /Users/cher/Privat/AkashicExport-20260722 (1538 photo rows, 3 journeys, read-only). Comparing each journey's recorded range with the taken_at range of its own photos: Kilimanjaro records 2022-09-30 -> 2023-10-09 (374 days) while its 849 dated photos span 2022-09-30 -> 2022-10-08 — the START is right and the END year is wrong. Mount Kenya records 2023-10-10 -> 2023-10-17 while its 264 dated photos span 2024-10-10 -> 2024-10-17 — day and month match EXACTLY and only the year differs, so this is a typo and not a mis-set trip. Inca Trail matches its photos to the day and is clean. This is owner work because it mutates the owner's own CloudKit data; the agent-side gap that let it stay invisible is QUA-93. It matters beyond tidiness: PhotoDayMatcher's time tier cannot place a photo into a day whose date range does not contain it, so a wrong year silently demotes every photo in that journey to a weaker matching tier.",
+      "files": [],
+      "verify": [
+        "OWNER: In the app (or CloudKit Console), correct Kilimanjaro's end date to 2022-10-09 and Mount Kenya's dates to 2024-10-10/2024-10-17.",
+        "MANUAL: Re-run the archive audit and confirm each journey's recorded range contains its own photos' taken_at range."
+      ]
+    },
+    {
+      "id": "QUA-93",
+      "effort": 0.4,
+      "priority": 5,
+      "deps": [],
+      "track": "QUALITY",
+      "status": "TODO",
+      "owner": false,
+      "title": "Nothing detects a journey whose photos disagree with its own dates, or 144 photos pinned to one point 265 km off the route",
+      "done_when": "A data-integrity check (extending scripts/export/smoke.ts, which already runs 26 checks) fails on: a journey whose date range does not contain its own photos' taken_at range, a journey span implausible for its day count, and a single coordinate shared by an outsized share of a journey's photos. Each failure names the journey and the counts. Proven by pointing it at the 2026-07-22 archive, where it must flag Kilimanjaro's 374-day span, Mount Kenya's year offset and the 144-photo cluster — and pass once those are corrected.",
+      "why": "MEASURED 2026-07-30 on the real archive. Three findings that no gate in this repo could have caught, because every existing check validates SHAPE (does the row parse, is the field present) and none validates COHERENCE. (1) Kilimanjaro's recorded span is 374 days against 9 days of photos; Mount Kenya's year is off by one — see QUA-92. (2) 144 of Mount Kenya's 318 photos sit at the SINGLE coordinate [35.26,-1.37], measured 265 km off its route, in northern Tanzania rather than on Mount Kenya; 272 of that journey's photos carry location_source=estimated, so an estimator collapsed a large share of them onto one wrong point. On the map those 144 render as a cluster in the wrong country, and QUA-83's clustering will happily group them there. (3) 200 photos across the three journeys have NO coordinates at all (143 Kilimanjaro, 46 Mount Kenya, 11 Inca Trail), so they never appear on a map at all — related to QUA-89, which is about them being invisible from the day surfaces. NOTE the false positive this audit produced, because the next person will hit it too: a raw 'distance from route' check flags Inca Trail's day-1 Cusco photos at 55 km, which are CORRECT — day 1 is a city preparation day and is legitimately nowhere near the trail. Distance-off-route is only a defect signal relative to the day the photo belongs to.",
+      "files": [
+        "scripts/export/smoke.ts"
+      ],
+      "verify": [
+        "npx tsc -p scripts/export/tsconfig.json",
+        "node scripts/export/smoke.ts"
+      ]
     }
   ]
 }
