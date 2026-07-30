@@ -5,17 +5,17 @@
 
 # Akashic — work ledger
 
-191 tasks · **48 open** (22 agent-doable, 16 dev-days · 26 owner-only, 10.8 dev-days) · 143 done · 0 dropped
+191 tasks · **47 open** (21 agent-doable, 15.5 dev-days · 26 owner-only, 10.8 dev-days) · 144 done · 0 dropped
 
 > **`dev-days` are a human-developer estimate, not agent time.** They came from the review
 > that produced these tasks and they are the right unit for deciding whether something is
 > worth doing — they are the wrong unit for predicting how long an agent will take, and
 > summing them as "work remaining" overstates it substantially.
 >
-> Measured so far: **137 agent tasks estimated at 83.8 dev-days**.
+> Measured so far: **138 agent tasks estimated at 84.3 dev-days**.
 > Elapsed time is deliberately absent: nothing here can support it. Use `git log` for that.
 >
-> 9 of the closed tasks were 2 dev-days or more, and 7.5 of the 16 remaining dev-days still sit in 3 such task(s): DIFF-18, DIFF-19, DIFF-20. Those turn on design judgement rather than localised edits, so do not assume the compression above holds.
+> 9 of the closed tasks were 2 dev-days or more, and 7.5 of the 15.5 remaining dev-days still sit in 3 such task(s): DIFF-18, DIFF-19, DIFF-20. Those turn on design judgement rather than localised edits, so do not assume the compression above holds.
 
 Read [CLAUDE.md](CLAUDE.md) before touching anything. To find work:
 
@@ -158,7 +158,7 @@ node scripts/workplan.mjs next
 
 > Tests, types, CI, localisation, accessibility. Localisation and accessibility are in v1.0 by decision.
 
-18 open of 103 · 5.4 d remaining
+17 open of 103 · 4.9 d remaining
 
 | | Task | Days | Who | Deps | Finish line |
 |---|---|---|---|---|---|
@@ -264,7 +264,7 @@ node scripts/workplan.mjs next
 | `x` | `QUA-93` **Nothing detects a journey whose photos disagree with its own dates, or 144 photos pinned to one point 265 km off the route** | 0.4 | agent | — | A data-integrity check (extending scripts/export/smoke.ts, which already runs 26 checks) fails on: a journey whose date range does not contain its own photos' taken_at range, a journey span implausible for its day count, and a single coordinate shared by an outsized share of a journey's photos. Each failure names the journey and the counts. Proven by pointing it at the 2026-07-22 archive, where it must flag Kilimanjaro's 374-day span, Mount Kenya's year offset and the 144-photo cluster — and pass once those are corrected. |
 | `x` | `QUA-94` **PhotoDayMatcher's date tier is off by 1–3 days on real journeys: dateStarted counts travel days that precede camp day 1** | 0.4 | agent | — | The date tier resolves a day from an anchor that corresponds to CAMP day 1 rather than to the journey's first calendar day — preferring each camp's own `date` where the data carries one, and otherwise deriving the anchor rather than assuming journey.dateStarted. Proven by a test over the real geometry: with the corrected anchor, the share of on-trek EXIF photos whose nearest day-leg equals their assigned day must be the ~88%/76% measured below, not the 0%/20% that journey.dateStarted produces. |
 | `x` | `QUA-95` **"Check this journey": the coherence audit in the app, each finding linked to the screen that fixes it** | 0.6 | agent | `QUA-94` | A journey surface runs the coherence rules and lists what is inconsistent — dates that exclude their own photos, an implausible span, duplicate day numbers, photos with no day, photos sharing one coordinate, no photo with real GPS — and each row navigates to the existing edit surface that corrects it (JourneyEditSheet, WaypointEditSheet, MovePhotoToDaySheet, PhotoPlacementSheet). A clean journey says so. Unit-tested against the three real journeys' shapes, and the rules must agree with the TypeScript implementation in scripts/export/lib.ts on the same inputs. |
-| ` ` | `QUA-96` **No multi-select anywhere, so correcting a photo library is one photo at a time — 939 of them on one journey** | 0.5 | agent | — | The photo grid supports selecting several photos and applying one correction to all of them: assign to a day, place at a coordinate, clear a location. The store methods already take a single id (assignPhoto, setPhotoLocation) so the batch wrapper must be one write, not N — and a test asserts the batch is atomic and that a partial failure does not leave half the selection moved. |
+| `x` | `QUA-96` **No multi-select anywhere, so correcting a photo library is one photo at a time — 939 of them on one journey** | 0.5 | agent | — | The photo grid supports selecting several photos and applying one correction to all of them: assign to a day, place at a coordinate, clear a location. The store methods already take a single id (assignPhoto, setPhotoLocation) so the batch wrapper must be one write, not N — and the batch is one commit rather than N. NOTE (2026-07-30): the all-or-nothing ROLLBACK branch is written but UNEXERCISED — forcing a deterministic Core Data save failure was not something I could do cleanly, so what is tested is the success path, the skip-unknown-ids path and the empty-selection no-op. Do not read "atomic" as proven. |
 
 ## Decisions on record
 

@@ -264,6 +264,76 @@ final class EditTests: XCTestCase {
                              highestPoint: HighestPoint(name: "Top", elevation: 2000, coordinates: nil)),
             route: .empty, camps: camps)
     }
+
+    // MARK: - Batch photo corrections (QUA-96)
+    //
+    // The scale that motivates these: 939 of the owner's Kilimanjaro photographs have no day at all.
+    // One sheet each is not a workflow anyone finishes, and a loop over the single-id writes would
+    // save 939 times and reload the store 939 times.
+
+    func testBatchAssignMovesEveryPhotoInOneCommit() throws {
+        let pc = controller()
+        for i in 1...5 { pc.insertPhoto(makePhoto(id: "P\(i)")) }
+
+        let moved = pc.assignPhotos(ids: (1...5).map { "P\($0)" }, toWaypointID: "W2")
+        XCTAssertEqual(moved.count, 5)
+        let photos = pc.loadPhotos(forJourneyID: "J1")
+        XCTAssertEqual(photos.filter { $0.waypointId == "W2" }.count, 5)
+    }
+
+    func testBatchAssignAcceptsNilToUnassignTheWholeSelection() throws {
+        let pc = controller()
+        for i in 1...3 { pc.insertPhoto(makePhoto(id: "P\(i)")) }
+        _ = pc.assignPhotos(ids: ["P1", "P2", "P3"], toWaypointID: "W2")
+
+        XCTAssertEqual(pc.assignPhotos(ids: ["P1", "P2", "P3"], toWaypointID: nil).count, 3)
+        XCTAssertTrue(pc.loadPhotos(forJourneyID: "J1").allSatisfy { $0.waypointId == nil })
+    }
+
+    func testBatchSkipsUnknownIdsInsteadOfFailingTheWholeCorrection() throws {
+        // A selection can outlive a deletion on another device. Refusing every photo because one
+        // vanished would be the wrong trade — the surviving ones still move.
+        let pc = controller()
+        pc.insertPhoto(makePhoto(id: "P1"))
+
+        let moved = pc.assignPhotos(ids: ["P1", "does-not-exist"], toWaypointID: "W2")
+        XCTAssertEqual(moved.map(\.id), ["P1"])
+        XCTAssertEqual(pc.loadPhotos(forJourneyID: "J1").first?.waypointId, "W2")
+    }
+
+    func testBatchWithNoMatchingIdsChangesNothing() throws {
+        let pc = controller()
+        pc.insertPhoto(makePhoto(id: "P1"))
+        XCTAssertTrue(pc.assignPhotos(ids: ["nope"], toWaypointID: "W2").isEmpty)
+        XCTAssertNil(pc.loadPhotos(forJourneyID: "J1").first?.waypointId)
+        XCTAssertTrue(pc.assignPhotos(ids: [], toWaypointID: "W2").isEmpty, "an empty selection is a no-op")
+    }
+
+    func testBatchLocationSetsAndClearsSourceAcrossTheSelection() throws {
+        let pc = controller()
+        for i in 1...4 { pc.insertPhoto(makePhoto(id: "P\(i)")) }
+
+        let placed = pc.setPhotoLocations(ids: (1...4).map { "P\($0)" },
+                                          coordinates: [37.35, -3.07], source: "manual")
+        XCTAssertEqual(placed.count, 4)
+        XCTAssertTrue(pc.loadPhotos(forJourneyID: "J1").allSatisfy { $0.locationSource == "manual" })
+
+        // Clearing must drop the source too, or a photo reads as manually placed at nowhere.
+        XCTAssertEqual(pc.setPhotoLocations(ids: ["P1"], coordinates: nil, source: "manual").count, 1)
+        let cleared = pc.loadPhotos(forJourneyID: "J1").first { $0.id == "P1" }
+        XCTAssertNil(cleared?.coordinates)
+        XCTAssertNil(cleared?.locationSource)
+    }
+
+    func testStoreBatchWrappersReturnTheCountThatMoved() throws {
+        let pc = controller()
+        for i in 1...3 { pc.insertPhoto(makePhoto(id: "P\(i)")) }
+        let store = JourneyStore(persistence: pc)
+
+        XCTAssertEqual(store.assignPhotos(["P1", "P2"], toWaypoint: "W2"), 2)
+        XCTAssertEqual(store.setPhotoLocation([37.35, -3.07], forPhotos: ["P1", "P2", "P3"]), 3)
+        XCTAssertEqual(store.assignPhotos([], toWaypoint: "W2"), 0)
+    }
 }
 
 /// QUA-68: the lightbox decodes at bounded size (the jetsam fix) and clamps pan to the scaled
@@ -308,4 +378,5 @@ final class LightboxBoundedDecodeTests: XCTestCase {
         XCTAssertEqual(LightboxImageMath.clampedPanOffset(CGSize(width: 30, height: 30),
                                                           scale: 1, container: container), .zero)
     }
+
 }

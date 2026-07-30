@@ -18,6 +18,10 @@ struct PhotosGridView: View {
     @State private var movingPhoto: Photo?
     @State private var showImport = false
     @State private var photoPendingDelete: Photo?
+    /// QUA-96: bulk correction. 939 of the owner's Kilimanjaro photographs have no day, and one
+    /// sheet each is not a workflow anyone finishes.
+    @State private var isSelecting = false
+    @State private var selection: Set<String> = []
 
     private let columns = [GridItem(.adaptive(minimum: 108), spacing: 4)]
 
@@ -54,6 +58,9 @@ struct PhotosGridView: View {
         .background(Theme.background.ignoresSafeArea())
         .navigationTitle(journey?.shortName ?? "Photos")
         .navigationBarTitleDisplayMode(.inline)
+        .safeAreaInset(edge: .bottom) {
+            if isSelecting { selectionBar(journey: journey) }
+        }
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button { showImport = true } label: {
@@ -61,6 +68,15 @@ struct PhotosGridView: View {
                 }
                 .tint(Theme.accent)
                 .accessibilityLabel(Text("Add photos", comment: "Photo grid toolbar button."))
+            }
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    isSelecting.toggle()
+                    if !isSelecting { selection.removeAll() }
+                } label: {
+                    Text(isSelecting ? "Done" : "Select")
+                }
+                .tint(Theme.accent)
             }
         }
         .fullScreenCover(item: $lightbox) { data in
@@ -105,6 +121,53 @@ struct PhotosGridView: View {
                 set: { if !$0 { photoPendingDelete = nil } })
     }
 
+    /// The bulk-correction bar (QUA-96).
+    ///
+    /// Inline, and it presents **nothing** — deliberately. This view already carries six presentation
+    /// modifiers, and this project's own notes record a fourth on one view breaking presentation for
+    /// the whole view; that contradiction is unresolved (see the ledger note on QUA-96), so the safe
+    /// move is not to add a seventh. It also happens to be the better interaction for a bulk edit:
+    /// the day chips apply immediately, with no modal round-trip per correction.
+    @ViewBuilder
+    private func selectionBar(journey: Journey?) -> some View {
+        let days = (journey?.camps ?? []).sorted { $0.dayNumber < $1.dayNumber }
+        VStack(alignment: .leading, spacing: 8) {
+            Text("\(selection.count) selected")
+                .font(.footnote.weight(.semibold))
+                .foregroundStyle(Theme.textSecondary)
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(days, id: \.id) { camp in
+                        Button("Day \(camp.dayNumber)") {
+                            apply { store.assignPhotos(Array(selection), toWaypoint: camp.id) }
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .tint(Theme.accent)
+                    }
+                    Button("Unassign") {
+                        apply { store.assignPhotos(Array(selection), toWaypoint: nil) }
+                    }
+                    .buttonStyle(.bordered)
+                    Button("Clear location") {
+                        apply { store.setPhotoLocation(nil, forPhotos: Array(selection)) }
+                    }
+                    .buttonStyle(.bordered)
+                }
+                .padding(.horizontal, 2)
+            }
+        }
+        .disabled(selection.isEmpty)
+        .padding(12)
+        .background(.bar)
+    }
+
+    /// Run a bulk correction and drop the selection, so a second tap cannot silently re-apply to a
+    /// set the customer believes they have already dealt with.
+    private func apply(_ action: () -> Int) {
+        _ = action()
+        selection.removeAll()
+    }
+
     /// `subtitle` stays a `String?`: in the per-day sections it is the camp's own name, which is
     /// the customer's data and must not go near the catalogue. Only the Unassigned section passes
     /// prose, and it resolves it at the call site.
@@ -114,11 +177,33 @@ struct PhotosGridView: View {
             LazyVGrid(columns: columns, spacing: 4) {
                 ForEach(Array(photos.enumerated()), id: \.element.id) { index, photo in
                     Button {
-                        lightbox = LightboxData(photos: photos, startIndex: index, dayLabel: dayLabel)
+                        if isSelecting {
+                            // Toggling, not opening: while selecting, a tap must never take someone
+                            // out of a half-built selection into a full-screen viewer.
+                            if selection.contains(photo.id) { selection.remove(photo.id) }
+                            else { selection.insert(photo.id) }
+                        } else {
+                            lightbox = LightboxData(photos: photos, startIndex: index, dayLabel: dayLabel)
+                        }
                     } label: {
                         GridThumbnail(photo: photo)
+                            .overlay(alignment: .topLeading) {
+                                if isSelecting {
+                                    Image(systemName: selection.contains(photo.id)
+                                          ? "checkmark.circle.fill" : "circle")
+                                        .font(.title3)
+                                        .symbolRenderingMode(.palette)
+                                        .foregroundStyle(.white, selection.contains(photo.id)
+                                                         ? Theme.accent : .black.opacity(0.35))
+                                        .padding(6)
+                                        .accessibilityHidden(true)
+                                }
+                            }
                     }
                     .buttonStyle(.plain)
+                    // The selected state is a TRAIT, not words in the label: appending "selected" to
+                    // a caption would make it part of the photograph's identity to VoiceOver.
+                    .accessibilityAddTraits(selection.contains(photo.id) ? [.isSelected] : [])
                     // A thumbnail button announces nothing on its own. The caption is the only thing
                     // that tells one photograph from another, and the position is what keeps a
                     // VoiceOver user oriented in a grid of hundreds — so both, and the video/hero

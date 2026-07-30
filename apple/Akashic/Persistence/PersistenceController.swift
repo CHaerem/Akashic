@@ -700,6 +700,52 @@ final class PersistenceController {
         return CoreDataMapping.photo(from: cd)
     }
 
+    /// Mutate several photos and commit **once** (QUA-96).
+    ///
+    /// Not a loop over `editPhoto`, and the difference is the point: that saves per photo, so a
+    /// selection of 939 — which is exactly how many of the owner's Kilimanjaro photographs have no
+    /// day — would mean 939 saves, and a failure halfway would leave half the selection moved and
+    /// half not, with no way to tell which. One `save()` with a `rollback()` on failure makes the
+    /// batch all-or-nothing.
+    ///
+    /// Ids that match no photo are skipped rather than failing the batch: a selection can outlive a
+    /// deletion from another device, and refusing the whole correction because one photo vanished
+    /// would be the wrong trade.
+    @discardableResult
+    func editPhotos(ids: [String], _ mutate: (CDPhoto) -> Void) -> [Photo] {
+        guard !ids.isEmpty else { return [] }
+        let context = viewContext
+        let found = ids.compactMap { fetchOne(CDPhoto.self, matching: "id == %@", $0) }
+        guard !found.isEmpty else { return [] }
+        for cd in found { mutate(cd) }
+        do {
+            try context.save()
+        } catch {
+            context.rollback()
+            return []
+        }
+        return found.map { CoreDataMapping.photo(from: $0) }
+    }
+
+    /// Assign several photos to one waypoint/day in a single commit (QUA-96).
+    @discardableResult
+    func assignPhotos(ids: [String], toWaypointID waypointID: String?) -> [Photo] {
+        let waypoint = waypointID.flatMap { fetchOne(CDWaypoint.self, matching: "id == %@", $0) }
+        return editPhotos(ids: ids) {
+            $0.waypointId = waypoint?.id
+            $0.waypoint = waypoint
+        }
+    }
+
+    /// Set or clear the coordinates of several photos in a single commit (QUA-96).
+    @discardableResult
+    func setPhotoLocations(ids: [String], coordinates: [Double]?, source: String?) -> [Photo] {
+        editPhotos(ids: ids) {
+            $0.coordinates = JSONCoding.encode(coordinates)
+            $0.locationSource = coordinates == nil ? nil : source
+        }
+    }
+
     // MARK: Photo edits
 
     @discardableResult

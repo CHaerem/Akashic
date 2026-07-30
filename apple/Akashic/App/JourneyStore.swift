@@ -294,6 +294,31 @@ final class JourneyStore: ObservableObject {
         return updated
     }
 
+    /// Assign several photos to one day in a single commit, then reload **once** (QUA-96).
+    ///
+    /// Returns how many photos moved. The single-id `assignPhoto` above calls `reload()` on every
+    /// write, so looping it over a selection would rebuild the store's published state once per
+    /// photo — 939 times on the owner's Kilimanjaro library, each one invalidating every SwiftUI
+    /// view observing it. This is one persistence commit and one reload.
+    @discardableResult
+    func assignPhotos(_ ids: [String], toWaypoint waypointID: String?) -> Int {
+        guard !ids.isEmpty else { return 0 }
+        let moved = persistence.assignPhotos(ids: ids, toWaypointID: waypointID)
+        reload()
+        return moved.count
+    }
+
+    /// Set or clear the location of several photos in a single commit, then reload once (QUA-96).
+    @discardableResult
+    func setPhotoLocation(_ coordinates: [Double]?, source: String? = "manual",
+                          forPhotos ids: [String]) -> Int {
+        guard !ids.isEmpty else { return 0 }
+        let updated = persistence.setPhotoLocations(ids: ids, coordinates: coordinates,
+                                                    source: coordinates == nil ? nil : source)
+        reload()
+        return updated.count
+    }
+
     /// Delete a photo: commit the record deletion first, then reclaim its on-disk bytes only
     /// if the commit succeeded (so a failed save never orphans the row from its files).
     /// Returns true on success.
