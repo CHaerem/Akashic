@@ -1,21 +1,54 @@
 import Foundation
 
-/// Matches photos to journey days, ported 1:1 from the web app's `src/hooks/usePhotoDay.ts`.
+/// Matches photos to journey days, ported from the web app's `src/hooks/usePhotoDay.ts`.
 ///
-/// Four-tier strategy, applied in order until one resolves a day number:
+/// Four tiers, applied in order until one resolves a day number:
 ///   1. Explicit `waypoint_id` → the matching camp's `dayNumber`.
-///   2. Date match: `floor((taken_at − dateStarted) / 1 day) + 1`, if in `1...campCount`.
-///   3. Route proximity: snap the photo to the nearest route vertex; if within **2 km**,
-///      pick the first camp whose `routePointIndex` is at/after that vertex (else the last).
+///   2. **Route proximity**: snap the photo to the nearest route vertex; if within **2 km**,
+///      pick the first camp at/after that vertex (else the last).
+///   3. Date match: `floor((taken_at − dateStarted) / 1 day) + 1`, if in `1...campCount`.
 ///   4. Nearest camp within **5 km** (great-circle).
 /// Returns `nil` ("unassigned") when none apply.
+///
+/// ## QUA-94: why route proximity now outranks the date, and why the date tier was wrong
+///
+/// The web order put the date tier second and this file was a 1:1 port. **Measured against the
+/// owner's real archive (1538 photos, 3 journeys), the date tier is wrong for the majority of a
+/// library and route proximity is right.** A photo's time and its position both come from EXIF, so
+/// which route leg it sits on is an independent check on which day it was filed under. Sweeping the
+/// day anchor over ±4 days and scoring how many on-trek photos land on the leg of their own day:
+/// Inca Trail peaks at −3 days (146/165 = 88% correct, against 0/31 at no shift) and Kilimanjaro at
+/// −1 day (513/673 = 76%, against 125/621 = 20%).
+///
+/// The cause is not a typo. `dateStarted` is the first day of the **trip**, and a real trip begins
+/// with travel: Inca Trail's day 1 is "Cusco — Preparation", 74 km from the trail. So the anchor sits
+/// 1–3 days before the first camp and every photo the date tier resolves lands that many days early.
+/// Independently corroborated by the authored data itself — `kilimanjaro.json` labels its day-1 camp
+/// "Oct 1" while the journey's `dateStarted` is Sep 30.
+///
+/// The date tier is kept, because a photo with no coordinates has nothing else, and because a journey
+/// whose `dateStarted` really is its first camp day is common. It is simply no longer allowed to
+/// overrule a position.
+///
+/// ## And why tier 2 never fired before
+///
+/// It required `camp.routePointIndex`, which **no camp in the owner's data carries** — the recovered
+/// fixtures leave it empty and the Supabase waypoints never had the column. So `campsByRouteIndex`
+/// was empty, route proximity was dead code on real journeys, and the date tier answered everything
+/// by default. The index is now derived from the camp's coordinates when it is absent, which is what
+/// `MapGeoMath.resolvedRouteIndex` already does for the map.
 struct PhotoDayMatcher {
     let waypointToDay: [String: Int]
 
     private let campCount: Int
     private let startDate: Date?
     private let routeCoords: [RouteCoordinate]
-    /// Camps carrying a `routePointIndex`, sorted ascending (tier 3).
+    /// Every camp positioned along the route, sorted by route index (tier 2).
+    ///
+    /// QUA-94: this used to be `compactMap { camp.routePointIndex }`, which silently produced an
+    /// EMPTY list on every real journey — nothing in the owner's data carries that field — and left
+    /// route proximity as dead code. The index is derived from the camp's own coordinates when the
+    /// explicit one is missing.
     private let campsByRouteIndex: [(index: Int, day: Int)]
     /// (lng, lat, day) for every camp with coordinates (tier 4).
     private let campPoints: [(lng: Double, lat: Double, day: Int)]
@@ -27,9 +60,17 @@ struct PhotoDayMatcher {
         self.campCount = journey.camps.count
         self.startDate = Self.parseDate(journey.dateStarted)
         self.routeCoords = journey.route.coordinates
+        let route = journey.route.coordinates
         self.campsByRouteIndex = journey.camps
-            .compactMap { camp in camp.routePointIndex.map { ($0, camp.dayNumber) } }
-            .sorted { $0.0 < $1.0 }
+            .compactMap { camp -> (index: Int, day: Int)? in
+                if let explicit = camp.routePointIndex {
+                    return (min(max(explicit, 0), max(0, route.count - 1)), camp.dayNumber)
+                }
+                guard camp.coordinates.count >= 2, !route.isEmpty else { return nil }
+                return (Self.nearestRouteIndex(route, lng: camp.coordinates[0], lat: camp.coordinates[1]),
+                        camp.dayNumber)
+            }
+            .sorted { $0.index < $1.index }
         self.campPoints = journey.camps
             .filter { $0.coordinates.count >= 2 }
             .map { (lng: $0.coordinates[0], lat: $0.coordinates[1], day: $0.dayNumber) }
@@ -42,14 +83,9 @@ struct PhotoDayMatcher {
             return day
         }
 
-        // 2. Date match against the journey start.
-        if let takenAt = photo.takenAt, let taken = Self.parseDate(takenAt), let start = startDate {
-            let diffDays = floor(taken.timeIntervalSince(start) / 86_400)
-            let dayNum = Int(diffDays) + 1
-            if dayNum >= 1 && dayNum <= campCount { return dayNum }
-        }
-
-        // 3. Route-segment estimation (within 2 km of the route).
+        // 2. Route-segment estimation (within 2 km of the route). Ahead of the date tier since
+        //    QUA-94: a position measured by the camera beats a day counted from a start date that
+        //    includes travel days. See the note on this type.
         if let coords = photo.coordinates, coords.count >= 2,
            !routeCoords.isEmpty, campCount > 0 {
             let photoLng = coords[0], photoLat = coords[1]
@@ -64,6 +100,14 @@ struct PhotoDayMatcher {
                     if let last = campsByRouteIndex.last { return last.day }
                 }
             }
+        }
+
+        // 3. Date match against the journey start. Now a fallback for photos whose position cannot
+        //    decide — no coordinates, or more than 2 km off the route.
+        if let takenAt = photo.takenAt, let taken = Self.parseDate(takenAt), let start = startDate {
+            let diffDays = floor(taken.timeIntervalSince(start) / 86_400)
+            let dayNum = Int(diffDays) + 1
+            if dayNum >= 1 && dayNum <= campCount { return dayNum }
         }
 
         // 4. Nearest camp within 5 km.

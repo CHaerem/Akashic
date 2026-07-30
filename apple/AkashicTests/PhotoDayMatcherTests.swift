@@ -133,4 +133,59 @@ final class PhotoDayMatcherTests: XCTestCase {
         let d = PhotoDayMatcher.distanceKm(0, 0, 0.01, 0)
         XCTAssertEqual(d, 1.11, accuracy: 0.02)
     }
+
+    // MARK: QUA-94 — a position outranks a date, and camps need no routePointIndex
+    //
+    // Both of these are shaped from the owner's real archive rather than invented. Measured there:
+    // sweeping the day anchor, Kilimanjaro's photos agree with the route at −1 day (513/673) and
+    // Inca Trail's at −3 (146/165), because `dateStarted` is the first day of the TRIP and a trip
+    // begins with travel. And no camp in that data carries `routePointIndex`, so the route tier was
+    // dead code and the date tier answered everything by default.
+
+    /// A journey whose `dateStarted` is a travel day: camp day 1 is the day AFTER it, and no camp
+    /// carries an explicit route index — exactly the owner's Kilimanjaro shape.
+    private var travelDayJourney: Journey {
+        journey(camps: [camp("W1", day: 1, coords: [10.02, 60.0], routeIdx: nil),
+                        camp("W2", day: 2, coords: [10.04, 60.0], routeIdx: nil),
+                        camp("W3", day: 3, coords: [10.06, 60.0], routeIdx: nil)],
+                route: (0...6).map { [10.0 + Double($0) * 0.01, 60.0, 0] },
+                dateStarted: "2022-09-30")
+    }
+
+    func testPositionOutranksADateAnchoredOnATravelDay() {
+        let m = PhotoDayMatcher(journey: travelDayJourney)
+        // On day 2's leg (past camp 1 at vertex 2, before camp 2 at vertex 4), photographed on the
+        // second camp day. The date tier would count 2022-10-02 as day 3, because it starts counting
+        // from the travel day — off by one, which is the defect. The position says day 2.
+        let onDayTwosLeg = photo(takenAt: "2022-10-02T09:00:00+00:00", coords: [10.03, 60.0])
+        XCTAssertEqual(m.day(for: onDayTwosLeg), 2,
+                       "a photo on day 2's leg must be day 2 — the date tier's off-by-one anchor "
+                       + "must not overrule a measured position (QUA-94)")
+    }
+
+    func testRouteProximityWorksWithoutAnExplicitRoutePointIndex() {
+        let m = PhotoDayMatcher(journey: travelDayJourney)
+        // No timestamp at all, so only position can answer. Before QUA-94 `campsByRouteIndex` was
+        // built solely from `routePointIndex` and came out EMPTY here, so this fell through to the
+        // nearest-camp tier and returned day 1 (camp 1 is ~0.55 km away, camp 2 ~0.55 km further).
+        XCTAssertEqual(m.day(for: photo(coords: [10.03, 60.0])), 2,
+                       "the camp's route index must be derived from its coordinates when absent")
+    }
+
+    func testTheDateTierStillAnswersWhenPositionCannot() {
+        let m = PhotoDayMatcher(journey: travelDayJourney)
+        // No coordinates: the date tier is all there is, and it must still work. Its anchor is
+        // unchanged — this is a fallback now, not a demotion to nothing.
+        XCTAssertEqual(m.day(for: photo(takenAt: "2022-09-30T09:00:00+00:00")), 1)
+        XCTAssertEqual(m.day(for: photo(takenAt: "2022-10-01T09:00:00+00:00")), 2)
+    }
+
+    func testAPhotoFarOffRouteFallsBackToItsDate() {
+        let m = PhotoDayMatcher(journey: travelDayJourney)
+        // The Cusco case: day 1 of a real journey can be a city 74 km from the trail. Position
+        // cannot place it, so the date tier must — returning a day rather than nothing.
+        let inTheCity = photo(takenAt: "2022-10-01T09:00:00+00:00", coords: [11.0, 60.0])
+        XCTAssertEqual(m.day(for: inTheCity), 2,
+                       "beyond the 2 km band and the 5 km camp radius, the date decides")
+    }
 }
