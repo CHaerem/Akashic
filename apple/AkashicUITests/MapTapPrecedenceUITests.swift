@@ -113,7 +113,63 @@ final class MapTapPrecedenceUITests: AkashicUITestCase {
                       + "— the stack took the tap.")
     }
 
+    /// QUA-91: every day of the journey must be reachable from the overview's camp badges.
+    ///
+    /// Measured before the fix: the overview's accessibility tree held `map.campBadge.day1`, `day2`
+    /// and `day7` and nothing else — 3 of 8 camps, the summit four absent entirely. Absent is worse
+    /// than hidden: a culled annotation cannot be tapped and VoiceOver cannot reach it, so half the
+    /// journey's days were simply unavailable on the screen that exists to select them.
+    ///
+    /// The assertion is on the UNION OF DAYS the badges advertise, not on how many badges there are,
+    /// because the badge count depends on the live projection and no test can predict it. Merging is
+    /// a legitimate answer here and culling is not — one badge offering days 3–6 keeps all four
+    /// reachable, and that is the distinction this test encodes.
+    func testEveryDayIsReachableFromTheOverviewsCampBadges() throws {
+        let app = launchApp(["AKASHIC_OPEN": "kilimanjaro"])
+
+        let badges = app.descendants(matching: .any)
+            .matching(NSPredicate(format: "identifier BEGINSWITH %@", ID.mapCampBadgePrefix))
+        require(badges.firstMatch, "at least one camp badge on the journey overview")
+
+        // KNOWN-FAILING, DELIBERATELY RECORDED. The defect is live: `XCTExpectFailure` keeps the gate
+        // honest in both directions — the suite stays green while QUA-91 is open, and the moment the
+        // defect is actually fixed this test fails as an unexpected PASS, which is what makes it
+        // impossible to fix quietly and forget the assertion. A skip would not do that; a plain
+        // failure would leave `apple-ci` red, and a red gate that stays red trains everyone to ignore
+        // CI. Delete this line as part of closing QUA-91 — that is the whole point of it.
+        XCTExpectFailure("QUA-91: MapKit culls camp badges 3-6 on the Kilimanjaro overview. "
+                         + "The merge that would prevent it does not execute — measured, the "
+                         + "separation threshold changes nothing, so metersPerPoint is 0 here.")
+
+        let identifiers = badges.allElementsBoundByIndex.map(\.identifier)
+        let days = Set(identifiers.flatMap(Self.daysAdvertised(by:)))
+
+        // 8 camps over 7 day numbers: Kilimanjaro's fixture numbers both Uhuru Peak and Mweka Camp
+        // day 6 (`apple/Fixtures/recovered/kilimanjaro.json`). Day NUMBERS are what a customer picks
+        // from, so that is what must be covered.
+        XCTAssertEqual(days, Set(1...7), """
+            Not every day is reachable from the overview. Present badges: \
+            \(identifiers.sorted().joined(separator: ", ")).
+            Missing days: \(Set(1...7).subtracting(days).sorted().map(String.init).joined(separator: ", ")).
+            A missing day here is not a cosmetic gap — MapKit culled the annotation, so it is absent \
+            from the accessibility tree and cannot be tapped or reached by VoiceOver. The fix is to \
+            stop handing the map overlapping annotations: `campGroups(for:)` must merge badges closer \
+            than `MapGeoMath.campBadgeSeparationPoints`, which needs a live `metersPerPoint`.
+            """)
+    }
+
     // MARK: - Helpers
+
+    /// The day numbers a camp-badge identifier advertises — `map.campBadge.days3-4-5-6.i2` → 3,4,5,6.
+    ///
+    /// Parsing an identifier is deliberate. The alternative is reading the accessibility LABEL, and
+    /// that is a localised catalogue string: it would break on any copy edit and on every non-English
+    /// run, which is the whole reason this suite addresses elements by identifier.
+    static func daysAdvertised(by identifier: String) -> [Int] {
+        guard let tail = identifier.split(separator: ".").first(where: { $0.hasPrefix("days") })
+        else { return [] }
+        return tail.dropFirst(4).split(separator: "-").compactMap { Int($0) }
+    }
 
     /// Every non-empty identifier currently in the tree, for a failure message that names the cause.
     private func presentMapIdentifiers(_ app: XCUIApplication) -> [String] {

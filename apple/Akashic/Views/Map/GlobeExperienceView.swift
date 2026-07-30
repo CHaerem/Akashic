@@ -334,7 +334,6 @@ struct GlobeExperienceView: View {
             .simultaneousGesture(MagnifyGesture().onChanged { _ in
                 if controller.isRotating { controller.stopRotation() }
             })
-            .coordinateSpace(.named(Self.mapSpace))
             // QUA-83 needs the camera distance to size the clustering grid and the live projection
             // to size the camp clearance. `.onEnd` rather than `.continuous` on purpose: regrouping
             // photos is real work, and doing it per frame of a pinch would trade the annotation
@@ -346,14 +345,51 @@ struct GlobeExperienceView: View {
                 // stops type-checking and resolution silently falls back to the zero-argument one,
                 // so the error points at the argument count rather than at the wrong property.
                 cameraDistance = context.camera.distance
+            }
+            // QUA-91: the projection is captured CONTINUOUSLY while the clustering distance above
+            // stays on `.onEnd`, and the split is measured rather than stylistic. `.onEnd` does not
+            // fire when the overview camera is set programmatically at launch — only an animated
+            // fly-in "ends" — so `metersPerPoint` stayed 0 on exactly the screen where badge merging
+            // matters most, the camp badges never merged, and MapKit culled four of eight. This
+            // handler is two `convert` calls and no allocation, which is affordable per frame in a
+            // way regrouping every photo is not.
+            .onMapCameraChange(frequency: .continuous) { context in
                 if let m = Self.metersPerPoint(proxy: proxy, center: context.camera.centerCoordinate) {
                     metersPerPoint = m
                 }
             }
+            // …and seeded without waiting for any event at all, because measured 2026-07-30 NEITHER
+            // frequency fires on a deep-linked launch: setting `cameraPosition` before the map
+            // appears is not a camera CHANGE, so `.onEnd` and `.continuous` both stayed silent and
+            // `metersPerPoint` sat at 0 through the whole overview. `proxy.region` is readable as
+            // soon as the map lays out, which is what makes this independent of the event stream.
+            // Both hooks are needed and neither is redundant: the map's `onAppear` can run before the
+            // outer view's has applied the launch scene (so no journey is selected yet), and the
+            // selection change can land before the map has laid out (so `convert` returns nil).
+            .onAppear { seedProjection(proxy) }
+            .onChange(of: controller.selectedJourneyID) { _, _ in seedProjection(proxy) }
         }
     }
 
-    private static let mapSpace = "akashicMapProjection"
+    // A named coordinate space used to live here, and `proxy.convert(_:from:)` was given
+    // `.named("akashicMapProjection")`. Replaced by `.local` (QUA-91) — kept as a tombstone because
+    // the named form COMPILES and returns nil at runtime, which is the quiet kind of wrong: the
+    // clearance and the badge merging both degrade to "do nothing" and the map looks plausible.
+
+    /// Seed the projection for the launch where no camera event ever arrives (QUA-91). Silent when
+    /// the map has not laid out yet — the event handlers take over on the first real interaction.
+    ///
+    /// Anchored on the selected journey's own bounding-box centre, computed from its camps, because
+    /// `MapProxy` exposes only `convert` and `camera(framing:)` — the `region` / `camera` properties
+    /// that look like they would serve here belong to `MapCameraPosition`, not to the proxy, which
+    /// is an easy and expensive misread of the SDK interface. Any coordinate that is on screen works
+    /// as an anchor, and the journey's centre is on screen by construction at every framing the
+    /// controller produces.
+    private func seedProjection(_ proxy: MapProxy) {
+        guard let journey = controller.selectedJourney, !journey.camps.isEmpty else { return }
+        let centre = MapGeoMath.bbox(of: journey.camps.map(\.clCoordinate)).center
+        if let m = Self.metersPerPoint(proxy: proxy, center: centre) { metersPerPoint = m }
+    }
 
     /// Metres per point in the live projection, measured at the map's centre.
     ///
@@ -369,10 +405,10 @@ struct GlobeExperienceView: View {
     private static func metersPerPoint(proxy: MapProxy,
                                        center: CLLocationCoordinate2D) -> Double? {
         let span: CGFloat = 100
-        guard let origin = proxy.convert(center, to: .named(mapSpace)),
-              let a = proxy.convert(origin, from: .named(mapSpace)),
+        guard let origin = proxy.convert(center, to: .local),
+              let a = proxy.convert(origin, from: .local),
               let b = proxy.convert(CGPoint(x: origin.x + span, y: origin.y),
-                                    from: .named(mapSpace)) else { return nil }
+                                    from: .local) else { return nil }
         let perPoint = MapGeoMath.meters(from: a, to: b) / Double(span)
         return perPoint.isFinite && perPoint > 0 ? perPoint : nil
     }
@@ -447,11 +483,12 @@ struct GlobeExperienceView: View {
         // Amber day-number camp badges (selected bigger + brighter), declared LAST so they keep tap
         // precedence over the stacks above. Coincident camps are merged into one badge, because two
         // badges at one coordinate left only the later-declared day reachable.
-        ForEach(MapGeoMath.campGroups(journey.camps)) { group in
+        ForEach(campGroups(for: journey)) { group in
             Annotation(campGroupName(group, in: journey), coordinate: group.coordinate, anchor: .center) {
                 CampBadge(day: campBadgeDay(group, in: journey),
                           selected: isSelected(group),
-                          mergedDays: group.isMerged ? group.dayNumbers : [])
+                          mergedDays: group.isMerged ? group.dayNumbers : [],
+                          dayIndex: group.indices.first ?? 0)
                     .onTapGesture {
                         controller.selectDay(MapGeoMath.tapSelection(in: group,
                                                                     current: controller.selectedDayIndex))
@@ -482,6 +519,30 @@ struct GlobeExperienceView: View {
     private func campGroupName(_ group: MapGeoMath.CampGroup, in journey: Journey) -> String {
         guard let first = group.indices.first, journey.camps.indices.contains(first) else { return "" }
         return journey.camps[first].name
+    }
+
+    /// The camp badges to render, merged so that no two of them can overlap on screen.
+    ///
+    /// QUA-91: this is a reachability fix, not cosmetics. Measured on the Kilimanjaro overview, the
+    /// accessibility tree held **3 of 8** camp badges — the four around the summit were absent
+    /// entirely, so those days could not be tapped and VoiceOver could not reach them. SwiftUI's
+    /// `Annotation` opts into MapKit's annotation decluttering and the API exposes no collision
+    /// control, so the culling cannot be turned off; the only lever is to stop handing the map
+    /// overlapping annotations in the first place.
+    ///
+    /// So the merge radius follows the projection: two badges whose centres are closer than one tap
+    /// frame become one badge that offers both days (`MapGeoMath.tapSelection` walks them). The
+    /// result is that nothing overlaps, so nothing is culled, and every day stays reachable at every
+    /// framing — which is what the identifier-coverage assertion in `MapTapPrecedenceUITests` holds
+    /// this to.
+    ///
+    /// Before the map reports a camera, `metersPerPoint` is 0 and this falls back to the fixed 25 m
+    /// coincident-camp radius from QUA-83 — the rest-day case still merges, wide-framing culling is
+    /// simply not yet prevented on that first frame.
+    private func campGroups(for journey: Journey) -> [MapGeoMath.CampGroup] {
+        guard metersPerPoint > 0 else { return MapGeoMath.campGroups(journey.camps) }
+        return MapGeoMath.campGroups(journey.camps,
+                                     radiusMeters: MapGeoMath.campBadgeSeparationPoints * metersPerPoint)
     }
 
     /// The photo stacks to render: grouped at the current camera distance, pushed clear of the camp

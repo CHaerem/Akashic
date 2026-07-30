@@ -185,6 +185,10 @@ struct CampBadge: View {
     /// only the later-declared one could be tapped.
     var mergedDays: [Int] = []
 
+    /// The camp index this badge selects — the identifier's disambiguator (QUA-91). Two camps can
+    /// carry the same day number, so day alone does not identify a badge.
+    var dayIndex: Int = 0
+
     // The circles were sized to fit fixed 10/13 pt digits; scale them with the text so a
     // two-digit day number (day 10+) doesn't outgrow its badge at larger text sizes.
     @ScaledMetric(relativeTo: .caption2) private var glowDiameter: CGFloat = 26
@@ -231,7 +235,8 @@ struct CampBadge: View {
         // QUA-90. Applied here rather than at the call site so a whole-file revert of
         // `GlobeExperienceView` (which is how the tap-precedence guard is proven) restores the old
         // declaration order WITHOUT also removing the identifier the test needs to find this badge.
-        .accessibilityIdentifier(A11yID.mapCampBadge(day: day))
+        .accessibilityIdentifier(A11yID.mapCampBadge(days: mergedDays.isEmpty ? [day] : mergedDays,
+                                                    firstIndex: dayIndex))
     }
 }
 

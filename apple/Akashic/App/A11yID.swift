@@ -98,6 +98,19 @@ enum A11yID {
     static let mapCampBadgePrefix = "map.campBadge."
     static let mapPhotoStackPrefix = "map.photoStack."
 
-    static func mapCampBadge(day: Int) -> String { "\(mapCampBadgePrefix)day\(day)" }
+    /// A camp badge, naming **every day it stands for** and the index it selects.
+    ///
+    /// QUA-91: the day list is in the identifier so a test can assert *reachability* — the union of
+    /// days across the visible badges must cover the journey — rather than a badge count nobody can
+    /// predict. Counting was not an option: how many badges a framing produces depends on the live
+    /// projection. The day numbers alone are not unique either (Kilimanjaro numbers two separate
+    /// camps day 6, 9 km apart), so the selected index disambiguates.
+    ///
+    /// Format: `map.campBadge.days3-4-5-6.i2`. QUA-90's test matches on the prefix, so extending
+    /// the tail is safe — which is why the prefix is the published contract and this shape is not.
+    static func mapCampBadge(days: [Int], firstIndex: Int) -> String {
+        "\(mapCampBadgePrefix)days\(days.map(String.init).joined(separator: "-")).i\(firstIndex)"
+    }
+
     static func mapPhotoStack(photoID: String) -> String { "\(mapPhotoStackPrefix)\(photoID)" }
 }

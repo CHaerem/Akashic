@@ -343,6 +343,32 @@ enum MapGeoMath {
     /// tap frames (`GlobeMapComponents.swift:210`, `:257`).
     static let markerClearancePoints: Double = 30
 
+    /// Centre-to-centre separation below which two camp badges are merged into one (QUA-91).
+    ///
+    /// **MEASURED, and the obvious value is wrong.** This was first set to 44 — one full tap frame
+    /// (`GlobeMapComponents.swift:210`), the closest two badges can sit while each still owns its hit
+    /// region — and it did not work: on the Kilimanjaro overview, camps 3–6 sit 2.6–2.9 km apart,
+    /// which is roughly 58 pt at that framing, so they were never merged, and MapKit culled four of
+    /// them anyway. So MapKit's own declutter margin is materially LARGER than the annotation's
+    /// frame, and a value derived from our own view geometry cannot predict it.
+    ///
+    /// **And that reasoning is refuted too — this value currently changes NOTHING, which is the real
+    /// finding.** 44 and 96 were both run against
+    /// `MapTapPrecedenceUITests.testEveryDayIsReachableFromTheOverviewsCampBadges` and produced
+    /// byte-identical output (`days1.i0`, `days2.i1`, `days7.i7`). A merge at either threshold would
+    /// have changed the identifiers, so the merging branch is not being executed at all: `campGroups(for:)`
+    /// takes its `metersPerPoint == 0` fallback, meaning the live projection is never established on
+    /// this screen.
+    ///
+    /// That has a consequence beyond QUA-91 and it is the reason this comment is this long: if
+    /// `metersPerPoint` is 0 in practice then **QUA-83's photo clearance has never run either**, and
+    /// QUA-90's "no stack covers a badge" assertion may be passing vacuously — decluttering removes
+    /// one of the two markers, so there is no overlap to find for a reason that has nothing to do
+    /// with the fix. QUA-91 stays OPEN on exactly this, and the next step is to measure
+    /// `metersPerPoint` directly rather than infer it. Do not tune this number until that is known;
+    /// it is not the variable.
+    static let campBadgeSeparationPoints: Double = 44
+
     /// Push any cluster sitting within `clearancePoints` of a camp badge directly away from it, so
     /// the two tap frames stop overlapping.
     ///

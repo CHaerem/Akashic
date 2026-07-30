@@ -5421,7 +5421,7 @@
       "priority": 7,
       "deps": [],
       "track": "QUALITY",
-      "status": "TODO",
+      "status": "WIP",
       "owner": false,
       "title": "SwiftUI Map declutters camp badges on its own — only 3 of 8 are reachable on the Kilimanjaro overview",
       "done_when": "The overview's camp badges are all reachable, or the decluttering is a documented, deliberate decision with a stated rule for which camps survive. Whichever it is, a test asserts the count that ships, so this cannot regress silently — QUA-90's identifier prefixes already make the badges enumerable.",
@@ -5434,7 +5434,13 @@
       "verify": [
         "cd apple && xcodegen generate",
         "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,name=iPhone 17 Pro\" CODE_SIGNING_ALLOWED=NO test > /tmp/qua91.log 2>&1 && grep -q \"with 1 test skipped and 0 failures\" /tmp/qua91.log"
-      ]
+      ],
+      "claim": {
+        "agent": "claude-remote",
+        "branch": "claude/remote-control-d38598",
+        "at": "2026-07-30"
+      },
+      "resume": "STILL OPEN; the investigation moved the target. The reachability test is written and records the live defect via XCTExpectFailure (days 3-6 absent on the Kilimanjaro overview; identifiers days1.i0/days2.i1/days7.i7). The attempted fix -- merging camp badges closer than campBadgeSeparationPoints, driven by the live projection -- DOES NOT EXECUTE: 44 pt and 96 pt gave byte-identical output, so campGroups(for:) takes its metersPerPoint==0 fallback. Tried and ruled out: .onEnd (never fires on a deep-linked launch, because setting cameraPosition before the map appears is not a camera CHANGE), .continuous (same), an onAppear seed anchored on the journey bbox centre, and switching proxy.convert from a NAMED coordinate space to .local. NEXT STEP: measure metersPerPoint directly instead of inferring it; everything above is inference. Two consequences if it really is 0 in practice: QUA-83's photo clearance has never run, and QUA-90's 'no stack covers a badge' assertion may pass vacuously because decluttering removes one of the two markers. Do not tune campBadgeSeparationPoints; it is not the variable."
     }
   ]
 }
