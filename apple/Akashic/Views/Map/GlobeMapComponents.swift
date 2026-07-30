@@ -228,6 +228,10 @@ struct CampBadge: View {
             ? Text("Camp for days \(mergedDays.map(String.init).formatted(.list(type: .and)))")
             : Text("Day \(day) camp"))
         .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
+        // QUA-90. Applied here rather than at the call site so a whole-file revert of
+        // `GlobeExperienceView` (which is how the tap-precedence guard is proven) restores the old
+        // declaration order WITHOUT also removing the identifier the test needs to find this badge.
+        .accessibilityIdentifier(A11yID.mapCampBadge(day: day))
     }
 }
 
@@ -311,6 +315,8 @@ struct PhotoMarker: View {
         // that opens twelve of them is the wrong promise.
         .accessibilityLabel(photoLabel)
         .accessibilityAddTraits(.isButton)
+        // QUA-90 — see the note on `CampBadge`'s identifier for why this lives here.
+        .accessibilityIdentifier(A11yID.mapPhotoStack(photoID: photo.id))
     }
 
     private var photoLabel: Text {

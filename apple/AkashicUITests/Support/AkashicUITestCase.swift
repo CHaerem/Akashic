@@ -196,4 +196,10 @@ enum ID {
     static let paywallClose = "paywall.close"
 
     static let settingsComplete = "settings.akashicComplete"
+
+    /// QUA-90: map marker identifier PREFIXES, matched with `BEGINSWITH` rather than by equality.
+    /// The guarded defect is geometric — which marker covers which — so the test enumerates markers
+    /// and picks by frame overlap instead of naming one.
+    static let mapCampBadgePrefix = "map.campBadge."
+    static let mapPhotoStackPrefix = "map.photoStack."
 }

@@ -77,4 +77,27 @@ enum A11yID {
     /// The "Akashic Complete" row — the paywall's `.settings` entry point, and the only one
     /// reachable without first filling the free tier.
     static let settingsComplete = "settings.akashicComplete"
+
+    // MARK: Map markers (QUA-90)
+
+    /// Camp badges and photo stacks on the trek map.
+    ///
+    /// These two break the "one identifier per control" habit above on purpose, and the reason is
+    /// what makes QUA-90's test possible. The defect being guarded is *geometric* — a photo stack
+    /// covering a camp badge and eating its tap — so the test does not want "the badge for day 6",
+    /// it wants "the badge that has a stack on top of it". It therefore enumerates every marker by
+    /// identifier PREFIX and picks by frame overlap. A unique identifier per camp would not help:
+    /// Kilimanjaro has two camps numbered day 6 (Uhuru Peak and Mweka Camp, 9 km apart), so day
+    /// number is not unique anyway.
+    ///
+    /// Both are also applied INSIDE `CampBadge` / `PhotoMarker` rather than at their call sites in
+    /// `GlobeExperienceView`, which is load-bearing for the proof: `npm run prove` reverts whole
+    /// FILES, so an identifier passed in from the call site would vanish along with the declaration
+    /// order the revert is meant to restore, and the resulting red would be "element not found"
+    /// instead of "the photo stole the tap". A red for the wrong reason proves nothing.
+    static let mapCampBadgePrefix = "map.campBadge."
+    static let mapPhotoStackPrefix = "map.photoStack."
+
+    static func mapCampBadge(day: Int) -> String { "\(mapCampBadgePrefix)day\(day)" }
+    static func mapPhotoStack(photoID: String) -> String { "\(mapPhotoStackPrefix)\(photoID)" }
 }
