@@ -5514,6 +5514,26 @@
       },
       "attestation": "Ran node scripts/export/auditArchive.ts /Users/cher/Privat/AkashicExport-20260722 (read-only, 3 journeys / 1538 photos) on 2026-07-30 and read the output: 5 findings, exit 1. mount-kenya dates-exclude-photos 264/318 spanning 2024-10-10..2024-10-17 against a 2023 record, collapsed-coordinate 144/272 at [35.26,-1.37], no-real-location 272 located and zero EXIF; kilimanjaro implausible-span 374 days, no-day-assignment none of 939 photos attached to a day; inca-trail reported clean. The PASS case is not yet observed on real data — it needs QUA-92's two date corrections first, and that is the owner's.",
       "evidence": "npx tsc -p scripts/export/tsconfig.json clean (first time since 61b455c retired Supabase — TS2307 had been failing, and because the documented command is 'tsc && node smoke.ts' the smoke test never ran either); node scripts/export/smoke.ts 38 checks passed, up from 26."
+    },
+    {
+      "id": "QUA-94",
+      "effort": 0.4,
+      "priority": 4,
+      "deps": [],
+      "track": "QUALITY",
+      "status": "TODO",
+      "owner": false,
+      "title": "PhotoDayMatcher's date tier is off by 1–3 days on real journeys: dateStarted counts travel days that precede camp day 1",
+      "done_when": "The date tier resolves a day from an anchor that corresponds to CAMP day 1 rather than to the journey's first calendar day — preferring each camp's own `date` where the data carries one, and otherwise deriving the anchor rather than assuming journey.dateStarted. Proven by a test over the real geometry: with the corrected anchor, the share of on-trek EXIF photos whose nearest day-leg equals their assigned day must be the ~88%/76% measured below, not the 0%/20% that journey.dateStarted produces.",
+      "why": "MEASURED 2026-07-30 against the owner's archive (AkashicExport-20260722, read-only) by an independent test: a photo's TIME comes from EXIF and its POSITION comes from EXIF, so which route leg it sits on is a check on which day it was assigned. Sweeping the day anchor over ±4 days and scoring how many on-trek photos land on the leg of their own day: Inca Trail peaks at shift −3 with 146/165 = 88% correct (shift 0 scores 0/31), and Kilimanjaro peaks at shift −1 with 513/673 = 76% (shift 0 scores 125/621 = 20%). So the photos and the routes AGREE — what is misaligned is the calendar anchor. The cause is structural, not a typo: PhotoDayMatcher.swift:7 computes `floor((taken_at − dateStarted) / 1 day) + 1`, and `dateStarted` is the first day of the TRIP, which on real journeys includes travel and acclimatisation before the first camp is reached (Inca Trail's day 1 is 'Cusco - Preparation', 74 km from the trail; Kilimanjaro's first photo day is an arrival day). Camp day 1 corresponds to 2017-10-02 and 2022-10-01 respectively, not to the recorded 2017-09-29 and 2022-09-30. Consequence today: every photo that reaches tier 2 is placed on the wrong day for the majority of the owner's library, which is the defect the owner reported as 'photos do not match the routes'. Note the fixtures carry a per-camp `date` field that is currently unused by the matcher and would resolve this directly where present.",
+      "files": [
+        "apple/Akashic/Import/PhotoDayMatcher.swift",
+        "apple/AkashicTests/PhotoDayMatcherTests.swift"
+      ],
+      "verify": [
+        "cd apple && xcodegen generate",
+        "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,name=iPhone 17 Pro\" CODE_SIGNING_ALLOWED=NO -only-testing:AkashicTests test > /tmp/qua94.log 2>&1 && grep -q \"with 1 test skipped and 0 failures\" /tmp/qua94.log"
+      ]
     }
   ]
 }
