@@ -5,17 +5,17 @@
 
 # Akashic — work ledger
 
-185 tasks · **46 open** (21 agent-doable, 15.7 dev-days · 25 owner-only, 10.6 dev-days) · 139 done · 0 dropped
+186 tasks · **46 open** (21 agent-doable, 15.5 dev-days · 25 owner-only, 10.6 dev-days) · 140 done · 0 dropped
 
 > **`dev-days` are a human-developer estimate, not agent time.** They came from the review
 > that produced these tasks and they are the right unit for deciding whether something is
 > worth doing — they are the wrong unit for predicting how long an agent will take, and
 > summing them as "work remaining" overstates it substantially.
 >
-> Measured so far: **133 agent tasks estimated at 81.9 dev-days**.
+> Measured so far: **134 agent tasks estimated at 82.4 dev-days**.
 > Elapsed time is deliberately absent: nothing here can support it. Use `git log` for that.
 >
-> 9 of the closed tasks were 2 dev-days or more, and 7.5 of the 15.7 remaining dev-days still sit in 3 such task(s): DIFF-18, DIFF-19, DIFF-20. Those turn on design judgement rather than localised edits, so do not assume the compression above holds.
+> 9 of the closed tasks were 2 dev-days or more, and 7.5 of the 15.5 remaining dev-days still sit in 3 such task(s): DIFF-18, DIFF-19, DIFF-20. Those turn on design judgement rather than localised edits, so do not assume the compression above holds.
 
 Read [CLAUDE.md](CLAUDE.md) before touching anything. To find work:
 
@@ -157,7 +157,7 @@ node scripts/workplan.mjs next
 
 > Tests, types, CI, localisation, accessibility. Localisation and accessibility are in v1.0 by decision.
 
-16 open of 97 · 4.9 d remaining
+16 open of 98 · 4.7 d remaining
 
 | | Task | Days | Who | Deps | Finish line |
 |---|---|---|---|---|---|
@@ -257,7 +257,8 @@ node scripts/workplan.mjs next
 | ` ` | `QUA-85` **First-run surfaces are excluded from the enforced accessibility audit and carry sub-44pt targets; five surfaces bypass themedMaterial** | 0.3 | agent | — | One UI-test leg launches WITHOUT AKASHIC_SKIP_ONBOARDING and runs the enforced audit over the onboarding cards; the onboarding Skip button, DayNotesField Save/Cancel, DayDetailSheet 'Edit day' pill and the elevation Reset pill get the QUA-29 pairing (minHeight 44 + contentShape); the five raw .ultraThinMaterial sites (comments composer/name/cards, day-sheet chevrons, story DAY badge) route through themedMaterial; FunFactsCarousel's height scales with Dynamic Type instead of character count. |
 | ` ` | `QUA-88` **Norwegian-market data entry and display gaps: decimal-comma input silently dropped, day labels hardcoded English, Intelligence drafts English into a Norwegian journal** | 0.2 | agent | — | Weather/distance fields parse with a locale-aware formatter (accepting ',' and '.') and show a validation hint instead of silently dropping; persisted day dateLabels stay POSIX for round-tripping but render localized at the read sites; the Intelligence instruction sets carry a Locale-driven output-language line (with on-device nb quality assessment deferred to QUA-38's session and recorded there). |
 | ` ` | `QUA-89` **Unassigned photos are invisible from the day-centric surfaces — the count mismatch reads as photo loss (observed hands-on)** | 0.2 | agent | — | When a journey has photos not matched to any day, the journey detail and/or day sheet surface it ('N photos aren't matched to a day — review'), routing to the existing all-photos grid which already renders the Unassigned section; the no-route journey's map fallback no longer frames Null Island (stay on globe or show a designed placeholder). |
-| ` ` | `QUA-90` **Nothing automated guards camp-over-photo tap precedence on the iOS map — the headline half of QUA-83 ships unproven** | 0.5 | agent | `QUA-83` | CampBadge and PhotoMarker carry accessibilityIdentifiers in A11yID.swift; a UI test seeds a journey with a photo geotagged AT a camp, taps the camp badge, and asserts the day is selected rather than the lightbox opening; the test is shown to FAIL when trekOverlays() declares camps before the photo stacks (the pre-QUA-83 order), which is the only way to know it guards anything. |
+| `x` | `QUA-90` **Nothing automated guards camp-over-photo tap precedence on the iOS map — the headline half of QUA-83 ships unproven** | 0.5 | agent | `QUA-83` | CampBadge and PhotoMarker carry accessibilityIdentifiers in A11yID.swift; a UI test seeds a journey with a photo geotagged AT a camp, taps the camp badge, and asserts the day is selected rather than the lightbox opening; the test is shown to FAIL when trekOverlays() declares camps before the photo stacks (the pre-QUA-83 order), which is the only way to know it guards anything. |
+| ` ` | `QUA-91` **SwiftUI Map declutters camp badges on its own — only 3 of 8 are reachable on the Kilimanjaro overview** | 0.3 | agent | — | The overview's camp badges are all reachable, or the decluttering is a documented, deliberate decision with a stated rule for which camps survive. Whichever it is, a test asserts the count that ships, so this cannot regress silently — QUA-90's identifier prefixes already make the badges enumerable. |
 
 ## Decisions on record
 

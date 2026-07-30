@@ -5363,7 +5363,7 @@
         "QUA-83"
       ],
       "track": "QUALITY",
-      "status": "TODO",
+      "status": "DONE",
       "owner": false,
       "title": "Nothing automated guards camp-over-photo tap precedence on the iOS map — the headline half of QUA-83 ships unproven",
       "done_when": "CampBadge and PhotoMarker carry accessibilityIdentifiers in A11yID.swift; a UI test seeds a journey with a photo geotagged AT a camp, taps the camp badge, and asserts the day is selected rather than the lightbox opening; the test is shown to FAIL when trekOverlays() declares camps before the photo stacks (the pre-QUA-83 order), which is the only way to know it guards anything.",
@@ -5372,12 +5372,68 @@
         "apple/Akashic/App/A11yID.swift",
         "apple/Akashic/Views/Map/GlobeMapComponents.swift",
         "apple/Akashic/Views/Map/GlobeExperienceView.swift",
-        "apple/AkashicUITests/MapTapPrecedenceUITests.swift"
+        "apple/AkashicUITests/MapTapPrecedenceUITests.swift",
+        "apple/AkashicUITests/Support/AkashicUITestCase.swift"
       ],
       "verify": [
         "cd apple && xcodegen generate",
         "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,name=iPhone 17 Pro\" CODE_SIGNING_ALLOWED=NO test > /tmp/qua90.log 2>&1 && grep -q \"with 1 test skipped and 0 failures\" /tmp/qua90.log",
-        "npm run prove -- --tests apple/AkashicUITests/MapTapPrecedenceUITests.swift --revert apple/Akashic/Views/Map/GlobeExperienceView.swift --native --only-testing AkashicUITests/MapTapPrecedenceUITests"
+        "npm run prove -- --tests apple/AkashicUITests --revert apple/Akashic/Views/Map/GlobeExperienceView.swift --against 37524bc --native --only-testing AkashicUITests/MapTapPrecedenceUITests"
+      ],
+      "claim": {
+        "agent": "claude-remote",
+        "branch": "claude/remote-control-d38598",
+        "at": "2026-07-30"
+      },
+      "verification": {
+        "at": "2026-07-30T06:40:22.997Z",
+        "head": "8fccc34",
+        "ran": [
+          {
+            "command": "cd apple && xcodegen generate",
+            "ok": true,
+            "ms": 87,
+            "status": 0,
+            "signal": null
+          },
+          {
+            "command": "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,name=iPhone 17 Pro\" CODE_SIGNING_ALLOWED=NO test > /tmp/qua90.log 2>&1 && grep -q \"with 1 test skipped and 0 failures\" /tmp/qua90.log",
+            "ok": true,
+            "ms": 215833,
+            "status": 0,
+            "signal": null
+          },
+          {
+            "command": "npm run prove -- --tests apple/AkashicUITests --revert apple/Akashic/Views/Map/GlobeExperienceView.swift --against 37524bc --native --only-testing AkashicUITests/MapTapPrecedenceUITests",
+            "ok": true,
+            "ms": 57703,
+            "status": 0,
+            "signal": null
+          }
+        ],
+        "attested": []
+      },
+      "evidence": "Full native gate on pinned iPhone 17 Pro: 941 unit (1 skipped) + 15 UI (was 14), 0 failures. prove PROVEN IN BOTH DIRECTIONS against scratch/qua90-proof (37524bc): 1 failing ASSERTION in 1 of 1 test there, green on HEAD. That ref is a purpose-made commit carrying the pre-QUA-83 map behaviour with QUA-90's identifiers, because no commit in history has both — it is kept, not deleted, so the receipt stays reproducible."
+    },
+    {
+      "id": "QUA-91",
+      "effort": 0.3,
+      "priority": 7,
+      "deps": [],
+      "track": "QUALITY",
+      "status": "TODO",
+      "owner": false,
+      "title": "SwiftUI Map declutters camp badges on its own — only 3 of 8 are reachable on the Kilimanjaro overview",
+      "done_when": "The overview's camp badges are all reachable, or the decluttering is a documented, deliberate decision with a stated rule for which camps survive. Whichever it is, a test asserts the count that ships, so this cannot regress silently — QUA-90's identifier prefixes already make the badges enumerable.",
+      "why": "MEASURED 2026-07-30 while writing QUA-90's UI test: on the Kilimanjaro journey overview the accessibility tree holds map.campBadge.day1, day2 and day7 and NOTHING ELSE — 3 of 8 camps. The four camps clustered near the summit (Barranco, Karanga, Barafu, Uhuru) are absent entirely, which means they cannot be tapped and VoiceOver cannot reach them. SwiftUI's Annotation participates in MapKit's own annotation decluttering and the SwiftUI Map API exposes no collision control, so this is not something QUA-83's clustering caused or can fix — QUA-83 clusters PHOTOS. Two consequences worth separating: a customer on the overview cannot select half their days (a real reachability defect), and any UI test that expects a particular camp badge at overview framing is unreliable by construction — QUA-90 had to launch at AKASHIC_SCENE=day7 for exactly this reason. Also relevant to QUA-84 (camera arcs) and DIFF-18 (replay), both of which assume markers are where their coordinates are.",
+      "files": [
+        "apple/Akashic/Views/Map/GlobeExperienceView.swift",
+        "apple/Akashic/Views/Map/GlobeMapComponents.swift",
+        "apple/AkashicUITests/MapTapPrecedenceUITests.swift"
+      ],
+      "verify": [
+        "cd apple && xcodegen generate",
+        "cd apple && xcodebuild -project Akashic.xcodeproj -scheme Akashic -configuration Debug -destination \"platform=iOS Simulator,name=iPhone 17 Pro\" CODE_SIGNING_ALLOWED=NO test > /tmp/qua91.log 2>&1 && grep -q \"with 1 test skipped and 0 failures\" /tmp/qua91.log"
       ]
     }
   ]
