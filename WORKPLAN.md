@@ -5,14 +5,14 @@
 
 # Akashic — work ledger
 
-184 tasks · **46 open** (21 agent-doable, 15.7 dev-days · 25 owner-only, 10.6 dev-days) · 138 done · 0 dropped
+185 tasks · **46 open** (21 agent-doable, 15.7 dev-days · 25 owner-only, 10.6 dev-days) · 139 done · 0 dropped
 
 > **`dev-days` are a human-developer estimate, not agent time.** They came from the review
 > that produced these tasks and they are the right unit for deciding whether something is
 > worth doing — they are the wrong unit for predicting how long an agent will take, and
 > summing them as "work remaining" overstates it substantially.
 >
-> Measured so far: **132 agent tasks estimated at 81.4 dev-days**.
+> Measured so far: **133 agent tasks estimated at 81.9 dev-days**.
 > Elapsed time is deliberately absent: nothing here can support it. Use `git log` for that.
 >
 > 9 of the closed tasks were 2 dev-days or more, and 7.5 of the 15.7 remaining dev-days still sit in 3 such task(s): DIFF-18, DIFF-19, DIFF-20. Those turn on design judgement rather than localised edits, so do not assume the compression above holds.
@@ -28,7 +28,6 @@ node scripts/workplan.mjs next
 | Task | Agent | Branch | Stopped at |
 |---|---|---|---|
 | `DIFF-16` DIFF-15 on a real device: the prompt worked, the rows did not — and the failure is undiagnosable by design | diff16-agent | `agent/diff16` | Root-cause fix merged at 65b1c5d: fireTransition(from:) at all three policy mutation sites, became-false delivered via observer self-registration on the gate seam (PersistenceController wiring not needed), and the guard that makes it real — the in-flight fetch's success path no longer overwrites the honest deferral. 903 unit tests; prove receipt 16 assertion-reds in 5/7 against HEAD. Remaining: the owner's cellular observation on build 103, and the owner's 5G-data-mode product call (gate on literal WiFi vs reword the toggle). |
-| `QUA-83` iOS map has no photo clustering, and photo markers steal taps from camp badges — the unfixed iOS twin of the web's QUA-49 | claude-remote | `claude/remote-control-d38598` | Clustering + clearance + coincident-camp merge landed with 15 pure tests in MapMathTests (926 -> 941 unit). prove REFUSED as designed: every symbol the tests name is new, so the reverted build cannot compile and there is no honest RED. The camp-over-photo TAP PRECEDENCE half is view declaration order and is guarded by nothing automated -- CampBadge/PhotoMarker carry no accessibilityIdentifier, so no UI test can address them without adding to A11yID.swift, which is outside this task's files list. |
 
 ## LEGACY
 
@@ -158,7 +157,7 @@ node scripts/workplan.mjs next
 
 > Tests, types, CI, localisation, accessibility. Localisation and accessibility are in v1.0 by decision.
 
-16 open of 96 · 4.9 d remaining
+16 open of 97 · 4.9 d remaining
 
 | | Task | Days | Who | Deps | Finish line |
 |---|---|---|---|---|---|
@@ -243,7 +242,7 @@ node scripts/workplan.mjs next
 | `x` | `QUA-71` **DIFF-05/DIFF-08 are engines without wires: Vision subjects never reach the day-note prompt, and drafting failures show the exact generic message the code condemns** | 0.3 | agent | — | WaypointEditSheet.draftNote() populates DayNoteInput.photoSubjects via VisionPhotoScorer.subjects(in:) before generating; the catch maps errors through DayNoteDrafter.failure(from:), shows failure.message, and gates the retry affordance on isWorthRetrying; DIFF-05's and DIFF-08's ledger evidence is corrected to name this task as the wiring that made them reachable. |
 | `x` | `QUA-77` **The PDF story book (DIFF-07, 6 dev-days, DONE) has no UI entry point — no customer can create one** | 0.3 | agent | — | A 'Save as PDF book' action exists on the journey (story toolbar and/or export sheet), feeds StoryPDFRenderer.render with the curated per-day input StoryPagination documents, and hands the produced file to ShareLink; a symbol-presence check à la DIFF-13 (not just unit tests) proves the renderer is linked into the shipped binary. |
 | `x` | `QUA-66` **The signature day fly-in lands with its subject half-hidden behind the sheet** | 0.3 | agent | — | Day (and overview) camera framing accounts for the covered region: a pure MapGeoMath function takes the visible-rect fraction and biases the fitting camera so the day's bbox lands in the visible half (iPhone medium-detent bottom sheet) or the uncovered width (iPad 400pt left panel); MapMathTests pin the offset math; the fly-in visibly lands its subject. |
-| `~` | `QUA-83` **iOS map has no photo clustering, and photo markers steal taps from camp badges — the unfixed iOS twin of the web's QUA-49** | 0.5 | agent | — | Geotagged photos cluster by screen-space proximity at the current camera distance into stack markers with a count badge (matching the web surface); camp badges keep tap precedence over photo markers (declared later / filtered within a clearance radius, mirroring the web decision); coincident camps (rest days) merge into one badge offering both days; a rendered-annotation cap bounds the overview; precedence and clustering are unit-tested like QUA-58 did for the web. |
+| `x` | `QUA-83` **iOS map has no photo clustering, and photo markers steal taps from camp badges — the unfixed iOS twin of the web's QUA-49** | 0.5 | agent | — | Geotagged photos cluster by screen-space proximity at the current camera distance into stack markers with a count badge (matching the web surface); camp badges keep tap precedence over photo markers (declared later / filtered within a clearance radius, mirroring the web decision); coincident camps (rest days) merge into one badge offering both days; a rendered-annotation cap bounds the overview; precedence and clustering are unit-tested like QUA-58 did for the web. |
 | ` ` | `QUA-84` **Camera flights are single linear interpolations and the idle globe spin is a 30 Hz main-thread timer that never rests** | 0.3 | agent | `QUA-66` | Transitions between distant targets use MapCameraKeyframeAnimator with a distance-dependent apex (rise–traverse–descend), built by a unit-tested MapGeoMath keyframe builder; the idle spin pauses when the Explore tab is hidden and stops on ANY gesture (including two-finger rotate); ideally the spin itself moves to a system-interpolated animation instead of 30 Hz cameraPosition assignments. |
 | `x` | `QUA-67` **Story mode builds the whole journey eagerly, re-fetches all photos per day per body pass — and strip taps open the wrong photo when the cover is not first** | 0.3 | agent | — | Chapters render in a LazyVStack and DayPhotoStrip in a LazyHStack; the journey's photos are fetched once and sliced per chapter instead of one full Core Data fetch per day per body evaluation; the strip tap resolves the photo by IDENTITY (not index+1), fixing the off-by-one when a mid-day photo is the cover; the hero image is a real button for VoiceOver; a unit test pins the tap-index resolution. |
 | `x` | `QUA-68` **The lightbox decodes full-resolution originals with no downsampling inside a non-lazy pager — jetsam risk on the most-used photo surface** | 0.3 | agent | — | Lightbox pages decode at bounded size (CGImageSource thumbnail at ~2× screen scale, orientation-honoured, off-main) with the full-res file used only for ShareLink and re-decode on deep zoom; pan offsets clamp to the scaled bounds; VideoPage gets the same failed-state + Retry treatment ResolvingImagePage already has; a unit test covers the downsample helper. |
@@ -258,6 +257,7 @@ node scripts/workplan.mjs next
 | ` ` | `QUA-85` **First-run surfaces are excluded from the enforced accessibility audit and carry sub-44pt targets; five surfaces bypass themedMaterial** | 0.3 | agent | — | One UI-test leg launches WITHOUT AKASHIC_SKIP_ONBOARDING and runs the enforced audit over the onboarding cards; the onboarding Skip button, DayNotesField Save/Cancel, DayDetailSheet 'Edit day' pill and the elevation Reset pill get the QUA-29 pairing (minHeight 44 + contentShape); the five raw .ultraThinMaterial sites (comments composer/name/cards, day-sheet chevrons, story DAY badge) route through themedMaterial; FunFactsCarousel's height scales with Dynamic Type instead of character count. |
 | ` ` | `QUA-88` **Norwegian-market data entry and display gaps: decimal-comma input silently dropped, day labels hardcoded English, Intelligence drafts English into a Norwegian journal** | 0.2 | agent | — | Weather/distance fields parse with a locale-aware formatter (accepting ',' and '.') and show a validation hint instead of silently dropping; persisted day dateLabels stay POSIX for round-tripping but render localized at the read sites; the Intelligence instruction sets carry a Locale-driven output-language line (with on-device nb quality assessment deferred to QUA-38's session and recorded there). |
 | ` ` | `QUA-89` **Unassigned photos are invisible from the day-centric surfaces — the count mismatch reads as photo loss (observed hands-on)** | 0.2 | agent | — | When a journey has photos not matched to any day, the journey detail and/or day sheet surface it ('N photos aren't matched to a day — review'), routing to the existing all-photos grid which already renders the Unassigned section; the no-route journey's map fallback no longer frames Null Island (stay on globe or show a designed placeholder). |
+| ` ` | `QUA-90` **Nothing automated guards camp-over-photo tap precedence on the iOS map — the headline half of QUA-83 ships unproven** | 0.5 | agent | `QUA-83` | CampBadge and PhotoMarker carry accessibilityIdentifiers in A11yID.swift; a UI test seeds a journey with a photo geotagged AT a camp, taps the camp badge, and asserts the day is selected rather than the lightbox opening; the test is shown to FAIL when trekOverlays() declares camps before the photo stacks (the pre-QUA-83 order), which is the only way to know it guards anything. |
 
 ## Decisions on record
 
