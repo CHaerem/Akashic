@@ -44,17 +44,30 @@ Two things the review produced that are NOT in the artifact:
   correctly refuses tests whose every symbol the fix introduced. That gap is `QUA-90`, and it is the
   first item below.
 
-Gate at `49c68ae`, measured on the pinned iPhone 17 Pro: **941 unit (1 skipped) + 14 UI, 0 failures**;
+- **`QUA-90`** (`8fccc34`) — the screen-level guard QUA-83 could not provide, and unlike QUA-83's
+  tests it is **proven in both directions**. Two findings from writing it are load-bearing. The
+  *clearance* is what actually fixes the tap defect; the declaration order covers the state where
+  `metersPerPoint` is still 0 and the nudge is skipped — QUA-83's commit message credited the order,
+  and that was the wrong way round. And the proof needed a purpose-made ref,
+  `scratch/qua90-proof` (`37524bc`), which is **kept deliberately**: `prove` checks the whole tree out
+  at `--against`, no commit in history carries the old behaviour with the new identifiers, and
+  deleting the branch would make the receipt unreproducible. Do not merge it.
+- **`QUA-91`** opened, not closed — a reachability defect found on the way: only **3 of 8** camp
+  badges exist in the accessibility tree on the Kilimanjaro overview. The four near the summit cannot
+  be tapped and VoiceOver cannot reach them. This is MapKit's own annotation decluttering, which
+  SwiftUI's `Annotation` opts into with no collision control exposed, so no amount of photo clustering
+  touches it.
+
+Gate at `ca17d15`, measured on the pinned iPhone 17 Pro: **941 unit (1 skipped) + 15 UI, 0 failures**;
 web **691 tests / 54 files**, typecheck, lint and build clean; `npm run workplan:check` ok — 185 tasks.
 The 926-unit figure this file used to carry was the pre-QUA-83 baseline; it was re-measured in this
 tree after the fast-forward rather than inherited, which is the only reason the +15 can be trusted.
 
 ## Next, in the order the review ranked it
 
-1. **`QUA-90`** — the guard QUA-83 could not provide: `accessibilityIdentifier`s for `CampBadge` and
-   `PhotoMarker` in `A11yID.swift`, then a UI test that taps a camp badge with a photo geotagged on
-   top of it. Provable in the way QUA-83's tests were not — reverting the two-line declaration-order
-   swap is a cheap, honest RED to point `--against`.
+1. **`QUA-91`** — the decluttering reachability defect above. Cheap (0.3 d) and it blocks nothing, but
+   it makes half a journey's days untappable on the overview, and it undermines any UI test written
+   against overview framing.
 2. **`QUA-87`** (reload republishes the whole library per edit), **`QUA-76`** (no fetch indexes),
    **`QUA-84`** (keyframe camera arcs + the 30 Hz spin timer).
 3. **`QUA-89`** unassigned photos read as loss · **`QUA-88`** Norwegian data entry · **`QUA-75`/`QUA-82`** web.

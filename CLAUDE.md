@@ -369,6 +369,26 @@ right: fix this file in the same commit.
   test you already deleted, even after touching the source — the binary in DerivedData is correct the
   whole time. `xcrun simctl uninstall no.akashic.app` fixes it. This is the likeliest explanation for
   any inexplicable "transient" test failure.
+  **Two corrections measured on 2026-07-30, because this bullet as written was too narrow to save
+  me.** `simctl uninstall` triggers it just as `install` does — any manual `simctl` touch will do. And
+  uninstalling the app bundle is **not enough**: the UI-test RUNNER caches separately, so you need
+  `xcrun simctl uninstall no.akashic.app.uitests` as well. Until both went, two byte-identical runs of
+  one test file disagreed, and the tell was that the failure message quoted a sentence I had already
+  DELETED from the file. I was one commit away from documenting that as non-determinism in the
+  `AKASHIC_SCENE` launch seam, which would have sent the next reader hunting a race that does not
+  exist. If a "flaky" UI test's output mentions anything you no longer have in the source, stop and
+  uninstall both bundles before forming any theory.
+- **`npm run prove --against <ref>` checks out the WHOLE tree at that ref; `--revert` reverts
+  nothing.** `--revert` is validation and the receipt line — the mechanism is
+  `git worktree add --detach <worktree> <against>` plus the `--tests` pathspec copied in on top. Three
+  things follow, all measured on QUA-90. `--tests` carries **only** what it matches, so a lone test
+  file leaves shared test-target code at the old revision (`type 'ID' has no member ...`) — pass the
+  directory, `--tests apple/AkashicUITests`. A fix whose instrumentation postdates it is unprovable
+  against history, because no commit has the old behaviour *and* the new identifiers; the way through
+  is a purpose-made commit carrying exactly that pair, and **keep it** — deleting the branch makes the
+  receipt unreproducible. And put a test's identifiers where the reverted file cannot take them with
+  it: an identifier passed in from the view under test disappears with the revert, and the red then
+  reads "element not found" instead of the defect.
 - **A UI test that cannot find its element PASSES.** `XCUIElement.waitForExistence(for:)` returns a
   `Bool` that is trivially ignored, and a query that matches nothing taps nothing and asserts
   nothing. `AkashicUITests/Support` wraps every lookup in a `require(...)` that fails loudly, and
