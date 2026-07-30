@@ -110,6 +110,8 @@ struct GlobeExperienceView: View {
             if isRegularWidth {
                 regularDayPanel
             }
+
+            projectionProbe
         }
         // This screen is the immersive globe/trek map, not a page of chrome — it stays a fixed
         // night-sky dark in both appearances (see `MapPalette.nightSky` and the note on
@@ -375,6 +377,27 @@ struct GlobeExperienceView: View {
     // `.named("akashicMapProjection")`. Replaced by `.local` (QUA-91) — kept as a tombstone because
     // the named form COMPILES and returns nil at runtime, which is the quiet kind of wrong: the
     // clearance and the badge merging both degrade to "do nothing" and the map looks plausible.
+
+    /// QUA-91: publishes `metersPerPoint` and `cameraDistance` into the accessibility tree so a UI
+    /// test can read the actual numbers.
+    ///
+    /// Behind `AKASHIC_MAP_PROBE=1` and absent otherwise, so it never reaches a customer's tree or
+    /// the enforced accessibility audit. `.accessibilityElement()` on a 1 pt shape is what makes a
+    /// decorative view addressable at all — an identifier on a view that is not an accessibility
+    /// element does not appear, which would have made this probe silently report nothing and cost
+    /// another round of guessing.
+    @ViewBuilder
+    private var projectionProbe: some View {
+        if ProcessInfo.processInfo.environment["AKASHIC_MAP_PROBE"] == "1" {
+            Rectangle()
+                .fill(.clear)
+                .frame(width: 1, height: 1)
+                .accessibilityElement()
+                .accessibilityIdentifier(A11yID.mapProjectionProbe(metersPerPoint: metersPerPoint,
+                                                                   cameraDistance: cameraDistance))
+                .allowsHitTesting(false)
+        }
+    }
 
     /// Seed the projection for the launch where no camera event ever arrives (QUA-91). Silent when
     /// the map has not laid out yet — the event handlers take over on the first real interaction.

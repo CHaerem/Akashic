@@ -158,7 +158,48 @@ final class MapTapPrecedenceUITests: AkashicUITestCase {
             """)
     }
 
+    /// QUA-91: the live projection must actually be established on the overview.
+    ///
+    /// This exists because five attempts to fix the culling defect were reasoned from symptoms — badge
+    /// identifiers that did not change between a 44 pt and a 96 pt threshold — and every one of them
+    /// was a guess about a number nobody had read. `metersPerPoint` gates both QUA-83's photo
+    /// clearance and QUA-91's badge merging, and when it is 0 BOTH degrade to doing nothing while the
+    /// map still looks entirely plausible. So it is worth an assertion of its own: this is the
+    /// difference between "the fix is wrong" and "the fix never ran".
+    func testTheLiveProjectionIsEstablishedOnTheOverview() throws {
+        let app = launchApp(["AKASHIC_OPEN": "kilimanjaro", "AKASHIC_MAP_PROBE": "1"])
+
+        let probe = app.descendants(matching: .any)
+            .matching(NSPredicate(format: "identifier BEGINSWITH %@", ID.mapProjectionProbePrefix))
+            .firstMatch
+        require(probe, "the projection probe (needs AKASHIC_MAP_PROBE=1)")
+
+        let metersPerPoint = try XCTUnwrap(Self.probeValue(probe.identifier, key: "mppMilli"),
+                                          "could not parse mppMilli from \(probe.identifier)") / 1000
+
+        XCTAssertGreaterThan(metersPerPoint, 0, """
+            The live map projection is never established on the overview (metersPerPoint = \
+            \(metersPerPoint), probe: \(probe.identifier)). Everything that depends on it silently \
+            does nothing: QUA-83's photo clearance never nudges a stack off a camp, and QUA-91's \
+            badge merging never merges. Neither failure is visible on screen, which is why this is \
+            asserted directly rather than inferred from marker positions.
+            """)
+    }
+
     // MARK: - Helpers
+
+    /// The number following `key` in the probe's `-`-separated identifier.
+    ///
+    /// `map.projectionProbe.mppMilli-50000-distM-1200` → `probeValue(_, key: "mppMilli") == 50000`.
+    static func probeValue(_ identifier: String, key: String) -> Double? {
+        // `hasSuffix`, not `==`: the first token carries the whole dotted prefix
+        // (`map.projectionProbe.mppMilli`), which an equality match silently misses — measured, it
+        // cost a run and reported "could not parse" about an identifier that was perfectly well formed.
+        let tokens = identifier.split(separator: "-").map(String.init)
+        guard let at = tokens.firstIndex(where: { $0.hasSuffix(key) }),
+              tokens.indices.contains(at + 1) else { return nil }
+        return Double(tokens[at + 1])
+    }
 
     /// The day numbers a camp-badge identifier advertises — `map.campBadge.days3-4-5-6.i2` → 3,4,5,6.
     ///

@@ -352,21 +352,23 @@ enum MapGeoMath {
     /// them anyway. So MapKit's own declutter margin is materially LARGER than the annotation's
     /// frame, and a value derived from our own view geometry cannot predict it.
     ///
-    /// **And that reasoning is refuted too — this value currently changes NOTHING, which is the real
-    /// finding.** 44 and 96 were both run against
-    /// `MapTapPrecedenceUITests.testEveryDayIsReachableFromTheOverviewsCampBadges` and produced
-    /// byte-identical output (`days1.i0`, `days2.i1`, `days7.i7`). A merge at either threshold would
-    /// have changed the identifiers, so the merging branch is not being executed at all: `campGroups(for:)`
-    /// takes its `metersPerPoint == 0` fallback, meaning the live projection is never established on
-    /// this screen.
+    /// **A second reading was also wrong, and its correction is the useful part.** Because 44 and 96
+    /// produced byte-identical test output, I concluded the merging branch was never executed and that
+    /// `metersPerPoint` must be 0 — which would have meant QUA-83's photo clearance had never run
+    /// either. Then I measured it instead of inferring it (`AKASHIC_MAP_PROBE=1`, asserted by
+    /// `testTheLiveProjectionIsEstablishedOnTheOverview`): **`metersPerPoint` is 38.06 m/pt on the
+    /// Kilimanjaro overview.** The projection is fine, the branch does run, and the clearance does run.
     ///
-    /// That has a consequence beyond QUA-91 and it is the reason this comment is this long: if
-    /// `metersPerPoint` is 0 in practice then **QUA-83's photo clearance has never run either**, and
-    /// QUA-90's "no stack covers a badge" assertion may be passing vacuously — decluttering removes
-    /// one of the two markers, so there is no overlap to find for a reason that has nothing to do
-    /// with the fix. QUA-91 stays OPEN on exactly this, and the next step is to measure
-    /// `metersPerPoint` directly rather than infer it. Do not tune this number until that is known;
-    /// it is not the variable.
+    /// The identical output has a duller explanation: only the SURVIVING annotations appear in the
+    /// tree, and the survivors are camps 1, 2 and 7, which are singletons at either threshold. At 96 pt
+    /// (3,654 m here) the middle camps genuinely did merge — and MapKit culled the merged badge too.
+    /// Barranco and Barafu sit 4.4 km apart, about 116 pt at this framing, and are still culled.
+    ///
+    /// So the direction is right and the threshold is not the whole answer: MapKit's culling is more
+    /// aggressive than pairwise separation at any value that keeps day-level framing usable, or is not
+    /// distance-based at all. QUA-91 stays OPEN on that question. The lesson worth more than the
+    /// constant: two rounds of confident reasoning from *symptoms* were both wrong, and one probe
+    /// settled it — measure the number before theorising about the number.
     static let campBadgeSeparationPoints: Double = 44
 
     /// Push any cluster sitting within `clearancePoints` of a camp badge directly away from it, so

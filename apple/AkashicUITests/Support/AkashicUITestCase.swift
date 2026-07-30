@@ -202,4 +202,6 @@ enum ID {
     /// and picks by frame overlap instead of naming one.
     static let mapCampBadgePrefix = "map.campBadge."
     static let mapPhotoStackPrefix = "map.photoStack."
+    /// QUA-91: only present under `AKASHIC_MAP_PROBE=1`.
+    static let mapProjectionProbePrefix = "map.projectionProbe."
 }

@@ -113,4 +113,23 @@ enum A11yID {
     }
 
     static func mapPhotoStack(photoID: String) -> String { "\(mapPhotoStackPrefix)\(photoID)" }
+
+    /// QUA-91: publishes the live map projection so a UI test can MEASURE it instead of inferring it
+    /// from behaviour.
+    ///
+    /// Present only under `AKASHIC_MAP_PROBE=1`, so it costs a shipping build nothing and adds no
+    /// element to the accessibility tree a customer or the enforced audit would ever see. It exists
+    /// because five separate attempts to fix QUA-91 were reasoned from *symptoms* — badge identifiers
+    /// that did not change — and every one of them was a guess about a number nobody had looked at.
+    static let mapProjectionProbePrefix = "map.projectionProbe."
+
+    /// Values are integers in MILLI-units, and separated by `-` rather than `.`, because both obvious
+    /// encodings break the reader: a `Double`'s own decimal point splits the identifier when the test
+    /// tokenises on `.`, and rounding metres-per-point to a whole number collapses 0.5 to 0 — which is
+    /// precisely the distinction this probe exists to make.
+    static func mapProjectionProbe(metersPerPoint: Double, cameraDistance: Double) -> String {
+        let mpp = Int((metersPerPoint * 1000).rounded())
+        let dist = Int(cameraDistance.rounded())
+        return "\(mapProjectionProbePrefix)mppMilli-\(mpp)-distM-\(dist)"
+    }
 }
