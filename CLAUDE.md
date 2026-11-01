@@ -157,6 +157,14 @@ model, and it is worth noticing when a tool obsoletes an agent rather than the o
 frontmatter is validated and its instructions are drawn from measured incidents in this repo, but
 its behaviour is unobserved. Treat the first run as an experiment and report what it actually did.
 
+## The dev shell
+
+`nix develop` (from `flake.nix`) gives node 22 and xcodegen; Xcode comes from the machine via
+`xcode-select`. On mac-1 the Remote Control host `mac-1-akashic` starts inside this shell, so its
+sessions already have the tools. CI still pins node 20, which nixpkgs dropped at end of life.
+The simulator there is `iPhone 18 Pro` — there is no `iPhone 17 Pro` in Xcode 27's runtimes, so
+substitute the name in the native command below.
+
 ## Before you build anything native
 
 `apple/Akashic.xcodeproj` is **generated and not committed** (`apple/.gitignore:2`). Every
